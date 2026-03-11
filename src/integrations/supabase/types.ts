@@ -292,12 +292,15 @@ export type Database = {
           formule_abonnement: string | null
           groupe_sante_id: string | null
           id: string
+          mode_facturation: string | null
           modifie_le: string | null
           nom: string
           rist_plafond_actif: boolean | null
           rist_taux_base_horaire: number | null
           siret: string
+          stripe_customer_id: string | null
           supprime_le: string | null
+          taux_commission_negocie: number | null
           taux_majoration_dimanche_pourcent: number | null
           taux_majoration_ferie_pourcent: number | null
           taux_majoration_nuit_pourcent: number | null
@@ -317,12 +320,15 @@ export type Database = {
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
           id?: string
+          mode_facturation?: string | null
           modifie_le?: string | null
           nom: string
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
           siret: string
+          stripe_customer_id?: string | null
           supprime_le?: string | null
+          taux_commission_negocie?: number | null
           taux_majoration_dimanche_pourcent?: number | null
           taux_majoration_ferie_pourcent?: number | null
           taux_majoration_nuit_pourcent?: number | null
@@ -342,12 +348,15 @@ export type Database = {
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
           id?: string
+          mode_facturation?: string | null
           modifie_le?: string | null
           nom?: string
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
           siret?: string
+          stripe_customer_id?: string | null
           supprime_le?: string | null
+          taux_commission_negocie?: number | null
           taux_majoration_dimanche_pourcent?: number | null
           taux_majoration_ferie_pourcent?: number | null
           taux_majoration_nuit_pourcent?: number | null
@@ -360,6 +369,80 @@ export type Database = {
             columns: ["groupe_sante_id"]
             isOneToOne: false
             referencedRelation: "groupes_sante"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      factures: {
+        Row: {
+          cree_le: string | null
+          date_echeance: string | null
+          date_emission: string | null
+          date_paiement: string | null
+          etablissement_id: string
+          id: string
+          modifie_le: string | null
+          montant_ht: number
+          montant_ttc: number
+          montant_tva: number
+          nombre_missions: number | null
+          numero_facture: string
+          periode_debut: string | null
+          periode_fin: string | null
+          statut: string | null
+          stripe_hosted_url: string | null
+          stripe_invoice_id: string | null
+          stripe_payment_intent_id: string | null
+          taux_tva: number | null
+        }
+        Insert: {
+          cree_le?: string | null
+          date_echeance?: string | null
+          date_emission?: string | null
+          date_paiement?: string | null
+          etablissement_id: string
+          id?: string
+          modifie_le?: string | null
+          montant_ht: number
+          montant_ttc: number
+          montant_tva: number
+          nombre_missions?: number | null
+          numero_facture: string
+          periode_debut?: string | null
+          periode_fin?: string | null
+          statut?: string | null
+          stripe_hosted_url?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          taux_tva?: number | null
+        }
+        Update: {
+          cree_le?: string | null
+          date_echeance?: string | null
+          date_emission?: string | null
+          date_paiement?: string | null
+          etablissement_id?: string
+          id?: string
+          modifie_le?: string | null
+          montant_ht?: number
+          montant_ttc?: number
+          montant_tva?: number
+          nombre_missions?: number | null
+          numero_facture?: string
+          periode_debut?: string | null
+          periode_fin?: string | null
+          statut?: string | null
+          stripe_hosted_url?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          taux_tva?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "factures_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
             referencedColumns: ["id"]
           },
         ]
@@ -554,12 +637,14 @@ export type Database = {
       }
       missions: {
         Row: {
+          commission_facturee: boolean | null
           cree_le: string | null
           debut_le: string
           description: string | null
           duree_heures: number | null
           est_urgente: boolean | null
           etablissement_id: string
+          facture_id: string | null
           fin_le: string
           heures_dimanche: number | null
           heures_ferie: number | null
@@ -567,6 +652,9 @@ export type Database = {
           id: string
           intitule: string
           modifie_le: string | null
+          montant_commission_ht: number | null
+          montant_commission_ttc: number | null
+          montant_commission_tva: number | null
           montant_icp: number | null
           montant_ifm: number | null
           montant_majoration_dimanche: number | null
@@ -579,6 +667,7 @@ export type Database = {
           service: string | null
           soignant_assigne_id: string | null
           statut: Database["public"]["Enums"]["statut_mission"] | null
+          taux_commission: number | null
           taux_horaire_base: number
           taux_icp: number | null
           taux_ifm: number | null
@@ -588,12 +677,14 @@ export type Database = {
           yousign_statut: string | null
         }
         Insert: {
+          commission_facturee?: boolean | null
           cree_le?: string | null
           debut_le: string
           description?: string | null
           duree_heures?: number | null
           est_urgente?: boolean | null
           etablissement_id: string
+          facture_id?: string | null
           fin_le: string
           heures_dimanche?: number | null
           heures_ferie?: number | null
@@ -601,6 +692,9 @@ export type Database = {
           id?: string
           intitule: string
           modifie_le?: string | null
+          montant_commission_ht?: number | null
+          montant_commission_ttc?: number | null
+          montant_commission_tva?: number | null
           montant_icp?: number | null
           montant_ifm?: number | null
           montant_majoration_dimanche?: number | null
@@ -613,6 +707,7 @@ export type Database = {
           service?: string | null
           soignant_assigne_id?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
+          taux_commission?: number | null
           taux_horaire_base: number
           taux_icp?: number | null
           taux_ifm?: number | null
@@ -622,12 +717,14 @@ export type Database = {
           yousign_statut?: string | null
         }
         Update: {
+          commission_facturee?: boolean | null
           cree_le?: string | null
           debut_le?: string
           description?: string | null
           duree_heures?: number | null
           est_urgente?: boolean | null
           etablissement_id?: string
+          facture_id?: string | null
           fin_le?: string
           heures_dimanche?: number | null
           heures_ferie?: number | null
@@ -635,6 +732,9 @@ export type Database = {
           id?: string
           intitule?: string
           modifie_le?: string | null
+          montant_commission_ht?: number | null
+          montant_commission_ttc?: number | null
+          montant_commission_tva?: number | null
           montant_icp?: number | null
           montant_ifm?: number | null
           montant_majoration_dimanche?: number | null
@@ -647,6 +747,7 @@ export type Database = {
           service?: string | null
           soignant_assigne_id?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
+          taux_commission?: number | null
           taux_horaire_base?: number
           taux_icp?: number | null
           taux_ifm?: number | null
@@ -1205,6 +1306,7 @@ export type Database = {
       }
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
+      fn_generer_numero_facture: { Args: never; Returns: string }
       fn_matcher_soignants_mission: {
         Args: { p_mission_id: string }
         Returns: {
