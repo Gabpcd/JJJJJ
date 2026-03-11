@@ -139,12 +139,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           return;
         }
 
-        await supabase.rpc('fn_ecrire_audit', {
+        const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
           p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_MODIFICATION',
           p_type_ressource: 'mission', p_id_ressource: missionSource.id, p_cle_s3: null,
-          p_details: { intitule, profession, taux: tauxHoraire, debut: debutLe, fin: finLe } as any,
+          p_details: { intitule, profession, taux: tauxHoraire, debut: debutLe, fin: finLe },
           p_ip: null, p_navigateur: navigator.userAgent,
         });
+        if (auditError) console.error('Audit failed:', auditError);
 
         afficherNotification({ type: 'succes', message: 'Mission mise à jour !' });
         navigate(`/etablissement/missions/${missionSource.id}`);
