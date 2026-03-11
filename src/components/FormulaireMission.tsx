@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { SelectProfession } from '@/components/SelectProfession';
 import { WarningRist } from '@/components/WarningRist';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
-import { FormulaireRecurrence, type RecurrenceConfig, type Creneau, type RecurrenceValidation } from '@/components/FormulaireRecurrence';
+import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
 import { BarreProgressionBulk } from '@/components/BarreProgressionBulk';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
