@@ -260,11 +260,31 @@ export default function DetailMissionSoignant() {
 
         {/* Col 2 — Finance + Actions */}
         <div className="space-y-4">
+          {/* Compteur hebdomadaire compact */}
+          {estOuverte && (
+            <CompteurHebdomadaire compact missionCandidateHeures={mission.duree_heures || 0} />
+          )}
+
           {/* Rémunération */}
           <DecompositionFinanciere mission={mission} />
           <p className="text-xs text-muted-foreground/60 italic text-center">
             Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
           </p>
+
+          {/* Bloc de conformité (missions ouvertes) */}
+          {estOuverte && peutPostuler && (
+            <BlocConformite missionId={id!} onResultat={setConformiteOk} />
+          )}
+
+          {/* Lien planning */}
+          {estOuverte && (
+            <button
+              onClick={() => navigate(`/soignant/planning?highlight=${id}`)}
+              className="text-xs text-primary font-medium hover:underline flex items-center gap-1"
+            >
+              📅 Voir dans mon planning
+            </button>
+          )}
 
           {/* Actions */}
           <div className="card-base">
@@ -275,11 +295,17 @@ export default function DetailMissionSoignant() {
                   <>
                     <button
                       onClick={() => setModalConfirm(true)}
-                      disabled={acceptationEnCours}
+                      disabled={acceptationEnCours || !conformiteOk}
                       className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
+                      title={!conformiteOk ? 'Résolvez les conflits ci-dessus pour accepter' : undefined}
                     >
                       {acceptationEnCours ? 'Acceptation en cours…' : '★ Accepter cette mission'}
                     </button>
+                    {!conformiteOk && (
+                      <p className="text-[10px] text-destructive text-center mt-2">
+                        ⛔ Résolvez les conflits de conformité ci-dessus pour pouvoir accepter.
+                      </p>
+                    )}
                     <p className="text-[10px] text-muted-foreground text-center mt-2">
                       En acceptant, vous vous engagez à être présent(e) aux dates et horaires indiqués.
                     </p>
