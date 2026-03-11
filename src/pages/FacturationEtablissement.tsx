@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CreditCard, Clock, CheckCircle, DollarSign, FileText, Loader2, Printer, Trophy } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, FlaskConical } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -29,17 +29,36 @@ const STATUT_LABELS: Record<string, string> = {
   ANNULEE: 'Annulée',
 };
 
+const IS_PREVIEW = window.location.hostname.includes('lovable.app') || window.location.hostname === 'localhost';
+
 export default function FacturationEtablissement() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [simulatingId, setSimulatingId] = useState<string | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [factures, setFactures] = useState<any[]>([]);
   const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
   const [etab, setEtab] = useState<any>(null);
   const [kpi, setKpi] = useState({ enAttente: 0, enCours: 0, totalPaye: 0 });
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+
+  // Detect payment success from URL
+  useEffect(() => {
+    if (searchParams.get('paiement') === 'succes') {
+      setShowSuccessBanner(true);
+      // Clean URL
+      searchParams.delete('paiement');
+      setSearchParams(searchParams, { replace: true });
+      // Auto-hide after 8s
+      const timer = setTimeout(() => setShowSuccessBanner(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   const charger = async () => {
     if (!user) return;
@@ -59,7 +78,6 @@ export default function FacturationEtablissement() {
     if (resFact.data) setFactures(resFact.data);
     if (resMNF.data) setMissionsNonFacturees(resMNF.data);
 
-    // KPI
     const facturesData = resFact.data ?? [];
     const enAttente = (resMNF.data ?? []).reduce((s: number, m: any) => s + (m.montant_commission_ttc ?? 0), 0);
     const enCours = facturesData.filter((f: any) => f.statut === 'EMISE' || f.statut === 'EN_RETARD').reduce((s: number, f: any) => s + (f.montant_ttc ?? 0), 0);
@@ -76,7 +94,6 @@ export default function FacturationEtablissement() {
     setGenerating(true);
 
     try {
-      // Generate invoice number
       const { data: numFacture } = await supabase.rpc('fn_generer_numero_facture');
 
       const totalHT = missionsNonFacturees.reduce((s, m) => s + (m.montant_commission_ht ?? 0), 0);
@@ -107,14 +124,12 @@ export default function FacturationEtablissement() {
 
       if (errFacture) throw errFacture;
 
-      // Mark missions as invoiced
       const missionIds = missionsNonFacturees.map(m => m.id);
       await supabase
         .from('missions')
         .update({ commission_facturee: true, facture_id: facture.id, modifie_le: new Date().toISOString() } as any)
         .in('id', missionIds);
 
-      // Audit
       await supabase.rpc('fn_ecrire_audit', {
         p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'FACTURE_GENEREE',
         p_type_ressource: 'facture', p_id_ressource: facture.id, p_cle_s3: null,
@@ -137,11 +152,8 @@ export default function FacturationEtablissement() {
       const { data, error } = await supabase.functions.invoke('create-invoice-payment', {
         body: { facture_id: facture.id },
       });
-
       if (error) throw error;
-      if (data?.url) {
-        window.open(data.url, '_blank');
-      }
+      if (data?.url) window.open(data.url, '_blank');
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
@@ -149,10 +161,77 @@ export default function FacturationEtablissement() {
     }
   };
 
+  const rafraichirStatut = async (factureId: string) => {
+    setRefreshingId(factureId);
+    try {
+      const { data, error } = await supabase
+        .from('factures')
+        .select('statut, date_paiement')
+        .eq('id', factureId)
+        .single();
+      if (error) throw error;
+      if (data) {
+        setFactures(prev => prev.map(f => f.id === factureId ? { ...f, ...data } : f));
+        if (data.statut === 'PAYEE') {
+          afficherNotification({ type: 'succes', message: 'Statut mis à jour : Payée ✅' });
+        } else {
+          afficherNotification({ type: 'info', message: `Statut actuel : ${STATUT_LABELS[data.statut] ?? data.statut}` });
+        }
+      }
+    } catch (err: any) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+    } finally {
+      setRefreshingId(null);
+    }
+  };
+
+  const simulerPaiement = async (facture: any) => {
+    setSimulatingId(facture.id);
+    try {
+      const { error } = await supabase
+        .from('factures')
+        .update({
+          statut: 'PAYEE',
+          date_paiement: new Date().toISOString(),
+          modifie_le: new Date().toISOString(),
+        } as any)
+        .eq('id', facture.id);
+      if (error) throw error;
+
+      await supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'FINANCE_FACTURE_PAYEE',
+        p_type_ressource: 'facture', p_id_ressource: facture.id, p_cle_s3: null,
+        p_details: { numero_facture: facture.numero_facture, montant_ttc: facture.montant_ttc, mode: 'SIMULATION_DEV' },
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
+
+      afficherNotification({ type: 'succes', message: `🧪 Paiement simulé pour ${facture.numero_facture}` });
+      charger();
+    } catch (err: any) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+    } finally {
+      setSimulatingId(null);
+    }
+  };
+
   if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
     <LayoutApp role="ETABLISSEMENT">
+      {/* Success banner */}
+      {showSuccessBanner && (
+        <div className="mb-4 flex items-center gap-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-green-700 dark:text-green-400">Paiement confirmé !</p>
+            <p className="text-xs text-green-600 dark:text-green-500">Votre paiement a été reçu. Le statut sera mis à jour sous quelques instants.</p>
+          </div>
+          <button onClick={() => { setShowSuccessBanner(false); charger(); }} className="text-xs text-green-700 dark:text-green-400 underline hover:no-underline">
+            Rafraîchir
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-foreground">💳 Facturation</h1>
@@ -264,23 +343,48 @@ export default function FacturationEtablissement() {
                   )}
                 </div>
 
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-wrap gap-2 shrink-0">
                   <button
                     onClick={() => navigate(`/etablissement/facturation/${f.id}`)}
                     className="btn-secondary text-xs flex items-center gap-1"
                   >
                     <FileText className="h-3.5 w-3.5" /> Détail
                   </button>
+
                   {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
-                    <button
-                      onClick={() => payerParCarte(f)}
-                      disabled={payingId === f.id}
-                      className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50"
-                    >
-                      {payingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
-                      Payer
-                    </button>
+                    <>
+                      <button
+                        onClick={() => payerParCarte(f)}
+                        disabled={payingId === f.id}
+                        className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {payingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
+                        Payer
+                      </button>
+
+                      <button
+                        onClick={() => rafraichirStatut(f.id)}
+                        disabled={refreshingId === f.id}
+                        className="btn-secondary text-xs flex items-center gap-1 disabled:opacity-50"
+                        title="Rafraîchir le statut de paiement"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${refreshingId === f.id ? 'animate-spin' : ''}`} />
+                      </button>
+
+                      {/* Dev simulate button — preview only */}
+                      {IS_PREVIEW && (
+                        <button
+                          onClick={() => simulerPaiement(f)}
+                          disabled={simulatingId === f.id}
+                          className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-yellow-400 text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 disabled:opacity-50 transition-colors"
+                        >
+                          {simulatingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
+                          Simuler
+                        </button>
+                      )}
+                    </>
                   )}
+
                   {f.statut === 'PAYEE' && f.stripe_hosted_url && (
                     <a href={f.stripe_hosted_url} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs flex items-center gap-1">
                       <CheckCircle className="h-3.5 w-3.5" /> Reçu
