@@ -23,6 +23,15 @@ export default function Parcours3200h() {
       setSuivi(sv);
       setMissions((ms as any[]) || []);
       setLoading(false);
+      // Audit HDS
+      supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
+        p_action: 'DONNEES_PERSO_CONSULTATION',
+        p_type_ressource: 'soignant', p_id_ressource: user.id,
+        p_cle_s3: null,
+        p_details: { page: 'parcours_3200h' },
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
     });
   }, [user]);
 

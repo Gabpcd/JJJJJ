@@ -164,10 +164,12 @@ export default function AttestationHeures() {
 
         {/* Footer légal */}
         <div className="text-xs text-gray-500 space-y-2">
-          <p>Ce document est généré automatiquement par la plateforme Soin Direct SAS. Il peut être présenté à l'Ordre professionnel, à la CPAM ou à tout organisme compétent.</p>
+          <p>Ce document est généré automatiquement par la plateforme {ENTREPRISE.nom}. Il peut être présenté à l'Ordre professionnel, à la CPAM ou à tout organisme compétent.</p>
           <p>Généré le : {format(new Date(), 'dd/MM/yyyy')}</p>
           <p>Identifiant : {identifiant}</p>
-          <p className="font-medium">Soin Direct SAS — www.soindirect.fr</p>
+          <p className="font-medium">{ENTREPRISE.nom} — SIRET {ENTREPRISE.siret}</p>
+          <p>{ENTREPRISE.adresse} · {ENTREPRISE.email}</p>
+          <p>Hébergeur HDS : {ENTREPRISE.hebergeurHDS}</p>
           <p>Conforme RGPD · HDS · Code du Travail</p>
           <p className="italic mt-3">⚠️ Les montants financiers ne figurent pas sur cette attestation. Pour les justificatifs de rémunération, consultez vos bulletins de paie.</p>
         </div>

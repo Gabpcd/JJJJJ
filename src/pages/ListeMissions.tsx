@@ -126,11 +126,14 @@ export default function ListeMissions() {
         .eq('statut', 'OUVERTE');
       if (!error) reussies++;
     }
-    await supabase.rpc('fn_ecrire_audit', {
-      p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_ANNULATION',
-      p_type_ressource: 'mission', p_id_ressource: user!.id, p_cle_s3: null,
-      p_details: { type: 'annulation_serie', nb_annulees: reussies }, p_ip: null, p_navigateur: navigator.userAgent,
-    });
+    // Audit HDS — un log par mission annulée
+    for (const m of missionsSerieOuvertes) {
+      await supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_ANNULATION',
+        p_type_ressource: 'mission', p_id_ressource: m.id, p_cle_s3: null,
+        p_details: { type: 'annulation_serie', intitule: m.intitule }, p_ip: null, p_navigateur: navigator.userAgent,
+      });
+    }
     afficherNotification({ type: 'succes', message: `${reussies} mission(s) annulée(s).` });
     charger();
   };

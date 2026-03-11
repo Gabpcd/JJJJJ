@@ -85,7 +85,7 @@ export function CarteSerie({ missions, role, soignant, onAnnulerSerie }: CarteSe
         <span className="text-primary font-bold text-sm">💰 {first.taux_horaire_base?.toFixed(2)} €/h</span>
         {role === 'soignant' && netTotal > 0 && (
           <span className="text-xs text-muted-foreground">
-            Net estimé total : ~{fmt(netTotal)}
+            {missions.some(m => !m.net_a_payer) ? 'Net estimé partiel' : 'Net estimé total'} : ~{fmt(netTotal)}
           </span>
         )}
       </div>
