@@ -126,7 +126,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const recurrenceBlocante = modeRecurrent && recurrenceValidation && !recurrenceValidation.valide;
   const recurrenceValide = modeRecurrent && creneaux.length > 0 && recurrenceValidation && recurrenceValidation.valide;
 
-  const handleRecurrenceChange = (config: RecurrenceConfig, creneauxGen: Creneau[], validation: RecurrenceValidation) => {
+  const handleRecurrenceChange = (config: RecurrenceFlexConfig, creneauxGen: CreneauFlex[], validation: ValidationFlexResult) => {
     setRecurrenceConfig(config);
     setCreneaux(creneauxGen);
     setRecurrenceValidation(validation);
