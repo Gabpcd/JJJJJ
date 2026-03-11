@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { Info } from 'lucide-react';
+import { Info, MapPin, Loader2 } from 'lucide-react';
 
 export default function ProfilEtablissement() {
   const { user } = useAuth();
