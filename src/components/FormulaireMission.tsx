@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { SelectProfession } from '@/components/SelectProfession';
 import { WarningRist } from '@/components/WarningRist';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
-import { FormulaireRecurrence, type RecurrenceConfig, type Creneau, type RecurrenceValidation } from '@/components/FormulaireRecurrence';
+import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
 import { BarreProgressionBulk } from '@/components/BarreProgressionBulk';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -40,9 +40,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   // Recurrence state
   const [modeRecurrent, setModeRecurrent] = useState(false);
-  const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | null>(null);
-  const [creneaux, setCreneaux] = useState<Creneau[]>([]);
-  const [recurrenceValidation, setRecurrenceValidation] = useState<RecurrenceValidation | null>(null);
+  const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceFlexConfig | null>(null);
+  const [creneaux, setCreneaux] = useState<CreneauFlex[]>([]);
+  const [recurrenceValidation, setRecurrenceValidation] = useState<ValidationFlexResult | null>(null);
   const [publicationEnCours, setPublicationEnCours] = useState(false);
   const [progression, setProgression] = useState(0);
   const [progressionActuel, setProgressionActuel] = useState(0);
@@ -123,10 +123,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const warningDureeTresLongue = !modeRecurrent && dureeEstimee > 24;
 
   // Recurrence validation
-  const recurrenceBlocante = modeRecurrent && recurrenceValidation && (!recurrenceValidation.reposOk || !recurrenceValidation.plafond48hOk);
-  const recurrenceValide = modeRecurrent && creneaux.length > 0 && recurrenceValidation && recurrenceValidation.reposOk && recurrenceValidation.plafond48hOk;
+  const recurrenceBlocante = modeRecurrent && recurrenceValidation && !recurrenceValidation.valide;
+  const recurrenceValide = modeRecurrent && creneaux.length > 0 && recurrenceValidation && recurrenceValidation.valide;
 
-  const handleRecurrenceChange = (config: RecurrenceConfig, creneauxGen: Creneau[], validation: RecurrenceValidation) => {
+  const handleRecurrenceChange = (config: RecurrenceFlexConfig, creneauxGen: CreneauFlex[], validation: ValidationFlexResult) => {
     setRecurrenceConfig(config);
     setCreneaux(creneauxGen);
     setRecurrenceValidation(validation);
@@ -178,8 +178,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         type: 'serie_recurrente', serie_id: serieId, nb_creneaux: creneaux.length,
         nb_reussies: reussies, nb_echouees: echouees,
         periode: { du: recurrenceConfig.dateDebut, au: recurrenceConfig.dateFin },
-        jours: recurrenceConfig.joursCochés,
-        horaires: { debut: recurrenceConfig.heureDebut, fin: recurrenceConfig.heureFin },
+        horaires_par_jour: recurrenceConfig.horairesParJour.filter(j => j.actif).map(j => ({
+          jour: j.label, debut: j.heureDebut, fin: j.heureFin, duree: j.dureeHeures,
+        })),
       },
       p_ip: null, p_navigateur: navigator.userAgent,
     });
@@ -421,25 +422,28 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         )}
 
         {/* Estimation (récurrent) */}
-        {modeRecurrent && creneaux.length > 0 && taux > 0 && recurrenceValidation && (
-          <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
-            <p className="font-bold text-foreground mb-3">💰 Estimation de rémunération (série)</p>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Taux de base</span>
-                <span className="font-medium">{taux.toFixed(2)} €/h</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">{creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} × {recurrenceValidation.dureeCreneau}h</span>
-                <span className="font-medium">~{(creneaux.length * recurrenceValidation.dureeCreneau).toFixed(0)}h total</span>
-              </div>
-              <div className="border-t border-border pt-2 flex justify-between">
-                <span className="text-muted-foreground">Base brute estimée (série)</span>
-                <span className="font-bold text-primary">~{(taux * creneaux.length * recurrenceValidation.dureeCreneau).toFixed(2)} €</span>
+        {modeRecurrent && creneaux.length > 0 && taux > 0 && recurrenceValidation && (() => {
+          const totalH = creneaux.reduce((s, c) => s + c.dureeHeures, 0);
+          return (
+            <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
+              <p className="font-bold text-foreground mb-3">💰 Estimation de rémunération (série)</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taux de base</span>
+                  <span className="font-medium">{taux.toFixed(2)} €/h</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} — {totalH.toFixed(0)}h total</span>
+                  <span className="font-medium">~{totalH.toFixed(0)}h</span>
+                </div>
+                <div className="border-t border-border pt-2 flex justify-between">
+                  <span className="text-muted-foreground">Base brute estimée (série)</span>
+                  <span className="font-bold text-primary">~{(taux * totalH).toFixed(2)} €</span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         <p className="text-[10px] text-muted-foreground italic text-center">
           Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.

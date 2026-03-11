@@ -1,149 +1,240 @@
-import React, { useState, useMemo } from 'react';
-import { format, addDays, getISOWeek, startOfWeek } from 'date-fns';
+import React, { useState, useMemo, useCallback } from 'react';
+import { format, startOfWeek, getISOWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { ARTICLES_CODE_TRAVAIL } from '@/constantes/loi';
+import { LigneHoraireJour, type HorairesJour, parseHeure, calculerDuree } from '@/components/LigneHoraireJour';
+import { toast } from '@/hooks/use-toast';
 
-const JOURS_SEMAINE = [
-  { iso: 1, label: 'Lun' },
-  { iso: 2, label: 'Mar' },
-  { iso: 3, label: 'Mer' },
-  { iso: 4, label: 'Jeu' },
-  { iso: 5, label: 'Ven' },
-  { iso: 6, label: 'Sam' },
-  { iso: 7, label: 'Dim' },
+const JOURS_SEMAINE_DEF = [
+  { jourISO: 1, label: 'Lundi' },
+  { jourISO: 2, label: 'Mardi' },
+  { jourISO: 3, label: 'Mercredi' },
+  { jourISO: 4, label: 'Jeudi' },
+  { jourISO: 5, label: 'Vendredi' },
+  { jourISO: 6, label: 'Samedi' },
+  { jourISO: 7, label: 'Dimanche' },
 ];
 
-export interface Creneau {
+export interface CreneauFlex {
   debut: string;
   fin: string;
-  jourISO: number;
+  jourLabel: string;
+  dureeHeures: number;
 }
 
-export interface RecurrenceConfig {
+export interface RecurrenceFlexConfig {
   dateDebut: string;
   dateFin: string;
-  joursCochés: number[];
-  heureDebut: string;
-  heureFin: string;
+  horairesParJour: HorairesJour[];
 }
 
-export interface RecurrenceValidation {
-  reposOk: boolean;
-  reposHeures: number;
-  plafond48hOk: boolean;
-  maxHebdo: number;
-  semaineProbleme?: string;
-  dureeCreneauOk: boolean;
-  dureeCreneau: number;
+export interface ErreurValidation {
+  type: 'PLAFOND_48H' | 'REPOS_11H' | 'DUREE_LONGUE';
+  message: string;
+  gravite: 'bloquant' | 'avertissement';
+  joursAffectes?: number[];
 }
 
-interface FormulaireRecurrenceProps {
-  onChange: (config: RecurrenceConfig, creneaux: Creneau[], validation: RecurrenceValidation) => void;
+export interface ValidationFlexResult {
+  valide: boolean;
+  erreurs: ErreurValidation[];
+  totalHebdo: number;
 }
 
-export function genererCreneaux(
-  dateDebut: string, dateFin: string,
-  joursCochés: number[], heureDebut: string, heureFin: string
-): Creneau[] {
-  if (!dateDebut || !dateFin || !heureDebut || !heureFin || joursCochés.length === 0) return [];
-  const creneaux: Creneau[] = [];
+// ─── Génération des créneaux ──────────────────────────────────────
+export function genererCreneauxFlex(
+  dateDebut: string, dateFin: string, horairesParJour: HorairesJour[]
+): CreneauFlex[] {
+  if (!dateDebut || !dateFin) return [];
+  const joursActifs = horairesParJour.filter(j => j.actif);
+  if (joursActifs.length === 0) return [];
+
+  const creneaux: CreneauFlex[] = [];
   const debut = new Date(dateDebut);
   const fin = new Date(dateFin);
 
   for (let d = new Date(debut); d <= fin; d.setDate(d.getDate() + 1)) {
     const jourISO = d.getDay() === 0 ? 7 : d.getDay();
-    if (joursCochés.includes(jourISO)) {
-      const dateStr = d.toISOString().split('T')[0];
-      creneaux.push({
-        debut: `${dateStr}T${heureDebut}:00`,
-        fin: `${dateStr}T${heureFin}:00`,
-        jourISO,
-      });
+    const horaireJour = joursActifs.find(j => j.jourISO === jourISO);
+    if (!horaireJour) continue;
+
+    const dateStr = d.toISOString().split('T')[0];
+    let finCreneau: string;
+    if (parseHeure(horaireJour.heureFin) <= parseHeure(horaireJour.heureDebut)) {
+      const lendemain = new Date(d);
+      lendemain.setDate(lendemain.getDate() + 1);
+      finCreneau = `${lendemain.toISOString().split('T')[0]}T${horaireJour.heureFin}:00`;
+    } else {
+      finCreneau = `${dateStr}T${horaireJour.heureFin}:00`;
     }
+
+    creneaux.push({
+      debut: `${dateStr}T${horaireJour.heureDebut}:00`,
+      fin: finCreneau,
+      jourLabel: horaireJour.label,
+      dureeHeures: horaireJour.dureeHeures,
+    });
   }
   return creneaux;
 }
 
-function validerCreneaux(creneaux: Creneau[], heureDebut: string, heureFin: string): RecurrenceValidation {
-  const dureeCreneau = (() => {
-    const d = new Date(`2000-01-01T${heureDebut}`);
-    const f = new Date(`2000-01-01T${heureFin}`);
-    let diff = (f.getTime() - d.getTime()) / 3600000;
-    if (diff <= 0) diff += 24;
-    return diff;
-  })();
+// ─── Validation ───────────────────────────────────────────────────
+export function validerHorairesFlex(horairesParJour: HorairesJour[]): ValidationFlexResult {
+  const joursActifs = horairesParJour.filter(j => j.actif);
+  const erreurs: ErreurValidation[] = [];
 
-  const reposHeures = 24 - dureeCreneau;
-
-  // Heures par semaine ISO
-  const heuresParSemaine = new Map<string, { heures: number; dateLabel: string }>();
-  creneaux.forEach(c => {
-    const d = new Date(c.debut);
-    const w = startOfWeek(d, { weekStartsOn: 1 });
-    const key = w.toISOString().split('T')[0];
-    const existing = heuresParSemaine.get(key);
-    heuresParSemaine.set(key, {
-      heures: (existing?.heures || 0) + dureeCreneau,
-      dateLabel: format(w, 'd MMM', { locale: fr }),
+  const totalHebdo = joursActifs.reduce((s, j) => s + j.dureeHeures, 0);
+  if (totalHebdo > 48) {
+    erreurs.push({
+      type: 'PLAFOND_48H',
+      message: `La semaine totalise ${totalHebdo}h. Maximum légal : 48h (Art. L3121-20)`,
+      gravite: 'bloquant',
     });
-  });
-  const maxHebdoEntry = [...heuresParSemaine.entries()].reduce(
-    (max, [k, v]) => (v.heures > max.heures ? { ...v, key: k } : max),
-    { heures: 0, dateLabel: '', key: '' }
-  );
+  }
+
+  const joursTriés = [...joursActifs].sort((a, b) => a.jourISO - b.jourISO);
+  for (let i = 0; i < joursTriés.length - 1; i++) {
+    const actuel = joursTriés[i];
+    const suivant = joursTriés[i + 1];
+    if (suivant.jourISO - actuel.jourISO === 1) {
+      const finActuel = parseHeure(actuel.heureFin);
+      const debutSuivant = parseHeure(suivant.heureDebut);
+      const repos = (24 - finActuel) + debutSuivant;
+      if (repos < 11) {
+        erreurs.push({
+          type: 'REPOS_11H',
+          message: `Repos insuffisant entre ${actuel.label} (fin ${actuel.heureFin}) et ${suivant.label} (début ${suivant.heureDebut}) : ${repos.toFixed(1)}h au lieu de 11h`,
+          gravite: 'bloquant',
+          joursAffectes: [actuel.jourISO, suivant.jourISO],
+        });
+      }
+    }
+  }
+
+  for (const jour of joursActifs) {
+    if (jour.dureeHeures > 12) {
+      erreurs.push({
+        type: 'DUREE_LONGUE',
+        message: `${jour.label} : créneau de ${jour.dureeHeures}h (recommandation : max 12h)`,
+        gravite: 'avertissement',
+        joursAffectes: [jour.jourISO],
+      });
+    }
+  }
 
   return {
-    reposOk: reposHeures >= 11,
-    reposHeures: Math.round(reposHeures * 10) / 10,
-    plafond48hOk: maxHebdoEntry.heures <= 48,
-    maxHebdo: Math.round(maxHebdoEntry.heures * 10) / 10,
-    semaineProbleme: maxHebdoEntry.heures > 48 ? `Semaine du ${maxHebdoEntry.dateLabel}` : undefined,
-    dureeCreneauOk: dureeCreneau <= 12,
-    dureeCreneau: Math.round(dureeCreneau * 10) / 10,
+    valide: !erreurs.some(e => e.gravite === 'bloquant'),
+    erreurs,
+    totalHebdo,
   };
+}
+
+// ─── Props ────────────────────────────────────────────────────────
+interface FormulaireRecurrenceProps {
+  onChange: (config: RecurrenceFlexConfig, creneaux: CreneauFlex[], validation: ValidationFlexResult) => void;
 }
 
 export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
-  const [joursCochés, setJoursCochés] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [heureDebut, setHeureDebut] = useState('07:00');
-  const [heureFin, setHeureFin] = useState('19:00');
-
-  const creneaux = useMemo(() =>
-    genererCreneaux(dateDebut, dateFin, joursCochés, heureDebut, heureFin),
-    [dateDebut, dateFin, joursCochés, heureDebut, heureFin]
+  const [horairesParJour, setHorairesParJour] = useState<HorairesJour[]>(
+    JOURS_SEMAINE_DEF.map(j => ({
+      ...j,
+      heureDebut: '07:00',
+      heureFin: '19:00',
+      dureeHeures: 12,
+      actif: [1, 2, 3, 4, 5].includes(j.jourISO),
+    }))
   );
 
-  const validation = useMemo(() =>
-    validerCreneaux(creneaux, heureDebut, heureFin),
-    [creneaux, heureDebut, heureFin]
+  const joursActifs = useMemo(() => horairesParJour.filter(j => j.actif), [horairesParJour]);
+
+  const validation = useMemo(() => validerHorairesFlex(horairesParJour), [horairesParJour]);
+
+  const creneaux = useMemo(
+    () => genererCreneauxFlex(dateDebut, dateFin, horairesParJour),
+    [dateDebut, dateFin, horairesParJour]
   );
 
-  const totalHeures = creneaux.length * validation.dureeCreneau;
-  const nbSemaines = new Set(creneaux.map(c => {
-    const d = new Date(c.debut);
-    return startOfWeek(d, { weekStartsOn: 1 }).toISOString().split('T')[0];
-  })).size;
+  // Group creneaux by ISO week
+  const creneauxParSemaine = useMemo(() => {
+    const map = new Map<string, { label: string; creneaux: CreneauFlex[]; totalHeures: number }>();
+    creneaux.forEach(c => {
+      const d = new Date(c.debut);
+      const w = startOfWeek(d, { weekStartsOn: 1 });
+      const key = w.toISOString().split('T')[0];
+      if (!map.has(key)) {
+        const fin = new Date(w);
+        fin.setDate(fin.getDate() + 6);
+        map.set(key, {
+          label: `${format(w, 'd MMM', { locale: fr })} → ${format(fin, 'd MMM', { locale: fr })}`,
+          creneaux: [],
+          totalHeures: 0,
+        });
+      }
+      const entry = map.get(key)!;
+      entry.creneaux.push(c);
+      entry.totalHeures += c.dureeHeures;
+    });
+    return [...map.entries()];
+  }, [creneaux]);
+
+  const totalHeures = creneaux.reduce((s, c) => s + c.dureeHeures, 0);
 
   // Notify parent
   React.useEffect(() => {
-    onChange({ dateDebut, dateFin, joursCochés, heureDebut, heureFin }, creneaux, validation);
-  }, [dateDebut, dateFin, joursCochés, heureDebut, heureFin]);
+    onChange({ dateDebut, dateFin, horairesParJour }, creneaux, validation);
+  }, [dateDebut, dateFin, horairesParJour, creneaux, validation]);
 
-  const toggleJour = (iso: number) => {
-    setJoursCochés(prev =>
-      prev.includes(iso) ? prev.filter(j => j !== iso) : [...prev, iso].sort()
+  const toggleJour = useCallback((iso: number) => {
+    setHorairesParJour(prev =>
+      prev.map(j => j.jourISO === iso ? { ...j, actif: !j.actif } : j)
     );
-  };
+  }, []);
+
+  const updateHoraire = useCallback((jourISO: number, heureDebut: string, heureFin: string) => {
+    setHorairesParJour(prev =>
+      prev.map(j =>
+        j.jourISO === jourISO
+          ? { ...j, heureDebut, heureFin, dureeHeures: calculerDuree(heureDebut, heureFin) }
+          : j
+      )
+    );
+  }, []);
+
+  const appliquerATous = useCallback(() => {
+    const premier = horairesParJour.find(j => j.actif);
+    if (!premier) return;
+    setHorairesParJour(prev =>
+      prev.map(j =>
+        j.actif
+          ? { ...j, heureDebut: premier.heureDebut, heureFin: premier.heureFin, dureeHeures: premier.dureeHeures }
+          : j
+      )
+    );
+    toast({ title: '✅ Horaires appliqués à tous les jours' });
+  }, [horairesParJour]);
+
+  const joursEnErreur = new Set(validation.erreurs.flatMap(e => e.joursAffectes || []));
+  const premierJourActif = joursActifs[0]?.jourISO;
+
+  // Find repos errors between specific pairs for inline display
+  const reposErreurs = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const e of validation.erreurs) {
+      if (e.type === 'REPOS_11H' && e.joursAffectes && e.joursAffectes.length === 2) {
+        map.set(e.joursAffectes[0], e.message);
+      }
+    }
+    return map;
+  }, [validation.erreurs]);
 
   return (
     <div className="space-y-4">
       {/* Période */}
       <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-4">
         <p className="text-sm font-semibold text-foreground">📅 Période du remplacement</p>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Du *</label>
@@ -155,102 +246,132 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
           </div>
         </div>
 
+        {/* Jours */}
         <div>
           <label className="text-xs text-muted-foreground mb-2 block">Jours travaillés</label>
           <div className="flex flex-wrap gap-2">
-            {JOURS_SEMAINE.map(j => (
+            {JOURS_SEMAINE_DEF.map(j => (
               <button
-                key={j.iso}
+                key={j.jourISO}
                 type="button"
-                onClick={() => toggleJour(j.iso)}
+                onClick={() => toggleJour(j.jourISO)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  joursCochés.includes(j.iso)
+                  horairesParJour.find(h => h.jourISO === j.jourISO)?.actif
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
-                {joursCochés.includes(j.iso) ? '☑️' : '☐'} {j.label}
+                {horairesParJour.find(h => h.jourISO === j.jourISO)?.actif ? '☑️' : '☐'} {j.label.slice(0, 3)}
               </button>
             ))}
           </div>
         </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Début créneau *</label>
-            <input type="time" value={heureDebut} onChange={e => setHeureDebut(e.target.value)} className="input-base" required />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Fin créneau *</label>
-            <input type="time" value={heureFin} onChange={e => setHeureFin(e.target.value)} className="input-base" required />
-          </div>
-        </div>
       </div>
 
-      {/* Prévisualisation */}
-      {creneaux.length > 0 && (
-        <div className="card-base">
-          <p className="text-sm font-bold text-foreground mb-3">
-            📋 Prévisualisation : {creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} sera{creneaux.length > 1 ? 'ont' : ''} créé{creneaux.length > 1 ? 's' : ''}
-          </p>
-
-          <div className="max-h-48 overflow-y-auto space-y-1">
-            {creneaux.map((c, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs text-foreground">
-                <span className="text-success">✅</span>
-                <span className="font-medium w-28">
-                  {format(new Date(c.debut), 'EEE d MMM', { locale: fr })}
-                </span>
-                <span className="text-muted-foreground">
-                  {heureDebut} → {heureFin} ({validation.dureeCreneau}h)
-                </span>
-                {i < creneaux.length - 1 && (
-                  <span className={`text-[10px] ml-auto ${validation.reposOk ? 'text-success' : 'text-destructive font-bold'}`}>
-                    ↕️ {validation.reposHeures}h repos {validation.reposOk ? '✅' : '❌'}
-                  </span>
+      {/* Horaires par jour */}
+      {joursActifs.length > 0 && (
+        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 space-y-1">
+          <p className="text-sm font-semibold text-foreground mb-3">🕐 Horaires par jour</p>
+          {horairesParJour.filter(j => j.actif).map((jour, idx) => {
+            const reposErr = reposErreurs.get(jour.jourISO);
+            return (
+              <React.Fragment key={jour.jourISO}>
+                <LigneHoraireJour
+                  jour={jour}
+                  onChange={(hd, hf) => updateHoraire(jour.jourISO, hd, hf)}
+                  estPremierJour={jour.jourISO === premierJourActif}
+                  onAppliquerATous={jour.jourISO === premierJourActif ? appliquerATous : undefined}
+                  enErreur={joursEnErreur.has(jour.jourISO)}
+                />
+                {reposErr && (
+                  <div className="flex items-center gap-2 text-xs text-destructive font-medium pl-4 py-1">
+                    <span>↕️ ❌</span>
+                    <span>{reposErr}</span>
+                  </div>
                 )}
-              </div>
-            ))}
-          </div>
+              </React.Fragment>
+            );
+          })}
 
-          <div className="border-t border-border mt-3 pt-3 space-y-1 text-xs text-muted-foreground">
-            <p>Total : <strong className="text-foreground">{totalHeures.toFixed(0)}h</strong> sur {nbSemaines} semaine{nbSemaines > 1 ? 's' : ''}</p>
+          {/* Récap hebdo */}
+          <div className="border-t border-border mt-3 pt-3 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Total hebdomadaire :</span>
+            <span className={`font-bold ${validation.totalHebdo > 48 ? 'text-destructive' : validation.totalHebdo > 36 ? 'text-amber-600' : 'text-teal-600'}`}>
+              {validation.totalHebdo}h {validation.totalHebdo > 48 && '← 🔴 DÉPASSE 48h !'}
+            </span>
           </div>
         </div>
       )}
 
       {/* Validations */}
-      {creneaux.length > 0 && (
+      {validation.erreurs.length > 0 && (
         <div className="space-y-2">
-          {/* Repos 11h */}
-          <div className={`flex items-center gap-2 text-xs font-medium ${validation.reposOk ? 'text-success' : 'text-destructive'}`}>
-            {validation.reposOk ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-            Repos inter-créneaux : {validation.reposHeures}h — {validation.reposOk ? 'conforme' : 'NON CONFORME (min. 11h)'}
-          </div>
-          {!validation.reposOk && (
-            <p className="text-[10px] text-destructive ml-6">
-              📖 Art. L3131-1 — {ARTICLES_CODE_TRAVAIL['L3131-1']?.explicationSimple}
-            </p>
-          )}
-
-          {/* Plafond 48h */}
-          <div className={`flex items-center gap-2 text-xs font-medium ${validation.plafond48hOk ? 'text-success' : 'text-destructive'}`}>
-            {validation.plafond48hOk ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-            Heures max/semaine : {validation.maxHebdo}h — {validation.plafond48hOk ? 'conforme (max 48h)' : `DÉPASSEMENT (max 48h)`}
-          </div>
-          {!validation.plafond48hOk && validation.semaineProbleme && (
-            <p className="text-[10px] text-destructive ml-6">
-              📖 Art. L3121-20 — {validation.semaineProbleme} totaliserait {validation.maxHebdo}h.
-            </p>
-          )}
-
-          {/* Durée créneau */}
-          {!validation.dureeCreneauOk && (
-            <div className="flex items-center gap-2 text-xs font-medium text-warning">
-              <AlertTriangle className="h-4 w-4" />
-              Créneau de {validation.dureeCreneau}h — recommandation : max 12h pour la sécurité des patients
+          {validation.erreurs.map((e, i) => (
+            <div key={i} className={`flex items-start gap-2 text-xs font-medium ${e.gravite === 'bloquant' ? 'text-destructive' : 'text-amber-600'}`}>
+              {e.gravite === 'bloquant' ? <XCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
+              <div>
+                <p>{e.message}</p>
+                {e.type === 'PLAFOND_48H' && (
+                  <p className="text-[10px] mt-0.5">📖 Art. L3121-20 — {ARTICLES_CODE_TRAVAIL['L3121-20']?.explicationSimple}</p>
+                )}
+                {e.type === 'REPOS_11H' && (
+                  <p className="text-[10px] mt-0.5">📖 Art. L3131-1 — {ARTICLES_CODE_TRAVAIL['L3131-1']?.explicationSimple}</p>
+                )}
+              </div>
             </div>
-          )}
+          ))}
+        </div>
+      )}
+
+      {validation.erreurs.length === 0 && joursActifs.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-medium text-teal-600">
+            <CheckCircle2 className="h-4 w-4" />
+            Repos inter-créneaux : conforme (≥ 11h)
+          </div>
+          <div className="flex items-center gap-2 text-xs font-medium text-teal-600">
+            <CheckCircle2 className="h-4 w-4" />
+            Heures hebdomadaires : {validation.totalHebdo}h / 48h — conforme
+          </div>
+        </div>
+      )}
+
+      {/* Prévisualisation groupée par semaine */}
+      {creneaux.length > 0 && (
+        <div className="card-base">
+          <p className="text-sm font-bold text-foreground mb-3">
+            📋 Prévisualisation : {creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} sur {creneauxParSemaine.length} semaine{creneauxParSemaine.length > 1 ? 's' : ''}
+          </p>
+
+          <div className="max-h-64 overflow-y-auto space-y-4">
+            {creneauxParSemaine.map(([key, sem]) => (
+              <div key={key}>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-semibold text-foreground">Semaine ({sem.label})</p>
+                  <span className={`text-xs font-bold ${sem.totalHeures > 48 ? 'text-destructive' : 'text-teal-600'}`}>
+                    {sem.totalHeures}h {sem.totalHeures > 48 ? '❌' : '✅'}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  {sem.creneaux.map((c, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-foreground">
+                      <span className="text-teal-500">✅</span>
+                      <span className="font-medium w-32">
+                        {format(new Date(c.debut), 'EEE d MMM', { locale: fr })}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {c.debut.slice(11, 16)} → {c.fin.slice(11, 16)} ({c.dureeHeures}h)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-border mt-3 pt-3 text-xs text-muted-foreground">
+            <p>Total : <strong className="text-foreground">{totalHeures.toFixed(0)}h</strong> sur {creneauxParSemaine.length} semaine{creneauxParSemaine.length > 1 ? 's' : ''} ({creneaux.length} créneaux)</p>
+          </div>
         </div>
       )}
     </div>
