@@ -319,6 +319,31 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             placeholder="Ex: Urgences, Gériatrie, Réa, Bloc, EHPAD" className="input-base" />
         </div>
 
+        {/* Ouvert aux contrats */}
+        <div>
+          <label className="text-sm font-medium text-foreground mb-2 block">Ouvert aux contrats :</label>
+          <div className="space-y-2">
+            {([
+              { value: 'TOUS' as const, label: 'Tous types de contrats', desc: 'CDDU, Intérim, Vacation, Libéral, Salarié' },
+              { value: 'SALARIE' as const, label: 'Salariés et CDD uniquement', desc: 'CDDU, Intérim, Vacation, Salarié' },
+              { value: 'LIBERAL' as const, label: 'Libéraux uniquement', desc: 'Libéral' },
+            ]).map(opt => (
+              <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="radio" name="contratPreference"
+                  checked={contratPreference === opt.value}
+                  onChange={() => setContratPreference(opt.value)}
+                  className="mt-0.5 accent-primary"
+                />
+                <div>
+                  <span className="text-sm text-foreground font-medium group-hover:text-primary transition-colors">{opt.label}</span>
+                  <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
         {/* Mode ponctuel: horaires */}
         {!modeRecurrent && (
           <div className="border border-primary/20 rounded-xl p-4 bg-primary/5 space-y-3">
