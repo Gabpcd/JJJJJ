@@ -41,6 +41,7 @@ export default function InscriptionSoignant() {
     email: '', motDePasse: '', confirmMdp: '',
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     profession: '', typeContrat: '', rpps: '', rayon: 30,
+    lat: null as number | null, lng: null as number | null,
   });
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
