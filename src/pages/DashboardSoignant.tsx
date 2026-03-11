@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle } from 'lucide-react';
+import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
+import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide } from '@/components/EtatVide';
