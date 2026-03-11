@@ -98,6 +98,7 @@ export default function InscriptionEtablissement() {
           )}
 
           {etape === 2 && (
+            <>
             <GeoAutoEtab onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre établissement</p>
