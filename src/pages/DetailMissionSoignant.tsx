@@ -70,7 +70,7 @@ export default function DetailMissionSoignant() {
             taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
             taux_majoration_ferie_pourcent)
         `).eq('id', id).single(),
-        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee').eq('id', user.id).single(),
+        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, heures_cumulees').eq('id', user.id).single(),
       ]);
       if (m) {
         setMission(m);
