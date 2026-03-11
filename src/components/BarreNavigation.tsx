@@ -31,6 +31,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: PlusCircle, label: 'Publier', route: '/etablissement/missions/creer' },
   { icone: List, label: 'Missions', route: '/etablissement/missions' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
+  { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
   { icone: Settings, label: 'Profil', route: '/etablissement/profil' },
 ];
 
