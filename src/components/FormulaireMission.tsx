@@ -123,8 +123,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const warningDureeTresLongue = !modeRecurrent && dureeEstimee > 24;
 
   // Recurrence validation
-  const recurrenceBlocante = modeRecurrent && recurrenceValidation && (!recurrenceValidation.reposOk || !recurrenceValidation.plafond48hOk);
-  const recurrenceValide = modeRecurrent && creneaux.length > 0 && recurrenceValidation && recurrenceValidation.reposOk && recurrenceValidation.plafond48hOk;
+  const recurrenceBlocante = modeRecurrent && recurrenceValidation && !recurrenceValidation.valide;
+  const recurrenceValide = modeRecurrent && creneaux.length > 0 && recurrenceValidation && recurrenceValidation.valide;
 
   const handleRecurrenceChange = (config: RecurrenceConfig, creneauxGen: Creneau[], validation: RecurrenceValidation) => {
     setRecurrenceConfig(config);
