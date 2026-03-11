@@ -156,7 +156,7 @@ export default function DashboardEtablissement() {
         <button onClick={() => navigate('/etablissement/missions')} className="btn-secondary text-sm whitespace-nowrap flex items-center gap-2">
           <ClipboardList className="h-4 w-4" /> Mes missions
         </button>
-        {etab.groupe_sante_id && (
+        {etab?.groupe_sante_id && (
           <button onClick={() => navigate('/etablissement/mon-groupe')} className="btn-secondary text-sm whitespace-nowrap flex items-center gap-2">
             <Users className="h-4 w-4" /> Mon groupe
           </button>
