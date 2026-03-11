@@ -263,7 +263,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         </div>
 
         {/* Warning Rist */}
-        {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} />}
+        {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} ristPlafondActif={ristPlafondActif} />}
 
         {/* Urgence */}
         <div className="flex items-center justify-between">
