@@ -61,6 +61,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const navigate = useNavigate();
   const { deconnexion } = useAuth();
   const items = getNavItems(role);
+  const mobileItems = getMobileNavItems(role);
 
   const handleDeconnexion = async () => {
     await deconnexion();
