@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Banknote, User, Copy, XCircle, RotateCcw } from 'lucide-react';
 import { BadgeStatut } from '@/components/BadgeStatut';
-import { getLabelProfession } from '@/lib/constantes';
+import { getLabelProfession, extraireContratPreference, getContratBadge } from '@/lib/constantes';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
