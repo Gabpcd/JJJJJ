@@ -116,6 +116,11 @@ export default function DashboardSoignant() {
         );
         setMissionsOubliDepart(oublis);
       }
+      // Gains ce mois
+      if (gainsMois) {
+        const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_a_payer || 0), 0);
+        setGainsCeMois({ net, nb: (gainsMois as any[]).length });
+      }
       setLoading(false);
     };
     load();
