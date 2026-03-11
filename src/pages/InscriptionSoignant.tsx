@@ -115,6 +115,7 @@ export default function InscriptionSoignant() {
 
           {etape === 2 && (
             <div className="space-y-4">
+              <GeoAutoRequest onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre profil professionnel</p>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">Prénom *</label><input value={form.prenom} onChange={e => maj('prenom', e.target.value)} className="input-base" required /></div>
