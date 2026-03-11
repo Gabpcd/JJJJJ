@@ -21,35 +21,88 @@ export default function DashboardEtablissement() {
   const [missions, setMissions] = useState<any[]>([]);
   const [kpi, setKpi] = useState({ ouvertes: 0, enCours: 0, terminees: 0, taux: 0 });
   const [loading, setLoading] = useState(true);
+  const [erreurPartielle, setErreurPartielle] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState<any>(null);
   const [modalAnnuler, setModalAnnuler] = useState<any>(null);
 
   const charger = async () => {
     if (!user) return;
-    const [{ data: e }, { data: ms }] = await Promise.all([
-      supabase.from('etablissements').select('*, groupes_sante(nom)').eq('id', user.id).single(),
-      supabase.from('missions')
-        .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, soignants(prenom, nom, score_fiabilite), cree_le')
-        .eq('etablissement_id', user.id)
-        .order('cree_le', { ascending: false })
-        .limit(5),
-    ]);
+    let partialError = false;
 
-    const [{ count: o }, { count: ec }, { count: t }, { count: total }, { count: assigned }] = await Promise.all([
-      supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
-      supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
-      supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-      supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id),
-      supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
-    ]);
+    // 1. Données essentielles : établissement + missions récentes
+    try {
+      const [resEtab, resMissions] = await Promise.all([
+        supabase.from('etablissements').select('*, groupes_sante(nom)').eq('id', user.id).single(),
+        supabase.from('missions')
+          .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, soignants(prenom, nom, score_fiabilite), cree_le')
+          .eq('etablissement_id', user.id)
+          .order('cree_le', { ascending: false })
+          .limit(5),
+      ]);
 
-    if (e) setEtab(e);
-    if (ms) setMissions(ms);
-    const totalN = total ?? 0;
-    setKpi({
-      ouvertes: o ?? 0, enCours: ec ?? 0, terminees: t ?? 0,
-      taux: totalN > 0 ? Math.round(((assigned ?? 0) / totalN) * 100) : 0,
-    });
+      if (resEtab.error) {
+        console.error('[DashboardEtab] Erreur chargement établissement:', resEtab.error);
+        partialError = true;
+      } else if (resEtab.data) {
+        setEtab(resEtab.data);
+      }
+
+      if (resMissions.error) {
+        console.error('[DashboardEtab] Erreur chargement missions:', resMissions.error);
+        partialError = true;
+      } else if (resMissions.data) {
+        setMissions(resMissions.data);
+      }
+    } catch (err) {
+      console.error('[DashboardEtab] Erreur critique chargement principal:', err);
+      partialError = true;
+    }
+
+    // 2. KPI (non bloquant)
+    try {
+      const [resO, resEC, resT, resTotal, resAssigned] = await Promise.all([
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
+      ]);
+
+      if (resO.error || resEC.error || resT.error || resTotal.error || resAssigned.error) {
+        console.error('[DashboardEtab] Erreur KPI:', { o: resO.error, ec: resEC.error, t: resT.error, total: resTotal.error, assigned: resAssigned.error });
+        partialError = true;
+      }
+
+      const totalN = resTotal.count ?? 0;
+      setKpi({
+        ouvertes: resO.count ?? 0,
+        enCours: resEC.count ?? 0,
+        terminees: resT.count ?? 0,
+        taux: totalN > 0 ? Math.round(((resAssigned.count ?? 0) / totalN) * 100) : 0,
+      });
+    } catch (err) {
+      console.error('[DashboardEtab] Erreur critique KPI:', err);
+      partialError = true;
+    }
+
+    // 3. Audit HDS (non bloquant — ne doit JAMAIS bloquer l'affichage)
+    try {
+      await supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: user.id,
+        p_type_acteur: 'ADMIN_ETABLISSEMENT',
+        p_action: 'DONNEES_PERSO_CONSULTATION',
+        p_type_ressource: 'etablissement',
+        p_id_ressource: user.id,
+        p_cle_s3: null,
+        p_details: { page: 'dashboard_etablissement' },
+        p_ip: null,
+        p_navigateur: navigator.userAgent,
+      });
+    } catch (err) {
+      console.error('[DashboardEtab] Erreur audit (non bloquant):', err);
+    }
+
+    setErreurPartielle(partialError);
     setLoading(false);
   };
 
