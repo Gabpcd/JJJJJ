@@ -178,8 +178,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         type: 'serie_recurrente', serie_id: serieId, nb_creneaux: creneaux.length,
         nb_reussies: reussies, nb_echouees: echouees,
         periode: { du: recurrenceConfig.dateDebut, au: recurrenceConfig.dateFin },
-        jours: recurrenceConfig.joursCochés,
-        horaires: { debut: recurrenceConfig.heureDebut, fin: recurrenceConfig.heureFin },
+        horaires_par_jour: recurrenceConfig.horairesParJour.filter(j => j.actif).map(j => ({
+          jour: j.label, debut: j.heureDebut, fin: j.heureFin, duree: j.dureeHeures,
+        })),
       },
       p_ip: null, p_navigateur: navigator.userAgent,
     });
