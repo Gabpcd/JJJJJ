@@ -278,40 +278,37 @@ export default function DashboardSoignant() {
         )}
       </div>
 
+      {/* Gains ce mois */}
+      {gainsCeMois.nb > 0 && (
+        <div className="card-base mb-6 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/mes-gains')}>
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl p-2.5 bg-primary/10"><Banknote className="h-5 w-5 text-primary" /></div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-foreground">💰 Ce mois : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.net)} net sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}</p>
+              <p className="text-xs text-primary mt-0.5">Voir le détail →</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Parcours libéral */}
-      <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 border border-purple-200 p-4 md:p-6">
-        <h2 className="text-base font-bold text-foreground mb-1">Mon parcours vers le libéral</h2>
+      <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 border border-purple-200 p-4 md:p-6 mb-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-base font-bold text-foreground">Mon parcours vers le libéral</h2>
+          <span className="text-xs text-primary font-medium">Mon parcours →</span>
+        </div>
         <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
         <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-purple-500 to-purple-600" couleurFond="bg-purple-100" />
         <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
         <p className="text-sm font-semibold text-foreground mt-3"><span className="text-purple-600">{heures}h</span> / 3 200h</p>
-        {soignant.eligible_conversion_3200h && (
-          <div className="mt-3 rounded-xl bg-warning/10 border border-warning/20 p-3 text-center">
-            <p className="text-sm font-semibold text-warning">🎉 Félicitations ! Vous êtes éligible à l'installation libérale</p>
-          </div>
-        )}
       </div>
 
-      {/* Modal Score */}
-      {modalScore && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
-          <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setModalScore(false)} />
-          <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-sm w-full">
-            <button onClick={() => setModalScore(false)} className="absolute top-4 right-4 text-muted-foreground"><X className="h-5 w-5" /></button>
-            <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2"><Star className="h-5 w-5 text-primary" /> Score de fiabilité</h3>
-            <ul className="space-y-2 text-sm text-foreground">
-              <li className="flex gap-2"><span className="text-success">+2 pts</span> par mission terminée</li>
-              <li className="flex gap-2"><span className="text-destructive">−8 pts</span> par annulation</li>
-              <li className="flex gap-2"><span className="text-destructive">−25 pts</span> par absence</li>
-              <li className="flex gap-2"><span className="text-destructive">−3 pts</span> par retard au pointage</li>
-              <li className="flex gap-2"><span className="text-success">+10 pts</span> bonus après 20 missions</li>
-              <li className="flex gap-2"><span className="text-success">+5 pts</span> si zéro absence (après 5 missions)</li>
-              <li className="flex gap-2"><span className="text-success">+3 pts</span> si prévoyance active</li>
-            </ul>
-            <div className="mt-4 rounded-xl bg-primary/5 border border-primary/20 p-3">
-              <p className="text-xs text-primary font-medium">Score ≥ 75 = accès prioritaire aux missions urgentes 🚀</p>
-            </div>
-          </div>
+      {/* Prévoyance CTA */}
+      {!(soignant as any).prevoyance_inscrit && (
+        <div className="rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 p-4 mb-6 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
+          <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protégez-vous avec la Prévoyance Soin Direct</h3>
+          <p className="text-xs text-muted-foreground mb-2">Assurance santé subventionnée jusqu'à 30%. Bonus : +3 points de fiabilité.</p>
+          <span className="text-xs text-primary font-medium">Découvrir les plans →</span>
         </div>
       )}
     </LayoutApp>
