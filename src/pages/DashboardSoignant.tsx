@@ -7,6 +7,8 @@ import { EtatVide } from '@/components/EtatVide';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
+import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
+import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
@@ -51,21 +53,35 @@ export default function DashboardSoignant() {
   const [missions, setMissions] = useState<any[]>([]);
   const [mesMissions, setMesMissions] = useState<any[]>([]);
   const [docsExpirant, setDocsExpirant] = useState<any[]>([]);
+  const [heuresSemaine, setHeuresSemaine] = useState(0);
   const [loading, setLoading] = useState(true);
   const [modalScore, setModalScore] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: sg }, { data: ms }, { data: mm }, { data: docs }] = await Promise.all([
+      // Calcul semaine courante
+      const now = new Date();
+      const jour = now.getDay();
+      const lundi = new Date(now);
+      lundi.setDate(now.getDate() - (jour === 0 ? 6 : jour - 1));
+      lundi.setHours(0, 0, 0, 0);
+      const dimanche = new Date(lundi);
+      dimanche.setDate(lundi.getDate() + 7);
+
+      const [{ data: sg }, { data: ms }, { data: mm }, { data: docs }, { data: msSemaine }] = await Promise.all([
         supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single(),
         supabase.from('missions').select('id, intitule, service, debut_le, fin_le, taux_horaire_base, est_urgente, etablissements(nom, adresse_ville)').eq('statut', 'OUVERTE').order('debut_le', { ascending: true }).limit(3),
         supabase.from('missions').select('id, intitule, debut_le, fin_le, statut, etablissements(nom, adresse_ville)').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true }).limit(3),
         supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
+        supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
       ]);
       if (sg) setSoignant(sg as any);
       if (ms) setMissions(ms as any);
       if (mm) setMesMissions(mm as any);
+      if (msSemaine) {
+        setHeuresSemaine(msSemaine.reduce((t: number, m: any) => t + (m.duree_heures || 0), 0));
+      }
       if (docs) {
         setDocsExpirant((docs as any[]).filter(d =>
           d.valide_jusqua && d.statut_verification === 'VERIFIE' &&
@@ -96,6 +112,9 @@ export default function DashboardSoignant() {
           <p className="text-sm text-muted-foreground mt-1">Voici votre activité</p>
         )}
       </div>
+
+      {/* Alerte 48h */}
+      <BandeauAlerte48h heuresSemaine={heuresSemaine} />
 
       {/* Alerte documents expirant */}
       {docsExpirant.map(d => (
@@ -156,6 +175,11 @@ export default function DashboardSoignant() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Compteur hebdomadaire */}
+      <div className="mb-6">
+        <CompteurHebdomadaire />
       </div>
 
       {/* Mes missions en cours */}
