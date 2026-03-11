@@ -4,6 +4,7 @@ import { Printer, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { PROFESSIONS } from '@/lib/constantes';
+import { ENTREPRISE } from '@/constantes/entreprise';
 import { ChargementPage } from '@/components/ChargementPage';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
