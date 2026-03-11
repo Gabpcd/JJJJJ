@@ -79,6 +79,9 @@ export default function DashboardSoignant() {
       if (sg) setSoignant(sg as any);
       if (ms) setMissions(ms as any);
       if (mm) setMesMissions(mm as any);
+      if (msSemaine) {
+        setHeuresSemaine(msSemaine.reduce((t: number, m: any) => t + (m.duree_heures || 0), 0));
+      }
       if (docs) {
         setDocsExpirant((docs as any[]).filter(d =>
           d.valide_jusqua && d.statut_verification === 'VERIFIE' &&
