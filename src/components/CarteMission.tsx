@@ -71,6 +71,7 @@ export function CarteMission({ mission, afficherEtablissement, onDupliquer, onAn
       <h3 className="font-semibold text-sm text-foreground mb-1">{m.intitule}</h3>
       <p className="text-xs text-muted-foreground mb-2">
         {m.service && `${m.service} · `}{getLabelProfession(m.profession_requise)}
+        <span className={`badge-base text-[10px] ml-2 ${contratBadge.classes}`}>{contratBadge.label}</span>
       </p>
 
       <div className="flex items-center gap-4 text-xs text-muted-foreground mb-2">

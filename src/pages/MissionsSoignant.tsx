@@ -82,10 +82,19 @@ export default function MissionsSoignant() {
 
   const missionsAvecDistance = useMemo(() => {
     if (!soignant) return [];
+    const typesContrat = getTypesContratSoignant(soignant);
     let result = missions.map(m => ({
       ...m,
       distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
     }));
+
+    // Filter by contract type compatibility (only for available missions)
+    if (onglet === 'disponibles') {
+      result = result.filter(m => {
+        const pref = extraireContratPreference(m.description);
+        return missionCompatibleContrat(pref, typesContrat);
+      });
+    }
 
     if (onglet === 'disponibles' && filtres) {
       result = result.filter(m => m.distance_km === null || m.distance_km <= filtres.rayonKm);

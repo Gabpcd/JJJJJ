@@ -56,6 +56,7 @@ export function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissio
         {m.etablissements?.adresse_departement && ` (${m.etablissements.adresse_departement})`}
       </p>
       <BadgeDistance distanceKm={m.distance_km} />
+      <span className={`badge-base text-[10px] ${contratBadge.classes}`}>{contratBadge.label}</span>
 
       <div className="mt-2 text-xs text-muted-foreground">
         <p>📅 {format(new Date(m.debut_le), 'EEEE d MMMM yyyy', { locale: fr })}</p>
