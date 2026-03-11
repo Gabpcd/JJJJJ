@@ -33,9 +33,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [tauxHoraire, setTauxHoraire] = useState('');
   const [estUrgente, setEstUrgente] = useState(false);
   const [niveauUrgence, setNiveauUrgence] = useState(1);
+  const [contratPreference, setContratPreference] = useState<'TOUS' | 'SALARIE' | 'LIBERAL'>('TOUS');
   const [loading, setLoading] = useState(false);
   const [erreurCodeTravail, setErreurCodeTravail] = useState<any>(null);
   const [dupliquerInfo, setDupliquerInfo] = useState<string | null>(null);
+  const [ristPlafondActif, setRistPlafondActif] = useState(false);
   const [ristPlafondActif, setRistPlafondActif] = useState(false);
 
   // Recurrence state

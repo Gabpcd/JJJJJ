@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { CONTRATS, getLabelProfession } from '@/lib/constantes';
+import { CONTRATS, getLabelProfession, getTypesContratSoignant } from '@/lib/constantes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -20,6 +20,7 @@ export default function ProfilSoignant() {
     typeContrat: '', rpps: '', adeli: '',
     lat: '', lng: '', rayon: 30,
   });
+  const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
 
   useEffect(() => {
     if (!user) return;
@@ -35,6 +36,7 @@ export default function ProfilSoignant() {
           lat: data.adresse_lat?.toString() || '', lng: data.adresse_lng?.toString() || '',
           rayon: data.rayon_deplacement_km ?? 30,
         });
+        setTypesContrat(getTypesContratSoignant(data as any));
       }
       setLoading(false);
     });
@@ -43,6 +45,16 @@ export default function ProfilSoignant() {
   const [geoLoading, setGeoLoading] = useState(false);
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
+
+  const toggleContrat = (valeur: string) => {
+    setTypesContrat(prev => {
+      if (prev.includes(valeur)) {
+        if (prev.length <= 1) return prev; // at least one must be selected
+        return prev.filter(v => v !== valeur);
+      }
+      return [...prev, valeur];
+    });
+  };
 
   const demanderGeolocalisation = () => {
     if (!navigator.geolocation) {
@@ -72,7 +84,9 @@ export default function ProfilSoignant() {
     const { error } = await supabase.from('soignants').update({
       prenom: form.prenom, nom: form.nom,
       telephone: form.telephone || null, date_naissance: form.dateNaissance || null,
-      type_contrat: form.typeContrat || null, numero_rpps: form.rpps || null,
+      type_contrat: typesContrat[0] || null,
+      types_contrat_acceptes: JSON.stringify(typesContrat),
+      numero_rpps: form.rpps || null,
       numero_adeli: form.adeli || null, rayon_deplacement_km: form.rayon,
       adresse_lat: form.lat ? parseFloat(form.lat) : null,
       adresse_lng: form.lng ? parseFloat(form.lng) : null,
@@ -86,7 +100,7 @@ export default function ProfilSoignant() {
         p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
         p_action: 'DONNEES_PERSO_MODIFICATION', p_type_ressource: 'soignant',
         p_id_ressource: user.id, p_cle_s3: null,
-        p_details: { champs_modifies: Object.keys(form) },
+        p_details: { champs_modifies: Object.keys(form), types_contrat: typesContrat },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
       if (auditError) console.error('Audit failed:', auditError);
@@ -118,10 +132,24 @@ export default function ProfilSoignant() {
           <div className="space-y-3">
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Profession</label><input value={getLabelProfession(profession)} disabled className="input-base bg-muted cursor-not-allowed" /></div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Type de contrat</label>
-              <select value={form.typeContrat} onChange={e => maj('typeContrat', e.target.value)} className="input-base">
-                {CONTRATS.map(c => <option key={c.valeur} value={c.valeur}>{c.label}</option>)}
-              </select>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés</label>
+              <p className="text-xs text-muted-foreground mb-2">Cochez tous les types de contrat que vous acceptez</p>
+              <div className="space-y-2">
+                {CONTRATS.map(c => (
+                  <label key={c.valeur} className="flex items-center gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={typesContrat.includes(c.valeur)}
+                      onChange={() => toggleContrat(c.valeur)}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary accent-primary"
+                    />
+                    <span className="text-sm text-foreground group-hover:text-primary transition-colors">{c.label}</span>
+                  </label>
+                ))}
+              </div>
+              {typesContrat.length === 0 && (
+                <p className="text-xs text-destructive mt-1">Sélectionnez au moins un type de contrat</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">RPPS</label><input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} className="input-base" /></div>
