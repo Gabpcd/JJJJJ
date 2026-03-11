@@ -87,9 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const deconnexion = useCallback(async () => {
     const currentUser = user;
-    await supabase.auth.signOut();
+    // Audit AVANT signOut (sinon la session est invalidée)
     if (currentUser) {
-      supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
         p_acteur_id: currentUser.id,
         p_type_acteur: currentUser.role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
         p_action: 'DECONNEXION',
@@ -99,8 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         p_details: { horodatage: new Date().toISOString() },
         p_ip: null,
         p_navigateur: navigator.userAgent,
-      }).then(() => {});
+      });
+      if (auditError) console.error('Audit failed:', auditError);
     }
+    await supabase.auth.signOut();
   }, [user]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
