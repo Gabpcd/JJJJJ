@@ -64,6 +64,13 @@ export default function PresencesEtablissement() {
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     } else {
+      await supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
+        p_action: 'PRESENCE_VALIDATION', p_type_ressource: 'presence',
+        p_id_ressource: presenceId, p_cle_s3: null,
+        p_details: { type: 'validation_individuelle' },
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
       afficherNotification({ type: 'succes', message: '✅ Présence validée !' });
       charger();
     }
@@ -78,6 +85,13 @@ export default function PresencesEtablissement() {
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     } else {
+      await supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
+        p_action: 'PRESENCE_CONTESTATION', p_type_ressource: 'presence',
+        p_id_ressource: presenceId, p_cle_s3: null,
+        p_details: { motif },
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
       afficherNotification({ type: 'avertissement', message: 'Contestation enregistrée.' });
       charger();
     }
