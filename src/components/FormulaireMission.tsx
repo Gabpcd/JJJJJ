@@ -4,10 +4,14 @@ import { Loader2 } from 'lucide-react';
 import { SelectProfession } from '@/components/SelectProfession';
 import { WarningRist } from '@/components/WarningRist';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
+import { FormulaireRecurrence, type RecurrenceConfig, type Creneau, type RecurrenceValidation } from '@/components/FormulaireRecurrence';
+import { BarreProgressionBulk } from '@/components/BarreProgressionBulk';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 interface FormulaireMissionProps {
   missionSource?: any;
@@ -34,7 +38,16 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [dupliquerInfo, setDupliquerInfo] = useState<string | null>(null);
   const [ristPlafondActif, setRistPlafondActif] = useState(false);
 
-  // Load rist_plafond_actif from etablissements
+  // Recurrence state
+  const [modeRecurrent, setModeRecurrent] = useState(false);
+  const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | null>(null);
+  const [creneaux, setCreneaux] = useState<Creneau[]>([]);
+  const [recurrenceValidation, setRecurrenceValidation] = useState<RecurrenceValidation | null>(null);
+  const [publicationEnCours, setPublicationEnCours] = useState(false);
+  const [progression, setProgression] = useState(0);
+  const [progressionActuel, setProgressionActuel] = useState(0);
+
+  // Load rist_plafond_actif
   useEffect(() => {
     if (!user) return;
     supabase.from('etablissements').select('rist_plafond_actif, type').eq('id', user.id).single().then(({ data }) => {
@@ -82,11 +95,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const taux = parseFloat(tauxHoraire) || 0;
 
   const { dureeEstimee, heuresNuitEstimees } = useMemo(() => {
-    if (!debutLe || !finLe) return { dureeEstimee: 0, heuresNuitEstimees: 0 };
+    if (modeRecurrent || !debutLe || !finLe) return { dureeEstimee: 0, heuresNuitEstimees: 0 };
     const d = new Date(debutLe);
     const f = new Date(finLe);
     const dur = Math.max(0, (f.getTime() - d.getTime()) / 3600000);
-    // Rough night hours estimate
     let nuit = 0;
     const cursor = new Date(d);
     while (cursor < f) {
@@ -95,22 +107,106 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       cursor.setTime(cursor.getTime() + 3600000);
     }
     return { dureeEstimee: dur, heuresNuitEstimees: Math.min(nuit, dur) };
-  }, [debutLe, finLe]);
+  }, [debutLe, finLe, modeRecurrent]);
 
   const erreurDates = useMemo(() => {
+    if (modeRecurrent) return null;
     if (!debutLe || !finLe) return null;
     const d = new Date(debutLe);
     const f = new Date(finLe);
     if (f <= d) return 'La fin doit être après le début';
     if (!modeEdition && d < new Date()) return 'La mission ne peut pas commencer dans le passé';
     return null;
-  }, [debutLe, finLe, modeEdition]);
+  }, [debutLe, finLe, modeEdition, modeRecurrent]);
 
-  const warningDuree = dureeEstimee > 24;
+  const warningDureeLongue = !modeRecurrent && dureeEstimee > 12 && dureeEstimee <= 24;
+  const warningDureeTresLongue = !modeRecurrent && dureeEstimee > 24;
 
+  // Recurrence validation
+  const recurrenceBlocante = modeRecurrent && recurrenceValidation && (!recurrenceValidation.reposOk || !recurrenceValidation.plafond48hOk);
+  const recurrenceValide = modeRecurrent && creneaux.length > 0 && recurrenceValidation && recurrenceValidation.reposOk && recurrenceValidation.plafond48hOk;
+
+  const handleRecurrenceChange = (config: RecurrenceConfig, creneauxGen: Creneau[], validation: RecurrenceValidation) => {
+    setRecurrenceConfig(config);
+    setCreneaux(creneauxGen);
+    setRecurrenceValidation(validation);
+  };
+
+  // Bulk publish
+  const publierSerieRecurrente = async () => {
+    if (!user || !recurrenceConfig || creneaux.length === 0) return;
+    setPublicationEnCours(true);
+    setProgression(0);
+    setProgressionActuel(0);
+
+    const serieId = `SERIE_${Date.now()}`;
+    const descriptionAvecTag = `[SERIE_ID:${serieId}] ${description || ''}`.trim();
+    const resultats: { ok: boolean; erreur?: string }[] = [];
+
+    for (let i = 0; i < creneaux.length; i++) {
+      const creneau = creneaux[i];
+      const { data, error } = await supabase
+        .from('missions')
+        .insert({
+          etablissement_id: user.id,
+          intitule,
+          description: descriptionAvecTag,
+          profession_requise: profession as any,
+          service: service || null,
+          debut_le: new Date(creneau.debut).toISOString(),
+          fin_le: new Date(creneau.fin).toISOString(),
+          taux_horaire_base: parseFloat(tauxHoraire),
+          est_urgente: estUrgente,
+          niveau_urgence: estUrgente ? niveauUrgence : 0,
+        } as any)
+        .select()
+        .single();
+
+      resultats.push({ ok: !error, erreur: error?.message });
+      setProgressionActuel(i + 1);
+      setProgression(Math.round(((i + 1) / creneaux.length) * 100));
+    }
+
+    const reussies = resultats.filter(r => r.ok).length;
+    const echouees = resultats.filter(r => !r.ok).length;
+
+    // Audit
+    await supabase.rpc('fn_ecrire_audit', {
+      p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_CREATION',
+      p_type_ressource: 'mission', p_id_ressource: user.id, p_cle_s3: null,
+      p_details: {
+        type: 'serie_recurrente', serie_id: serieId, nb_creneaux: creneaux.length,
+        nb_reussies: reussies, nb_echouees: echouees,
+        periode: { du: recurrenceConfig.dateDebut, au: recurrenceConfig.dateFin },
+        jours: recurrenceConfig.joursCochés,
+        horaires: { debut: recurrenceConfig.heureDebut, fin: recurrenceConfig.heureFin },
+      },
+      p_ip: null, p_navigateur: navigator.userAgent,
+    });
+
+    setPublicationEnCours(false);
+
+    if (echouees === 0) {
+      afficherNotification({ type: 'succes', message: `✅ ${reussies} missions créées avec succès !` });
+    } else {
+      afficherNotification({ type: 'avertissement', message: `${reussies} missions créées, ${echouees} en erreur.` });
+    }
+    navigate('/etablissement/missions');
+  };
+
+  // Single mission submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || erreurDates || !intitule || !profession || !debutLe || !finLe || !tauxHoraire) return;
+    if (!user) return;
+
+    if (modeRecurrent) {
+      if (recurrenceBlocante) return;
+      if (creneaux.length === 0) return;
+      await publierSerieRecurrente();
+      return;
+    }
+
+    if (erreurDates || !intitule || !profession || !debutLe || !finLe || !tauxHoraire) return;
 
     setLoading(true);
     try {
@@ -139,13 +235,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           return;
         }
 
-        const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+        await supabase.rpc('fn_ecrire_audit', {
           p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_MODIFICATION',
           p_type_ressource: 'mission', p_id_ressource: missionSource.id, p_cle_s3: null,
           p_details: { intitule, profession, taux: tauxHoraire, debut: debutLe, fin: finLe },
           p_ip: null, p_navigateur: navigator.userAgent,
         });
-        if (auditError) console.error('Audit failed:', auditError);
 
         afficherNotification({ type: 'succes', message: 'Mission mise à jour !' });
         navigate(`/etablissement/missions/${missionSource.id}`);
@@ -162,13 +257,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           return;
         }
 
-        const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+        await supabase.rpc('fn_ecrire_audit', {
           p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_CREATION',
           p_type_ressource: 'mission', p_id_ressource: data.id, p_cle_s3: null,
           p_details: { intitule, profession, taux: tauxHoraire, debut: debutLe, fin: finLe },
           p_ip: null, p_navigateur: navigator.userAgent,
         });
-        if (auditError) console.error('Audit failed:', auditError);
 
         afficherNotification({ type: 'succes', message: 'Mission publiée avec succès !' });
         navigate('/etablissement/missions');
@@ -177,6 +271,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       setLoading(false);
     }
   };
+
+  const canSubmit = modeRecurrent
+    ? (!!intitule && !!profession && !!tauxHoraire && recurrenceValide && !publicationEnCours)
+    : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading);
 
   return (
     <>
@@ -190,22 +288,16 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {/* Intitulé */}
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">Intitulé *</label>
-          <input
-            value={intitule} onChange={(e) => setIntitule(e.target.value.slice(0, 120))}
-            placeholder="Ex: IDE de nuit — Service Urgences"
-            required className="input-base"
-          />
+          <input value={intitule} onChange={(e) => setIntitule(e.target.value.slice(0, 120))}
+            placeholder="Ex: IDE de nuit — Service Urgences" required className="input-base" />
           <p className="text-[10px] text-muted-foreground mt-1 text-right">{intitule.length}/120</p>
         </div>
 
         {/* Description */}
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">Description</label>
-          <textarea
-            value={description} onChange={(e) => setDescription(e.target.value)}
-            placeholder="Informations complémentaires pour le soignant..."
-            rows={3} className="input-base resize-none"
-          />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+            placeholder="Informations complémentaires pour le soignant..." rows={3} className="input-base resize-none" />
         </div>
 
         {/* Profession */}
@@ -217,49 +309,65 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {/* Service */}
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">Service</label>
-          <input
-            value={service} onChange={(e) => setService(e.target.value)}
-            placeholder="Ex: Urgences, Gériatrie, Réa, Bloc, EHPAD"
-            className="input-base"
-          />
+          <input value={service} onChange={(e) => setService(e.target.value)}
+            placeholder="Ex: Urgences, Gériatrie, Réa, Bloc, EHPAD" className="input-base" />
         </div>
 
-        {/* Bloc horaire */}
-        <div className="border border-primary/20 rounded-xl p-4 bg-primary/5 space-y-3">
-          <p className="text-sm font-semibold text-foreground">📅 Horaires de la mission</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Date et heure de début *</label>
-              <input type="datetime-local" value={debutLe} onChange={(e) => setDebutLe(e.target.value)} required className="input-base" />
+        {/* Mode ponctuel: horaires */}
+        {!modeRecurrent && (
+          <div className="border border-primary/20 rounded-xl p-4 bg-primary/5 space-y-3">
+            <p className="text-sm font-semibold text-foreground">📅 Horaires de la mission</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Date et heure de début *</label>
+                <input type="datetime-local" value={debutLe} onChange={(e) => setDebutLe(e.target.value)} required className="input-base" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Date et heure de fin *</label>
+                <input type="datetime-local" value={finLe} onChange={(e) => setFinLe(e.target.value)} required className="input-base" />
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Date et heure de fin *</label>
-              <input type="datetime-local" value={finLe} onChange={(e) => setFinLe(e.target.value)} required className="input-base" />
-            </div>
+            {erreurDates && <p className="text-xs text-destructive font-medium">{erreurDates}</p>}
+            {warningDureeLongue && <p className="text-xs text-warning font-medium">⚠️ Mission longue — assurez-vous que les repos légaux sont respectés</p>}
+            {warningDureeTresLongue && <p className="text-xs text-destructive font-medium">⚠️ Pour un remplacement de plusieurs jours, utilisez le mode récurrent ci-dessous</p>}
+            {dureeEstimee > 0 && !erreurDates && (
+              <div className="text-center">
+                <span className="badge-base bg-primary/10 text-primary">
+                  ⏱ Durée estimée : {Math.floor(dureeEstimee)}h{String(Math.round((dureeEstimee % 1) * 60)).padStart(2, '0')}
+                </span>
+                {heuresNuitEstimees > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-1">dont ~{heuresNuitEstimees.toFixed(0)}h de nuit (21h-6h)</p>
+                )}
+              </div>
+            )}
           </div>
-          {erreurDates && <p className="text-xs text-destructive font-medium">{erreurDates}</p>}
-          {warningDuree && <p className="text-xs text-warning font-medium">⚠️ Attention : mission de plus de 24h</p>}
-          {dureeEstimee > 0 && !erreurDates && (
-            <div className="text-center">
-              <span className="badge-base bg-primary/10 text-primary">
-                ⏱ Durée estimée : {Math.floor(dureeEstimee)}h{String(Math.round((dureeEstimee % 1) * 60)).padStart(2, '0')}
-              </span>
-              {heuresNuitEstimees > 0 && (
-                <p className="text-[10px] text-muted-foreground mt-1">dont ~{heuresNuitEstimees.toFixed(0)}h de nuit (21h-6h)</p>
-              )}
-            </div>
-          )}
-        </div>
+        )}
+
+        {/* Toggle Récurrence */}
+        {!modeEdition && (
+          <div className="flex items-center justify-between py-2">
+            <label className="text-sm font-medium text-foreground">🔁 Mission récurrente (plusieurs jours)</label>
+            <button
+              type="button"
+              onClick={() => setModeRecurrent(!modeRecurrent)}
+              className={`relative w-12 h-6 rounded-full transition-colors ${modeRecurrent ? 'bg-primary' : 'bg-muted'}`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${modeRecurrent ? 'translate-x-6' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+        )}
+
+        {/* Mode récurrent: formulaire */}
+        {modeRecurrent && !modeEdition && (
+          <FormulaireRecurrence onChange={handleRecurrenceChange} />
+        )}
 
         {/* Taux horaire */}
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">Taux horaire brut * (€/h)</label>
           <div className="relative">
-            <input
-              type="number" step="0.01" min="11.65" value={tauxHoraire}
-              onChange={(e) => setTauxHoraire(e.target.value)}
-              placeholder="25.00" required className="input-base pr-12"
-            />
+            <input type="number" step="0.01" min="11.65" value={tauxHoraire}
+              onChange={(e) => setTauxHoraire(e.target.value)} placeholder="25.00" required className="input-base pr-12" />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€/h</span>
           </div>
         </div>
@@ -270,11 +378,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {/* Urgence */}
         <div className="flex items-center justify-between">
           <label className="text-sm font-medium text-foreground">Mission urgente ?</label>
-          <button
-            type="button"
-            onClick={() => setEstUrgente(!estUrgente)}
-            className={`relative w-12 h-6 rounded-full transition-colors ${estUrgente ? 'bg-primary' : 'bg-muted'}`}
-          >
+          <button type="button" onClick={() => setEstUrgente(!estUrgente)}
+            className={`relative w-12 h-6 rounded-full transition-colors ${estUrgente ? 'bg-primary' : 'bg-muted'}`}>
             <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${estUrgente ? 'translate-x-6' : 'translate-x-0.5'}`} />
           </button>
         </div>
@@ -287,8 +392,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           </select>
         )}
 
-        {/* Estimation */}
-        {dureeEstimee > 0 && taux > 0 && (
+        {/* Estimation (ponctuel only) */}
+        {!modeRecurrent && dureeEstimee > 0 && taux > 0 && (
           <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
             <p className="font-bold text-foreground mb-3">💰 Estimation de rémunération</p>
             <div className="space-y-2 text-sm">
@@ -315,25 +420,52 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           </div>
         )}
 
+        {/* Estimation (récurrent) */}
+        {modeRecurrent && creneaux.length > 0 && taux > 0 && recurrenceValidation && (
+          <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
+            <p className="font-bold text-foreground mb-3">💰 Estimation de rémunération (série)</p>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Taux de base</span>
+                <span className="font-medium">{taux.toFixed(2)} €/h</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} × {recurrenceValidation.dureeCreneau}h</span>
+                <span className="font-medium">~{(creneaux.length * recurrenceValidation.dureeCreneau).toFixed(0)}h total</span>
+              </div>
+              <div className="border-t border-border pt-2 flex justify-between">
+                <span className="text-muted-foreground">Base brute estimée (série)</span>
+                <span className="font-bold text-primary">~{(taux * creneaux.length * recurrenceValidation.dureeCreneau).toFixed(2)} €</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <p className="text-[10px] text-muted-foreground italic text-center">
           Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
-          Les majorations (nuit, dimanche, jours fériés), l'IFM et l'ICP sont calculés automatiquement
-          par le système après la création de la mission.
         </p>
 
         {/* Submit */}
-        <button
-          type="submit"
-          disabled={loading || !!erreurDates || !intitule || !profession || !debutLe || !finLe || !tauxHoraire}
-          className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
-        >
+        <button type="submit" disabled={!canSubmit}
+          className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          {modeEdition ? '💾 Enregistrer les modifications' : '📤 Publier la mission'}
+          {modeEdition ? '💾 Enregistrer les modifications' :
+            modeRecurrent ? `📤 Publier ${creneaux.length} mission${creneaux.length > 1 ? 's' : ''}` : '📤 Publier la mission'}
         </button>
+
+        {modeRecurrent && recurrenceBlocante && (
+          <p className="text-xs text-destructive text-center font-medium">
+            ⛔ Corrigez les violations légales ci-dessus avant de publier.
+          </p>
+        )}
       </form>
 
       {erreurCodeTravail && (
         <ModalCodeTravail erreur={erreurCodeTravail} onFermer={() => setErreurCodeTravail(null)} />
+      )}
+
+      {publicationEnCours && (
+        <BarreProgressionBulk progression={progression} total={creneaux.length} actuel={progressionActuel} />
       )}
     </>
   );
