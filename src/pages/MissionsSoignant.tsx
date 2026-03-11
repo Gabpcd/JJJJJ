@@ -5,6 +5,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
+import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,6 +25,8 @@ interface SoignantData {
   tous_documents_valides: boolean;
 }
 
+type GroupeItem = { type: 'single'; mission: any } | { type: 'serie'; serieId: string; missions: any[] };
+
 export default function MissionsSoignant() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -35,49 +38,35 @@ export default function MissionsSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from('soignants')
+    supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides')
-      .eq('id', user.id)
-      .single()
+      .eq('id', user.id).single()
       .then(({ data }) => { if (data) setSoignant(data as any); });
   }, [user]);
 
   useEffect(() => {
     if (!user || !soignant) return;
     setLoading(true);
-
     const fetchMissions = async () => {
-      let query = supabase
-        .from('missions')
-        .select(`
-          id, intitule, description, service, profession_requise,
-          debut_le, fin_le, duree_heures,
-          taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
-          total_brut, net_a_payer,
-          est_urgente, niveau_urgence, statut,
-          soignant_assigne_id, cree_le,
-          etablissements(id, nom, adresse_ville, adresse_departement, adresse_lat, adresse_lng, type)
-        `);
+      let query = supabase.from('missions').select(`
+        id, intitule, description, service, profession_requise,
+        debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+        total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
+        soignant_assigne_id, cree_le,
+        etablissements(id, nom, adresse_ville, adresse_departement, adresse_lat, adresse_lng, type)
+      `);
 
       if (onglet === 'disponibles') {
-        query = query
-          .eq('statut', 'OUVERTE')
-          .eq('profession_requise', soignant.profession as any)
-          .order('est_urgente', { ascending: false })
-          .order('debut_le', { ascending: true });
-
+        query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any)
+          .order('est_urgente', { ascending: false }).order('debut_le', { ascending: true });
         if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);
         if (filtres?.dateFin) query = query.lte('debut_le', filtres.dateFin);
         if (filtres?.tauxMin && filtres.tauxMin > 0) query = query.gte('taux_horaire_base', filtres.tauxMin);
       } else if (onglet === 'mes_missions') {
-        query = query
-          .eq('soignant_assigne_id', user.id)
-          .in('statut', ['ASSIGNEE', 'EN_COURS'])
-          .order('debut_le', { ascending: true });
+        query = query.eq('soignant_assigne_id', user.id)
+          .in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true });
       } else {
-        query = query
-          .eq('soignant_assigne_id', user.id)
+        query = query.eq('soignant_assigne_id', user.id)
           .in('statut', ['TERMINEE', 'ANNULEE_PAR_SOIGNANT', 'ANNULEE_PAR_ETABLISSEMENT', 'ABSENCE'])
           .order('debut_le', { ascending: false });
       }
@@ -86,7 +75,6 @@ export default function MissionsSoignant() {
       setMissions(data || []);
       setLoading(false);
     };
-
     fetchMissions();
   }, [user, soignant, onglet, filtres]);
 
@@ -94,32 +82,54 @@ export default function MissionsSoignant() {
     if (!soignant) return [];
     let result = missions.map(m => ({
       ...m,
-      distance_km: calculerDistanceKm(
-        soignant.adresse_lat, soignant.adresse_lng,
-        m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null
-      ),
+      distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
     }));
 
-    // Filtrage par rayon (onglet disponibles uniquement)
     if (onglet === 'disponibles' && filtres) {
       result = result.filter(m => m.distance_km === null || m.distance_km <= filtres.rayonKm);
     }
 
-    // Tri
-    if (filtres?.tri === 'proximite') {
-      result.sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
-    } else if (filtres?.tri === 'taux') {
-      result.sort((a, b) => b.taux_horaire_base - a.taux_horaire_base);
-    } else if (filtres?.tri === 'duree') {
-      result.sort((a, b) => (a.duree_heures ?? 0) - (b.duree_heures ?? 0));
-    }
+    if (filtres?.tri === 'proximite') result.sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
+    else if (filtres?.tri === 'taux') result.sort((a, b) => b.taux_horaire_base - a.taux_horaire_base);
+    else if (filtres?.tri === 'duree') result.sort((a, b) => (a.duree_heures ?? 0) - (b.duree_heures ?? 0));
 
     return result;
   }, [missions, soignant, filtres, onglet]);
 
+  // Group by serie for 'disponibles' tab
+  const groupes = useMemo((): GroupeItem[] => {
+    if (onglet !== 'disponibles') return missionsAvecDistance.map(m => ({ type: 'single' as const, mission: m }));
+
+    const seriesMap = new Map<string, any[]>();
+    const singles: any[] = [];
+
+    for (const m of missionsAvecDistance) {
+      const sid = extraireSerieId(m.description);
+      if (sid) {
+        if (!seriesMap.has(sid)) seriesMap.set(sid, []);
+        seriesMap.get(sid)!.push(m);
+      } else {
+        singles.push(m);
+      }
+    }
+
+    const result: GroupeItem[] = [];
+    for (const [serieId, ms] of seriesMap) {
+      if (ms.length >= 2) {
+        result.push({ type: 'serie', serieId, missions: ms });
+      } else {
+        singles.push(...ms);
+      }
+    }
+    for (const m of singles) {
+      result.push({ type: 'single', mission: m });
+    }
+    return result;
+  }, [missionsAvecDistance, onglet]);
+
   if (!soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
-  const onglets: { id: Onglet; label: string; count?: number }[] = [
+  const onglets: { id: Onglet; label: string }[] = [
     { id: 'disponibles', label: 'Disponibles' },
     { id: 'mes_missions', label: 'Mes missions' },
     { id: 'historique', label: 'Historique' },
@@ -129,55 +139,41 @@ export default function MissionsSoignant() {
     <LayoutApp role="SOIGNANT">
       <h1 className="text-xl font-bold text-foreground mb-4">Missions</h1>
 
-      {/* Onglets */}
       <div className="flex border-b border-border mb-4 overflow-x-auto">
         {onglets.map(o => (
-          <button
-            key={o.id}
-            onClick={() => setOnglet(o.id)}
+          <button key={o.id} onClick={() => setOnglet(o.id)}
             className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors
-              ${onglet === o.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-          >
+              ${onglet === o.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             {o.label}
           </button>
         ))}
       </div>
 
-      {/* Filtres (onglet disponibles uniquement) */}
       {onglet === 'disponibles' && (
-        <FiltresMissions
-          rayonDefaut={soignant.rayon_deplacement_km}
-          onFiltreChange={setFiltres}
-        />
+        <FiltresMissions rayonDefaut={soignant.rayon_deplacement_km} onFiltreChange={setFiltres} />
       )}
 
-      {loading ? (
-        <ChargementPage />
-      ) : (
+      {loading ? <ChargementPage /> : (
         <>
-          {/* Onglet Disponibles */}
           {onglet === 'disponibles' && (
-            missionsAvecDistance.length > 0 ? (
+            groupes.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {missionsAvecDistance.map(m => (
-                  <CarteMissionSoignant
-                    key={m.id}
-                    mission={m}
-                    soignant={soignant}
-                    onClick={() => navigate(`/soignant/missions/${m.id}`)}
-                  />
-                ))}
+                {groupes.map((g, i) => {
+                  if (g.type === 'serie') {
+                    return <CarteSerie key={g.serieId} missions={g.missions} role="soignant" soignant={soignant} />;
+                  }
+                  return (
+                    <CarteMissionSoignant key={g.mission.id} mission={g.mission} soignant={soignant}
+                      onClick={() => navigate(`/soignant/missions/${g.mission.id}`)} />
+                  );
+                })}
               </div>
             ) : (
-              <EtatVide
-                icone={SearchX}
-                titre="Aucune mission disponible pour votre profil"
-                sousTitre={`De nouvelles missions pour les ${getLabelProfession(soignant.profession)} sont publiées régulièrement dans votre zone. Revenez bientôt !`}
-              />
+              <EtatVide icone={SearchX} titre="Aucune mission disponible pour votre profil"
+                sousTitre={`De nouvelles missions pour les ${getLabelProfession(soignant.profession)} sont publiées régulièrement. Revenez bientôt !`} />
             )
           )}
 
-          {/* Onglet Mes missions */}
           {onglet === 'mes_missions' && (
             missionsAvecDistance.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -196,18 +192,12 @@ export default function MissionsSoignant() {
                 ))}
               </div>
             ) : (
-              <EtatVide
-                icone={Briefcase}
-                titre="Vous n'avez pas encore de mission en cours"
+              <EtatVide icone={Briefcase} titre="Vous n'avez pas encore de mission en cours"
                 sousTitre="Consultez les missions disponibles et postulez !"
-                boutonLabel="Voir les missions disponibles"
-                boutonRoute="#"
-                boutonDisabled={false}
-              />
+                boutonLabel="Voir les missions disponibles" boutonRoute="#" boutonDisabled={false} />
             )
           )}
 
-          {/* Onglet Historique */}
           {onglet === 'historique' && (
             missionsAvecDistance.length > 0 ? (
               <div className="space-y-3">
@@ -224,11 +214,8 @@ export default function MissionsSoignant() {
                 ))}
               </div>
             ) : (
-              <EtatVide
-                icone={History}
-                titre="Aucune mission dans l'historique"
-                sousTitre="Vos missions terminées et annulées apparaîtront ici."
-              />
+              <EtatVide icone={History} titre="Aucune mission dans l'historique"
+                sousTitre="Vos missions terminées et annulées apparaîtront ici." />
             )
           )}
         </>
