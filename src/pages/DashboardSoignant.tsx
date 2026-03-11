@@ -75,13 +75,18 @@ export default function DashboardSoignant() {
       const dimanche = new Date(lundi);
       dimanche.setDate(lundi.getDate() + 7);
 
-      const [{ data: sg }, { data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }] = await Promise.all([
-        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single(),
+      // Gains ce mois
+      const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
+      const finMois = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+      const [{ data: sg }, { data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }, { data: gainsMois }] = await Promise.all([
+        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h, prevoyance_inscrit').eq('id', user.id).single(),
         supabase.from('missions').select('id, intitule, service, debut_le, fin_le, taux_horaire_base, est_urgente, etablissements(nom, adresse_ville)').eq('statut', 'OUVERTE').order('debut_le', { ascending: true }).limit(3),
         supabase.from('missions').select('id, intitule, debut_le, fin_le, statut, etablissements(nom, adresse_ville)').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true }).limit(3),
         supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
         supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
         supabase.from('missions').select('id, intitule, fin_le, presences(id, pointage_arrivee_le, pointage_depart_le)').eq('soignant_assigne_id', user.id).eq('statut', 'EN_COURS').lt('fin_le', new Date(Date.now() - 30 * 60000).toISOString()),
+        supabase.from('missions').select('net_a_payer').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', debutMois.toISOString()).lte('debut_le', finMois.toISOString()),
       ]);
       if (sg) setSoignant(sg as any);
       if (ms) setMissions(ms as any);
