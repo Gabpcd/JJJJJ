@@ -65,11 +65,12 @@ export default function DetailMission() {
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     } else {
-      await supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_ANNULATION',
         p_type_ressource: 'mission', p_id_ressource: id!, p_cle_s3: null,
-        p_details: { intitule: mission.intitule } as any, p_ip: null, p_navigateur: navigator.userAgent,
+        p_details: { intitule: mission.intitule }, p_ip: null, p_navigateur: navigator.userAgent,
       });
+      if (auditError) console.error('Audit failed:', auditError);
       afficherNotification({ type: 'succes', message: 'Mission annulée.' });
       navigate('/etablissement/missions');
     }

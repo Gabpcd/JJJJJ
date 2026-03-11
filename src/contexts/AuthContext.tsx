@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const role = extractRole(u);
 
     // Audit HDS
-    supabase.rpc('fn_ecrire_audit', {
+    const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
       p_acteur_id: u.id,
       p_type_acteur: role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
       p_action: 'CONNEXION',
@@ -76,7 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_details: { methode: 'email_password', horodatage: new Date().toISOString() },
       p_ip: null,
       p_navigateur: navigator.userAgent,
-    }).then(() => {});
+    });
+    if (auditError) console.error('Audit failed:', auditError);
 
     // Update derniere_activite_le for soignants
     if (role === 'SOIGNANT') {
@@ -86,9 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const deconnexion = useCallback(async () => {
     const currentUser = user;
-    await supabase.auth.signOut();
+    // Audit AVANT signOut (sinon la session est invalidée)
     if (currentUser) {
-      supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
         p_acteur_id: currentUser.id,
         p_type_acteur: currentUser.role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
         p_action: 'DECONNEXION',
@@ -98,8 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         p_details: { horodatage: new Date().toISOString() },
         p_ip: null,
         p_navigateur: navigator.userAgent,
-      }).then(() => {});
+      });
+      if (auditError) console.error('Audit failed:', auditError);
     }
+    await supabase.auth.signOut();
   }, [user]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
@@ -142,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // 4. Audit
-    supabase.rpc('fn_ecrire_audit', {
+    const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
       p_acteur_id: userId,
       p_type_acteur: 'SOIGNANT',
       p_action: 'CONNEXION',
@@ -152,7 +155,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_details: { evenement: 'inscription', profession: data.profession },
       p_ip: null,
       p_navigateur: navigator.userAgent,
-    }).then(() => {});
+    });
+    if (auditError) console.error('Audit failed:', auditError);
   }, []);
 
   const inscriptionEtablissement = useCallback(async (data: any) => {
@@ -196,7 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // 4. Audit
-    supabase.rpc('fn_ecrire_audit', {
+    const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
       p_acteur_id: userId,
       p_type_acteur: 'ADMIN_ETABLISSEMENT',
       p_action: 'CONNEXION',
@@ -206,7 +210,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_details: { evenement: 'inscription', type: data.type },
       p_ip: null,
       p_navigateur: navigator.userAgent,
-    }).then(() => {});
+    });
+    if (auditError) console.error('Audit failed:', auditError);
   }, []);
 
   return (
