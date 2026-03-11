@@ -56,6 +56,16 @@ export default function MesGains() {
       setMissions((ms as any[]) || []);
       setSoignant(sg);
       setLoading(false);
+
+      // Audit HDS — tracer la consultation de données personnelles
+      supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
+        p_action: 'DONNEES_PERSO_CONSULTATION',
+        p_type_ressource: 'soignant', p_id_ressource: user.id,
+        p_cle_s3: null,
+        p_details: { page: 'mes_gains', periode: filtre.label },
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
     };
     load();
   }, [user, filtre]);

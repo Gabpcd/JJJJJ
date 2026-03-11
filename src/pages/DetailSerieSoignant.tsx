@@ -185,13 +185,15 @@ export default function DetailSerieSoignant() {
       }
     }
 
-    // Audit
-    await supabase.rpc('fn_ecrire_audit', {
-      p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT', p_action: 'MISSION_ASSIGNATION',
-      p_type_ressource: 'mission', p_id_ressource: user!.id, p_cle_s3: null,
-      p_details: { type: 'acceptation_serie', serie_id: serieId, nb_acceptees: reussies, nb_echouees: echouees },
-      p_ip: null, p_navigateur: navigator.userAgent,
-    });
+    // Audit HDS — un log par mission acceptée
+    for (const mission of toAccept) {
+      await supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT', p_action: 'MISSION_ASSIGNATION',
+        p_type_ressource: 'mission', p_id_ressource: mission.id, p_cle_s3: null,
+        p_details: { type: 'acceptation_serie', serie_id: serieId, intitule: mission.intitule },
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
+    }
 
     setAcceptationEnCours(false);
     setResultatsAcceptation({ reussies, echouees });
