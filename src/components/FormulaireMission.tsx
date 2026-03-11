@@ -480,6 +480,15 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           );
         })()}
 
+        {/* Encart commission dégressive */}
+        {taux > 0 && dureeEstimee > 0 && !modeRecurrent && (
+          <EncartCommissionDegressif
+            netEstime={taux * dureeEstimee * 1.21}
+            tauxActuel={tauxCommission}
+            palierNom={palierNom}
+          />
+        )}
+
         <p className="text-[10px] text-muted-foreground italic text-center">
           Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
         </p>
