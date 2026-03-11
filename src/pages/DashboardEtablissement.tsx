@@ -122,19 +122,31 @@ export default function DashboardEtablissement() {
     }
   };
 
-  if (loading || !etab) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
     <LayoutApp role="ETABLISSEMENT">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">Bienvenue, <span className="text-primary">{etab.nom}</span></h1>
-        {etab.groupes_sante && (
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-sm text-muted-foreground">Groupe</span>
-            <span className="badge-base bg-primary/10 text-primary">{etab.groupes_sante.nom}</span>
-          </div>
-        )}
-      </div>
+      {erreurPartielle && (
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
+          ⚠️ Certaines données n'ont pas pu être chargées. Les informations affichées peuvent être incomplètes.
+        </div>
+      )}
+
+      {etab ? (
+        <div className="mb-6">
+          <h1 className="text-xl font-bold text-foreground">Bienvenue, <span className="text-primary">{etab.nom}</span></h1>
+          {etab.groupes_sante && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-sm text-muted-foreground">Groupe</span>
+              <span className="badge-base bg-primary/10 text-primary">{etab.groupes_sante.nom}</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mb-6">
+          <h1 className="text-xl font-bold text-foreground">Tableau de bord</h1>
+        </div>
+      )}
 
       {/* Actions rapides */}
       <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
