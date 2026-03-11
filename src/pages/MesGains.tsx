@@ -122,11 +122,16 @@ export default function MesGains() {
 
       {/* Liste fiches de paie */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h2 className="text-lg font-bold text-foreground">📋 Fiches de paie</h2>
-          <button onClick={copierResume} className="flex items-center gap-1 text-sm text-primary font-medium hover:underline">
-            <Copy className="h-4 w-4" /> Copier le résumé
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setModalAttestation(true)} className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-xl px-4 py-2 font-semibold text-sm hover:opacity-90 transition-opacity">
+              <FileDown className="h-4 w-4" /> Attestation d'heures
+            </button>
+            <button onClick={copierResume} className="flex items-center gap-1 text-sm text-primary font-medium hover:underline">
+              <Copy className="h-4 w-4" /> Copier le résumé
+            </button>
+          </div>
         </div>
 
         {missions.length > 0 ? (
