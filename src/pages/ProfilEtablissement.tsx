@@ -41,7 +41,43 @@ export default function ProfilEtablissement() {
     });
   }, [user]);
 
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+
+  // Load existing coords
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('etablissements').select('adresse_lat, adresse_lng').eq('id', user.id).single().then(({ data }) => {
+      if (data) {
+        setLat(data.adresse_lat?.toString() || '');
+        setLng(data.adresse_lng?.toString() || '');
+      }
+    });
+  }, [user]);
+
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
+
+  const demanderGeolocalisation = () => {
+    if (!navigator.geolocation) {
+      afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par votre navigateur.' });
+      return;
+    }
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLat(position.coords.latitude.toString());
+        setLng(position.coords.longitude.toString());
+        setGeoLoading(false);
+        afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
+      },
+      (erreur) => {
+        console.log('Géolocalisation refusée:', erreur.message);
+        setGeoLoading(false);
+        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir les coordonnées manuellement.' });
+      }
+    );
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
