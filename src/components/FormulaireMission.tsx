@@ -422,25 +422,28 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         )}
 
         {/* Estimation (récurrent) */}
-        {modeRecurrent && creneaux.length > 0 && taux > 0 && recurrenceValidation && (
-          <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
-            <p className="font-bold text-foreground mb-3">💰 Estimation de rémunération (série)</p>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Taux de base</span>
-                <span className="font-medium">{taux.toFixed(2)} €/h</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">{creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} × {recurrenceValidation.dureeCreneau}h</span>
-                <span className="font-medium">~{(creneaux.length * recurrenceValidation.dureeCreneau).toFixed(0)}h total</span>
-              </div>
-              <div className="border-t border-border pt-2 flex justify-between">
-                <span className="text-muted-foreground">Base brute estimée (série)</span>
-                <span className="font-bold text-primary">~{(taux * creneaux.length * recurrenceValidation.dureeCreneau).toFixed(2)} €</span>
+        {modeRecurrent && creneaux.length > 0 && taux > 0 && recurrenceValidation && (() => {
+          const totalH = creneaux.reduce((s, c) => s + c.dureeHeures, 0);
+          return (
+            <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
+              <p className="font-bold text-foreground mb-3">💰 Estimation de rémunération (série)</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taux de base</span>
+                  <span className="font-medium">{taux.toFixed(2)} €/h</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} — {totalH.toFixed(0)}h total</span>
+                  <span className="font-medium">~{totalH.toFixed(0)}h</span>
+                </div>
+                <div className="border-t border-border pt-2 flex justify-between">
+                  <span className="text-muted-foreground">Base brute estimée (série)</span>
+                  <span className="font-bold text-primary">~{(taux * totalH).toFixed(2)} €</span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         <p className="text-[10px] text-muted-foreground italic text-center">
           Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
