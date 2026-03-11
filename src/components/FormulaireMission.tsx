@@ -215,9 +215,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     setLoading(true);
     try {
+      const descriptionFinale = injecterContratTag(description || '', contratPreference);
       const payload = {
         intitule,
-        description: description || null,
+        description: descriptionFinale || null,
         profession_requise: profession,
         service: service || null,
         debut_le: new Date(debutLe).toISOString(),
