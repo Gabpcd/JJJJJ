@@ -196,6 +196,10 @@ export default function DetailMissionSoignant() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Col 1 — Infos */}
         <div className="space-y-4">
+          {/* Goal gradient banner */}
+          {estOuverte && (soignant as any).heures_cumulees != null && (
+            <GoalGradientMission heures={(soignant as any).heures_cumulees || 0} dureeHeuresMission={duree} />
+          )}
           {/* Mission info */}
           <div className="card-base">
             <div className="flex items-center gap-2 flex-wrap mb-2">
