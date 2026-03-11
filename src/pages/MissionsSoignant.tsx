@@ -11,7 +11,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { calculerDistanceKm } from '@/lib/geo';
-import { getLabelProfession } from '@/lib/constantes';
+import { getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
