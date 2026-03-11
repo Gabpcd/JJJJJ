@@ -23,6 +23,8 @@ interface SoignantData {
   adresse_lng: number | null;
   rayon_deplacement_km: number;
   tous_documents_valides: boolean;
+  type_contrat: string | null;
+  types_contrat_acceptes: string | null;
 }
 
 type GroupeItem = { type: 'single'; mission: any } | { type: 'serie'; serieId: string; missions: any[] };
