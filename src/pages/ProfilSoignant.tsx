@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
+import { MapPin, Loader2 } from 'lucide-react';
 
 export default function ProfilSoignant() {
   const { user } = useAuth();
@@ -39,7 +40,30 @@ export default function ProfilSoignant() {
     });
   }, [user]);
 
+  const [geoLoading, setGeoLoading] = useState(false);
+
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
+
+  const demanderGeolocalisation = () => {
+    if (!navigator.geolocation) {
+      afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par votre navigateur.' });
+      return;
+    }
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        maj('lat', position.coords.latitude.toString());
+        maj('lng', position.coords.longitude.toString());
+        setGeoLoading(false);
+        afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
+      },
+      (erreur) => {
+        console.log('Géolocalisation refusée:', erreur.message);
+        setGeoLoading(false);
+        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir votre adresse manuellement.' });
+      }
+    );
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,6 +132,15 @@ export default function ProfilSoignant() {
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Localisation</h2>
           <div className="space-y-3">
+            <button
+              type="button"
+              onClick={demanderGeolocalisation}
+              disabled={geoLoading}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50"
+            >
+              {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+              {geoLoading ? 'Récupération en cours…' : '📍 Utiliser ma position actuelle'}
+            </button>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Latitude</label><input type="number" step="any" value={form.lat} onChange={e => maj('lat', e.target.value)} className="input-base" /></div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Longitude</label><input type="number" step="any" value={form.lng} onChange={e => maj('lng', e.target.value)} className="input-base" /></div>

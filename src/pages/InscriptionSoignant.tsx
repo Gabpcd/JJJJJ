@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,6 +6,20 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { SelectProfession } from '@/components/SelectProfession';
 import { CONTRATS } from '@/lib/constantes';
+
+function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => void }) {
+  const [asked, setAsked] = useState(false);
+  useEffect(() => {
+    if (asked) return;
+    setAsked(true);
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => onResult(pos.coords.latitude, pos.coords.longitude),
+      (err) => console.log('Géolocalisation refusée:', err.message)
+    );
+  }, [asked, onResult]);
+  return null;
+}
 
 function JaugeForce({ motDePasse }: { motDePasse: string }) {
   let force = 0;
@@ -41,6 +55,7 @@ export default function InscriptionSoignant() {
     email: '', motDePasse: '', confirmMdp: '',
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     profession: '', typeContrat: '', rpps: '', rayon: 30,
+    lat: null as number | null, lng: null as number | null,
   });
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
@@ -114,6 +129,7 @@ export default function InscriptionSoignant() {
 
           {etape === 2 && (
             <div className="space-y-4">
+              <GeoAutoRequest onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre profil professionnel</p>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">Prénom *</label><input value={form.prenom} onChange={e => maj('prenom', e.target.value)} className="input-base" required /></div>

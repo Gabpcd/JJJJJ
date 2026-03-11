@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { Info } from 'lucide-react';
+import { Info, MapPin, Loader2 } from 'lucide-react';
 
 export default function ProfilEtablissement() {
   const { user } = useAuth();
@@ -41,7 +41,43 @@ export default function ProfilEtablissement() {
     });
   }, [user]);
 
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+
+  // Load existing coords
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('etablissements').select('adresse_lat, adresse_lng').eq('id', user.id).single().then(({ data }) => {
+      if (data) {
+        setLat(data.adresse_lat?.toString() || '');
+        setLng(data.adresse_lng?.toString() || '');
+      }
+    });
+  }, [user]);
+
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
+
+  const demanderGeolocalisation = () => {
+    if (!navigator.geolocation) {
+      afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par votre navigateur.' });
+      return;
+    }
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLat(position.coords.latitude.toString());
+        setLng(position.coords.longitude.toString());
+        setGeoLoading(false);
+        afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
+      },
+      (erreur) => {
+        console.log('Géolocalisation refusée:', erreur.message);
+        setGeoLoading(false);
+        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir les coordonnées manuellement.' });
+      }
+    );
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +88,8 @@ export default function ProfilEtablissement() {
       adresse_rue: form.rue, adresse_ville: form.ville,
       adresse_code_postal: form.codePostal, adresse_departement: form.departement || null,
       email_contact: form.emailContact, telephone_contact: form.telephoneContact || null,
+      adresse_lat: lat ? parseFloat(lat) : null,
+      adresse_lng: lng ? parseFloat(lng) : null,
       taux_majoration_nuit_pourcent: form.tauxNuit,
       taux_majoration_dimanche_pourcent: form.tauxDimanche,
       taux_majoration_ferie_pourcent: form.tauxFerie,
@@ -107,6 +145,24 @@ export default function ProfilEtablissement() {
           <div className="grid grid-cols-2 gap-3">
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
+          </div>
+        </div>
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">Géolocalisation</h2>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={demanderGeolocalisation}
+              disabled={geoLoading}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50"
+            >
+              {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+              {geoLoading ? 'Récupération en cours…' : '📍 Localiser mon établissement'}
+            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Latitude</label><input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className="input-base" /></div>
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Longitude</label><input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className="input-base" /></div>
+            </div>
           </div>
         </div>
         <div className="card-base">

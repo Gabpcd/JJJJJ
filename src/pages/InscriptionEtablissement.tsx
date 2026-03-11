@@ -1,10 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
+
+function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
+  const [asked, setAsked] = useState(false);
+  useEffect(() => {
+    if (asked) return;
+    setAsked(true);
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => onResult(pos.coords.latitude, pos.coords.longitude),
+      (err) => console.log('Géolocalisation refusée:', err.message)
+    );
+  }, [asked, onResult]);
+  return null;
+}
 
 export default function InscriptionEtablissement() {
   const navigate = useNavigate();
@@ -20,9 +34,10 @@ export default function InscriptionEtablissement() {
     nom: '', siret: '', finess: '', type: '',
     rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
+    lat: null as number | null, lng: null as number | null,
   });
 
-  const maj = (champ: string, valeur: string) => setForm(prev => ({ ...prev, [champ]: valeur }));
+  const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
   const etape2Valide = form.nom && form.siret.length === 14 && form.type && form.ville;
 
@@ -83,6 +98,8 @@ export default function InscriptionEtablissement() {
           )}
 
           {etape === 2 && (
+            <>
+            <GeoAutoEtab onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre établissement</p>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom de l'établissement *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required /></div>
@@ -111,6 +128,7 @@ export default function InscriptionEtablissement() {
                 </button>
               </div>
             </div>
+            </>
           )}
         </form>
 
