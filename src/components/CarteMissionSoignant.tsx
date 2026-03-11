@@ -35,6 +35,8 @@ export function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissio
   const temps = getTempsEcoule(m.cree_le);
   const profilComplet = soignant?.tous_documents_valides;
   const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
+  const contratPref = extraireContratPreference(m.description);
+  const contratBadge = getContratBadge(contratPref);
 
   return (
     <div onClick={onClick} className="card-base hover:shadow-md transition-all cursor-pointer active:scale-[0.99]">
