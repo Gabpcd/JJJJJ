@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const role = extractRole(u);
 
     // Audit HDS
-    supabase.rpc('fn_ecrire_audit', {
+    const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
       p_acteur_id: u.id,
       p_type_acteur: role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
       p_action: 'CONNEXION',
@@ -76,7 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_details: { methode: 'email_password', horodatage: new Date().toISOString() },
       p_ip: null,
       p_navigateur: navigator.userAgent,
-    }).then(() => {});
+    });
+    if (auditError) console.error('Audit failed:', auditError);
 
     // Update derniere_activite_le for soignants
     if (role === 'SOIGNANT') {
