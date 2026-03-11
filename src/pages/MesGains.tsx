@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Banknote, Gift, Palmtree, Clock, Copy } from 'lucide-react';
+import { Banknote, Gift, Palmtree, Clock, Copy, FileDown } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -7,6 +7,7 @@ import { EtatVide } from '@/components/EtatVide';
 import { FiltresPeriode } from '@/components/FiltresPeriode';
 import { GraphiqueGainsMensuels } from '@/components/GraphiqueGainsMensuels';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
+import { ModalAttestation } from '@/components/ModalAttestation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
