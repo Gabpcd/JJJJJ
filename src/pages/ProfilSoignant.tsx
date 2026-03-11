@@ -40,7 +40,30 @@ export default function ProfilSoignant() {
     });
   }, [user]);
 
+  const [geoLoading, setGeoLoading] = useState(false);
+
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
+
+  const demanderGeolocalisation = () => {
+    if (!navigator.geolocation) {
+      afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par votre navigateur.' });
+      return;
+    }
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        maj('lat', position.coords.latitude.toString());
+        maj('lng', position.coords.longitude.toString());
+        setGeoLoading(false);
+        afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
+      },
+      (erreur) => {
+        console.log('Géolocalisation refusée:', erreur.message);
+        setGeoLoading(false);
+        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir votre adresse manuellement.' });
+      }
+    );
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
