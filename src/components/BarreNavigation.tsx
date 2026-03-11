@@ -48,6 +48,14 @@ function getNavItems(role: UserRole): NavItem[] {
   }
 }
 
+function getMobileNavItems(role: UserRole): NavItem[] {
+  switch (role) {
+    case 'SOIGNANT': return NAV_SOIGNANT_MOBILE;
+    case 'ETABLISSEMENT': return NAV_ETABLISSEMENT;
+    case 'ADMIN_GROUPE': return NAV_GROUPE;
+  }
+}
+
 export function BarreNavigation({ role }: { role: UserRole }) {
   const location = useLocation();
   const navigate = useNavigate();
