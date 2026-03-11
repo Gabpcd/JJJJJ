@@ -38,7 +38,6 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [erreurCodeTravail, setErreurCodeTravail] = useState<any>(null);
   const [dupliquerInfo, setDupliquerInfo] = useState<string | null>(null);
   const [ristPlafondActif, setRistPlafondActif] = useState(false);
-  const [ristPlafondActif, setRistPlafondActif] = useState(false);
 
   // Recurrence state
   const [modeRecurrent, setModeRecurrent] = useState(false);
