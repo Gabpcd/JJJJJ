@@ -905,6 +905,7 @@ export type Database = {
           total_retards_pointage: number | null
           tous_documents_valides: boolean | null
           type_contrat: Database["public"]["Enums"]["type_contrat"] | null
+          types_contrat_acceptes: string | null
         }
         Insert: {
           adresse_lat?: number | null
@@ -941,6 +942,7 @@ export type Database = {
           total_retards_pointage?: number | null
           tous_documents_valides?: boolean | null
           type_contrat?: Database["public"]["Enums"]["type_contrat"] | null
+          types_contrat_acceptes?: string | null
         }
         Update: {
           adresse_lat?: number | null
@@ -977,6 +979,7 @@ export type Database = {
           total_retards_pointage?: number | null
           tous_documents_valides?: boolean | null
           type_contrat?: Database["public"]["Enums"]["type_contrat"] | null
+          types_contrat_acceptes?: string | null
         }
         Relationships: []
       }

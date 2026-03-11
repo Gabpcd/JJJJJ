@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { extraireContratPreference, injecterContratTag, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { WarningRist } from '@/components/WarningRist';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
@@ -33,6 +34,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [tauxHoraire, setTauxHoraire] = useState('');
   const [estUrgente, setEstUrgente] = useState(false);
   const [niveauUrgence, setNiveauUrgence] = useState(1);
+  const [contratPreference, setContratPreference] = useState<'TOUS' | 'SALARIE' | 'LIBERAL'>('TOUS');
   const [loading, setLoading] = useState(false);
   const [erreurCodeTravail, setErreurCodeTravail] = useState<any>(null);
   const [dupliquerInfo, setDupliquerInfo] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         if (data) {
           setIntitule(data.intitule);
           setDescription(data.description || '');
+          setContratPreference(extraireContratPreference(data.description));
           setProfession(data.profession_requise);
           setService(data.service || '');
           setTauxHoraire(String(data.taux_horaire_base));
@@ -140,7 +143,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     setProgressionActuel(0);
 
     const serieId = `SERIE_${Date.now()}`;
-    const descriptionAvecTag = `[SERIE_ID:${serieId}] ${description || ''}`.trim();
+    const descWithContrat = injecterContratTag(description || '', contratPreference);
+    const descriptionAvecTag = `[SERIE_ID:${serieId}] ${descWithContrat}`.trim();
     const resultats: { ok: boolean; erreur?: string }[] = [];
 
     for (let i = 0; i < creneaux.length; i++) {
@@ -211,9 +215,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     setLoading(true);
     try {
+      const descriptionFinale = injecterContratTag(description || '', contratPreference);
       const payload = {
         intitule,
-        description: description || null,
+        description: descriptionFinale || null,
         profession_requise: profession,
         service: service || null,
         debut_le: new Date(debutLe).toISOString(),
@@ -312,6 +317,31 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <label className="text-sm font-medium text-foreground mb-1 block">Service</label>
           <input value={service} onChange={(e) => setService(e.target.value)}
             placeholder="Ex: Urgences, Gériatrie, Réa, Bloc, EHPAD" className="input-base" />
+        </div>
+
+        {/* Ouvert aux contrats */}
+        <div>
+          <label className="text-sm font-medium text-foreground mb-2 block">Ouvert aux contrats :</label>
+          <div className="space-y-2">
+            {([
+              { value: 'TOUS' as const, label: 'Tous types de contrats', desc: 'CDDU, Intérim, Vacation, Libéral, Salarié' },
+              { value: 'SALARIE' as const, label: 'Salariés et CDD uniquement', desc: 'CDDU, Intérim, Vacation, Salarié' },
+              { value: 'LIBERAL' as const, label: 'Libéraux uniquement', desc: 'Libéral' },
+            ]).map(opt => (
+              <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="radio" name="contratPreference"
+                  checked={contratPreference === opt.value}
+                  onChange={() => setContratPreference(opt.value)}
+                  className="mt-0.5 accent-primary"
+                />
+                <div>
+                  <span className="text-sm text-foreground font-medium group-hover:text-primary transition-colors">{opt.label}</span>
+                  <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
         </div>
 
         {/* Mode ponctuel: horaires */}

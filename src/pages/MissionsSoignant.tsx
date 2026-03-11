@@ -11,7 +11,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { calculerDistanceKm } from '@/lib/geo';
-import { getLabelProfession } from '@/lib/constantes';
+import { getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -23,6 +23,8 @@ interface SoignantData {
   adresse_lng: number | null;
   rayon_deplacement_km: number;
   tous_documents_valides: boolean;
+  type_contrat: string | null;
+  types_contrat_acceptes: string | null;
 }
 
 type GroupeItem = { type: 'single'; mission: any } | { type: 'serie'; serieId: string; missions: any[] };
@@ -39,7 +41,7 @@ export default function MissionsSoignant() {
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants')
-      .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides')
+      .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes')
       .eq('id', user.id).single()
       .then(({ data }) => { if (data) setSoignant(data as any); });
   }, [user]);
@@ -80,10 +82,19 @@ export default function MissionsSoignant() {
 
   const missionsAvecDistance = useMemo(() => {
     if (!soignant) return [];
+    const typesContrat = getTypesContratSoignant(soignant);
     let result = missions.map(m => ({
       ...m,
       distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
     }));
+
+    // Filter by contract type compatibility (only for available missions)
+    if (onglet === 'disponibles') {
+      result = result.filter(m => {
+        const pref = extraireContratPreference(m.description);
+        return missionCompatibleContrat(pref, typesContrat);
+      });
+    }
 
     if (onglet === 'disponibles' && filtres) {
       result = result.filter(m => m.distance_km === null || m.distance_km <= filtres.rayonKm);

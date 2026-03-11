@@ -59,3 +59,45 @@ export function getLabelContrat(valeur: string): string {
 export function getLabelTypeEtablissement(valeur: string): string {
   return TYPES_ETABLISSEMENT.find(t => t.valeur === valeur)?.label || valeur;
 }
+
+// ─── Contract type tags in mission description ───
+export type ContratPreference = 'TOUS' | 'SALARIE' | 'LIBERAL';
+
+export function extraireContratPreference(description: string | null): ContratPreference {
+  if (!description) return 'TOUS';
+  const match = description.match(/\[CONTRAT:(TOUS|SALARIE|LIBERAL)\]/);
+  return (match?.[1] as ContratPreference) || 'TOUS';
+}
+
+export function injecterContratTag(description: string, pref: ContratPreference): string {
+  // Remove existing tag
+  const cleaned = description.replace(/\[CONTRAT:(TOUS|SALARIE|LIBERAL)\]\s*/g, '').trim();
+  if (pref === 'TOUS') return cleaned; // no tag needed for default
+  return `[CONTRAT:${pref}] ${cleaned}`.trim();
+}
+
+export function getContratBadge(pref: ContratPreference): { label: string; classes: string } {
+  switch (pref) {
+    case 'LIBERAL': return { label: 'Libéraux', classes: 'bg-purple-100 text-purple-700' };
+    case 'SALARIE': return { label: 'Salariés / CDD', classes: 'bg-primary/10 text-primary' };
+    default: return { label: 'Tous contrats', classes: 'bg-muted text-muted-foreground' };
+  }
+}
+
+export function missionCompatibleContrat(pref: ContratPreference, typesContratSoignant: string[]): boolean {
+  if (pref === 'TOUS') return true;
+  if (pref === 'LIBERAL') return typesContratSoignant.includes('LIBERAL');
+  // SALARIE = CDDU, INTERIM, VACATION, SALARIE
+  return typesContratSoignant.some(t => ['CDDU', 'INTERIM', 'VACATION', 'SALARIE'].includes(t));
+}
+
+/** Parse the types_contrat_acceptes JSON string or fall back to type_contrat */
+export function getTypesContratSoignant(soignant: { type_contrat?: string | null; types_contrat_acceptes?: string | null }): string[] {
+  if (soignant.types_contrat_acceptes) {
+    try {
+      const arr = JSON.parse(soignant.types_contrat_acceptes);
+      if (Array.isArray(arr) && arr.length > 0) return arr;
+    } catch { /* fallback */ }
+  }
+  return soignant.type_contrat ? [soignant.type_contrat] : ['CDDU'];
+}

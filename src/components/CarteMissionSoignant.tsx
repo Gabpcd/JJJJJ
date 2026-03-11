@@ -2,7 +2,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { BadgeStatut } from '@/components/BadgeStatut';
-import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
+import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge } from '@/lib/constantes';
 
 interface CarteMissionSoignantProps {
   mission: any;
@@ -35,6 +35,8 @@ export function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissio
   const temps = getTempsEcoule(m.cree_le);
   const profilComplet = soignant?.tous_documents_valides;
   const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
+  const contratPref = extraireContratPreference(m.description);
+  const contratBadge = getContratBadge(contratPref);
 
   return (
     <div onClick={onClick} className="card-base hover:shadow-md transition-all cursor-pointer active:scale-[0.99]">
@@ -54,6 +56,7 @@ export function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissio
         {m.etablissements?.adresse_departement && ` (${m.etablissements.adresse_departement})`}
       </p>
       <BadgeDistance distanceKm={m.distance_km} />
+      <span className={`badge-base text-[10px] ${contratBadge.classes}`}>{contratBadge.label}</span>
 
       <div className="mt-2 text-xs text-muted-foreground">
         <p>📅 {format(new Date(m.debut_le), 'EEEE d MMMM yyyy', { locale: fr })}</p>
