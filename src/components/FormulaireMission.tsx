@@ -40,9 +40,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   // Recurrence state
   const [modeRecurrent, setModeRecurrent] = useState(false);
-  const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | null>(null);
-  const [creneaux, setCreneaux] = useState<Creneau[]>([]);
-  const [recurrenceValidation, setRecurrenceValidation] = useState<RecurrenceValidation | null>(null);
+  const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceFlexConfig | null>(null);
+  const [creneaux, setCreneaux] = useState<CreneauFlex[]>([]);
+  const [recurrenceValidation, setRecurrenceValidation] = useState<ValidationFlexResult | null>(null);
   const [publicationEnCours, setPublicationEnCours] = useState(false);
   const [progression, setProgression] = useState(0);
   const [progressionActuel, setProgressionActuel] = useState(0);
