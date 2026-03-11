@@ -1,16 +1,28 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
 
+// Bottom bar mobile: 5 items max
+const NAV_SOIGNANT_MOBILE: NavItem[] = [
+  { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
+  { icone: Search, label: 'Missions', route: '/soignant/missions' },
+  { icone: MapPin, label: 'Pointer', route: '/soignant/presences' },
+  { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
+  { icone: User, label: 'Profil', route: '/soignant/profil' },
+];
+
+// Sidebar desktop: full nav
 const NAV_SOIGNANT: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
   { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
-  { icone: MapPin, label: 'Pointer', route: '/soignant/presences' },
+  { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
+  { icone: FileText, label: 'Documents', route: '/soignant/documents' },
+  { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 
@@ -36,11 +48,20 @@ function getNavItems(role: UserRole): NavItem[] {
   }
 }
 
+function getMobileNavItems(role: UserRole): NavItem[] {
+  switch (role) {
+    case 'SOIGNANT': return NAV_SOIGNANT_MOBILE;
+    case 'ETABLISSEMENT': return NAV_ETABLISSEMENT;
+    case 'ADMIN_GROUPE': return NAV_GROUPE;
+  }
+}
+
 export function BarreNavigation({ role }: { role: UserRole }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { deconnexion } = useAuth();
   const items = getNavItems(role);
+  const mobileItems = getMobileNavItems(role);
 
   const handleDeconnexion = async () => {
     await deconnexion();
@@ -50,7 +71,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   return (
     <>
       <nav className="bottom-nav md:hidden">
-        {items.map((item) => {
+        {mobileItems.map((item) => {
           const actif = location.pathname === item.route;
           return (
             <button key={item.route} onClick={() => navigate(item.route)} className={`bottom-nav-item ${actif ? 'bottom-nav-item-active' : ''}`}>

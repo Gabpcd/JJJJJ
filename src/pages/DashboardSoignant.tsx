@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle } from 'lucide-react';
+import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote } from 'lucide-react';
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
 import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
+import { BadgeNiveau } from '@/components/BadgeNiveau';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide } from '@/components/EtatVide';
@@ -60,6 +61,7 @@ export default function DashboardSoignant() {
   const [modalScore, setModalScore] = useState(false);
   const [missionProchaine, setMissionProchaine] = useState<any>(null);
   const [missionsOubliDepart, setMissionsOubliDepart] = useState<any[]>([]);
+  const [gainsCeMois, setGainsCeMois] = useState({ net: 0, nb: 0 });
 
   useEffect(() => {
     if (!user) return;
@@ -73,13 +75,18 @@ export default function DashboardSoignant() {
       const dimanche = new Date(lundi);
       dimanche.setDate(lundi.getDate() + 7);
 
-      const [{ data: sg }, { data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }] = await Promise.all([
-        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single(),
+      // Gains ce mois
+      const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
+      const finMois = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+      const [{ data: sg }, { data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }, { data: gainsMois }] = await Promise.all([
+        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h, prevoyance_inscrit').eq('id', user.id).single(),
         supabase.from('missions').select('id, intitule, service, debut_le, fin_le, taux_horaire_base, est_urgente, etablissements(nom, adresse_ville)').eq('statut', 'OUVERTE').order('debut_le', { ascending: true }).limit(3),
         supabase.from('missions').select('id, intitule, debut_le, fin_le, statut, etablissements(nom, adresse_ville)').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true }).limit(3),
         supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
         supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
         supabase.from('missions').select('id, intitule, fin_le, presences(id, pointage_arrivee_le, pointage_depart_le)').eq('soignant_assigne_id', user.id).eq('statut', 'EN_COURS').lt('fin_le', new Date(Date.now() - 30 * 60000).toISOString()),
+        supabase.from('missions').select('net_a_payer').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', debutMois.toISOString()).lte('debut_le', finMois.toISOString()),
       ]);
       if (sg) setSoignant(sg as any);
       if (ms) setMissions(ms as any);
@@ -108,6 +115,11 @@ export default function DashboardSoignant() {
           m.presences?.length > 0 && m.presences[0].pointage_arrivee_le && !m.presences[0].pointage_depart_le
         );
         setMissionsOubliDepart(oublis);
+      }
+      // Gains ce mois
+      if (gainsMois) {
+        const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_a_payer || 0), 0);
+        setGainsCeMois({ net, nb: (gainsMois as any[]).length });
       }
       setLoading(false);
     };
@@ -177,13 +189,14 @@ export default function DashboardSoignant() {
       {/* KPI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
-        <div className="card-kpi cursor-pointer" onClick={() => setModalScore(true)}>
+        <div className="card-kpi cursor-pointer" onClick={() => navigate('/soignant/fiabilite')}>
           <div className="flex items-start gap-3">
             <div className={`rounded-xl p-2.5 ${scoreConfig.couleurFond}`}><Star className={`h-5 w-5 ${scoreConfig.couleurIcone}`} /></div>
             <div>
               <p className="text-2xl font-bold text-foreground">{score}<span className="text-sm text-muted-foreground">/100</span></p>
               <p className="text-xs text-muted-foreground">Score · {scoreConfig.label}</p>
-              <p className="text-[10px] text-primary mt-0.5 flex items-center gap-0.5"><Info className="h-3 w-3" /> En savoir plus</p>
+              <BadgeNiveau score={score} compact />
+              <p className="text-[10px] text-primary mt-0.5">Voir le détail →</p>
             </div>
           </div>
         </div>
@@ -265,40 +278,37 @@ export default function DashboardSoignant() {
         )}
       </div>
 
+      {/* Gains ce mois */}
+      {gainsCeMois.nb > 0 && (
+        <div className="card-base mb-6 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/mes-gains')}>
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl p-2.5 bg-primary/10"><Banknote className="h-5 w-5 text-primary" /></div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-foreground">💰 Ce mois : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.net)} net sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}</p>
+              <p className="text-xs text-primary mt-0.5">Voir le détail →</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Parcours libéral */}
-      <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 border border-purple-200 p-4 md:p-6">
-        <h2 className="text-base font-bold text-foreground mb-1">Mon parcours vers le libéral</h2>
+      <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 border border-purple-200 p-4 md:p-6 mb-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-base font-bold text-foreground">Mon parcours vers le libéral</h2>
+          <span className="text-xs text-primary font-medium">Mon parcours →</span>
+        </div>
         <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
         <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-purple-500 to-purple-600" couleurFond="bg-purple-100" />
         <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
         <p className="text-sm font-semibold text-foreground mt-3"><span className="text-purple-600">{heures}h</span> / 3 200h</p>
-        {soignant.eligible_conversion_3200h && (
-          <div className="mt-3 rounded-xl bg-warning/10 border border-warning/20 p-3 text-center">
-            <p className="text-sm font-semibold text-warning">🎉 Félicitations ! Vous êtes éligible à l'installation libérale</p>
-          </div>
-        )}
       </div>
 
-      {/* Modal Score */}
-      {modalScore && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
-          <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setModalScore(false)} />
-          <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-sm w-full">
-            <button onClick={() => setModalScore(false)} className="absolute top-4 right-4 text-muted-foreground"><X className="h-5 w-5" /></button>
-            <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2"><Star className="h-5 w-5 text-primary" /> Score de fiabilité</h3>
-            <ul className="space-y-2 text-sm text-foreground">
-              <li className="flex gap-2"><span className="text-success">+2 pts</span> par mission terminée</li>
-              <li className="flex gap-2"><span className="text-destructive">−8 pts</span> par annulation</li>
-              <li className="flex gap-2"><span className="text-destructive">−25 pts</span> par absence</li>
-              <li className="flex gap-2"><span className="text-destructive">−3 pts</span> par retard au pointage</li>
-              <li className="flex gap-2"><span className="text-success">+10 pts</span> bonus après 20 missions</li>
-              <li className="flex gap-2"><span className="text-success">+5 pts</span> si zéro absence (après 5 missions)</li>
-              <li className="flex gap-2"><span className="text-success">+3 pts</span> si prévoyance active</li>
-            </ul>
-            <div className="mt-4 rounded-xl bg-primary/5 border border-primary/20 p-3">
-              <p className="text-xs text-primary font-medium">Score ≥ 75 = accès prioritaire aux missions urgentes 🚀</p>
-            </div>
-          </div>
+      {/* Prévoyance CTA */}
+      {!(soignant as any).prevoyance_inscrit && (
+        <div className="rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 p-4 mb-6 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
+          <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protégez-vous avec la Prévoyance Soin Direct</h3>
+          <p className="text-xs text-muted-foreground mb-2">Assurance santé subventionnée jusqu'à 30%. Bonus : +3 points de fiabilité.</p>
+          <span className="text-xs text-primary font-medium">Découvrir les plans →</span>
         </div>
       )}
     </LayoutApp>
