@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { UserRole, Soignant, Etablissement } from '@/lib/types';
-import { MOCK_SOIGNANT, MOCK_ETABLISSEMENT } from '@/lib/mock-data';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { UserRole } from '@/lib/types';
+import { Session, User } from '@supabase/supabase-js';
 
-interface User {
+interface AppUser {
   id: string;
   email: string;
   role: UserRole;
@@ -12,74 +12,189 @@ interface User {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AppUser | null;
+  session: Session | null;
   loading: boolean;
   connexion: (email: string, motDePasse: string) => Promise<void>;
-  deconnexion: () => void;
+  deconnexion: () => Promise<void>;
   inscriptionSoignant: (data: any) => Promise<void>;
   inscriptionEtablissement: (data: any) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+function extractRole(user: User): UserRole {
+  return (user.app_metadata?.role || user.user_metadata?.role || 'SOIGNANT') as UserRole;
+}
+
+function toAppUser(user: User): AppUser {
+  return {
+    id: user.id,
+    email: user.email || '',
+    role: extractRole(user),
+    prenom: user.user_metadata?.prenom,
+    nom: user.user_metadata?.nom,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const connexion = useCallback(async (email: string, _motDePasse: string) => {
-    setLoading(true);
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 800));
-
-    // Demo: determine role from email
-    let role: UserRole = 'SOIGNANT';
-    if (email.includes('etab') || email.includes('hopital') || email.includes('chu')) {
-      role = 'ETABLISSEMENT';
-    } else if (email.includes('groupe') || email.includes('admin')) {
-      role = 'ADMIN_GROUPE';
-    }
-
-    setUser({
-      id: role === 'SOIGNANT' ? MOCK_SOIGNANT.id : MOCK_ETABLISSEMENT.id,
-      email,
-      role,
-      prenom: role === 'SOIGNANT' ? MOCK_SOIGNANT.prenom : undefined,
-      nom: role === 'SOIGNANT' ? MOCK_SOIGNANT.nom : MOCK_ETABLISSEMENT.nom,
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ? toAppUser(session.user) : null);
+      setLoading(false);
     });
-    setLoading(false);
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ? toAppUser(session.user) : null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const deconnexion = useCallback(() => {
-    setUser(null);
+  const connexion = useCallback(async (email: string, motDePasse: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: motDePasse });
+    if (error) throw error;
+
+    const u = data.user;
+    const role = extractRole(u);
+
+    // Audit HDS
+    supabase.rpc('fn_ecrire_audit', {
+      p_acteur_id: u.id,
+      p_type_acteur: role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
+      p_action: 'CONNEXION',
+      p_type_ressource: role === 'SOIGNANT' ? 'soignant' : 'etablissement',
+      p_id_ressource: u.id,
+      p_cle_s3: null,
+      p_details: { methode: 'email_password', horodatage: new Date().toISOString() },
+      p_ip: null,
+      p_navigateur: navigator.userAgent,
+    }).then(() => {});
+
+    // Update derniere_activite_le for soignants
+    if (role === 'SOIGNANT') {
+      supabase.from('soignants').update({ derniere_activite_le: new Date().toISOString() } as any).eq('id', u.id).then(() => {});
+    }
   }, []);
+
+  const deconnexion = useCallback(async () => {
+    const currentUser = user;
+    await supabase.auth.signOut();
+    if (currentUser) {
+      supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: currentUser.id,
+        p_type_acteur: currentUser.role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
+        p_action: 'DECONNEXION',
+        p_type_ressource: currentUser.role === 'SOIGNANT' ? 'soignant' : 'etablissement',
+        p_id_ressource: currentUser.id,
+        p_cle_s3: null,
+        p_details: { horodatage: new Date().toISOString() },
+        p_ip: null,
+        p_navigateur: navigator.userAgent,
+      }).then(() => {});
+    }
+  }, [user]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-    setUser({
-      id: 'new-soignant-' + Date.now(),
+    // 1. Create auth account
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
-      role: 'SOIGNANT',
+      password: data.motDePasse,
+      options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
+    });
+    if (authError) throw authError;
+
+    const userId = authData.user!.id;
+
+    // 2. Insert into soignants table
+    const { error: insertError } = await supabase.from('soignants').insert({
+      id: userId,
       prenom: data.prenom,
       nom: data.nom,
+      email: data.email,
+      telephone: data.telephone || null,
+      date_naissance: data.dateNaissance || null,
+      profession: data.profession,
+      type_contrat: data.typeContrat,
+      numero_rpps: data.rpps || null,
+      rayon_deplacement_km: data.rayon,
+    } as any);
+    if (insertError) throw insertError;
+
+    // 3. Set app_metadata for RLS
+    await supabase.functions.invoke('set-user-claims', {
+      body: { userId, role: 'SOIGNANT' },
     });
-    setLoading(false);
+
+    // 4. Audit
+    supabase.rpc('fn_ecrire_audit', {
+      p_acteur_id: userId,
+      p_type_acteur: 'SOIGNANT',
+      p_action: 'CONNEXION',
+      p_type_ressource: 'soignant',
+      p_id_ressource: userId,
+      p_cle_s3: null,
+      p_details: { evenement: 'inscription', profession: data.profession },
+      p_ip: null,
+      p_navigateur: navigator.userAgent,
+    }).then(() => {});
   }, []);
 
   const inscriptionEtablissement = useCallback(async (data: any) => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-    setUser({
-      id: 'new-etab-' + Date.now(),
+    // 1. Create auth account
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
-      role: 'ETABLISSEMENT',
-      nom: data.nom,
+      password: data.motDePasse,
+      options: { data: { role: 'ETABLISSEMENT', nom_etablissement: data.nom } },
     });
-    setLoading(false);
+    if (authError) throw authError;
+
+    const userId = authData.user!.id;
+
+    // 2. Insert into etablissements table
+    const { error: insertError } = await supabase.from('etablissements').insert({
+      id: userId,
+      nom: data.nom,
+      siret: data.siret,
+      finess: data.finess || null,
+      type: data.type,
+      adresse_rue: data.rue || 'Non renseigné',
+      adresse_ville: data.ville,
+      adresse_code_postal: data.codePostal || '00000',
+      adresse_departement: data.departement || null,
+      email_contact: data.emailContact || data.email,
+      telephone_contact: data.telephoneContact || null,
+    } as any);
+    if (insertError) throw insertError;
+
+    // 3. Set app_metadata for RLS
+    await supabase.functions.invoke('set-user-claims', {
+      body: { userId, role: 'ETABLISSEMENT', etablissementId: userId },
+    });
+
+    // 4. Audit
+    supabase.rpc('fn_ecrire_audit', {
+      p_acteur_id: userId,
+      p_type_acteur: 'ADMIN_ETABLISSEMENT',
+      p_action: 'CONNEXION',
+      p_type_ressource: 'etablissement',
+      p_id_ressource: userId,
+      p_cle_s3: null,
+      p_details: { evenement: 'inscription', type: data.type },
+      p_ip: null,
+      p_navigateur: navigator.userAgent,
+    }).then(() => {});
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, connexion, deconnexion, inscriptionSoignant, inscriptionEtablissement }}>
+    <AuthContext.Provider value={{ user, session, loading, connexion, deconnexion, inscriptionSoignant, inscriptionEtablissement }}>
       {children}
     </AuthContext.Provider>
   );
