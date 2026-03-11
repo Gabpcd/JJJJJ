@@ -4,7 +4,6 @@ import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
 import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { BadgeNiveau } from '@/components/BadgeNiveau';
-import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide } from '@/components/EtatVide';
