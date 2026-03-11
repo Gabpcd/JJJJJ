@@ -43,6 +43,12 @@ export interface ValidationFlexResult {
 }
 
 // ─── Génération des créneaux ──────────────────────────────────────
+// Parse "YYYY-MM-DD" as LOCAL date (not UTC)
+function parseDateLocale(str: string): Date {
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 export function genererCreneauxFlex(
   dateDebut: string, dateFin: string, horairesParJour: HorairesJour[]
 ): CreneauFlex[] {
@@ -51,31 +57,49 @@ export function genererCreneauxFlex(
   if (joursActifs.length === 0) return [];
 
   const creneaux: CreneauFlex[] = [];
-  const debut = new Date(dateDebut);
-  const fin = new Date(dateFin);
+  const debut = parseDateLocale(dateDebut);
+  const fin = parseDateLocale(dateFin);
 
-  for (let d = new Date(debut); d <= fin; d.setDate(d.getDate() + 1)) {
-    const jourISO = d.getDay() === 0 ? 7 : d.getDay();
+  console.log('[genererCreneauxFlex] dateDebut:', dateDebut, '→', debut.toLocaleDateString(), '| dateFin:', dateFin, '→', fin.toLocaleDateString());
+  console.log('[genererCreneauxFlex] joursActifs ISO:', joursActifs.map(j => `${j.label}(${j.jourISO})`));
+
+  const d = new Date(debut);
+  while (d <= fin) {
+    const rawDay = d.getDay(); // 0=Sun..6=Sat
+    const jourISO = rawDay === 0 ? 7 : rawDay; // 1=Mon..7=Sun
     const horaireJour = joursActifs.find(j => j.jourISO === jourISO);
-    if (!horaireJour) continue;
 
-    const dateStr = d.toISOString().split('T')[0];
-    let finCreneau: string;
-    if (parseHeure(horaireJour.heureFin) <= parseHeure(horaireJour.heureDebut)) {
-      const lendemain = new Date(d);
-      lendemain.setDate(lendemain.getDate() + 1);
-      finCreneau = `${lendemain.toISOString().split('T')[0]}T${horaireJour.heureFin}:00`;
-    } else {
-      finCreneau = `${dateStr}T${horaireJour.heureFin}:00`;
+    if (horaireJour) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${day}`;
+
+      let finCreneau: string;
+      if (parseHeure(horaireJour.heureFin) <= parseHeure(horaireJour.heureDebut)) {
+        const lendemain = new Date(d);
+        lendemain.setDate(lendemain.getDate() + 1);
+        const ly = lendemain.getFullYear();
+        const lm = String(lendemain.getMonth() + 1).padStart(2, '0');
+        const ld = String(lendemain.getDate()).padStart(2, '0');
+        finCreneau = `${ly}-${lm}-${ld}T${horaireJour.heureFin}:00`;
+      } else {
+        finCreneau = `${dateStr}T${horaireJour.heureFin}:00`;
+      }
+
+      console.log(`[genererCreneauxFlex] ✅ ${dateStr} (${horaireJour.label}, ISO=${jourISO})`);
+      creneaux.push({
+        debut: `${dateStr}T${horaireJour.heureDebut}:00`,
+        fin: finCreneau,
+        jourLabel: horaireJour.label,
+        dureeHeures: horaireJour.dureeHeures,
+      });
     }
 
-    creneaux.push({
-      debut: `${dateStr}T${horaireJour.heureDebut}:00`,
-      fin: finCreneau,
-      jourLabel: horaireJour.label,
-      dureeHeures: horaireJour.dureeHeures,
-    });
+    d.setDate(d.getDate() + 1);
   }
+
+  console.log('[genererCreneauxFlex] Total créneaux générés:', creneaux.length);
   return creneaux;
 }
 
