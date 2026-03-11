@@ -145,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // 4. Audit
-    supabase.rpc('fn_ecrire_audit', {
+    const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
       p_acteur_id: userId,
       p_type_acteur: 'SOIGNANT',
       p_action: 'CONNEXION',
@@ -155,7 +155,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_details: { evenement: 'inscription', profession: data.profession },
       p_ip: null,
       p_navigateur: navigator.userAgent,
-    }).then(() => {});
+    });
+    if (auditError) console.error('Audit failed:', auditError);
   }, []);
 
   const inscriptionEtablissement = useCallback(async (data: any) => {
