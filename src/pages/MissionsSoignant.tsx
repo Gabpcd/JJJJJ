@@ -63,7 +63,7 @@ export default function MissionsSoignant() {
       if (onglet === 'disponibles') {
         query = query
           .eq('statut', 'OUVERTE')
-          .eq('profession_requise', soignant.profession)
+          .eq('profession_requise', soignant.profession as any)
           .order('est_urgente', { ascending: false })
           .order('debut_le', { ascending: true });
 

@@ -18,6 +18,9 @@ import ListeMissions from "./pages/ListeMissions";
 import DetailMission from "./pages/DetailMission";
 import ModifierMission from "./pages/ModifierMission";
 import MonGroupe from "./pages/MonGroupe";
+import MissionsSoignant from "./pages/MissionsSoignant";
+import DetailMissionSoignant from "./pages/DetailMissionSoignant";
+import DocumentsSoignant from "./pages/DocumentsSoignant";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,8 +39,9 @@ const App = () => (
 
               <Route path="/soignant/tableau-de-bord" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />
               <Route path="/soignant/profil" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ProfilSoignant /></RouteProtegee>} />
-              <Route path="/soignant/missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />
-              <Route path="/soignant/documents" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />
+              <Route path="/soignant/missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MissionsSoignant /></RouteProtegee>} />
+              <Route path="/soignant/missions/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailMissionSoignant /></RouteProtegee>} />
+              <Route path="/soignant/documents" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DocumentsSoignant /></RouteProtegee>} />
               <Route path="/soignant/mes-gains" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />
 
               <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
