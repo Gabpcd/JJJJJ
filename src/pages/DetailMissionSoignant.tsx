@@ -13,6 +13,7 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
 import { ModalPerduDeVitesse } from '@/components/ModalPerduDeVitesse';
 import { AnimationSuccesMission } from '@/components/AnimationSuccesMission';
+import { GoalGradientMission } from '@/components/GoalGradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { calculerDistanceKm } from '@/lib/geo';
