@@ -109,12 +109,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: data.motDePasse,
       options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
     });
-    if (authError) throw authError;
+    if (authError) {
+      console.error('AUTH SIGNUP ERROR (soignant):', { message: authError.message, status: authError.status, name: authError.name });
+      throw authError;
+    }
 
     const userId = authData.user!.id;
 
     // 2. Insert into soignants table
-    const { error: insertError } = await supabase.from('soignants').insert({
+    const insertPayload = {
       id: userId,
       prenom: data.prenom,
       nom: data.nom,
@@ -125,8 +128,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       type_contrat: data.typeContrat,
       numero_rpps: data.rpps || null,
       rayon_deplacement_km: data.rayon,
-    } as any);
-    if (insertError) throw insertError;
+    };
+    console.log('INSERT soignants payload:', insertPayload);
+    const { error: insertError } = await supabase.from('soignants').insert(insertPayload as any);
+    if (insertError) {
+      console.error('SUPABASE INSERT ERROR (soignant):', { message: insertError.message, details: insertError.details, hint: insertError.hint, code: insertError.code });
+      throw new Error(`[INSERT soignants] ${insertError.message} | details: ${insertError.details} | hint: ${insertError.hint} | code: ${insertError.code}`);
+    }
 
     // 3. Set app_metadata for RLS
     await supabase.functions.invoke('set-user-claims', {
