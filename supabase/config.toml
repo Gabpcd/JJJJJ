@@ -1,1 +1,4 @@
 project_id = "flripxtsyegjshnhzjkz"
+
+[functions.set-user-claims]
+verify_jwt = false

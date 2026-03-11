@@ -4,11 +4,7 @@ import { LucideIcon, Home, Search, FileText, Banknote, User, PlusCircle, List, C
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 
-interface NavItem {
-  icone: LucideIcon;
-  label: string;
-  route: string;
-}
+interface NavItem { icone: LucideIcon; label: string; route: string; }
 
 const NAV_SOIGNANT: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
@@ -46,18 +42,18 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const { deconnexion } = useAuth();
   const items = getNavItems(role);
 
+  const handleDeconnexion = async () => {
+    await deconnexion();
+    navigate('/');
+  };
+
   return (
     <>
-      {/* Mobile Bottom Bar */}
       <nav className="bottom-nav md:hidden">
         {items.map((item) => {
           const actif = location.pathname === item.route;
           return (
-            <button
-              key={item.route}
-              onClick={() => navigate(item.route)}
-              className={`bottom-nav-item ${actif ? 'bottom-nav-item-active' : ''}`}
-            >
+            <button key={item.route} onClick={() => navigate(item.route)} className={`bottom-nav-item ${actif ? 'bottom-nav-item-active' : ''}`}>
               <item.icone className="h-5 w-5" />
               <span className="bottom-nav-label">{item.label}</span>
             </button>
@@ -65,40 +61,24 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         })}
       </nav>
 
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] bg-sidebar flex-col z-40">
         <div className="p-6 flex items-center gap-2">
           <HeartPulse className="h-7 w-7 text-sidebar-primary" />
           <span className="text-xl font-bold text-sidebar-foreground">Soin Direct</span>
         </div>
-
         <nav className="flex-1 px-3 space-y-1">
           {items.map((item) => {
             const actif = location.pathname === item.route;
             return (
-              <button
-                key={item.route}
-                onClick={() => navigate(item.route)}
-                className={`sidebar-item w-full text-left ${
-                  actif
-                    ? 'bg-sidebar-accent text-sidebar-primary'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                }`}
-              >
-                <item.icone className="h-5 w-5" />
-                <span>{item.label}</span>
+              <button key={item.route} onClick={() => navigate(item.route)} className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}>
+                <item.icone className="h-5 w-5" /><span>{item.label}</span>
               </button>
             );
           })}
         </nav>
-
         <div className="p-3 border-t border-sidebar-border">
-          <button
-            onClick={() => { deconnexion(); navigate('/'); }}
-            className="sidebar-item w-full text-left text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent"
-          >
-            <LogOut className="h-5 w-5" />
-            <span>Déconnexion</span>
+          <button onClick={handleDeconnexion} className="sidebar-item w-full text-left text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent">
+            <LogOut className="h-5 w-5" /><span>Déconnexion</span>
           </button>
         </div>
       </aside>

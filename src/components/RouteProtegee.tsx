@@ -15,7 +15,6 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
   if (!user) return <Navigate to="/connexion" replace />;
 
   if (!rolesAutorises.includes(user.role)) {
-    // Redirect to appropriate dashboard
     switch (user.role) {
       case 'SOIGNANT': return <Navigate to="/soignant/tableau-de-bord" replace />;
       case 'ETABLISSEMENT': return <Navigate to="/etablissement/tableau-de-bord" replace />;

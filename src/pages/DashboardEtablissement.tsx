@@ -1,29 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { EtatVide } from '@/components/EtatVide';
-import { MOCK_ETABLISSEMENT, MOCK_MISSIONS_ETAB } from '@/lib/mock-data';
+import { ChargementPage } from '@/components/ChargementPage';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 export default function DashboardEtablissement() {
   const navigate = useNavigate();
-  const etab = MOCK_ETABLISSEMENT;
-  const missions = MOCK_MISSIONS_ETAB;
+  const { user } = useAuth();
+  const [etab, setEtab] = useState<any>(null);
+  const [missions, setMissions] = useState<any[]>([]);
+  const [kpi, setKpi] = useState({ ouvertes: 0, enCours: 0, terminees: 0, taux: 0 });
+  const [loading, setLoading] = useState(true);
 
-  const missionsOuvertes = missions.filter(m => m.statut === 'OUVERTE').length;
-  const missionsEnCours = missions.filter(m => m.statut === 'EN_COURS').length;
-  const missionsTerminees = missions.filter(m => m.statut === 'TERMINEE').length;
-  const total = missions.length;
-  const assignees = missions.filter(m => m.soignant_assigne_id).length;
-  const tauxOccupation = total > 0 ? Math.round((assignees / total) * 100) : 0;
+  useEffect(() => {
+    if (!user) return;
+    const load = async () => {
+      const [{ data: e }, { data: ms }] = await Promise.all([
+        supabase.from('etablissements').select('*, groupes_sante(nom)').eq('id', user.id).single(),
+        supabase.from('missions').select('id, intitule, service, debut_le, statut, soignant_assigne_id, soignants(prenom, nom)').eq('etablissement_id', user.id).order('cree_le', { ascending: false }).limit(5),
+      ]);
+
+      // KPI counts
+      const [{ count: o }, { count: ec }, { count: t }, { count: total }, { count: assigned }] = await Promise.all([
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
+      ]);
+
+      if (e) setEtab(e);
+      if (ms) setMissions(ms);
+      const totalN = total ?? 0;
+      setKpi({
+        ouvertes: o ?? 0, enCours: ec ?? 0, terminees: t ?? 0,
+        taux: totalN > 0 ? Math.round(((assigned ?? 0) / totalN) * 100) : 0,
+      });
+      setLoading(false);
+    };
+    load();
+  }, [user]);
+
+  if (loading || !etab) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
     <LayoutApp role="ETABLISSEMENT">
-      {/* Bannière */}
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground">Bienvenue, <span className="text-primary">{etab.nom}</span></h1>
         {etab.groupes_sante && (
@@ -34,77 +62,54 @@ export default function DashboardEtablissement() {
         )}
       </div>
 
-      {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <CarteKPI icone={Briefcase} valeur={missionsOuvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" />
-        <CarteKPI icone={PlayCircle} valeur={missionsEnCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" />
-        <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
-        <CarteKPI icone={TrendingUp} valeur={`${tauxOccupation}%`} label="Taux d'occupation" couleurIcone={tauxOccupation > 70 ? 'text-success' : 'text-warning'} couleurFond={tauxOccupation > 70 ? 'bg-success/10' : 'bg-warning/10'} />
+        <CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" />
+        <CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+        <CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
+        <CarteKPI icone={TrendingUp} valeur={`${kpi.taux}%`} label="Taux d'occupation" couleurIcone={kpi.taux > 70 ? 'text-success' : 'text-warning'} couleurFond={kpi.taux > 70 ? 'bg-success/10' : 'bg-warning/10'} />
       </div>
 
-      {/* Dernières missions */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold text-foreground">Dernières missions</h2>
-          <button onClick={() => navigate('/etablissement/missions')} className="text-sm text-primary font-medium hover:underline">
-            Voir tout →
-          </button>
+          <button onClick={() => navigate('/etablissement/missions')} className="text-sm text-primary font-medium hover:underline">Voir tout →</button>
         </div>
 
         {missions.length > 0 ? (
           <>
-            {/* Desktop table */}
             <div className="hidden md:block card-base overflow-hidden p-0">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Intitulé</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Service</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Statut</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Soignant</th>
+                <thead><tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Intitulé</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Service</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Statut</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Soignant</th>
+                </tr></thead>
+                <tbody>{missions.map(m => (
+                  <tr key={m.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3 font-medium text-foreground">{m.intitule}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{m.service || '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}</td>
+                    <td className="px-4 py-3"><BadgeStatut statut={m.statut} /></td>
+                    <td className="px-4 py-3 text-muted-foreground">{m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : '—'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {missions.map(m => (
-                    <tr key={m.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3 font-medium text-foreground">{m.intitule}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{m.service || '—'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}</td>
-                      <td className="px-4 py-3"><BadgeStatut statut={m.statut} /></td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                ))}</tbody>
               </table>
             </div>
-
-            {/* Mobile cards */}
-            <div className="md:hidden space-y-3">
-              {missions.map(m => (
-                <div key={m.id} className="card-base">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
-                    <BadgeStatut statut={m.statut} />
-                  </div>
-                  <p className="text-xs text-muted-foreground">{m.service && `${m.service} · `}{format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Soignant : {m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : '—'}
-                  </p>
+            <div className="md:hidden space-y-3">{missions.map(m => (
+              <div key={m.id} className="card-base">
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
+                  <BadgeStatut statut={m.statut} />
                 </div>
-              ))}
-            </div>
+                <p className="text-xs text-muted-foreground">{m.service && `${m.service} · `}{format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}</p>
+                <p className="text-xs text-muted-foreground mt-1">Soignant : {m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : '—'}</p>
+              </div>
+            ))}</div>
           </>
         ) : (
-          <EtatVide
-            icone={ClipboardList}
-            titre="Publiez votre première mission"
-            sousTitre="Les soignants qualifiés de votre zone seront notifiés immédiatement"
-            boutonLabel="Publier une mission"
-            boutonRoute="/etablissement/missions/creer"
-          />
+          <EtatVide icone={ClipboardList} titre="Publiez votre première mission" sousTitre="Les soignants qualifiés de votre zone seront notifiés immédiatement" boutonLabel="Publier une mission" boutonRoute="/etablissement/missions/creer" />
         )}
       </div>
     </LayoutApp>
