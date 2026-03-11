@@ -188,3 +188,22 @@
   border-radius: 50%;
   animation: confetti-fall linear forwards;
 }
+
+@keyframes pulse-once {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+.animate-pulse-once {
+  animation: pulse-once 0.8s ease-in-out 3;
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .attestation, .attestation * { visibility: visible; }
+  .attestation { position: absolute; left: 0; top: 0; width: 100%; font-family: 'Times New Roman', serif; font-size: 11pt; color: #000; }
+  .attestation h1 { font-size: 16pt; text-align: center; }
+  .attestation table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+  .attestation th, .attestation td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
+  .attestation th { background: #f0f0f0; font-weight: bold; }
+  .no-print { display: none !important; }
+}

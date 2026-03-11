@@ -4,6 +4,7 @@ import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
 import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { BadgeNiveau } from '@/components/BadgeNiveau';
+import { BandeauGoalGradient, CelebrationJalonManager } from '@/components/GoalGradient';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide } from '@/components/EtatVide';
@@ -155,6 +156,12 @@ export default function DashboardSoignant() {
 
       {/* Mission prochaine — aller pointer */}
       {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
+
+      {/* Goal Gradient — Proximité de jalon */}
+      <BandeauGoalGradient heures={heures} />
+
+      {/* Célébration de jalon */}
+      <CelebrationJalonManager heures={heures} />
 
       {/* Alerte documents expirant */}
       {docsExpirant.map(d => (
