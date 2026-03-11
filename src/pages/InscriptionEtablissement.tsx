@@ -6,6 +6,20 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 
+function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
+  const [asked, setAsked] = useState(false);
+  useEffect(() => {
+    if (asked) return;
+    setAsked(true);
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => onResult(pos.coords.latitude, pos.coords.longitude),
+      (err) => console.log('Géolocalisation refusée:', err.message)
+    );
+  }, [asked, onResult]);
+  return null;
+}
+
 export default function InscriptionEtablissement() {
   const navigate = useNavigate();
   const { inscriptionEtablissement } = useAuth();

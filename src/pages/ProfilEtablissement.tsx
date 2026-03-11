@@ -148,6 +148,24 @@ export default function ProfilEtablissement() {
           </div>
         </div>
         <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">Géolocalisation</h2>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={demanderGeolocalisation}
+              disabled={geoLoading}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50"
+            >
+              {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+              {geoLoading ? 'Récupération en cours…' : '📍 Localiser mon établissement'}
+            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Latitude</label><input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className="input-base" /></div>
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Longitude</label><input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className="input-base" /></div>
+            </div>
+          </div>
+        </div>
+        <div className="card-base">
           <div className="flex items-start gap-2 rounded-xl bg-primary/5 border border-primary/20 p-3 mb-4">
             <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
             <p className="text-xs text-primary">Ces taux s'appliquent automatiquement au calcul de la rémunération. Par défaut : Convention FPH.</p>

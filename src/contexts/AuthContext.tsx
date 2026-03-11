@@ -188,6 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       adresse_departement: data.departement || null,
       email_contact: data.emailContact || data.email,
       telephone_contact: data.telephoneContact || null,
+      adresse_lat: data.lat || null,
+      adresse_lng: data.lng || null,
     };
     console.log('INSERT etablissements payload:', insertPayload);
     const { error: insertError } = await supabase.from('etablissements').insert(insertPayload as any);

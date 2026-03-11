@@ -7,6 +7,20 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { SelectProfession } from '@/components/SelectProfession';
 import { CONTRATS } from '@/lib/constantes';
 
+function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => void }) {
+  const [asked, setAsked] = useState(false);
+  useEffect(() => {
+    if (asked) return;
+    setAsked(true);
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => onResult(pos.coords.latitude, pos.coords.longitude),
+      (err) => console.log('Géolocalisation refusée:', err.message)
+    );
+  }, [asked, onResult]);
+  return null;
+}
+
 function JaugeForce({ motDePasse }: { motDePasse: string }) {
   let force = 0;
   if (motDePasse.length >= 8) force++;
