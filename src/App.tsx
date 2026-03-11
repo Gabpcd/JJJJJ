@@ -30,6 +30,7 @@ import MesGains from "./pages/MesGains";
 import FiabiliteSoignant from "./pages/FiabiliteSoignant";
 import Parcours3200h from "./pages/Parcours3200h";
 import PrevoyanceSoignant from "./pages/PrevoyanceSoignant";
+import AttestationHeures from "./pages/AttestationHeures";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
