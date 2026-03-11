@@ -59,7 +59,7 @@ const App = () => (
               <Route path="/etablissement/missions/creer" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><CreerMission /></RouteProtegee>} />
               <Route path="/etablissement/missions/:id" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DetailMission /></RouteProtegee>} />
               <Route path="/etablissement/missions/:id/modifier" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ModifierMission /></RouteProtegee>} />
-              <Route path="/etablissement/presences" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
+              <Route path="/etablissement/presences" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><PresencesEtablissement /></RouteProtegee>} />
               <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
 
               <Route path="/groupe/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />
