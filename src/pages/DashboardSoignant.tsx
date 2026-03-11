@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X } from 'lucide-react';
+import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide } from '@/components/EtatVide';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { ChargementPage } from '@/components/ChargementPage';
+import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { TYPES_DOCUMENTS } from '@/lib/documents';
+import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 interface SoignantData {
@@ -19,13 +21,6 @@ interface SoignantData {
   tous_documents_valides: boolean | null; identite_verifiee: boolean | null;
   score_fiabilite: number | null; total_missions_terminees: number | null;
   heures_cumulees: number | null; eligible_conversion_3200h: boolean | null;
-}
-
-interface MissionData {
-  id: string; intitule: string; service: string | null;
-  debut_le: string; fin_le: string; taux_horaire_base: number;
-  est_urgente: boolean | null;
-  etablissements: { nom: string; adresse_ville: string } | null;
 }
 
 function calculerCompletionProfil(s: SoignantData) {
@@ -53,19 +48,31 @@ export default function DashboardSoignant() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
-  const [missions, setMissions] = useState<MissionData[]>([]);
+  const [missions, setMissions] = useState<any[]>([]);
+  const [mesMissions, setMesMissions] = useState<any[]>([]);
+  const [docsExpirant, setDocsExpirant] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalScore, setModalScore] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: sg }, { data: ms }] = await Promise.all([
+      const [{ data: sg }, { data: ms }, { data: mm }, { data: docs }] = await Promise.all([
         supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single(),
         supabase.from('missions').select('id, intitule, service, debut_le, fin_le, taux_horaire_base, est_urgente, etablissements(nom, adresse_ville)').eq('statut', 'OUVERTE').order('debut_le', { ascending: true }).limit(3),
+        supabase.from('missions').select('id, intitule, debut_le, fin_le, statut, etablissements(nom, adresse_ville)').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true }).limit(3),
+        supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
       ]);
       if (sg) setSoignant(sg as any);
       if (ms) setMissions(ms as any);
+      if (mm) setMesMissions(mm as any);
+      if (docs) {
+        setDocsExpirant((docs as any[]).filter(d =>
+          d.valide_jusqua && d.statut_verification === 'VERIFIE' &&
+          new Date(d.valide_jusqua) > new Date() &&
+          differenceInDays(new Date(d.valide_jusqua), new Date()) < 30
+        ));
+      }
       setLoading(false);
     };
     load();
@@ -90,6 +97,18 @@ export default function DashboardSoignant() {
         )}
       </div>
 
+      {/* Alerte documents expirant */}
+      {docsExpirant.map(d => (
+        <div key={d.id} className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-3 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+          <p className="text-xs text-destructive">
+            ⏰ Votre {TYPES_DOCUMENTS[d.type_document] || d.type_document} expire dans {differenceInDays(new Date(d.valide_jusqua), new Date())} jours.{' '}
+            <button onClick={() => navigate('/soignant/documents')} className="text-primary font-medium hover:underline">Mettre à jour →</button>
+          </p>
+        </div>
+      ))}
+
+      {/* Profil completion */}
       {profil.pourcentage < 100 ? (
         <div className="rounded-2xl bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 p-4 md:p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
@@ -108,6 +127,7 @@ export default function DashboardSoignant() {
         </div>
       )}
 
+      {/* KPI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
         <div className="card-kpi cursor-pointer" onClick={() => setModalScore(true)}>
@@ -138,6 +158,31 @@ export default function DashboardSoignant() {
         </div>
       </div>
 
+      {/* Mes missions en cours */}
+      {mesMissions.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-foreground">Mes missions en cours</h2>
+            <button onClick={() => navigate('/soignant/missions')} className="text-sm text-primary font-medium hover:underline">Voir tout →</button>
+          </div>
+          <div className="space-y-3">
+            {mesMissions.map((m: any) => (
+              <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all">
+                <div className="flex items-center justify-between mb-1">
+                  <BadgeStatut statut={m.statut} />
+                </div>
+                <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
+                <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom} · {m.etablissements?.adresse_ville}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  📅 {format(new Date(m.debut_le), "EEE d MMM · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Missions disponibles */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold text-foreground">Missions disponibles</h2>
@@ -145,8 +190,8 @@ export default function DashboardSoignant() {
         </div>
         {missions.length > 0 ? (
           <div className="space-y-3">
-            {missions.map(m => (
-              <div key={m.id} className="card-base hover:shadow-md transition-shadow">
+            {missions.map((m: any) => (
+              <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md transition-shadow cursor-pointer">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -160,15 +205,15 @@ export default function DashboardSoignant() {
                 <p className="text-xs text-muted-foreground">
                   {format(new Date(m.debut_le), "EEE d MMM · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
                 </p>
-                <button className="btn-secondary text-xs px-3 py-1.5 mt-3">Voir</button>
               </div>
             ))}
           </div>
         ) : (
-          <EtatVide icone={Search} titre="Aucune mission disponible" sousTitre="De nouvelles missions sont publiées chaque jour. Revenez bientôt !" boutonLabel="Activer les notifications" boutonRoute="#" boutonDisabled />
+          <EtatVide icone={Search} titre="Aucune mission disponible" sousTitre="De nouvelles missions sont publiées chaque jour. Revenez bientôt !" />
         )}
       </div>
 
+      {/* Parcours libéral */}
       <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 border border-purple-200 p-4 md:p-6">
         <h2 className="text-base font-bold text-foreground mb-1">Mon parcours vers le libéral</h2>
         <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
@@ -182,6 +227,7 @@ export default function DashboardSoignant() {
         )}
       </div>
 
+      {/* Modal Score */}
       {modalScore && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center">
           <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setModalScore(false)} />

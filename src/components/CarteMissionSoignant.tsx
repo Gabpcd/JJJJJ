@@ -1,0 +1,87 @@
+import { format, formatDistanceToNow } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { BadgeDistance } from '@/components/BadgeDistance';
+import { BadgeStatut } from '@/components/BadgeStatut';
+import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
+
+interface CarteMissionSoignantProps {
+  mission: any;
+  soignant: any;
+  onClick: () => void;
+}
+
+function getBadgeUrgence(niveau: number) {
+  if (niveau >= 3) return { icone: '🚨', label: 'URGENT Critique', classes: 'bg-destructive text-destructive-foreground' };
+  if (niveau >= 2) return { icone: '🔥', label: 'URGENT', classes: 'bg-destructive text-destructive-foreground' };
+  return { icone: '⚡', label: 'Urgent', classes: 'bg-destructive/80 text-destructive-foreground' };
+}
+
+function getTempsEcoule(cree_le: string) {
+  const diff = Date.now() - new Date(cree_le).getTime();
+  const heures = diff / (1000 * 60 * 60);
+  let couleur = 'text-success';
+  if (heures > 24) couleur = 'text-destructive';
+  else if (heures > 1) couleur = 'text-warning';
+  return { texte: formatDistanceToNow(new Date(cree_le), { addSuffix: true, locale: fr }), couleur };
+}
+
+function fmt(v: number | null): string {
+  if (v == null || v === 0) return '';
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
+}
+
+export function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissionSoignantProps) {
+  const m = mission;
+  const temps = getTempsEcoule(m.cree_le);
+  const profilComplet = soignant?.tous_documents_valides;
+  const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
+
+  return (
+    <div onClick={onClick} className="card-base hover:shadow-md transition-all cursor-pointer active:scale-[0.99]">
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {m.est_urgente && (() => {
+            const badge = getBadgeUrgence(m.niveau_urgence || 1);
+            return <span className={`badge-base text-[10px] ${badge.classes}`}>{badge.icone} {badge.label}</span>;
+          })()}
+        </div>
+        <span className={`text-[10px] ${temps.couleur}`}>{temps.texte}</span>
+      </div>
+
+      <h3 className="font-semibold text-sm text-foreground mb-1">{m.intitule}</h3>
+      <p className="text-xs text-muted-foreground mb-1">
+        🏥 {m.etablissements?.nom} · {m.etablissements?.adresse_ville}
+        {m.etablissements?.adresse_departement && ` (${m.etablissements.adresse_departement})`}
+      </p>
+      <BadgeDistance distanceKm={m.distance_km} />
+
+      <div className="mt-2 text-xs text-muted-foreground">
+        <p>📅 {format(new Date(m.debut_le), 'EEEE d MMMM yyyy', { locale: fr })}</p>
+        <p>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })} ({Math.round(duree)}h)</p>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-primary font-bold text-sm">💰 {m.taux_horaire_base?.toFixed(2)} €/h</span>
+        {m.net_a_payer && m.net_a_payer > 0 ? (
+          <span className="text-xs text-muted-foreground">Net estimé : ~{fmt(m.net_a_payer)}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground/50">Calculé après assignation</span>
+        )}
+      </div>
+
+      <div className="mt-2">
+        {profilComplet ? (
+          <span className="badge-base bg-success/10 text-success text-[10px]">✅ Compatible</span>
+        ) : soignant && !soignant.tous_documents_valides ? (
+          <span className="badge-base bg-destructive/10 text-destructive text-[10px]">📄 Documents manquants</span>
+        ) : (
+          <span className="badge-base bg-warning/10 text-warning text-[10px]">⚠️ Profil incomplet</span>
+        )}
+      </div>
+
+      <div className="mt-3 text-right">
+        <span className="text-xs text-primary font-medium">Voir le détail et postuler →</span>
+      </div>
+    </div>
+  );
+}
