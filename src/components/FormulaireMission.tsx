@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { extraireContratPreference, injecterContratTag, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { WarningRist } from '@/components/WarningRist';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
