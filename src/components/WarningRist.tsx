@@ -4,9 +4,11 @@ import { getLabelProfession } from '@/lib/constantes';
 interface WarningRistProps {
   profession: string;
   tauxSaisi: number;
+  ristPlafondActif: boolean;
 }
 
-export function WarningRist({ profession, tauxSaisi }: WarningRistProps) {
+export function WarningRist({ profession, tauxSaisi, ristPlafondActif }: WarningRistProps) {
+  if (!ristPlafondActif) return null;
   const plafond = PLAFONDS_RIST[profession];
   if (!plafond || tauxSaisi <= plafond) return null;
 

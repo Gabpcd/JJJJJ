@@ -32,6 +32,18 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [loading, setLoading] = useState(false);
   const [erreurCodeTravail, setErreurCodeTravail] = useState<any>(null);
   const [dupliquerInfo, setDupliquerInfo] = useState<string | null>(null);
+  const [ristPlafondActif, setRistPlafondActif] = useState(false);
+
+  // Load rist_plafond_actif from etablissements
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('etablissements').select('rist_plafond_actif, type').eq('id', user.id).single().then(({ data }) => {
+      if (data) {
+        const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
+        setRistPlafondActif(data.rist_plafond_actif === true || typesPublics.includes(data.type));
+      }
+    });
+  }, [user]);
 
   // Load duplication source
   useEffect(() => {
@@ -251,7 +263,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         </div>
 
         {/* Warning Rist */}
-        {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} />}
+        {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} ristPlafondActif={ristPlafondActif} />}
 
         {/* Urgence */}
         <div className="flex items-center justify-between">
