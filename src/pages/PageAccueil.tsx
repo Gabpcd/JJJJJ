@@ -132,6 +132,7 @@ export default function PageAccueil() {
       <footer className="py-8 text-center text-sm text-muted-foreground border-t border-border bg-card">
         <p>© 2026 Soin Direct SAS — Conforme RGPD · HDS · Code du Travail</p>
         <div className="flex gap-4 justify-center mt-2">
+          <a href="/tarifs" className="hover:text-foreground transition-colors">Tarifs</a>
           <a href="#" className="hover:text-foreground transition-colors">Mentions légales</a>
           <a href="#" className="hover:text-foreground transition-colors">CGU</a>
         </div>

@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { extraireContratPreference, injecterContratTag, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { WarningRist } from '@/components/WarningRist';
+import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressif';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
 import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
 import { BarreProgressionBulk } from '@/components/BarreProgressionBulk';
@@ -39,6 +40,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [erreurCodeTravail, setErreurCodeTravail] = useState<any>(null);
   const [dupliquerInfo, setDupliquerInfo] = useState<string | null>(null);
   const [ristPlafondActif, setRistPlafondActif] = useState(false);
+  const [tauxCommission, setTauxCommission] = useState(15);
+  const [palierNom, setPalierNom] = useState('Découverte');
 
   // Recurrence state
   const [modeRecurrent, setModeRecurrent] = useState(false);
@@ -49,13 +52,15 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [progression, setProgression] = useState(0);
   const [progressionActuel, setProgressionActuel] = useState(0);
 
-  // Load rist_plafond_actif
+  // Load rist_plafond_actif + commission info
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('rist_plafond_actif, type').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom)').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
         setRistPlafondActif(data.rist_plafond_actif === true || typesPublics.includes(data.type));
+        setTauxCommission(data.taux_commission_negocie ?? 15);
+        if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);
       }
     });
   }, [user]);
@@ -474,6 +479,15 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             </div>
           );
         })()}
+
+        {/* Encart commission dégressive */}
+        {taux > 0 && dureeEstimee > 0 && !modeRecurrent && (
+          <EncartCommissionDegressif
+            netEstime={taux * dureeEstimee * 1.21}
+            tauxActuel={tauxCommission}
+            palierNom={palierNom}
+          />
+        )}
 
         <p className="text-[10px] text-muted-foreground italic text-center">
           Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.

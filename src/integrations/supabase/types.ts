@@ -292,9 +292,12 @@ export type Database = {
           formule_abonnement: string | null
           groupe_sante_id: string | null
           id: string
+          missions_mois_precedent: number | null
           mode_facturation: string | null
           modifie_le: string | null
           nom: string
+          palier_commission_id: string | null
+          palier_recalcule_le: string | null
           rist_plafond_actif: boolean | null
           rist_taux_base_horaire: number | null
           siret: string
@@ -320,9 +323,12 @@ export type Database = {
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
           id?: string
+          missions_mois_precedent?: number | null
           mode_facturation?: string | null
           modifie_le?: string | null
           nom: string
+          palier_commission_id?: string | null
+          palier_recalcule_le?: string | null
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
           siret: string
@@ -348,9 +354,12 @@ export type Database = {
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
           id?: string
+          missions_mois_precedent?: number | null
           mode_facturation?: string | null
           modifie_le?: string | null
           nom?: string
+          palier_commission_id?: string | null
+          palier_recalcule_le?: string | null
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
           siret?: string
@@ -369,6 +378,13 @@ export type Database = {
             columns: ["groupe_sante_id"]
             isOneToOne: false
             referencedRelation: "groupes_sante"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "etablissements_palier_commission_id_fkey"
+            columns: ["palier_commission_id"]
+            isOneToOne: false
+            referencedRelation: "paliers_commission"
             referencedColumns: ["id"]
           },
         ]
@@ -779,6 +795,39 @@ export type Database = {
             referencedColumns: ["soignant_id"]
           },
         ]
+      }
+      paliers_commission: {
+        Row: {
+          cree_le: string | null
+          est_actif: boolean | null
+          id: string
+          missions_max: number | null
+          missions_min: number
+          nom: string
+          ordre: number
+          taux_commission: number
+        }
+        Insert: {
+          cree_le?: string | null
+          est_actif?: boolean | null
+          id?: string
+          missions_max?: number | null
+          missions_min: number
+          nom: string
+          ordre: number
+          taux_commission: number
+        }
+        Update: {
+          cree_le?: string | null
+          est_actif?: boolean | null
+          id?: string
+          missions_max?: number | null
+          missions_min?: number
+          nom?: string
+          ordre?: number
+          taux_commission?: number
+        }
+        Relationships: []
       }
       plans_prevoyance: {
         Row: {
@@ -1321,6 +1370,11 @@ export type Database = {
           soignant_id: string
         }[]
       }
+      fn_recalculer_palier_commission: {
+        Args: { p_etablissement_id: string }
+        Returns: Json
+      }
+      fn_recalculer_tous_paliers: { Args: never; Returns: number }
       fn_rgpd_exporter_donnees_soignant: {
         Args: { p_soignant_id: string }
         Returns: Json
