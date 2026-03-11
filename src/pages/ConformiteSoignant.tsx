@@ -1,0 +1,113 @@
+import React, { useState, useEffect } from 'react';
+import { LayoutApp } from '@/components/LayoutApp';
+import { ChargementPage } from '@/components/ChargementPage';
+import { EtatVide } from '@/components/EtatVide';
+import { CarteConformite } from '@/components/CarteConformite';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { ShieldCheck, Copy } from 'lucide-react';
+import { format, isToday, isYesterday } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { toast } from 'sonner';
+
+export default function ConformiteSoignant() {
+  const { user } = useAuth();
+  const [controles, setControles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('conformite_travail')
+      .select('*, missions(intitule, debut_le, fin_le, etablissements(nom))')
+      .eq('soignant_id', user.id)
+      .order('controle_le', { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        setControles(data || []);
+        setLoading(false);
+      });
+  }, [user]);
+
+  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+
+  const total = controles.length;
+  const conformes = controles.filter(c => c.resultat === 'CONFORME').length;
+  const violations = controles.filter(c => c.resultat === 'VIOLATION_BLOQUEE').length;
+  const alertes = controles.filter(c => c.resultat === 'VIOLATION_ALERTEE').length;
+
+  // Group by date
+  const grouped = controles.reduce((acc, c) => {
+    const date = new Date(c.controle_le);
+    let label: string;
+    if (isToday(date)) label = "Aujourd'hui";
+    else if (isYesterday(date)) label = 'Hier';
+    else label = format(date, 'EEEE d MMMM yyyy', { locale: fr });
+    if (!acc[label]) acc[label] = [];
+    acc[label].push(c);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  const exporterHistorique = () => {
+    const lignes = controles.map(c => {
+      const date = format(new Date(c.controle_le), 'dd/MM/yyyy HH:mm', { locale: fr });
+      const mission = c.missions?.intitule || '—';
+      return `${date} | ${c.type_controle} | ${c.resultat} | ${mission}`;
+    });
+    const texte = `Historique de conformité — Soin Direct\n${'='.repeat(50)}\n\n${lignes.join('\n')}`;
+    navigator.clipboard.writeText(texte);
+    toast.success('Historique copié dans le presse-papier');
+  };
+
+  return (
+    <LayoutApp role="SOIGNANT">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-foreground">📊 Historique de conformité</h1>
+        <button onClick={exporterHistorique} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
+          <Copy className="h-3.5 w-3.5" /> Exporter
+        </button>
+      </div>
+
+      {/* KPI */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="card-base text-center">
+          <p className="text-2xl font-bold text-foreground">{total}</p>
+          <p className="text-xs text-muted-foreground">Contrôles</p>
+        </div>
+        <div className="card-base text-center">
+          <p className="text-2xl font-bold text-success">{conformes}</p>
+          <p className="text-xs text-muted-foreground">Conformes ({total > 0 ? Math.round((conformes / total) * 100) : 0}%)</p>
+        </div>
+        <div className="card-base text-center">
+          <p className="text-2xl font-bold text-destructive">{violations}</p>
+          <p className="text-xs text-muted-foreground">Violations bloquées</p>
+        </div>
+        <div className="card-base text-center">
+          <p className="text-2xl font-bold text-warning">{alertes}</p>
+          <p className="text-xs text-muted-foreground">Alertes</p>
+        </div>
+      </div>
+
+      {controles.length === 0 ? (
+        <EtatVide
+          icone={ShieldCheck}
+          titre="Aucun contrôle de conformité"
+          sousTitre="Les contrôles apparaîtront ici lorsque vous accepterez des missions."
+        />
+      ) : (
+        <div className="space-y-6">
+          {Object.entries(grouped).map(([label, items]) => (
+            <div key={label}>
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{label}</h3>
+              <div className="card-base divide-y divide-border">
+                {items.map((c: any) => (
+                  <CarteConformite key={c.id} controle={c} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </LayoutApp>
+  );
+}
