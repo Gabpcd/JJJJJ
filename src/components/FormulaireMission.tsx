@@ -143,7 +143,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     setProgressionActuel(0);
 
     const serieId = `SERIE_${Date.now()}`;
-    const descriptionAvecTag = `[SERIE_ID:${serieId}] ${description || ''}`.trim();
+    const descWithContrat = injecterContratTag(description || '', contratPreference);
+    const descriptionAvecTag = `[SERIE_ID:${serieId}] ${descWithContrat}`.trim();
     const resultats: { ok: boolean; erreur?: string }[] = [];
 
     for (let i = 0; i < creneaux.length; i++) {
