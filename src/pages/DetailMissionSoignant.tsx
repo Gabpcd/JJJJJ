@@ -7,6 +7,8 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
+import { BlocConformite } from '@/components/BlocConformite';
+import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
 import { ModalPerduDeVitesse } from '@/components/ModalPerduDeVitesse';

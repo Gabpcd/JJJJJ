@@ -177,6 +177,11 @@ export default function DashboardSoignant() {
         </div>
       </div>
 
+      {/* Compteur hebdomadaire */}
+      <div className="mb-6">
+        <CompteurHebdomadaire />
+      </div>
+
       {/* Mes missions en cours */}
       {mesMissions.length > 0 && (
         <div className="mb-6">
