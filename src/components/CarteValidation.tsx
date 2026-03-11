@@ -1,0 +1,182 @@
+import React, { useState } from 'react';
+import { format, differenceInMinutes } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle } from 'lucide-react';
+import { BadgeCertification } from './BadgeCertification';
+
+interface CarteValidationProps {
+  presence: any;
+  onValider: (id: string) => Promise<void>;
+  onContester: (id: string, motif: string) => Promise<void>;
+}
+
+export function CarteValidation({ presence, onValider, onContester }: CarteValidationProps) {
+  const [motifLitige, setMotifLitige] = useState('');
+  const [showContester, setShowContester] = useState(false);
+  const [showContact, setShowContact] = useState(false);
+
+  const mission = presence.missions;
+  const soignant = presence.soignants;
+  if (!mission || !soignant) return null;
+
+  const debutPrevu = new Date(mission.debut_le);
+  const finPrevue = new Date(mission.fin_le);
+  const arriveeReelle = presence.pointage_arrivee_le ? new Date(presence.pointage_arrivee_le) : null;
+  const departReel = presence.pointage_depart_le ? new Date(presence.pointage_depart_le) : null;
+
+  const dureeReelleMin = arriveeReelle && departReel ? differenceInMinutes(departReel, arriveeReelle) : null;
+  const dureePrevueMin = (mission.duree_heures || 0) * 60;
+  const ecartMin = dureeReelleMin !== null ? dureeReelleMin - dureePrevueMin : null;
+
+  const aAlertes = presence.alerte_teleportation || !presence.perimetre_gps_valide;
+
+  const borderClass = presence.alerte_teleportation
+    ? 'border-l-4 border-destructive bg-destructive/5'
+    : !presence.perimetre_gps_valide
+      ? 'border-l-4 border-warning bg-warning/5'
+      : presence.valide_par_etablissement
+        ? 'border-success/30'
+        : 'border-border';
+
+  return (
+    <div className={`rounded-2xl border p-4 space-y-3 ${borderClass}`}>
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="font-semibold text-foreground text-sm">{soignant.prenom} {soignant.nom} · {soignant.profession}</h3>
+          <p className="text-xs text-muted-foreground">{mission.intitule}{mission.service ? ` · ${mission.service}` : ''}</p>
+        </div>
+        {presence.valide_par_etablissement && (
+          <BadgeCertification
+            perimetreOk={presence.perimetre_gps_valide === true}
+            pasAlerteTeleportation={!presence.alerte_teleportation}
+            valideParEtablissement={true}
+          />
+        )}
+      </div>
+
+      {/* Horaires */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <p className="text-muted-foreground">Prévu</p>
+          <p className="font-medium text-foreground">
+            {format(debutPrevu, "HH:mm")} → {format(finPrevue, "HH:mm")} ({mission.duree_heures}h)
+          </p>
+        </div>
+        {arriveeReelle && departReel && dureeReelleMin !== null && (
+          <div>
+            <p className="text-muted-foreground">Réel</p>
+            <p className="font-medium text-foreground">
+              {format(arriveeReelle, "HH:mm")} → {format(departReel, "HH:mm")} ({Math.floor(dureeReelleMin / 60)}h{String(dureeReelleMin % 60).padStart(2, '0')})
+            </p>
+          </div>
+        )}
+      </div>
+
+      {ecartMin !== null && (
+        <p className={`text-xs ${Math.abs(ecartMin) <= 15 ? 'text-muted-foreground' : ecartMin > 15 ? 'text-warning' : 'text-destructive'}`}>
+          Écart : {ecartMin >= 0 ? '+' : ''}{ecartMin} min
+        </p>
+      )}
+
+      {/* GPS info */}
+      <div className="flex flex-wrap gap-3 text-xs">
+        {presence.distance_etablissement_m !== null && (
+          <span className={`flex items-center gap-1 ${presence.perimetre_gps_valide ? 'text-success' : 'text-warning'}`}>
+            <MapPin className="h-3.5 w-3.5" />
+            Arrivée : {Math.round(presence.distance_etablissement_m)}m · {presence.perimetre_gps_valide ? '✅ OK' : '⚠️ Hors périmètre'}
+          </span>
+        )}
+        {presence.arrivee_precision_gps_m && (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Radio className="h-3.5 w-3.5" /> {Math.round(presence.arrivee_precision_gps_m)}m
+          </span>
+        )}
+      </div>
+
+      {/* Alertes */}
+      {aAlertes && (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-destructive">🚨 ALERTES :</p>
+          {!presence.perimetre_gps_valide && (
+            <p className="text-xs text-warning flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5" /> Hors périmètre à l'arrivée ({Math.round(presence.distance_etablissement_m || 0)}m)
+            </p>
+          )}
+          {presence.alerte_teleportation && (
+            <p className="text-xs text-destructive flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5" /> Téléportation détectée
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Litige */}
+      {presence.motif_litige && (
+        <div className="bg-warning/10 border border-warning/20 rounded-xl p-2 text-xs text-warning">
+          ⚠️ Litige : {presence.motif_litige}
+        </div>
+      )}
+
+      {/* Actions */}
+      {!presence.valide_par_etablissement && departReel && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            onClick={() => onValider(presence.id)}
+            className="flex items-center gap-1.5 bg-success text-success-foreground text-xs font-semibold px-3 py-2 rounded-xl hover:bg-success/90 transition-colors"
+          >
+            <CheckCircle className="h-3.5 w-3.5" /> Valider
+          </button>
+          <button
+            onClick={() => setShowContester(!showContester)}
+            className="flex items-center gap-1.5 bg-destructive/10 text-destructive text-xs font-semibold px-3 py-2 rounded-xl hover:bg-destructive/20 transition-colors"
+          >
+            <XCircle className="h-3.5 w-3.5" /> Contester
+          </button>
+          <button
+            onClick={() => setShowContact(!showContact)}
+            className="flex items-center gap-1.5 bg-muted text-muted-foreground text-xs font-semibold px-3 py-2 rounded-xl hover:bg-muted/80 transition-colors"
+          >
+            <Phone className="h-3.5 w-3.5" /> Contacter
+          </button>
+        </div>
+      )}
+
+      {/* Contester form */}
+      {showContester && (
+        <div className="space-y-2 border-t border-border pt-2">
+          <textarea
+            value={motifLitige}
+            onChange={e => setMotifLitige(e.target.value)}
+            placeholder="Motif de la contestation..."
+            className="input-base w-full text-sm"
+            rows={2}
+          />
+          <button
+            onClick={() => { onContester(presence.id, motifLitige); setShowContester(false); setMotifLitige(''); }}
+            disabled={!motifLitige.trim()}
+            className="btn-primary text-xs disabled:opacity-50"
+          >
+            Envoyer la contestation
+          </button>
+        </div>
+      )}
+
+      {/* Contact options */}
+      {showContact && (
+        <div className="flex gap-2 border-t border-border pt-2">
+          {soignant.telephone && (
+            <a href={`tel:${soignant.telephone}`} className="flex items-center gap-1 text-xs text-primary hover:underline">
+              <Phone className="h-3.5 w-3.5" /> Appeler
+            </a>
+          )}
+          {soignant.email && (
+            <a href={`mailto:${soignant.email}`} className="flex items-center gap-1 text-xs text-primary hover:underline">
+              <Mail className="h-3.5 w-3.5" /> Email
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

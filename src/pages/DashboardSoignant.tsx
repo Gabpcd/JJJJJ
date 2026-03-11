@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle } from 'lucide-react';
+import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
+import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide } from '@/components/EtatVide';
@@ -56,6 +58,8 @@ export default function DashboardSoignant() {
   const [heuresSemaine, setHeuresSemaine] = useState(0);
   const [loading, setLoading] = useState(true);
   const [modalScore, setModalScore] = useState(false);
+  const [missionProchaine, setMissionProchaine] = useState<any>(null);
+  const [missionsOubliDepart, setMissionsOubliDepart] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -69,12 +73,13 @@ export default function DashboardSoignant() {
       const dimanche = new Date(lundi);
       dimanche.setDate(lundi.getDate() + 7);
 
-      const [{ data: sg }, { data: ms }, { data: mm }, { data: docs }, { data: msSemaine }] = await Promise.all([
+      const [{ data: sg }, { data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }] = await Promise.all([
         supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single(),
         supabase.from('missions').select('id, intitule, service, debut_le, fin_le, taux_horaire_base, est_urgente, etablissements(nom, adresse_ville)').eq('statut', 'OUVERTE').order('debut_le', { ascending: true }).limit(3),
         supabase.from('missions').select('id, intitule, debut_le, fin_le, statut, etablissements(nom, adresse_ville)').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true }).limit(3),
         supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
         supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
+        supabase.from('missions').select('id, intitule, fin_le, presences(id, pointage_arrivee_le, pointage_depart_le)').eq('soignant_assigne_id', user.id).eq('statut', 'EN_COURS').lt('fin_le', new Date(Date.now() - 30 * 60000).toISOString()),
       ]);
       if (sg) setSoignant(sg as any);
       if (ms) setMissions(ms as any);
@@ -88,6 +93,21 @@ export default function DashboardSoignant() {
           new Date(d.valide_jusqua) > new Date() &&
           differenceInDays(new Date(d.valide_jusqua), new Date()) < 30
         ));
+      }
+      // Mission prochaine (dans moins d'1h)
+      if (mm) {
+        const prochaine = (mm as any[]).find(m => {
+          const mins = (new Date(m.debut_le).getTime() - Date.now()) / 60000;
+          return mins > -30 && mins <= 60;
+        });
+        if (prochaine) setMissionProchaine(prochaine);
+      }
+      // Oubli de départ
+      if (missionsOubliees) {
+        const oublis = (missionsOubliees as any[]).filter(m =>
+          m.presences?.length > 0 && m.presences[0].pointage_arrivee_le && !m.presences[0].pointage_depart_le
+        );
+        setMissionsOubliDepart(oublis);
       }
       setLoading(false);
     };
@@ -115,6 +135,14 @@ export default function DashboardSoignant() {
 
       {/* Alerte 48h */}
       <BandeauAlerte48h heuresSemaine={heuresSemaine} />
+
+      {/* Oubli de départ */}
+      {missionsOubliDepart.map(m => (
+        <BandeauOubliDepart key={m.id} mission={m} onPointer={() => navigate('/soignant/presences')} />
+      ))}
+
+      {/* Mission prochaine — aller pointer */}
+      {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
 
       {/* Alerte documents expirant */}
       {docsExpirant.map(d => (
