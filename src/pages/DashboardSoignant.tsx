@@ -94,6 +94,21 @@ export default function DashboardSoignant() {
           differenceInDays(new Date(d.valide_jusqua), new Date()) < 30
         ));
       }
+      // Mission prochaine (dans moins d'1h)
+      if (mm) {
+        const prochaine = (mm as any[]).find(m => {
+          const mins = (new Date(m.debut_le).getTime() - Date.now()) / 60000;
+          return mins > -30 && mins <= 60;
+        });
+        if (prochaine) setMissionProchaine(prochaine);
+      }
+      // Oubli de départ
+      if (missionsOubliees) {
+        const oublis = (missionsOubliees as any[]).filter(m =>
+          m.presences?.length > 0 && m.presences[0].pointage_arrivee_le && !m.presences[0].pointage_depart_le
+        );
+        setMissionsOubliDepart(oublis);
+      }
       setLoading(false);
     };
     load();
