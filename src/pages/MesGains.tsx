@@ -162,6 +162,7 @@ export default function MesGains() {
           <EtatVide icone={Banknote} titre="Aucune mission terminée" sousTitre="Vos fiches de paie apparaîtront ici après chaque mission." />
         )}
       </div>
+      <ModalAttestation open={modalAttestation} onClose={() => setModalAttestation(false)} />
     </LayoutApp>
   );
 }
