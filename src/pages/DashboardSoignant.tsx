@@ -136,6 +136,14 @@ export default function DashboardSoignant() {
       {/* Alerte 48h */}
       <BandeauAlerte48h heuresSemaine={heuresSemaine} />
 
+      {/* Oubli de départ */}
+      {missionsOubliDepart.map(m => (
+        <BandeauOubliDepart key={m.id} mission={m} onPointer={() => navigate('/soignant/presences')} />
+      ))}
+
+      {/* Mission prochaine — aller pointer */}
+      {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
+
       {/* Alerte documents expirant */}
       {docsExpirant.map(d => (
         <div key={d.id} className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-3 flex items-start gap-2">
