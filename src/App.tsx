@@ -26,6 +26,10 @@ import PlanningSoignant from "./pages/PlanningSoignant";
 import ConformiteSoignant from "./pages/ConformiteSoignant";
 import PresencesSoignant from "./pages/PresencesSoignant";
 import PresencesEtablissement from "./pages/PresencesEtablissement";
+import MesGains from "./pages/MesGains";
+import FiabiliteSoignant from "./pages/FiabiliteSoignant";
+import Parcours3200h from "./pages/Parcours3200h";
+import PrevoyanceSoignant from "./pages/PrevoyanceSoignant";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,7 +55,10 @@ const App = () => (
               <Route path="/soignant/planning" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PlanningSoignant /></RouteProtegee>} />
               <Route path="/soignant/conformite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ConformiteSoignant /></RouteProtegee>} />
               <Route path="/soignant/presences" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PresencesSoignant /></RouteProtegee>} />
-              <Route path="/soignant/mes-gains" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />
+              <Route path="/soignant/mes-gains" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesGains /></RouteProtegee>} />
+              <Route path="/soignant/fiabilite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><FiabiliteSoignant /></RouteProtegee>} />
+              <Route path="/soignant/parcours-3200h" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><Parcours3200h /></RouteProtegee>} />
+              <Route path="/soignant/prevoyance" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PrevoyanceSoignant /></RouteProtegee>} />
 
               <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
               <Route path="/etablissement/profil" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ProfilEtablissement /></RouteProtegee>} />

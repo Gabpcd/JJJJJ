@@ -6,11 +6,23 @@ import { UserRole } from '@/lib/types';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
 
+// Bottom bar mobile: 5 items max
+const NAV_SOIGNANT_MOBILE: NavItem[] = [
+  { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
+  { icone: Search, label: 'Missions', route: '/soignant/missions' },
+  { icone: MapPin, label: 'Pointer', route: '/soignant/presences' },
+  { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
+  { icone: User, label: 'Profil', route: '/soignant/profil' },
+];
+
+// Sidebar desktop: full nav
 const NAV_SOIGNANT: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
   { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
-  { icone: MapPin, label: 'Pointer', route: '/soignant/presences' },
+  { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
+  { icone: FileText, label: 'Documents', route: '/soignant/documents' },
+  { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 

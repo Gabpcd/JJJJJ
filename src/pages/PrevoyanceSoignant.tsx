@@ -129,12 +129,13 @@ export default function PrevoyanceSoignant() {
 
       {planASouscrire && (
         <ModalConfirmation
+          ouvert={true}
+          onFermer={() => setPlanASouscrire(null)}
           titre={`Souscrire au plan ${planASouscrire.nom} ?`}
           message={`Vous allez souscrire pour ${fmt(planASouscrire.prime_mensuelle)}/mois. Soin Direct subventionne ${planASouscrire.subvention_plateforme_pourcent || 0}% de la prime. Votre score de fiabilité gagnera +3 points.`}
-          boutonConfirmer="Confirmer la souscription"
-          variante="info"
+          labelConfirmer="Confirmer la souscription"
+          variante="primaire"
           onConfirmer={() => souscrire(planASouscrire)}
-          onAnnuler={() => setPlanASouscrire(null)}
         />
       )}
     </LayoutApp>
