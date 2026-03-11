@@ -7,6 +7,8 @@ import { EtatVide } from '@/components/EtatVide';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
+import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
+import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
