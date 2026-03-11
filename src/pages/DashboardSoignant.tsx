@@ -62,6 +62,7 @@ export default function DashboardSoignant() {
   const [modalScore, setModalScore] = useState(false);
   const [missionProchaine, setMissionProchaine] = useState<any>(null);
   const [missionsOubliDepart, setMissionsOubliDepart] = useState<any[]>([]);
+  const [gainsCeMois, setGainsCeMois] = useState({ net: 0, nb: 0 });
 
   useEffect(() => {
     if (!user) return;
