@@ -68,6 +68,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         if (data) {
           setIntitule(data.intitule);
           setDescription(data.description || '');
+          setContratPreference(extraireContratPreference(data.description));
           setProfession(data.profession_requise);
           setService(data.service || '');
           setTauxHoraire(String(data.taux_horaire_base));
