@@ -50,6 +50,11 @@ export function extraireMessageErreur(error: any): string {
     return 'Erreur de connexion. Vérifiez votre accès internet.';
   }
 
+  // En dev, afficher le message brut pour le debug
+  if (msg) {
+    return `Erreur: ${msg}`;
+  }
+
   return 'Une erreur inattendue est survenue. Veuillez réessayer.';
 }
 
