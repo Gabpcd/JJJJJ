@@ -189,13 +189,14 @@ export default function DashboardSoignant() {
       {/* KPI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
-        <div className="card-kpi cursor-pointer" onClick={() => setModalScore(true)}>
+        <div className="card-kpi cursor-pointer" onClick={() => navigate('/soignant/fiabilite')}>
           <div className="flex items-start gap-3">
             <div className={`rounded-xl p-2.5 ${scoreConfig.couleurFond}`}><Star className={`h-5 w-5 ${scoreConfig.couleurIcone}`} /></div>
             <div>
               <p className="text-2xl font-bold text-foreground">{score}<span className="text-sm text-muted-foreground">/100</span></p>
               <p className="text-xs text-muted-foreground">Score · {scoreConfig.label}</p>
-              <p className="text-[10px] text-primary mt-0.5 flex items-center gap-0.5"><Info className="h-3 w-3" /> En savoir plus</p>
+              <BadgeNiveau score={score} compact />
+              <p className="text-[10px] text-primary mt-0.5">Voir le détail →</p>
             </div>
           </div>
         </div>
