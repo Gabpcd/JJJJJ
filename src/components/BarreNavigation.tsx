@@ -9,8 +9,8 @@ interface NavItem { icone: LucideIcon; label: string; route: string; }
 const NAV_SOIGNANT: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
+  { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
   { icone: FileText, label: 'Documents', route: '/soignant/documents' },
-  { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 
