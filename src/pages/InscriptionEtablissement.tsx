@@ -20,6 +20,7 @@ export default function InscriptionEtablissement() {
     nom: '', siret: '', finess: '', type: '',
     rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
+    lat: null as number | null, lng: null as number | null,
   });
 
   const maj = (champ: string, valeur: string) => setForm(prev => ({ ...prev, [champ]: valeur }));
