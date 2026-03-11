@@ -13,6 +13,11 @@ import DashboardEtablissement from "./pages/DashboardEtablissement";
 import DashboardGroupe from "./pages/DashboardGroupe";
 import ProfilSoignant from "./pages/ProfilSoignant";
 import ProfilEtablissement from "./pages/ProfilEtablissement";
+import CreerMission from "./pages/CreerMission";
+import ListeMissions from "./pages/ListeMissions";
+import DetailMission from "./pages/DetailMission";
+import ModifierMission from "./pages/ModifierMission";
+import MonGroupe from "./pages/MonGroupe";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,9 +42,12 @@ const App = () => (
 
               <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
               <Route path="/etablissement/profil" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ProfilEtablissement /></RouteProtegee>} />
-              <Route path="/etablissement/missions" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
-              <Route path="/etablissement/missions/creer" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
+              <Route path="/etablissement/missions" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ListeMissions /></RouteProtegee>} />
+              <Route path="/etablissement/missions/creer" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><CreerMission /></RouteProtegee>} />
+              <Route path="/etablissement/missions/:id" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DetailMission /></RouteProtegee>} />
+              <Route path="/etablissement/missions/:id/modifier" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ModifierMission /></RouteProtegee>} />
               <Route path="/etablissement/presences" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
+              <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
 
               <Route path="/groupe/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />
               <Route path="/groupe/etablissements" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />

@@ -1,54 +1,103 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, PlayCircle, CheckCircle, TrendingUp } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, Building2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
-import { BadgeStatut } from '@/components/BadgeStatut';
+import { SelecteurEtablissement } from '@/components/SelecteurEtablissement';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { getLabelTypeEtablissement } from '@/lib/constantes';
 
 export default function DashboardGroupe() {
   const { user } = useAuth();
-  const [etabSelectionne, setEtabSelectionne] = useState<string>('tous');
+  const [etabSelectionne, setEtabSelectionne] = useState('tous');
   const [etablissements, setEtablissements] = useState<any[]>([]);
-  const [missions, setMissions] = useState<any[]>([]);
   const [groupeNom, setGroupeNom] = useState('Mon Groupe');
   const [loading, setLoading] = useState(true);
+  const [filtreDepartement, setFiltreDepartement] = useState('');
+  const [filtreType, setFiltreType] = useState('');
+  const [kpi, setKpi] = useState({ ouvertes: 0, enCours: 0, terminees: 0, actifs: 0 });
+  const [perfParEtab, setPerfParEtab] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      // Get group id from admin table
-      const { data: adminData } = await supabase.from('admins_groupe_sante').select('groupe_id, groupes_sante(nom)').eq('utilisateur_id', user.id).limit(1).single();
+      const { data: adminData } = await supabase
+        .from('admins_groupe_sante')
+        .select('groupe_id, groupes_sante(nom)')
+        .eq('utilisateur_id', user.id)
+        .limit(1)
+        .single();
 
       if (!adminData) { setLoading(false); return; }
       const groupeId = adminData.groupe_id;
       setGroupeNom((adminData as any).groupes_sante?.nom || 'Mon Groupe');
 
-      const { data: etabs } = await supabase.from('etablissements').select('id, nom, adresse_ville').eq('groupe_sante_id', groupeId);
-      if (etabs) setEtablissements(etabs);
+      const { data: etabs } = await supabase
+        .from('etablissements')
+        .select('id, nom, adresse_ville, adresse_departement, type')
+        .eq('groupe_sante_id', groupeId)
+        .is('supprime_le', null)
+        .order('nom');
 
-      const etabIds = etabs?.map(e => e.id) || [];
-      if (etabIds.length > 0) {
-        const { data: ms } = await supabase.from('missions').select('id, intitule, service, debut_le, statut, soignant_assigne_id, etablissement_id, soignants(prenom, nom)').in('etablissement_id', etabIds).order('cree_le', { ascending: false }).limit(20);
-        if (ms) setMissions(ms);
-      }
+      if (etabs) setEtablissements(etabs);
       setLoading(false);
     };
     load();
   }, [user]);
 
-  if (loading) return <LayoutApp role="ADMIN_GROUPE"><ChargementPage /></LayoutApp>;
+  // Compute filtered etabs
+  const etabsFiltres = etablissements.filter(e => {
+    if (filtreDepartement && e.adresse_departement !== filtreDepartement) return false;
+    if (filtreType && e.type !== filtreType) return false;
+    return true;
+  });
 
-  const missionsFiltrees = etabSelectionne === 'tous' ? missions : missions.filter(m => m.etablissement_id === etabSelectionne);
-  const ouvertes = missionsFiltrees.filter(m => m.statut === 'OUVERTE').length;
-  const enCours = missionsFiltrees.filter(m => m.statut === 'EN_COURS').length;
-  const terminees = missionsFiltrees.filter(m => m.statut === 'TERMINEE').length;
-  const total = missionsFiltrees.length;
-  const assignees = missionsFiltrees.filter(m => m.soignant_assigne_id).length;
-  const taux = total > 0 ? Math.round((assignees / total) * 100) : 0;
+  const etabIds = etabSelectionne === 'tous'
+    ? etabsFiltres.map(e => e.id)
+    : etabsFiltres.filter(e => e.id === etabSelectionne).map(e => e.id);
+
+  useEffect(() => {
+    if (etabIds.length === 0) {
+      setKpi({ ouvertes: 0, enCours: 0, terminees: 0, actifs: 0 });
+      setPerfParEtab([]);
+      return;
+    }
+    const loadKpi = async () => {
+      const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const [{ count: o }, { count: ec }, { count: t }] = await Promise.all([
+        supabase.from('missions').select('*', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'OUVERTE'),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'EN_COURS'),
+        supabase.from('missions').select('*', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'TERMINEE').gte('modifie_le', debutMois),
+      ]);
+      setKpi({ ouvertes: o ?? 0, enCours: ec ?? 0, terminees: t ?? 0, actifs: etabsFiltres.length });
+
+      // Performance par établissement
+      const perfs = await Promise.all(
+        etabsFiltres.map(async (e) => {
+          const [{ count: ouv }, { count: ass }, { count: term }, { count: tot }] = await Promise.all([
+            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'OUVERTE'),
+            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'ASSIGNEE'),
+            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'TERMINEE'),
+            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id),
+          ]);
+          const totalN = tot ?? 0;
+          const assigned = (ass ?? 0) + (term ?? 0);
+          return {
+            ...e,
+            ouvertes: ouv ?? 0,
+            assignees: ass ?? 0,
+            terminees: term ?? 0,
+            taux: totalN > 0 ? Math.round((assigned / totalN) * 100) : 0,
+          };
+        })
+      );
+      setPerfParEtab(perfs);
+    };
+    loadKpi();
+  }, [etabIds.join(',')]);
+
+  if (loading) return <LayoutApp role="ADMIN_GROUPE"><ChargementPage /></LayoutApp>;
 
   return (
     <LayoutApp role="ADMIN_GROUPE">
@@ -57,38 +106,63 @@ export default function DashboardGroupe() {
         <p className="text-sm text-muted-foreground mt-1">Vue consolidée de vos établissements</p>
       </div>
 
-      <div className="mb-6 overflow-x-auto">
-        <div className="flex gap-2 pb-2">
-          <button onClick={() => setEtabSelectionne('tous')} className={`badge-base whitespace-nowrap transition-colors ${etabSelectionne === 'tous' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>Tous les établissements</button>
-          {etablissements.map(e => (
-            <button key={e.id} onClick={() => setEtabSelectionne(e.id)} className={`badge-base whitespace-nowrap transition-colors ${etabSelectionne === e.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
-              {e.nom} — {e.adresse_ville}
-            </button>
-          ))}
-        </div>
+      <div className="mb-6">
+        <SelecteurEtablissement
+          etablissements={etablissements}
+          valeur={etabSelectionne}
+          onChange={setEtabSelectionne}
+          avecFiltres
+          filtreDepartement={filtreDepartement}
+          onChangeDepartement={setFiltreDepartement}
+          filtreType={filtreType}
+          onChangeType={setFiltreType}
+        />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <CarteKPI icone={Briefcase} valeur={ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" />
-        <CarteKPI icone={PlayCircle} valeur={enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" />
-        <CarteKPI icone={CheckCircle} valeur={terminees} label="Terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
-        <CarteKPI icone={TrendingUp} valeur={`${taux}%`} label="Taux d'occupation" couleurIcone={taux > 70 ? 'text-success' : 'text-warning'} couleurFond={taux > 70 ? 'bg-success/10' : 'bg-warning/10'} />
+        <CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" />
+        <CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+        <CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
+        <CarteKPI icone={Building2} valeur={kpi.actifs} label="Établissements actifs" couleurIcone="text-info" couleurFond="bg-info/10" />
       </div>
 
-      <h2 className="text-lg font-bold text-foreground mb-3">Missions récentes</h2>
-      <div className="space-y-3">
-        {missionsFiltrees.length > 0 ? missionsFiltrees.slice(0, 10).map(m => (
-          <div key={m.id} className="card-base">
-            <div className="flex items-start justify-between mb-2">
-              <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
-              <BadgeStatut statut={m.statut} />
-            </div>
-            <p className="text-xs text-muted-foreground">{m.service && `${m.service} · `}{format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}</p>
-            <p className="text-xs text-muted-foreground mt-1">Soignant : {m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : '—'}</p>
-          </div>
-        )) : (
-          <p className="text-sm text-muted-foreground text-center py-8">Aucune mission pour cette sélection.</p>
-        )}
+      {/* Tableau de performance */}
+      <h2 className="text-lg font-bold text-foreground mb-3">Performance par établissement</h2>
+      <div className="card-base overflow-x-auto p-0">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/30">
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Établissement</th>
+              <th className="text-center px-4 py-3 font-medium text-muted-foreground">Ouvertes</th>
+              <th className="text-center px-4 py-3 font-medium text-muted-foreground">Assignées</th>
+              <th className="text-center px-4 py-3 font-medium text-muted-foreground">Terminées</th>
+              <th className="text-center px-4 py-3 font-medium text-muted-foreground">Taux</th>
+            </tr>
+          </thead>
+          <tbody>
+            {perfParEtab.map(e => (
+              <tr
+                key={e.id}
+                onClick={() => setEtabSelectionne(e.id)}
+                className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
+              >
+                <td className="px-4 py-3">
+                  <p className="font-medium text-foreground">{e.nom}</p>
+                  <p className="text-xs text-muted-foreground">{e.adresse_ville}</p>
+                </td>
+                <td className="px-4 py-3 text-center">{e.ouvertes}</td>
+                <td className="px-4 py-3 text-center">{e.assignees}</td>
+                <td className="px-4 py-3 text-center">{e.terminees}</td>
+                <td className={`px-4 py-3 text-center font-semibold ${e.taux >= 70 ? 'text-success' : e.taux >= 40 ? 'text-warning' : 'text-destructive'}`}>
+                  {e.taux}%
+                </td>
+              </tr>
+            ))}
+            {perfParEtab.length === 0 && (
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Aucun établissement trouvé</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </LayoutApp>
   );
