@@ -128,6 +128,7 @@ export default function InscriptionEtablissement() {
                 </button>
               </div>
             </div>
+            </>
           )}
         </form>
 
