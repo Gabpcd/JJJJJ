@@ -157,6 +157,12 @@ export default function DashboardSoignant() {
       {/* Mission prochaine — aller pointer */}
       {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
 
+      {/* Goal Gradient — Proximité de jalon */}
+      <BandeauGoalGradient heures={heures} />
+
+      {/* Célébration de jalon */}
+      <CelebrationJalonManager heures={heures} />
+
       {/* Alerte documents expirant */}
       {docsExpirant.map(d => (
         <div key={d.id} className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-3 flex items-start gap-2">

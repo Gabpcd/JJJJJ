@@ -25,6 +25,7 @@ export default function MesGains() {
   const [missions, setMissions] = useState<any[]>([]);
   const [soignant, setSoignant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [modalAttestation, setModalAttestation] = useState(false);
   const [filtre, setFiltre] = useState<{ debut: Date | null; fin: Date | null; label: string }>({
     debut: startOfMonth(new Date()), fin: endOfMonth(new Date()), label: format(new Date(), 'MMMM yyyy', { locale: fr }),
   });
