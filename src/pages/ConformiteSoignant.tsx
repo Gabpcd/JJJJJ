@@ -96,7 +96,7 @@ export default function ConformiteSoignant() {
         />
       ) : (
         <div className="space-y-6">
-          {Object.entries(grouped).map(([label, items]) => (
+          {Object.entries(grouped).map(([label, items]: [string, any[]]) => (
             <div key={label}>
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{label}</h3>
               <div className="card-base divide-y divide-border">
