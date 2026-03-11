@@ -37,7 +37,7 @@ export default function InscriptionEtablissement() {
     lat: null as number | null, lng: null as number | null,
   });
 
-  const maj = (champ: string, valeur: string) => setForm(prev => ({ ...prev, [champ]: valeur }));
+  const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
   const etape2Valide = form.nom && form.siret.length === 14 && form.type && form.ville;
 
