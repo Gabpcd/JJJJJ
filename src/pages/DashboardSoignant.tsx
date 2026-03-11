@@ -113,6 +113,9 @@ export default function DashboardSoignant() {
         )}
       </div>
 
+      {/* Alerte 48h */}
+      <BandeauAlerte48h heuresSemaine={heuresSemaine} />
+
       {/* Alerte documents expirant */}
       {docsExpirant.map(d => (
         <div key={d.id} className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-3 flex items-start gap-2">
