@@ -46,6 +46,8 @@ export function CarteMission({ mission, afficherEtablissement, onDupliquer, onAn
   const dateFormatee = format(debut, 'EEEE d MMMM yyyy', { locale: fr });
   const tempsInfo = m.statut === 'OUVERTE' ? tempsDepuis(m.cree_le) : null;
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
+  const contratPref = extraireContratPreference(m.description);
+  const contratBadge = getContratBadge(contratPref);
 
   return (
     <div
