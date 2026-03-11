@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { extraireContratPreference, injecterContratTag, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { WarningRist } from '@/components/WarningRist';
+import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressif';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
 import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
 import { BarreProgressionBulk } from '@/components/BarreProgressionBulk';
