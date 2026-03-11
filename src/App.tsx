@@ -21,6 +21,8 @@ import MonGroupe from "./pages/MonGroupe";
 import MissionsSoignant from "./pages/MissionsSoignant";
 import DetailMissionSoignant from "./pages/DetailMissionSoignant";
 import DocumentsSoignant from "./pages/DocumentsSoignant";
+import PlanningSoignant from "./pages/PlanningSoignant";
+import ConformiteSoignant from "./pages/ConformiteSoignant";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
