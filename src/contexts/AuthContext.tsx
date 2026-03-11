@@ -131,6 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       type_contrat: data.typeContrat,
       numero_rpps: data.rpps || null,
       rayon_deplacement_km: data.rayon,
+      adresse_lat: data.lat || null,
+      adresse_lng: data.lng || null,
     };
     console.log('INSERT soignants payload:', insertPayload);
     const { error: insertError } = await supabase.from('soignants').insert(insertPayload as any);
