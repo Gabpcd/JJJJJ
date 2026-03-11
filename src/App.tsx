@@ -24,6 +24,8 @@ import DetailSerieSoignant from "./pages/DetailSerieSoignant";
 import DocumentsSoignant from "./pages/DocumentsSoignant";
 import PlanningSoignant from "./pages/PlanningSoignant";
 import ConformiteSoignant from "./pages/ConformiteSoignant";
+import PresencesSoignant from "./pages/PresencesSoignant";
+import PresencesEtablissement from "./pages/PresencesEtablissement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
