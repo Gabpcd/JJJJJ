@@ -71,7 +71,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   return (
     <>
       <nav className="bottom-nav md:hidden">
-        {items.map((item) => {
+        {mobileItems.map((item) => {
           const actif = location.pathname === item.route;
           return (
             <button key={item.route} onClick={() => navigate(item.route)} className={`bottom-nav-item ${actif ? 'bottom-nav-item-active' : ''}`}>
