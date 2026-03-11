@@ -58,13 +58,14 @@ export default function ProfilSoignant() {
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     } else {
-      supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
         p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
         p_action: 'DONNEES_PERSO_MODIFICATION', p_type_ressource: 'soignant',
         p_id_ressource: user.id, p_cle_s3: null,
         p_details: { champs_modifies: Object.keys(form) },
         p_ip: null, p_navigateur: navigator.userAgent,
-      }).then(() => {});
+      });
+      if (auditError) console.error('Audit failed:', auditError);
       afficherNotification({ type: 'succes', message: 'Profil mis à jour avec succès !' });
     }
     setSaving(false);
