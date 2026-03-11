@@ -88,6 +88,8 @@ export default function ProfilEtablissement() {
       adresse_rue: form.rue, adresse_ville: form.ville,
       adresse_code_postal: form.codePostal, adresse_departement: form.departement || null,
       email_contact: form.emailContact, telephone_contact: form.telephoneContact || null,
+      adresse_lat: lat ? parseFloat(lat) : null,
+      adresse_lng: lng ? parseFloat(lng) : null,
       taux_majoration_nuit_pourcent: form.tauxNuit,
       taux_majoration_dimanche_pourcent: form.tauxDimanche,
       taux_majoration_ferie_pourcent: form.tauxFerie,
