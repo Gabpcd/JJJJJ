@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 
@@ -31,6 +31,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: PlusCircle, label: 'Publier', route: '/etablissement/missions/creer' },
   { icone: List, label: 'Missions', route: '/etablissement/missions' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
+  { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
   { icone: Settings, label: 'Profil', route: '/etablissement/profil' },
 ];
 

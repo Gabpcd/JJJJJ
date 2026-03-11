@@ -32,6 +32,8 @@ import Parcours3200h from "./pages/Parcours3200h";
 import PrevoyanceSoignant from "./pages/PrevoyanceSoignant";
 import AttestationHeures from "./pages/AttestationHeures";
 import Tarifs from "./pages/Tarifs";
+import FacturationEtablissement from "./pages/FacturationEtablissement";
+import DetailFacture from "./pages/DetailFacture";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -71,6 +73,8 @@ const App = () => (
               <Route path="/etablissement/missions/:id" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DetailMission /></RouteProtegee>} />
               <Route path="/etablissement/missions/:id/modifier" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ModifierMission /></RouteProtegee>} />
               <Route path="/etablissement/presences" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><PresencesEtablissement /></RouteProtegee>} />
+              <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
+              <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
               <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
 
               <Route path="/groupe/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />
