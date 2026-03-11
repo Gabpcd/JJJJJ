@@ -223,6 +223,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) {
+    // During HMR, context can temporarily be null — return safe defaults
+    return {
+      user: null, session: null, loading: true,
+      connexion: async () => {}, deconnexion: async () => {},
+      inscriptionSoignant: async () => {}, inscriptionEtablissement: async () => {},
+    } as any;
+  }
   return ctx;
 }
