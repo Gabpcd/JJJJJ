@@ -167,7 +167,7 @@ export default function DetailMissionSoignant() {
         body: {
           to: user!.email,
           subject: `Mission confirmée : ${mission.intitule}`,
-          html: emailMissionAccepteeSoignant(soignant.prenom, mission.intitule, dateFormatee, mission.etablissements?.nom || '', id!),
+          html: emailMissionAccepteeSoignant(soignant.prenom, mission.intitule, dateFormatee, etablissement?.nom || '', id!),
           type: 'MISSION_ACCEPTEE_SOIGNANT',
           destinataire_id: user!.id,
         },
