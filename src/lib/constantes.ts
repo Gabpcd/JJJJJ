@@ -18,7 +18,6 @@ export const PROFESSIONS = [
 
 export const CONTRATS = [
   { valeur: 'CDDU', label: "CDD d'Usage (CDDU)" },
-  { valeur: 'INTERIM', label: 'Intérim' },
   { valeur: 'VACATION', label: 'Vacation' },
   { valeur: 'LIBERAL', label: 'Libéral' },
   { valeur: 'SALARIE', label: 'Salarié' },

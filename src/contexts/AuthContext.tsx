@@ -120,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userId = authData.user!.id;
 
     // 2. Insert into soignants table
+    const typesContrat: string[] = data.typesContrat || (data.typeContrat ? [data.typeContrat] : ['CDDU']);
     const insertPayload = {
       id: userId,
       prenom: data.prenom,
@@ -128,7 +129,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       telephone: data.telephone || null,
       date_naissance: data.dateNaissance || null,
       profession: data.profession,
-      type_contrat: data.typeContrat,
+      type_contrat: typesContrat[0],
+      types_contrat_acceptes: JSON.stringify(typesContrat),
       numero_rpps: data.rpps || null,
       rayon_deplacement_km: data.rayon,
       adresse_lat: data.lat || null,
