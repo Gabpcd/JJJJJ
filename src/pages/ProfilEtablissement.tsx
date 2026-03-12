@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { handleErrorSilent } from '@/lib/handleError';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { getLabelTypeEtablissement } from '@/lib/constantes';

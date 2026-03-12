@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
 import { FolderOpen, AlertCircle, Clock } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';

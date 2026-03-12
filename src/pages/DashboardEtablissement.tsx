@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
