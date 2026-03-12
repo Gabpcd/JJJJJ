@@ -34,6 +34,7 @@ export default function InscriptionEtablissement() {
     nom: '', siret: '', finess: '', type: '',
     rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
+    numeroLicence: '',
     lat: null as number | null, lng: null as number | null,
   });
 
