@@ -1,89 +1,120 @@
-const HEADER = `<div style="font-family:'Inter',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;">
-<div style="background:linear-gradient(135deg,#0e9aa7,#3dc1d3);padding:24px;text-align:center;">
-  <span style="color:#fff;font-size:24px;font-weight:bold;">❤️ Soin Direct</span>
-</div>`;
+const WRAPPER = (content: string) => `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="margin:0;padding:0;background:#F8FAFC;font-family:Arial,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:white;">
+    <div style="background:#0F172A;padding:24px;text-align:center;">
+      <span style="color:#17A2B8;font-size:28px;font-weight:bold;">❤️ Soin Direct</span>
+    </div>
+    <div style="padding:32px 24px;">
+      ${content}
+    </div>
+    <div style="background:#F1F5F9;padding:16px 24px;text-align:center;font-size:11px;color:#94A3B8;">
+      <p>Soin Direct SAS — <a href="https://soindirect.com" style="color:#17A2B8;">soindirect.com</a></p>
+      <p><a href="https://soindirect.com/cgu" style="color:#94A3B8;">CGU</a> · 
+         <a href="https://soindirect.com/confidentialite" style="color:#94A3B8;">Confidentialité</a></p>
+    </div>
+  </div>
+</body>
+</html>`;
 
-const FOOTER = `<div style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e2e8f0;">
-  <p style="font-size:12px;color:#94a3b8;margin:0;">Soin Direct SAS — <a href="https://soindirect.com" style="color:#0e9aa7;">soindirect.com</a></p>
-  <p style="font-size:11px;color:#94a3b8;margin:4px 0 0;">Vous recevez cet email car vous êtes inscrit(e) sur Soin Direct.</p>
-</div></div>`;
+const BUTTON = (text: string, url: string) =>
+  `<a href="${url}" style="display:inline-block;background:#17A2B8;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0;">${text}</a>`;
 
 export function emailBienvenueSoignant(prenom: string) {
-  return `${HEADER}
-  <div style="padding:32px 24px;">
-    <h2 style="color:#1e293b;margin:0 0 16px;">Bienvenue ${prenom} ! 🎉</h2>
-    <p style="color:#475569;font-size:14px;line-height:1.6;">Votre compte Soin Direct est créé. Voici les prochaines étapes :</p>
-    <ol style="color:#475569;font-size:14px;line-height:2;">
-      <li>Complétez votre profil (profession, RPPS, adresse)</li>
-      <li>Téléversez vos documents (diplôme, RCP, identité)</li>
-      <li>Parcourez les missions disponibles près de chez vous</li>
-    </ol>
-    <div style="text-align:center;margin-top:24px;">
-      <a href="https://soindirect.com/soignant/profil" style="background:#0e9aa7;color:#fff;padding:12px 32px;border-radius:12px;text-decoration:none;font-weight:600;display:inline-block;">Compléter mon profil →</a>
+  return WRAPPER(`
+    <h2 style="color:#0F172A;">Bienvenue ${prenom} ! 🎉</h2>
+    <p>Votre compte soignant est créé. Prochaines étapes :</p>
+    <div style="background:#F0FDFA;border-left:4px solid #17A2B8;padding:16px;margin:16px 0;">
+      <strong>1.</strong> Complétez votre profil (RPPS, adresse)<br/>
+      <strong>2.</strong> Téléversez vos documents (diplôme, RCP, identité)<br/>
+      <strong>3.</strong> Parcourez les missions près de chez vous
     </div>
-  </div>
-  ${FOOTER}`;
+    ${BUTTON('Compléter mon profil →', 'https://soindirect.com/soignant/profil')}
+  `);
 }
 
-export function emailMissionAcceptee(prenom: string, mission: string, date: string, etablissement: string) {
-  return `${HEADER}
-  <div style="padding:32px 24px;">
-    <h2 style="color:#1e293b;margin:0 0 16px;">Mission confirmée ✅</h2>
-    <p style="color:#475569;font-size:14px;">Bonjour ${prenom},</p>
-    <p style="color:#475569;font-size:14px;">Votre mission a été confirmée :</p>
-    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:16px;margin:16px 0;">
-      <p style="margin:0;font-weight:600;color:#1e293b;">${mission}</p>
-      <p style="margin:4px 0 0;color:#475569;font-size:13px;">📍 ${etablissement}</p>
-      <p style="margin:4px 0 0;color:#475569;font-size:13px;">📅 ${date}</p>
+export function emailBienvenueEtablissement(nom: string) {
+  return WRAPPER(`
+    <h2 style="color:#0F172A;">Bienvenue ${nom} !</h2>
+    <p>Votre établissement est enregistré sur Soin Direct.</p>
+    <div style="background:#F0FDFA;border-left:4px solid #17A2B8;padding:16px;margin:16px 0;">
+      <strong>1.</strong> Complétez votre profil (SIRET, FINESS, adresse)<br/>
+      <strong>2.</strong> Publiez votre première mission<br/>
+      <strong>3.</strong> Recevez des candidatures en quelques heures
     </div>
-    <p style="color:#475569;font-size:14px;">N'oubliez pas de pointer votre arrivée dans l'app le jour J !</p>
-  </div>
-  ${FOOTER}`;
+    ${BUTTON('Publier une mission →', 'https://soindirect.com/etablissement/missions/creer')}
+  `);
 }
 
-export function emailFactureMensuelle(nomEtab: string, numero: string, montantTTC: string, lienPaiement: string) {
-  return `${HEADER}
-  <div style="padding:32px 24px;">
-    <h2 style="color:#1e293b;margin:0 0 16px;">Facture ${numero}</h2>
-    <p style="color:#475569;font-size:14px;">Bonjour,</p>
-    <p style="color:#475569;font-size:14px;">Votre facture de commission Soin Direct est disponible :</p>
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:16px 0;">
-      <p style="margin:0;font-weight:600;color:#1e293b;">Facture ${numero}</p>
-      <p style="margin:4px 0 0;color:#475569;font-size:13px;">Montant TTC : ${montantTTC} €</p>
-      <p style="margin:4px 0 0;color:#475569;font-size:13px;">Échéance : 30 jours</p>
+export function emailMissionAcceptee(prenom: string, mission: string, date: string, etab: string) {
+  return WRAPPER(`
+    <h2 style="color:#0F172A;">Mission confirmée ✅</h2>
+    <p>Bonjour ${prenom},</p>
+    <div style="background:#F0FDFA;border:1px solid #17A2B8;border-radius:8px;padding:16px;margin:16px 0;">
+      <strong>${mission}</strong><br/>
+      📍 ${etab}<br/>
+      📅 ${date}
     </div>
-    <div style="text-align:center;margin-top:24px;">
-      <a href="${lienPaiement}" style="background:#0e9aa7;color:#fff;padding:12px 32px;border-radius:12px;text-decoration:none;font-weight:600;display:inline-block;">💳 Payer la facture →</a>
-    </div>
-  </div>
-  ${FOOTER}`;
+    <p>⚠️ Pensez à <strong>signer votre contrat</strong> dans l'app avant le début de la mission.</p>
+    ${BUTTON('Voir la mission →', 'https://soindirect.com/soignant/missions')}
+  `);
 }
 
-export function emailMissionRappel(prenom: string, mission: string, heure: string, etablissement: string) {
-  return `${HEADER}
-  <div style="padding:32px 24px;">
-    <h2 style="color:#1e293b;margin:0 0 16px;">⏰ Rappel : mission demain</h2>
-    <p style="color:#475569;font-size:14px;">Bonjour ${prenom},</p>
-    <p style="color:#475569;font-size:14px;">Rappel : vous avez une mission demain :</p>
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;margin:16px 0;">
-      <p style="margin:0;font-weight:600;color:#1e293b;">${mission}</p>
-      <p style="margin:4px 0 0;color:#475569;font-size:13px;">📍 ${etablissement}</p>
-      <p style="margin:4px 0 0;color:#475569;font-size:13px;">🕐 Début : ${heure}</p>
-    </div>
-  </div>
-  ${FOOTER}`;
+export function emailContratASignerSoignant(prenom: string, mission: string, contratId: string) {
+  return WRAPPER(`
+    <h2 style="color:#0F172A;">📝 Contrat à signer</h2>
+    <p>Bonjour ${prenom},</p>
+    <p>Un contrat a été généré pour votre mission <strong>"${mission}"</strong>.</p>
+    <p>Vous devez le signer avant de pouvoir commencer votre mission.</p>
+    ${BUTTON('Signer le contrat →', 'https://soindirect.com/contrat/' + contratId)}
+    <p style="font-size:12px;color:#94A3B8;">Pour des raisons de sécurité, le contrat n'est pas en pièce jointe. Connectez-vous à l'app pour le consulter et le signer.</p>
+  `);
 }
 
-export function emailDocumentExpirant(prenom: string, typeDoc: string, dateExpiration: string) {
-  return `${HEADER}
-  <div style="padding:32px 24px;">
-    <h2 style="color:#1e293b;margin:0 0 16px;">⚠️ Document bientôt expiré</h2>
-    <p style="color:#475569;font-size:14px;">Bonjour ${prenom},</p>
-    <p style="color:#475569;font-size:14px;">Votre <strong>${typeDoc}</strong> expire le <strong>${dateExpiration}</strong>.</p>
-    <p style="color:#475569;font-size:14px;">Pensez à le renouveler et à téléverser la nouvelle version dans votre coffre-fort.</p>
-    <div style="text-align:center;margin-top:24px;">
-      <a href="https://soindirect.com/soignant/documents" style="background:#0e9aa7;color:#fff;padding:12px 32px;border-radius:12px;text-decoration:none;font-weight:600;display:inline-block;">Mettre à jour mes documents →</a>
+export function emailContratASignerEtablissement(nomEtab: string, soignant: string, contratId: string) {
+  return WRAPPER(`
+    <h2 style="color:#0F172A;">📝 Contrat à signer</h2>
+    <p>Bonjour,</p>
+    <p><strong>${soignant}</strong> a accepté votre mission. Un contrat a été généré.</p>
+    <p>Signez-le pour confirmer la collaboration.</p>
+    ${BUTTON('Signer le contrat →', 'https://soindirect.com/contrat/' + contratId)}
+  `);
+}
+
+export function emailFactureMensuelle(nomEtab: string, numero: string, ttc: string, factureId: string) {
+  return WRAPPER(`
+    <h2 style="color:#0F172A;">Facture ${numero}</h2>
+    <p>Bonjour,</p>
+    <div style="background:#F0FDFA;border:1px solid #17A2B8;border-radius:8px;padding:16px;margin:16px 0;">
+      <strong>Facture ${numero}</strong><br/>
+      Montant TTC : <strong>${ttc} €</strong><br/>
+      Échéance : 30 jours
     </div>
-  </div>
-  ${FOOTER}`;
+    ${BUTTON('💳 Consulter et payer →', 'https://soindirect.com/etablissement/facturation/' + factureId)}
+    <p style="font-size:12px;color:#94A3B8;">Pour des raisons de sécurité, la facture n'est pas en pièce jointe. Consultez-la dans votre espace.</p>
+  `);
+}
+
+export function emailRappelMission(prenom: string, mission: string, heure: string, etab: string) {
+  return WRAPPER(`
+    <h2 style="color:#F59E0B;">⏰ Rappel : mission demain</h2>
+    <p>Bonjour ${prenom},</p>
+    <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:16px;margin:16px 0;">
+      <strong>${mission}</strong><br/>
+      📍 ${etab}<br/>
+      🕐 ${heure}
+    </div>
+    <p>N'oubliez pas votre pointage d'arrivée dans l'app !</p>
+  `);
+}
+
+export function emailDocumentExpirant(prenom: string, typeDoc: string, dateExp: string) {
+  return WRAPPER(`
+    <h2 style="color:#F59E0B;">⚠️ Document bientôt expiré</h2>
+    <p>Bonjour ${prenom},</p>
+    <p>Votre <strong>${typeDoc}</strong> expire le <strong>${dateExp}</strong>.</p>
+    ${BUTTON('Mettre à jour →', 'https://soindirect.com/soignant/documents')}
+  `);
 }

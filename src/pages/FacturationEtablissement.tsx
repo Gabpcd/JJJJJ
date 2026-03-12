@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ENTREPRISE } from '@/constantes/entreprise';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, FlaskConical } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -353,14 +354,23 @@ export default function FacturationEtablissement() {
 
                   {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
                     <>
-                      <button
-                        onClick={() => payerParCarte(f)}
-                        disabled={payingId === f.id}
-                        className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50"
-                      >
-                        {payingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
-                        Payer
-                      </button>
+                      {/* Chorus Pro for public sector */}
+                      {f.est_secteur_public ? (
+                        <FactureChorus facture={f} onUpdate={charger} />
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => payerParCarte(f)}
+                            disabled={payingId === f.id}
+                            className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {payingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
+                            Payer par carte
+                          </button>
+
+                          <PaiementVirement facture={f} onUpdate={charger} />
+                        </>
+                      )}
 
                       <button
                         onClick={() => rafraichirStatut(f.id)}
@@ -371,7 +381,6 @@ export default function FacturationEtablissement() {
                         <RefreshCw className={`h-3.5 w-3.5 ${refreshingId === f.id ? 'animate-spin' : ''}`} />
                       </button>
 
-                      {/* Dev simulate button — preview only */}
                       {IS_PREVIEW && (
                         <button
                           onClick={() => simulerPaiement(f)}

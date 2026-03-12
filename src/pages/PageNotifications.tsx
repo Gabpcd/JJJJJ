@@ -5,7 +5,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Bell, ExternalLink } from 'lucide-react';
+import { Bell, ExternalLink, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { UserRole } from '@/lib/types';
@@ -43,6 +43,23 @@ export default function PageNotifications({ role }: { role: UserRole }) {
     load();
   }, [user]);
 
+  // Realtime
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('notif-page-live')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `destinataire_id=eq.${user.id}`,
+      }, (payload) => {
+        setNotifications(prev => [payload.new as any, ...prev]);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   const handleClick = async (n: any) => {
     if (!n.lue) {
       await supabase.from('notifications').update({ lue: true, lue_le: new Date().toISOString() } as any).eq('id', n.id);
@@ -51,13 +68,26 @@ export default function PageNotifications({ role }: { role: UserRole }) {
     if (n.lien) navigate(n.lien);
   };
 
+  const supprimerLues = async () => {
+    const ids = notifications.filter(n => n.lue).map(n => n.id);
+    if (ids.length === 0) return;
+    await supabase.from('notifications').delete().in('id', ids);
+    setNotifications(prev => prev.filter(n => !n.lue));
+  };
+
   const filtered = filtre === 'Toutes' ? notifications : notifications.filter(n => TYPE_MAP[filtre].includes(n.type));
 
   if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
 
   return (
     <LayoutApp role={role}>
-      <h1 className="text-xl font-bold text-foreground mb-4">Notifications</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-foreground">Notifications</h1>
+        <button onClick={supprimerLues} className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1">
+          <Trash2 className="h-3.5 w-3.5" /> Supprimer les lues
+        </button>
+      </div>
+
       <div className="flex gap-2 mb-4 flex-wrap">
         {FILTRES.map(f => (
           <button key={f} onClick={() => setFiltre(f)} className={`badge-base transition-colors ${filtre === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
@@ -79,7 +109,7 @@ export default function PageNotifications({ role }: { role: UserRole }) {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <div className={`h-2 w-2 rounded-full shrink-0 ${!n.lue ? 'bg-destructive' : 'bg-muted-foreground/30'}`} />
-                  <span className="text-sm font-semibold text-foreground">{n.titre}</span>
+                  <span className={`text-sm ${!n.lue ? 'font-semibold' : ''} text-foreground`}>{n.titre}</span>
                 </div>
                 <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                   {formatDistanceToNow(new Date(n.cree_le), { addSuffix: true, locale: fr })}
