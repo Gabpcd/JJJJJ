@@ -3,6 +3,7 @@ import { Bell, X, Check, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -127,6 +128,7 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
 
 export function BadgeNotification() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
 
@@ -149,8 +151,13 @@ export function BadgeNotification() {
         schema: 'public',
         table: 'notifications',
         filter: `destinataire_id=eq.${user.id}`,
-      }, () => {
+      }, (payload) => {
         setCount(prev => prev + 1);
+        const n = payload.new as any;
+        toast({
+          title: n.titre,
+          description: n.corps?.substring(0, 80),
+        });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
