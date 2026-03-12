@@ -230,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // 4. Audit inscription + CGU consent
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: userId,
       p_type_acteur: 'ADMIN_ETABLISSEMENT',
       p_action: 'CONNEXION',
