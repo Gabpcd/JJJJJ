@@ -149,7 +149,7 @@ export default function DetailMissionSoignant() {
         p_cle_s3: null,
         p_details: {
           intitule: mission.intitule,
-          etablissement: mission.etablissements?.nom,
+          etablissement: etablissement?.nom,
           debut: mission.debut_le,
           fin: mission.fin_le,
         },
