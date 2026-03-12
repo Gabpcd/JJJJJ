@@ -99,7 +99,7 @@ export function genererCreneauxFlex(
     d.setDate(d.getDate() + 1);
   }
 
-  console.log('[genererCreneauxFlex] Total créneaux générés:', creneaux.length);
+  logger.debug('[genererCreneauxFlex] Total créneaux:', creneaux.length);
   return creneaux;
 }
 
