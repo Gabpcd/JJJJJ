@@ -51,7 +51,7 @@ export default function DashboardEtablissement() {
       if (resEtab.error) { handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
       else if (resEtab.data) setEtab(resEtab.data);
 
-      if (resMissions.error) { console.error('[DashboardEtab] Erreur missions:', resMissions.error); partialError = true; }
+      if (resMissions.error) { handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
       else if (resMissions.data) setMissions(resMissions.data);
 
       if (resPaliers.data) setPaliers(resPaliers.data);
