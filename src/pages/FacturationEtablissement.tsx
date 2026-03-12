@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ENTREPRISE } from '@/constantes/entreprise';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, FlaskConical } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
