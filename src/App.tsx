@@ -34,6 +34,8 @@ import AttestationHeures from "./pages/AttestationHeures";
 import Tarifs from "./pages/Tarifs";
 import FacturationEtablissement from "./pages/FacturationEtablissement";
 import DetailFacture from "./pages/DetailFacture";
+import PasserEnLiberal from "./pages/PasserEnLiberal";
+import ExportPaie from "./pages/ExportPaie";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
