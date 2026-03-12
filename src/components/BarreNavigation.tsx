@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
 import { supabase } from '@/integrations/supabase/client';
+import { BadgeNotification } from '@/components/PanneauNotifications';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
 
-// Bottom bar mobile: 5 items max
 const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
@@ -17,14 +17,15 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 
-// Sidebar desktop: full nav
 const NAV_SOIGNANT: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
   { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
+  { icone: FileText, label: 'Mes contrats', route: '/soignant/contrats' },
   { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
-  { icone: FileText, label: 'Documents', route: '/soignant/documents' },
   { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
+  { icone: FileText, label: 'Documents', route: '/soignant/documents' },
+  { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 
@@ -32,10 +33,13 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
   { icone: PlusCircle, label: 'Publier', route: '/etablissement/missions/creer' },
   { icone: List, label: 'Missions', route: '/etablissement/missions' },
+  { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
-  { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
   { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
-  { icone: Settings, label: 'Profil', route: '/etablissement/profil' },
+  { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+  { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
+  { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
+  { icone: User, label: 'Profil', route: '/etablissement/profil' },
 ];
 
 const NAV_GROUPE: NavItem[] = [
@@ -77,9 +81,13 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   }, [role, user]);
 
   const baseItems = getNavItems(role);
-  const items = role === 'SOIGNANT' && showLiberal
-    ? [...baseItems.slice(0, -1), { icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' }, baseItems[baseItems.length - 1]]
-    : baseItems;
+  // Insert "Passer en libéral" before Notifications for soignant
+  let items = baseItems;
+  if (role === 'SOIGNANT' && showLiberal) {
+    const notifIdx = items.findIndex(i => i.label === 'Notifications');
+    const liberalItem = { icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' };
+    items = [...items.slice(0, notifIdx), liberalItem, ...items.slice(notifIdx)];
+  }
   const mobileItems = getMobileNavItems(role);
 
   const handleDeconnexion = async () => {
@@ -102,11 +110,14 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       </nav>
 
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] bg-sidebar flex-col z-40">
-        <div className="p-6 flex items-center gap-2">
-          <HeartPulse className="h-7 w-7 text-sidebar-primary" />
-          <span className="text-xl font-bold text-sidebar-foreground">Soin Direct</span>
+        <div className="p-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <HeartPulse className="h-7 w-7 text-sidebar-primary" />
+            <span className="text-xl font-bold text-sidebar-foreground">Soin Direct</span>
+          </div>
+          <BadgeNotification />
         </div>
-        <nav className="flex-1 px-3 space-y-1">
+        <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           {items.map((item) => {
             const actif = location.pathname === item.route;
             return (

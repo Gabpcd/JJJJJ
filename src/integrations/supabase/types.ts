@@ -167,6 +167,95 @@ export type Database = {
           },
         ]
       }
+      contrats_mission: {
+        Row: {
+          contenu_html: string | null
+          cree_le: string | null
+          etablissement_id: string
+          id: string
+          mission_id: string
+          modifie_le: string | null
+          numero_contrat: string
+          pdf_cle_s3: string | null
+          signature_etablissement: boolean | null
+          signature_etablissement_le: string | null
+          signature_soignant: boolean | null
+          signature_soignant_le: string | null
+          soignant_id: string
+          statut: string | null
+          type_contrat: string
+          yousign_document_id: string | null
+          yousign_procedure_id: string | null
+        }
+        Insert: {
+          contenu_html?: string | null
+          cree_le?: string | null
+          etablissement_id: string
+          id?: string
+          mission_id: string
+          modifie_le?: string | null
+          numero_contrat: string
+          pdf_cle_s3?: string | null
+          signature_etablissement?: boolean | null
+          signature_etablissement_le?: string | null
+          signature_soignant?: boolean | null
+          signature_soignant_le?: string | null
+          soignant_id: string
+          statut?: string | null
+          type_contrat: string
+          yousign_document_id?: string | null
+          yousign_procedure_id?: string | null
+        }
+        Update: {
+          contenu_html?: string | null
+          cree_le?: string | null
+          etablissement_id?: string
+          id?: string
+          mission_id?: string
+          modifie_le?: string | null
+          numero_contrat?: string
+          pdf_cle_s3?: string | null
+          signature_etablissement?: boolean | null
+          signature_etablissement_le?: string | null
+          signature_soignant?: boolean | null
+          signature_soignant_le?: string | null
+          soignant_id?: string
+          statut?: string | null
+          type_contrat?: string
+          yousign_document_id?: string | null
+          yousign_procedure_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrats_mission_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrats_mission_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrats_mission_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrats_mission_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "vm_fiabilite_soignants"
+            referencedColumns: ["soignant_id"]
+          },
+        ]
+      }
       conversions_liberal: {
         Row: {
           complete_le: string | null
@@ -430,6 +519,42 @@ export type Database = {
             referencedColumns: ["soignant_id"]
           },
         ]
+      }
+      emails_envoyes: {
+        Row: {
+          cree_le: string | null
+          destinataire_email: string
+          destinataire_id: string | null
+          erreur: string | null
+          id: string
+          provider_id: string | null
+          statut: string | null
+          sujet: string
+          type: string
+        }
+        Insert: {
+          cree_le?: string | null
+          destinataire_email: string
+          destinataire_id?: string | null
+          erreur?: string | null
+          id?: string
+          provider_id?: string | null
+          statut?: string | null
+          sujet: string
+          type: string
+        }
+        Update: {
+          cree_le?: string | null
+          destinataire_email?: string
+          destinataire_id?: string | null
+          erreur?: string | null
+          id?: string
+          provider_id?: string | null
+          statut?: string | null
+          sujet?: string
+          type?: string
+        }
+        Relationships: []
       }
       etablissements: {
         Row: {
@@ -963,6 +1088,63 @@ export type Database = {
             referencedColumns: ["soignant_id"]
           },
         ]
+      }
+      notifications: {
+        Row: {
+          corps: string
+          cree_le: string | null
+          destinataire_id: string
+          email_envoye: boolean | null
+          email_envoye_le: string | null
+          id: string
+          id_ressource: string | null
+          lien: string | null
+          lue: boolean | null
+          lue_le: string | null
+          push_envoyee: boolean | null
+          push_envoyee_le: string | null
+          titre: string
+          type: string
+          type_destinataire: string
+          type_ressource: string | null
+        }
+        Insert: {
+          corps: string
+          cree_le?: string | null
+          destinataire_id: string
+          email_envoye?: boolean | null
+          email_envoye_le?: string | null
+          id?: string
+          id_ressource?: string | null
+          lien?: string | null
+          lue?: boolean | null
+          lue_le?: string | null
+          push_envoyee?: boolean | null
+          push_envoyee_le?: string | null
+          titre: string
+          type: string
+          type_destinataire: string
+          type_ressource?: string | null
+        }
+        Update: {
+          corps?: string
+          cree_le?: string | null
+          destinataire_id?: string
+          email_envoye?: boolean | null
+          email_envoye_le?: string | null
+          id?: string
+          id_ressource?: string | null
+          lien?: string | null
+          lue?: boolean | null
+          lue_le?: string | null
+          push_envoyee?: boolean | null
+          push_envoyee_le?: string | null
+          titre?: string
+          type?: string
+          type_destinataire?: string
+          type_ressource?: string | null
+        }
+        Relationships: []
       }
       paliers_bfa: {
         Row: {
@@ -1563,6 +1745,72 @@ export type Database = {
           },
         ]
       }
+      templates_contrat: {
+        Row: {
+          contenu_html: string
+          cree_le: string | null
+          est_actif: boolean | null
+          id: string
+          modifie_le: string | null
+          nom: string
+          type_contrat: string
+          variables: Json
+          version: number | null
+        }
+        Insert: {
+          contenu_html: string
+          cree_le?: string | null
+          est_actif?: boolean | null
+          id?: string
+          modifie_le?: string | null
+          nom: string
+          type_contrat: string
+          variables?: Json
+          version?: number | null
+        }
+        Update: {
+          contenu_html?: string
+          cree_le?: string | null
+          est_actif?: boolean | null
+          id?: string
+          modifie_le?: string | null
+          nom?: string
+          type_contrat?: string
+          variables?: Json
+          version?: number | null
+        }
+        Relationships: []
+      }
+      tokens_push: {
+        Row: {
+          actif: boolean | null
+          cree_le: string | null
+          derniere_utilisation: string | null
+          id: string
+          plateforme: string | null
+          token: string
+          utilisateur_id: string
+        }
+        Insert: {
+          actif?: boolean | null
+          cree_le?: string | null
+          derniere_utilisation?: string | null
+          id?: string
+          plateforme?: string | null
+          token: string
+          utilisateur_id: string
+        }
+        Update: {
+          actif?: boolean | null
+          cree_le?: string | null
+          derniere_utilisation?: string | null
+          id?: string
+          plateforme?: string | null
+          token?: string
+          utilisateur_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       vm_fiabilite_soignants: {
@@ -1606,6 +1854,19 @@ export type Database = {
         Args: { p_soignant_id: string }
         Returns: Json
       }
+      fn_creer_notification: {
+        Args: {
+          p_corps: string
+          p_destinataire_id: string
+          p_id_ressource?: string
+          p_lien?: string
+          p_titre: string
+          p_type: string
+          p_type_destinataire: string
+          p_type_ressource?: string
+        }
+        Returns: string
+      }
       fn_detecter_teleportation: {
         Args: {
           p_horodatage: string
@@ -1631,6 +1892,7 @@ export type Database = {
       }
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
+      fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
       fn_generer_numero_facture: { Args: never; Returns: string }
       fn_generer_numero_note_honoraires: {
         Args: { p_soignant_id: string }
@@ -1650,6 +1912,7 @@ export type Database = {
           soignant_id: string
         }[]
       }
+      fn_notifier_documents_expirants: { Args: never; Returns: number }
       fn_recalculer_palier_commission: {
         Args: { p_etablissement_id: string }
         Returns: Json
