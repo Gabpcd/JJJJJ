@@ -50,12 +50,12 @@ export function extraireMessageErreur(error: any): string {
     return 'Erreur de connexion. Vérifiez votre accès internet.';
   }
 
-  // En dev, afficher le message brut pour le debug
-  if (msg) {
+  // En dev uniquement, afficher le message brut pour le debug
+  if (import.meta.env.DEV && msg) {
     return `Erreur: ${msg}`;
   }
 
-  return 'Une erreur inattendue est survenue. Veuillez réessayer.';
+  return 'Une erreur est survenue. Veuillez réessayer.';
 }
 
 export function estBlocageCodeTravail(error: any): boolean {
