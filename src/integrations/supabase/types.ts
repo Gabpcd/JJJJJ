@@ -1985,6 +1985,14 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_calculer_bfa_safe: {
+        Args: {
+          p_annee?: number
+          p_etablissement_id?: string
+          p_groupe_id?: string
+        }
+        Returns: Json
+      }
       fn_calculer_heures_totales: {
         Args: { p_soignant_id: string }
         Returns: Json
@@ -2000,6 +2008,10 @@ export type Database = {
         Returns: Json
       }
       fn_calculer_taux_free_transition: {
+        Args: { p_soignant_id: string }
+        Returns: Json
+      }
+      fn_calculer_taux_free_transition_safe: {
         Args: { p_soignant_id: string }
         Returns: Json
       }
@@ -2039,6 +2051,20 @@ export type Database = {
         }
         Returns: string
       }
+      fn_ecrire_audit_safe: {
+        Args: {
+          p_acteur_id: string
+          p_action: string
+          p_cle_s3?: string
+          p_details?: Json
+          p_id_ressource: string
+          p_ip?: unknown
+          p_navigateur?: string
+          p_type_acteur: string
+          p_type_ressource: string
+        }
+        Returns: Json
+      }
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
@@ -2047,6 +2073,7 @@ export type Database = {
         Args: { p_soignant_id: string }
         Returns: string
       }
+      fn_get_my_role: { Args: never; Returns: Json }
       fn_health_check: { Args: never; Returns: Json }
       fn_matcher_soignants_mission: {
         Args: { p_mission_id: string }
@@ -2081,6 +2108,10 @@ export type Database = {
         }[]
       }
       fn_sanitiser_html: { Args: { p_html: string }; Returns: string }
+      fn_set_user_role: {
+        Args: { p_etablissement_id?: string; p_role: string; p_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       statut_mission:
