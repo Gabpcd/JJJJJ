@@ -1,0 +1,168 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { LayoutApp } from '@/components/LayoutApp';
+import { ChargementPage } from '@/components/ChargementPage';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/contexts/NotificationContext';
+import { supabase } from '@/integrations/supabase/client';
+import { FileText, Printer, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { Checkbox } from '@/components/ui/checkbox';
+import { UserRole } from '@/lib/types';
+
+export default function ContratMission() {
+  const { id } = useParams();
+  const { user } = useAuth();
+  const { afficherNotification } = useNotification();
+  const navigate = useNavigate();
+  const [contrat, setContrat] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [accepte, setAccepte] = useState(false);
+  const [signing, setSigning] = useState(false);
+
+  const role: UserRole = user?.role || 'SOIGNANT';
+
+  useEffect(() => {
+    if (!id) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from('contrats_mission')
+        .select('*')
+        .eq('id', id)
+        .single();
+      setContrat(data);
+      setLoading(false);
+    };
+    load();
+  }, [id]);
+
+  const handleSigner = async () => {
+    if (!contrat || !user || !accepte) return;
+    setSigning(true);
+    try {
+      const isSoignant = contrat.soignant_id === user.id;
+      const updateData: any = isSoignant
+        ? { signature_soignant: true, signature_soignant_le: new Date().toISOString() }
+        : { signature_etablissement: true, signature_etablissement_le: new Date().toISOString() };
+
+      // Check if both will be signed
+      const autreSignee = isSoignant ? contrat.signature_etablissement : contrat.signature_soignant;
+      if (autreSignee) {
+        updateData.statut = 'SIGNE_COMPLET';
+      }
+
+      await supabase.from('contrats_mission').update(updateData).eq('id', contrat.id);
+
+      // Audit
+      await supabase.rpc('fn_ecrire_audit', {
+        p_acteur_id: user.id,
+        p_type_acteur: isSoignant ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
+        p_action: 'CONTRAT_SIGNE',
+        p_type_ressource: 'contrat',
+        p_id_ressource: contrat.id,
+        p_cle_s3: null,
+        p_details: { numero: contrat.numero_contrat, type: contrat.type_contrat, role_signataire: isSoignant ? 'soignant' : 'etablissement' },
+        p_ip: null,
+        p_navigateur: navigator.userAgent,
+      });
+
+      afficherNotification({ type: 'succes', message: 'Contrat signé avec succès !' });
+      // Reload
+      const { data: updated } = await supabase.from('contrats_mission').select('*').eq('id', contrat.id).single();
+      setContrat(updated);
+    } catch (err) {
+      afficherNotification({ type: 'erreur', message: 'Erreur lors de la signature' });
+    } finally {
+      setSigning(false);
+    }
+  };
+
+  if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
+  if (!contrat) return <LayoutApp role={role}><p className="text-center text-muted-foreground py-12">Contrat introuvable</p></LayoutApp>;
+
+  const isSoignant = contrat.soignant_id === user?.id;
+  const dejaSigneParMoi = isSoignant ? contrat.signature_soignant : contrat.signature_etablissement;
+
+  return (
+    <LayoutApp role={role}>
+      <div className="max-w-3xl mx-auto">
+        <div className="flex items-center gap-3 mb-4">
+          <FileText className="h-6 w-6 text-primary" />
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Contrat {contrat.numero_contrat}</h1>
+            <p className="text-sm text-muted-foreground">
+              Statut : {contrat.statut === 'SIGNE_COMPLET' ? '✅ Signé' : contrat.statut === 'ANNULE' ? '❌ Annulé' : '⏳ En attente de signatures'}
+            </p>
+          </div>
+        </div>
+
+        {/* Contract HTML render */}
+        <div className="card-base mb-4 max-h-[60vh] overflow-y-auto contrat-print">
+          {contrat.contenu_html ? (
+            <div dangerouslySetInnerHTML={{ __html: contrat.contenu_html }} className="prose prose-sm max-w-none text-foreground" />
+          ) : (
+            <p className="text-center text-muted-foreground py-8">Le contenu du contrat n'est pas encore disponible.</p>
+          )}
+        </div>
+
+        {/* Signature status */}
+        <div className="card-base mb-4 space-y-3">
+          <div className="flex items-center gap-3">
+            {contrat.signature_etablissement ? (
+              <CheckCircle className="h-5 w-5 text-success" />
+            ) : (
+              <Clock className="h-5 w-5 text-warning" />
+            )}
+            <span className="text-sm text-foreground">
+              Signé par l'établissement : {contrat.signature_etablissement
+                ? `✅ Le ${format(new Date(contrat.signature_etablissement_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}`
+                : '⏳ En attente'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {contrat.signature_soignant ? (
+              <CheckCircle className="h-5 w-5 text-success" />
+            ) : (
+              <Clock className="h-5 w-5 text-warning" />
+            )}
+            <span className="text-sm text-foreground">
+              Signé par le soignant : {contrat.signature_soignant
+                ? `✅ Le ${format(new Date(contrat.signature_soignant_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}`
+                : '⏳ En attente'}
+            </span>
+          </div>
+        </div>
+
+        {/* Signing section */}
+        {!dejaSigneParMoi && contrat.statut !== 'SIGNE_COMPLET' && contrat.statut !== 'ANNULE' && (
+          <div className="card-base space-y-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <Checkbox checked={accepte} onCheckedChange={(v) => setAccepte(!!v)} />
+              <span className="text-sm text-foreground">J'ai lu et j'accepte les termes de ce contrat</span>
+            </label>
+            <div className="flex gap-3">
+              <button onClick={handleSigner} disabled={!accepte || signing} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <FileText className="h-4 w-4" /> {signing ? 'Signature...' : '✍️ Signer le contrat'}
+              </button>
+              <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
+                <Printer className="h-4 w-4" /> Imprimer
+              </button>
+            </div>
+          </div>
+        )}
+
+        {dejaSigneParMoi && (
+          <div className="rounded-xl bg-success/10 border border-success/20 p-4 text-center">
+            <p className="text-sm font-semibold text-success">✅ Vous avez déjà signé ce contrat</p>
+          </div>
+        )}
+
+        <p className="text-[10px] text-muted-foreground/60 italic text-center mt-4">
+          Art. L.1242-12 du Code du travail — Ce contrat est obligatoire pour toute mission.
+          Signature électronique simple. Signature qualifiée eIDAS prévue Sprint 10.
+        </p>
+      </div>
+    </LayoutApp>
+  );
+}

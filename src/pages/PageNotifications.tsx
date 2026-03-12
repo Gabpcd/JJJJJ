@@ -1,0 +1,96 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { LayoutApp } from '@/components/LayoutApp';
+import { ChargementPage } from '@/components/ChargementPage';
+import { EtatVide } from '@/components/EtatVide';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Bell, ExternalLink } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { UserRole } from '@/lib/types';
+
+const FILTRES = ['Toutes', 'Missions', 'Documents', 'Finance', 'Système'] as const;
+type Filtre = typeof FILTRES[number];
+
+const TYPE_MAP: Record<Filtre, string[]> = {
+  Toutes: [],
+  Missions: ['MISSION_ACCEPTEE', 'MISSION_ANNULEE', 'MISSION_TERMINEE', 'MISSION_RAPPEL'],
+  Documents: ['DOCUMENT_EXPIRE', 'DOCUMENT_VALIDE', 'DOCUMENT_REJETE'],
+  Finance: ['FACTURE_GENEREE', 'FACTURE_PAYEE', 'NOTE_HONORAIRES'],
+  Système: ['SYSTEME', 'BIENVENUE', 'CONTRAT_GENERE', 'CONTRAT_SIGNE'],
+};
+
+export default function PageNotifications({ role }: { role: UserRole }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filtre, setFiltre] = useState<Filtre>('Toutes');
+
+  useEffect(() => {
+    if (!user) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('destinataire_id', user.id)
+        .order('cree_le', { ascending: false })
+        .limit(200);
+      setNotifications(data || []);
+      setLoading(false);
+    };
+    load();
+  }, [user]);
+
+  const handleClick = async (n: any) => {
+    if (!n.lue) {
+      await supabase.from('notifications').update({ lue: true, lue_le: new Date().toISOString() } as any).eq('id', n.id);
+      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
+    }
+    if (n.lien) navigate(n.lien);
+  };
+
+  const filtered = filtre === 'Toutes' ? notifications : notifications.filter(n => TYPE_MAP[filtre].includes(n.type));
+
+  if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
+
+  return (
+    <LayoutApp role={role}>
+      <h1 className="text-xl font-bold text-foreground mb-4">Notifications</h1>
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {FILTRES.map(f => (
+          <button key={f} onClick={() => setFiltre(f)} className={`badge-base transition-colors ${filtre === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <EtatVide icone={Bell} titre="Aucune notification" sousTitre="Vous serez notifié(e) ici en temps réel." />
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((n: any) => (
+            <button
+              key={n.id}
+              onClick={() => handleClick(n)}
+              className={`w-full text-left card-base hover:shadow-md transition-all ${!n.lue ? 'border-l-4 border-l-primary bg-primary/5' : ''}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className={`h-2 w-2 rounded-full shrink-0 ${!n.lue ? 'bg-destructive' : 'bg-muted-foreground/30'}`} />
+                  <span className="text-sm font-semibold text-foreground">{n.titre}</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                  {formatDistanceToNow(new Date(n.cree_le), { addSuffix: true, locale: fr })}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 ml-4">{n.corps}</p>
+              {n.lien && <span className="text-[10px] text-primary ml-4 mt-1 inline-flex items-center gap-1">Voir <ExternalLink className="h-2.5 w-2.5" /></span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </LayoutApp>
+  );
+}
