@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check } from 'lucide-react';
+import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { SelectProfession } from '@/components/SelectProfession';
-import { CONTRATS } from '@/lib/constantes';
+import { CONTRATS, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
+import { supabase } from '@/integrations/supabase/client';
 
 function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => void }) {
   const [asked, setAsked] = useState(false);
