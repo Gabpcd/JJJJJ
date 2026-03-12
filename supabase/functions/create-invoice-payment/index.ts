@@ -103,8 +103,8 @@ serve(async (req) => {
         },
       ],
       mode: "payment",
-      success_url: `${req.headers.get("origin")}/etablissement/facturation/${facture_id}?paiement=succes`,
-      cancel_url: `${req.headers.get("origin")}/etablissement/facturation/${facture_id}?paiement=annule`,
+      success_url: `https://soin-direct-connect.lovable.app/etablissement/facturation/${facture_id}?paiement=succes`,
+      cancel_url: `https://soin-direct-connect.lovable.app/etablissement/facturation/${facture_id}?paiement=annule`,
       metadata: {
         facture_id: facture.id,
         numero_facture: facture.numero_facture,
