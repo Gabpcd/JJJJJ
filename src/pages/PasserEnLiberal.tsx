@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Rocket, ExternalLink, Download, Check, Circle, Loader2, PartyPopper } from 'lucide-react';
+import { Rocket, ExternalLink, Download, Check, Circle, Loader2, PartyPopper, ClipboardList } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
