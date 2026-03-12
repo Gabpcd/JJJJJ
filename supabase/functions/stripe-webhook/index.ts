@@ -93,7 +93,7 @@ serve(async (req) => {
 
       // Write audit log
       if (facture) {
-        await supabaseAdmin.rpc("fn_ecrire_audit", {
+        await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
           p_acteur_id: facture.etablissement_id,
           p_type_acteur: "SYSTEME",
           p_action: "FINANCE_FACTURE_PAYEE",

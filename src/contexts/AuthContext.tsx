@@ -25,8 +25,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function extractRole(user: User): UserRole {
-  return (user.app_metadata?.role || user.user_metadata?.role || 'SOIGNANT') as UserRole;
+function extractRole(_user: User): UserRole {
+  // Le rôle affiché ici est provisoire (affichage uniquement).
+  // La vérification d'accès réelle se fait via useRole() + fn_get_my_role côté serveur.
+  return 'SOIGNANT' as UserRole;
 }
 
 function toAppUser(user: User): AppUser {
