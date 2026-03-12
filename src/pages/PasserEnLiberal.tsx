@@ -97,7 +97,7 @@ export default function PasserEnLiberal() {
         heures_plateforme_au_demarrage: soignant?.heures_plateforme || 0,
       } as any);
 
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
         p_action: 'CONVERSION_LIBERAL_COMPLETEE',
         p_type_ressource: 'soignant', p_id_ressource: user.id,
