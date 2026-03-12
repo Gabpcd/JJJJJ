@@ -60,6 +60,10 @@ export default function InscriptionSoignant() {
     lat: null as number | null, lng: null as number | null,
   });
 
+  // RPPS verification state
+  const [rppsVerifiant, setRppsVerifiant] = useState(false);
+  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; correspond: boolean; nom_api?: string; profession_api?: string } | null>(null);
+
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
 
   const toggleContrat = (valeur: string) => {
