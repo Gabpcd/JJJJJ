@@ -136,7 +136,7 @@ export default function DetailMissionSoignant() {
         } else if (error.message?.includes('0 rows')) {
           setModalPerdu(true);
         } else {
-          toast.error(extraireMessageErreur(error));
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
         }
         return;
       }
