@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
     });
     if (authError) {
-      console.error('AUTH SIGNUP ERROR (soignant):', { message: authError.message, status: authError.status, name: authError.name });
+      logger.error('Inscription soignant auth échouée', authError);
       throw authError;
     }
 
