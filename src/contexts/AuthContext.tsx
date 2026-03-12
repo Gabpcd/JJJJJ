@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserRole } from '@/lib/types';
-import { emailBienvenueSoignant } from '@/lib/emailTemplates';
+import { emailBienvenueSoignant, emailBienvenueEtablissement } from '@/lib/emailTemplates';
 import { Session, User } from '@supabase/supabase-js';
 
 interface AppUser {
@@ -252,6 +252,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_ip: null,
       p_navigateur: navigator.userAgent,
     });
+
+    // 5. Email de bienvenue établissement
+    supabase.functions.invoke('send-email', {
+      body: {
+        to: data.email,
+        subject: 'Bienvenue sur Soin Direct !',
+        html: emailBienvenueEtablissement(data.nom),
+        type: 'BIENVENUE_ETABLISSEMENT',
+        destinataire_id: userId,
+      },
+    }).catch(() => {});
   }, []);
 
   return (

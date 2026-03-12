@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { emailFactureMensuelle } from '@/lib/emailTemplates';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -139,6 +140,17 @@ export default function FacturationEtablissement() {
         p_details: { numero: facture.numero_facture, montant_ttc: totalTTC, nb_missions: missionIds.length },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
+
+      // Email facture
+      supabase.functions.invoke('send-email', {
+        body: {
+          to: user!.email,
+          subject: `Facture ${facture.numero_facture} — Soin Direct`,
+          html: emailFactureMensuelle(etab?.nom || '', facture.numero_facture, totalTTC.toFixed(2), facture.id),
+          type: 'FACTURE_GENEREE',
+          destinataire_id: user!.id,
+        },
+      }).catch(() => {});
 
       afficherNotification({ type: 'succes', message: `Facture ${facture.numero_facture} générée avec succès !` });
       charger();
