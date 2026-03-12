@@ -5,11 +5,12 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Printer, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { FileText, Printer, CheckCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { UserRole } from '@/lib/types';
+import SignatureCanvas from '@/components/SignatureCanvas';
 
 export default function ContratMission() {
   const { id } = useParams();
@@ -20,6 +21,7 @@ export default function ContratMission() {
   const [loading, setLoading] = useState(true);
   const [accepte, setAccepte] = useState(false);
   const [signing, setSigning] = useState(false);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
 
   const role: UserRole = user?.role || 'SOIGNANT';
 
@@ -38,15 +40,24 @@ export default function ContratMission() {
   }, [id]);
 
   const handleSigner = async () => {
-    if (!contrat || !user || !accepte) return;
+    if (!contrat || !user || !accepte || !signatureData) return;
     setSigning(true);
     try {
       const isSoignant = contrat.soignant_id === user.id;
       const updateData: any = isSoignant
-        ? { signature_soignant: true, signature_soignant_le: new Date().toISOString() }
-        : { signature_etablissement: true, signature_etablissement_le: new Date().toISOString() };
+        ? {
+            signature_soignant: true,
+            signature_soignant_le: new Date().toISOString(),
+            signature_image_soignant: signatureData,
+            signature_navigateur_soignant: navigator.userAgent,
+          }
+        : {
+            signature_etablissement: true,
+            signature_etablissement_le: new Date().toISOString(),
+            signature_image_etablissement: signatureData,
+            signature_navigateur_etablissement: navigator.userAgent,
+          };
 
-      // Check if both will be signed
       const autreSignee = isSoignant ? contrat.signature_etablissement : contrat.signature_soignant;
       if (autreSignee) {
         updateData.statut = 'SIGNE_COMPLET';
@@ -54,7 +65,6 @@ export default function ContratMission() {
 
       await supabase.from('contrats_mission').update(updateData).eq('id', contrat.id);
 
-      // Audit
       await supabase.rpc('fn_ecrire_audit', {
         p_acteur_id: user.id,
         p_type_acteur: isSoignant ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
@@ -68,7 +78,6 @@ export default function ContratMission() {
       });
 
       afficherNotification({ type: 'succes', message: 'Contrat signé avec succès !' });
-      // Reload
       const { data: updated } = await supabase.from('contrats_mission').select('*').eq('id', contrat.id).single();
       setContrat(updated);
     } catch (err) {
@@ -106,44 +115,74 @@ export default function ContratMission() {
           )}
         </div>
 
-        {/* Signature status */}
-        <div className="card-base mb-4 space-y-3">
-          <div className="flex items-center gap-3">
-            {contrat.signature_etablissement ? (
-              <CheckCircle className="h-5 w-5 text-success" />
-            ) : (
-              <Clock className="h-5 w-5 text-warning" />
+        {/* Signatures section */}
+        <div className="card-base mb-4 space-y-4">
+          <h3 className="font-bold text-foreground">Signatures</h3>
+
+          {/* Etablissement signature */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              {contrat.signature_etablissement ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <Clock className="h-5 w-5 text-yellow-600" />
+              )}
+              <span className="text-sm text-foreground">
+                Établissement : {contrat.signature_etablissement
+                  ? `✅ Signé le ${format(new Date(contrat.signature_etablissement_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}`
+                  : '⏳ En attente'}
+              </span>
+            </div>
+            {contrat.signature_image_etablissement && (
+              <img src={contrat.signature_image_etablissement} alt="Signature établissement" className="h-16 border border-border rounded bg-background ml-8" />
             )}
-            <span className="text-sm text-foreground">
-              Signé par l'établissement : {contrat.signature_etablissement
-                ? `✅ Le ${format(new Date(contrat.signature_etablissement_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}`
-                : '⏳ En attente'}
-            </span>
           </div>
-          <div className="flex items-center gap-3">
-            {contrat.signature_soignant ? (
-              <CheckCircle className="h-5 w-5 text-success" />
-            ) : (
-              <Clock className="h-5 w-5 text-warning" />
+
+          {/* Soignant signature */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              {contrat.signature_soignant ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <Clock className="h-5 w-5 text-yellow-600" />
+              )}
+              <span className="text-sm text-foreground">
+                Soignant(e) : {contrat.signature_soignant
+                  ? `✅ Signé le ${format(new Date(contrat.signature_soignant_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}`
+                  : '⏳ En attente'}
+              </span>
+            </div>
+            {contrat.signature_image_soignant && (
+              <img src={contrat.signature_image_soignant} alt="Signature soignant" className="h-16 border border-border rounded bg-background ml-8" />
             )}
-            <span className="text-sm text-foreground">
-              Signé par le soignant : {contrat.signature_soignant
-                ? `✅ Le ${format(new Date(contrat.signature_soignant_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}`
-                : '⏳ En attente'}
-            </span>
           </div>
         </div>
 
         {/* Signing section */}
         {!dejaSigneParMoi && contrat.statut !== 'SIGNE_COMPLET' && contrat.statut !== 'ANNULE' && (
           <div className="card-base space-y-4">
+            <h3 className="font-bold text-foreground">Votre signature</h3>
+
+            <SignatureCanvas onSave={(data) => setSignatureData(data)} />
+
+            {signatureData && (
+              <div className="flex items-center gap-2 text-xs text-green-700">
+                <CheckCircle className="h-3.5 w-3.5" /> Signature validée
+              </div>
+            )}
+
             <label className="flex items-start gap-3 cursor-pointer">
               <Checkbox checked={accepte} onCheckedChange={(v) => setAccepte(!!v)} />
-              <span className="text-sm text-foreground">J'ai lu et j'accepte les termes de ce contrat</span>
+              <span className="text-sm text-foreground">Je reconnais avoir lu et accepté les termes de ce contrat.</span>
             </label>
+
             <div className="flex gap-3">
-              <button onClick={handleSigner} disabled={!accepte || signing} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                <FileText className="h-4 w-4" /> {signing ? 'Signature...' : '✍️ Signer le contrat'}
+              <button
+                onClick={handleSigner}
+                disabled={!accepte || signing || !signatureData}
+                className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <FileText className="h-4 w-4" /> {signing ? 'Signature...' : '✍️ Signer définitivement'}
               </button>
               <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
                 <Printer className="h-4 w-4" /> Imprimer
@@ -153,8 +192,8 @@ export default function ContratMission() {
         )}
 
         {dejaSigneParMoi && (
-          <div className="rounded-xl bg-success/10 border border-success/20 p-4 text-center">
-            <p className="text-sm font-semibold text-success">✅ Vous avez déjà signé ce contrat</p>
+          <div className="rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-4 text-center">
+            <p className="text-sm font-semibold text-green-700 dark:text-green-400">✅ Vous avez déjà signé ce contrat</p>
           </div>
         )}
 
