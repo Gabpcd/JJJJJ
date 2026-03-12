@@ -57,7 +57,7 @@ export default function DashboardEtablissement() {
       if (resPaliers.data) setPaliers(resPaliers.data);
       setMissionsCeMois(resMissionsCeMois.count ?? 0);
     } catch (err) {
-      console.error('[DashboardEtab] Erreur critique:', err);
+      handleErrorSilent(err, '[DashboardEtab] Erreur critique');
       partialError = true;
     }
 
