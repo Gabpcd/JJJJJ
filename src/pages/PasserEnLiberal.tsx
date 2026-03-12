@@ -164,6 +164,35 @@ export default function PasserEnLiberal() {
         <p className="text-sm text-muted-foreground mt-1">Module de conversion en 3 étapes</p>
       </div>
 
+      {/* Section 0: Heures d'expérience */}
+      <div className="card-base mb-6">
+        <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2"><ClipboardList className="h-5 w-5 text-primary" /> Mes heures d'expérience</h2>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between"><span className="text-muted-foreground">Heures sur Soin Direct :</span><span className="font-bold text-foreground">{soignant?.heures_plateforme || 0}h ✅</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Heures externes validées :</span><span className="font-bold text-foreground">{heuresExternes.filter(h => h.statut === 'VALIDEE').reduce((s: number, h: any) => s + (h.heures_declarees || 0), 0)}h</span></div>
+          <div className="border-t border-border pt-2 flex justify-between"><span className="font-bold text-foreground">TOTAL :</span><span className="font-bold text-primary">{soignant?.heures_cumulees || 0}h</span></div>
+          {(soignant?.heures_cumulees || 0) < 3200 && <p className="text-xs text-primary">💡 Encore {3200 - (soignant?.heures_cumulees || 0)}h pour le palier 3 200h (100%)</p>}
+        </div>
+        <div className="mt-3">
+          <ImportHeuresExternes onDone={() => { supabase.from('heures_externes').select('*').eq('soignant_id', user!.id).order('date_debut', { ascending: false }).then(({ data }) => { if (data) setHeuresExternes(data); }); }} />
+        </div>
+        {heuresExternes.length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-border text-muted-foreground"><th className="pb-1 text-left">Employeur</th><th className="pb-1 text-left">Période</th><th className="pb-1 text-right">Heures</th><th className="pb-1 text-right">Statut</th></tr></thead>
+              <tbody>{heuresExternes.map((h: any) => (
+                <tr key={h.id} className="border-b border-border/50">
+                  <td className="py-1.5">{h.employeur_nom}</td>
+                  <td className="py-1.5 text-muted-foreground">{h.date_debut} → {h.date_fin}</td>
+                  <td className="py-1.5 text-right">{h.heures_declarees}h</td>
+                  <td className="py-1.5 text-right">{h.statut === 'VALIDEE' ? '✅' : h.statut === 'REJETEE' ? '❌' : '⏳'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Section 1: Free Transition */}
       <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-primary/5 border border-purple-200 p-5 mb-6">
         <h2 className="text-base font-bold text-foreground mb-3">🎁 Votre Free Transition</h2>
