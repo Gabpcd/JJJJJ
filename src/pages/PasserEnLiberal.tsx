@@ -35,10 +35,11 @@ export default function PasserEnLiberal() {
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: sg }, { data: prof }, { data: ft }] = await Promise.all([
+      const [{ data: sg }, { data: prof }, { data: ft }, { data: he }] = await Promise.all([
         supabase.from('soignants').select('*').eq('id', user.id).single(),
         supabase.from('professions_liberal_eligible').select('*').limit(20),
         supabase.rpc('fn_calculer_taux_free_transition', { p_soignant_id: user.id }),
+        supabase.from('heures_externes').select('*').eq('soignant_id', user.id).order('date_debut', { ascending: false }),
       ]);
       if (sg) {
         setSoignant(sg);
