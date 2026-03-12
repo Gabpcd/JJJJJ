@@ -9,6 +9,7 @@ import { EtatVide } from '@/components/EtatVide';
 import { ChargementPage } from '@/components/ChargementPage';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { WidgetPalierFidelite } from '@/components/WidgetPalierFidelite';
+import { WidgetBFA } from '@/components/WidgetBFA';
 import { BadgePalier } from '@/components/BadgePalier';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
