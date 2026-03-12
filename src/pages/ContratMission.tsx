@@ -181,7 +181,7 @@ export default function ContratMission() {
 
             <div className="flex gap-3">
               <button
-                onClick={handleSigner}
+                onClick={() => setShowConfirmSign(true)}
                 disabled={!accepte || signing || !signatureData}
                 className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -191,6 +191,16 @@ export default function ContratMission() {
                 <Printer className="h-4 w-4" /> Imprimer
               </button>
             </div>
+
+            <ModalConfirmation
+              ouvert={showConfirmSign}
+              onFermer={() => setShowConfirmSign(false)}
+              onConfirmer={handleSigner}
+              titre="Confirmer la signature"
+              message="Cette action est irréversible. En signant ce contrat, vous vous engagez légalement. Souhaitez-vous continuer ?"
+              labelConfirmer="✍️ Signer"
+              variante="primaire"
+            />
           </div>
         )}
 
