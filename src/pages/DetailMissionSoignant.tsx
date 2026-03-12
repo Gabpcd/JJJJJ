@@ -50,6 +50,7 @@ export default function DetailMissionSoignant() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [mission, setMission] = useState<any>(null);
+  const [etablissement, setEtablissement] = useState<any>(null);
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [countMissions, setCountMissions] = useState(0);
   const [loading, setLoading] = useState(true);
