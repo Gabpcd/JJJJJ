@@ -101,7 +101,7 @@ export default function DocumentsSoignant() {
     const { data } = await supabase.storage.from('soin-direct-documents').createSignedUrl(doc.s3_cle, 300);
     if (!data?.signedUrl) { toast.error('Impossible de générer le lien'); return; }
 
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_CONSULTATION',
       p_type_ressource: 'document', p_id_ressource: doc.id, p_cle_s3: doc.s3_cle,
       p_details: { type_document: doc.type_document }, p_ip: null, p_navigateur: navigator.userAgent,
