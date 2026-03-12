@@ -2071,6 +2071,10 @@ export type Database = {
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
+      fn_generer_numero_contrat_safe: {
+        Args: { p_type: string }
+        Returns: string
+      }
       fn_generer_numero_facture: { Args: never; Returns: string }
       fn_generer_numero_note_honoraires: {
         Args: { p_soignant_id: string }
