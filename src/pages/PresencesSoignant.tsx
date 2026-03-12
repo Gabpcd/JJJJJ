@@ -131,7 +131,7 @@ export default function PresencesSoignant() {
     }
 
     // Mission → EN_COURS
-    await supabase.from('missions').update({ statut: 'EN_COURS', modifie_le: new Date().toISOString() } as any).eq('id', missionId).eq('statut', 'ASSIGNEE');
+    await supabase.from('missions').update({ statut: 'EN_COURS' } as any).eq('id', missionId).eq('statut', 'ASSIGNEE');
 
     // Audit
     await supabase.rpc('fn_ecrire_audit_safe', {
