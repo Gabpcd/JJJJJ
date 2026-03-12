@@ -61,10 +61,10 @@ const App = () => (
               <Route path="/inscription/etablissement" element={<InscriptionEtablissement />} />
 
               {/* Pages légales — publiques */}
-              <Route path="/cgu" element={<PageLegale />} />
-              <Route path="/cgv" element={<PageLegale />} />
-              <Route path="/confidentialite" element={<PageLegale />} />
-              <Route path="/mentions-legales" element={<PageLegale />} />
+              <Route path="/cgu" element={<PageCGU />} />
+              <Route path="/cgv" element={<PageCGV />} />
+              <Route path="/confidentialite" element={<PageConfidentialite />} />
+              <Route path="/mentions-legales" element={<PageMentionsLegales />} />
 
               {/* Soignant */}
               <Route path="/soignant/tableau-de-bord" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />
