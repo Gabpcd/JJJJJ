@@ -195,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { data: { role: 'ETABLISSEMENT', nom_etablissement: data.nom } },
     });
     if (authError) {
-      console.error('AUTH SIGNUP ERROR (etablissement):', { message: authError.message, status: authError.status, name: authError.name });
+      logger.error('Inscription établissement auth échouée', authError);
       throw authError;
     }
 

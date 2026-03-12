@@ -70,7 +70,7 @@ export default function ProfilSoignant() {
         afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
       },
       (erreur) => {
-        console.log('Géolocalisation refusée:', erreur.message);
+        /* géolocalisation refusée */
         setGeoLoading(false);
         afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir votre adresse manuellement.' });
       }

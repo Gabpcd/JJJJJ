@@ -112,7 +112,7 @@ export default function ContratMission() {
         {/* Contract HTML render */}
         <div className="card-base mb-4 max-h-[60vh] overflow-y-auto contrat-print">
           {contrat.contenu_html ? (
-            <div dangerouslySetInnerHTML={{ __html: contrat.contenu_html }} className="prose prose-sm max-w-none text-foreground" />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(contrat.contenu_html) }} className="prose prose-sm max-w-none text-foreground" />
           ) : (
             <p className="text-center text-muted-foreground py-8">Le contenu du contrat n'est pas encore disponible.</p>
           )}

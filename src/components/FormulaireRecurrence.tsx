@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { ARTICLES_CODE_TRAVAIL } from '@/constantes/loi';
 import { LigneHoraireJour, type HorairesJour, parseHeure, calculerDuree } from '@/components/LigneHoraireJour';
 import { toast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 const JOURS_SEMAINE_DEF = [
   { jourISO: 1, label: 'Lundi' },
