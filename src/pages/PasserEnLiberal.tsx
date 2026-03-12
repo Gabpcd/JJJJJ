@@ -6,7 +6,6 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
