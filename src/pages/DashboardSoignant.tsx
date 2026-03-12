@@ -140,7 +140,10 @@ export default function DashboardSoignant() {
   return (
     <LayoutApp role="SOIGNANT">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">Bonjour, <span className="text-primary">{soignant.prenom}</span> 👋</h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-xl font-bold text-foreground">Bonjour, <span className="text-primary">{soignant.prenom}</span> 👋</h1>
+          <BadgeRPPS rppsVerifie={(soignant as any).rpps_verifie} rpps={(soignant as any).numero_rpps} profession={soignant.profession} />
+        </div>
         {!soignant.tous_documents_valides ? (
           <p className="text-sm text-warning mt-1">⚠️ Complétez votre profil pour postuler aux missions</p>
         ) : (
