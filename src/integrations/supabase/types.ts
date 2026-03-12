@@ -46,6 +46,69 @@ export type Database = {
           },
         ]
       }
+      bfa_suivi: {
+        Row: {
+          annee: number
+          bfa_verse: boolean | null
+          calcule_le: string | null
+          commissions_cumulees: number | null
+          cree_le: string | null
+          date_versement: string | null
+          etablissement_id: string | null
+          groupe_id: string | null
+          id: string
+          missions_cumulees: number | null
+          montant_bfa: number | null
+          palier_bfa: string | null
+          taux_bfa: number | null
+        }
+        Insert: {
+          annee: number
+          bfa_verse?: boolean | null
+          calcule_le?: string | null
+          commissions_cumulees?: number | null
+          cree_le?: string | null
+          date_versement?: string | null
+          etablissement_id?: string | null
+          groupe_id?: string | null
+          id?: string
+          missions_cumulees?: number | null
+          montant_bfa?: number | null
+          palier_bfa?: string | null
+          taux_bfa?: number | null
+        }
+        Update: {
+          annee?: number
+          bfa_verse?: boolean | null
+          calcule_le?: string | null
+          commissions_cumulees?: number | null
+          cree_le?: string | null
+          date_versement?: string | null
+          etablissement_id?: string | null
+          groupe_id?: string | null
+          id?: string
+          missions_cumulees?: number | null
+          montant_bfa?: number | null
+          palier_bfa?: string | null
+          taux_bfa?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bfa_suivi_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bfa_suivi_groupe_id_fkey"
+            columns: ["groupe_id"]
+            isOneToOne: false
+            referencedRelation: "groupes_sante"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conformite_travail: {
         Row: {
           controle_le: string | null
@@ -97,6 +160,96 @@ export type Database = {
           },
           {
             foreignKeyName: "conformite_travail_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "vm_fiabilite_soignants"
+            referencedColumns: ["soignant_id"]
+          },
+        ]
+      }
+      conversions_liberal: {
+        Row: {
+          complete_le: string | null
+          cree_le: string | null
+          demarre_le: string | null
+          free_transition_eligible: boolean | null
+          guide_pdf_cle_s3: string | null
+          guide_pdf_genere: boolean | null
+          heures_externes_validees: number | null
+          heures_plateforme_au_demarrage: number
+          heures_totales: number
+          id: string
+          indy_active: boolean | null
+          indy_lien_affiliation: string | null
+          macsf_active: boolean | null
+          macsf_lien_affiliation: string | null
+          modifie_le: string | null
+          montant_pris_en_charge: number | null
+          qonto_active: boolean | null
+          qonto_lien_affiliation: string | null
+          siret_recu_le: string | null
+          soignant_id: string
+          statut: string | null
+          taux_prise_en_charge: number | null
+        }
+        Insert: {
+          complete_le?: string | null
+          cree_le?: string | null
+          demarre_le?: string | null
+          free_transition_eligible?: boolean | null
+          guide_pdf_cle_s3?: string | null
+          guide_pdf_genere?: boolean | null
+          heures_externes_validees?: number | null
+          heures_plateforme_au_demarrage: number
+          heures_totales: number
+          id?: string
+          indy_active?: boolean | null
+          indy_lien_affiliation?: string | null
+          macsf_active?: boolean | null
+          macsf_lien_affiliation?: string | null
+          modifie_le?: string | null
+          montant_pris_en_charge?: number | null
+          qonto_active?: boolean | null
+          qonto_lien_affiliation?: string | null
+          siret_recu_le?: string | null
+          soignant_id: string
+          statut?: string | null
+          taux_prise_en_charge?: number | null
+        }
+        Update: {
+          complete_le?: string | null
+          cree_le?: string | null
+          demarre_le?: string | null
+          free_transition_eligible?: boolean | null
+          guide_pdf_cle_s3?: string | null
+          guide_pdf_genere?: boolean | null
+          heures_externes_validees?: number | null
+          heures_plateforme_au_demarrage?: number
+          heures_totales?: number
+          id?: string
+          indy_active?: boolean | null
+          indy_lien_affiliation?: string | null
+          macsf_active?: boolean | null
+          macsf_lien_affiliation?: string | null
+          modifie_le?: string | null
+          montant_pris_en_charge?: number | null
+          qonto_active?: boolean | null
+          qonto_lien_affiliation?: string | null
+          siret_recu_le?: string | null
+          soignant_id?: string
+          statut?: string | null
+          taux_prise_en_charge?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversions_liberal_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversions_liberal_soignant_id_fkey"
             columns: ["soignant_id"]
             isOneToOne: false
             referencedRelation: "vm_fiabilite_soignants"
@@ -286,7 +439,10 @@ export type Database = {
           adresse_lng: number | null
           adresse_rue: string
           adresse_ville: string
+          chorus_pro_actif: boolean | null
+          chorus_pro_identifiant: string | null
           cree_le: string | null
+          delai_paiement_jours: number | null
           email_contact: string
           finess: string | null
           formule_abonnement: string | null
@@ -317,7 +473,10 @@ export type Database = {
           adresse_lng?: number | null
           adresse_rue: string
           adresse_ville: string
+          chorus_pro_actif?: boolean | null
+          chorus_pro_identifiant?: string | null
           cree_le?: string | null
+          delai_paiement_jours?: number | null
           email_contact: string
           finess?: string | null
           formule_abonnement?: string | null
@@ -348,7 +507,10 @@ export type Database = {
           adresse_lng?: number | null
           adresse_rue?: string
           adresse_ville?: string
+          chorus_pro_actif?: boolean | null
+          chorus_pro_identifiant?: string | null
           cree_le?: string | null
+          delai_paiement_jours?: number | null
           email_contact?: string
           finess?: string | null
           formule_abonnement?: string | null
@@ -678,6 +840,7 @@ export type Database = {
           montant_majoration_nuit: number | null
           net_a_payer: number | null
           niveau_urgence: number | null
+          numero_note_honoraires: string | null
           profession_requise: Database["public"]["Enums"]["type_profession"]
           rist_plafond_applique: boolean | null
           service: string | null
@@ -689,6 +852,7 @@ export type Database = {
           taux_ifm: number | null
           taux_rist_plafonne: number | null
           total_brut: number | null
+          type_paiement_soignant: string | null
           yousign_id_procedure: string | null
           yousign_statut: string | null
         }
@@ -718,6 +882,7 @@ export type Database = {
           montant_majoration_nuit?: number | null
           net_a_payer?: number | null
           niveau_urgence?: number | null
+          numero_note_honoraires?: string | null
           profession_requise: Database["public"]["Enums"]["type_profession"]
           rist_plafond_applique?: boolean | null
           service?: string | null
@@ -729,6 +894,7 @@ export type Database = {
           taux_ifm?: number | null
           taux_rist_plafonne?: number | null
           total_brut?: number | null
+          type_paiement_soignant?: string | null
           yousign_id_procedure?: string | null
           yousign_statut?: string | null
         }
@@ -758,6 +924,7 @@ export type Database = {
           montant_majoration_nuit?: number | null
           net_a_payer?: number | null
           niveau_urgence?: number | null
+          numero_note_honoraires?: string | null
           profession_requise?: Database["public"]["Enums"]["type_profession"]
           rist_plafond_applique?: boolean | null
           service?: string | null
@@ -769,6 +936,7 @@ export type Database = {
           taux_ifm?: number | null
           taux_rist_plafonne?: number | null
           total_brut?: number | null
+          type_paiement_soignant?: string | null
           yousign_id_procedure?: string | null
           yousign_statut?: string | null
         }
@@ -795,6 +963,39 @@ export type Database = {
             referencedColumns: ["soignant_id"]
           },
         ]
+      }
+      paliers_bfa: {
+        Row: {
+          cree_le: string | null
+          est_actif: boolean | null
+          id: string
+          missions_max: number | null
+          missions_min: number
+          nom: string
+          ordre: number
+          taux_bfa: number
+        }
+        Insert: {
+          cree_le?: string | null
+          est_actif?: boolean | null
+          id?: string
+          missions_max?: number | null
+          missions_min: number
+          nom: string
+          ordre: number
+          taux_bfa: number
+        }
+        Update: {
+          cree_le?: string | null
+          est_actif?: boolean | null
+          id?: string
+          missions_max?: number | null
+          missions_min?: number
+          nom?: string
+          ordre?: number
+          taux_bfa?: number
+        }
+        Relationships: []
       }
       paliers_commission: {
         Row: {
@@ -980,6 +1181,33 @@ export type Database = {
           },
         ]
       }
+      professions_liberal_eligible: {
+        Row: {
+          code_ape: string
+          libelle_urssaf: string
+          nom_ordre: string | null
+          ordre_obligatoire: boolean | null
+          plafond_micro: number | null
+          profession: Database["public"]["Enums"]["type_profession"]
+        }
+        Insert: {
+          code_ape: string
+          libelle_urssaf: string
+          nom_ordre?: string | null
+          ordre_obligatoire?: boolean | null
+          plafond_micro?: number | null
+          profession: Database["public"]["Enums"]["type_profession"]
+        }
+        Update: {
+          code_ape?: string
+          libelle_urssaf?: string
+          nom_ordre?: string | null
+          ordre_obligatoire?: boolean | null
+          plafond_micro?: number | null
+          profession?: Database["public"]["Enums"]["type_profession"]
+        }
+        Relationships: []
+      }
       rist_plafonds: {
         Row: {
           coefficient_plafond: number | null
@@ -1021,29 +1249,41 @@ export type Database = {
       }
       soignants: {
         Row: {
+          adresse_code_postal: string | null
           adresse_lat: number | null
           adresse_lng: number | null
+          adresse_rue: string | null
+          adresse_ville: string | null
+          code_ape: string | null
           cree_le: string | null
           date_naissance: string | null
+          date_passage_liberal: string | null
           derniere_activite_le: string | null
           diplome_verifie: boolean | null
           eligible_conversion_3200h: boolean | null
           email: string
           heures_cumulees: number | null
+          heures_plateforme: number | null
           id: string
           identite_verifiee: boolean | null
           modifie_le: string | null
           nom: string
           numero_adeli: string | null
           numero_rpps: string | null
+          numero_secu: string | null
           prenom: string
           prevoyance_fournisseur: string | null
           prevoyance_inscrit: boolean | null
           prevoyance_numero_contrat: string | null
           profession: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km: number | null
+          rpps_nom_api: string | null
+          rpps_profession_api: string | null
           rpps_verifie: boolean | null
+          rpps_verifie_le: string | null
           score_fiabilite: number | null
+          siret_liberal: string | null
+          statut_liberal: string | null
           statut_verification_aria:
             | Database["public"]["Enums"]["statut_verification"]
             | null
@@ -1058,29 +1298,41 @@ export type Database = {
           types_contrat_acceptes: string | null
         }
         Insert: {
+          adresse_code_postal?: string | null
           adresse_lat?: number | null
           adresse_lng?: number | null
+          adresse_rue?: string | null
+          adresse_ville?: string | null
+          code_ape?: string | null
           cree_le?: string | null
           date_naissance?: string | null
+          date_passage_liberal?: string | null
           derniere_activite_le?: string | null
           diplome_verifie?: boolean | null
           eligible_conversion_3200h?: boolean | null
           email: string
           heures_cumulees?: number | null
+          heures_plateforme?: number | null
           id?: string
           identite_verifiee?: boolean | null
           modifie_le?: string | null
           nom: string
           numero_adeli?: string | null
           numero_rpps?: string | null
+          numero_secu?: string | null
           prenom: string
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
           prevoyance_numero_contrat?: string | null
           profession: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km?: number | null
+          rpps_nom_api?: string | null
+          rpps_profession_api?: string | null
           rpps_verifie?: boolean | null
+          rpps_verifie_le?: string | null
           score_fiabilite?: number | null
+          siret_liberal?: string | null
+          statut_liberal?: string | null
           statut_verification_aria?:
             | Database["public"]["Enums"]["statut_verification"]
             | null
@@ -1095,29 +1347,41 @@ export type Database = {
           types_contrat_acceptes?: string | null
         }
         Update: {
+          adresse_code_postal?: string | null
           adresse_lat?: number | null
           adresse_lng?: number | null
+          adresse_rue?: string | null
+          adresse_ville?: string | null
+          code_ape?: string | null
           cree_le?: string | null
           date_naissance?: string | null
+          date_passage_liberal?: string | null
           derniere_activite_le?: string | null
           diplome_verifie?: boolean | null
           eligible_conversion_3200h?: boolean | null
           email?: string
           heures_cumulees?: number | null
+          heures_plateforme?: number | null
           id?: string
           identite_verifiee?: boolean | null
           modifie_le?: string | null
           nom?: string
           numero_adeli?: string | null
           numero_rpps?: string | null
+          numero_secu?: string | null
           prenom?: string
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
           prevoyance_numero_contrat?: string | null
           profession?: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km?: number | null
+          rpps_nom_api?: string | null
+          rpps_profession_api?: string | null
           rpps_verifie?: boolean | null
+          rpps_verifie_le?: string | null
           score_fiabilite?: number | null
+          siret_liberal?: string | null
+          statut_liberal?: string | null
           statut_verification_aria?:
             | Database["public"]["Enums"]["statut_verification"]
             | null
@@ -1320,6 +1584,14 @@ export type Database = {
       }
     }
     Functions: {
+      fn_calculer_bfa: {
+        Args: {
+          p_annee?: number
+          p_etablissement_id?: string
+          p_groupe_id?: string
+        }
+        Returns: Json
+      }
       fn_calculer_remuneration_mission: {
         Args: {
           p_debut: string
@@ -1328,6 +1600,10 @@ export type Database = {
           p_soignant_id?: string
           p_taux_base: number
         }
+        Returns: Json
+      }
+      fn_calculer_taux_free_transition: {
+        Args: { p_soignant_id: string }
         Returns: Json
       }
       fn_detecter_teleportation: {
@@ -1356,6 +1632,10 @@ export type Database = {
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_facture: { Args: never; Returns: string }
+      fn_generer_numero_note_honoraires: {
+        Args: { p_soignant_id: string }
+        Returns: string
+      }
       fn_matcher_soignants_mission: {
         Args: { p_mission_id: string }
         Returns: {
@@ -1422,6 +1702,9 @@ export type Database = {
         | "MEDECINE_TRAVAIL"
         | "FORMATION_OBLIGATOIRE"
         | "AUTRE"
+        | "CARTE_ORDRE"
+        | "ATTESTATION_CPAM"
+        | "NOTE_HONORAIRES"
       type_etablissement:
         | "HOPITAL_PUBLIC"
         | "CLINIQUE_PRIVEE"
@@ -1433,6 +1716,8 @@ export type Database = {
         | "IME"
         | "MAS"
         | "FAM"
+        | "PHARMACIE_OFFICINE"
+        | "ESPIC"
       type_profession:
         | "IDE"
         | "AS"
@@ -1611,6 +1896,9 @@ export const Constants = {
         "MEDECINE_TRAVAIL",
         "FORMATION_OBLIGATOIRE",
         "AUTRE",
+        "CARTE_ORDRE",
+        "ATTESTATION_CPAM",
+        "NOTE_HONORAIRES",
       ],
       type_etablissement: [
         "HOPITAL_PUBLIC",
@@ -1623,6 +1911,8 @@ export const Constants = {
         "IME",
         "MAS",
         "FAM",
+        "PHARMACIE_OFFICINE",
+        "ESPIC",
       ],
       type_profession: [
         "IDE",
