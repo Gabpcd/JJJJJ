@@ -6,6 +6,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { SelectProfession } from '@/components/SelectProfession';
 import { CONTRATS } from '@/lib/constantes';
+import { Checkbox } from '@/components/ui/checkbox';
 
 function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => void }) {
   const [asked, setAsked] = useState(false);
@@ -54,13 +55,24 @@ export default function InscriptionSoignant() {
   const [form, setForm] = useState({
     email: '', motDePasse: '', confirmMdp: '',
     prenom: '', nom: '', telephone: '', dateNaissance: '',
-    profession: '', typeContrat: '', rpps: '', rayon: 30,
+    profession: '', typesContrat: [] as string[], rpps: '', rayon: 30,
     lat: null as number | null, lng: null as number | null,
   });
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
+
+  const toggleContrat = (valeur: string) => {
+    setForm(prev => {
+      const current = prev.typesContrat;
+      const next = current.includes(valeur)
+        ? current.filter(v => v !== valeur)
+        : [...current, valeur];
+      return { ...prev, typesContrat: next };
+    });
+  };
+
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
-  const etape2Valide = form.prenom && form.nom && form.profession && form.typeContrat;
+  const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,11 +151,21 @@ export default function InscriptionSoignant() {
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance</label><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className="input-base" max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} /></div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Profession *</label><SelectProfession value={form.profession} onChange={v => maj('profession', v)} /></div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Type de contrat *</label>
-                <select value={form.typeContrat} onChange={e => maj('typeContrat', e.target.value)} className="input-base">
-                  <option value="">Sélectionnez le type</option>
-                  {CONTRATS.map(c => <option key={c.valeur} value={c.valeur}>{c.label}</option>)}
-                </select>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés * <span className="text-xs text-muted-foreground font-normal">(au moins 1)</span></label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  {CONTRATS.map(c => (
+                    <label key={c.valeur} className="flex items-center gap-2 cursor-pointer rounded-lg border border-input px-3 py-2.5 hover:bg-accent/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                      <Checkbox
+                        checked={form.typesContrat.includes(c.valeur)}
+                        onCheckedChange={() => toggleContrat(c.valeur)}
+                      />
+                      <span className="text-sm text-foreground">{c.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {form.typesContrat.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">Cochez au moins un type de contrat</p>
+                )}
               </div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS</label><input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base" /></div>
               <div>
