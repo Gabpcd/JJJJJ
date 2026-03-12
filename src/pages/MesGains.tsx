@@ -34,6 +34,7 @@ export default function MesGains() {
   useEffect(() => {
     if (!user) return;
     const load = async () => {
+      // Sécurité : ne jamais requêter taux_commission, montant_commission_ht/tva/ttc
       let query = supabase
         .from('missions')
         .select(`id, intitule, service, debut_le, fin_le, duree_heures,
