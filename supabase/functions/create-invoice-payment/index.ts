@@ -41,6 +41,17 @@ serve(async (req) => {
       .single();
 
     if (errF || !facture) throw new Error("Facture introuvable");
+
+    // Vérification de propriété : l'utilisateur doit appartenir à l'établissement de la facture
+    const { data: userRole } = await supabaseAdmin.rpc("fn_get_my_role");
+    const userEtabId = userRole?.etablissement_id;
+    if (!userEtabId || userEtabId !== facture.etablissement_id) {
+      return new Response(JSON.stringify({ error: "Accès interdit : cette facture ne vous appartient pas" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (facture.statut === "PAYEE") throw new Error("Facture déjà payée");
 
     // Initialize Stripe
