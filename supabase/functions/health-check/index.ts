@@ -26,7 +26,8 @@ serve(async (req) => {
       status: data?.status === 'OK' ? 200 : 500,
     });
   } catch (err) {
-    return new Response(JSON.stringify({ status: 'ERROR', error: err.message }), {
+    console.error('health-check error:', err);
+    return new Response(JSON.stringify({ status: 'ERROR', error: 'Erreur interne' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });

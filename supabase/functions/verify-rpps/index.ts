@@ -1,13 +1,61 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Rate limiting simple en mémoire (par IP, 10 req/min)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_LIMIT_MAX;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Rate limiting par IP
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (isRateLimited(clientIp)) {
+    return new Response(JSON.stringify({ error: 'Trop de requêtes' }), {
+      status: 429,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Vérification JWT stricte
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Non autorisé' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseAuth = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!
+  );
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Token invalide' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {
@@ -36,13 +84,10 @@ serve(async (req) => {
       if (response.ok) {
         const html = await response.text();
         
-        // Parse the HTML response to extract name and profession
-        // The annuaire.sante.fr page contains structured data
         const nomMatch = html.match(/class="[^"]*nom[^"]*"[^>]*>([^<]+)</i);
         const prenomMatch = html.match(/class="[^"]*prenom[^"]*"[^>]*>([^<]+)</i);
         const professionMatch = html.match(/class="[^"]*profession[^"]*"[^>]*>([^<]+)</i);
         
-        // Alternative parsing: look for typical patterns in the page
         const nomCompletMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
         const profMatch = html.match(/Profession\s*:\s*([^<]+)/i) || html.match(/profession[^>]*>([^<]+)/i);
 
@@ -51,7 +96,6 @@ serve(async (req) => {
           const profRetournee = profMatch?.[1]?.trim() || professionMatch?.[1]?.trim() || '';
 
           if (nomRetourne && nomRetourne.length > 2) {
-            // Check name correspondence (case-insensitive, partial match)
             const nomNormalise = nomRetourne.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const nomSoignant = `${prenom} ${nom}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const nomSeul = nom?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
@@ -125,7 +169,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Erreur verify-rpps:', error);
-    return new Response(JSON.stringify({ error: 'Erreur interne', details: String(error) }), {
+    return new Response(JSON.stringify({ error: 'Erreur interne' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
