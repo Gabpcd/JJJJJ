@@ -48,7 +48,7 @@ export default function DashboardEtablissement() {
         supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
       ]);
 
-      if (resEtab.error) { console.error('[DashboardEtab] Erreur établissement:', resEtab.error); partialError = true; }
+      if (resEtab.error) { handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
       else if (resEtab.data) setEtab(resEtab.data);
 
       if (resMissions.error) { console.error('[DashboardEtab] Erreur missions:', resMissions.error); partialError = true; }
