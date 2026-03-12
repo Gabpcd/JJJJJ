@@ -148,7 +148,7 @@ export default function DetailMissionSoignant() {
         p_ip: null,
         p_navigateur: navigator.userAgent,
       });
-      if (auditError) console.error('Audit failed:', auditError);
+      if (auditError) handleErrorSilent(auditError, 'Audit assignation mission');
 
       setMission({ ...mission, ...data });
       setAnimationSucces(true);
