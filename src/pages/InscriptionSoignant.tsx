@@ -196,7 +196,26 @@ export default function InscriptionSoignant() {
                   <p className="text-xs text-muted-foreground mt-1">Cochez au moins un type de contrat</p>
                 )}
               </div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS</label><input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base" /></div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS {rppsRequis && '*'}</label>
+                <div className="relative">
+                  <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base pr-10" />
+                  {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+                </div>
+                {rppsVerifiant && <p className="text-xs text-primary mt-1">Vérification en cours...</p>}
+                {rppsResultat && rppsResultat.trouve && rppsResultat.correspond && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    ✅ RPPS Vérifié — {rppsResultat.nom_api} — {rppsResultat.profession_api}
+                  </div>
+                )}
+                {rppsResultat && (!rppsResultat.trouve || !rppsResultat.correspond) && form.rpps.length === 11 && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    ❌ RPPS non trouvé ou ne correspond pas
+                  </div>
+                )}
+              </div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon de déplacement : <span className="text-primary font-bold">{form.rayon} km</span></label>
                 <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full h-2 bg-primary/20 rounded-full appearance-none cursor-pointer accent-primary" />

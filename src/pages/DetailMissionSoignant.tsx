@@ -271,8 +271,24 @@ export default function DetailMissionSoignant() {
             <CompteurHebdomadaire compact missionCandidateHeures={mission.duree_heures || 0} />
           )}
 
-          {/* Rémunération */}
-          <DecompositionFinanciere mission={mission} />
+          {/* Rémunération — Note d'honoraires pour libéraux, décomposition classique sinon */}
+          {(soignant as any).type_contrat === 'LIBERAL' && estTerminee ? (
+            <NoteHonoraires
+              mission={mission}
+              soignant={soignant}
+              onAudit={() => {
+                supabase.rpc('fn_ecrire_audit', {
+                  p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT',
+                  p_action: 'NOTE_HONORAIRES_GENEREE',
+                  p_type_ressource: 'mission', p_id_ressource: id!,
+                  p_cle_s3: null, p_details: { numero: mission.numero_note_honoraires },
+                  p_ip: null, p_navigateur: navigator.userAgent,
+                });
+              }}
+            />
+          ) : (
+            <DecompositionFinanciere mission={mission} />
+          )}
           <p className="text-xs text-muted-foreground/60 italic text-center">
             Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
           </p>

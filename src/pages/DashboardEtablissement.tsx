@@ -168,6 +168,11 @@ export default function DashboardEtablissement() {
         <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />
       )}
 
+      {/* Widget BFA */}
+      {etab && (
+        <WidgetBFA etablissementId={user!.id} groupeId={etab.groupe_sante_id} />
+      )}
+
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold text-foreground">Dernières missions</h2>
