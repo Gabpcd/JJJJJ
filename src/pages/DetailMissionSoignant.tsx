@@ -152,6 +152,31 @@ export default function DetailMissionSoignant() {
 
       setMission({ ...mission, ...data });
       setAnimationSucces(true);
+
+      // Email au soignant
+      const dateFormatee = format(new Date(mission.debut_le), 'EEEE d MMMM yyyy à HH:mm', { locale: fr });
+      supabase.functions.invoke('send-email', {
+        body: {
+          to: user!.email,
+          subject: `Mission confirmée : ${mission.intitule}`,
+          html: emailMissionAccepteeSoignant(soignant.prenom, mission.intitule, dateFormatee, mission.etablissements?.nom || '', id!),
+          type: 'MISSION_ACCEPTEE_SOIGNANT',
+          destinataire_id: user!.id,
+        },
+      }).catch(() => {});
+
+      // Email à l'établissement
+      if (mission.etablissements?.email_contact) {
+        supabase.functions.invoke('send-email', {
+          body: {
+            to: mission.etablissements.email_contact,
+            subject: `Mission acceptée par ${soignant.prenom} ${soignant.nom}`,
+            html: emailMissionAccepteeEtablissement(mission.etablissements.nom, `${soignant.prenom} ${soignant.nom}`, mission.intitule, dateFormatee, id!),
+            type: 'MISSION_ACCEPTEE_ETABLISSEMENT',
+            destinataire_id: mission.etablissement_id,
+          },
+        }).catch(() => {});
+      }
     } finally {
       setAcceptationEnCours(false);
     }

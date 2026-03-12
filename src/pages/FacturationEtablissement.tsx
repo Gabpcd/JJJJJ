@@ -141,6 +141,17 @@ export default function FacturationEtablissement() {
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
+      // Email facture
+      supabase.functions.invoke('send-email', {
+        body: {
+          to: user!.email,
+          subject: `Facture ${facture.numero_facture} — Soin Direct`,
+          html: emailFactureMensuelle(etablissement?.nom || '', facture.numero_facture, totalTTC.toFixed(2), facture.id),
+          type: 'FACTURE_GENEREE',
+          destinataire_id: user!.id,
+        },
+      }).catch(() => {});
+
       afficherNotification({ type: 'succes', message: `Facture ${facture.numero_facture} générée avec succès !` });
       charger();
     } catch (err: any) {
