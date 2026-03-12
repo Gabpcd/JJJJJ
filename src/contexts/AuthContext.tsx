@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_ip: null,
       p_navigateur: navigator.userAgent,
     });
-    if (auditError) console.error('Audit failed:', auditError);
+    if (auditError) logger.error('Audit connexion échoué', auditError);
 
     // Update derniere_activite_le for soignants
     if (role === 'SOIGNANT') {
