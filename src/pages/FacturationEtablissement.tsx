@@ -134,7 +134,7 @@ export default function FacturationEtablissement() {
         .update({ commission_facturee: true, facture_id: facture.id, modifie_le: new Date().toISOString() } as any)
         .in('id', missionIds);
 
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'FACTURE_GENEREE',
         p_type_ressource: 'facture', p_id_ressource: facture.id, p_cle_s3: null,
         p_details: { numero: facture.numero_facture, montant_ttc: totalTTC, nb_missions: missionIds.length },
