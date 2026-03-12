@@ -50,6 +50,7 @@ export default function PasserEnLiberal() {
         setProfData(match || null);
       }
       if (ft) setFreeTransition(ft);
+      if (he) setHeuresExternes(he);
 
       // Audit
       supabase.rpc('fn_ecrire_audit', {
