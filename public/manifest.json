@@ -1,0 +1,16 @@
+{
+  "name": "Soin Direct",
+  "short_name": "SoinDirect",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#17A2B8",
+  "background_color": "#0F172A",
+  "gcm_sender_id": "103953800507",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
