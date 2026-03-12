@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { handleError } from '@/lib/handleError';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
@@ -50,7 +50,7 @@ export default function InscriptionEtablissement() {
       afficherNotification({ type: 'succes', message: 'Établissement créé avec succès !' });
       navigate('/etablissement/tableau-de-bord');
     } catch (err) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      handleError(err, 'inscription établissement');
     } finally {
       setSubmitting(false);
     }

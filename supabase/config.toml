@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.health-check]
 verify_jwt = false
+
+[functions.register-etablissement]
+verify_jwt = false
