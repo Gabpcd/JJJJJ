@@ -186,7 +186,6 @@ export default function DetailMissionSoignant() {
       .update({
         soignant_assigne_id: null,
         statut: 'ANNULEE_PAR_SOIGNANT' as any,
-        modifie_le: new Date().toISOString(),
       })
       .eq('id', id!);
 
