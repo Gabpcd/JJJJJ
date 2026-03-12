@@ -40,8 +40,9 @@ export default function MesGains() {
           heures_nuit, heures_dimanche, heures_ferie,
           montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
           montant_ifm, montant_icp, total_brut, net_a_payer,
+          type_paiement_soignant, numero_note_honoraires,
           statut, cree_le,
-          etablissements(nom, adresse_ville, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent)`)
+          etablissements(nom, adresse_ville, siret, finess, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent)`)
         .eq('soignant_assigne_id', user.id)
         .eq('statut', 'TERMINEE')
         .order('debut_le', { ascending: false });
