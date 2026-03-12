@@ -179,6 +179,12 @@ export type Database = {
           pdf_cle_s3: string | null
           signature_etablissement: boolean | null
           signature_etablissement_le: string | null
+          signature_image_etablissement: string | null
+          signature_image_soignant: string | null
+          signature_ip_etablissement: unknown
+          signature_ip_soignant: unknown
+          signature_navigateur_etablissement: string | null
+          signature_navigateur_soignant: string | null
           signature_soignant: boolean | null
           signature_soignant_le: string | null
           soignant_id: string
@@ -198,6 +204,12 @@ export type Database = {
           pdf_cle_s3?: string | null
           signature_etablissement?: boolean | null
           signature_etablissement_le?: string | null
+          signature_image_etablissement?: string | null
+          signature_image_soignant?: string | null
+          signature_ip_etablissement?: unknown
+          signature_ip_soignant?: unknown
+          signature_navigateur_etablissement?: string | null
+          signature_navigateur_soignant?: string | null
           signature_soignant?: boolean | null
           signature_soignant_le?: string | null
           soignant_id: string
@@ -217,6 +229,12 @@ export type Database = {
           pdf_cle_s3?: string | null
           signature_etablissement?: boolean | null
           signature_etablissement_le?: string | null
+          signature_image_etablissement?: string | null
+          signature_image_soignant?: string | null
+          signature_ip_etablissement?: unknown
+          signature_ip_soignant?: unknown
+          signature_navigateur_etablissement?: string | null
+          signature_navigateur_soignant?: string | null
           signature_soignant?: boolean | null
           signature_soignant_le?: string | null
           soignant_id?: string
@@ -678,12 +696,17 @@ export type Database = {
       }
       factures: {
         Row: {
+          chorus_pro_deposee_le: string | null
+          chorus_pro_id: string | null
+          chorus_pro_statut: string | null
           cree_le: string | null
           date_echeance: string | null
           date_emission: string | null
           date_paiement: string | null
+          est_secteur_public: boolean | null
           etablissement_id: string
           id: string
+          mode_paiement: string | null
           modifie_le: string | null
           montant_ht: number
           montant_ttc: number
@@ -697,14 +720,22 @@ export type Database = {
           stripe_invoice_id: string | null
           stripe_payment_intent_id: string | null
           taux_tva: number | null
+          virement_confirme_le: string | null
+          virement_confirme_par: string | null
+          virement_reference: string | null
         }
         Insert: {
+          chorus_pro_deposee_le?: string | null
+          chorus_pro_id?: string | null
+          chorus_pro_statut?: string | null
           cree_le?: string | null
           date_echeance?: string | null
           date_emission?: string | null
           date_paiement?: string | null
+          est_secteur_public?: boolean | null
           etablissement_id: string
           id?: string
+          mode_paiement?: string | null
           modifie_le?: string | null
           montant_ht: number
           montant_ttc: number
@@ -718,14 +749,22 @@ export type Database = {
           stripe_invoice_id?: string | null
           stripe_payment_intent_id?: string | null
           taux_tva?: number | null
+          virement_confirme_le?: string | null
+          virement_confirme_par?: string | null
+          virement_reference?: string | null
         }
         Update: {
+          chorus_pro_deposee_le?: string | null
+          chorus_pro_id?: string | null
+          chorus_pro_statut?: string | null
           cree_le?: string | null
           date_echeance?: string | null
           date_emission?: string | null
           date_paiement?: string | null
+          est_secteur_public?: boolean | null
           etablissement_id?: string
           id?: string
+          mode_paiement?: string | null
           modifie_le?: string | null
           montant_ht?: number
           montant_ttc?: number
@@ -739,6 +778,9 @@ export type Database = {
           stripe_invoice_id?: string | null
           stripe_payment_intent_id?: string | null
           taux_tva?: number | null
+          virement_confirme_le?: string | null
+          virement_confirme_par?: string | null
+          virement_reference?: string | null
         }
         Relationships: [
           {
@@ -860,6 +902,109 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "groupes_sante"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      health_check: {
+        Row: {
+          details: Json | null
+          id: string
+          latence_ms: number | null
+          service: string
+          statut: string | null
+          verifie_le: string | null
+        }
+        Insert: {
+          details?: Json | null
+          id?: string
+          latence_ms?: number | null
+          service: string
+          statut?: string | null
+          verifie_le?: string | null
+        }
+        Update: {
+          details?: Json | null
+          id?: string
+          latence_ms?: number | null
+          service?: string
+          statut?: string | null
+          verifie_le?: string | null
+        }
+        Relationships: []
+      }
+      heures_externes: {
+        Row: {
+          cree_le: string | null
+          date_debut: string
+          date_fin: string
+          document_id: string | null
+          employeur_nom: string
+          employeur_type: string | null
+          heures_declarees: number
+          id: string
+          modifie_le: string | null
+          motif_rejet: string | null
+          soignant_id: string
+          statut: string | null
+          type_preuve: string | null
+          validee_le: string | null
+          validee_par: string | null
+        }
+        Insert: {
+          cree_le?: string | null
+          date_debut: string
+          date_fin: string
+          document_id?: string | null
+          employeur_nom: string
+          employeur_type?: string | null
+          heures_declarees: number
+          id?: string
+          modifie_le?: string | null
+          motif_rejet?: string | null
+          soignant_id: string
+          statut?: string | null
+          type_preuve?: string | null
+          validee_le?: string | null
+          validee_par?: string | null
+        }
+        Update: {
+          cree_le?: string | null
+          date_debut?: string
+          date_fin?: string
+          document_id?: string | null
+          employeur_nom?: string
+          employeur_type?: string | null
+          heures_declarees?: number
+          id?: string
+          modifie_le?: string | null
+          motif_rejet?: string | null
+          soignant_id?: string
+          statut?: string | null
+          type_preuve?: string | null
+          validee_le?: string | null
+          validee_par?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "heures_externes_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents_soignants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "heures_externes_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "heures_externes_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "vm_fiabilite_soignants"
+            referencedColumns: ["soignant_id"]
           },
         ]
       }
@@ -1840,6 +1985,10 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_calculer_heures_totales: {
+        Args: { p_soignant_id: string }
+        Returns: Json
+      }
       fn_calculer_remuneration_mission: {
         Args: {
           p_debut: string
@@ -1898,6 +2047,7 @@ export type Database = {
         Args: { p_soignant_id: string }
         Returns: string
       }
+      fn_health_check: { Args: never; Returns: Json }
       fn_matcher_soignants_mission: {
         Args: { p_mission_id: string }
         Returns: {
