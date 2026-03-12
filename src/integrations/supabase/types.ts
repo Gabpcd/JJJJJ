@@ -158,13 +158,6 @@ export type Database = {
             referencedRelation: "soignants"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "conformite_travail_soignant_id_fkey"
-            columns: ["soignant_id"]
-            isOneToOne: false
-            referencedRelation: "vm_fiabilite_soignants"
-            referencedColumns: ["soignant_id"]
-          },
         ]
       }
       contrats_mission: {
@@ -265,13 +258,6 @@ export type Database = {
             referencedRelation: "soignants"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "contrats_mission_soignant_id_fkey"
-            columns: ["soignant_id"]
-            isOneToOne: false
-            referencedRelation: "vm_fiabilite_soignants"
-            referencedColumns: ["soignant_id"]
-          },
         ]
       }
       conversions_liberal: {
@@ -354,13 +340,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "soignants"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversions_liberal_soignant_id_fkey"
-            columns: ["soignant_id"]
-            isOneToOne: false
-            referencedRelation: "vm_fiabilite_soignants"
-            referencedColumns: ["soignant_id"]
           },
         ]
       }
@@ -528,13 +507,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "soignants"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_soignants_soignant_id_fkey"
-            columns: ["soignant_id"]
-            isOneToOne: false
-            referencedRelation: "vm_fiabilite_soignants"
-            referencedColumns: ["soignant_id"]
           },
         ]
       }
@@ -999,13 +971,6 @@ export type Database = {
             referencedRelation: "soignants"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "heures_externes_soignant_id_fkey"
-            columns: ["soignant_id"]
-            isOneToOne: false
-            referencedRelation: "vm_fiabilite_soignants"
-            referencedColumns: ["soignant_id"]
-          },
         ]
       }
       journaux_audit: {
@@ -1224,13 +1189,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "soignants"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "missions_soignant_assigne_id_fkey"
-            columns: ["soignant_assigne_id"]
-            isOneToOne: false
-            referencedRelation: "vm_fiabilite_soignants"
-            referencedColumns: ["soignant_id"]
           },
         ]
       }
@@ -1498,13 +1456,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "soignants"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "presences_soignant_id_fkey"
-            columns: ["soignant_id"]
-            isOneToOne: false
-            referencedRelation: "vm_fiabilite_soignants"
-            referencedColumns: ["soignant_id"]
           },
         ]
       }
@@ -1776,13 +1727,6 @@ export type Database = {
             referencedRelation: "soignants"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "souscriptions_prevoyance_soignant_id_fkey"
-            columns: ["soignant_id"]
-            isOneToOne: false
-            referencedRelation: "vm_fiabilite_soignants"
-            referencedColumns: ["soignant_id"]
-          },
         ]
       }
       statut_services_api: {
@@ -1881,13 +1825,6 @@ export type Database = {
             referencedRelation: "soignants"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "suivi_conversion_3200h_soignant_id_fkey"
-            columns: ["soignant_id"]
-            isOneToOne: true
-            referencedRelation: "vm_fiabilite_soignants"
-            referencedColumns: ["soignant_id"]
-          },
         ]
       }
       templates_contrat: {
@@ -1958,23 +1895,7 @@ export type Database = {
       }
     }
     Views: {
-      vm_fiabilite_soignants: {
-        Row: {
-          categorie_soignant: string | null
-          derniere_activite_le: string | null
-          nom: string | null
-          prenom: string | null
-          profession: Database["public"]["Enums"]["type_profession"] | null
-          score_calcule: number | null
-          soignant_id: string | null
-          total_absences: number | null
-          total_missions_annulees: number | null
-          total_missions_terminees: number | null
-          total_retards_pointage: number | null
-          tous_documents_valides: boolean | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       est_admin: { Args: never; Returns: boolean }
