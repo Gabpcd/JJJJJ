@@ -24,9 +24,10 @@ export default function PageConnexion() {
     try {
       await connexion(email, motDePasse);
       afficherNotification({ type: 'succes', message: 'Connexion réussie !' });
-      // AuthContext onAuthStateChange will update user, we need to read role from fresh session
-      const { data } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
-      const role = data.user?.app_metadata?.role || data.user?.user_metadata?.role;
+      // Récupérer le rôle sécurisé via RPC serveur
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: roleData } = await supabase.rpc('fn_get_my_role');
+      const role = (roleData as any)?.role;
       if (role === 'ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
       else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
       else navigate('/soignant/tableau-de-bord');
