@@ -152,6 +152,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "conformite_travail_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "v_missions_etablissement"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conformite_travail_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "v_missions_soignant"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "conformite_travail_soignant_id_fkey"
             columns: ["soignant_id"]
             isOneToOne: false
@@ -249,6 +263,20 @@ export type Database = {
             columns: ["mission_id"]
             isOneToOne: false
             referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrats_mission_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "v_missions_etablissement"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrats_mission_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "v_missions_soignant"
             referencedColumns: ["id"]
           },
           {
@@ -1451,6 +1479,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "presences_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "v_missions_etablissement"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presences_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "v_missions_soignant"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "presences_soignant_id_fkey"
             columns: ["soignant_id"]
             isOneToOne: false
@@ -1895,7 +1937,119 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_missions_etablissement: {
+        Row: {
+          commission_facturee: boolean | null
+          cree_le: string | null
+          debut_le: string | null
+          description: string | null
+          duree_heures: number | null
+          est_urgente: boolean | null
+          etablissement_id: string | null
+          facture_id: string | null
+          fin_le: string | null
+          heures_dimanche: number | null
+          heures_ferie: number | null
+          heures_nuit: number | null
+          id: string | null
+          intitule: string | null
+          modifie_le: string | null
+          montant_commission_ht: number | null
+          montant_commission_ttc: number | null
+          montant_commission_tva: number | null
+          montant_icp: number | null
+          montant_ifm: number | null
+          montant_majoration_dimanche: number | null
+          montant_majoration_ferie: number | null
+          montant_majoration_nuit: number | null
+          net_a_payer: number | null
+          niveau_urgence: number | null
+          numero_note_honoraires: string | null
+          profession_requise:
+            | Database["public"]["Enums"]["type_profession"]
+            | null
+          rist_plafond_applique: boolean | null
+          service: string | null
+          soignant_assigne_id: string | null
+          soignant_nom: string | null
+          soignant_prenom: string | null
+          soignant_profession:
+            | Database["public"]["Enums"]["type_profession"]
+            | null
+          statut: Database["public"]["Enums"]["statut_mission"] | null
+          taux_commission: number | null
+          taux_horaire_base: number | null
+          taux_icp: number | null
+          taux_ifm: number | null
+          taux_rist_plafonne: number | null
+          total_brut: number | null
+          type_paiement_soignant: string | null
+          yousign_id_procedure: string | null
+          yousign_statut: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "missions_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "missions_soignant_assigne_id_fkey"
+            columns: ["soignant_assigne_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_missions_soignant: {
+        Row: {
+          debut_le: string | null
+          description: string | null
+          duree_heures: number | null
+          est_urgente: boolean | null
+          etablissement_adresse: string | null
+          etablissement_id: string | null
+          etablissement_nom: string | null
+          etablissement_ville: string | null
+          fin_le: string | null
+          id: string | null
+          intitule: string | null
+          montant_icp: number | null
+          montant_ifm: number | null
+          montant_majoration_dimanche: number | null
+          montant_majoration_ferie: number | null
+          montant_majoration_nuit: number | null
+          net_a_payer: number | null
+          niveau_urgence: number | null
+          profession_requise:
+            | Database["public"]["Enums"]["type_profession"]
+            | null
+          service: string | null
+          soignant_assigne_id: string | null
+          statut: Database["public"]["Enums"]["statut_mission"] | null
+          taux_horaire_base: number | null
+          total_brut: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "missions_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "missions_soignant_assigne_id_fkey"
+            columns: ["soignant_assigne_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       est_admin: { Args: never; Returns: boolean }
