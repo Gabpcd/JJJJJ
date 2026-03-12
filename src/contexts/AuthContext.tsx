@@ -137,10 +137,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       adresse_lat: data.lat || null,
       adresse_lng: data.lng || null,
     };
-    console.log('INSERT soignants payload:', insertPayload);
+    logger.debug('INSERT soignants pour userId:', userId);
     const { error: insertError } = await supabase.from('soignants').insert(insertPayload as any);
     if (insertError) {
-      console.error('SUPABASE INSERT ERROR (soignant):', { message: insertError.message, details: insertError.details, hint: insertError.hint, code: insertError.code });
+      logger.error('INSERT soignants échoué', insertError);
       throw new Error(`[INSERT soignants] ${insertError.message} | details: ${insertError.details} | hint: ${insertError.hint} | code: ${insertError.code}`);
     }
 
