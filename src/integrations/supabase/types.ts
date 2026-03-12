@@ -2017,6 +2017,31 @@ export type Database = {
           soignant_id: string
         }[]
       }
+      fn_mes_missions_soignant: {
+        Args: never
+        Returns: {
+          debut_le: string
+          description: string
+          duree_heures: number
+          est_urgente: boolean
+          etablissement_nom: string
+          etablissement_ville: string
+          fin_le: string
+          id: string
+          intitule: string
+          montant_icp: number
+          montant_ifm: number
+          montant_majoration_dimanche: number
+          montant_majoration_ferie: number
+          montant_majoration_nuit: number
+          net_a_payer: number
+          profession_requise: Database["public"]["Enums"]["type_profession"]
+          service: string
+          statut: Database["public"]["Enums"]["statut_mission"]
+          taux_horaire_base: number
+          total_brut: number
+        }[]
+      }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
       fn_recalculer_palier_commission: {
         Args: { p_etablissement_id: string }
