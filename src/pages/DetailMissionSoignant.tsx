@@ -68,7 +68,16 @@ export default function DetailMissionSoignant() {
     const load = async () => {
       const [{ data: m }, { data: s }] = await Promise.all([
         supabase.from('missions').select(`
-          *, etablissements(nom, adresse_rue, adresse_ville, adresse_code_postal,
+          id, intitule, description, service, profession_requise,
+          debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+          heures_nuit, heures_dimanche, heures_ferie,
+          montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
+          taux_ifm, taux_icp, montant_ifm, montant_icp,
+          total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
+          soignant_assigne_id, etablissement_id, cree_le, modifie_le,
+          type_paiement_soignant, numero_note_honoraires,
+          yousign_statut,
+          etablissements(nom, adresse_rue, adresse_ville, adresse_code_postal,
             adresse_departement, adresse_lat, adresse_lng, type,
             telephone_contact, email_contact,
             taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
