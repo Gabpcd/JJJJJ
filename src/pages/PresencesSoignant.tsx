@@ -181,7 +181,7 @@ export default function PresencesSoignant() {
 
     await supabase.from('missions').update({ statut: 'TERMINEE', modifie_le: new Date().toISOString() } as any).eq('id', missionId);
 
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'PRESENCE_POINTAGE_DEPART',
       p_type_ressource: 'presence', p_id_ressource: presenceId, p_cle_s3: null,
       p_details: { mission_id: missionId, lat: position.coords.latitude, lng: position.coords.longitude, precision_m: position.coords.accuracy },

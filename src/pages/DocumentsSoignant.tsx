@@ -112,7 +112,7 @@ export default function DocumentsSoignant() {
   const supprimerDocument = async () => {
     if (!suppDocId || !user) return;
     await supabase.from('documents_soignants').update({ supprime_le: new Date().toISOString() } as any).eq('id', suppDocId);
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_SUPPRESSION',
       p_type_ressource: 'document', p_id_ressource: suppDocId, p_cle_s3: null,
       p_details: {}, p_ip: null, p_navigateur: navigator.userAgent,
