@@ -119,7 +119,6 @@ export default function DetailMissionSoignant() {
         .update({
           soignant_assigne_id: user!.id,
           statut: 'ASSIGNEE' as any,
-          modifie_le: new Date().toISOString(),
         })
         .eq('id', id!)
         .eq('statut', 'OUVERTE')
