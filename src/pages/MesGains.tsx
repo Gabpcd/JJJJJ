@@ -148,27 +148,40 @@ export default function MesGains() {
 
         {missions.length > 0 ? (
           <Accordion type="single" collapsible className="space-y-2">
-            {missions.map(m => (
-              <AccordionItem key={m.id} value={m.id} className="card-base !p-0 overflow-hidden border">
-                <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-semibold text-foreground">
-                      📅 {format(new Date(m.debut_le), "EEE d MMM", { locale: fr })} · {m.intitule} · {m.etablissements?.nom}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {m.duree_heures}h · {m.taux_horaire_base} €/h
-                      <span className="float-right font-bold text-primary">Net : {fmt(m.net_a_payer || 0)}</span>
-                    </p>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="px-4 pb-4">
-                  <div className="mb-2 text-xs text-muted-foreground">
-                    {m.etablissements?.nom}, {m.etablissements?.adresse_ville} · {format(new Date(m.debut_le), "HH:mm", { locale: fr })} → {format(new Date(m.fin_le), "HH:mm", { locale: fr })} ({m.duree_heures}h)
-                  </div>
-                  <DecompositionFinanciere mission={m} etablissement={m.etablissements} />
-                </AccordionContent>
-              </AccordionItem>
-            ))}
+            {missions.map(m => {
+              const estLiberal = m.type_paiement_soignant === 'NOTE_HONORAIRES';
+              const iconeType = estLiberal ? '🧾' : '📋';
+              const labelType = estLiberal ? 'Note d\'honoraires' : 'Bulletin de paie';
+              const montantAffiche = estLiberal ? m.total_brut : m.net_a_payer;
+              return (
+                <AccordionItem key={m.id} value={m.id} className="card-base !p-0 overflow-hidden border">
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-semibold text-foreground">
+                        📅 {format(new Date(m.debut_le), "EEE d MMM", { locale: fr })} · {m.intitule} · {m.etablissements?.nom}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${estLiberal ? 'bg-purple-100 text-purple-700' : 'bg-primary/10 text-primary'}`}>
+                          {iconeType} {labelType}
+                        </span>
+                        {' '}{m.duree_heures}h · {m.taux_horaire_base} €/h
+                        <span className="float-right font-bold text-primary">{estLiberal ? 'HT' : 'Net'} : {fmt(montantAffiche || 0)}</span>
+                      </p>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    <div className="mb-2 text-xs text-muted-foreground">
+                      {m.etablissements?.nom}, {m.etablissements?.adresse_ville} · {format(new Date(m.debut_le), "HH:mm", { locale: fr })} → {format(new Date(m.fin_le), "HH:mm", { locale: fr })} ({m.duree_heures}h)
+                    </div>
+                    {estLiberal ? (
+                      <NoteHonoraires mission={m} soignant={soignant} etablissement={m.etablissements} />
+                    ) : (
+                      <DecompositionFinanciere mission={m} etablissement={m.etablissements} />
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
           </Accordion>
         ) : (
           <EtatVide icone={Banknote} titre="Aucune mission terminée" sousTitre="Vos fiches de paie apparaîtront ici après chaque mission." />
