@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
+import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
 
@@ -61,8 +63,23 @@ function getMobileNavItems(role: UserRole): NavItem[] {
 export function BarreNavigation({ role }: { role: UserRole }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { deconnexion } = useAuth();
-  const items = getNavItems(role);
+  const { deconnexion, user } = useAuth();
+  const [showLiberal, setShowLiberal] = useState(false);
+
+  useEffect(() => {
+    if (role !== 'SOIGNANT' || !user) return;
+    supabase.from('soignants').select('profession, heures_cumulees, statut_liberal').eq('id', user.id).single()
+      .then(({ data }) => {
+        if (data && !PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
+          setShowLiberal(true);
+        }
+      });
+  }, [role, user]);
+
+  const baseItems = getNavItems(role);
+  const items = role === 'SOIGNANT' && showLiberal
+    ? [...baseItems.slice(0, -1), { icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' }, baseItems[baseItems.length - 1]]
+    : baseItems;
   const mobileItems = getMobileNavItems(role);
 
   const handleDeconnexion = async () => {

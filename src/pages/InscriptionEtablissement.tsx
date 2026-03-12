@@ -34,6 +34,7 @@ export default function InscriptionEtablissement() {
     nom: '', siret: '', finess: '', type: '',
     rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
+    numeroLicence: '',
     lat: null as number | null, lng: null as number | null,
   });
 
@@ -105,9 +106,12 @@ export default function InscriptionEtablissement() {
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom de l'établissement *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">SIRET * (14 chiffres)</label><input value={form.siret} onChange={e => maj('siret', e.target.value.replace(/\D/g, '').slice(0, 14))} className="input-base" required /></div>
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">FINESS (9 chiffres)</label><input value={form.finess} onChange={e => maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9))} className="input-base" /></div>
+                <div><label className="text-sm font-medium text-foreground mb-1.5 block">{form.type === 'PHARMACIE_OFFICINE' ? 'N° Licence' : 'FINESS (9 chiffres)'}</label><input value={form.type === 'PHARMACIE_OFFICINE' ? form.numeroLicence : form.finess} onChange={e => form.type === 'PHARMACIE_OFFICINE' ? maj('numeroLicence', e.target.value) : maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9))} className="input-base" /></div>
               </div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Type d'établissement *</label><SelectTypeEtablissement value={form.type} onChange={v => maj('type', v)} /></div>
+              {form.type !== 'PHARMACIE_OFFICINE' && (
+                <p className="text-xs text-muted-foreground">ℹ️ Le plafond Loi Rist s'applique aux taux horaires en CDDU/Intérim.</p>
+              )}
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Adresse</label>
                 <input value={form.rue} onChange={e => maj('rue', e.target.value)} placeholder="Rue" className="input-base mb-2" />
