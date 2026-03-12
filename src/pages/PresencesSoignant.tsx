@@ -20,6 +20,8 @@ export default function PresencesSoignant() {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [contrats, setContrats] = useState<Record<string, any>>({});
+
   const charger = useCallback(async () => {
     if (!user) return;
     const aujourdhui = new Date();
@@ -42,7 +44,21 @@ export default function PresencesSoignant() {
       .lt('debut_le', demain.toISOString())
       .order('debut_le', { ascending: true });
 
-    setMissions(data || []);
+    const missionsList = data || [];
+    setMissions(missionsList);
+
+    // Check contract status for each mission
+    if (missionsList.length > 0) {
+      const missionIds = missionsList.map((m: any) => m.id);
+      const { data: contratsData } = await supabase
+        .from('contrats_mission')
+        .select('id, mission_id, statut')
+        .in('mission_id', missionIds);
+      const map: Record<string, any> = {};
+      (contratsData || []).forEach((c: any) => { map[c.mission_id] = c; });
+      setContrats(map);
+    }
+
     setLoading(false);
   }, [user]);
 
