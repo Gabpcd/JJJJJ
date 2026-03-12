@@ -77,7 +77,31 @@ export default function InscriptionSoignant() {
   };
 
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
-  const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0;
+  const rppsRequis = form.profession && !PROFESSIONS_SANS_RPPS.includes(form.profession);
+  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && (!rppsResultat.trouve || !rppsResultat.correspond);
+  const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant;
+
+  // Verify RPPS when 11 digits entered
+  useEffect(() => {
+    if (form.rpps.length !== 11 || !form.prenom || !form.nom) {
+      setRppsResultat(null);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      setRppsVerifiant(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('verify-rpps', {
+          body: { numero_rpps: form.rpps, prenom: form.prenom, nom: form.nom },
+        });
+        if (!error && data) setRppsResultat(data);
+        else setRppsResultat({ trouve: false, correspond: false });
+      } catch {
+        setRppsResultat(null);
+      }
+      setRppsVerifiant(false);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [form.rpps, form.prenom, form.nom]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
