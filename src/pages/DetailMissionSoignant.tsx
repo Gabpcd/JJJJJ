@@ -100,7 +100,7 @@ export default function DetailMissionSoignant() {
 
   const distance = calculerDistanceKm(
     soignant.adresse_lat, soignant.adresse_lng,
-    mission.etablissements?.adresse_lat, mission.etablissements?.adresse_lng
+    etablissement?.adresse_lat, etablissement?.adresse_lng
   );
   const completionProfil = calculerCompletionProfil(soignant);
   const peutPostuler = completionProfil >= 100 && soignant.tous_documents_valides;
