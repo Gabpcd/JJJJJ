@@ -1990,6 +1990,10 @@ export type Database = {
         Returns: Json
       }
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
+      fn_etablissement_pour_soignant: {
+        Args: { p_etablissement_id: string }
+        Returns: Json
+      }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
       fn_generer_numero_contrat_safe: {
