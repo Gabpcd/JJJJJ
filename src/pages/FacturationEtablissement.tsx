@@ -213,7 +213,7 @@ export default function FacturationEtablissement() {
         .eq('id', facture.id);
       if (error) throw error;
 
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'FINANCE_FACTURE_PAYEE',
         p_type_ressource: 'facture', p_id_ressource: facture.id, p_cle_s3: null,
         p_details: { numero_facture: facture.numero_facture, montant_ttc: facture.montant_ttc, mode: 'SIMULATION_DEV' },

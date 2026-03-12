@@ -60,7 +60,7 @@ export default function MesGains() {
       setLoading(false);
 
       // Audit HDS — tracer la consultation de données personnelles
-      supabase.rpc('fn_ecrire_audit', {
+      supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
         p_action: 'DONNEES_PERSO_CONSULTATION',
         p_type_ressource: 'soignant', p_id_ressource: user.id,

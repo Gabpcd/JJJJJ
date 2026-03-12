@@ -28,7 +28,7 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
       virement_confirme_le: new Date().toISOString(),
     } as any).eq('id', facture.id);
 
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id,
       p_type_acteur: 'ADMIN_ETABLISSEMENT',
       p_action: 'FINANCE_VIREMENT_CONFIRME',
