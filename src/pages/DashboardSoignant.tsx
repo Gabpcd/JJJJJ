@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote } from 'lucide-react';
+import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket } from 'lucide-react';
+import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
+import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
 import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { BadgeNiveau } from '@/components/BadgeNiveau';
@@ -138,7 +140,10 @@ export default function DashboardSoignant() {
   return (
     <LayoutApp role="SOIGNANT">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">Bonjour, <span className="text-primary">{soignant.prenom}</span> 👋</h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-xl font-bold text-foreground">Bonjour, <span className="text-primary">{soignant.prenom}</span> 👋</h1>
+          <BadgeRPPS rppsVerifie={(soignant as any).rpps_verifie} rpps={(soignant as any).numero_rpps} profession={soignant.profession} />
+        </div>
         {!soignant.tous_documents_valides ? (
           <p className="text-sm text-warning mt-1">⚠️ Complétez votre profil pour postuler aux missions</p>
         ) : (
@@ -298,17 +303,40 @@ export default function DashboardSoignant() {
         </div>
       )}
 
-      {/* Parcours libéral */}
-      <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 border border-purple-200 p-4 md:p-6 mb-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-base font-bold text-foreground">Mon parcours vers le libéral</h2>
-          <span className="text-xs text-primary font-medium">Mon parcours →</span>
+      {/* Parcours libéral — masqué pour pharmaciens */}
+      {!PROFESSIONS_NON_LIBERAL.includes(soignant.profession) ? (
+        <>
+          <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 border border-purple-200 p-4 md:p-6 mb-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-base font-bold text-foreground">Mon parcours vers le libéral</h2>
+              <span className="text-xs text-primary font-medium">Mon parcours →</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
+            <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-purple-500 to-purple-600" couleurFond="bg-purple-100" />
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
+            <p className="text-sm font-semibold text-foreground mt-3"><span className="text-purple-600">{heures}h</span> / 3 200h</p>
+          </div>
+
+          {/* Bouton passer en libéral */}
+          {heures >= 800 && (soignant as any).statut_liberal !== 'ACTIF' && (
+            <div className="rounded-2xl bg-gradient-to-r from-primary/5 to-purple-50 border border-primary/20 p-4 mb-6 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/passer-en-liberal')}>
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl p-2.5 bg-primary/10"><Rocket className="h-5 w-5 text-primary" /></div>
+                <div>
+                  <p className="text-sm font-bold text-foreground">🎉 Passer en libéral</p>
+                  <p className="text-xs text-muted-foreground">Vous êtes éligible ! Découvrez le module Free Transition.</p>
+                  <p className="text-xs text-primary mt-0.5">Commencer →</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="rounded-2xl bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 p-4 mb-6">
+          <p className="text-sm font-semibold text-foreground">💊 Vous exercez en pharmacie d'officine</p>
+          <p className="text-xs text-muted-foreground mt-1">Les missions sont en CDD de remplacement.</p>
         </div>
-        <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
-        <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-purple-500 to-purple-600" couleurFond="bg-purple-100" />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
-        <p className="text-sm font-semibold text-foreground mt-3"><span className="text-purple-600">{heures}h</span> / 3 200h</p>
-      </div>
+      )}
 
       {/* Prévoyance CTA */}
       {!(soignant as any).prevoyance_inscrit && (

@@ -34,6 +34,8 @@ import AttestationHeures from "./pages/AttestationHeures";
 import Tarifs from "./pages/Tarifs";
 import FacturationEtablissement from "./pages/FacturationEtablissement";
 import DetailFacture from "./pages/DetailFacture";
+import PasserEnLiberal from "./pages/PasserEnLiberal";
+import ExportPaie from "./pages/ExportPaie";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -65,6 +67,7 @@ const App = () => (
               <Route path="/soignant/parcours-3200h" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><Parcours3200h /></RouteProtegee>} />
               <Route path="/soignant/prevoyance" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PrevoyanceSoignant /></RouteProtegee>} />
               <Route path="/soignant/attestation-heures" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><AttestationHeures /></RouteProtegee>} />
+              <Route path="/soignant/passer-en-liberal" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PasserEnLiberal /></RouteProtegee>} />
 
               <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
               <Route path="/etablissement/profil" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ProfilEtablissement /></RouteProtegee>} />
@@ -75,6 +78,7 @@ const App = () => (
               <Route path="/etablissement/presences" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><PresencesEtablissement /></RouteProtegee>} />
               <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
               <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
+              <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
               <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
 
               <Route path="/groupe/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />

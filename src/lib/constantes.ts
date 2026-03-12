@@ -34,7 +34,17 @@ export const TYPES_ETABLISSEMENT = [
   { valeur: 'IME', label: 'IME' },
   { valeur: 'MAS', label: 'MAS' },
   { valeur: 'FAM', label: 'FAM' },
+  { valeur: 'PHARMACIE_OFFICINE', label: 'Pharmacie d\'Officine' },
 ] as const;
+
+// Professions NON éligibles au libéral
+export const PROFESSIONS_NON_LIBERAL = ['PHARMACIEN', 'PREPARATEUR_PHARMA', 'AS', 'AES', 'MANIPULATEUR_RADIO'];
+
+// Professions sans RPPS (ADELI uniquement)
+export const PROFESSIONS_SANS_RPPS = ['AS', 'AES'];
+
+// Professions limitées pour pharmacies
+export const PROFESSIONS_PHARMACIE = ['PHARMACIEN', 'PREPARATEUR_PHARMA'];
 
 export const BADGES_STATUT: Record<string, { label: string; classes: string }> = {
   'OUVERTE': { label: 'Ouverte', classes: 'bg-primary/10 text-primary' },
