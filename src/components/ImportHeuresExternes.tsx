@@ -65,7 +65,7 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
       if (heErr) throw heErr;
 
       // 4. Audit
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
         p_action: 'HEURES_EXTERNES_DECLAREES',
         p_type_ressource: 'soignant', p_id_ressource: user.id,

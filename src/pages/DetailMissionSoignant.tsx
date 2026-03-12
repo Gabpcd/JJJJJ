@@ -132,7 +132,7 @@ export default function DetailMissionSoignant() {
       }
 
       // Audit HDS
-      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id,
         p_type_acteur: 'SOIGNANT',
         p_action: 'MISSION_ASSIGNATION',
@@ -197,7 +197,7 @@ export default function DetailMissionSoignant() {
       return;
     }
 
-    const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+    const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user!.id,
       p_type_acteur: 'SOIGNANT',
       p_action: 'MISSION_ANNULATION',
@@ -303,7 +303,7 @@ export default function DetailMissionSoignant() {
               mission={mission}
               soignant={soignant}
               onAudit={() => {
-                supabase.rpc('fn_ecrire_audit', {
+                supabase.rpc('fn_ecrire_audit_safe', {
                   p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT',
                   p_action: 'NOTE_HONORAIRES_GENEREE',
                   p_type_ressource: 'mission', p_id_ressource: id!,

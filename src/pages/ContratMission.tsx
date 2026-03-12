@@ -69,7 +69,7 @@ export default function ContratMission() {
 
       await supabase.from('contrats_mission').update(updateData).eq('id', contrat.id);
 
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id,
         p_type_acteur: isSoignant ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
         p_action: 'CONTRAT_SIGNE',

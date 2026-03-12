@@ -38,7 +38,7 @@ export default function PasserEnLiberal() {
       const [{ data: sg }, { data: prof }, { data: ft }, { data: he }] = await Promise.all([
         supabase.from('soignants').select('*').eq('id', user.id).single(),
         supabase.from('professions_liberal_eligible').select('*').limit(20),
-        supabase.rpc('fn_calculer_taux_free_transition', { p_soignant_id: user.id }),
+        supabase.rpc('fn_calculer_taux_free_transition_safe', { p_soignant_id: user.id }),
         supabase.from('heures_externes').select('*').eq('soignant_id', user.id).order('date_debut', { ascending: false }),
       ]);
       if (sg) {
@@ -53,7 +53,7 @@ export default function PasserEnLiberal() {
       if (he) setHeuresExternes(he);
 
       // Audit
-      supabase.rpc('fn_ecrire_audit', {
+      supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
         p_action: 'DONNEES_PERSO_CONSULTATION',
         p_type_ressource: 'soignant', p_id_ressource: user.id,
@@ -97,7 +97,7 @@ export default function PasserEnLiberal() {
         heures_plateforme_au_demarrage: soignant?.heures_plateforme || 0,
       } as any);
 
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
         p_action: 'CONVERSION_LIBERAL_COMPLETEE',
         p_type_ressource: 'soignant', p_id_ressource: user.id,
@@ -115,7 +115,7 @@ export default function PasserEnLiberal() {
   };
 
   const handleDownloadGuide = () => {
-    supabase.rpc('fn_ecrire_audit', {
+    supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT',
       p_action: 'DONNEES_PERSO_EXPORT',
       p_type_ressource: 'soignant', p_id_ressource: user!.id,

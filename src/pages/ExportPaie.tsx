@@ -91,7 +91,7 @@ export default function ExportPaie() {
     URL.revokeObjectURL(url);
 
     // Audit
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id,
       p_type_acteur: 'ADMIN_ETABLISSEMENT',
       p_action: 'EXPORT_RH_PAIE',

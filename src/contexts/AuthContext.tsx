@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const role = extractRole(u);
 
     // Audit HDS
-    const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+    const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: u.id,
       p_type_acteur: role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
       p_action: 'CONNEXION',
@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentUser = user;
     // Audit AVANT signOut (sinon la session est invalidée)
     if (currentUser) {
-      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: currentUser.id,
         p_type_acteur: currentUser.role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
         p_action: 'DECONNEXION',
@@ -151,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // 4. Audit inscription + CGU consent
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: userId,
       p_type_acteur: 'SOIGNANT',
       p_action: 'CONNEXION',
@@ -163,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_navigateur: navigator.userAgent,
     });
 
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: userId,
       p_type_acteur: 'SOIGNANT',
       p_action: 'RGPD_CONSENTEMENT_DONNE',
@@ -230,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // 4. Audit inscription + CGU consent
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: userId,
       p_type_acteur: 'ADMIN_ETABLISSEMENT',
       p_action: 'CONNEXION',
@@ -242,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_navigateur: navigator.userAgent,
     });
 
-    await supabase.rpc('fn_ecrire_audit', {
+    await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: userId,
       p_type_acteur: 'ADMIN_ETABLISSEMENT',
       p_action: 'RGPD_CONSENTEMENT_DONNE',

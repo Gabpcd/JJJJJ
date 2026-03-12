@@ -106,7 +106,7 @@ export default function ListeMissions() {
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     } else {
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_ANNULATION',
         p_type_ressource: 'mission', p_id_ressource: mission.id, p_cle_s3: null,
         p_details: { intitule: mission.intitule }, p_ip: null, p_navigateur: navigator.userAgent,
@@ -128,7 +128,7 @@ export default function ListeMissions() {
     }
     // Audit HDS — un log par mission annulée
     for (const m of missionsSerieOuvertes) {
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_ANNULATION',
         p_type_ressource: 'mission', p_id_ressource: m.id, p_cle_s3: null,
         p_details: { type: 'annulation_serie', intitule: m.intitule }, p_ip: null, p_navigateur: navigator.userAgent,
