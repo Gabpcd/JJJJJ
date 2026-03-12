@@ -179,7 +179,7 @@ export default function PresencesSoignant() {
 
     if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
 
-    await supabase.from('missions').update({ statut: 'TERMINEE', modifie_le: new Date().toISOString() } as any).eq('id', missionId);
+    await supabase.from('missions').update({ statut: 'TERMINEE' } as any).eq('id', missionId);
 
     await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'PRESENCE_POINTAGE_DEPART',
