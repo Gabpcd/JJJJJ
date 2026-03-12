@@ -60,8 +60,8 @@ export function genererCreneauxFlex(
   const debut = parseDateLocale(dateDebut);
   const fin = parseDateLocale(dateFin);
 
-  console.log('[genererCreneauxFlex] dateDebut:', dateDebut, '→', debut.toLocaleDateString(), '| dateFin:', dateFin, '→', fin.toLocaleDateString());
-  console.log('[genererCreneauxFlex] joursActifs ISO:', joursActifs.map(j => `${j.label}(${j.jourISO})`));
+  logger.debug('[genererCreneauxFlex] dateDebut:', dateDebut, '| dateFin:', dateFin);
+  logger.debug('[genererCreneauxFlex] joursActifs:', joursActifs.length);
 
   const d = new Date(debut);
   while (d <= fin) {
