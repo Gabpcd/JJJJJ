@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentUser = user;
     // Audit AVANT signOut (sinon la session est invalidée)
     if (currentUser) {
-      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: currentUser.id,
         p_type_acteur: currentUser.role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
         p_action: 'DECONNEXION',
