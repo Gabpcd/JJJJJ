@@ -216,10 +216,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       adresse_lat: data.lat || null,
       adresse_lng: data.lng || null,
     };
-    console.log('INSERT etablissements payload:', insertPayload);
+    logger.debug('INSERT etablissements pour userId:', userId);
     const { error: insertError } = await supabase.from('etablissements').insert(insertPayload as any);
     if (insertError) {
-      console.error('SUPABASE INSERT ERROR (etablissement):', { message: insertError.message, details: insertError.details, hint: insertError.hint, code: insertError.code });
+      logger.error('INSERT etablissements échoué', insertError);
       throw new Error(`[INSERT etablissements] ${insertError.message} | details: ${insertError.details} | hint: ${insertError.hint} | code: ${insertError.code}`);
     }
 
