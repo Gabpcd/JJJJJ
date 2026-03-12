@@ -41,6 +41,22 @@ serve(async (req) => {
       .single();
 
     if (errF || !facture) throw new Error("Facture introuvable");
+
+    // Vérification de propriété via le JWT de l'utilisateur
+    const supabaseUser = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: userRole } = await supabaseUser.rpc("fn_get_my_role");
+    const userEtabId = userRole?.etablissement_id;
+    if (!userEtabId || userEtabId !== facture.etablissement_id) {
+      return new Response(JSON.stringify({ error: "Accès interdit : cette facture ne vous appartient pas" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (facture.statut === "PAYEE") throw new Error("Facture déjà payée");
 
     // Initialize Stripe
