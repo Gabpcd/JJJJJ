@@ -84,7 +84,7 @@ export default function DocumentsSoignant() {
 
     if (error) { toast.error(extraireMessageErreur(error)); return; }
 
-    const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+    const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_TELEVERSEMENT',
       p_type_ressource: 'document', p_id_ressource: (data as any).id, p_cle_s3: chemin,
       p_details: { type_document: televersementType, nom_fichier: fichier.name, taille: fichier.size },
