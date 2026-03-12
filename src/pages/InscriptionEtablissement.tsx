@@ -50,7 +50,7 @@ export default function InscriptionEtablissement() {
       afficherNotification({ type: 'succes', message: 'Établissement créé avec succès !' });
       navigate('/etablissement/tableau-de-bord');
     } catch (err) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      handleError(err, 'inscription établissement');
     } finally {
       setSubmitting(false);
     }

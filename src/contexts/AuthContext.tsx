@@ -198,72 +198,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (authError) {
       logger.error('Inscription établissement auth échouée', authError);
-      throw authError;
+      throw new Error('Erreur lors de la création du compte.');
     }
 
-    const userId = authData.user!.id;
+    // 2. Server-side: create établissement + assign role via Edge Function
+    const { data: result, error: fnError } = await supabase.functions.invoke('register-etablissement', {
+      body: {
+        nom: data.nom,
+        siret: data.siret,
+        finess: data.finess || null,
+        type: data.type,
+        adresse_rue: data.rue || null,
+        adresse_ville: data.ville,
+        adresse_code_postal: data.codePostal || null,
+        adresse_departement: data.departement || null,
+        telephone_contact: data.telephoneContact || null,
+        email_contact: data.emailContact || data.email,
+        adresse_lat: data.lat || null,
+        adresse_lng: data.lng || null,
+        numero_licence: data.numeroLicence || null,
+        navigateur: navigator.userAgent,
+      },
+    });
 
-    // 2. Insert into etablissements table
-    const insertPayload = {
-      id: userId,
-      nom: data.nom,
-      siret: data.siret,
-      finess: data.finess || null,
-      type: data.type,
-      adresse_rue: data.rue || 'Non renseigné',
-      adresse_ville: data.ville,
-      adresse_code_postal: data.codePostal || '00000',
-      adresse_departement: data.departement || null,
-      email_contact: data.emailContact || data.email,
-      telephone_contact: data.telephoneContact || null,
-      adresse_lat: data.lat || null,
-      adresse_lng: data.lng || null,
-    };
-    logger.debug('INSERT etablissements pour userId:', userId);
-    const { error: insertError } = await supabase.from('etablissements').insert(insertPayload as any);
-    if (insertError) {
-      logger.error('INSERT etablissements échoué', insertError);
+    if (fnError) {
+      logger.error('register-etablissement échoué', fnError);
       throw new Error('Erreur lors de la création du profil établissement.');
     }
 
-    // 3. Set app_metadata for RLS
-    await supabase.functions.invoke('set-user-claims', {
-      body: { userId, role: 'ETABLISSEMENT', etablissementId: userId },
-    });
+    // Check for error in response body
+    if (result?.error) {
+      throw new Error(result.error);
+    }
 
-    // 4. Audit inscription + CGU consent
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: userId,
-      p_type_acteur: 'ADMIN_ETABLISSEMENT',
-      p_action: 'CONNEXION',
-      p_type_ressource: 'etablissement',
-      p_id_ressource: userId,
-      p_cle_s3: null,
-      p_details: { evenement: 'inscription', type: data.type },
-      p_ip: null,
-      p_navigateur: navigator.userAgent,
-    });
-
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: userId,
-      p_type_acteur: 'ADMIN_ETABLISSEMENT',
-      p_action: 'RGPD_CONSENTEMENT_DONNE',
-      p_type_ressource: 'etablissement',
-      p_id_ressource: userId,
-      p_cle_s3: null,
-      p_details: { type: 'inscription', cgu: true, confidentialite: true },
-      p_ip: null,
-      p_navigateur: navigator.userAgent,
-    });
-
-    // 5. Email de bienvenue établissement
+    // 3. Email de bienvenue établissement (fire-and-forget)
     supabase.functions.invoke('send-email', {
       body: {
         to: data.email,
         subject: 'Bienvenue sur Soin Direct !',
         html: emailBienvenueEtablissement(data.nom),
         type: 'BIENVENUE_ETABLISSEMENT',
-        destinataire_id: userId,
+        destinataire_id: authData.user!.id,
       },
     }).catch(() => {});
   }, []);
