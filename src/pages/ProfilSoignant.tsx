@@ -103,7 +103,7 @@ export default function ProfilSoignant() {
         p_details: { champs_modifies: Object.keys(form), types_contrat: typesContrat },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
-      if (auditError) console.error('Audit failed:', auditError);
+      if (auditError) handleErrorSilent(auditError, 'Audit modification profil soignant');
       afficherNotification({ type: 'succes', message: 'Profil mis à jour avec succès !' });
     }
     setSaving(false);

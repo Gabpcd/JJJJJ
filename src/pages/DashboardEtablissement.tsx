@@ -81,7 +81,7 @@ export default function DashboardEtablissement() {
         taux: totalN > 0 ? Math.round(((resAssigned.count ?? 0) / totalN) * 100) : 0,
       });
     } catch (err) {
-      console.error('[DashboardEtab] Erreur KPI:', err);
+      handleErrorSilent(err, '[DashboardEtab] Erreur KPI');
       partialError = true;
     }
 
