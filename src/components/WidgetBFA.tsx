@@ -25,7 +25,7 @@ export function WidgetBFA({ etablissementId, groupeId }: WidgetBFAProps) {
         params.p_etablissement_id = etablissementId;
       }
 
-      const { data, error } = await supabase.rpc('fn_calculer_bfa', params);
+      const { data, error } = await supabase.rpc('fn_calculer_bfa_safe', params);
       if (!error && data) setBfa(data);
       setLoading(false);
     };
