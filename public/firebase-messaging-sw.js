@@ -26,6 +26,23 @@ messaging.onBackgroundMessage((payload) => {
   });
 });
 
+// Forward foreground messages to client
+self.addEventListener('push', (event) => {
+  const allClients = self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  event.waitUntil(
+    allClients.then((clients) => {
+      const data = event.data?.json?.() || {};
+      clients.forEach((client) => {
+        client.postMessage({
+          type: 'PUSH_RECEIVED',
+          notification: data.notification,
+          data: data.data,
+        });
+      });
+    })
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const lien = event.notification.data?.lien || '/';

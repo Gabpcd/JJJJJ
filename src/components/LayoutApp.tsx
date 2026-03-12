@@ -3,7 +3,6 @@ import { BarreNavigation } from '@/components/BarreNavigation';
 import { FooterLegal } from '@/components/FooterLegal';
 import { DemandePermissionPush } from '@/components/DemandePermissionPush';
 import { UserRole } from '@/lib/types';
-import { ecouterMessagesForeground } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 interface LayoutAppProps {
@@ -15,19 +14,20 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
   const { toast } = useToast();
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
+    let cleanup: (() => void) | undefined;
 
-    ecouterMessagesForeground((payload) => {
-      toast({
-        title: payload.title || 'Notification',
-        description: payload.body,
+    // Lazy import — no Firebase SDK at module level
+    import('@/lib/firebase').then(({ ecouterMessagesForeground }) => {
+      cleanup = ecouterMessagesForeground((payload) => {
+        toast({
+          title: payload.title || 'Notification',
+          description: payload.body,
+        });
       });
-    }).then((unsub) => {
-      if (typeof unsub === 'function') unsubscribe = unsub;
     });
 
     return () => {
-      unsubscribe?.();
+      cleanup?.();
     };
   }, [toast]);
 
