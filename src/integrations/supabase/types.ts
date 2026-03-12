@@ -1977,6 +1977,9 @@ export type Database = {
       }
     }
     Functions: {
+      est_admin: { Args: never; Returns: boolean }
+      est_admin_etablissement: { Args: never; Returns: boolean }
+      est_soignant: { Args: never; Returns: boolean }
       fn_calculer_bfa: {
         Args: {
           p_annee?: number
@@ -2112,6 +2115,8 @@ export type Database = {
         Args: { p_etablissement_id?: string; p_role: string; p_user_id: string }
         Returns: undefined
       }
+      mon_etablissement_id: { Args: never; Returns: string }
+      mon_role: { Args: never; Returns: string }
     }
     Enums: {
       statut_mission:
