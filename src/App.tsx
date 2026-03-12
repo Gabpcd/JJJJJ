@@ -39,7 +39,10 @@ import ExportPaie from "./pages/ExportPaie";
 import ContratMission from "./pages/ContratMission";
 import ListeContrats from "./pages/ListeContrats";
 import PageNotifications from "./pages/PageNotifications";
-import PageLegale from "./pages/PageLegale";
+import PageCGU from "./pages/PageCGU";
+import PageCGV from "./pages/PageCGV";
+import PageConfidentialite from "./pages/PageConfidentialite";
+import PageMentionsLegales from "./pages/PageMentionsLegales";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -58,10 +61,10 @@ const App = () => (
               <Route path="/inscription/etablissement" element={<InscriptionEtablissement />} />
 
               {/* Pages légales — publiques */}
-              <Route path="/cgu" element={<PageLegale />} />
-              <Route path="/cgv" element={<PageLegale />} />
-              <Route path="/confidentialite" element={<PageLegale />} />
-              <Route path="/mentions-legales" element={<PageLegale />} />
+              <Route path="/cgu" element={<PageCGU />} />
+              <Route path="/cgv" element={<PageCGV />} />
+              <Route path="/confidentialite" element={<PageConfidentialite />} />
+              <Route path="/mentions-legales" element={<PageMentionsLegales />} />
 
               {/* Soignant */}
               <Route path="/soignant/tableau-de-bord" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />

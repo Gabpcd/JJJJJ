@@ -1,0 +1,74 @@
+import React from 'react';
+import LayoutLegal from '@/components/LayoutLegal';
+
+const TOC = [
+  { id: 'editeur', label: '1. Éditeur du site' },
+  { id: 'hebergeur', label: '2. Hébergeur' },
+  { id: 'domaine', label: '3. Nom de domaine' },
+  { id: 'pi', label: '4. Propriété intellectuelle' },
+  { id: 'contact', label: '5. Contact' },
+];
+
+export default function PageMentionsLegales() {
+  return (
+    <LayoutLegal titre="Mentions Légales" dateMaj="12 mars 2026" toc={TOC}>
+      {/* Éditeur */}
+      <section id="editeur">
+        <h2 className="text-xl font-bold text-primary mb-4">1. Éditeur du site</h2>
+        <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
+          <p><strong className="text-foreground">Raison sociale :</strong> Soin Direct SAS</p>
+          <p><strong className="text-foreground">Forme juridique :</strong> Société par Actions Simplifiée (SAS)</p>
+          <p><strong className="text-foreground">Présidente :</strong> Gabrielle Picard</p>
+          <p><strong className="text-foreground">Siège social :</strong> XX rue XXXX, 75006 Paris, France</p>
+          <p><strong className="text-foreground">SIRET :</strong> XXX XXX XXX XXXXX</p>
+          <p><strong className="text-foreground">Capital social :</strong> en cours de constitution</p>
+          <p><strong className="text-foreground">Numéro TVA intracommunautaire :</strong> en cours d'attribution</p>
+          <p><strong className="text-foreground">Directrice de la publication :</strong> Gabrielle Picard</p>
+        </div>
+      </section>
+
+      {/* Hébergeur */}
+      <section id="hebergeur">
+        <h2 className="text-xl font-bold text-primary mb-4">2. Hébergeur</h2>
+        <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
+          <p><strong className="text-foreground">Hébergeur HDS :</strong> Supabase Inc.</p>
+          <p><strong className="text-foreground">Adresse :</strong> 970 Toa Payoh North, #07-04, Singapore 318992</p>
+          <p><strong className="text-foreground">Infrastructure :</strong> Amazon Web Services (AWS) — Région eu-west-3 (Paris, France)</p>
+          <p><strong className="text-foreground">Certifications :</strong> HDS (Hébergeur de Données de Santé), SOC 2 Type II, ISO 27001</p>
+          <p><strong className="text-foreground">Site web :</strong> <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">supabase.com</a></p>
+        </div>
+        <p className="mt-3 text-muted-foreground">L'hébergement des données de santé est réalisé conformément à l'article L.1111-8 du Code de la santé publique. L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne.</p>
+      </section>
+
+      {/* Nom de domaine */}
+      <section id="domaine">
+        <h2 className="text-xl font-bold text-primary mb-4">3. Nom de domaine</h2>
+        <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
+          <p><strong className="text-foreground">Nom de domaine :</strong> soindirect.com</p>
+          <p><strong className="text-foreground">Registrar :</strong> Squarespace Domains LLC</p>
+          <p><strong className="text-foreground">Titulaire :</strong> Soin Direct SAS</p>
+        </div>
+      </section>
+
+      {/* Propriété intellectuelle */}
+      <section id="pi">
+        <h2 className="text-xl font-bold text-primary mb-4">4. Propriété intellectuelle</h2>
+        <p className="mb-3">L'ensemble des contenus présents sur le site soindirect.com (textes, graphismes, images, logos, icônes, logiciels, bases de données) est protégé par le droit d'auteur et le droit des marques.</p>
+        <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
+          <p>La marque « <strong>Soin Direct</strong> » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le <strong>numéro 5186614</strong>.</p>
+        </div>
+        <p>Toute reproduction, représentation, modification, publication, adaptation ou exploitation de tout ou partie des éléments du site, quel que soit le moyen ou le procédé utilisé, est interdite sauf autorisation écrite préalable de Soin Direct SAS. Toute exploitation non autorisée constitue une contrefaçon au sens des articles L.335-2 et suivants du Code de la propriété intellectuelle.</p>
+      </section>
+
+      {/* Contact */}
+      <section id="contact">
+        <h2 className="text-xl font-bold text-primary mb-4">5. Contact</h2>
+        <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
+          <p><strong className="text-foreground">Contact général :</strong> <a href="mailto:contact@soindirect.com" className="text-primary hover:underline">contact@soindirect.com</a></p>
+          <p><strong className="text-foreground">Délégué à la protection des données (DPO) :</strong> <a href="mailto:dpo@soindirect.com" className="text-primary hover:underline">dpo@soindirect.com</a></p>
+        </div>
+        <p className="mt-4 text-muted-foreground">Pour toute question relative au fonctionnement de la Plateforme, à la protection de vos données personnelles ou à l'exercice de vos droits, n'hésitez pas à nous contacter aux adresses ci-dessus.</p>
+      </section>
+    </LayoutLegal>
+  );
+}
