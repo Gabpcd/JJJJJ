@@ -24,7 +24,7 @@ export default function ContratMission() {
   const [loading, setLoading] = useState(true);
   const [accepte, setAccepte] = useState(false);
   const [signing, setSigning] = useState(false);
-  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [showConfirmSign, setShowConfirmSign] = useState(false);
 
   const role: UserRole = user?.role || 'SOIGNANT';
 
