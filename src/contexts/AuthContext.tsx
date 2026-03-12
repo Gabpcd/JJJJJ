@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { UserRole } from '@/lib/types';
 import { emailBienvenueSoignant, emailBienvenueEtablissement } from '@/lib/emailTemplates';
 import { Session, User } from '@supabase/supabase-js';
+import { logger } from '@/lib/logger';
 
 interface AppUser {
   id: string;
@@ -78,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_ip: null,
       p_navigateur: navigator.userAgent,
     });
-    if (auditError) console.error('Audit failed:', auditError);
+    if (auditError) logger.error('Audit connexion échoué', auditError);
 
     // Update derniere_activite_le for soignants
     if (role === 'SOIGNANT') {
@@ -101,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         p_ip: null,
         p_navigateur: navigator.userAgent,
       });
-      if (auditError) console.error('Audit failed:', auditError);
+      if (auditError) logger.error('Audit déconnexion échoué', auditError);
     }
     await supabase.auth.signOut();
   }, [user]);
@@ -114,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
     });
     if (authError) {
-      console.error('AUTH SIGNUP ERROR (soignant):', { message: authError.message, status: authError.status, name: authError.name });
+      logger.error('Inscription soignant auth échouée', authError);
       throw authError;
     }
 
@@ -137,10 +138,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       adresse_lat: data.lat || null,
       adresse_lng: data.lng || null,
     };
-    console.log('INSERT soignants payload:', insertPayload);
+    logger.debug('INSERT soignants pour userId:', userId);
     const { error: insertError } = await supabase.from('soignants').insert(insertPayload as any);
     if (insertError) {
-      console.error('SUPABASE INSERT ERROR (soignant):', { message: insertError.message, details: insertError.details, hint: insertError.hint, code: insertError.code });
+      logger.error('INSERT soignants échoué', insertError);
       throw new Error(`[INSERT soignants] ${insertError.message} | details: ${insertError.details} | hint: ${insertError.hint} | code: ${insertError.code}`);
     }
 
@@ -194,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { data: { role: 'ETABLISSEMENT', nom_etablissement: data.nom } },
     });
     if (authError) {
-      console.error('AUTH SIGNUP ERROR (etablissement):', { message: authError.message, status: authError.status, name: authError.name });
+      logger.error('Inscription établissement auth échouée', authError);
       throw authError;
     }
 
@@ -216,10 +217,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       adresse_lat: data.lat || null,
       adresse_lng: data.lng || null,
     };
-    console.log('INSERT etablissements payload:', insertPayload);
+    logger.debug('INSERT etablissements pour userId:', userId);
     const { error: insertError } = await supabase.from('etablissements').insert(insertPayload as any);
     if (insertError) {
-      console.error('SUPABASE INSERT ERROR (etablissement):', { message: insertError.message, details: insertError.details, hint: insertError.hint, code: insertError.code });
+      logger.error('INSERT etablissements échoué', insertError);
       throw new Error(`[INSERT etablissements] ${insertError.message} | details: ${insertError.details} | hint: ${insertError.hint} | code: ${insertError.code}`);
     }
 

@@ -11,6 +11,9 @@ import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { UserRole } from '@/lib/types';
 import SignatureCanvas from '@/components/SignatureCanvas';
+import { sanitizeHTML } from '@/lib/sanitize';
+import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { logger } from '@/lib/logger';
 
 export default function ContratMission() {
   const { id } = useParams();
@@ -22,6 +25,7 @@ export default function ContratMission() {
   const [accepte, setAccepte] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [showConfirmSign, setShowConfirmSign] = useState(false);
 
   const role: UserRole = user?.role || 'SOIGNANT';
 
@@ -109,7 +113,7 @@ export default function ContratMission() {
         {/* Contract HTML render */}
         <div className="card-base mb-4 max-h-[60vh] overflow-y-auto contrat-print">
           {contrat.contenu_html ? (
-            <div dangerouslySetInnerHTML={{ __html: contrat.contenu_html }} className="prose prose-sm max-w-none text-foreground" />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(contrat.contenu_html) }} className="prose prose-sm max-w-none text-foreground" />
           ) : (
             <p className="text-center text-muted-foreground py-8">Le contenu du contrat n'est pas encore disponible.</p>
           )}
@@ -178,7 +182,7 @@ export default function ContratMission() {
 
             <div className="flex gap-3">
               <button
-                onClick={handleSigner}
+                onClick={() => setShowConfirmSign(true)}
                 disabled={!accepte || signing || !signatureData}
                 className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -188,6 +192,16 @@ export default function ContratMission() {
                 <Printer className="h-4 w-4" /> Imprimer
               </button>
             </div>
+
+            <ModalConfirmation
+              ouvert={showConfirmSign}
+              onFermer={() => setShowConfirmSign(false)}
+              onConfirmer={handleSigner}
+              titre="Confirmer la signature"
+              message="Cette action est irréversible. En signant ce contrat, vous vous engagez légalement. Souhaitez-vous continuer ?"
+              labelConfirmer="✍️ Signer"
+              variante="primaire"
+            />
           </div>
         )}
 

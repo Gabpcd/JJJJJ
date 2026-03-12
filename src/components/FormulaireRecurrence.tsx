@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { ARTICLES_CODE_TRAVAIL } from '@/constantes/loi';
 import { LigneHoraireJour, type HorairesJour, parseHeure, calculerDuree } from '@/components/LigneHoraireJour';
 import { toast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 const JOURS_SEMAINE_DEF = [
   { jourISO: 1, label: 'Lundi' },
@@ -60,8 +61,8 @@ export function genererCreneauxFlex(
   const debut = parseDateLocale(dateDebut);
   const fin = parseDateLocale(dateFin);
 
-  console.log('[genererCreneauxFlex] dateDebut:', dateDebut, '→', debut.toLocaleDateString(), '| dateFin:', dateFin, '→', fin.toLocaleDateString());
-  console.log('[genererCreneauxFlex] joursActifs ISO:', joursActifs.map(j => `${j.label}(${j.jourISO})`));
+  logger.debug('[genererCreneauxFlex] dateDebut:', dateDebut, '| dateFin:', dateFin);
+  logger.debug('[genererCreneauxFlex] joursActifs:', joursActifs.length);
 
   const d = new Date(debut);
   while (d <= fin) {
@@ -87,7 +88,7 @@ export function genererCreneauxFlex(
         finCreneau = `${dateStr}T${horaireJour.heureFin}:00`;
       }
 
-      console.log(`[genererCreneauxFlex] ✅ ${dateStr} (${horaireJour.label}, ISO=${jourISO})`);
+      logger.debug(`[genererCreneauxFlex] ✅ ${dateStr}`);
       creneaux.push({
         debut: `${dateStr}T${horaireJour.heureDebut}:00`,
         fin: finCreneau,
@@ -99,7 +100,7 @@ export function genererCreneauxFlex(
     d.setDate(d.getDate() + 1);
   }
 
-  console.log('[genererCreneauxFlex] Total créneaux générés:', creneaux.length);
+  logger.debug('[genererCreneauxFlex] Total créneaux:', creneaux.length);
   return creneaux;
 }
 

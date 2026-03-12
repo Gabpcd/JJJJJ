@@ -17,7 +17,7 @@ function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => 
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => onResult(pos.coords.latitude, pos.coords.longitude),
-      (err) => console.log('Géolocalisation refusée:', err.message)
+      () => { /* géolocalisation refusée — silencieux */ }
     );
   }, [asked, onResult]);
   return null;

@@ -2080,6 +2080,7 @@ export type Database = {
           soignant_purge_id: string
         }[]
       }
+      fn_sanitiser_html: { Args: { p_html: string }; Returns: string }
     }
     Enums: {
       statut_mission:
