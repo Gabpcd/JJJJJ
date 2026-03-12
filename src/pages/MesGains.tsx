@@ -132,10 +132,10 @@ export default function MesGains() {
         <GraphiqueGainsMensuels missions={missions} />
       </div>
 
-      {/* Liste fiches de paie */}
+      {/* Liste fiches de paie / notes d'honoraires */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h2 className="text-lg font-bold text-foreground">📋 Fiches de paie</h2>
+          <h2 className="text-lg font-bold text-foreground">📋 Fiches de paie & honoraires</h2>
           <div className="flex items-center gap-2">
             <button onClick={() => setModalAttestation(true)} className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-xl px-4 py-2 font-semibold text-sm hover:opacity-90 transition-opacity">
               <FileDown className="h-4 w-4" /> Attestation d'heures
