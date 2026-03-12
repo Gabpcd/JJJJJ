@@ -146,7 +146,7 @@ export default function FacturationEtablissement() {
         body: {
           to: user!.email,
           subject: `Facture ${facture.numero_facture} — Soin Direct`,
-          html: emailFactureMensuelle(etablissement?.nom || '', facture.numero_facture, totalTTC.toFixed(2), facture.id),
+          html: emailFactureMensuelle(etab?.nom || '', facture.numero_facture, totalTTC.toFixed(2), facture.id),
           type: 'FACTURE_GENEREE',
           destinataire_id: user!.id,
         },
