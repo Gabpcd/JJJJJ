@@ -144,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error: insertError } = await supabase.from('soignants').insert(insertPayload as any);
     if (insertError) {
       logger.error('INSERT soignants échoué', insertError);
-      throw new Error(`[INSERT soignants] ${insertError.message} | details: ${insertError.details} | hint: ${insertError.hint} | code: ${insertError.code}`);
+      throw new Error('Erreur lors de la création du profil soignant.');
     }
 
     // 3. Set app_metadata for RLS
@@ -223,7 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error: insertError } = await supabase.from('etablissements').insert(insertPayload as any);
     if (insertError) {
       logger.error('INSERT etablissements échoué', insertError);
-      throw new Error(`[INSERT etablissements] ${insertError.message} | details: ${insertError.details} | hint: ${insertError.hint} | code: ${insertError.code}`);
+      throw new Error('Erreur lors de la création du profil établissement.');
     }
 
     // 3. Set app_metadata for RLS
