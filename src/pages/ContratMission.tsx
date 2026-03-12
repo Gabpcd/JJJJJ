@@ -62,10 +62,8 @@ export default function ContratMission() {
             signature_navigateur_etablissement: navigator.userAgent,
           };
 
-      const autreSignee = isSoignant ? contrat.signature_etablissement : contrat.signature_soignant;
-      if (autreSignee) {
-        updateData.statut = 'SIGNE_COMPLET';
-      }
+      // Le trigger dec_proteger_signature_contrat gère automatiquement
+      // le passage à SIGNE_COMPLET quand les deux parties ont signé.
 
       await supabase.from('contrats_mission').update(updateData).eq('id', contrat.id);
 

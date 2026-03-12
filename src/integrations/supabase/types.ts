@@ -1994,6 +1994,23 @@ export type Database = {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
+      fn_etablissement_public: {
+        Args: { p_etablissement_id: string }
+        Returns: {
+          adresse_code_postal: string
+          adresse_departement: string
+          adresse_lat: number
+          adresse_lng: number
+          adresse_rue: string
+          adresse_ville: string
+          email_contact: string
+          finess: string
+          id: string
+          nom: string
+          telephone_contact: string
+          type: Database["public"]["Enums"]["type_etablissement"]
+        }[]
+      }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
       fn_generer_numero_contrat_safe: {

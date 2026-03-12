@@ -50,6 +50,7 @@ export default function DetailMissionSoignant() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [mission, setMission] = useState<any>(null);
+  const [etablissement, setEtablissement] = useState<any>(null);
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [countMissions, setCountMissions] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -76,17 +77,15 @@ export default function DetailMissionSoignant() {
           total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_paiement_soignant, numero_note_honoraires,
-          yousign_statut,
-          etablissements(nom, adresse_rue, adresse_ville, adresse_code_postal,
-            adresse_departement, adresse_lat, adresse_lng, type,
-            telephone_contact, email_contact,
-            taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
-            taux_majoration_ferie_pourcent)
+          yousign_statut
         `).eq('id', id).single(),
         supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, heures_cumulees').eq('id', user.id).single(),
       ]);
       if (m) {
         setMission(m);
+        // Fetch etablissement via secure RPC (masque champs sensibles)
+        const { data: etab } = await supabase.rpc('fn_etablissement_public' as any, { p_etablissement_id: (m as any).etablissement_id });
+        if (etab) setEtablissement(Array.isArray(etab) ? etab[0] : etab);
         // Count missions from this establishment
         const { count } = await supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', (m as any).etablissement_id);
         setCountMissions(count || 0);
@@ -101,7 +100,7 @@ export default function DetailMissionSoignant() {
 
   const distance = calculerDistanceKm(
     soignant.adresse_lat, soignant.adresse_lng,
-    mission.etablissements?.adresse_lat, mission.etablissements?.adresse_lng
+    etablissement?.adresse_lat, etablissement?.adresse_lng
   );
   const completionProfil = calculerCompletionProfil(soignant);
   const peutPostuler = completionProfil >= 100 && soignant.tous_documents_valides;
@@ -119,7 +118,6 @@ export default function DetailMissionSoignant() {
         .update({
           soignant_assigne_id: user!.id,
           statut: 'ASSIGNEE' as any,
-          modifie_le: new Date().toISOString(),
         })
         .eq('id', id!)
         .eq('statut', 'OUVERTE')
@@ -151,7 +149,7 @@ export default function DetailMissionSoignant() {
         p_cle_s3: null,
         p_details: {
           intitule: mission.intitule,
-          etablissement: mission.etablissements?.nom,
+          etablissement: etablissement?.nom,
           debut: mission.debut_le,
           fin: mission.fin_le,
         },
@@ -169,7 +167,7 @@ export default function DetailMissionSoignant() {
         body: {
           to: user!.email,
           subject: `Mission confirmée : ${mission.intitule}`,
-          html: emailMissionAccepteeSoignant(soignant.prenom, mission.intitule, dateFormatee, mission.etablissements?.nom || '', id!),
+          html: emailMissionAccepteeSoignant(soignant.prenom, mission.intitule, dateFormatee, etablissement?.nom || '', id!),
           type: 'MISSION_ACCEPTEE_SOIGNANT',
           destinataire_id: user!.id,
         },
@@ -187,7 +185,6 @@ export default function DetailMissionSoignant() {
       .update({
         soignant_assigne_id: null,
         statut: 'ANNULEE_PAR_SOIGNANT' as any,
-        modifie_le: new Date().toISOString(),
       })
       .eq('id', id!);
 
@@ -244,25 +241,25 @@ export default function DetailMissionSoignant() {
             <div className="flex items-start gap-3">
               <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-sm text-foreground">{mission.etablissements?.nom}</h3>
-                <p className="text-xs text-muted-foreground">{getLabelTypeEtablissement(mission.etablissements?.type)}</p>
+                <h3 className="font-semibold text-sm text-foreground">{etablissement?.nom}</h3>
+                <p className="text-xs text-muted-foreground">{getLabelTypeEtablissement(etablissement?.type)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {mission.etablissements?.adresse_rue}, {mission.etablissements?.adresse_code_postal} {mission.etablissements?.adresse_ville}
-                  {mission.etablissements?.adresse_departement && ` (${mission.etablissements.adresse_departement})`}
+                  {etablissement?.adresse_rue}, {etablissement?.adresse_code_postal} {etablissement?.adresse_ville}
+                  {etablissement?.adresse_departement && ` (${etablissement.adresse_departement})`}
                 </p>
                 <div className="mt-1">
                   <BadgeDistance distanceKm={distance} />
                 </div>
                 {estAssigne && (
                   <div className="mt-2 space-y-1">
-                    {mission.etablissements?.telephone_contact && (
-                      <a href={`tel:${mission.etablissements.telephone_contact}`} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
-                        <Phone className="h-3.5 w-3.5" /> {mission.etablissements.telephone_contact}
+                    {etablissement?.telephone_contact && (
+                      <a href={`tel:${etablissement.telephone_contact}`} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                        <Phone className="h-3.5 w-3.5" /> {etablissement.telephone_contact}
                       </a>
                     )}
-                    {mission.etablissements?.email_contact && (
-                      <a href={`mailto:${mission.etablissements.email_contact}`} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
-                        <Mail className="h-3.5 w-3.5" /> {mission.etablissements.email_contact}
+                    {etablissement?.email_contact && (
+                      <a href={`mailto:${etablissement.email_contact}`} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                        <Mail className="h-3.5 w-3.5" /> {etablissement.email_contact}
                       </a>
                     )}
                   </div>
