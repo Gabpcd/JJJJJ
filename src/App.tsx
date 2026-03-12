@@ -39,7 +39,10 @@ import ExportPaie from "./pages/ExportPaie";
 import ContratMission from "./pages/ContratMission";
 import ListeContrats from "./pages/ListeContrats";
 import PageNotifications from "./pages/PageNotifications";
-import PageLegale from "./pages/PageLegale";
+import PageCGU from "./pages/PageCGU";
+import PageCGV from "./pages/PageCGV";
+import PageConfidentialite from "./pages/PageConfidentialite";
+import PageMentionsLegales from "./pages/PageMentionsLegales";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
