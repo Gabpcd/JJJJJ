@@ -241,25 +241,25 @@ export default function DetailMissionSoignant() {
             <div className="flex items-start gap-3">
               <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-sm text-foreground">{mission.etablissements?.nom}</h3>
-                <p className="text-xs text-muted-foreground">{getLabelTypeEtablissement(mission.etablissements?.type)}</p>
+                <h3 className="font-semibold text-sm text-foreground">{etablissement?.nom}</h3>
+                <p className="text-xs text-muted-foreground">{getLabelTypeEtablissement(etablissement?.type)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {mission.etablissements?.adresse_rue}, {mission.etablissements?.adresse_code_postal} {mission.etablissements?.adresse_ville}
-                  {mission.etablissements?.adresse_departement && ` (${mission.etablissements.adresse_departement})`}
+                  {etablissement?.adresse_rue}, {etablissement?.adresse_code_postal} {etablissement?.adresse_ville}
+                  {etablissement?.adresse_departement && ` (${etablissement.adresse_departement})`}
                 </p>
                 <div className="mt-1">
                   <BadgeDistance distanceKm={distance} />
                 </div>
                 {estAssigne && (
                   <div className="mt-2 space-y-1">
-                    {mission.etablissements?.telephone_contact && (
-                      <a href={`tel:${mission.etablissements.telephone_contact}`} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
-                        <Phone className="h-3.5 w-3.5" /> {mission.etablissements.telephone_contact}
+                    {etablissement?.telephone_contact && (
+                      <a href={`tel:${etablissement.telephone_contact}`} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                        <Phone className="h-3.5 w-3.5" /> {etablissement.telephone_contact}
                       </a>
                     )}
-                    {mission.etablissements?.email_contact && (
-                      <a href={`mailto:${mission.etablissements.email_contact}`} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
-                        <Mail className="h-3.5 w-3.5" /> {mission.etablissements.email_contact}
+                    {etablissement?.email_contact && (
+                      <a href={`mailto:${etablissement.email_contact}`} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                        <Mail className="h-3.5 w-3.5" /> {etablissement.email_contact}
                       </a>
                     )}
                   </div>
