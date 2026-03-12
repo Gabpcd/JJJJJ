@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { emailMissionAccepteeSoignant, emailMissionAccepteeEtablissement } from '@/lib/emailTemplates';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Mail, Building2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
