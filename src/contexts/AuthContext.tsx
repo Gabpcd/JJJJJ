@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         p_ip: null,
         p_navigateur: navigator.userAgent,
       });
-      if (auditError) console.error('Audit failed:', auditError);
+      if (auditError) logger.error('Audit déconnexion échoué', auditError);
     }
     await supabase.auth.signOut();
   }, [user]);
