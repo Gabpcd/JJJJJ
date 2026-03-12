@@ -11,6 +11,9 @@ import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { UserRole } from '@/lib/types';
 import SignatureCanvas from '@/components/SignatureCanvas';
+import { sanitizeHTML } from '@/lib/sanitize';
+import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { logger } from '@/lib/logger';
 
 export default function ContratMission() {
   const { id } = useParams();
