@@ -47,9 +47,10 @@ export async function demanderPermissionPush(
     await navigator.serviceWorker.ready;
   }
 
+  const applicationServerKey = urlBase64ToUint8Array(VAPID_KEY);
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_KEY),
+    applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
   });
 
   const token = JSON.stringify(subscription);
