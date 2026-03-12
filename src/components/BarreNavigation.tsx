@@ -32,6 +32,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: List, label: 'Missions', route: '/etablissement/missions' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
   { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+  { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
   { icone: Settings, label: 'Profil', route: '/etablissement/profil' },
 ];
 

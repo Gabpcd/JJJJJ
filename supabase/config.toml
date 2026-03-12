@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+[functions.verify-rpps]
+verify_jwt = false
