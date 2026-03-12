@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { demanderPermissionPush } from '@/lib/firebase';
 import { useNotification } from '@/contexts/NotificationContext';
 
 const STORAGE_KEY = 'push_permission_asked';
@@ -27,12 +26,14 @@ export function DemandePermissionPush() {
     localStorage.setItem(STORAGE_KEY, 'accepted');
     setVisible(false);
     try {
+      // Lazy import to avoid top-level Firebase SDK loading
+      const { demanderPermissionPush } = await import('@/lib/firebase');
       const token = await demanderPermissionPush(user.id, supabase);
       if (token) {
         afficherNotification({ type: 'succes', message: 'Alertes push activées !' });
       }
     } catch {
-      afficherNotification({ type: 'erreur', message: 'Impossible d\'activer les notifications.' });
+      afficherNotification({ type: 'erreur', message: "Impossible d'activer les notifications." });
     }
   };
 
