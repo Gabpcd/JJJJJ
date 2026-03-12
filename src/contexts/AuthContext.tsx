@@ -149,8 +149,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: { userId, role: 'SOIGNANT' },
     });
 
-    // 4. Audit
-    const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+    // 4. Audit inscription + CGU consent
+    await supabase.rpc('fn_ecrire_audit', {
       p_acteur_id: userId,
       p_type_acteur: 'SOIGNANT',
       p_action: 'CONNEXION',
@@ -161,7 +161,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_ip: null,
       p_navigateur: navigator.userAgent,
     });
-    if (auditError) console.error('Audit failed:', auditError);
+
+    await supabase.rpc('fn_ecrire_audit', {
+      p_acteur_id: userId,
+      p_type_acteur: 'SOIGNANT',
+      p_action: 'RGPD_CONSENTEMENT_DONNE',
+      p_type_ressource: 'soignant',
+      p_id_ressource: userId,
+      p_cle_s3: null,
+      p_details: { type: 'inscription', cgu: true, confidentialite: true },
+      p_ip: null,
+      p_navigateur: navigator.userAgent,
+    });
+
+    // 5. Email de bienvenue
+    supabase.functions.invoke('send-email', {
+      body: {
+        to: data.email,
+        subject: 'Bienvenue sur Soin Direct ! 🎉',
+        html: emailBienvenueSoignant(data.prenom),
+        type: 'BIENVENUE_SOIGNANT',
+        destinataire_id: userId,
+      },
+    }).catch(() => {});
   }, []);
 
   const inscriptionEtablissement = useCallback(async (data: any) => {
