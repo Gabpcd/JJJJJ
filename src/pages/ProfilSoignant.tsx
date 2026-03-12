@@ -96,7 +96,7 @@ export default function ProfilSoignant() {
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     } else {
-      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
         p_action: 'DONNEES_PERSO_MODIFICATION', p_type_ressource: 'soignant',
         p_id_ressource: user.id, p_cle_s3: null,

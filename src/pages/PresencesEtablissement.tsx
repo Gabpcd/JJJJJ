@@ -111,7 +111,7 @@ export default function PresencesEtablissement() {
       .in('id', ids);
 
     if (!error) {
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
         p_action: 'PRESENCE_VALIDATION_LOT', p_type_ressource: 'presence',
         p_id_ressource: user!.id, p_cle_s3: null,

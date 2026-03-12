@@ -41,7 +41,7 @@ export default function AttestationHeures() {
       setMissions((ms as any[]) || []);
 
       // Audit HDS
-      await supabase.rpc('fn_ecrire_audit', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id,
         p_type_acteur: 'SOIGNANT',
         p_action: 'DONNEES_PERSO_EXPORT',

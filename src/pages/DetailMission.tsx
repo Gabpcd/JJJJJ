@@ -65,7 +65,7 @@ export default function DetailMission() {
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     } else {
-      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_ANNULATION',
         p_type_ressource: 'mission', p_id_ressource: id!, p_cle_s3: null,
         p_details: { intitule: mission.intitule }, p_ip: null, p_navigateur: navigator.userAgent,
