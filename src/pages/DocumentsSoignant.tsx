@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
 import { FolderOpen, AlertCircle, Clock } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -90,7 +91,7 @@ export default function DocumentsSoignant() {
       p_details: { type_document: televersementType, nom_fichier: fichier.name, taille: fichier.size },
       p_ip: null, p_navigateur: navigator.userAgent,
     });
-    if (auditError) console.error('Audit failed:', auditError);
+    if (auditError) handleErrorSilent(auditError, 'Audit téléversement document');
 
     toast.success('Document téléversé avec succès !');
     setTeleversementType(null);

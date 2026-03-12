@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { handleErrorSilent } from '@/lib/handleError';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
@@ -106,7 +107,7 @@ export default function ProfilEtablissement() {
         p_details: { champs_modifies: Object.keys(form) },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
-      if (auditError) console.error('Audit failed:', auditError);
+      if (auditError) handleErrorSilent(auditError, 'Audit modification établissement');
       afficherNotification({ type: 'succes', message: 'Informations mises à jour avec succès !' });
     }
     setSaving(false);

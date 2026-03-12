@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { handleErrorSilent } from '@/lib/handleError';
 import { emailMissionAccepteeSoignant, emailMissionAccepteeEtablissement } from '@/lib/emailTemplates';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Mail, Building2 } from 'lucide-react';
@@ -148,7 +149,7 @@ export default function DetailMissionSoignant() {
         p_ip: null,
         p_navigateur: navigator.userAgent,
       });
-      if (auditError) console.error('Audit failed:', auditError);
+      if (auditError) handleErrorSilent(auditError, 'Audit assignation mission');
 
       setMission({ ...mission, ...data });
       setAnimationSucces(true);
@@ -208,7 +209,7 @@ export default function DetailMissionSoignant() {
       p_ip: null,
       p_navigateur: navigator.userAgent,
     });
-    if (auditError) console.error('Audit failed:', auditError);
+    if (auditError) handleErrorSilent(auditError, 'Audit annulation participation');
 
     toast.warning('Participation annulée. Votre score sera mis à jour.');
     navigate('/soignant/missions');

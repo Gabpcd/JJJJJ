@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -48,16 +49,16 @@ export default function DashboardEtablissement() {
         supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
       ]);
 
-      if (resEtab.error) { console.error('[DashboardEtab] Erreur établissement:', resEtab.error); partialError = true; }
+      if (resEtab.error) { handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
       else if (resEtab.data) setEtab(resEtab.data);
 
-      if (resMissions.error) { console.error('[DashboardEtab] Erreur missions:', resMissions.error); partialError = true; }
+      if (resMissions.error) { handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
       else if (resMissions.data) setMissions(resMissions.data);
 
       if (resPaliers.data) setPaliers(resPaliers.data);
       setMissionsCeMois(resMissionsCeMois.count ?? 0);
     } catch (err) {
-      console.error('[DashboardEtab] Erreur critique:', err);
+      handleErrorSilent(err, '[DashboardEtab] Erreur critique');
       partialError = true;
     }
 
@@ -81,7 +82,7 @@ export default function DashboardEtablissement() {
         taux: totalN > 0 ? Math.round(((resAssigned.count ?? 0) / totalN) * 100) : 0,
       });
     } catch (err) {
-      console.error('[DashboardEtab] Erreur KPI:', err);
+      handleErrorSilent(err, '[DashboardEtab] Erreur KPI');
       partialError = true;
     }
 

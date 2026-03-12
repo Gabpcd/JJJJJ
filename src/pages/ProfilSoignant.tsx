@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { handleErrorSilent } from '@/lib/handleError';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CONTRATS, getLabelProfession, getTypesContratSoignant } from '@/lib/constantes';
@@ -103,7 +104,7 @@ export default function ProfilSoignant() {
         p_details: { champs_modifies: Object.keys(form), types_contrat: typesContrat },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
-      if (auditError) console.error('Audit failed:', auditError);
+      if (auditError) handleErrorSilent(auditError, 'Audit modification profil soignant');
       afficherNotification({ type: 'succes', message: 'Profil mis à jour avec succès !' });
     }
     setSaving(false);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { handleErrorSilent } from '@/lib/handleError';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -70,7 +71,7 @@ export default function DetailMission() {
         p_type_ressource: 'mission', p_id_ressource: id!, p_cle_s3: null,
         p_details: { intitule: mission.intitule }, p_ip: null, p_navigateur: navigator.userAgent,
       });
-      if (auditError) console.error('Audit failed:', auditError);
+      if (auditError) handleErrorSilent(auditError, 'Audit annulation mission');
       afficherNotification({ type: 'succes', message: 'Mission annulée.' });
       navigate('/etablissement/missions');
     }
