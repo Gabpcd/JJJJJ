@@ -83,6 +83,9 @@ export default function DetailMissionSoignant() {
       ]);
       if (m) {
         setMission(m);
+        // Fetch etablissement via secure RPC (masque champs sensibles)
+        const { data: etab } = await supabase.rpc('fn_etablissement_public' as any, { p_etablissement_id: (m as any).etablissement_id });
+        if (etab) setEtablissement(Array.isArray(etab) ? etab[0] : etab);
         // Count missions from this establishment
         const { count } = await supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', (m as any).etablissement_id);
         setCountMissions(count || 0);
