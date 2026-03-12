@@ -94,7 +94,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('send-email error:', error);
-    return new Response(JSON.stringify({ success: false, error: String(error) }), {
+    return new Response(JSON.stringify({ success: false, error: 'Erreur interne' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
