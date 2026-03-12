@@ -208,6 +208,34 @@ export default function PresencesSoignant() {
         <div className="space-y-4">
           {missions.map((m: any) => {
             const presence = m.presences?.[0] || null;
+            const contrat = contrats[m.id];
+            const contratBloque = contrat && contrat.statut !== 'SIGNE_COMPLET';
+            const pasDeContrat = !contrat;
+
+            if ((contratBloque || pasDeContrat) && !presence?.pointage_arrivee_le) {
+              return (
+                <div key={m.id} className="card-base">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-semibold text-foreground">{m.intitule}</p>
+                      <p className="text-xs text-muted-foreground">{(m as any).etablissements?.nom}</p>
+                    </div>
+                  </div>
+                  <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 text-center">
+                    <p className="text-warning font-bold text-sm">⚠️ Contrat non signé</p>
+                    <p className="text-warning/80 text-xs mt-1">
+                      Le contrat de mission doit être signé par les deux parties avant de pouvoir pointer.
+                    </p>
+                    {contrat && (
+                      <button onClick={() => navigate(`/contrat/${contrat.id}`)} className="btn-primary text-xs mt-3">
+                        Signer le contrat →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <CartePointage
                 key={m.id}
