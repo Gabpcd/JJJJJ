@@ -7,6 +7,7 @@ import { EtatVide } from '@/components/EtatVide';
 import { FiltresPeriode } from '@/components/FiltresPeriode';
 import { GraphiqueGainsMensuels } from '@/components/GraphiqueGainsMensuels';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
+import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { ModalAttestation } from '@/components/ModalAttestation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';

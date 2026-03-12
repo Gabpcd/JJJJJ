@@ -63,8 +63,23 @@ function getMobileNavItems(role: UserRole): NavItem[] {
 export function BarreNavigation({ role }: { role: UserRole }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { deconnexion } = useAuth();
-  const items = getNavItems(role);
+  const { deconnexion, user } = useAuth();
+  const [showLiberal, setShowLiberal] = useState(false);
+
+  useEffect(() => {
+    if (role !== 'SOIGNANT' || !user) return;
+    supabase.from('soignants').select('profession, heures_cumulees, statut_liberal').eq('id', user.id).single()
+      .then(({ data }) => {
+        if (data && !PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
+          setShowLiberal(true);
+        }
+      });
+  }, [role, user]);
+
+  const baseItems = getNavItems(role);
+  const items = role === 'SOIGNANT' && showLiberal
+    ? [...baseItems.slice(0, -1), { icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' }, baseItems[baseItems.length - 1]]
+    : baseItems;
   const mobileItems = getMobileNavItems(role);
 
   const handleDeconnexion = async () => {
