@@ -87,7 +87,7 @@ export function genererCreneauxFlex(
         finCreneau = `${dateStr}T${horaireJour.heureFin}:00`;
       }
 
-      console.log(`[genererCreneauxFlex] ✅ ${dateStr} (${horaireJour.label}, ISO=${jourISO})`);
+      logger.debug(`[genererCreneauxFlex] ✅ ${dateStr}`);
       creneaux.push({
         debut: `${dateStr}T${horaireJour.heureDebut}:00`,
         fin: finCreneau,
