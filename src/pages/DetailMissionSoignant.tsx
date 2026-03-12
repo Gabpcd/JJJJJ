@@ -132,7 +132,7 @@ export default function DetailMissionSoignant() {
       }
 
       // Audit HDS
-      const { error: auditError } = await supabase.rpc('fn_ecrire_audit', {
+      const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id,
         p_type_acteur: 'SOIGNANT',
         p_action: 'MISSION_ASSIGNATION',
