@@ -38,7 +38,7 @@ export default function ProfilSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, score_fiabilite, heures_cumulees, assujetti_tva, numero_tva').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
