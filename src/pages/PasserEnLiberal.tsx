@@ -164,7 +164,7 @@ export default function PasserEnLiberal() {
           {(soignant?.heures_cumulees || 0) < 3200 && <p className="text-xs text-primary">💡 Encore {3200 - (soignant?.heures_cumulees || 0)}h pour le palier 3 200h (100%)</p>}
         </div>
         <div className="mt-3">
-          <ImportHeuresExternes onDone={() => { supabase.from('heures_externes').select('*').eq('soignant_id', user!.id).order('date_debut', { ascending: false }).then(({ data }) => { if (data) setHeuresExternes(data); }); }} />
+          <ImportHeuresExternes onDone={() => { supabase.from('heures_externes').select('id, soignant_id, employeur_nom, employeur_type, heures_declarees, date_debut, date_fin, statut, motif_rejet, type_preuve').eq('soignant_id', user!.id).order('date_debut', { ascending: false }).then(({ data }) => { if (data) setHeuresExternes(data); }); }} />
         </div>
         {heuresExternes.length > 0 && (
           <div className="mt-4 overflow-x-auto">
