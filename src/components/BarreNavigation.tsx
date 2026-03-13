@@ -120,6 +120,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             <span className="text-xl font-bold text-sidebar-foreground">Soin Direct</span>
           </div>
           <BadgeNotification />
+          <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           {items.map((item) => {
