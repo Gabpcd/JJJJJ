@@ -37,17 +37,13 @@ export default function PrevoyanceSoignant() {
 
   async function souscrire(plan: any) {
     if (!user) return;
-    const { error } = await supabase.from('souscriptions_prevoyance').insert({
-      soignant_id: user.id,
-      plan_id: plan.id,
-    } as any);
-    if (error) { afficherNotification({ type: 'erreur', message: error.message }); return; }
-
-    await supabase.from('soignants').update({
-      prevoyance_inscrit: true,
-      prevoyance_fournisseur: plan.fournisseur,
-      modifie_le: new Date().toISOString(),
-    } as any).eq('id', user.id);
+    const { data, error } = await supabase.rpc('fn_souscrire_prevoyance' as any, {
+      p_plan_id: plan.id,
+    });
+    if (error || data?.error) {
+      afficherNotification({ type: 'erreur', message: data?.error || error?.message || 'Erreur' });
+      return;
+    }
 
     await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',

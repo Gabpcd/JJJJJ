@@ -83,34 +83,17 @@ export default function PasserEnLiberal() {
     if (!user || !profData) return;
     setSaving(true);
     try {
-      await supabase.from('soignants').update({
-        type_contrat: 'LIBERAL',
-        statut_liberal: 'ACTIF',
-        date_passage_liberal: new Date().toISOString().split('T')[0],
-        code_ape: profData.code_ape,
-        modifie_le: new Date().toISOString(),
-      } as any).eq('id', user.id);
-
-      await supabase.from('conversions_liberal').upsert({
-        soignant_id: user.id,
-        statut: 'COMPLET',
-        complete_le: new Date().toISOString(),
-        heures_totales: soignant?.heures_cumulees || 0,
-        heures_plateforme_au_demarrage: soignant?.heures_plateforme || 0,
-      } as any);
-
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
-        p_action: 'CONVERSION_LIBERAL_COMPLETEE',
-        p_type_ressource: 'soignant', p_id_ressource: user.id,
-        p_cle_s3: null,
-        p_details: { siret, profession: soignant?.profession, code_ape: profData.code_ape },
-        p_ip: null, p_navigateur: navigator.userAgent,
+      const { data, error } = await supabase.rpc('fn_activer_liberal' as any, {
+        p_siret: siret,
       });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       setShowConfetti(true);
       afficherNotification({ type: 'succes', message: '🎉 Profil libéral activé avec succès !' });
       setTimeout(() => navigate('/soignant/tableau-de-bord'), 3000);
+    } catch (err: any) {
+      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de l\'activation' });
     } finally {
       setSaving(false);
     }
