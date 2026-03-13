@@ -16,6 +16,9 @@ export const TYPES_DOCUMENTS: Record<string, string> = {
   'AUTRE': 'Autre document',
 };
 
+/** Types de documents exclus du téléversement (attestation sur l'honneur à la place) */
+export const TYPES_DOCUMENTS_EXCLUS_UPLOAD: string[] = ['VACCINATIONS', 'MEDECINE_TRAVAIL'];
+
 export const STATUTS_VERIFICATION: Record<string, { label: string; couleur: string }> = {
   'EN_ATTENTE': { label: 'En attente de vérification', couleur: 'bg-amber-100 text-amber-700' },
   'VERIFIE': { label: 'Vérifié ✓', couleur: 'bg-emerald-100 text-emerald-700' },
