@@ -66,6 +66,7 @@ export default function DetailMissionSoignant() {
   const [animationSucces, setAnimationSucces] = useState(false);
   const [conformiteOk, setConformiteOk] = useState(true);
   const [showEvaluation, setShowEvaluation] = useState(true);
+  const [chevauchement, setChevauchement] = useState(false);
 
   useEffect(() => {
     if (!user || !id) return;
