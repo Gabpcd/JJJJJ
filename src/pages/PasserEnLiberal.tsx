@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import ImportHeuresExternes from '@/components/ImportHeuresExternes';
+import { extraireMessageErreur } from '@/lib/erreurs';
 
 function fmt(v: number): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -370,8 +371,17 @@ export default function PasserEnLiberal() {
         <button
           type="button"
           onClick={async () => {
-            await supabase.from('soignants').update({ assujetti_tva: assujettiTVA, numero_tva: assujettiTVA ? numeroTVA || null : null } as any).eq('id', user!.id);
-            afficherNotification({ type: 'succes', message: 'TVA mise à jour.' });
+            const { data, error } = await supabase.rpc('fn_modifier_tva_liberal' as any, {
+              p_assujetti_tva: assujettiTVA,
+              p_numero_tva: assujettiTVA ? numeroTVA || null : null,
+            });
+            if (error) {
+              afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+            } else if (data?.error) {
+              afficherNotification({ type: 'erreur', message: data.error });
+            } else {
+              afficherNotification({ type: 'succes', message: 'TVA mise à jour.' });
+            }
           }}
           className="btn-secondary text-xs mt-3"
         >

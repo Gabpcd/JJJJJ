@@ -2159,6 +2159,7 @@ export type Database = {
         Args: { p_soignant_id: string }
         Returns: Json
       }
+      fn_consentir_gps: { Args: { p_accepte: boolean }; Returns: Json }
       fn_creer_notification: {
         Args: {
           p_corps: string
@@ -2414,16 +2415,47 @@ export type Database = {
           tous_documents_valides: boolean
         }[]
       }
-      fn_modifier_mon_etablissement: {
-        Args: {
-          p_adresse_code_postal?: string
-          p_adresse_rue?: string
-          p_adresse_ville?: string
-          p_nom?: string
-          p_telephone?: string
-        }
-        Returns: Json
-      }
+      fn_modifier_mon_etablissement:
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_nom?: string
+              p_telephone?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_convention_collective?: string
+              p_nom?: string
+              p_telephone?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_departement?: string
+              p_adresse_lat?: number
+              p_adresse_lng?: number
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_convention_collective?: string
+              p_email_contact?: string
+              p_finess?: string
+              p_nom: string
+              p_taux_majoration_dimanche?: number
+              p_taux_majoration_ferie?: number
+              p_taux_majoration_nuit?: number
+              p_telephone_contact?: string
+            }
+            Returns: Json
+          }
       fn_modifier_mon_profil: {
         Args: {
           p_adresse_code_postal?: string
@@ -2432,6 +2464,10 @@ export type Database = {
           p_rayon_deplacement_km?: number
           p_telephone?: string
         }
+        Returns: Json
+      }
+      fn_modifier_tva_liberal: {
+        Args: { p_assujetti_tva: boolean; p_numero_tva?: string }
         Returns: Json
       }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
@@ -2449,6 +2485,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_purger_gps_ancien: { Args: never; Returns: number }
       fn_recalculer_palier_commission: {
         Args: { p_etablissement_id: string }
         Returns: Json

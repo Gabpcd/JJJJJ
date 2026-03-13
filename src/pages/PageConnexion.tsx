@@ -28,7 +28,7 @@ export default function PageConnexion() {
       const { supabase } = await import('@/integrations/supabase/client');
       const { data: roleData } = await supabase.rpc('fn_get_my_role');
       const role = (roleData as any)?.role;
-      if (role === 'ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
+      if (role === 'ADMIN_ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
       else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
       else navigate('/soignant/tableau-de-bord');
     } catch (err) {
@@ -85,7 +85,27 @@ export default function PageConnexion() {
         </div>
 
         <p className="text-center mt-4">
-          <a href="#" className="text-sm text-primary hover:underline">Mot de passe oublié ?</a>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!email) {
+                afficherNotification({ type: 'erreur', message: 'Saisissez votre email avant de demander une réinitialisation.' });
+                return;
+              }
+              const { supabase } = await import('@/integrations/supabase/client');
+              const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/connexion`,
+              });
+              if (error) {
+                afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });
+              } else {
+                afficherNotification({ type: 'succes', message: 'Email de réinitialisation envoyé. Vérifiez votre boîte mail.' });
+              }
+            }}
+            className="text-sm text-primary hover:underline"
+          >
+            Mot de passe oublié ?
+          </button>
         </p>
       </div>
     </div>

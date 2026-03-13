@@ -44,29 +44,41 @@ export default function PresencesSoignant() {
 
   const handleAccepterGPS = async () => {
     if (!user) return;
-    await supabase.rpc('fn_modifier_mon_profil' as any, {
-      p_telephone: null, p_adresse_rue: null, p_adresse_ville: null, p_adresse_code_postal: null,
-      p_rayon_deplacement_km: null, p_prenom: null, p_nom: null, p_date_naissance: null,
-      p_type_contrat: null, p_types_contrat_acceptes: null, p_numero_rpps: null, p_numero_adeli: null,
-      p_adresse_lat: null, p_adresse_lng: null,
+    // Use dedicated RPC to update only GPS consent without touching other fields
+    await supabase.rpc('fn_modifier_consentement_gps' as any, {
       p_consentement_gps: true,
     });
     setConsentementGPS(true);
     setShowConsentementGPS(false);
+
+    // Audit GPS consent
+    await supabase.rpc('fn_ecrire_audit_safe', {
+      p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
+      p_action: 'RGPD_CONSENTEMENT_DONNE',
+      p_type_ressource: 'soignant', p_id_ressource: user.id,
+      p_cle_s3: null, p_details: { type: 'gps', consentement: true },
+      p_ip: null, p_navigateur: navigator.userAgent,
+    });
+
     afficherNotification({ type: 'succes', message: 'Consentement GPS enregistré.' });
   };
 
   const handleRefuserGPS = async () => {
     if (!user) return;
-    await supabase.rpc('fn_modifier_mon_profil' as any, {
-      p_telephone: null, p_adresse_rue: null, p_adresse_ville: null, p_adresse_code_postal: null,
-      p_rayon_deplacement_km: null, p_prenom: null, p_nom: null, p_date_naissance: null,
-      p_type_contrat: null, p_types_contrat_acceptes: null, p_numero_rpps: null, p_numero_adeli: null,
-      p_adresse_lat: null, p_adresse_lng: null,
+    await supabase.rpc('fn_modifier_consentement_gps' as any, {
       p_consentement_gps: false,
     });
     setConsentementGPS(false);
     setShowConsentementGPS(false);
+
+    await supabase.rpc('fn_ecrire_audit_safe', {
+      p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
+      p_action: 'RGPD_CONSENTEMENT_DONNE',
+      p_type_ressource: 'soignant', p_id_ressource: user.id,
+      p_cle_s3: null, p_details: { type: 'gps', consentement: false },
+      p_ip: null, p_navigateur: navigator.userAgent,
+    });
+
     afficherNotification({ type: 'info', message: 'Pointage sans GPS activé. Vérification manuelle requise.' });
   };
 
