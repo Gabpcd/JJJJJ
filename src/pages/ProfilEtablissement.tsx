@@ -224,6 +224,51 @@ export default function ProfilEtablissement() {
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>
       </form>
+
+      {/* RGPD / Suppression compte (obligation Apple) */}
+      <div className="max-w-2xl mt-12 space-y-4">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
+        <button
+          onClick={async () => {
+            try {
+              const { data, error } = await supabase.rpc('fn_exporter_mes_donnees' as any);
+              if (error) throw error;
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `mes-donnees-soin-direct-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              afficherNotification({ type: 'succes', message: 'Données exportées.' });
+            } catch (err: any) {
+              afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+            }
+          }}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
+        >
+          <Download className="h-4 w-4" /> 📥 Télécharger mes données (RGPD)
+        </button>
+        <button
+          onClick={async () => {
+            const confirmText = prompt('Tapez SUPPRIMER pour confirmer la suppression définitive de votre compte :');
+            if (confirmText !== 'SUPPRIMER') return;
+            try {
+              const { data, error } = await supabase.rpc('fn_supprimer_mon_compte' as any);
+              if (error) throw error;
+              if (data?.error) { afficherNotification({ type: 'erreur', message: data.error }); return; }
+              afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection…' });
+              await supabase.auth.signOut();
+              navigate('/');
+            } catch (err: any) {
+              afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+            }
+          }}
+          className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition"
+        >
+          <Trash2 className="h-4 w-4" /> Supprimer mon compte
+        </button>
+      </div>
     </LayoutApp>
   );
 }
