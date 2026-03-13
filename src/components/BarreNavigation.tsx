@@ -103,11 +103,11 @@ export function BarreNavigation({ role }: { role: UserRole }) {
 
   return (
     <>
-      <nav className="bottom-nav md:hidden">
+      <nav className="bottom-nav md:hidden" role="navigation" aria-label="Navigation mobile">
         {mobileItems.map((item) => {
           const actif = location.pathname === item.route;
           return (
-            <button key={item.route} onClick={() => navigate(item.route)} className={`bottom-nav-item ${actif ? 'bottom-nav-item-active' : ''}`}>
+            <button key={item.route} onClick={() => navigate(item.route)} aria-label={item.label} aria-current={actif ? 'page' : undefined} className={`bottom-nav-item ${actif ? 'bottom-nav-item-active' : ''}`}>
               <item.icone className="h-5 w-5" />
               <span className="bottom-nav-label">{item.label}</span>
             </button>
@@ -115,7 +115,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         })}
       </nav>
 
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] bg-sidebar flex-col z-40">
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] bg-sidebar flex-col z-40" role="navigation" aria-label="Sidebar">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <HeartPulse className="h-7 w-7 text-sidebar-primary" />
@@ -124,18 +124,18 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           <BadgeNotification />
           <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
-        <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 space-y-1 overflow-y-auto" aria-label="Menu principal">
           {items.map((item) => {
             const actif = location.pathname === item.route;
             return (
-              <button key={item.route} onClick={() => navigate(item.route)} className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}>
+              <button key={item.route} onClick={() => navigate(item.route)} aria-label={item.label} aria-current={actif ? 'page' : undefined} className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}>
                 <item.icone className="h-5 w-5" /><span>{item.label}</span>
               </button>
             );
           })}
         </nav>
         <div className="p-3 border-t border-sidebar-border">
-          <button onClick={handleDeconnexion} className="sidebar-item w-full text-left text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent">
+          <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="sidebar-item w-full text-left text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent">
             <LogOut className="h-5 w-5" /><span>Déconnexion</span>
           </button>
         </div>

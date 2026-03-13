@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2 } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette } from 'lucide-react';
 
 const CONVENTIONS_COLLECTIVES = [
   { valeur: 'CCN_51_FEHAP', label: 'CCN 51 (FEHAP)' },
@@ -69,13 +69,15 @@ export default function ProfilEtablissement() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
+  const [couleurTheme, setCouleurTheme] = useState('#17A2B8');
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('adresse_lat, adresse_lng').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('adresse_lat, adresse_lng, couleur_theme').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         setLat(data.adresse_lat?.toString() || '');
         setLng(data.adresse_lng?.toString() || '');
+        setCouleurTheme(data.couleur_theme || '#17A2B8');
       }
     });
   }, [user]);
@@ -106,6 +108,9 @@ export default function ProfilEtablissement() {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
+
+    // Save couleur_theme directly (allowed by pol_etab_update_self)
+    await supabase.from('etablissements').update({ couleur_theme: couleurTheme }).eq('id', user.id);
 
     const { error } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
       p_convention_collective: conventionCollective || null,
@@ -231,6 +236,29 @@ export default function ProfilEtablissement() {
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Jours fériés — %</label><input type="number" step="0.01" value={form.tauxFerie} onChange={e => maj('tauxFerie', Number(e.target.value))} className="input-base" /></div>
           </div>
         </div>
+        {/* Couleur de thème */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Palette className="h-5 w-5 text-primary" /> Couleur de votre établissement
+          </h2>
+          <div className="flex items-center gap-4">
+            <input
+              type="color"
+              value={couleurTheme}
+              onChange={e => setCouleurTheme(e.target.value)}
+              className="w-12 h-12 rounded-xl border border-border cursor-pointer"
+              aria-label="Choisir la couleur de l'établissement"
+            />
+            <div className="flex-1">
+              <p className="text-sm text-muted-foreground">Cette couleur apparaît sur vos cartes mission.</p>
+              <div className="mt-2 rounded-xl border border-border overflow-hidden">
+                <div className="h-1" style={{ backgroundColor: couleurTheme }} />
+                <div className="p-3 text-xs text-muted-foreground">Aperçu de la bande colorée</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50">
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>

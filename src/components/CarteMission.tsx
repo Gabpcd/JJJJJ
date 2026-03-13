@@ -49,11 +49,14 @@ export function CarteMission({ mission, afficherEtablissement, onDupliquer, onAn
   const contratPref = extraireContratPreference(m.description);
   const contratBadge = getContratBadge(contratPref);
 
+  const couleurTheme = m.etablissements?.couleur_theme || m.couleur_theme;
+
   return (
     <div
-      className="card-base hover:shadow-md transition-shadow cursor-pointer"
+      className="card-base hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
       onClick={() => navigate(`/etablissement/missions/${m.id}`)}
     >
+      {couleurTheme && <div className="h-1 -mt-4 md:-mt-6 -mx-4 md:-mx-6 mb-3" style={{ backgroundColor: couleurTheme }} />}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2 flex-wrap">
           {m.est_urgente && (

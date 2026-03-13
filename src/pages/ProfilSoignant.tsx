@@ -10,6 +10,7 @@ import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle } from 'lucide-react';
+import { BadgesGamification, BadgeStats } from '@/components/BadgesGamification';
 import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -190,6 +191,7 @@ export default function ProfilSoignant() {
 
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
   const [evaluations, setEvaluations] = useState<any[]>([]);
+  const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -202,6 +204,10 @@ export default function ProfilSoignant() {
       .then(({ data }: any) => {
         if (Array.isArray(data)) setEvaluations(data);
       });
+    // Load badge stats
+    supabase.rpc('fn_badge_stats' as any).then(({ data }: any) => {
+      if (data) setBadgeStats(data as BadgeStats);
+    });
   }, [user]);
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
@@ -225,6 +231,13 @@ export default function ProfilSoignant() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Badges Gamification */}
+      {badgeStats && (
+        <div className="max-w-2xl mb-6">
+          <BadgesGamification stats={badgeStats} />
         </div>
       )}
 
