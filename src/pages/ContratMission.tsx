@@ -105,11 +105,9 @@ export default function ContratMission() {
           // Email to the other party via edge function (service handles authorization)
           // We fetch the other party's email from the etablissement table
           if (missionData?.etablissement_id && isSoignant) {
-            const { data: etab } = await supabase.from('etablissements').select('email_contact').eq('id', missionData.etablissement_id).single();
-            if (etab?.email_contact) {
+            {
               supabase.functions.invoke('send-email', {
                 body: {
-                  to: etab.email_contact,
                   type: 'CONTRAT_SIGNE',
                   data: { mission: missionName, contrat_id: contrat.id },
                   destinataire_id: missionData.etablissement_id,

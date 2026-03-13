@@ -232,7 +232,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 3. Email de bienvenue établissement (fire-and-forget)
     supabase.functions.invoke('send-email', {
       body: {
-        to: data.email,
         type: 'BIENVENUE_ETABLISSEMENT',
         data: { nom: data.nom },
         destinataire_id: authData.user!.id,

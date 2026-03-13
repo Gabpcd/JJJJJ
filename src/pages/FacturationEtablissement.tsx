@@ -144,7 +144,6 @@ export default function FacturationEtablissement() {
       // Email facture
       supabase.functions.invoke('send-email', {
         body: {
-          to: user!.email,
           type: 'FACTURE_EMISE',
           data: {
             numero: facture.numero_facture,
