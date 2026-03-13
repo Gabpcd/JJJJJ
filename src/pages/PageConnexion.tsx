@@ -28,7 +28,7 @@ export default function PageConnexion() {
       const { supabase } = await import('@/integrations/supabase/client');
       const { data: roleData } = await supabase.rpc('fn_get_my_role');
       const role = (roleData as any)?.role;
-      if (role === 'ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
+      if (role === 'ADMIN_ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
       else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
       else navigate('/soignant/tableau-de-bord');
     } catch (err) {
