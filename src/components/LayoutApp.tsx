@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { BarreNavigation } from '@/components/BarreNavigation';
 import { FooterLegal } from '@/components/FooterLegal';
 import { DemandePermissionPush } from '@/components/DemandePermissionPush';
+import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
+import { SyncHorsLigne } from '@/components/SyncHorsLigne';
 import { UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
