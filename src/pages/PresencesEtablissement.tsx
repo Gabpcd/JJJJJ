@@ -20,27 +20,35 @@ export default function PresencesEtablissement() {
 
   const charger = useCallback(async () => {
     if (!user) return;
-    // We need to get presences for missions belonging to this établissement
-    // Since RLS on presences checks soignant_id or ADMIN_ETABLISSEMENT role,
-    // we query missions first then presences
-    const { data } = await supabase
-      .from('presences')
-      .select(`
-        id, mission_id, soignant_id,
-        pointage_arrivee_le, pointage_depart_le,
-        arrivee_lat, arrivee_lng, arrivee_precision_gps_m,
-        depart_lat, depart_lng, depart_precision_gps_m,
-        distance_etablissement_m, perimetre_gps_valide,
-        alerte_teleportation, alertes_fraude,
-        valide_par_etablissement, valide_le, motif_litige,
-        soignants(prenom, nom, telephone, email, profession),
-        missions!inner(intitule, service, debut_le, fin_le, duree_heures, etablissement_id)
-      `)
-      .eq('missions.etablissement_id', user.id)
-      .not('pointage_arrivee_le', 'is', null)
-      .order('pointage_arrivee_le', { ascending: false });
+    const [{ data: presData }, { data: soignantsData }] = await Promise.all([
+      supabase
+        .from('presences')
+        .select(`
+          id, mission_id, soignant_id,
+          pointage_arrivee_le, pointage_depart_le,
+          arrivee_lat, arrivee_lng, arrivee_precision_gps_m,
+          depart_lat, depart_lng, depart_precision_gps_m,
+          distance_etablissement_m, perimetre_gps_valide,
+          alerte_teleportation, alertes_fraude,
+          valide_par_etablissement, valide_le, motif_litige,
+          missions!inner(intitule, service, debut_le, fin_le, duree_heures, etablissement_id)
+        `)
+        .eq('missions.etablissement_id', user.id)
+        .not('pointage_arrivee_le', 'is', null)
+        .order('pointage_arrivee_le', { ascending: false }),
+      supabase.rpc('fn_mes_soignants_etablissement'),
+    ]);
 
-    setPresences(data || []);
+    // Map soignant data by ID
+    const sgMap: Record<string, any> = {};
+    if (Array.isArray(soignantsData)) {
+      for (const s of soignantsData) sgMap[s.id] = s;
+    }
+
+    setPresences((presData || []).map((p: any) => ({
+      ...p,
+      soignants: sgMap[p.soignant_id] || null,
+    })));
     setLoading(false);
   }, [user]);
 

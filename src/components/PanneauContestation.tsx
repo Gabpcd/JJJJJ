@@ -4,6 +4,7 @@ import { fr } from 'date-fns/locale';
 import { AlertTriangle, Send, Clock, CheckCircle, Shield, MessageSquare, Ban, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/hooks/useRole';
 import { sanitizeText } from '@/lib/sanitize';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { toast } from 'sonner';
@@ -49,6 +50,8 @@ export function PanneauContestation({
   presenceId, missionId, etablissementId, soignantId, presenceValideeLe, role, onUpdate,
 }: Props) {
   const { user } = useAuth();
+  const { role: roleGlobal } = useRole();
+  const estAdminPlateforme = (roleGlobal as string) === 'ADMIN_PLATEFORME';
   const [litige, setLitige] = useState<Litige | null>(null);
   const [loading, setLoading] = useState(true);
   const [motif, setMotif] = useState('');
@@ -84,6 +87,8 @@ export function PanneauContestation({
   const peutRepondre = estRepondant && statutOuvert && !litige?.reponse;
   // Initiator can reply again if status moved to EN_DISCUSSION and there's a response
   const peutRelancer = estInitiateur && litige?.statut === 'EN_DISCUSSION' && !!litige?.reponse;
+  // Parties can move to EN_DISCUSSION, only admin can resolve/close
+  const peutPasserEnDiscussion = (peutRepondre || peutRelancer) && litige?.statut === 'CONTESTEE';
 
   const estResolu = litige && ['RESOLUE_SOIGNANT', 'RESOLUE_ETABLISSEMENT', 'RESOLUE_ADMIN', 'FERME'].includes(litige.statut);
 
@@ -142,28 +147,20 @@ export function PanneauContestation({
     if (!user || !litige || !reponse.trim()) return;
     setEnvoi(true);
     try {
-      // Response moves to EN_DISCUSSION; resolution closes it
-      const nouveauStatut = litige.statut === 'CONTESTEE' ? 'EN_DISCUSSION' : `RESOLUE_${role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT'}`;
-      const estResolution = litige.statut === 'EN_DISCUSSION';
-
+      // Parties can only move to EN_DISCUSSION, never resolve
       const updateData: any = {
         reponse: sanitizeText(reponse.trim()),
-        statut: nouveauStatut,
+        statut: 'EN_DISCUSSION',
       };
-      if (estResolution) {
-        updateData.resolution = sanitizeText(reponse.trim());
-        updateData.resolu_le = new Date().toISOString();
-        updateData.resolu_par = user.id;
-      }
 
       const { error } = await supabase.from('litiges').update(updateData).eq('id', litige.id);
       if (error) throw error;
 
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: roleActeur,
-        p_action: estResolution ? 'CONTESTATION_RESOLUTION' : 'CONTESTATION_REPONSE',
+        p_action: 'CONTESTATION_REPONSE',
         p_type_ressource: 'litige', p_id_ressource: litige.id, p_cle_s3: null,
-        p_details: { reponse: reponse.trim(), presence_id: presenceId, nouveau_statut: nouveauStatut },
+        p_details: { reponse: reponse.trim(), presence_id: presenceId, nouveau_statut: 'EN_DISCUSSION' },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
@@ -173,13 +170,36 @@ export function PanneauContestation({
       await supabase.rpc('fn_creer_notification', {
         p_destinataire_id: destId, p_type_destinataire: destType,
         p_type: 'REPONSE_CONTESTATION',
-        p_titre: estResolution ? 'Contestation résolue' : 'Réponse à la contestation',
-        p_corps: `Le ${roleLabel} a ${estResolution ? 'résolu' : 'répondu à'} la contestation de présence.`,
+        p_titre: 'Réponse à la contestation',
+        p_corps: `Le ${roleLabel} a répondu à la contestation de présence.`,
         p_lien: lien, p_type_ressource: 'presence', p_id_ressource: presenceId,
       });
 
-      toast.success(estResolution ? 'Contestation résolue' : 'Réponse envoyée');
+      toast.success('Réponse envoyée');
       setReponse('');
+      charger();
+      onUpdate?.();
+    } catch (err: any) {
+      toast.error(extraireMessageErreur(err));
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  // Admin-only: resolve or close a litige
+  const resoudreAdmin = async (resolution: 'RESOLUE_SOIGNANT' | 'RESOLUE_ETABLISSEMENT' | 'FERME') => {
+    if (!user || !litige) return;
+    setEnvoi(true);
+    try {
+      const { error } = await supabase.from('litiges').update({
+        statut: resolution === 'FERME' ? 'FERME' : `RESOLUE_ADMIN`,
+        resolution: resolution === 'RESOLUE_SOIGNANT' ? 'Résolu en faveur du soignant' : resolution === 'RESOLUE_ETABLISSEMENT' ? 'Résolu en faveur de l\'établissement' : 'Fermé par l\'administrateur',
+        resolu_le: new Date().toISOString(),
+        resolu_par: user.id,
+      }).eq('id', litige.id);
+      if (error) throw error;
+
+      toast.success('Litige résolu');
       charger();
       onUpdate?.();
     } catch (err: any) {
@@ -336,18 +356,16 @@ export function PanneauContestation({
           </div>
         )}
 
-        {/* Respond (other party) */}
-        {(peutRepondre || peutRelancer) && (
+        {/* Respond (other party — move to EN_DISCUSSION only) */}
+        {(peutRepondre || (peutRelancer && !estAdminPlateforme)) && (
           <div className="space-y-2 border-t border-border pt-3">
             <p className="text-xs font-semibold text-foreground">
-              {peutRelancer ? 'Proposer une résolution' : 'Répondre à la contestation'}
+              Répondre à la contestation
             </p>
             <textarea
               value={reponse}
               onChange={(e) => setReponse(e.target.value.slice(0, 500))}
-              placeholder={peutRelancer
-                ? 'Proposez une résolution pour clore ce litige…'
-                : 'Votre réponse à la contestation…'}
+              placeholder="Votre réponse à la contestation…"
               rows={3}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
@@ -357,9 +375,41 @@ export function PanneauContestation({
                 disabled={!reponse.trim() || envoi}
                 className="flex items-center gap-1.5 bg-primary text-primary-foreground text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity"
               >
-                <Send className="h-3.5 w-3.5" /> {envoi ? 'Envoi…' : peutRelancer ? 'Résoudre' : 'Répondre'}
+                <Send className="h-3.5 w-3.5" /> {envoi ? 'Envoi…' : 'Répondre'}
               </button>
               <p className="text-[11px] text-muted-foreground">{reponse.length}/500</p>
+            </div>
+          </div>
+        )}
+
+        {/* Admin-only: resolution buttons */}
+        {estAdminPlateforme && litige && statutOuvert && (
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5 text-primary" /> Actions administrateur
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => resoudreAdmin('RESOLUE_SOIGNANT')}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-success/10 text-success text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-success/20 transition-colors border border-success/20"
+              >
+                <CheckCircle className="h-3.5 w-3.5" /> Résoudre en faveur du soignant
+              </button>
+              <button
+                onClick={() => resoudreAdmin('RESOLUE_ETABLISSEMENT')}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-primary/20 transition-colors border border-primary/20"
+              >
+                <CheckCircle className="h-3.5 w-3.5" /> Résoudre en faveur de l'établissement
+              </button>
+              <button
+                onClick={() => resoudreAdmin('FERME')}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-muted text-muted-foreground text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-muted/80 transition-colors border border-border"
+              >
+                <Ban className="h-3.5 w-3.5" /> Fermer
+              </button>
             </div>
           </div>
         )}
