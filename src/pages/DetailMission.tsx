@@ -108,6 +108,16 @@ export default function DetailMission() {
         ← Retour aux missions
       </button>
 
+      {/* A4: Alerte CDDU répétitifs */}
+      {alerteCDDU?.alerte && (
+        <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-300 dark:border-orange-800 rounded-xl p-4 mb-4 flex items-start gap-3">
+          <span className="text-lg">⚠️</span>
+          <p className="text-sm font-medium text-orange-700 dark:text-orange-400">
+            Ce soignant a travaillé {alerteCDDU.jours_travailles || '?'} jours chez vous sur 12 mois. Risque de requalification en CDI au-delà de 150 jours.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Colonne gauche */}
         <div className="lg:col-span-2 space-y-4">
