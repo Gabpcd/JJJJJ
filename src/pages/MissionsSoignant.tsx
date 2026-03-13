@@ -39,6 +39,7 @@ export default function MissionsSoignant() {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtres, setFiltres] = useState<FiltresMissionsState | null>(null);
+  const [heuresSemaine, setHeuresSemaine] = useState(0);
 
   useEffect(() => {
     if (!user) return;
