@@ -229,7 +229,7 @@ export default function MissionsSoignant() {
             ) : (
               <EtatVide icone={Briefcase} titre="Vous n'avez pas encore de mission en cours"
                 sousTitre="Consultez les missions disponibles et postulez !"
-                boutonLabel="Voir les missions disponibles" boutonRoute="#" boutonDisabled={false} />
+                boutonLabel="Voir les missions disponibles" boutonRoute="/soignant/missions" boutonDisabled={false} />
             )
           )}
 

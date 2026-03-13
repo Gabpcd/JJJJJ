@@ -16,8 +16,8 @@ export default function Tarifs() {
       .select('id, nom, taux_commission, missions_min, missions_max, ordre')
       .eq('est_actif', true)
       .order('ordre', { ascending: true })
-      .then(({ data }) => {
-        setPaliers(data ?? []);
+      .then(({ data, error }) => {
+        if (!error) setPaliers(data ?? []);
         setLoading(false);
       });
   }, []);

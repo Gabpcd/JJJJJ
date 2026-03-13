@@ -74,7 +74,8 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   useEffect(() => {
     if (role !== 'SOIGNANT' || !user) return;
     supabase.from('soignants').select('profession, heures_cumulees, statut_liberal').eq('id', user.id).single()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) return;
         if (data && !PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
           setShowLiberal(true);
         }

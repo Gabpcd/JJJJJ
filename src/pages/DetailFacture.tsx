@@ -144,8 +144,6 @@ export default function DetailFacture() {
               <tr className="border-b-2 border-border text-left">
                 <th className="pb-2 font-semibold text-foreground">Date</th>
                 <th className="pb-2 font-semibold text-foreground">Intitulé</th>
-                <th className="pb-2 font-semibold text-foreground text-right">Net soignant</th>
-                <th className="pb-2 font-semibold text-foreground text-right">Taux</th>
                 <th className="pb-2 font-semibold text-foreground text-right">Commission HT</th>
               </tr>
             </thead>

@@ -76,10 +76,10 @@ export default function DashboardGroupe() {
       const perfs = await Promise.all(
         etabsFiltres.map(async (e) => {
           const [{ count: ouv }, { count: ass }, { count: term }, { count: tot }] = await Promise.all([
-            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'OUVERTE'),
-            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'ASSIGNEE'),
-            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'TERMINEE'),
-            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id),
+            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'OUVERTE'),
+            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'ASSIGNEE'),
+            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'TERMINEE'),
+            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id),
           ]);
           const totalN = tot ?? 0;
           const assigned = (ass ?? 0) + (term ?? 0);

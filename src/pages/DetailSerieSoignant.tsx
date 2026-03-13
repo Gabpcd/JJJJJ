@@ -196,10 +196,10 @@ export default function DetailSerieSoignant() {
     if (reussies > 0 && echouees === 0) {
       setAnimationSucces(true);
       // Redirect to contracts list after animation
-      setTimeout(() => navigate('/contrats'), 2000);
+      setTimeout(() => navigate('/soignant/contrats'), 2000);
     } else if (reussies > 0) {
       toast.warning(`${reussies} mission(s) acceptée(s), ${echouees} en conflit.`);
-      navigate('/contrats');
+      navigate('/soignant/contrats');
     } else {
       toast.error('Aucune mission n\'a pu être acceptée.');
     }

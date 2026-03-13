@@ -18,11 +18,12 @@ export default function MonGroupe() {
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const { data: e } = await supabase
+      const { data: e, error: errE } = await supabase
         .from('etablissements')
         .select('groupe_sante_id, groupes_sante(id, nom, siren, raison_sociale_facturation, remise_groupe_pourcent, formule_abonnement)')
         .eq('id', user.id)
         .single();
+      if (errE) { setLoading(false); return; }
 
       setEtab(e);
 
