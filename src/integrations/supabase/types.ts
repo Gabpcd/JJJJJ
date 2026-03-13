@@ -1689,6 +1689,7 @@ export type Database = {
           assujetti_tva: boolean | null
           attestation_medecine_travail: boolean | null
           attestation_medecine_travail_le: string | null
+          attestation_sante_signee_le: string | null
           attestation_vaccinations: boolean | null
           attestation_vaccinations_le: string | null
           code_ape: string | null
@@ -1746,6 +1747,7 @@ export type Database = {
           assujetti_tva?: boolean | null
           attestation_medecine_travail?: boolean | null
           attestation_medecine_travail_le?: string | null
+          attestation_sante_signee_le?: string | null
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           code_ape?: string | null
@@ -1803,6 +1805,7 @@ export type Database = {
           assujetti_tva?: boolean | null
           attestation_medecine_travail?: boolean | null
           attestation_medecine_travail_le?: string | null
+          attestation_sante_signee_le?: string | null
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           code_ape?: string | null
