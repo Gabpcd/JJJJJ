@@ -121,6 +121,20 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
+
+  /* WCAG: Focus visible on all interactive elements */
+  :focus-visible {
+    outline: 2px solid hsl(187 75% 40%);
+    outline-offset: 2px;
+  }
+
+  /* WCAG: Skip link */
+  .skip-to-main {
+    @apply absolute -top-12 left-4 bg-primary text-primary-foreground px-4 py-2 rounded-b-xl z-[9999] font-semibold text-sm transition-all;
+  }
+  .skip-to-main:focus {
+    @apply top-0;
+  }
 }
 
 @layer components {

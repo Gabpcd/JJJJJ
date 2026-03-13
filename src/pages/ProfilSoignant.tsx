@@ -234,6 +234,13 @@ export default function ProfilSoignant() {
         </div>
       )}
 
+      {/* Badges Gamification */}
+      {badgeStats && (
+        <div className="max-w-2xl mb-6">
+          <BadgesGamification stats={badgeStats} />
+        </div>
+      )}
+
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Identité</h2>

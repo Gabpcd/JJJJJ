@@ -109,6 +109,9 @@ export default function ProfilEtablissement() {
     if (!user) return;
     setSaving(true);
 
+    // Save couleur_theme directly (allowed by pol_etab_update_self)
+    await supabase.from('etablissements').update({ couleur_theme: couleurTheme }).eq('id', user.id);
+
     const { error } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
       p_convention_collective: conventionCollective || null,
       p_nom: form.nom,

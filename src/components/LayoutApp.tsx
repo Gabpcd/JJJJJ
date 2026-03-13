@@ -35,8 +35,11 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <a href="#main-content" className="skip-to-main">Aller au contenu principal</a>
+      <BandeauHorsLigne />
+      <SyncHorsLigne />
       <BarreNavigation role={role} />
-      <main className="page-container flex-1">
+      <main id="main-content" role="main" className="page-container flex-1">
         <div className="max-w-6xl mx-auto px-4 py-6">
           {children}
         </div>
