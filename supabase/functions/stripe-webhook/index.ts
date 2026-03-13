@@ -128,14 +128,8 @@ serve(async (req) => {
           p_navigateur: "stripe-webhook",
         });
 
-        // Send FACTURE_PAYEE email to établissement
-        const { data: etab } = await supabaseAdmin
-          .from("etablissements")
-          .select("email_contact")
-          .eq("id", facture.etablissement_id)
-          .single();
-
-        if (etab?.email_contact) {
+        // M6: Send FACTURE_PAYEE email — use destinataire_id only, no raw email address
+        {
           const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
           const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
           await fetch(`${supabaseUrl}/functions/v1/send-email`, {
@@ -145,7 +139,6 @@ serve(async (req) => {
               "Authorization": `Bearer ${serviceRoleKey}`,
             },
             body: JSON.stringify({
-              to: etab.email_contact,
               type: "FACTURE_PAYEE",
               data: {
                 numero: facture.numero_facture,
