@@ -1,9 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { PlanningHebdomadaire } from '@/components/PlanningHebdomadaire';
+import { CalendrierMensuel } from '@/components/CalendrierMensuel';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
+import { SyncCalendrier } from '@/components/SyncCalendrier';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function PlanningSoignant() {
   const { user } = useAuth();
@@ -22,11 +25,26 @@ export default function PlanningSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <h1 className="text-xl font-bold text-foreground mb-4">📅 Mon planning</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-foreground">📅 Mon planning</h1>
+        <SyncCalendrier />
+      </div>
 
       <div className="space-y-4">
         <CompteurHebdomadaire />
-        <PlanningHebdomadaire />
+
+        <Tabs defaultValue="mensuel">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="mensuel">Vue mensuelle</TabsTrigger>
+            <TabsTrigger value="hebdo">Vue hebdomadaire</TabsTrigger>
+          </TabsList>
+          <TabsContent value="mensuel" className="mt-4">
+            <CalendrierMensuel />
+          </TabsContent>
+          <TabsContent value="hebdo" className="mt-4">
+            <PlanningHebdomadaire />
+          </TabsContent>
+        </Tabs>
       </div>
     </LayoutApp>
   );
