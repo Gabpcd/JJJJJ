@@ -5,7 +5,7 @@ import { ENTREPRISE } from '@/constantes/entreprise';
 const TOC = [
   { id: 'art1', label: 'Article 1 — Responsable du traitement' },
   { id: 'art2', label: 'Article 2 — Données collectées' },
-  { id: 'art3', label: 'Article 3 — Hébergement HDS' },
+  { id: 'art3', label: 'Article 3 — Hébergement sécurisé' },
   { id: 'art4', label: "Article 4 — Journaux d'audit" },
   { id: 'art5', label: 'Article 5 — Durées de conservation' },
   { id: 'art6', label: 'Article 6 — Droits des personnes' },
