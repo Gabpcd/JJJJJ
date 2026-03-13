@@ -354,13 +354,19 @@ export default function DetailMissionSoignant() {
             {estOuverte && (
               <>
                 <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} />
+                {chevauchement && (
+                  <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-3 text-center">
+                    <p className="text-sm font-semibold text-warning">⚠️ Vous avez déjà une mission sur ce créneau</p>
+                    <p className="text-xs text-warning/80 mt-1">Vous ne pouvez pas accepter deux missions qui se chevauchent.</p>
+                  </div>
+                )}
                 {peutPostuler && (
                   <>
                     <button
                       onClick={() => setModalConfirm(true)}
-                      disabled={acceptationEnCours || !conformiteOk}
+                      disabled={acceptationEnCours || !conformiteOk || chevauchement}
                       className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
-                      title={!conformiteOk ? 'Résolvez les conflits ci-dessus pour accepter' : undefined}
+                      title={chevauchement ? 'Mission chevauchante détectée' : !conformiteOk ? 'Résolvez les conflits ci-dessus pour accepter' : undefined}
                     >
                       {acceptationEnCours ? 'Acceptation en cours…' : '★ Accepter cette mission'}
                     </button>
