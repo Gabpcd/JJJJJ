@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (auditError) logger.error('Audit connexion échoué', auditError);
 
     // Update derniere_activite_le for soignants via RPC
-    if (role === 'SOIGNANT') {
+    if (verifiedRole === 'SOIGNANT') {
       supabase.rpc('fn_maj_activite_soignant' as any).then(() => {});
     }
   }, []);
