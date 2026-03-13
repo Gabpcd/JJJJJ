@@ -110,11 +110,45 @@ export default function ProfilSoignant() {
     setSaving(false);
   };
 
+  const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
+  const [evaluations, setEvaluations] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.rpc('fn_note_moyenne' as any, { p_user_id: user.id })
+      .then(({ data }: any) => {
+        if (data && typeof data === 'object') setNoteMoyenne(data);
+        else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
+      });
+    supabase.rpc('fn_mes_evaluations_recues' as any)
+      .then(({ data }: any) => {
+        if (Array.isArray(data)) setEvaluations(data);
+      });
+  }, [user]);
+
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
   return (
     <LayoutApp role="SOIGNANT">
       <h1 className="text-xl font-bold text-foreground mb-6">Mon profil</h1>
+
+      {noteMoyenne && noteMoyenne.total > 0 && (
+        <div className="card-base mb-6">
+          <h2 className="text-base font-semibold text-foreground mb-2">Évaluations reçues</h2>
+          <p className="text-lg font-bold text-foreground">⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}</p>
+          {evaluations.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {evaluations.slice(0, 5).map((ev: any, i: number) => (
+                <div key={i} className="text-sm text-muted-foreground border-t border-border pt-2">
+                  <span className="text-foreground font-medium">{'⭐'.repeat(ev.note)}</span>
+                  {ev.commentaire && <p className="text-xs mt-0.5">{ev.commentaire}</p>}
+                  {ev.cree_le && <p className="text-[10px] text-muted-foreground/60">{format(new Date(ev.cree_le), 'd MMM yyyy', { locale: fr })}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Identité</h2>
