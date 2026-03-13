@@ -67,16 +67,13 @@ export default function ListeMissions() {
       soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
     })));
 
-    const statuts = ['', 'OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
-    const results = await Promise.all(
-      statuts.map(s => {
-        let q = supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id);
-        if (s) q = q.eq('statut', s as any);
-        return q;
-      })
-    );
-    const c: Record<string, number> = {};
-    statuts.forEach((s, i) => { c[s] = results[i].count ?? 0; });
+    // M2: Single count query with status grouping instead of 7 parallel queries
+    const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', user.id);
+    const c: Record<string, number> = { '': allData?.length ?? 0 };
+    const statuts = ['OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
+    for (const s of statuts) {
+      c[s] = allData?.filter((m: any) => m.statut === s).length ?? 0;
+    }
     setCounts(c);
     setLoading(false);
   };
