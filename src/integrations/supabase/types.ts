@@ -2135,7 +2135,7 @@ export type Database = {
         Returns: Json
       }
       fn_anonymiser_gps_anciennes: { Args: never; Returns: undefined }
-      fn_auto_facturation_mensuelle: { Args: never; Returns: number }
+      fn_auto_facturation_mensuelle: { Args: never; Returns: Json }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_calculer_bfa: {
         Args: {

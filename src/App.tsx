@@ -48,6 +48,10 @@ import PageCGV from "./pages/PageCGV";
 import PageConfidentialite from "./pages/PageConfidentialite";
 import PageMentionsLegales from "./pages/PageMentionsLegales";
 import NotFound from "./pages/NotFound";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUtilisateurs from "./pages/admin/AdminUtilisateurs";
+import AdminModeration from "./pages/admin/AdminModeration";
+import AdminFacturation from "./pages/admin/AdminFacturation";
 
 const queryClient = new QueryClient();
 
@@ -114,6 +118,12 @@ const App = () => (
                 {/* Groupe */}
                 <Route path="/groupe/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />
                 <Route path="/groupe/etablissements" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />
+
+                {/* Admin Plateforme */}
+                <Route path="/admin" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDashboard /></RouteProtegee>} />
+                <Route path="/admin/utilisateurs" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminUtilisateurs /></RouteProtegee>} />
+                <Route path="/admin/moderation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminModeration /></RouteProtegee>} />
+                <Route path="/admin/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminFacturation /></RouteProtegee>} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
