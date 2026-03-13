@@ -96,7 +96,6 @@ export default function ContratMission() {
           // Email to current user
           supabase.functions.invoke('send-email', {
             body: {
-              to: user.email,
               type: 'CONTRAT_SIGNE',
               data: { prenom: user.prenom || '', mission: missionName, contrat_id: contrat.id },
               destinataire_id: user.id,
