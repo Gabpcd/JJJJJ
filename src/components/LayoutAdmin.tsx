@@ -10,6 +10,7 @@ const NAV_ADMIN = [
   { icone: Users, label: 'Utilisateurs', route: '/admin/utilisateurs' },
   { icone: Shield, label: 'Modération', route: '/admin/moderation' },
   { icone: CreditCard, label: 'Facturation', route: '/admin/facturation' },
+  { icone: ShieldCheck, label: 'Conformité', route: '/admin/conformite' },
 ];
 
 export function LayoutAdmin({ children }: { children: React.ReactNode }) {

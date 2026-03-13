@@ -27,6 +27,7 @@ const NAV_SOIGNANT: NavItem[] = [
   { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
   { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
   { icone: FileText, label: 'Documents', route: '/soignant/documents' },
+  { icone: Crown, label: 'Premium', route: '/soignant/premium' },
   { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];

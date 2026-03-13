@@ -72,6 +72,62 @@ export default function AdminFacturation() {
     }
   };
 
+  const exporterFEC = async () => {
+    const annee = new Date().getFullYear();
+    const { data, error } = await supabase.rpc('fn_export_fec' as any, { p_annee: annee });
+    if (error) { toast({ title: 'Erreur FEC', description: error.message, variant: 'destructive' }); return; }
+    const lignes = Array.isArray(data) ? data : [];
+    if (lignes.length === 0) { toast({ title: 'Aucune donnée FEC pour ' + annee }); return; }
+    const cols = Object.keys(lignes[0]);
+    const csv = [cols.join('\t'), ...lignes.map((l: any) => cols.map(c => l[c] ?? '').join('\t'))].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `FEC_${annee}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: `FEC ${annee} exporté` });
+  };
+
+  const genererRapportPDF = async () => {
+    const doc = new jsPDF();
+    doc.setFillColor(23, 162, 184);
+    doc.rect(0, 0, 210, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.text('Soin Direct — Rapport mensuel', 14, 20);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(11);
+    const mois = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    doc.text(`Période : ${mois}`, 14, 42);
+    doc.text(`Factures : ${filtered.length}`, 14, 50);
+    doc.text(`Total HT : ${formatEur(totaux.ht)}`, 14, 58);
+    doc.text(`Total TTC : ${formatEur(totaux.ttc)}`, 14, 66);
+
+    let y = 80;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('N° Facture', 14, y);
+    doc.text('Établissement', 55, y);
+    doc.text('HT', 130, y);
+    doc.text('TTC', 155, y);
+    doc.text('Statut', 180, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+
+    filtered.slice(0, 50).forEach((f: any) => {
+      if (y > 275) { doc.addPage(); y = 20; }
+      doc.text(f.numero_facture || '—', 14, y);
+      doc.text(((f.etablissements as any)?.nom ?? '—').substring(0, 30), 55, y);
+      doc.text(formatEur(f.montant_ht), 130, y);
+      doc.text(formatEur(f.montant_ttc), 155, y);
+      doc.text(f.statut || '—', 180, y);
+      y += 5;
+    });
+
+    doc.save(`rapport_mensuel_${new Date().toISOString().slice(0, 7)}.pdf`);
+    toast({ title: 'Rapport PDF généré' });
+  };
+
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   return (
@@ -79,10 +135,18 @@ export default function AdminFacturation() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl font-bold text-foreground">Facturation</h1>
-          <Button onClick={genererFactures} disabled={generating} className="gap-2">
-            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-            Générer les factures du mois
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={exporterFEC} className="gap-2">
+              <Download className="h-4 w-4" /> Exporter FEC {new Date().getFullYear()}
+            </Button>
+            <Button variant="outline" onClick={genererRapportPDF} className="gap-2">
+              <FileText className="h-4 w-4" /> Rapport PDF
+            </Button>
+            <Button onClick={genererFactures} disabled={generating} className="gap-2">
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              Générer les factures du mois
+            </Button>
+          </div>
         </div>
 
         {/* Totaux */}
