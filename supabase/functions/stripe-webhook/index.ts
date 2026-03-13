@@ -147,11 +147,9 @@ serve(async (req) => {
                 date_paiement: new Date().toLocaleDateString("fr-FR"),
                 facture_id: factureId,
               },
-              destinataire_id: facture.etablissement_id,
             }),
           }).catch((err: unknown) => console.error("Email FACTURE_PAYEE error:", err));
         }
-      }
     }
 
     // Handle payment_intent.succeeded (backup reconciliation)
