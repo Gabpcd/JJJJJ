@@ -221,7 +221,6 @@ export default function FacturationEtablissement() {
                   <tr className="border-b border-border text-left text-muted-foreground">
                     <th className="pb-2 font-medium">Date</th>
                     <th className="pb-2 font-medium">Intitulé</th>
-                    <th className="pb-2 font-medium text-right">Net soignant</th>
                     <th className="pb-2 font-medium text-right">Commission HT</th>
                   </tr>
                 </thead>
