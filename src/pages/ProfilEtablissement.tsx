@@ -138,10 +138,10 @@ export default function ProfilEtablissement() {
       });
   }, [user]);
 
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       <h1 className="text-xl font-bold text-foreground mb-6">Profil de l'établissement</h1>
 
       {noteMoyenne && noteMoyenne.total > 0 && (

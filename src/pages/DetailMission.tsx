@@ -95,7 +95,7 @@ export default function DetailMission() {
     }
   };
 
-  if (loading || !mission) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading || !mission) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   const m = mission;
   const debut = new Date(m.debut_le);
@@ -103,7 +103,7 @@ export default function DetailMission() {
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       <button onClick={() => navigate('/etablissement/missions')} className="text-sm text-primary hover:underline mb-4 inline-block">
         ← Retour aux missions
       </button>

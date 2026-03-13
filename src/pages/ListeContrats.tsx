@@ -71,7 +71,7 @@ export default function ListeContrats({ role }: { role: UserRole }) {
               {!c.signature_soignant && role === 'SOIGNANT' && c.statut !== 'ANNULE' && (
                 <p className="text-xs text-primary font-medium mt-1">✍️ Signer →</p>
               )}
-              {!c.signature_etablissement && role === 'ETABLISSEMENT' && c.statut !== 'ANNULE' && (
+              {!c.signature_etablissement && role === 'ADMIN_ETABLISSEMENT' && c.statut !== 'ANNULE' && (
                 <p className="text-xs text-primary font-medium mt-1">✍️ Signer →</p>
               )}
             </div>

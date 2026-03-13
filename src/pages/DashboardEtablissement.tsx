@@ -122,11 +122,11 @@ export default function DashboardEtablissement() {
     else { afficherNotification({ type: 'succes', message: 'Mission annulée.' }); charger(); }
   };
 
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
-      <OnboardingGuide role="ETABLISSEMENT" userId={user!.id} />
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <OnboardingGuide role="ADMIN_ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
           ⚠️ Certaines données n'ont pas pu être chargées.

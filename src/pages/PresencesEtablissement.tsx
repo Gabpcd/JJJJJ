@@ -39,7 +39,6 @@ export default function PresencesEtablissement() {
       supabase.rpc('fn_mes_soignants_etablissement'),
     ]);
 
-    // Map soignant data by ID
     const sgMap: Record<string, any> = {};
     if (Array.isArray(soignantsData)) {
       for (const s of soignantsData) sgMap[s.id] = s;
@@ -64,13 +63,10 @@ export default function PresencesEtablissement() {
   );
 
   const validerUne = async (presenceId: string) => {
-    const { error } = await supabase
-      .from('presences')
-      .update({ valide_par_etablissement: true, valide_le: new Date().toISOString(), modifie_le: new Date().toISOString() } as any)
-      .eq('id', presenceId);
+    const { data, error } = await supabase.rpc('fn_valider_presence', { p_presence_id: presenceId });
 
-    if (error) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    if (error || (data && !(data as any).success)) {
+      afficherNotification({ type: 'erreur', message: (data as any)?.error || extraireMessageErreur(error) });
     } else {
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
@@ -85,13 +81,13 @@ export default function PresencesEtablissement() {
   };
 
   const contester = async (presenceId: string, motif: string) => {
-    const { error } = await supabase
-      .from('presences')
-      .update({ motif_litige: motif, modifie_le: new Date().toISOString() } as any)
-      .eq('id', presenceId);
+    const { data, error } = await supabase.rpc('fn_contester_presence', {
+      p_presence_id: presenceId,
+      p_motif: motif,
+    });
 
-    if (error) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    if (error || (data && !(data as any).success)) {
+      afficherNotification({ type: 'erreur', message: (data as any)?.error || extraireMessageErreur(error) });
     } else {
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
@@ -113,30 +109,28 @@ export default function PresencesEtablissement() {
 
     const ids = presencesSansAlerte.map(p => p.id);
 
-    const { error } = await supabase
-      .from('presences')
-      .update({ valide_par_etablissement: true, valide_le: new Date().toISOString(), modifie_le: new Date().toISOString() } as any)
-      .in('id', ids);
+    const { data, error } = await supabase.rpc('fn_valider_presences_lot', { p_ids: ids });
 
-    if (!error) {
+    if (error || (data && !(data as any).success)) {
+      afficherNotification({ type: 'erreur', message: (data as any)?.error || extraireMessageErreur(error) });
+    } else {
+      const nbValidees = (data as any)?.nb_validees ?? ids.length;
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
         p_action: 'PRESENCE_VALIDATION_LOT', p_type_ressource: 'presence',
         p_id_ressource: user!.id, p_cle_s3: null,
-        p_details: { type: 'validation_en_lot', nb_validees: ids.length, ids_presences: ids },
+        p_details: { type: 'validation_en_lot', nb_validees: nbValidees, ids_presences: ids },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
-      afficherNotification({ type: 'succes', message: `✅ ${ids.length} présences validées !` });
+      afficherNotification({ type: 'succes', message: `✅ ${nbValidees} présences validées !` });
       charger();
-    } else {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     }
   };
 
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <ClipboardCheck className="h-5 w-5 text-primary" /> Présences à valider
@@ -161,7 +155,6 @@ export default function PresencesEtablissement() {
         </TabsList>
 
         <TabsContent value="a_valider">
-          {/* Bulk validation */}
           {aValider.length > 0 && (
             <div className="bg-card border border-border rounded-2xl p-4 mb-4">
               <p className="text-sm font-semibold text-foreground mb-2">{aValider.length} présences à valider</p>

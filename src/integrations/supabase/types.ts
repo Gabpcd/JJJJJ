@@ -2160,6 +2160,10 @@ export type Database = {
         Returns: Json
       }
       fn_consentir_gps: { Args: { p_accepte: boolean }; Returns: Json }
+      fn_contester_presence: {
+        Args: { p_motif: string; p_presence_id: string }
+        Returns: Json
+      }
       fn_creer_notification: {
         Args: {
           p_corps: string
@@ -2316,7 +2320,15 @@ export type Database = {
           type: Database["public"]["Enums"]["type_etablissement"]
         }[]
       }
+      fn_exclure_utilisateur: {
+        Args: { p_exclu_id: string; p_motif?: string; p_type: string }
+        Returns: Json
+      }
       fn_exporter_mes_donnees: { Args: never; Returns: Json }
+      fn_generer_facture_mensuelle: {
+        Args: { p_etablissement_id: string }
+        Returns: Json
+      }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
       fn_generer_numero_contrat_safe: {
@@ -2500,6 +2512,7 @@ export type Database = {
         Args: { p_litige_id: string; p_resolution: string; p_statut: string }
         Returns: Json
       }
+      fn_retirer_exclusion: { Args: { p_exclu_id: string }; Returns: Json }
       fn_rgpd_exporter_donnees_soignant: {
         Args: { p_soignant_id: string }
         Returns: Json
@@ -2535,6 +2548,8 @@ export type Database = {
         Returns: Json
       }
       fn_supprimer_mon_compte: { Args: never; Returns: Json }
+      fn_valider_presence: { Args: { p_presence_id: string }; Returns: Json }
+      fn_valider_presences_lot: { Args: { p_ids: string[] }; Returns: Json }
       mon_etablissement_id: { Args: never; Returns: string }
       mon_role: { Args: never; Returns: string }
     }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, FlaskConical } from 'lucide-react';
+import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -33,7 +33,7 @@ const STATUT_LABELS: Record<string, string> = {
   ANNULEE: 'Annulée',
 };
 
-const IS_PREVIEW = window.location.hostname.includes('lovable.app') || window.location.hostname === 'localhost';
+
 
 export default function FacturationEtablissement() {
   const navigate = useNavigate();
@@ -43,7 +43,6 @@ export default function FacturationEtablissement() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
-  const [simulatingId, setSimulatingId] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [factures, setFactures] = useState<any[]>([]);
   const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
@@ -204,39 +203,10 @@ export default function FacturationEtablissement() {
     }
   };
 
-  const simulerPaiement = async (facture: any) => {
-    setSimulatingId(facture.id);
-    try {
-      const { error } = await supabase
-        .from('factures')
-        .update({
-          statut: 'PAYEE',
-          date_paiement: new Date().toISOString(),
-          modifie_le: new Date().toISOString(),
-        } as any)
-        .eq('id', facture.id);
-      if (error) throw error;
-
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'FINANCE_FACTURE_PAYEE',
-        p_type_ressource: 'facture', p_id_ressource: facture.id, p_cle_s3: null,
-        p_details: { numero_facture: facture.numero_facture, montant_ttc: facture.montant_ttc, mode: 'SIMULATION_DEV' },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-
-      afficherNotification({ type: 'succes', message: `🧪 Paiement simulé pour ${facture.numero_facture}` });
-      charger();
-    } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-    } finally {
-      setSimulatingId(null);
-    }
-  };
-
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Success banner */}
       {showSuccessBanner && (
         <div className="mb-4 flex items-center gap-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
@@ -399,16 +369,6 @@ export default function FacturationEtablissement() {
                         <RefreshCw className={`h-3.5 w-3.5 ${refreshingId === f.id ? 'animate-spin' : ''}`} />
                       </button>
 
-                      {IS_PREVIEW && (
-                        <button
-                          onClick={() => simulerPaiement(f)}
-                          disabled={simulatingId === f.id}
-                          className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-yellow-400 text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 disabled:opacity-50 transition-colors"
-                        >
-                          {simulatingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
-                          Simuler
-                        </button>
-                      )}
                     </>
                   )}
 

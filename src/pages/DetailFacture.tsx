@@ -58,11 +58,11 @@ export default function DetailFacture() {
     }
   };
 
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
-  if (!facture) return <LayoutApp role="ETABLISSEMENT"><p className="text-center text-muted-foreground py-12">Facture introuvable.</p></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (!facture) return <LayoutApp role="ADMIN_ETABLISSEMENT"><p className="text-center text-muted-foreground py-12">Facture introuvable.</p></LayoutApp>;
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Print styles */}
       <style>{`
         @media print {
