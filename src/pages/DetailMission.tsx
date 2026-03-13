@@ -7,6 +7,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -37,6 +38,7 @@ export default function DetailMission() {
   const [loading, setLoading] = useState(true);
   const [modalAnnuler, setModalAnnuler] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState(false);
+  const [showEvaluation, setShowEvaluation] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -222,6 +224,16 @@ export default function DetailMission() {
         message={`Une copie de « ${m.intitule} » sera créée avec le statut OUVERTE.`}
         labelConfirmer="Dupliquer"
       />
+
+      {m.statut === 'TERMINEE' && m.soignant_assigne_id && showEvaluation && (
+        <EvaluationPostMission
+          missionId={m.id}
+          evalueId={m.soignant_assigne_id}
+          typeEvaluateur="ETABLISSEMENT"
+          nomEvalue={m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : 'Soignant'}
+          onTermine={() => setShowEvaluation(false)}
+        />
+      )}
     </LayoutApp>
   );
 }

@@ -11,6 +11,7 @@ import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatMission } from '@/components/ChatMission';
+import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { BlocConformite } from '@/components/BlocConformite';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -64,6 +65,7 @@ export default function DetailMissionSoignant() {
   const [modalPerdu, setModalPerdu] = useState(false);
   const [animationSucces, setAnimationSucces] = useState(false);
   const [conformiteOk, setConformiteOk] = useState(true);
+  const [showEvaluation, setShowEvaluation] = useState(true);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -432,6 +434,16 @@ export default function DetailMissionSoignant() {
         <AnimationSuccesMission
           mission={mission}
           onTermine={() => { setAnimationSucces(false); navigate('/soignant/missions'); }}
+        />
+      )}
+
+      {mission.statut === 'TERMINEE' && mission.etablissement_id && showEvaluation && (
+        <EvaluationPostMission
+          missionId={mission.id}
+          evalueId={mission.etablissement_id}
+          typeEvaluateur="SOIGNANT"
+          nomEvalue={etablissement?.nom || 'Établissement'}
+          onTermine={() => setShowEvaluation(false)}
         />
       )}
     </LayoutApp>
