@@ -42,7 +42,7 @@ export default function DashboardEtablissement() {
       const [resEtab, resMissions, resPaliers, resMissionsCeMois] = await Promise.all([
         supabase.from('etablissements').select('*, groupes_sante(nom), paliers_commission(nom, taux_commission, missions_min, missions_max)').eq('id', user.id).single(),
         supabase.from('missions')
-          .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, soignants(prenom, nom, score_fiabilite), cree_le')
+          .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
           .eq('etablissement_id', user.id)
           .order('cree_le', { ascending: false })
           .limit(5),

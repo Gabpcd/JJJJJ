@@ -44,15 +44,28 @@ export default function ListeMissions() {
 
     let query = supabase
       .from('missions')
-      .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, soignants(prenom, nom, score_fiabilite), cree_le')
+      .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
       .eq('etablissement_id', user.id)
       .order('debut_le', { ascending: false });
 
     if (filtreStatut) query = query.eq('statut', filtreStatut as any);
     if (recherche) query = query.ilike('intitule', `%${recherche}%`);
 
-    const { data } = await query;
-    setMissions(data || []);
+    const [{ data }, { data: sgData }] = await Promise.all([
+      query,
+      supabase.rpc('fn_mes_soignants_etablissement'),
+    ]);
+
+    // Map soignant data by ID
+    const sgMap: Record<string, any> = {};
+    if (Array.isArray(sgData)) {
+      for (const s of sgData) sgMap[s.id] = s;
+    }
+
+    setMissions((data || []).map((m: any) => ({
+      ...m,
+      soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
+    })));
 
     const statuts = ['', 'OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
     const results = await Promise.all(

@@ -42,22 +42,27 @@ export default function DetailMission() {
 
   useEffect(() => {
     if (!id) return;
-    supabase
-      .from('missions')
-      .select(`
-        *,
-        etablissements(nom, adresse_ville, adresse_departement,
-          taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
-          taux_majoration_ferie_pourcent),
-        soignants(prenom, nom, profession, telephone, email,
-          score_fiabilite, total_missions_terminees, total_absences)
-      `)
-      .eq('id', id)
-      .single()
-      .then(({ data }) => {
-        setMission(data);
-        setLoading(false);
-      });
+    const load = async () => {
+      const { data: m } = await supabase
+        .from('missions')
+        .select(`
+          *,
+          etablissements(nom, adresse_ville, adresse_departement,
+            taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
+            taux_majoration_ferie_pourcent)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (m && m.soignant_assigne_id) {
+        const { data: sg } = await supabase.rpc('fn_soignant_pour_etablissement', { p_soignant_id: m.soignant_assigne_id });
+        setMission({ ...m, soignants: sg || null });
+      } else {
+        setMission(m ? { ...m, soignants: null } : null);
+      }
+      setLoading(false);
+    };
+    load();
   }, [id]);
 
   const handleAnnuler = async () => {
