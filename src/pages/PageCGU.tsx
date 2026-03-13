@@ -38,7 +38,7 @@ export default function PageCGU() {
         <p className="mb-3">La Plateforme constitue un outil technique de mise en relation facilitant la conclusion de contrats de mission entre Établissements et Soignants. Elle automatise la gestion administrative (contrats, pointage, facturation) pour le compte des parties.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p className="font-semibold text-foreground">Clause essentielle :</p>
-          <p>L'Éditeur n'est en aucun cas employeur, co-employeur ou mandataire social des Soignants. La Plateforme n'est pas une agence d'intérim au sens des articles L.1251-1 et suivants du Code du travail. Soin Direct agit exclusivement en qualité d'intermédiaire technique de mise en relation.</p>
+          <p>L'Éditeur n'est en aucun cas employeur, co-employeur ou mandataire social des Soignants. La Plateforme n'est pas une agence de travail temporaire au sens des articles L.1251-1 et suivants du Code du travail. Soin Direct agit exclusivement en qualité d'intermédiaire technique de mise en relation.</p>
         </div>
         <p>Le contrat de travail ou de prestation est conclu directement entre l'Établissement et le Soignant. L'Éditeur ne participe ni à la subordination juridique, ni à la direction des soins, ni à l'évaluation clinique des Soignants.</p>
       </section>

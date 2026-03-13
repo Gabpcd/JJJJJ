@@ -189,7 +189,7 @@ export default function DetailFacture() {
 
         {/* Footer */}
         <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
-          <p>Soin Direct SAS — Plateforme de mise en relation de soignants intérimaires</p>
+          <p>Soin Direct SAS — Plateforme de mise en relation soignants-établissements</p>
           <p>Facture générée automatiquement — Commission sur missions terminées</p>
         </div>
       </div>

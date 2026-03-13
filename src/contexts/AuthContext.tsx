@@ -26,8 +26,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 function extractRole(user: User): UserRole {
-  // Le rôle affiché ici est provisoire (affichage uniquement).
-  // La vérification d'accès réelle se fait via useRole() + fn_get_my_role côté serveur.
   const metaRole = user.user_metadata?.role;
   if (metaRole === 'ADMIN_ETABLISSEMENT' || metaRole === 'ETABLISSEMENT') return 'ADMIN_ETABLISSEMENT';
   if (metaRole === 'ADMIN_GROUPE') return 'ADMIN_GROUPE';
@@ -72,7 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const u = data.user;
 
-    // C3: Resolve role server-side to prevent identity spoofing in audit logs
     let verifiedRole: string = extractRole(u);
     try {
       const { data: roleData } = await supabase.rpc('fn_get_my_role');
@@ -81,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch { /* fallback to extractRole */ }
 
-    // Audit HDS with server-verified role
     const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: u.id,
       p_type_acteur: verifiedRole,
@@ -95,7 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (auditError) logger.error('Audit connexion échoué', auditError);
 
-    // Update derniere_activite_le for soignants via RPC
     if (verifiedRole === 'SOIGNANT') {
       supabase.rpc('fn_maj_activite_soignant' as any).then(() => {});
     }
@@ -103,7 +98,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const deconnexion = useCallback(async () => {
     const currentUser = user;
-    // Audit AVANT signOut (sinon la session est invalidée)
     if (currentUser) {
       const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: currentUser.id,
@@ -122,7 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
-    // 1. Create auth account
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.motDePasse,
@@ -133,7 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw authError;
     }
 
-    // 2. Create profile + assign role via secure Edge Function (no client-side INSERT)
+    const userId = authData.user!.id;
+
     const { data: result, error: fnError } = await supabase.functions.invoke('register-soignant', {
       body: {
         prenom: data.prenom,
@@ -150,17 +144,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    if (fnError) {
-      logger.error('register-soignant échoué', fnError);
-      throw new Error('Erreur lors de la création du profil soignant.');
+    if (fnError || result?.error) {
+      logger.error('register-soignant échoué', fnError || result?.error);
+      // Flag orphan account for cleanup on next login attempt
+      try {
+        await supabase.auth.signOut();
+      } catch { /* ignore */ }
+      throw new Error('Erreur lors de la création de votre profil. Veuillez réessayer.');
     }
 
-    if (result?.error) {
-      throw new Error(result.error);
-    }
-
-    // 3. Email de bienvenue (fire-and-forget)
-    const userId = authData.user!.id;
+    // Email de bienvenue (fire-and-forget)
     supabase.functions.invoke('send-email', {
       body: {
         type: 'BIENVENUE_SOIGNANT',
@@ -171,7 +164,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const inscriptionEtablissement = useCallback(async (data: any) => {
-    // 1. Create auth account
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.motDePasse,
@@ -182,7 +174,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Erreur lors de la création du compte.');
     }
 
-    // 2. Server-side: create établissement + assign role via Edge Function
     const { data: result, error: fnError } = await supabase.functions.invoke('register-etablissement', {
       body: {
         nom: data.nom,
@@ -202,17 +193,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    if (fnError) {
-      logger.error('register-etablissement échoué', fnError);
-      throw new Error('Erreur lors de la création du profil établissement.');
+    if (fnError || result?.error) {
+      logger.error('register-etablissement échoué', fnError || result?.error);
+      try {
+        await supabase.auth.signOut();
+      } catch { /* ignore */ }
+      throw new Error('Erreur lors de la création du profil établissement. Veuillez réessayer.');
     }
 
-    // Check for error in response body
-    if (result?.error) {
-      throw new Error(result.error);
-    }
-
-    // 3. Email de bienvenue établissement (fire-and-forget)
+    // Email de bienvenue établissement (fire-and-forget)
     supabase.functions.invoke('send-email', {
       body: {
         type: 'BIENVENUE_ETABLISSEMENT',
@@ -232,7 +221,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    // During HMR, context can temporarily be null — return safe defaults
     return {
       user: null, session: null, loading: true,
       connexion: async () => {}, deconnexion: async () => {},

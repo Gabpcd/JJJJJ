@@ -34,58 +34,22 @@ serve(async (req) => {
       });
     }
 
+    // Only service_role calls are allowed — no user self-assignment
+    const bearerToken = authHeader.replace("Bearer ", "");
+    if (bearerToken !== serviceRoleKey) {
+      return new Response(JSON.stringify({ error: "Interdit — accès service_role uniquement" }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Mode 1 : appel via service_role → tout autorisé (C4: strict equality)
-    const bearerToken = authHeader.replace("Bearer ", "");
-    if (bearerToken === serviceRoleKey) {
-      const appMetadata: Record<string, unknown> = { role };
-      if (etablissement_id) appMetadata.etablissement_id = etablissement_id;
-
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
-        app_metadata: appMetadata,
-      });
-      if (error) {
-        return new Response(JSON.stringify({ error: "Erreur interne" }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Mode 2 : appel via JWT utilisateur
-    const token = authHeader.replace("Bearer ", "");
-    const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Token invalide" }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // L'utilisateur ne peut définir le rôle QUE pour lui-même
-    if (user_id !== user.id) {
-      return new Response(JSON.stringify({ error: "Interdit" }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // SEUL le rôle SOIGNANT est auto-assignable par un utilisateur
-    if (role !== "SOIGNANT") {
-      return new Response(JSON.stringify({ error: "Seul le rôle SOIGNANT peut être auto-assigné." }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const appMetadata: Record<string, unknown> = { role };
+    if (etablissement_id) appMetadata.etablissement_id = etablissement_id;
 
     const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
-      app_metadata: { role: "SOIGNANT" },
+      app_metadata: appMetadata,
     });
 
     if (error) {
