@@ -36,6 +36,7 @@ import Tarifs from "./pages/Tarifs";
 import FacturationEtablissement from "./pages/FacturationEtablissement";
 import DetailFacture from "./pages/DetailFacture";
 import PasserEnLiberal from "./pages/PasserEnLiberal";
+import ExclusionsSoignant from "./pages/ExclusionsSoignant";
 import ExportPaie from "./pages/ExportPaie";
 import ContratMission from "./pages/ContratMission";
 import ListeContrats from "./pages/ListeContrats";
