@@ -116,6 +116,7 @@ export default function DashboardEtablissement() {
 
   return (
     <LayoutApp role="ETABLISSEMENT">
+      <OnboardingGuide role="ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
           ⚠️ Certaines données n'ont pas pu être chargées.
