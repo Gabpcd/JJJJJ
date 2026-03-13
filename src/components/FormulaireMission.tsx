@@ -178,19 +178,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     setProgression(100);
     setProgressionActuel(creneaux.length);
 
-    // Audit
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_CREATION',
-      p_type_ressource: 'mission', p_id_ressource: user.id, p_cle_s3: null,
-      p_details: {
-        type: 'serie_recurrente', serie_id: serieId, nb_creneaux: creneaux.length,
-        periode: { du: recurrenceConfig.dateDebut, au: recurrenceConfig.dateFin },
-        horaires_par_jour: recurrenceConfig.horairesParJour.filter(j => j.actif).map(j => ({
-          jour: j.label, debut: j.heureDebut, fin: j.heureFin, duree: j.dureeHeures,
-        })),
-      },
-      p_ip: null, p_navigateur: navigator.userAgent,
-    });
+    // C5: Audit — type_acteur resolved server-side by fn_creer_serie RPC, no client audit for serie needed
+    // The RPC itself handles the audit internally
 
     setPublicationEnCours(false);
 

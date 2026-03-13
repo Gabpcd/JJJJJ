@@ -180,7 +180,9 @@ export default function InscriptionSoignant() {
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required /></div>
               </div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} placeholder="+33 6 ..." className="input-base" /></div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance</label><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className="input-base" max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} /></div>
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</label><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className="input-base" max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required />
+                {dateNaissanceRequise && <p className="text-xs text-destructive mt-1">La date de naissance est obligatoire</p>}
+              </div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Profession *</label><SelectProfession value={form.profession} onChange={v => maj('profession', v)} /></div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés * <span className="text-xs text-muted-foreground font-normal">(au moins 1)</span></label>

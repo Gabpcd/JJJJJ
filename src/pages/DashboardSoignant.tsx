@@ -85,7 +85,8 @@ export default function DashboardSoignant() {
       const finMois = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
       // Fetch soignant first to get profession for filtering
-      const { data: sg } = await supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single();
+      // C4: Minimized select — removed rpps_verifie, identite_verifiee, score_fiabilite from direct query
+      const { data: sg } = await supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single();
 
       const profession = sg?.profession;
 

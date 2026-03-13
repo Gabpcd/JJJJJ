@@ -43,7 +43,7 @@ export default function MesGains() {
           heures_nuit, heures_dimanche, heures_ferie,
           montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
           montant_ifm, montant_icp, total_brut, net_a_payer,
-          type_paiement_soignant, numero_note_honoraires,
+          type_paiement_soignant,
           statut, cree_le, etablissement_id`)
         .eq('soignant_assigne_id', user.id)
         .eq('statut', 'TERMINEE')
