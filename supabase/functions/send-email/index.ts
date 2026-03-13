@@ -10,6 +10,18 @@ const corsHeaders = {
 
 const APP_URL = Deno.env.get('APP_URL') || 'https://app.soindirect.com';
 
+// ─── XSS prevention ─────────────────────────────────────
+
+function escapeHtml(str: unknown): string {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── Email template helpers ──────────────────────────────
 
 const WRAPPER = (content: string) => `
@@ -59,11 +71,17 @@ const ALLOWED_TYPES = new Set([
 
 interface TemplateResult { subject: string; html: string }
 
-function renderTemplate(type: string, data: Record<string, unknown>): TemplateResult | null {
+function renderTemplate(type: string, rawData: Record<string, unknown>): TemplateResult | null {
+  // Escape all string values to prevent XSS injection in email HTML
+  const data: Record<string, string> = {};
+  for (const [key, value] of Object.entries(rawData)) {
+    data[key] = escapeHtml(value);
+  }
+
   switch (type) {
     case 'BIENVENUE_SOIGNANT':
       return {
-        subject: 'Bienvenue sur Soin Direct ! 🎉',
+        subject: `Bienvenue sur Soin Direct ! 🎉`,
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.prenom} ! 🎉</h2>
           <p style="color:#334155;">Votre compte soignant est créé. Voici les prochaines étapes :</p>
