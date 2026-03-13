@@ -178,8 +178,13 @@ export default function DetailMissionSoignant() {
       });
       if (auditError) handleErrorSilent(auditError, 'Audit assignation mission');
 
-      setMission({ ...mission, ...data });
+      setMission({ ...mission, statut: 'ASSIGNEE', soignant_assigne_id: user!.id });
       setAnimationSucces(true);
+
+      // Redirect to contract signing after animation
+      if (data?.contrat_id) {
+        setTimeout(() => navigate(`/contrat/${data.contrat_id}`), 2000);
+      }
 
       // Email au soignant
       supabase.functions.invoke('send-email', {
