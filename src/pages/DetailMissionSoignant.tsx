@@ -66,6 +66,7 @@ export default function DetailMissionSoignant() {
   const [animationSucces, setAnimationSucces] = useState(false);
   const [conformiteOk, setConformiteOk] = useState(true);
   const [showEvaluation, setShowEvaluation] = useState(true);
+  const [chevauchement, setChevauchement] = useState(false);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -98,6 +99,21 @@ export default function DetailMissionSoignant() {
     };
     load();
   }, [user, id]);
+
+  // Check for overlapping missions (must be before early return)
+  useEffect(() => {
+    if (!mission || mission.statut !== 'OUVERTE' || !user) return;
+    supabase
+      .from('missions')
+      .select('id')
+      .eq('soignant_assigne_id', user.id)
+      .in('statut', ['ASSIGNEE', 'EN_COURS'])
+      .lt('debut_le', mission.fin_le)
+      .gt('fin_le', mission.debut_le)
+      .then(({ data }) => {
+        setChevauchement((data || []).length > 0);
+      });
+  }, [mission, user]);
 
   if (loading || !mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
@@ -137,7 +153,7 @@ export default function DetailMissionSoignant() {
         } else if (error.message?.includes('0 rows')) {
           setModalPerdu(true);
         } else {
-      toast.error('Une erreur est survenue. Veuillez réessayer.');
+          toast.error(extraireMessageErreur(error));
         }
         return;
       }
@@ -192,7 +208,7 @@ export default function DetailMissionSoignant() {
       .eq('id', id!);
 
     if (error) {
-      toast.error('Une erreur est survenue. Veuillez réessayer.');
+      toast.error(extraireMessageErreur(error));
       return;
     }
 
@@ -338,13 +354,19 @@ export default function DetailMissionSoignant() {
             {estOuverte && (
               <>
                 <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} />
+                {chevauchement && (
+                  <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-3 text-center">
+                    <p className="text-sm font-semibold text-warning">⚠️ Vous avez déjà une mission sur ce créneau</p>
+                    <p className="text-xs text-warning/80 mt-1">Vous ne pouvez pas accepter deux missions qui se chevauchent.</p>
+                  </div>
+                )}
                 {peutPostuler && (
                   <>
                     <button
                       onClick={() => setModalConfirm(true)}
-                      disabled={acceptationEnCours || !conformiteOk}
+                      disabled={acceptationEnCours || !conformiteOk || chevauchement}
                       className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
-                      title={!conformiteOk ? 'Résolvez les conflits ci-dessus pour accepter' : undefined}
+                      title={chevauchement ? 'Mission chevauchante détectée' : !conformiteOk ? 'Résolvez les conflits ci-dessus pour accepter' : undefined}
                     >
                       {acceptationEnCours ? 'Acceptation en cours…' : '★ Accepter cette mission'}
                     </button>

@@ -5,6 +5,16 @@ export function extraireMessageErreur(error: any): string {
   if (!error) return '';
   const msg = error.message || error.details || error.hint || '';
 
+  // Trigger messages in French: surface them directly to the user
+  const TRIGGER_PREFIXES = ['Impossible', 'Ce soignant', 'Le taux', 'Pointage trop', 'Le départ', 'Le délai'];
+  for (const prefix of TRIGGER_PREFIXES) {
+    if (msg.includes(prefix)) {
+      // Extract the meaningful part after any Postgres wrapper
+      const clean = msg.replace(/^.*?(?=Impossible|Ce soignant|Le taux|Pointage trop|Le départ|Le délai)/, '').trim();
+      return clean;
+    }
+  }
+
   if (msg.includes('[CODE DU TRAVAIL]')) {
     const match = msg.match(/\[CODE DU TRAVAIL\]\s*(.+)/);
     return match ? match[1].trim() : msg;

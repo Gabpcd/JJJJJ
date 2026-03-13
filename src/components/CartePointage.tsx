@@ -23,13 +23,15 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
   const aPointeDepart = !!presence?.pointage_depart_le;
 
   // Determine state
-  let etat: 'futur' | 'pret' | 'en_mission' | 'termine';
+  let etat: 'futur' | 'trop_tot' | 'pret' | 'en_mission' | 'termine';
   if (aPointeArrivee && aPointeDepart) {
     etat = 'termine';
   } else if (aPointeArrivee) {
     etat = 'en_mission';
-  } else if (minutesAvantDebut <= 60) {
+  } else if (minutesAvantDebut <= 30) {
     etat = 'pret';
+  } else if (minutesAvantDebut <= 60) {
+    etat = 'trop_tot';
   } else {
     etat = 'futur';
   }
@@ -70,7 +72,18 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
           <p className="text-sm text-muted-foreground">
             ⏳ Mission dans {minutesAvantDebut > 60 ? `${Math.floor(minutesAvantDebut / 60)}h${String(minutesAvantDebut % 60).padStart(2, '0')}` : `${minutesAvantDebut} min`}
           </p>
-          <p className="text-xs text-muted-foreground/60 mt-1">Le bouton de pointage apparaîtra 1h avant le début.</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">Le bouton de pointage apparaîtra 30 min avant le début.</p>
+        </div>
+      )}
+
+      {/* État 1b: Too early — visible but disabled */}
+      {etat === 'trop_tot' && (
+        <div className="text-center py-4">
+          <Clock className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">
+            Pointage disponible à {format(new Date(debut.getTime() - 30 * 60000), "HH:mm", { locale: fr })}
+          </p>
+          <p className="text-xs text-muted-foreground/60 mt-1">Encore {minutesAvantDebut - 30} min d'attente.</p>
         </div>
       )}
 

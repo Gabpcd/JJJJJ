@@ -52,7 +52,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [progression, setProgression] = useState(0);
   const [progressionActuel, setProgressionActuel] = useState(0);
 
-  // Load rist_plafond_actif + commission info
+  const [etablissementType, setEtablissementType] = useState<string | null>(null);
+
+  // Load rist_plafond_actif + commission info + type
   useEffect(() => {
     if (!user) return;
     supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom)').eq('id', user.id).single().then(({ data }) => {
@@ -60,6 +62,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
         setRistPlafondActif(data.rist_plafond_actif === true || typesPublics.includes(data.type));
         setTauxCommission(data.taux_commission_negocie ?? 15);
+        setEtablissementType(data.type);
         if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);
       }
     });
@@ -314,7 +317,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {/* Profession */}
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">Profession requise *</label>
-          <SelectProfession value={profession} onChange={setProfession} />
+          <SelectProfession
+            value={profession}
+            onChange={setProfession}
+            filtresProfessions={etablissementType === 'PHARMACIE_OFFICINE' ? ['PHARMACIEN', 'PREPARATEUR_PHARMA'] : undefined}
+          />
+          {etablissementType === 'PHARMACIE_OFFICINE' && (
+            <p className="text-[10px] text-muted-foreground mt-1">🏥 Pharmacie : seuls les pharmaciens et préparateurs sont proposés.</p>
+          )}
         </div>
 
         {/* Service */}
@@ -356,14 +366,21 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Date et heure de début *</label>
-                <input type="datetime-local" value={debutLe} onChange={(e) => setDebutLe(e.target.value)} required className="input-base" />
+                <input
+                  type="datetime-local"
+                  value={debutLe}
+                  onChange={(e) => setDebutLe(e.target.value)}
+                  min={!modeEdition ? new Date().toISOString().slice(0, 16) : undefined}
+                  required
+                  className="input-base"
+                />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Date et heure de fin *</label>
                 <input type="datetime-local" value={finLe} onChange={(e) => setFinLe(e.target.value)} required className="input-base" />
               </div>
             </div>
-            {erreurDates && <p className="text-xs text-destructive font-medium">{erreurDates}</p>}
+            {erreurDates && <p className="text-xs text-destructive font-medium">{erreurDates === 'La mission ne peut pas commencer dans le passé' ? '⛔ La mission doit commencer dans le futur.' : erreurDates}</p>}
             {warningDureeLongue && <p className="text-xs text-warning font-medium">⚠️ Mission longue — assurez-vous que les repos légaux sont respectés</p>}
             {warningDureeTresLongue && <p className="text-xs text-destructive font-medium">⚠️ Pour un remplacement de plusieurs jours, utilisez le mode récurrent ci-dessous</p>}
             {dureeEstimee > 0 && !erreurDates && (
@@ -403,9 +420,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <label className="text-sm font-medium text-foreground mb-1 block">Taux horaire brut * (€/h)</label>
           <div className="relative">
             <input type="number" step="0.01" min="11.65" value={tauxHoraire}
-              onChange={(e) => setTauxHoraire(e.target.value)} placeholder="25.00" required className="input-base pr-12" />
+              onChange={(e) => setTauxHoraire(e.target.value)} placeholder="25.00" required
+              readOnly={modeEdition && missionSource?.statut !== 'OUVERTE'}
+              className={`input-base pr-12 ${modeEdition && missionSource?.statut !== 'OUVERTE' ? 'bg-muted cursor-not-allowed' : ''}`} />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€/h</span>
           </div>
+          {modeEdition && missionSource?.statut !== 'OUVERTE' && (
+            <p className="text-[10px] text-muted-foreground mt-1">🔒 Ces champs ne sont plus modifiables après acceptation.</p>
+          )}
         </div>
 
         {/* Warning Rist */}
