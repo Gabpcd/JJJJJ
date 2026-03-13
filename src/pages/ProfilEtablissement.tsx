@@ -109,10 +109,16 @@ export default function ProfilEtablissement() {
     if (!user) return;
     setSaving(true);
 
-    // Save couleur_theme directly (allowed by pol_etab_update_self)
-    await supabase.from('etablissements').update({ couleur_theme: couleurTheme }).eq('id', user.id);
+    // C3: Validate couleur_theme format before saving
+    const hexRegex = /^#[0-9a-fA-F]{6}$/;
+    if (!hexRegex.test(couleurTheme)) {
+      afficherNotification({ type: 'erreur', message: 'Couleur invalide. Format attendu : #RRGGBB' });
+      setSaving(false);
+      return;
+    }
 
     const { error } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
+      p_couleur_theme: couleurTheme,
       p_convention_collective: conventionCollective || null,
       p_nom: form.nom,
       p_finess: form.finess || null,

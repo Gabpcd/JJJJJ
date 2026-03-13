@@ -29,7 +29,7 @@ function extractRole(user: User): UserRole {
   const metaRole = user.user_metadata?.role;
   if (metaRole === 'ADMIN_ETABLISSEMENT' || metaRole === 'ETABLISSEMENT') return 'ADMIN_ETABLISSEMENT';
   if (metaRole === 'ADMIN_GROUPE') return 'ADMIN_GROUPE';
-  if (metaRole === 'ADMIN') return 'ADMIN';
+  if (metaRole === 'ADMIN' || metaRole === 'ADMIN_PLATEFORME') return 'ADMIN_PLATEFORME';
   return 'SOIGNANT';
 }
 
