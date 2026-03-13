@@ -103,6 +103,11 @@ export default function ContratMission() {
             <p className="text-sm font-semibold text-destructive">❌ Ce contrat a été annulé suite à l'annulation de la mission.</p>
           </div>
         )}
+        {contrat.statut === 'EXPIRE' && (
+          <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-4 text-center">
+            <p className="text-sm font-semibold text-warning">⏰ Contrat expiré — non signé dans les 72h. La mission a été annulée.</p>
+          </div>
+        )}
         <div className="flex items-center gap-3 mb-4">
           <FileText className="h-6 w-6 text-primary" />
           <div>

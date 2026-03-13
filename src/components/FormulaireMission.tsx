@@ -307,6 +307,16 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         </div>
       )}
 
+      {erreurFactureImpayee && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 mb-4">
+          <p className="text-sm font-semibold text-destructive">⚠️ Vous avez des factures impayées.</p>
+          <p className="text-xs text-destructive/80 mt-1">Vous devez régulariser vos factures avant de publier de nouvelles missions.</p>
+          <a href="/etablissement/facturation" className="text-sm font-medium text-destructive underline mt-2 inline-block">
+            Régulariser mes factures →
+          </a>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Intitulé */}
         <div>

@@ -113,11 +113,28 @@ export default function ProfilEtablissement() {
     setSaving(false);
   };
 
+  const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.rpc('fn_note_moyenne' as any, { p_user_id: user.id })
+      .then(({ data }: any) => {
+        if (data && typeof data === 'object') setNoteMoyenne(data);
+        else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
+      });
+  }, [user]);
+
   if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
     <LayoutApp role="ETABLISSEMENT">
       <h1 className="text-xl font-bold text-foreground mb-6">Profil de l'établissement</h1>
+
+      {noteMoyenne && noteMoyenne.total > 0 && (
+        <div className="card-base mb-6">
+          <p className="text-lg font-bold text-foreground">⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}</p>
+        </div>
+      )}
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Informations générales</h2>

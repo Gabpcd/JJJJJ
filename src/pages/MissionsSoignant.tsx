@@ -60,9 +60,9 @@ export default function MissionsSoignant() {
 
       if (onglet === 'disponibles') {
         query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any);
-        // Exclude CDDU missions for liberal soignants
+        // Soignants libéraux : uniquement les missions libérales (note d'honoraires)
         if (soignant.type_contrat === 'LIBERAL') {
-          query = query.not('description', 'ilike', '%[CONTRAT:SALARIE]%');
+          query = query.eq('type_paiement_soignant', 'NOTE_HONORAIRES');
         }
         query = query.order('est_urgente', { ascending: false }).order('debut_le', { ascending: true });
         if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);

@@ -294,7 +294,12 @@ export default function DetailMissionSoignant() {
                     )}
                   </div>
                 )}
-                <p className="text-[10px] text-muted-foreground/60 mt-2">
+                {noteMoyenne && noteMoyenne.total > 0 && (
+                  <p className="text-xs text-foreground mt-2">
+                    ⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}
+                  </p>
+                )}
+                <p className="text-[10px] text-muted-foreground/60 mt-1">
                   Cet établissement a publié {countMissions} mission{countMissions > 1 ? 's' : ''} sur Soin Direct
                 </p>
               </div>

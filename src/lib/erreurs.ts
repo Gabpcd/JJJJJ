@@ -10,7 +10,7 @@ export function extraireMessageErreur(error: any): string {
   for (const prefix of TRIGGER_PREFIXES) {
     if (msg.includes(prefix)) {
       // Extract the meaningful part after any Postgres wrapper
-      const clean = msg.replace(/^.*?(?=Impossible|Ce soignant|Le taux|Pointage trop|Le départ|Le délai)/, '').trim();
+      const clean = msg.replace(/^.*?(?=Impossible|Ce soignant|Le taux|Pointage trop|Le départ|Le délai|Vous avez|En tant que|Une pharmacie)/, '').trim();
       return clean;
     }
   }
