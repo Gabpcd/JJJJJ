@@ -294,6 +294,37 @@ export default function DashboardSoignant() {
         </div>
       </div>
 
+      {/* Missions près de chez vous ce week-end */}
+      {missionsWeekend.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" /> Missions ce week-end
+            </h2>
+            <button onClick={() => navigate('/soignant/recherche-missions')} className="text-sm text-primary font-medium hover:underline">Voir tout →</button>
+          </div>
+          <div className="space-y-3">
+            {missionsWeekend.map((m: any) => (
+              <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {m.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
+                      <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{m.etablissements?.nom} · {m.etablissements?.adresse_ville}</p>
+                  </div>
+                  <span className="text-primary font-bold text-sm whitespace-nowrap ml-2">{m.taux_horaire_base} €/h</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {format(new Date(m.debut_le), "EEE d MMM · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Compteur hebdomadaire */}
       <div className="mb-6">
         <CompteurHebdomadaire />
