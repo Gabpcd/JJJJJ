@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { handleErrorSilent } from '@/lib/handleError';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -7,13 +8,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Loader2 } from 'lucide-react';
+import { MapPin, Loader2, Download, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 export default function ProfilSoignant() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { afficherNotification } = useNotification();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [email, setEmail] = useState('');
@@ -25,17 +27,21 @@ export default function ProfilSoignant() {
   });
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
 
+  // RGPD states
+  const [exportLoading, setExportLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants').select('*').eq('id', user.id).single().then(({ data }) => {
       if (data) {
-        // Audit HDS — consultation profil
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
           p_action: 'DONNEES_PERSO_CONSULTATION',
           p_type_ressource: 'soignant', p_id_ressource: user.id,
-          p_cle_s3: null,
-          p_details: { page: 'profil' },
+          p_cle_s3: null, p_details: { page: 'profil' },
           p_ip: null, p_navigateur: navigator.userAgent,
         });
         setEmail(data.email);
@@ -55,13 +61,12 @@ export default function ProfilSoignant() {
   }, [user]);
 
   const [geoLoading, setGeoLoading] = useState(false);
-
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
 
   const toggleContrat = (valeur: string) => {
     setTypesContrat(prev => {
       if (prev.includes(valeur)) {
-        if (prev.length <= 1) return prev; // at least one must be selected
+        if (prev.length <= 1) return prev;
         return prev.filter(v => v !== valeur);
       }
       return [...prev, valeur];
@@ -81,8 +86,7 @@ export default function ProfilSoignant() {
         setGeoLoading(false);
         afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
       },
-      (erreur) => {
-        /* géolocalisation refusée */
+      () => {
         setGeoLoading(false);
         afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir votre adresse manuellement.' });
       }
@@ -95,21 +99,16 @@ export default function ProfilSoignant() {
     setSaving(true);
     const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
       p_telephone: form.telephone || null,
-      p_adresse_rue: null,
-      p_adresse_ville: null,
-      p_adresse_code_postal: null,
+      p_adresse_rue: null, p_adresse_ville: null, p_adresse_code_postal: null,
       p_rayon_deplacement_km: form.rayon,
-      p_prenom: form.prenom || null,
-      p_nom: form.nom || null,
+      p_prenom: form.prenom || null, p_nom: form.nom || null,
       p_date_naissance: form.dateNaissance || null,
       p_type_contrat: typesContrat[0] || null,
       p_types_contrat_acceptes: JSON.stringify(typesContrat),
-      p_numero_rpps: form.rpps || null,
-      p_numero_adeli: form.adeli || null,
+      p_numero_rpps: form.rpps || null, p_numero_adeli: form.adeli || null,
       p_adresse_lat: form.lat ? parseFloat(form.lat) : null,
       p_adresse_lng: form.lng ? parseFloat(form.lng) : null,
     });
-
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     } else if (rpcResult?.error) {
@@ -118,6 +117,47 @@ export default function ProfilSoignant() {
       afficherNotification({ type: 'succes', message: 'Profil mis à jour avec succès !' });
     }
     setSaving(false);
+  };
+
+  // B2: Export RGPD
+  const handleExportRGPD = async () => {
+    setExportLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_exporter_mes_donnees' as any);
+      if (error) throw error;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mes-donnees-soin-direct-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      afficherNotification({ type: 'succes', message: 'Données exportées avec succès.' });
+    } catch (err: any) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+    }
+    setExportLoading(false);
+  };
+
+  // B3: Suppression compte
+  const handleSupprimerCompte = async () => {
+    setDeleteLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_supprimer_mon_compte' as any);
+      if (error) throw error;
+      if (data?.error) {
+        afficherNotification({ type: 'erreur', message: data.error });
+        setDeleteLoading(false);
+        return;
+      }
+      afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection...' });
+      await supabase.auth.signOut();
+      navigate('/');
+    } catch (err: any) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+    }
+    setDeleteLoading(false);
+    setShowDeleteModal(false);
   };
 
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
@@ -159,6 +199,7 @@ export default function ProfilSoignant() {
           )}
         </div>
       )}
+
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Identité</h2>
@@ -182,19 +223,12 @@ export default function ProfilSoignant() {
               <div className="space-y-2">
                 {CONTRATS.map(c => (
                   <label key={c.valeur} className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={typesContrat.includes(c.valeur)}
-                      onChange={() => toggleContrat(c.valeur)}
-                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary accent-primary"
-                    />
+                    <input type="checkbox" checked={typesContrat.includes(c.valeur)} onChange={() => toggleContrat(c.valeur)} className="h-4 w-4 rounded border-border text-primary focus:ring-primary accent-primary" />
                     <span className="text-sm text-foreground group-hover:text-primary transition-colors">{c.label}</span>
                   </label>
                 ))}
               </div>
-              {typesContrat.length === 0 && (
-                <p className="text-xs text-destructive mt-1">Sélectionnez au moins un type de contrat</p>
-              )}
+              {typesContrat.length === 0 && <p className="text-xs text-destructive mt-1">Sélectionnez au moins un type de contrat</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">RPPS</label><input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} className="input-base" /></div>
@@ -205,12 +239,7 @@ export default function ProfilSoignant() {
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Localisation</h2>
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={demanderGeolocalisation}
-              disabled={geoLoading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50"
-            >
+            <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
               {geoLoading ? 'Récupération en cours…' : '📍 Utiliser ma position actuelle'}
             </button>
@@ -229,6 +258,58 @@ export default function ProfilSoignant() {
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>
       </form>
+
+      {/* RGPD Section */}
+      <div className="max-w-2xl mt-12 space-y-4">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
+
+        {/* B2: Export RGPD */}
+        <button
+          onClick={handleExportRGPD}
+          disabled={exportLoading}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {exportLoading ? 'Export en cours…' : '📥 Télécharger mes données (RGPD)'}
+        </button>
+
+        {/* B3: Suppression compte */}
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition"
+        >
+          <Trash2 className="h-4 w-4" /> Supprimer mon compte
+        </button>
+      </div>
+
+      {/* B3: Modal suppression */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
+          <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full">
+            <h3 className="text-lg font-bold text-destructive mb-2">🗑️ Supprimer mon compte</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Cette action est irréversible. Vos données seront anonymisées conformément au RGPD. Tapez <strong>SUPPRIMER</strong> pour confirmer.
+            </p>
+            <input
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder="Tapez SUPPRIMER"
+              className="input-base mb-4"
+            />
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); }} className="btn-secondary text-sm px-4 py-2">Annuler</button>
+              <button
+                onClick={handleSupprimerCompte}
+                disabled={deleteConfirmText !== 'SUPPRIMER' || deleteLoading}
+                className="btn-danger text-sm px-4 py-2 disabled:opacity-50"
+              >
+                {deleteLoading ? 'Suppression…' : 'Supprimer définitivement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutApp>
   );
 }

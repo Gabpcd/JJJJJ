@@ -9,6 +9,8 @@ import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
+import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
+import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';

@@ -9,6 +9,15 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2 } from 'lucide-react';
 
+const CONVENTIONS_COLLECTIVES = [
+  { valeur: 'CCN_51_FEHAP', label: 'CCN 51 (FEHAP)' },
+  { valeur: 'CCN_66_SOCIAL', label: 'CCN 66 (Social)' },
+  { valeur: 'CCN_FHP_PRIVE', label: 'CCN FHP (Privé)' },
+  { valeur: 'CCN_PHARMACIE', label: 'CCN Pharmacie' },
+  { valeur: 'FPH', label: 'Fonction Publique Hospitalière' },
+  { valeur: 'AUTRE', label: 'Autre' },
+];
+
 export default function ProfilEtablissement() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
@@ -16,6 +25,7 @@ export default function ProfilEtablissement() {
   const [saving, setSaving] = useState(false);
   const [siret, setSiret] = useState('');
   const [type, setType] = useState('');
+  const [conventionCollective, setConventionCollective] = useState('');
   const [form, setForm] = useState({
     nom: '', finess: '', rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
@@ -28,6 +38,7 @@ export default function ProfilEtablissement() {
       if (data) {
         setSiret(data.siret);
         setType(data.type);
+        setConventionCollective(data.convention_collective || '');
         setForm({
           nom: data.nom, finess: data.finess || '',
           rue: data.adresse_rue || '', ville: data.adresse_ville || '',
@@ -46,7 +57,6 @@ export default function ProfilEtablissement() {
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
 
-  // Load existing coords
   useEffect(() => {
     if (!user) return;
     supabase.from('etablissements').select('adresse_lat, adresse_lng').eq('id', user.id).single().then(({ data }) => {
@@ -72,8 +82,7 @@ export default function ProfilEtablissement() {
         setGeoLoading(false);
         afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
       },
-      (erreur) => {
-        /* géolocalisation refusée */
+      () => {
         setGeoLoading(false);
         afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir les coordonnées manuellement.' });
       }
@@ -84,6 +93,10 @@ export default function ProfilEtablissement() {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
+
+    // Save convention_collective separately via direct update (allowed by pol_etab_update_self)
+    await supabase.from('etablissements').update({ convention_collective: conventionCollective || null }).eq('id', user.id);
+
     const { error } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
       p_nom: form.nom,
       p_finess: form.finess || null,
@@ -148,6 +161,20 @@ export default function ProfilEtablissement() {
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">FINESS</label><input value={form.finess} onChange={e => maj('finess', e.target.value)} className="input-base" /></div>
             </div>
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Type</label><input value={getLabelTypeEtablissement(type)} disabled className="input-base bg-muted cursor-not-allowed" /></div>
+            {/* A2: Convention collective */}
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Convention collective</label>
+              <select
+                value={conventionCollective}
+                onChange={e => setConventionCollective(e.target.value)}
+                className="input-base"
+              >
+                <option value="">— Sélectionner —</option>
+                {CONVENTIONS_COLLECTIVES.map(c => (
+                  <option key={c.valeur} value={c.valeur}>{c.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
         <div className="card-base">
@@ -171,12 +198,7 @@ export default function ProfilEtablissement() {
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Géolocalisation</h2>
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={demanderGeolocalisation}
-              disabled={geoLoading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50"
-            >
+            <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
               {geoLoading ? 'Récupération en cours…' : '📍 Localiser mon établissement'}
             </button>

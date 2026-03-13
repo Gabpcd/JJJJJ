@@ -111,6 +111,11 @@ export function DecompositionFinanciere({ mission, etablissement }: Decompositio
           </div>
         </div>
       </div>
+
+      {/* A2: Mention convention collective */}
+      <p className="text-[10px] text-muted-foreground/60 italic mt-4">
+        Majorations indicatives. L'établissement est responsable d'appliquer les taux de sa convention collective.
+      </p>
     </div>
   );
 }
