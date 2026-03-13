@@ -267,7 +267,15 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
         if (error) {
           if (estBlocageCodeTravail(error)) { setErreurCodeTravail(error); }
-          else afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+          else {
+            const msg = extraireMessageErreur(error);
+            if (msg.includes('facture') && msg.includes('impayée')) {
+              afficherNotification({ type: 'erreur', message: msg });
+              setErreurFactureImpayee(true);
+            } else {
+              afficherNotification({ type: 'erreur', message: msg });
+            }
+          }
           return;
         }
 
