@@ -719,6 +719,33 @@ export type Database = {
           },
         ]
       }
+      exclusions: {
+        Row: {
+          cree_le: string | null
+          exclu_id: string
+          exclu_par: string
+          id: string
+          motif: string | null
+          type_exclu_par: string
+        }
+        Insert: {
+          cree_le?: string | null
+          exclu_id: string
+          exclu_par: string
+          id?: string
+          motif?: string | null
+          type_exclu_par: string
+        }
+        Update: {
+          cree_le?: string | null
+          exclu_id?: string
+          exclu_par?: string
+          id?: string
+          motif?: string | null
+          type_exclu_par?: string
+        }
+        Relationships: []
+      }
       factures: {
         Row: {
           chorus_pro_deposee_le: string | null
@@ -2408,6 +2435,7 @@ export type Database = {
         Returns: Json
       }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
+      fn_nettoyer_tokens_push: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
       fn_pointer_depart: {
@@ -2469,6 +2497,7 @@ export type Database = {
         Args: { p_numero_contrat?: string; p_plan_id: string }
         Returns: Json
       }
+      fn_supprimer_mon_compte: { Args: never; Returns: Json }
       mon_etablissement_id: { Args: never; Returns: string }
       mon_role: { Args: never; Returns: string }
     }
