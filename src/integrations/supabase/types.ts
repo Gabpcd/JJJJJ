@@ -2278,6 +2278,21 @@ export type Database = {
           total_brut: number
         }[]
       }
+      fn_mes_soignants_etablissement: {
+        Args: never
+        Returns: {
+          id: string
+          nom: string
+          numero_rpps: string
+          prenom: string
+          profession: Database["public"]["Enums"]["type_profession"]
+          rpps_verifie: boolean
+          score_fiabilite: number
+          telephone: string
+          total_missions_terminees: number
+          tous_documents_valides: boolean
+        }[]
+      }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
@@ -2303,6 +2318,10 @@ export type Database = {
       fn_set_user_role: {
         Args: { p_etablissement_id?: string; p_role: string; p_user_id: string }
         Returns: undefined
+      }
+      fn_soignant_pour_etablissement: {
+        Args: { p_soignant_id: string }
+        Returns: Json
       }
       mon_etablissement_id: { Args: never; Returns: string }
       mon_role: { Args: never; Returns: string }
