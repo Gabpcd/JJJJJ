@@ -73,7 +73,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   useEffect(() => {
     const dupId = searchParams.get('dupliquer');
     if (dupId && !missionSource) {
-      supabase.from('missions').select('*').eq('id', dupId).single().then(({ data }) => {
+      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence').eq('id', dupId).single().then(({ data }) => {
         if (data) {
           setIntitule(data.intitule);
           setDescription(data.description || '');
