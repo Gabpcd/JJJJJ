@@ -61,7 +61,7 @@ serve(async (req) => {
     const rayonKm = typeof rayon === 'number' ? Math.min(Math.max(rayon, 5), 100) : 30;
 
     // Sanitize typesContrat
-    const validContrats = ['CDDU', 'INTERIM', 'VACATION', 'LIBERAL', 'SALARIE'];
+    const validContrats = ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
     const contrats: string[] = Array.isArray(typesContrat)
       ? typesContrat.filter((c: string) => validContrats.includes(c))
       : ['CDDU'];
