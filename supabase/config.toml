@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.register-soignant]
 verify_jwt = false
+
+[functions.calendar-feed]
+verify_jwt = false

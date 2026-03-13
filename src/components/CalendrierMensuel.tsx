@@ -17,7 +17,8 @@ function getStatutClasses(statut: string) {
     case 'ASSIGNEE': return 'bg-info text-info-foreground';
     case 'EN_COURS': return 'bg-success text-success-foreground';
     case 'TERMINEE': return 'bg-muted-foreground/40 text-foreground';
-    case 'ANNULEE': return 'bg-destructive text-destructive-foreground';
+    case 'ANNULEE_PAR_ETABLISSEMENT':
+    case 'ANNULEE_PAR_SOIGNANT': return 'bg-destructive text-destructive-foreground';
     default: return 'bg-muted text-muted-foreground';
   }
 }
