@@ -10,6 +10,18 @@ const corsHeaders = {
 
 const APP_URL = Deno.env.get('APP_URL') || 'https://app.soindirect.com';
 
+// ─── XSS prevention ─────────────────────────────────────
+
+function escapeHtml(str: unknown): string {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── Email template helpers ──────────────────────────────
 
 const WRAPPER = (content: string) => `
