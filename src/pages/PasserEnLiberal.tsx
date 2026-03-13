@@ -40,7 +40,7 @@ export default function PasserEnLiberal() {
     const load = async () => {
       const [{ data: sg }, { data: prof }, { data: ft }, { data: he }] = await Promise.all([
         supabase.from('soignants').select('prenom, nom, profession, siret_liberal, statut_liberal, type_contrat, heures_cumulees, eligible_conversion_3200h, assujetti_tva, numero_tva').eq('id', user.id).single(),
-        supabase.from('professions_liberal_eligible').select('*').limit(20),
+        supabase.from('professions_liberal_eligible').select('profession, code_ape, libelle_urssaf, nom_ordre, ordre_obligatoire, plafond_micro').limit(20),
         supabase.rpc('fn_calculer_taux_free_transition_safe', { p_soignant_id: user.id }),
         supabase.from('heures_externes').select('*').eq('soignant_id', user.id).order('date_debut', { ascending: false }),
       ]);
