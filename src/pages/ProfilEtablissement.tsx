@@ -69,6 +69,7 @@ export default function ProfilEtablissement() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
+  const [couleurTheme, setCouleurTheme] = useState('#17A2B8');
 
   useEffect(() => {
     if (!user) return;
