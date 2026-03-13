@@ -49,7 +49,13 @@ export default function DetailMission() {
       const { data: m } = await supabase
         .from('missions')
         .select(`
-          *,
+          id, intitule, description, service, profession_requise,
+          debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
+          total_brut, net_a_payer, montant_ifm, montant_icp, montant_majoration_nuit,
+          montant_majoration_dimanche, montant_majoration_ferie,
+          heures_nuit, heures_dimanche, heures_ferie,
+          statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
+          cree_le, modifie_le,
           etablissements(nom, adresse_ville, adresse_departement,
             taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
             taux_majoration_ferie_pourcent)

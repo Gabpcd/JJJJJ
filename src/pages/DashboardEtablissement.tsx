@@ -113,12 +113,9 @@ export default function DashboardEtablissement() {
   useEffect(() => { charger(); }, [user]);
 
   const handleAnnuler = async (mission: any) => {
-    const { error } = await supabase
-      .from('missions')
-      .update({ statut: 'ANNULEE_PAR_ETABLISSEMENT', modifie_le: new Date().toISOString() } as any)
-      .eq('id', mission.id);
-
+    const { data, error } = await supabase.rpc('fn_annuler_mission_etablissement' as any, { p_mission_id: mission.id });
     if (error) afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    else if ((data as any)?.success === false) afficherNotification({ type: 'erreur', message: (data as any).error });
     else { afficherNotification({ type: 'succes', message: 'Mission annulée.' }); charger(); }
   };
 
