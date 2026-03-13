@@ -56,10 +56,10 @@ export async function demanderPermissionPush(
   const token = JSON.stringify(subscription);
   const plateforme = detecterPlateforme();
 
-  await supabase.from('tokens_push').upsert(
-    { utilisateur_id: userId, token, plateforme },
-    { onConflict: 'token' }
-  );
+  await supabase.rpc('fn_upsert_token_push' as any, {
+    p_token: token,
+    p_plateforme: plateforme,
+  });
 
   return token;
 }

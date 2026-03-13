@@ -261,7 +261,7 @@ export default function ContratMission() {
 
         <p className="text-[10px] text-muted-foreground/60 italic text-center mt-4">
           Art. L.1242-12 du Code du travail — Ce contrat est obligatoire pour toute mission.
-          Signature électronique simple. Signature qualifiée eIDAS prévue Sprint 10.
+          Signature électronique simple. Signature qualifiée eIDAS prochainement disponible.
         </p>
       </div>
     </LayoutApp>
