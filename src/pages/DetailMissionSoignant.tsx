@@ -116,6 +116,16 @@ export default function DetailMissionSoignant() {
       });
   }, [mission, user]);
 
+  // Fetch average rating for the establishment
+  useEffect(() => {
+    if (!mission?.etablissement_id) return;
+    supabase.rpc('fn_note_moyenne' as any, { p_user_id: mission.etablissement_id })
+      .then(({ data }: any) => {
+        if (data && typeof data === 'object') setNoteMoyenne(data);
+        else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
+      });
+  }, [mission?.etablissement_id]);
+
   if (loading || !mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
   const distance = calculerDistanceKm(
