@@ -317,7 +317,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {/* Profession */}
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">Profession requise *</label>
-          <SelectProfession value={profession} onChange={setProfession} />
+          <SelectProfession
+            value={profession}
+            onChange={setProfession}
+            filtresProfessions={etablissementType === 'PHARMACIE_OFFICINE' ? ['PHARMACIEN', 'PREPARATEUR_PHARMA'] : undefined}
+          />
+          {etablissementType === 'PHARMACIE_OFFICINE' && (
+            <p className="text-[10px] text-muted-foreground mt-1">🏥 Pharmacie : seuls les pharmaciens et préparateurs sont proposés.</p>
+          )}
         </div>
 
         {/* Service */}
