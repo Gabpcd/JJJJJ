@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RouteProtegee } from "@/components/RouteProtegee";
-import { BandeauCookies } from "@/components/BandeauCookies";
+
 import PageAccueil from "./pages/PageAccueil";
 import PageConnexion from "./pages/PageConnexion";
 import ConfirmerEmail from "./pages/ConfirmerEmail";
@@ -140,7 +140,7 @@ const App = () => (
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
-              <BandeauCookies />
+              
             </BrowserRouter>
           </NotificationProvider>
         </AuthProvider>
