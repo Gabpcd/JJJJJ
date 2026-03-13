@@ -58,10 +58,10 @@ export default function ExclusionsEtablissement() {
     setSuppressionId(null);
   };
 
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       <h1 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
         <Ban className="h-5 w-5 text-destructive" /> Exclusions
       </h1>
