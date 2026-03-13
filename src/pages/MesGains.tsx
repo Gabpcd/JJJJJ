@@ -85,9 +85,8 @@ export default function MesGains() {
 
   async function copierResume() {
     if (!soignant) return;
+    // L6: Anonymized resume — no personal identifiers in clipboard
     let texte = `RÉSUMÉ GAINS — ${filtre.label}\n`;
-    texte += `Soignant : ${soignant.prenom} ${soignant.nom}\n`;
-    texte += `Profession : ${soignant.profession}\n`;
     texte += `────────────────────────────\n`;
     texte += `Missions terminées : ${stats.nbMissions}\n`;
     texte += `Heures travaillées : ${stats.totalHeures}h\n`;
@@ -100,6 +99,14 @@ export default function MesGains() {
     texte += `\n⚠️ Simulation à titre indicatif.\n`;
     texte += `Généré par Soin Direct le ${new Date().toLocaleDateString('fr-FR')}`;
     await navigator.clipboard.writeText(texte);
+    // L6: Audit clipboard copy
+    supabase.rpc('fn_ecrire_audit_safe', {
+      p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT',
+      p_action: 'DONNEES_PERSO_COPIE_PRESSE_PAPIER',
+      p_type_ressource: 'soignant', p_id_ressource: user!.id,
+      p_cle_s3: null, p_details: { page: 'mes_gains', nb_missions: missions.length },
+      p_ip: null, p_navigateur: navigator.userAgent,
+    });
     afficherNotification({ type: 'succes', message: '📋 Résumé copié !' });
   }
 
