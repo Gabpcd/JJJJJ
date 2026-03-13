@@ -100,7 +100,8 @@ export default function FacturationEtablissement() {
       const { data, error } = await supabase.rpc('fn_generer_facture_mensuelle');
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Erreur de génération');
+      const result = data as any;
+      if (!result?.success) throw new Error(result?.error || 'Erreur de génération');
 
       // Send email notification (non-blocking)
       supabase.functions.invoke('send-email', {
