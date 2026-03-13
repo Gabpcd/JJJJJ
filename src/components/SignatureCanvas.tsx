@@ -59,8 +59,9 @@ export default function SignatureCanvas({ onSave, width = 400, height = 150 }: S
   }, [isDrawing, getPos]);
 
   const endDraw = useCallback(() => {
+    if (isDrawing) strokeCountRef.current++;
     setIsDrawing(false);
-  }, []);
+  }, [isDrawing]);
 
   const clear = () => {
     const canvas = canvasRef.current;
