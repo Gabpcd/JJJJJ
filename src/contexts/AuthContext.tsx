@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (currentUser) {
       const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: currentUser.id,
-        p_type_acteur: currentUser.role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
+        p_type_acteur: currentUser.role,
         p_action: 'DECONNEXION',
         p_type_ressource: currentUser.role === 'SOIGNANT' ? 'soignant' : 'etablissement',
         p_id_ressource: currentUser.id,

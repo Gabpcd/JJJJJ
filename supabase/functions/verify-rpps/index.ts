@@ -1,8 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const allowedOrigin = Deno.env.get('APP_URL') || 'https://app.soindirect.com';
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': allowedOrigin,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
@@ -71,8 +73,6 @@ serve(async (req) => {
     // Fetch from Annuaire Santé API
     const url = `https://annuaire.sante.fr/web/site/professionnel-de-sante?rpps=${numero_rpps}`;
     
-    let rppsData: { trouve: boolean; nom_api?: string; profession_api?: string } = { trouve: false };
-
     try {
       const response = await fetch(url, {
         headers: {
@@ -97,16 +97,9 @@ serve(async (req) => {
 
           if (nomRetourne && nomRetourne.length > 2) {
             const nomNormalise = nomRetourne.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const nomSoignant = `${prenom} ${nom}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const nomSeul = nom?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
             
             const correspond = nomNormalise.includes(nomSeul) || nomSeul.includes(nomNormalise.split(' ').pop() || '');
-
-            rppsData = {
-              trouve: true,
-              nom_api: nomRetourne,
-              profession_api: profRetournee,
-            };
 
             return new Response(JSON.stringify({
               trouve: true,
