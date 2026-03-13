@@ -69,6 +69,21 @@ serve(async (req) => {
         });
       }
 
+      // C2: Idempotency guard — skip if already PAYEE
+      const { data: existingFacture } = await supabaseAdmin
+        .from("factures")
+        .select("statut")
+        .eq("id", factureId)
+        .single();
+
+      if (existingFacture?.statut === "PAYEE") {
+        console.log(`Facture ${factureId} already PAYEE, skipping duplicate webhook`);
+        return new Response(JSON.stringify({ received: true, skipped: "already_paid" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Update facture to PAYEE
       const { error: updateErr } = await supabaseAdmin
         .from("factures")
@@ -79,7 +94,8 @@ serve(async (req) => {
           stripe_hosted_url: session.url,
           modifie_le: new Date().toISOString(),
         })
-        .eq("id", factureId);
+        .eq("id", factureId)
+        .neq("statut", "PAYEE");
 
       if (updateErr) {
         console.error("Erreur mise à jour facture:", updateErr);
