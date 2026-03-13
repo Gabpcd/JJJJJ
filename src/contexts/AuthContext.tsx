@@ -180,7 +180,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 5. Email de bienvenue
     supabase.functions.invoke('send-email', {
       body: {
-        to: data.email,
         type: 'BIENVENUE_SOIGNANT',
         data: { prenom: data.prenom },
         destinataire_id: userId,
