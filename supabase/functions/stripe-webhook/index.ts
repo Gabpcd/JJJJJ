@@ -140,6 +140,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               type: "FACTURE_PAYEE",
+              destinataire_id: facture.etablissement_id,
               data: {
                 numero: facture.numero_facture,
                 montant_ttc: (facture.montant_ttc ?? 0).toFixed(2),

@@ -306,8 +306,8 @@ serve(async (req) => {
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  // Allow service_role calls (from stripe-webhook, cron, etc.) without user check
-  const isServiceRole = authHeader.includes(serviceRoleKey);
+  // C1: Strict equality for service_role validation (prevents partial key match)
+  const isServiceRole = authHeader === `Bearer ${serviceRoleKey}`;
 
   let userId: string | null = null;
   let userEmail: string | null = null;
