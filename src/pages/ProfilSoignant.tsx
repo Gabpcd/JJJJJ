@@ -204,6 +204,10 @@ export default function ProfilSoignant() {
       .then(({ data }: any) => {
         if (Array.isArray(data)) setEvaluations(data);
       });
+    // Load badge stats
+    supabase.rpc('fn_badge_stats' as any).then(({ data }: any) => {
+      if (data) setBadgeStats(data as BadgeStats);
+    });
   }, [user]);
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
