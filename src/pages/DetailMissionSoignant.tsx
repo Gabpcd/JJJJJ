@@ -12,6 +12,7 @@ import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatMission } from '@/components/ChatMission';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { BlocConformite } from '@/components/BlocConformite';
+import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
