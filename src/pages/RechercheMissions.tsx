@@ -136,7 +136,7 @@ export default function RechercheMissions() {
         if (typeContrat !== 'TOUS') {
           const pref = extraireContratPreference(m.description);
           if (typeContrat === 'CDDU' && pref === 'LIBERAL') return false;
-          if (typeContrat === 'LIBERAL' && pref === 'CDDU') return false;
+          if (typeContrat === 'LIBERAL' && pref === 'SALARIE') return false;
         } else {
           const pref = extraireContratPreference(m.description);
           if (!missionCompatibleContrat(pref, typesContrat)) return false;
