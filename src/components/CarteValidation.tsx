@@ -3,6 +3,7 @@ import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle } from 'lucide-react';
 import { BadgeCertification } from './BadgeCertification';
+import { PanneauContestation } from './PanneauContestation';
 
 interface CarteValidationProps {
   presence: any;
@@ -176,6 +177,18 @@ export function CarteValidation({ presence, onValider, onContester }: CarteValid
             </a>
           )}
         </div>
+      )}
+
+      {/* Contestation panel for validated presences */}
+      {presence.valide_par_etablissement && (
+        <PanneauContestation
+          presenceId={presence.id}
+          missionId={presence.mission_id}
+          etablissementId={mission.etablissement_id}
+          soignantId={presence.soignant_id}
+          presenceValideeLe={presence.valide_le}
+          role="ETABLISSEMENT"
+        />
       )}
     </div>
   );
