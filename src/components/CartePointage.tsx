@@ -23,13 +23,15 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
   const aPointeDepart = !!presence?.pointage_depart_le;
 
   // Determine state
-  let etat: 'futur' | 'pret' | 'en_mission' | 'termine';
+  let etat: 'futur' | 'trop_tot' | 'pret' | 'en_mission' | 'termine';
   if (aPointeArrivee && aPointeDepart) {
     etat = 'termine';
   } else if (aPointeArrivee) {
     etat = 'en_mission';
-  } else if (minutesAvantDebut <= 60) {
+  } else if (minutesAvantDebut <= 30) {
     etat = 'pret';
+  } else if (minutesAvantDebut <= 60) {
+    etat = 'trop_tot';
   } else {
     etat = 'futur';
   }
