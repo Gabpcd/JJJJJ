@@ -2220,6 +2220,24 @@ export type Database = {
           type: Database["public"]["Enums"]["type_etablissement"]
         }[]
       }
+      fn_etablissements_safe: {
+        Args: { p_ids: string[] }
+        Returns: {
+          adresse_code_postal: string
+          adresse_departement: string
+          adresse_lat: number
+          adresse_lng: number
+          adresse_rue: string
+          adresse_ville: string
+          finess: string
+          id: string
+          nom: string
+          taux_majoration_dimanche_pourcent: number
+          taux_majoration_ferie_pourcent: number
+          taux_majoration_nuit_pourcent: number
+          type: Database["public"]["Enums"]["type_etablissement"]
+        }[]
+      }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
       fn_generer_numero_contrat_safe: {
@@ -2245,6 +2263,24 @@ export type Database = {
           repos_11h_ok: boolean
           score_fiabilite: number
           soignant_id: string
+        }[]
+      }
+      fn_mes_etablissements_soignant: {
+        Args: never
+        Returns: {
+          adresse_code_postal: string
+          adresse_departement: string
+          adresse_lat: number
+          adresse_lng: number
+          adresse_rue: string
+          adresse_ville: string
+          finess: string
+          id: string
+          nom: string
+          taux_majoration_dimanche_pourcent: number
+          taux_majoration_ferie_pourcent: number
+          taux_majoration_nuit_pourcent: number
+          type: Database["public"]["Enums"]["type_etablissement"]
         }[]
       }
       fn_mes_evaluations_recues: {

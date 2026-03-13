@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { extraireSerieId } from '@/components/CarteSerie';
 import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -43,14 +44,19 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
     setLoading(true);
     supabase
       .from('missions')
-      .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissements(nom)')
+      .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissement_id')
       .eq('soignant_assigne_id', user.id)
       .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
       .gte('fin_le', semaine.toISOString())
       .lt('debut_le', finSemaine.toISOString())
       .order('debut_le', { ascending: true })
-      .then(({ data }) => {
-        setMissions(data || []);
+      .then(async ({ data }) => {
+        const items = data || [];
+        if (items.length > 0) {
+          const etabMap = await fetchEtablissementsSafe(items.map((m: any) => m.etablissement_id));
+          items.forEach((m: any) => { m.etablissements = etabMap[m.etablissement_id] || null; });
+        }
+        setMissions(items);
         setLoading(false);
       });
   }, [user, semaine]);
@@ -61,12 +67,17 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
     const decoded = decodeURIComponent(serieParam);
     supabase
       .from('missions')
-      .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissements(nom)')
+      .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissement_id')
       .ilike('description', `%[SERIE_ID:${decoded}]%`)
       .eq('statut', 'OUVERTE')
       .order('debut_le')
-      .then(({ data }) => {
-        setSerieCandidates(data || []);
+      .then(async ({ data }) => {
+        const items = data || [];
+        if (items.length > 0) {
+          const etabMap = await fetchEtablissementsSafe(items.map((m: any) => m.etablissement_id));
+          items.forEach((m: any) => { m.etablissements = etabMap[m.etablissement_id] || null; });
+        }
+        setSerieCandidates(items);
         // Navigate to first week of serie
         if (data && data.length > 0) {
           setSemaine(startOfWeek(new Date(data[0].debut_le), { weekStartsOn: 1 }));

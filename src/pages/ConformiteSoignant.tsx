@@ -5,6 +5,7 @@ import { EtatVide } from '@/components/EtatVide';
 import { CarteConformite } from '@/components/CarteConformite';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { ShieldCheck, Copy } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -19,12 +20,22 @@ export default function ConformiteSoignant() {
     if (!user) return;
     supabase
       .from('conformite_travail')
-      .select('*, missions(intitule, debut_le, fin_le, etablissements(nom))')
+      .select('*, missions(intitule, debut_le, fin_le, etablissement_id)')
       .eq('soignant_id', user.id)
       .order('controle_le', { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        setControles(data || []);
+      .then(async ({ data }) => {
+        const items = data || [];
+        if (items.length > 0) {
+          const etabIds = items.map((c: any) => c.missions?.etablissement_id).filter(Boolean);
+          const etabMap = await fetchEtablissementsSafe(etabIds);
+          items.forEach((c: any) => {
+            if (c.missions?.etablissement_id) {
+              c.missions.etablissements = etabMap[c.missions.etablissement_id] || null;
+            }
+          });
+        }
+        setControles(items);
         setLoading(false);
       });
   }, [user]);

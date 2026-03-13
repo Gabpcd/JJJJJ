@@ -12,6 +12,7 @@ import { AnimationSuccesMission } from '@/components/AnimationSuccesMission';
 import { ARTICLES_CODE_TRAVAIL } from '@/constantes/loi';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession } from '@/lib/constantes';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
@@ -59,15 +60,15 @@ export default function DetailSerieSoignant() {
         supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
           debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer,
-          est_urgente, niveau_urgence, statut, soignant_assigne_id, cree_le,
-          etablissements(id, nom, adresse_ville, adresse_departement, adresse_lat, adresse_lng, type)
+          est_urgente, niveau_urgence, statut, soignant_assigne_id, cree_le, etablissement_id
         `).ilike('description', `%[SERIE_ID:${decoded}]%`).order('debut_le', { ascending: true }),
         supabase.from('soignants').select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides').eq('id', user.id).single(),
         supabase.from('missions').select('id, intitule, debut_le, fin_le, duree_heures, statut')
           .eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).order('debut_le'),
       ]);
 
-      const mWithDist = (allMissions || []).map((m: any) => ({
+      const enriched = allMissions ? await enrichirEtablissements(allMissions as any) : [];
+      const mWithDist = enriched.map((m: any) => ({
         ...m,
         distance_km: calculerDistanceKm(s?.adresse_lat, s?.adresse_lng, m.etablissements?.adresse_lat, m.etablissements?.adresse_lng),
       }));
