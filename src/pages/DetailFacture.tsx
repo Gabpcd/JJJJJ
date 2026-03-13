@@ -30,7 +30,7 @@ export default function DetailFacture() {
     Promise.all([
       supabase.from('factures').select('id, numero_facture, montant_ht, montant_tva, montant_ttc, taux_tva, nombre_missions, statut, date_emission, date_echeance, date_paiement, periode_debut, periode_fin, mode_paiement, stripe_hosted_url, chorus_pro_statut, est_secteur_public, etablissement_id').eq('id', id).eq('etablissement_id', user.id).single(),
       supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, net_a_payer, montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission')
+        .select('id, intitule, debut_le, fin_le, montant_commission_ht')
         .eq('facture_id', id)
         .order('fin_le', { ascending: true }),
       supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie, paliers_commission(nom)').eq('id', user.id).single(),
