@@ -48,7 +48,7 @@ export default function ProfilSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage').eq('id', user.id).single().then(({ data }: any) => {
       if (data) {
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
@@ -59,6 +59,7 @@ export default function ProfilSoignant() {
         });
         setEmail(data.email);
         setProfession(data.profession);
+        setCodeParrainage(data.code_parrainage || '');
         setForm({
           prenom: data.prenom, nom: data.nom,
           telephone: data.telephone || '', dateNaissance: data.date_naissance || '',
@@ -71,6 +72,11 @@ export default function ProfilSoignant() {
         setConsentementGPS((data as any).consentement_gps !== false);
       }
       setLoading(false);
+    });
+
+    // Load filleuls
+    supabase.rpc('fn_mes_filleuls' as any).then(({ data }: any) => {
+      if (Array.isArray(data)) setFilleuls(data);
     });
   }, [user]);
 
