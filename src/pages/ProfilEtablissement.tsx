@@ -94,10 +94,8 @@ export default function ProfilEtablissement() {
     if (!user) return;
     setSaving(true);
 
-    // Save convention_collective separately via direct update (allowed by pol_etab_update_self)
-    await supabase.from('etablissements').update({ convention_collective: conventionCollective || null }).eq('id', user.id);
-
     const { error } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
+      p_convention_collective: conventionCollective || null,
       p_nom: form.nom,
       p_finess: form.finess || null,
       p_adresse_rue: form.rue,

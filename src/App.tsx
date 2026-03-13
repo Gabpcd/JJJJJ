@@ -90,22 +90,22 @@ const App = () => (
                 <Route path="/soignant/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageNotifications role="SOIGNANT" /></RouteProtegee>} />
 
                 {/* Établissement */}
-                <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
-                <Route path="/etablissement/profil" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ProfilEtablissement /></RouteProtegee>} />
-                <Route path="/etablissement/missions" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ListeMissions /></RouteProtegee>} />
-                <Route path="/etablissement/missions/creer" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><CreerMission /></RouteProtegee>} />
-                <Route path="/etablissement/missions/:id" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DetailMission /></RouteProtegee>} />
-                <Route path="/etablissement/missions/:id/modifier" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ModifierMission /></RouteProtegee>} />
-                <Route path="/etablissement/presences" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><PresencesEtablissement /></RouteProtegee>} />
-                <Route path="/etablissement/contrats" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ListeContrats role="ETABLISSEMENT" /></RouteProtegee>} />
-                <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
-                <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
-                <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
-                <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
-                <Route path="/etablissement/notifications" element={<RouteProtegee rolesAutorises={['ETABLISSEMENT']}><PageNotifications role="ETABLISSEMENT" /></RouteProtegee>} />
+                <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
+                <Route path="/etablissement/profil" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ProfilEtablissement /></RouteProtegee>} />
+                <Route path="/etablissement/missions" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ListeMissions /></RouteProtegee>} />
+                <Route path="/etablissement/missions/creer" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><CreerMission /></RouteProtegee>} />
+                <Route path="/etablissement/missions/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailMission /></RouteProtegee>} />
+                <Route path="/etablissement/missions/:id/modifier" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ModifierMission /></RouteProtegee>} />
+                <Route path="/etablissement/presences" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PresencesEtablissement /></RouteProtegee>} />
+                <Route path="/etablissement/contrats" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ListeContrats role="ETABLISSEMENT" /></RouteProtegee>} />
+                <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
+                <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
+                <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
+                <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
+                <Route path="/etablissement/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageNotifications role="ETABLISSEMENT" /></RouteProtegee>} />
 
                 {/* Contrat (accessible par soignant et établissement) */}
-                <Route path="/contrat/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT', 'ETABLISSEMENT']}><ContratMission /></RouteProtegee>} />
+                <Route path="/contrat/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT', 'ADMIN_ETABLISSEMENT']}><ContratMission /></RouteProtegee>} />
 
                 {/* Groupe */}
                 <Route path="/groupe/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />

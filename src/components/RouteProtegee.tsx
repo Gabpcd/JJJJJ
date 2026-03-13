@@ -19,7 +19,7 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
   if (!roleServeur || roleServeur === 'INCONNU' || !rolesAutorises.includes(roleServeur)) {
     switch (roleServeur) {
       case 'SOIGNANT': return <Navigate to="/soignant/tableau-de-bord" replace />;
-      case 'ETABLISSEMENT': return <Navigate to="/etablissement/tableau-de-bord" replace />;
+      case 'ADMIN_ETABLISSEMENT': return <Navigate to="/etablissement/tableau-de-bord" replace />;
       case 'ADMIN_GROUPE': return <Navigate to="/groupe/tableau-de-bord" replace />;
       default: return <Navigate to="/" replace />;
     }

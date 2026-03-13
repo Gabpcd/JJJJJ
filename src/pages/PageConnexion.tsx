@@ -85,7 +85,27 @@ export default function PageConnexion() {
         </div>
 
         <p className="text-center mt-4">
-          <a href="#" className="text-sm text-primary hover:underline">Mot de passe oublié ?</a>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!email) {
+                afficherNotification({ type: 'erreur', message: 'Saisissez votre email avant de demander une réinitialisation.' });
+                return;
+              }
+              const { supabase } = await import('@/integrations/supabase/client');
+              const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/connexion`,
+              });
+              if (error) {
+                afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });
+              } else {
+                afficherNotification({ type: 'succes', message: 'Email de réinitialisation envoyé. Vérifiez votre boîte mail.' });
+              }
+            }}
+            className="text-sm text-primary hover:underline"
+          >
+            Mot de passe oublié ?
+          </button>
         </p>
       </div>
     </div>
