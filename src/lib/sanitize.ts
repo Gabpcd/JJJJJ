@@ -14,3 +14,7 @@ export function sanitizeHTML(html: string): string {
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
   });
 }
+
+export function sanitizeText(text: string): string {
+  return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] }).trim();
+}

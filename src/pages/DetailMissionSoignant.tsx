@@ -10,6 +10,7 @@ import { BadgeDistance } from '@/components/BadgeDistance';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
+import { ChatMission } from '@/components/ChatMission';
 import { BlocConformite } from '@/components/BlocConformite';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -384,6 +385,15 @@ export default function DetailMissionSoignant() {
               </div>
             )}
           </div>
+
+          {/* Chat — visible si ASSIGNEE ou EN_COURS */}
+          {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS') && estAssigne && (
+            <ChatMission
+              missionId={mission.id}
+              role="SOIGNANT"
+              prenomUtilisateur={soignant.prenom}
+            />
+          )}
         </div>
       </div>
 

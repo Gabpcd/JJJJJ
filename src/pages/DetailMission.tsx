@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
+import { ChatMission } from '@/components/ChatMission';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -167,8 +168,17 @@ export default function DetailMission() {
         </div>
 
         {/* Colonne droite */}
-        <div>
+        <div className="space-y-4">
           <DecompositionFinanciere mission={m} />
+
+          {/* Chat — visible si ASSIGNEE ou EN_COURS */}
+          {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
+            <ChatMission
+              missionId={m.id}
+              role="ETABLISSEMENT"
+              prenomUtilisateur={m.etablissements?.nom || 'Établissement'}
+            />
+          )}
         </div>
       </div>
 
