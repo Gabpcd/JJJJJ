@@ -13,7 +13,7 @@ export default function Tarifs() {
   useEffect(() => {
     supabase
       .from('paliers_commission')
-      .select('*')
+      .select('id, nom, taux_commission, missions_min, missions_max, ordre')
       .eq('est_actif', true)
       .order('ordre', { ascending: true })
       .then(({ data }) => {

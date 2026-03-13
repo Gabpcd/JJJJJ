@@ -46,8 +46,8 @@ export default function DashboardEtablissement() {
           .eq('etablissement_id', user.id)
           .order('cree_le', { ascending: false })
           .limit(5),
-        supabase.from('paliers_commission').select('*').eq('est_actif', true).order('ordre', { ascending: true }),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
+        supabase.from('paliers_commission').select('id, nom, taux_commission, missions_min, missions_max, ordre').eq('est_actif', true).order('ordre', { ascending: true }),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
         supabase.rpc('fn_mes_soignants_etablissement'),
       ]);
 
@@ -76,11 +76,11 @@ export default function DashboardEtablissement() {
     // KPI
     try {
       const [resO, resEC, resT, resTotal, resAssigned] = await Promise.all([
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
       ]);
 
       if (resO.error || resEC.error || resT.error || resTotal.error || resAssigned.error) partialError = true;

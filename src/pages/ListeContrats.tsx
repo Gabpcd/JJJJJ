@@ -26,7 +26,7 @@ export default function ListeContrats({ role }: { role: UserRole }) {
       const col = role === 'SOIGNANT' ? 'soignant_id' : 'etablissement_id';
       const { data } = await supabase
         .from('contrats_mission')
-        .select('*')
+        .select('id, mission_id, numero_contrat, type_contrat, statut, soignant_id, etablissement_id, signature_soignant, signature_etablissement, cree_le')
         .eq(col, user.id)
         .order('cree_le', { ascending: false });
       setContrats(data || []);

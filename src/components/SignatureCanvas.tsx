@@ -10,6 +10,8 @@ export default function SignatureCanvas({ onSave, width = 400, height = 150 }: S
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const strokeCountRef = useRef(0);
+  const MIN_STROKES = 2; // Minimum number of strokes for a valid signature (eIDAS)
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -57,8 +59,9 @@ export default function SignatureCanvas({ onSave, width = 400, height = 150 }: S
   }, [isDrawing, getPos]);
 
   const endDraw = useCallback(() => {
+    if (isDrawing) strokeCountRef.current++;
     setIsDrawing(false);
-  }, []);
+  }, [isDrawing]);
 
   const clear = () => {
     const canvas = canvasRef.current;
@@ -67,7 +70,10 @@ export default function SignatureCanvas({ onSave, width = 400, height = 150 }: S
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
+    strokeCountRef.current = 0;
   };
+
+  const signatureValide = hasSignature && strokeCountRef.current >= MIN_STROKES;
 
   const save = () => {
     const canvas = canvasRef.current;
@@ -98,11 +104,14 @@ export default function SignatureCanvas({ onSave, width = 400, height = 150 }: S
         <button
           type="button"
           onClick={save}
-          disabled={!hasSignature}
+          disabled={!signatureValide}
           className="text-xs bg-primary text-primary-foreground px-3 py-1 rounded disabled:opacity-50"
         >
           Valider la signature
         </button>
+        {hasSignature && !signatureValide && (
+          <span className="text-[10px] text-destructive">Signature trop simple — continuez à signer</span>
+        )}
       </div>
     </div>
   );

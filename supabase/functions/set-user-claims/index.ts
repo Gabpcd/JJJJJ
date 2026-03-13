@@ -1,8 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
+const allowedOrigin = Deno.env.get('APP_URL') || 'https://app.soindirect.com';
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': allowedOrigin,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
@@ -74,7 +76,6 @@ serve(async (req) => {
     }
 
     // SEUL le rôle SOIGNANT est auto-assignable par un utilisateur
-    // ADMIN_ETABLISSEMENT, ADMIN_GROUPE, ADMIN_PLATEFORME = INTERDIT
     if (role !== "SOIGNANT") {
       return new Response(JSON.stringify({ error: "Seul le rôle SOIGNANT peut être auto-assigné." }), {
         status: 403,

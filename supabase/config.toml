@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.register-etablissement]
 verify_jwt = false
+
+[functions.register-soignant]
+verify_jwt = false

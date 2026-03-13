@@ -9,7 +9,7 @@ export function sanitizeHTML(html: string): string {
       'table', 'thead', 'tbody', 'tr', 'th', 'td',
       'div', 'span', 'small',
     ],
-    ALLOWED_ATTR: ['class'],
+    ALLOWED_ATTR: [],
     FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
   });

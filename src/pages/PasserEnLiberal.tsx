@@ -40,9 +40,9 @@ export default function PasserEnLiberal() {
     const load = async () => {
       const [{ data: sg }, { data: prof }, { data: ft }, { data: he }] = await Promise.all([
         supabase.from('soignants').select('prenom, nom, profession, siret_liberal, statut_liberal, type_contrat, heures_cumulees, eligible_conversion_3200h, assujetti_tva, numero_tva').eq('id', user.id).single(),
-        supabase.from('professions_liberal_eligible').select('*').limit(20),
+        supabase.from('professions_liberal_eligible').select('profession, code_ape, libelle_urssaf, nom_ordre, ordre_obligatoire, plafond_micro').limit(20),
         supabase.rpc('fn_calculer_taux_free_transition_safe', { p_soignant_id: user.id }),
-        supabase.from('heures_externes').select('*').eq('soignant_id', user.id).order('date_debut', { ascending: false }),
+        supabase.from('heures_externes').select('id, soignant_id, employeur_nom, employeur_type, heures_declarees, date_debut, date_fin, statut, motif_rejet, type_preuve').eq('soignant_id', user.id).order('date_debut', { ascending: false }),
       ]);
       if (sg) {
         setSoignant(sg);
@@ -164,7 +164,7 @@ export default function PasserEnLiberal() {
           {(soignant?.heures_cumulees || 0) < 3200 && <p className="text-xs text-primary">💡 Encore {3200 - (soignant?.heures_cumulees || 0)}h pour le palier 3 200h (100%)</p>}
         </div>
         <div className="mt-3">
-          <ImportHeuresExternes onDone={() => { supabase.from('heures_externes').select('*').eq('soignant_id', user!.id).order('date_debut', { ascending: false }).then(({ data }) => { if (data) setHeuresExternes(data); }); }} />
+          <ImportHeuresExternes onDone={() => { supabase.from('heures_externes').select('id, soignant_id, employeur_nom, employeur_type, heures_declarees, date_debut, date_fin, statut, motif_rejet, type_preuve').eq('soignant_id', user!.id).order('date_debut', { ascending: false }).then(({ data }) => { if (data) setHeuresExternes(data); }); }} />
         </div>
         {heuresExternes.length > 0 && (
           <div className="mt-4 overflow-x-auto">

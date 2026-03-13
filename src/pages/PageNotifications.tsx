@@ -33,7 +33,7 @@ export default function PageNotifications({ role }: { role: UserRole }) {
     const load = async () => {
       const { data } = await supabase
         .from('notifications')
-        .select('*')
+        .select('id, titre, corps, type, lien, lue, cree_le, type_ressource, id_ressource')
         .eq('destinataire_id', user.id)
         .order('cree_le', { ascending: false })
         .limit(200);

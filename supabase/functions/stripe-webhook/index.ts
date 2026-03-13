@@ -2,8 +2,10 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
+const allowedOrigin = Deno.env.get("APP_URL") || "https://app.soindirect.com";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": allowedOrigin,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
@@ -148,7 +150,6 @@ serve(async (req) => {
       const factureId = paymentIntent.metadata?.facture_id;
 
       if (factureId) {
-        // Only update if not already PAYEE
         await supabaseAdmin
           .from("factures")
           .update({
@@ -177,8 +178,6 @@ serve(async (req) => {
 
       if (failErr) {
         console.error("Erreur mise à jour facture en retard:", failErr);
-      } else {
-        console.log(`Facture stripe_invoice_id=${stripeInvoiceId} marquée EN_RETARD`);
       }
     }
 

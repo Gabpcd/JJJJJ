@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Audit HDS
     const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: u.id,
-      p_type_acteur: role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
+      p_type_acteur: role,
       p_action: 'CONNEXION',
       p_type_ressource: role === 'SOIGNANT' ? 'soignant' : 'etablissement',
       p_id_ressource: u.id,
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (currentUser) {
       const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: currentUser.id,
-        p_type_acteur: currentUser.role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
+        p_type_acteur: currentUser.role,
         p_action: 'DECONNEXION',
         p_type_ressource: currentUser.role === 'SOIGNANT' ? 'soignant' : 'etablissement',
         p_id_ressource: currentUser.id,
@@ -125,63 +125,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw authError;
     }
 
-    const userId = authData.user!.id;
+    // 2. Create profile + assign role via secure Edge Function (no client-side INSERT)
+    const { data: result, error: fnError } = await supabase.functions.invoke('register-soignant', {
+      body: {
+        prenom: data.prenom,
+        nom: data.nom,
+        telephone: data.telephone || null,
+        dateNaissance: data.dateNaissance || null,
+        profession: data.profession,
+        typesContrat: data.typesContrat || ['CDDU'],
+        rpps: data.rpps || null,
+        rayon: data.rayon,
+        lat: data.lat || null,
+        lng: data.lng || null,
+        navigateur: navigator.userAgent,
+      },
+    });
 
-    // 2. Insert into soignants table
-    const typesContrat: string[] = data.typesContrat || (data.typeContrat ? [data.typeContrat] : ['CDDU']);
-    const insertPayload = {
-      id: userId,
-      prenom: data.prenom,
-      nom: data.nom,
-      email: data.email,
-      telephone: data.telephone || null,
-      date_naissance: data.dateNaissance || null,
-      profession: data.profession,
-      type_contrat: typesContrat[0],
-      types_contrat_acceptes: JSON.stringify(typesContrat),
-      numero_rpps: data.rpps || null,
-      rayon_deplacement_km: data.rayon,
-      adresse_lat: data.lat || null,
-      adresse_lng: data.lng || null,
-    };
-    
-    const { error: insertError } = await supabase.from('soignants').insert(insertPayload as any);
-    if (insertError) {
-      logger.error('INSERT soignants échoué', insertError);
+    if (fnError) {
+      logger.error('register-soignant échoué', fnError);
       throw new Error('Erreur lors de la création du profil soignant.');
     }
 
-    // 3. Set app_metadata for RLS
-    await supabase.functions.invoke('set-user-claims', {
-      body: { userId, role: 'SOIGNANT' },
-    });
+    if (result?.error) {
+      throw new Error(result.error);
+    }
 
-    // 4. Audit inscription + CGU consent
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: userId,
-      p_type_acteur: 'SOIGNANT',
-      p_action: 'CONNEXION',
-      p_type_ressource: 'soignant',
-      p_id_ressource: userId,
-      p_cle_s3: null,
-      p_details: { evenement: 'inscription', profession: data.profession },
-      p_ip: null,
-      p_navigateur: navigator.userAgent,
-    });
-
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: userId,
-      p_type_acteur: 'SOIGNANT',
-      p_action: 'RGPD_CONSENTEMENT_DONNE',
-      p_type_ressource: 'soignant',
-      p_id_ressource: userId,
-      p_cle_s3: null,
-      p_details: { type: 'inscription', cgu: true, confidentialite: true },
-      p_ip: null,
-      p_navigateur: navigator.userAgent,
-    });
-
-    // 5. Email de bienvenue
+    // 3. Email de bienvenue (fire-and-forget)
+    const userId = authData.user!.id;
     supabase.functions.invoke('send-email', {
       body: {
         type: 'BIENVENUE_SOIGNANT',

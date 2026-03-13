@@ -2,8 +2,10 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
+const allowedOrigin = Deno.env.get("APP_URL") || "https://app.soindirect.com";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": allowedOrigin,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
@@ -33,10 +35,10 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get facture
+    // Get facture with only needed fields
     const { data: facture, error: errF } = await supabaseAdmin
       .from("factures")
-      .select("*, etablissements(nom, email_contact, stripe_customer_id)")
+      .select("id, numero_facture, montant_ttc, nombre_missions, statut, etablissement_id, etablissements(nom, email_contact, stripe_customer_id)")
       .eq("id", facture_id)
       .single();
 

@@ -73,7 +73,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   useEffect(() => {
     const dupId = searchParams.get('dupliquer');
     if (dupId && !missionSource) {
-      supabase.from('missions').select('*').eq('id', dupId).single().then(({ data }) => {
+      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence').eq('id', dupId).single().then(({ data }) => {
         if (data) {
           setIntitule(data.intitule);
           setDescription(data.description || '');
@@ -356,8 +356,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <label className="text-sm font-medium text-foreground mb-2 block">Ouvert aux contrats :</label>
           <div className="space-y-2">
             {([
-              { value: 'TOUS' as const, label: 'Tous types de contrats', desc: 'CDDU, Intérim, Vacation, Libéral, Salarié' },
-              { value: 'SALARIE' as const, label: 'Salariés et CDD uniquement', desc: 'CDDU, Intérim, Vacation, Salarié' },
+              { value: 'TOUS' as const, label: 'Tous types de contrats', desc: 'CDDU, Vacation, Libéral, Salarié' },
+              { value: 'SALARIE' as const, label: 'Salariés et CDD uniquement', desc: 'CDDU, Vacation, Salarié' },
               { value: 'LIBERAL' as const, label: 'Libéraux uniquement', desc: 'Libéral' },
             ]).map(opt => (
               <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">

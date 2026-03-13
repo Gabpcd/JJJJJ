@@ -38,71 +38,82 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
-      adresse_departement, telephone_contact, email_contact, adresse_lat, adresse_lng,
-      numero_licence } = body;
+    const { prenom, nom, telephone, dateNaissance, profession, typesContrat,
+      rpps, rayon, lat, lng } = body;
 
     // Validate required fields
-    if (!nom || !siret || !type || !adresse_ville) {
-      return new Response(JSON.stringify({ error: 'Champs obligatoires manquants' }), {
+    if (!prenom || !nom || !profession) {
+      return new Response(JSON.stringify({ error: 'Champs obligatoires manquants (prenom, nom, profession)' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    if (siret.length !== 14) {
-      return new Response(JSON.stringify({ error: 'Le SIRET doit contenir 14 chiffres' }), {
+    // Validate RPPS format if provided
+    if (rpps && !/^\d{11}$/.test(rpps)) {
+      return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Validate rayon
+    const rayonKm = typeof rayon === 'number' ? Math.min(Math.max(rayon, 5), 100) : 30;
+
+    // Sanitize typesContrat
+    const validContrats = ['CDDU', 'INTERIM', 'VACATION', 'LIBERAL', 'SALARIE'];
+    const contrats: string[] = Array.isArray(typesContrat)
+      ? typesContrat.filter((c: string) => validContrats.includes(c))
+      : ['CDDU'];
+    if (contrats.length === 0) contrats.push('CDDU');
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // 2. Insert into etablissements table
+    // 2. Insert into soignants table (server-side, no client manipulation possible)
     const insertPayload = {
       id: user.id,
-      nom,
-      siret,
-      finess: finess || null,
-      type,
-      adresse_rue: adresse_rue || 'Non renseigné',
-      adresse_ville,
-      adresse_code_postal: adresse_code_postal || '00000',
-      adresse_departement: adresse_departement || null,
-      email_contact: email_contact || user.email,
-      telephone_contact: telephone_contact || null,
-      adresse_lat: adresse_lat || null,
-      adresse_lng: adresse_lng || null,
+      prenom: String(prenom).slice(0, 100),
+      nom: String(nom).slice(0, 100),
+      email: user.email,
+      telephone: telephone ? String(telephone).slice(0, 20) : null,
+      date_naissance: dateNaissance || null,
+      profession,
+      type_contrat: contrats[0],
+      types_contrat_acceptes: JSON.stringify(contrats),
+      numero_rpps: rpps || null,
+      rayon_deplacement_km: rayonKm,
+      adresse_lat: typeof lat === 'number' ? lat : null,
+      adresse_lng: typeof lng === 'number' ? lng : null,
     };
 
     const { error: insertError } = await supabaseAdmin
-      .from('etablissements')
+      .from('soignants')
       .insert(insertPayload);
 
     if (insertError) {
-      console.error('INSERT etablissements échoué', insertError.code);
+      console.error('INSERT soignants échoué', insertError.code);
       const msg = insertError.message || '';
-      if (msg.includes('duplicate key') && msg.includes('siret')) {
-        return new Response(JSON.stringify({ error: 'Ce numéro SIRET est déjà enregistré.' }), {
+      if (msg.includes('duplicate key')) {
+        return new Response(JSON.stringify({ error: 'Un compte avec cet identifiant existe déjà.' }), {
           status: 409,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      return new Response(JSON.stringify({ error: 'Erreur lors de la création du profil établissement.' }), {
+      return new Response(JSON.stringify({ error: 'Erreur lors de la création du profil soignant.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // 3. Set app_metadata role — server-side, no client involvement
+    // 3. Set app_metadata role — server-side
     const { error: claimsError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-      app_metadata: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: user.id },
+      app_metadata: { role: 'SOIGNANT' },
     });
 
     if (claimsError) {
       console.error('set-user-claims échoué', claimsError.code);
-      await supabaseAdmin.from('etablissements').delete().eq('id', user.id);
+      // Rollback
+      await supabaseAdmin.from('soignants').delete().eq('id', user.id);
       return new Response(JSON.stringify({ error: 'Erreur lors de la configuration du compte.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -112,30 +123,30 @@ serve(async (req) => {
     // 4. Audit inscription + CGU consent
     await supabaseAdmin.from('journaux_audit').insert({
       acteur_id: user.id,
-      type_acteur: 'ADMIN_ETABLISSEMENT',
+      type_acteur: 'SOIGNANT',
       action: 'CONNEXION',
-      type_ressource: 'etablissement',
+      type_ressource: 'soignant',
       id_ressource: user.id,
-      details: { evenement: 'inscription', type },
+      details: { evenement: 'inscription', profession },
       navigateur_acteur: body.navigateur || null,
     });
 
     await supabaseAdmin.from('journaux_audit').insert({
       acteur_id: user.id,
-      type_acteur: 'ADMIN_ETABLISSEMENT',
+      type_acteur: 'SOIGNANT',
       action: 'RGPD_CONSENTEMENT_DONNE',
-      type_ressource: 'etablissement',
+      type_ressource: 'soignant',
       id_ressource: user.id,
       details: { type: 'inscription', cgu: true, confidentialite: true },
       navigateur_acteur: body.navigateur || null,
     });
 
-    return new Response(JSON.stringify({ success: true, etablissement_id: user.id }), {
+    return new Response(JSON.stringify({ success: true, soignant_id: user.id }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    console.error('register-etablissement error:', err);
+    console.error('register-soignant error:', err);
     return new Response(JSON.stringify({ error: 'Erreur interne' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

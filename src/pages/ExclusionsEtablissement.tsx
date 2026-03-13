@@ -23,7 +23,7 @@ export default function ExclusionsEtablissement() {
     const [{ data }, { data: soignantsData }] = await Promise.all([
       supabase
         .from('exclusions')
-        .select('*')
+        .select('id, exclu_id, exclu_par, motif, type_exclu_par, cree_le')
         .eq('exclu_par', user.id)
         .order('cree_le', { ascending: false }),
       supabase.rpc('fn_mes_soignants_etablissement'),
