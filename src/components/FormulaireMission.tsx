@@ -172,7 +172,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           est_urgente: estUrgente,
           niveau_urgence: estUrgente ? niveauUrgence : 0,
         } as any)
-        .select()
+        .select('id, intitule, statut, debut_le, fin_le')
         .single();
 
       resultats.push({ ok: !error, erreur: error?.message });
