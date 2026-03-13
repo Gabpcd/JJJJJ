@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { FileText, Printer, CheckCircle, Clock } from 'lucide-react';
+import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
