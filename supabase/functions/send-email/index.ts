@@ -45,6 +45,16 @@ const SECURITY_NOTE = `<p style="font-size:12px;color:#94A3B8;text-align:center;
 
 // ─── Template registry ───────────────────────────────────
 
+const ALLOWED_TYPES = new Set([
+  'BIENVENUE_SOIGNANT', 'BIENVENUE_ETABLISSEMENT',
+  'MISSION_ACCEPTEE_SOIGNANT', 'MISSION_ACCEPTEE_ETABLISSEMENT',
+  'RAPPEL_MISSION', 'MISSION_TERMINEE',
+  'CONTRAT_A_SIGNER', 'CONTRAT_SIGNE',
+  'FACTURE_EMISE', 'FACTURE_PAYEE',
+  'DOCUMENT_EXPIRANT', 'RAPPEL_FACTURE',
+  'ELIGIBLE_LIBERAL', 'RECAP_HEBDO',
+]);
+
 interface TemplateResult { subject: string; html: string }
 
 function renderTemplate(type: string, data: Record<string, unknown>): TemplateResult | null {
