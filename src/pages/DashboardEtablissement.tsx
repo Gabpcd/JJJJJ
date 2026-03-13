@@ -40,7 +40,7 @@ export default function DashboardEtablissement() {
       const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
 
       const [resEtab, resMissions, resPaliers, resMissionsCeMois, resSoignants] = await Promise.all([
-        supabase.from('etablissements').select('id, nom, type, email_contact, groupe_sante_id, taux_commission_negocie, palier_commission_id, groupes_sante(nom), paliers_commission(nom, taux_commission, missions_min, missions_max)').eq('id', user.id).single(),
+        supabase.from('etablissements').select('id, nom, type, email_contact, groupe_sante_id, taux_commission_negocie, palier_commission_id, groupes_sante(nom), paliers_commission(nom)').eq('id', user.id).single(),
         supabase.from('missions')
           .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
           .eq('etablissement_id', user.id)
