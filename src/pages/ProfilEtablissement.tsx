@@ -259,6 +259,60 @@ export default function ProfilEtablissement() {
           <Trash2 className="h-4 w-4" /> Supprimer mon compte
         </button>
       </div>
+
+      {/* Modale de confirmation de suppression */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-background rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-destructive">⚠️ Suppression définitive</h3>
+            <p className="text-sm text-muted-foreground">
+              Cette action est irréversible. Toutes vos données seront supprimées conformément au RGPD.
+            </p>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                Tapez <span className="font-bold text-destructive">SUPPRIMER</span> pour confirmer
+              </label>
+              <input
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                placeholder="SUPPRIMER"
+                className="input-base"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); }}
+                className="px-4 py-2 text-sm rounded-xl border border-border text-foreground hover:bg-muted transition"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText !== 'SUPPRIMER' || deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    const { data, error } = await supabase.rpc('fn_supprimer_mon_compte' as any);
+                    if (error) throw error;
+                    if (data?.error) { afficherNotification({ type: 'erreur', message: data.error }); setDeleting(false); return; }
+                    afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection…' });
+                    await supabase.auth.signOut();
+                    navigate('/');
+                  } catch (err: any) {
+                    afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+                    setDeleting(false);
+                  }
+                }}
+                className="px-4 py-2 text-sm rounded-xl bg-destructive text-destructive-foreground font-semibold disabled:opacity-40 transition"
+              >
+                {deleting ? 'Suppression…' : 'Confirmer la suppression'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutApp>
   );
 }
