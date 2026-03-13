@@ -367,14 +367,38 @@ serve(async (req) => {
     }
 
     // Authorization: non-service-role users can only send to themselves
-    if (!isServiceRole && resolvedEmail !== userEmail) {
-      const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: roleData } = await supabaseUser.rpc('fn_get_my_role');
-      const role = (roleData as any)?.role;
-      if (role !== 'ETABLISSEMENT' && role !== 'ADMIN_GROUPE') {
-        return new Response(JSON.stringify({ error: 'Non autorisé à envoyer un email à cette adresse' }), {
+    // or to someone linked via a shared mission
+    if (!isServiceRole && destinataire_id !== userId) {
+      // Check if caller and destinataire share at least one mission
+      const { count } = await supabaseService
+        .from('missions')
+        .select('id', { count: 'exact', head: true })
+        .or(
+          `and(etablissement_id.eq.${userId},soignant_assigne_id.eq.${destinataire_id}),` +
+          `and(etablissement_id.eq.${destinataire_id},soignant_assigne_id.eq.${userId})`
+        );
+
+      // Also check if caller is an admin of the same groupe as the destinataire etablissement
+      let isGroupeAdmin = false;
+      if (!count) {
+        const { data: adminData } = await supabaseService
+          .from('admins_groupe_sante')
+          .select('groupe_id')
+          .eq('utilisateur_id', userId!);
+
+        if (adminData && adminData.length > 0) {
+          const groupeIds = adminData.map((a: any) => a.groupe_id);
+          const { count: etabCount } = await supabaseService
+            .from('etablissements')
+            .select('id', { count: 'exact', head: true })
+            .eq('id', destinataire_id)
+            .in('groupe_sante_id', groupeIds);
+          isGroupeAdmin = (etabCount ?? 0) > 0;
+        }
+      }
+
+      if (!count && !isGroupeAdmin) {
+        return new Response(JSON.stringify({ error: 'Non autorisé à envoyer un email à ce destinataire' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
