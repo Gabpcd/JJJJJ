@@ -30,9 +30,9 @@ function extractRole(user: User): UserRole {
   // La vérification d'accès réelle se fait via useRole() + fn_get_my_role côté serveur.
   const metaRole = user.user_metadata?.role;
   if (metaRole === 'ADMIN_ETABLISSEMENT' || metaRole === 'ETABLISSEMENT') return 'ADMIN_ETABLISSEMENT';
-  if (metaRole === 'ADMIN_GROUPE') return 'ADMIN_GROUPE' as UserRole;
-  if (metaRole === 'ADMIN') return 'ADMIN' as UserRole;
-  return 'SOIGNANT' as UserRole;
+  if (metaRole === 'ADMIN_GROUPE') return 'ADMIN_GROUPE';
+  if (metaRole === 'ADMIN') return 'ADMIN';
+  return 'SOIGNANT';
 }
 
 function toAppUser(user: User): AppUser {
