@@ -60,6 +60,13 @@ export default function DetailMission() {
       if (m && m.soignant_assigne_id) {
         const { data: sg } = await supabase.rpc('fn_soignant_pour_etablissement', { p_soignant_id: m.soignant_assigne_id });
         setMission({ ...m, soignants: sg || null });
+
+        // A4: Alerte CDDU répétitifs
+        const { data: alerteData } = await supabase.rpc('fn_alerte_cddu_repetitif' as any, {
+          p_soignant_id: m.soignant_assigne_id,
+          p_etablissement_id: m.etablissement_id,
+        });
+        if (alerteData) setAlerteCDDU(alerteData);
       } else {
         setMission(m ? { ...m, soignants: null } : null);
       }
