@@ -33,7 +33,7 @@ const STATUT_LABELS: Record<string, string> = {
   ANNULEE: 'Annulée',
 };
 
-const IS_PREVIEW = window.location.hostname.includes('lovable.app') || window.location.hostname === 'localhost';
+
 
 export default function FacturationEtablissement() {
   const navigate = useNavigate();
