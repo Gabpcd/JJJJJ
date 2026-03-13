@@ -356,18 +356,16 @@ export function PanneauContestation({
           </div>
         )}
 
-        {/* Respond (other party) */}
-        {(peutRepondre || peutRelancer) && (
+        {/* Respond (other party — move to EN_DISCUSSION only) */}
+        {(peutRepondre || (peutRelancer && !estAdminPlateforme)) && (
           <div className="space-y-2 border-t border-border pt-3">
             <p className="text-xs font-semibold text-foreground">
-              {peutRelancer ? 'Proposer une résolution' : 'Répondre à la contestation'}
+              Répondre à la contestation
             </p>
             <textarea
               value={reponse}
               onChange={(e) => setReponse(e.target.value.slice(0, 500))}
-              placeholder={peutRelancer
-                ? 'Proposez une résolution pour clore ce litige…'
-                : 'Votre réponse à la contestation…'}
+              placeholder="Votre réponse à la contestation…"
               rows={3}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
@@ -377,9 +375,41 @@ export function PanneauContestation({
                 disabled={!reponse.trim() || envoi}
                 className="flex items-center gap-1.5 bg-primary text-primary-foreground text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity"
               >
-                <Send className="h-3.5 w-3.5" /> {envoi ? 'Envoi…' : peutRelancer ? 'Résoudre' : 'Répondre'}
+                <Send className="h-3.5 w-3.5" /> {envoi ? 'Envoi…' : 'Répondre'}
               </button>
               <p className="text-[11px] text-muted-foreground">{reponse.length}/500</p>
+            </div>
+          </div>
+        )}
+
+        {/* Admin-only: resolution buttons */}
+        {estAdminPlateforme && litige && statutOuvert && (
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5 text-primary" /> Actions administrateur
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => resoudreAdmin('RESOLUE_SOIGNANT')}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-success/10 text-success text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-success/20 transition-colors border border-success/20"
+              >
+                <CheckCircle className="h-3.5 w-3.5" /> Résoudre en faveur du soignant
+              </button>
+              <button
+                onClick={() => resoudreAdmin('RESOLUE_ETABLISSEMENT')}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-primary/20 transition-colors border border-primary/20"
+              >
+                <CheckCircle className="h-3.5 w-3.5" /> Résoudre en faveur de l'établissement
+              </button>
+              <button
+                onClick={() => resoudreAdmin('FERME')}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-muted text-muted-foreground text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-muted/80 transition-colors border border-border"
+              >
+                <Ban className="h-3.5 w-3.5" /> Fermer
+              </button>
             </div>
           </div>
         )}
