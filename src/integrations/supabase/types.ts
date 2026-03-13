@@ -2334,6 +2334,16 @@ export type Database = {
           tous_documents_valides: boolean
         }[]
       }
+      fn_modifier_mon_etablissement: {
+        Args: {
+          p_adresse_code_postal?: string
+          p_adresse_rue?: string
+          p_adresse_ville?: string
+          p_nom?: string
+          p_telephone?: string
+        }
+        Returns: Json
+      }
       fn_modifier_mon_profil: {
         Args: {
           p_adresse_code_postal?: string
@@ -2384,6 +2394,10 @@ export type Database = {
       fn_set_user_role: {
         Args: { p_etablissement_id?: string; p_role: string; p_user_id: string }
         Returns: undefined
+      }
+      fn_signer_contrat_etablissement: {
+        Args: { p_contrat_id: string; p_signature_image: string }
+        Returns: Json
       }
       fn_signer_contrat_soignant: {
         Args: { p_contrat_id: string; p_signature_image: string }

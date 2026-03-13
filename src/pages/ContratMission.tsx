@@ -58,15 +58,13 @@ export default function ContratMission() {
         if (rpcError) throw rpcError;
         if (rpcResult?.error) throw new Error(rpcResult.error);
       } else {
-        // Établissement signe via UPDATE direct (autorisé par RLS)
-        const updateData: any = {
-          signature_etablissement: true,
-          signature_etablissement_le: new Date().toISOString(),
-          signature_image_etablissement: signatureData,
-          signature_navigateur_etablissement: navigator.userAgent,
-        };
-        const { error: updateError } = await supabase.from('contrats_mission').update(updateData).eq('id', contrat.id);
-        if (updateError) throw updateError;
+        // Établissement signe via RPC sécurisée
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('fn_signer_contrat_etablissement' as any, {
+          p_contrat_id: contrat.id,
+          p_signature_image: signatureData,
+        });
+        if (rpcError) throw rpcError;
+        if (rpcResult?.error) throw new Error(rpcResult.error);
       }
 
       await supabase.rpc('fn_ecrire_audit_safe', {
