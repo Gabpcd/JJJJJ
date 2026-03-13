@@ -400,6 +400,13 @@ export default function DetailMissionSoignant() {
               </div>
             )}
 
+            {mission.statut === 'ABSENCE' && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-center space-y-1">
+                <p className="text-sm font-semibold text-destructive">❌ Mission marquée absence — score impacté (-20 pts)</p>
+                <p className="text-xs text-destructive/80">Si c'est une erreur, contactez l'établissement pour correction.</p>
+              </div>
+            )}
+
             {estAssigneAutre && (
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-3">Cette mission a déjà été attribuée</p>
