@@ -27,6 +27,8 @@ export default function PasserEnLiberal() {
   const [saving, setSaving] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [heuresExternes, setHeuresExternes] = useState<any[]>([]);
+  const [assujettiTVA, setAssujettiTVA] = useState(false);
+  const [numeroTVA, setNumeroTVA] = useState('');
 
   const [checklist, setChecklist] = useState({
     siret: false, cpam: false, ordre: false, rcp: false, banque: false, compta: false,
