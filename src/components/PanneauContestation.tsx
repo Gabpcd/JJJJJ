@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { AlertTriangle, Send, Clock, CheckCircle, XCircle, Shield, MessageSquare } from 'lucide-react';
+import { AlertTriangle, Send, Clock, CheckCircle, Shield, MessageSquare, Ban, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
@@ -34,11 +34,15 @@ interface Props {
   onUpdate?: () => void;
 }
 
-const STATUT_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+const DELAI_CONTESTATION_MS = 48 * 60 * 60 * 1000;
+
+const STATUT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   CONTESTEE: { label: 'Contestée', icon: <AlertTriangle className="h-3.5 w-3.5" />, color: 'text-warning' },
+  EN_DISCUSSION: { label: 'En discussion', icon: <MessageSquare className="h-3.5 w-3.5" />, color: 'text-primary' },
   RESOLUE_SOIGNANT: { label: 'Résolue (soignant)', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-success' },
   RESOLUE_ETABLISSEMENT: { label: 'Résolue (établissement)', icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'text-success' },
   RESOLUE_ADMIN: { label: 'Résolue (admin)', icon: <Shield className="h-3.5 w-3.5" />, color: 'text-primary' },
+  FERME: { label: 'Fermé', icon: <Ban className="h-3.5 w-3.5" />, color: 'text-muted-foreground' },
 };
 
 export function PanneauContestation({
@@ -66,14 +70,26 @@ export function PanneauContestation({
 
   useEffect(() => { charger(); }, [charger]);
 
-  // Soignant peut contester dans les 48h après validation
-  const peutContester = role === 'SOIGNANT'
-    && presenceValideeLe
-    && !litige
-    && (Date.now() - new Date(presenceValideeLe).getTime()) < 48 * 60 * 60 * 1000;
+  const dans48h = presenceValideeLe
+    ? (Date.now() - new Date(presenceValideeLe).getTime()) < DELAI_CONTESTATION_MS
+    : false;
 
-  // Établissement peut répondre si statut CONTESTEE
-  const peutRepondre = role === 'ETABLISSEMENT' && litige?.statut === 'CONTESTEE' && !litige.reponse;
+  // Both roles can initiate a contestation within 48h if no existing litige
+  const peutContester = dans48h && !litige;
+
+  // The other party can respond when status is CONTESTEE or EN_DISCUSSION
+  const estInitiateur = litige?.initie_par === (role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT');
+  const estRepondant = litige && !estInitiateur;
+  const statutOuvert = litige?.statut === 'CONTESTEE' || litige?.statut === 'EN_DISCUSSION';
+  const peutRepondre = estRepondant && statutOuvert && !litige?.reponse;
+  // Initiator can reply again if status moved to EN_DISCUSSION and there's a response
+  const peutRelancer = estInitiateur && litige?.statut === 'EN_DISCUSSION' && !!litige?.reponse;
+
+  const estResolu = litige && ['RESOLUE_SOIGNANT', 'RESOLUE_ETABLISSEMENT', 'RESOLUE_ADMIN', 'FERME'].includes(litige.statut);
+
+  const roleActeur = role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
+  const roleLabel = role === 'SOIGNANT' ? 'soignant' : 'établissement';
+  const autreRoleLabel = role === 'SOIGNANT' ? 'établissement' : 'soignant';
 
   const creerContestation = async () => {
     if (!user || !motif.trim()) return;
@@ -86,33 +102,28 @@ export function PanneauContestation({
         etablissement_id: etablissementId,
         motif: sanitizeText(motif.trim()),
         statut: 'CONTESTEE',
-        initie_par: 'SOIGNANT',
+        initie_par: role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT',
       });
       if (error) throw error;
 
-      // Audit
       await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id,
-        p_type_acteur: 'SOIGNANT',
-        p_action: 'PRESENCE_CONTESTATION',
-        p_type_ressource: 'presence',
-        p_id_ressource: presenceId,
-        p_cle_s3: null,
-        p_details: { motif: motif.trim(), mission_id: missionId },
-        p_ip: null,
-        p_navigateur: navigator.userAgent,
+        p_acteur_id: user.id, p_type_acteur: roleActeur,
+        p_action: 'PRESENCE_CONTESTATION', p_type_ressource: 'presence',
+        p_id_ressource: presenceId, p_cle_s3: null,
+        p_details: { motif: motif.trim(), mission_id: missionId, initie_par: role },
+        p_ip: null, p_navigateur: navigator.userAgent,
       });
 
-      // Notification à l'établissement
+      // Notify the other party
+      const destId = role === 'SOIGNANT' ? etablissementId : soignantId;
+      const destType = role === 'SOIGNANT' ? 'ETABLISSEMENT' : 'SOIGNANT';
+      const lien = role === 'SOIGNANT' ? '/etablissement/presences' : '/soignant/presences';
       await supabase.rpc('fn_creer_notification', {
-        p_destinataire_id: etablissementId,
-        p_type_destinataire: 'ETABLISSEMENT',
+        p_destinataire_id: destId, p_type_destinataire: destType,
         p_type: 'CONTESTATION_PRESENCE',
         p_titre: 'Présence contestée',
-        p_corps: `Un soignant a contesté la validation d'une présence.`,
-        p_lien: `/etablissement/presences`,
-        p_type_ressource: 'presence',
-        p_id_ressource: presenceId,
+        p_corps: `Le ${roleLabel} a contesté une présence validée.`,
+        p_lien: lien, p_type_ressource: 'presence', p_id_ressource: presenceId,
       });
 
       toast.success('Contestation envoyée');
@@ -131,42 +142,43 @@ export function PanneauContestation({
     if (!user || !litige || !reponse.trim()) return;
     setEnvoi(true);
     try {
-      const { error } = await supabase
-        .from('litiges')
-        .update({
-          reponse: sanitizeText(reponse.trim()),
-          statut: 'RESOLUE_ETABLISSEMENT',
-          resolu_le: new Date().toISOString(),
-          resolu_par: user.id,
-        })
-        .eq('id', litige.id);
+      // Response moves to EN_DISCUSSION; resolution closes it
+      const nouveauStatut = litige.statut === 'CONTESTEE' ? 'EN_DISCUSSION' : `RESOLUE_${role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT'}`;
+      const estResolution = litige.statut === 'EN_DISCUSSION';
+
+      const updateData: any = {
+        reponse: sanitizeText(reponse.trim()),
+        statut: nouveauStatut,
+      };
+      if (estResolution) {
+        updateData.resolution = sanitizeText(reponse.trim());
+        updateData.resolu_le = new Date().toISOString();
+        updateData.resolu_par = user.id;
+      }
+
+      const { error } = await supabase.from('litiges').update(updateData).eq('id', litige.id);
       if (error) throw error;
 
       await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id,
-        p_type_acteur: 'ADMIN_ETABLISSEMENT',
-        p_action: 'CONTESTATION_REPONSE',
-        p_type_ressource: 'litige',
-        p_id_ressource: litige.id,
-        p_cle_s3: null,
-        p_details: { reponse: reponse.trim(), presence_id: presenceId },
-        p_ip: null,
-        p_navigateur: navigator.userAgent,
+        p_acteur_id: user.id, p_type_acteur: roleActeur,
+        p_action: estResolution ? 'CONTESTATION_RESOLUTION' : 'CONTESTATION_REPONSE',
+        p_type_ressource: 'litige', p_id_ressource: litige.id, p_cle_s3: null,
+        p_details: { reponse: reponse.trim(), presence_id: presenceId, nouveau_statut: nouveauStatut },
+        p_ip: null, p_navigateur: navigator.userAgent,
       });
 
-      // Notification au soignant
+      const destId = role === 'SOIGNANT' ? etablissementId : soignantId;
+      const destType = role === 'SOIGNANT' ? 'ETABLISSEMENT' : 'SOIGNANT';
+      const lien = role === 'SOIGNANT' ? '/etablissement/presences' : '/soignant/presences';
       await supabase.rpc('fn_creer_notification', {
-        p_destinataire_id: soignantId,
-        p_type_destinataire: 'SOIGNANT',
+        p_destinataire_id: destId, p_type_destinataire: destType,
         p_type: 'REPONSE_CONTESTATION',
-        p_titre: 'Réponse à votre contestation',
-        p_corps: `L'établissement a répondu à votre contestation de présence.`,
-        p_lien: `/soignant/presences`,
-        p_type_ressource: 'presence',
-        p_id_ressource: presenceId,
+        p_titre: estResolution ? 'Contestation résolue' : 'Réponse à la contestation',
+        p_corps: `Le ${roleLabel} a ${estResolution ? 'résolu' : 'répondu à'} la contestation de présence.`,
+        p_lien: lien, p_type_ressource: 'presence', p_id_ressource: presenceId,
       });
 
-      toast.success('Réponse envoyée');
+      toast.success(estResolution ? 'Contestation résolue' : 'Réponse envoyée');
       setReponse('');
       charger();
       onUpdate?.();
@@ -178,9 +190,9 @@ export function PanneauContestation({
   };
 
   if (loading) return null;
-
-  // No contestation and can't create one → nothing to show
   if (!litige && !peutContester) return null;
+
+  const initiePar = litige?.initie_par === 'SOIGNANT' ? 'soignant' : 'établissement';
 
   return (
     <div className="border border-border rounded-xl overflow-hidden mt-2">
@@ -189,24 +201,26 @@ export function PanneauContestation({
         <MessageSquare className="h-3.5 w-3.5 text-primary" />
         Contestation
         {litige && (
-          <span className={`ml-auto flex items-center gap-1 ${STATUT_LABELS[litige.statut]?.color || 'text-muted-foreground'}`}>
-            {STATUT_LABELS[litige.statut]?.icon}
-            {STATUT_LABELS[litige.statut]?.label || litige.statut}
+          <span className={`ml-auto flex items-center gap-1 ${STATUT_CONFIG[litige.statut]?.color || 'text-muted-foreground'}`}>
+            {STATUT_CONFIG[litige.statut]?.icon}
+            {STATUT_CONFIG[litige.statut]?.label || litige.statut}
           </span>
         )}
       </div>
 
       <div className="p-3 space-y-3">
-        {/* Existing litige timeline */}
+        {/* Timeline */}
         {litige && (
           <div className="space-y-3">
-            {/* Motif */}
+            {/* Step 1: Initial contestation */}
             <div className="flex gap-2">
               <div className="w-6 h-6 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                 <AlertTriangle className="h-3 w-3 text-warning" />
               </div>
               <div className="flex-1">
-                <p className="text-xs font-semibold text-foreground">Contestation du soignant</p>
+                <p className="text-xs font-semibold text-foreground">
+                  Contestation de l'{initiePar}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {format(new Date(litige.cree_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}
                 </p>
@@ -214,50 +228,76 @@ export function PanneauContestation({
               </div>
             </div>
 
-            {/* Réponse établissement */}
+            {/* Step 2: Response (EN_DISCUSSION) */}
             {litige.reponse && (
               <div className="flex gap-2">
                 <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <MessageSquare className="h-3 w-3 text-primary" />
+                  <ArrowRight className="h-3 w-3 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs font-semibold text-foreground">Réponse de l'établissement</p>
-                  {litige.resolu_le && (
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(litige.resolu_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}
-                    </p>
-                  )}
+                  <p className="text-xs font-semibold text-foreground">
+                    Réponse de l'{litige.initie_par === 'SOIGNANT' ? 'établissement' : 'soignant'}
+                  </p>
                   <p className="text-sm text-foreground mt-1 bg-muted/50 rounded-lg px-3 py-2">{litige.reponse}</p>
                 </div>
               </div>
             )}
 
-            {/* Admin resolution */}
+            {/* Step 3: Resolution */}
+            {litige.resolution && litige.statut !== 'RESOLUE_ADMIN' && (
+              <div className="flex gap-2">
+                <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <CheckCircle className="h-3 w-3 text-success" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-foreground">Résolution</p>
+                  {litige.resolu_le && (
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(litige.resolu_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                    </p>
+                  )}
+                  <p className="text-sm text-foreground mt-1 bg-success/5 border border-success/20 rounded-lg px-3 py-2">{litige.resolution}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Admin decision */}
             {litige.statut === 'RESOLUE_ADMIN' && litige.resolution && (
               <div className="flex gap-2">
                 <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Shield className="h-3 w-3 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs font-semibold text-foreground">Décision admin</p>
+                  <p className="text-xs font-semibold text-foreground">Décision de l'admin plateforme</p>
+                  {litige.resolu_le && (
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(litige.resolu_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                    </p>
+                  )}
                   <p className="text-sm text-foreground mt-1 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">{litige.resolution}</p>
                 </div>
               </div>
             )}
 
-            {/* Pending badge */}
+            {/* Pending states */}
             {litige.statut === 'CONTESTEE' && !litige.reponse && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
                 <Clock className="h-3.5 w-3.5" />
-                {role === 'SOIGNANT'
-                  ? 'En attente de la réponse de l\'établissement…'
-                  : 'Le soignant a contesté cette présence. Veuillez répondre.'}
+                En attente de la réponse de l'{autreRoleLabel === (litige.initie_par === 'SOIGNANT' ? 'soignant' : 'établissement') ? roleLabel : autreRoleLabel}…
+                <span className="ml-auto text-[11px]">72h pour répondre</span>
+              </div>
+            )}
+
+            {litige.statut === 'EN_DISCUSSION' && !estResolu && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-primary/5 rounded-lg px-3 py-2">
+                <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                Discussion en cours — si pas de résolution sous 72h, l'admin plateforme tranchera.
               </div>
             )}
           </div>
         )}
 
-        {/* Soignant: create contestation form */}
+        {/* Create contestation (either role) */}
         {peutContester && !showForm && (
           <button
             onClick={() => setShowForm(true)}
@@ -272,7 +312,9 @@ export function PanneauContestation({
             <textarea
               value={motif}
               onChange={(e) => setMotif(e.target.value.slice(0, 500))}
-              placeholder="Décrivez le motif de votre contestation…"
+              placeholder={role === 'SOIGNANT'
+                ? 'Les heures validées ne correspondent pas à ma présence réelle…'
+                : 'Le soignant n\'était pas présent ou les heures sont incorrectes…'}
               rows={3}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
@@ -282,35 +324,43 @@ export function PanneauContestation({
                 disabled={!motif.trim() || envoi}
                 className="flex items-center gap-1.5 bg-warning text-warning-foreground text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-warning/90 transition-colors"
               >
-                <Send className="h-3.5 w-3.5" /> {envoi ? 'Envoi…' : 'Envoyer'}
+                <Send className="h-3.5 w-3.5" /> {envoi ? 'Envoi…' : 'Envoyer la contestation'}
               </button>
               <button onClick={() => { setShowForm(false); setMotif(''); }} className="text-xs text-muted-foreground hover:text-foreground">
                 Annuler
               </button>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              ⏱ Vous avez 48h après la validation pour contester.
+              ⏱ Vous avez 48h après la validation pour contester. Sans résolution sous 72h, l'admin plateforme tranchera.
             </p>
           </div>
         )}
 
-        {/* Établissement: respond form */}
-        {peutRepondre && (
+        {/* Respond (other party) */}
+        {(peutRepondre || peutRelancer) && (
           <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-xs font-semibold text-foreground">
+              {peutRelancer ? 'Proposer une résolution' : 'Répondre à la contestation'}
+            </p>
             <textarea
               value={reponse}
               onChange={(e) => setReponse(e.target.value.slice(0, 500))}
-              placeholder="Votre réponse à la contestation…"
+              placeholder={peutRelancer
+                ? 'Proposez une résolution pour clore ce litige…'
+                : 'Votre réponse à la contestation…'}
               rows={3}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
-            <button
-              onClick={envoyerReponse}
-              disabled={!reponse.trim() || envoi}
-              className="flex items-center gap-1.5 bg-primary text-primary-foreground text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity"
-            >
-              <Send className="h-3.5 w-3.5" /> {envoi ? 'Envoi…' : 'Répondre'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={envoyerReponse}
+                disabled={!reponse.trim() || envoi}
+                className="flex items-center gap-1.5 bg-primary text-primary-foreground text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity"
+              >
+                <Send className="h-3.5 w-3.5" /> {envoi ? 'Envoi…' : peutRelancer ? 'Résoudre' : 'Répondre'}
+              </button>
+              <p className="text-[11px] text-muted-foreground">{reponse.length}/500</p>
+            </div>
           </div>
         )}
       </div>
