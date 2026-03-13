@@ -47,6 +47,20 @@ export default function MissionsSoignant() {
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes')
       .eq('id', user.id).single()
       .then(({ data }) => { if (data) setSoignant(data as any); });
+
+    // M6: Compteur heures planifiées cette semaine
+    const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
+    supabase.from('missions')
+      .select('duree_heures')
+      .eq('soignant_assigne_id', user.id)
+      .in('statut', ['ASSIGNEE', 'EN_COURS'])
+      .gte('debut_le', lundi.toISOString())
+      .lte('debut_le', dimanche.toISOString())
+      .then(({ data }) => {
+        const total = (data ?? []).reduce((s: number, m: any) => s + (m.duree_heures ?? 0), 0);
+        setHeuresSemaine(total);
+      });
   }, [user]);
 
   useEffect(() => {
