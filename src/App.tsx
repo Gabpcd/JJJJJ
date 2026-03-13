@@ -55,6 +55,7 @@ import AdminFacturation from "./pages/admin/AdminFacturation";
 import AdminConformite from "./pages/admin/AdminConformite";
 import RechercheMissions from "./pages/RechercheMissions";
 import PremiumSoignant from "./pages/PremiumSoignant";
+import PremiumEtablissement from "./pages/PremiumEtablissement";
 import WidgetRecrutement from "./pages/WidgetRecrutement";
 
 const queryClient = new QueryClient();
