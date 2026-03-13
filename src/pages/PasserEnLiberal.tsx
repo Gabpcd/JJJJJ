@@ -46,6 +46,8 @@ export default function PasserEnLiberal() {
       if (sg) {
         setSoignant(sg);
         setSiret(sg.siret_liberal || '');
+        setAssujettiTVA(sg.assujetti_tva || false);
+        setNumeroTVA(sg.numero_tva || '');
       }
       if (prof) {
         const match = (prof as any[]).find((p: any) => p.profession === sg?.profession);
