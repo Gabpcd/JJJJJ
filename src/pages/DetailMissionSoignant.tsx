@@ -395,6 +395,7 @@ export default function DetailMissionSoignant() {
             />
           )}
         </div>
+      </div>
 
       {/* Modals */}
       <ModalConfirmation
