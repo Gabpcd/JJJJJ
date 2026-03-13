@@ -70,7 +70,10 @@ export default function SignatureCanvas({ onSave, width = 400, height = 150 }: S
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
+    strokeCountRef.current = 0;
   };
+
+  const signatureValide = hasSignature && strokeCountRef.current >= MIN_STROKES;
 
   const save = () => {
     const canvas = canvasRef.current;
