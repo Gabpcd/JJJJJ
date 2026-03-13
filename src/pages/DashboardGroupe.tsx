@@ -66,9 +66,9 @@ export default function DashboardGroupe() {
     const loadKpi = async () => {
       const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
       const [{ count: o }, { count: ec }, { count: t }] = await Promise.all([
-        supabase.from('missions').select('*', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'OUVERTE'),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'EN_COURS'),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'TERMINEE').gte('modifie_le', debutMois),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'OUVERTE'),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'EN_COURS'),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).in('etablissement_id', etabIds).eq('statut', 'TERMINEE').gte('modifie_le', debutMois),
       ]);
       setKpi({ ouvertes: o ?? 0, enCours: ec ?? 0, terminees: t ?? 0, actifs: etabsFiltres.length });
 
@@ -76,10 +76,10 @@ export default function DashboardGroupe() {
       const perfs = await Promise.all(
         etabsFiltres.map(async (e) => {
           const [{ count: ouv }, { count: ass }, { count: term }, { count: tot }] = await Promise.all([
-            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'OUVERTE'),
-            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'ASSIGNEE'),
-            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'TERMINEE'),
-            supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', e.id),
+            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'OUVERTE'),
+            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'ASSIGNEE'),
+            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'TERMINEE'),
+            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id),
           ]);
           const totalN = tot ?? 0;
           const assigned = (ass ?? 0) + (term ?? 0);

@@ -30,7 +30,7 @@ export default function DetailFacture() {
     Promise.all([
       supabase.from('factures').select('id, numero_facture, montant_ht, montant_tva, montant_ttc, taux_tva, nombre_missions, statut, date_emission, date_echeance, date_paiement, periode_debut, periode_fin, mode_paiement, stripe_hosted_url, chorus_pro_statut, est_secteur_public, etablissement_id').eq('id', id).eq('etablissement_id', user.id).single(),
       supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, net_a_payer, montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission')
+        .select('id, intitule, debut_le, fin_le, montant_commission_ht')
         .eq('facture_id', id)
         .order('fin_le', { ascending: true }),
       supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie, paliers_commission(nom)').eq('id', user.id).single(),
@@ -144,8 +144,6 @@ export default function DetailFacture() {
               <tr className="border-b-2 border-border text-left">
                 <th className="pb-2 font-semibold text-foreground">Date</th>
                 <th className="pb-2 font-semibold text-foreground">Intitulé</th>
-                <th className="pb-2 font-semibold text-foreground text-right">Net soignant</th>
-                <th className="pb-2 font-semibold text-foreground text-right">Taux</th>
                 <th className="pb-2 font-semibold text-foreground text-right">Commission HT</th>
               </tr>
             </thead>
@@ -156,8 +154,6 @@ export default function DetailFacture() {
                     {m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
                   </td>
                   <td className="py-2.5 text-foreground">{m.intitule}</td>
-                  <td className="py-2.5 text-right">{(m.net_a_payer ?? 0).toFixed(2)} €</td>
-                  <td className="py-2.5 text-right text-muted-foreground">{m.taux_commission ?? 15}%</td>
                   <td className="py-2.5 text-right font-medium">{(m.montant_commission_ht ?? 0).toFixed(2)} €</td>
                 </tr>
               ))}
