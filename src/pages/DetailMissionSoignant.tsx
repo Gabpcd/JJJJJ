@@ -191,18 +191,41 @@ export default function DetailMissionSoignant() {
       setAnimationSucces(true);
 
       // Email au soignant
-      const dateFormatee = format(new Date(mission.debut_le), 'EEEE d MMMM yyyy à HH:mm', { locale: fr });
       supabase.functions.invoke('send-email', {
         body: {
           to: user!.email,
-          subject: `Mission confirmée : ${mission.intitule}`,
-          html: emailMissionAccepteeSoignant(soignant.prenom, mission.intitule, dateFormatee, etablissement?.nom || '', id!),
           type: 'MISSION_ACCEPTEE_SOIGNANT',
+          data: {
+            prenom: soignant.prenom,
+            mission: mission.intitule,
+            etablissement: etablissement?.nom || '',
+            date: format(new Date(mission.debut_le), 'EEEE d MMMM yyyy', { locale: fr }),
+            heure_debut: format(new Date(mission.debut_le), "HH'h'mm", { locale: fr }),
+            heure_fin: format(new Date(mission.fin_le), "HH'h'mm", { locale: fr }),
+            taux_horaire: mission.taux_horaire_base,
+            mission_id: id,
+          },
           destinataire_id: user!.id,
         },
       }).catch(() => {});
 
-      // Email à l'établissement — envoyé uniquement côté serveur (le soignant n'a pas le droit d'envoyer à une autre adresse)
+      // Email à l'établissement (établissement role can send to other addresses)
+      if (etablissement?.email_contact) {
+        supabase.functions.invoke('send-email', {
+          body: {
+            to: etablissement.email_contact,
+            type: 'MISSION_ACCEPTEE_ETABLISSEMENT',
+            data: {
+              soignant_nom: `${soignant.prenom} ${soignant.nom}`,
+              profession: soignant.profession,
+              mission: mission.intitule,
+              date: format(new Date(mission.debut_le), 'EEEE d MMMM yyyy', { locale: fr }),
+              mission_id: id,
+            },
+            destinataire_id: mission.etablissement_id,
+          },
+        }).catch(() => {});
+      }
     } finally {
       setAcceptationEnCours(false);
     }

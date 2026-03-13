@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserRole } from '@/lib/types';
-import { emailBienvenueSoignant, emailBienvenueEtablissement } from '@/lib/emailTemplates';
+
 import { Session, User } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 
