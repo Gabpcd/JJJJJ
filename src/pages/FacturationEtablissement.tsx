@@ -370,16 +370,6 @@ export default function FacturationEtablissement() {
                         <RefreshCw className={`h-3.5 w-3.5 ${refreshingId === f.id ? 'animate-spin' : ''}`} />
                       </button>
 
-                      {IS_PREVIEW && (
-                        <button
-                          onClick={() => simulerPaiement(f)}
-                          disabled={simulatingId === f.id}
-                          className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-yellow-400 text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 disabled:opacity-50 transition-colors"
-                        >
-                          {simulatingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
-                          Simuler
-                        </button>
-                      )}
                     </>
                   )}
 

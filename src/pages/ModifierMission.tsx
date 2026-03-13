@@ -19,11 +19,11 @@ export default function ModifierMission() {
     });
   }, [id]);
 
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   if (!mission || mission.statut !== 'OUVERTE') {
     return (
-      <LayoutApp role="ETABLISSEMENT">
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
         <div className="text-center py-12">
           <p className="text-lg font-semibold text-foreground mb-2">Cette mission ne peut plus être modifiée</p>
           <p className="text-sm text-muted-foreground mb-4">Seules les missions ouvertes peuvent être éditées.</p>
@@ -34,7 +34,7 @@ export default function ModifierMission() {
   }
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="max-w-2xl mx-auto">
         <button onClick={() => navigate(`/etablissement/missions/${id}`)} className="text-sm text-primary hover:underline mb-4 inline-block">
           ← Retour au détail

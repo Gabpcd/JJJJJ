@@ -41,11 +41,11 @@ export default function MonGroupe() {
     load();
   }, [user]);
 
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   if (!etab?.groupe_sante_id || !groupe) {
     return (
-      <LayoutApp role="ETABLISSEMENT">
+      <LayoutApp role="ADMIN_ETABLISSEMENT">
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Building2 className="h-16 w-16 text-primary/30 mb-4" />
           <h2 className="text-lg font-bold text-foreground mb-2">Établissement indépendant</h2>
@@ -68,7 +68,7 @@ export default function MonGroupe() {
   });
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* En-tête groupe */}
       <div className="card-base bg-gradient-to-r from-primary/5 to-info/5 mb-6">
         <h1 className="text-2xl font-bold text-foreground">{groupe.nom}</h1>
