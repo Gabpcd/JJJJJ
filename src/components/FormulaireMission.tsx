@@ -156,7 +156,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     setProgressionActuel(0);
 
     const serieId = `SERIE_${Date.now()}`;
-    const descWithContrat = injecterContratTag(description || '', contratPreference);
+    // C6: Sanitize description — strip any injected tags before sending to server
+    const cleanDesc = (description || '').replace(/\[SERIE_ID:[^\]]*\]/g, '').replace(/\[CONTRAT:[^\]]*\]/g, '').trim();
+    const descWithContrat = injecterContratTag(cleanDesc, contratPreference);
     const descriptionAvecTag = `[SERIE_ID:${serieId}] ${descWithContrat}`.trim();
 
     const missionsPayload = creneaux.map(c => ({
