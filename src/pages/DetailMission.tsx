@@ -9,6 +9,8 @@ import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
+import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
+import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,6 +41,7 @@ export default function DetailMission() {
   const [modalAnnuler, setModalAnnuler] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState(false);
   const [showEvaluation, setShowEvaluation] = useState(true);
+  const [alerteCDDU, setAlerteCDDU] = useState<any>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -57,6 +60,13 @@ export default function DetailMission() {
       if (m && m.soignant_assigne_id) {
         const { data: sg } = await supabase.rpc('fn_soignant_pour_etablissement', { p_soignant_id: m.soignant_assigne_id });
         setMission({ ...m, soignants: sg || null });
+
+        // A4: Alerte CDDU répétitifs
+        const { data: alerteData } = await supabase.rpc('fn_alerte_cddu_repetitif' as any, {
+          p_soignant_id: m.soignant_assigne_id,
+          p_etablissement_id: m.etablissement_id,
+        });
+        if (alerteData) setAlerteCDDU(alerteData);
       } else {
         setMission(m ? { ...m, soignants: null } : null);
       }
@@ -98,6 +108,16 @@ export default function DetailMission() {
         ← Retour aux missions
       </button>
 
+      {/* A4: Alerte CDDU répétitifs */}
+      {alerteCDDU?.alerte && (
+        <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-300 dark:border-orange-800 rounded-xl p-4 mb-4 flex items-start gap-3">
+          <span className="text-lg">⚠️</span>
+          <p className="text-sm font-medium text-orange-700 dark:text-orange-400">
+            Ce soignant a travaillé {alerteCDDU.jours_travailles || '?'} jours chez vous sur 12 mois. Risque de requalification en CDI au-delà de 150 jours.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Colonne gauche */}
         <div className="lg:col-span-2 space-y-4">
@@ -138,6 +158,10 @@ export default function DetailMission() {
                 </p>
                 {m.soignants.telephone && <p className="text-sm text-muted-foreground">📱 {m.soignants.telephone}</p>}
                 {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
+                {/* E2: Blacklist */}
+                <div className="mt-2 pt-2 border-t border-border">
+                  <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
+                </div>
               </div>
             ) : (
               <div className="text-center py-6">

@@ -6,6 +6,8 @@ import { CartePointage } from '@/components/CartePointage';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { PanneauContestation } from '@/components/PanneauContestation';
 import { EtatVide } from '@/components/EtatVide';
+import { ConsentementGPS } from '@/components/ConsentementGPS';
+import { BandeauSansGPS } from '@/components/BandeauSansGPS';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,8 +26,49 @@ export default function PresencesSoignant() {
   const [missions, setMissions] = useState<any[]>([]);
   const [presencesValidees, setPresencesValidees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [contrats, setContrats] = useState<Record<string, any>>({});
+
+  // GPS consent state
+  const [consentementGPS, setConsentementGPS] = useState<boolean | null>(null);
+  const [showConsentementGPS, setShowConsentementGPS] = useState(false);
+  const [consentementCharge, setConsentementCharge] = useState(false);
+
+  // Load GPS consent on mount
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('soignants').select('consentement_gps').eq('id', user.id).single().then(({ data }) => {
+      setConsentementGPS(data?.consentement_gps ?? null);
+      setConsentementCharge(true);
+    });
+  }, [user]);
+
+  const handleAccepterGPS = async () => {
+    if (!user) return;
+    await supabase.rpc('fn_modifier_mon_profil' as any, {
+      p_telephone: null, p_adresse_rue: null, p_adresse_ville: null, p_adresse_code_postal: null,
+      p_rayon_deplacement_km: null, p_prenom: null, p_nom: null, p_date_naissance: null,
+      p_type_contrat: null, p_types_contrat_acceptes: null, p_numero_rpps: null, p_numero_adeli: null,
+      p_adresse_lat: null, p_adresse_lng: null,
+      p_consentement_gps: true,
+    });
+    setConsentementGPS(true);
+    setShowConsentementGPS(false);
+    afficherNotification({ type: 'succes', message: 'Consentement GPS enregistré.' });
+  };
+
+  const handleRefuserGPS = async () => {
+    if (!user) return;
+    await supabase.rpc('fn_modifier_mon_profil' as any, {
+      p_telephone: null, p_adresse_rue: null, p_adresse_ville: null, p_adresse_code_postal: null,
+      p_rayon_deplacement_km: null, p_prenom: null, p_nom: null, p_date_naissance: null,
+      p_type_contrat: null, p_types_contrat_acceptes: null, p_numero_rpps: null, p_numero_adeli: null,
+      p_adresse_lat: null, p_adresse_lng: null,
+      p_consentement_gps: false,
+    });
+    setConsentementGPS(false);
+    setShowConsentementGPS(false);
+    afficherNotification({ type: 'info', message: 'Pointage sans GPS activé. Vérification manuelle requise.' });
+  };
 
   const charger = useCallback(async () => {
     if (!user) return;
@@ -49,14 +92,12 @@ export default function PresencesSoignant() {
       .order('debut_le', { ascending: true });
 
     let missionsList = data || [];
-    // Enrich with safe establishment data
     if (missionsList.length > 0) {
       const etabMap = await fetchEtablissementsSafe(missionsList.map((m: any) => m.etablissement_id));
       missionsList = missionsList.map((m: any) => ({ ...m, etablissements: etabMap[m.etablissement_id] || null }));
     }
     setMissions(missionsList);
 
-    // Check contract status for each mission
     if (missionsList.length > 0) {
       const missionIds = missionsList.map((m: any) => m.id);
       const { data: contratsData } = await supabase
@@ -68,7 +109,6 @@ export default function PresencesSoignant() {
       setContrats(map);
     }
 
-    // Load recently validated presences (last 7 days) for contestation
     const il7jours = new Date();
     il7jours.setDate(il7jours.getDate() - 7);
     const { data: validees } = await supabase
@@ -83,7 +123,6 @@ export default function PresencesSoignant() {
       .gte('valide_le', il7jours.toISOString())
       .order('valide_le', { ascending: false });
 
-    // Enrich presences with establishment names
     let presencesList = validees || [];
     if (presencesList.length > 0) {
       const etabIds = presencesList.map((p: any) => p.missions?.etablissement_id).filter(Boolean);
@@ -94,7 +133,6 @@ export default function PresencesSoignant() {
       }));
     }
     setPresencesValidees(presencesList);
-
     setLoading(false);
   }, [user]);
 
@@ -110,18 +148,28 @@ export default function PresencesSoignant() {
 
   const pointerArrivee = async (missionId: string) => {
     if (!user) return;
+
+    // Check GPS consent before first geolocation
+    if (consentementGPS === null || consentementGPS === undefined) {
+      setShowConsentementGPS(true);
+      return;
+    }
+
     if (!navigator.onLine) {
       stockerPointageHorsLigne(missionId, 'arrivee');
       afficherNotification({ type: 'info', message: '📡 Mode hors-ligne : pointage stocké localement.', duree: 8000 });
       return;
     }
 
-    let position: GeolocationPosition;
-    try {
-      position = await obtenirPosition();
-    } catch {
-      afficherNotification({ type: 'erreur', message: 'Impossible d\'obtenir votre position. Vérifiez que la géolocalisation est activée.' });
-      return;
+    let position: GeolocationPosition | null = null;
+
+    if (consentementGPS) {
+      try {
+        position = await obtenirPosition();
+      } catch {
+        afficherNotification({ type: 'erreur', message: 'Impossible d\'obtenir votre position. Vérifiez que la géolocalisation est activée.' });
+        return;
+      }
     }
 
     const idTerminal = genererIdTerminal();
@@ -133,9 +181,9 @@ export default function PresencesSoignant() {
         mission_id: missionId,
         soignant_id: user.id,
         pointage_arrivee_le: new Date().toISOString(),
-        arrivee_lat: position.coords.latitude,
-        arrivee_lng: position.coords.longitude,
-        arrivee_precision_gps_m: position.coords.accuracy,
+        arrivee_lat: position?.coords.latitude ?? null,
+        arrivee_lng: position?.coords.longitude ?? null,
+        arrivee_precision_gps_m: position?.coords.accuracy ?? null,
         arrivee_id_terminal: idTerminal,
         arrivee_modele_terminal: modeleTerminal,
       } as any)
@@ -149,14 +197,15 @@ export default function PresencesSoignant() {
 
     if ('vibrate' in navigator) navigator.vibrate(200);
 
-    // Re-read trigger-calculated columns
     const { data: pc } = await supabase
       .from('presences')
       .select('perimetre_gps_valide, alerte_teleportation, distance_etablissement_m, alertes_fraude, arrivee_precision_gps_m')
       .eq('id', (data as any).id)
       .single();
 
-    if (pc?.perimetre_gps_valide) {
+    if (!consentementGPS) {
+      afficherNotification({ type: 'avertissement', message: '⚠️ Arrivée pointée sans GPS. Vérification manuelle requise.' });
+    } else if (pc?.perimetre_gps_valide) {
       afficherNotification({ type: 'succes', message: `✅ Arrivée pointée ! Vous êtes à ${Math.round(pc.distance_etablissement_m)}m de l'établissement.` });
     } else {
       afficherNotification({ type: 'avertissement', message: `⚠️ Arrivée pointée, mais vous êtes à ${Math.round(pc?.distance_etablissement_m || 0)}m (périmètre : 500m).` });
@@ -166,13 +215,10 @@ export default function PresencesSoignant() {
       afficherNotification({ type: 'erreur', message: '🚨 Alerte : un déplacement inhabituellement rapide a été détecté.', duree: 10000 });
     }
 
-    // Mission → EN_COURS (handled by trigger on presence insert)
-
-    // Audit
     await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'PRESENCE_POINTAGE_ARRIVEE',
       p_type_ressource: 'presence', p_id_ressource: (data as any).id, p_cle_s3: null,
-      p_details: { mission_id: missionId, lat: position.coords.latitude, lng: position.coords.longitude, precision_m: position.coords.accuracy, perimetre_ok: pc?.perimetre_gps_valide, distance_m: pc?.distance_etablissement_m },
+      p_details: { mission_id: missionId, lat: position?.coords.latitude, lng: position?.coords.longitude, precision_m: position?.coords.accuracy, perimetre_ok: pc?.perimetre_gps_valide, distance_m: pc?.distance_etablissement_m, gps_consent: consentementGPS },
       p_ip: null, p_navigateur: navigator.userAgent,
     });
 
@@ -187,19 +233,22 @@ export default function PresencesSoignant() {
       return;
     }
 
-    let position: GeolocationPosition;
-    try {
-      position = await obtenirPosition();
-    } catch {
-      afficherNotification({ type: 'erreur', message: 'Position GPS indisponible.' });
-      return;
+    let position: GeolocationPosition | null = null;
+
+    if (consentementGPS) {
+      try {
+        position = await obtenirPosition();
+      } catch {
+        afficherNotification({ type: 'erreur', message: 'Position GPS indisponible.' });
+        return;
+      }
     }
 
     const { data: rpcResult, error } = await supabase.rpc('fn_pointer_depart' as any, {
       p_presence_id: presenceId,
-      p_lat: position.coords.latitude,
-      p_lng: position.coords.longitude,
-      p_precision: position.coords.accuracy,
+      p_lat: position?.coords.latitude ?? 0,
+      p_lng: position?.coords.longitude ?? 0,
+      p_precision: position?.coords.accuracy ?? 0,
       p_terminal_id: genererIdTerminal(),
       p_modele: navigator.userAgent.slice(0, 100),
     });
@@ -215,7 +264,6 @@ export default function PresencesSoignant() {
 
     if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
 
-    // Email MISSION_TERMINEE au soignant
     const missionData = missions.find((m: any) => m.id === missionId);
     if (missionData) {
       supabase.functions.invoke('send-email', {
@@ -223,10 +271,10 @@ export default function PresencesSoignant() {
           type: 'MISSION_TERMINEE',
           data: {
             prenom: user.prenom || '',
-            mission: missionData.intitule || missionData.missions?.intitule || 'Mission',
-            etablissement: missionData.etablissements?.nom || missionData.missions?.etablissements?.nom || '',
-            heures: missionData.duree_heures || missionData.missions?.duree_heures || 0,
-            net: missionData.net_a_payer || missionData.missions?.net_a_payer || 0,
+            mission: missionData.intitule || 'Mission',
+            etablissement: missionData.etablissements?.nom || '',
+            heures: missionData.duree_heures || 0,
+            net: missionData.net_a_payer || 0,
           },
           destinataire_id: user.id,
         },
@@ -237,11 +285,19 @@ export default function PresencesSoignant() {
     charger();
   };
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading || !consentementCharge) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+
+  // Show GPS consent screen if first time
+  if (showConsentementGPS) {
+    return <ConsentementGPS onAccepter={handleAccepterGPS} onRefuser={handleRefuserGPS} />;
+  }
 
   return (
     <LayoutApp role="SOIGNANT">
       <BandeauHorsLigne />
+
+      {consentementGPS === false && <BandeauSansGPS />}
+
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Clock className="h-5 w-5 text-primary" /> Mes présences
@@ -300,7 +356,6 @@ export default function PresencesSoignant() {
         />
       )}
 
-      {/* Presences validated recently — contestation possible */}
       {presencesValidees.length > 0 && (
         <div className="mt-8">
           <h2 className="text-base font-bold text-foreground flex items-center gap-2 mb-4">

@@ -27,6 +27,8 @@ export default function PasserEnLiberal() {
   const [saving, setSaving] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [heuresExternes, setHeuresExternes] = useState<any[]>([]);
+  const [assujettiTVA, setAssujettiTVA] = useState(false);
+  const [numeroTVA, setNumeroTVA] = useState('');
 
   const [checklist, setChecklist] = useState({
     siret: false, cpam: false, ordre: false, rcp: false, banque: false, compta: false,
@@ -44,6 +46,8 @@ export default function PasserEnLiberal() {
       if (sg) {
         setSoignant(sg);
         setSiret(sg.siret_liberal || '');
+        setAssujettiTVA(sg.assujetti_tva || false);
+        setNumeroTVA(sg.numero_tva || '');
       }
       if (prof) {
         const match = (prof as any[]).find((p: any) => p.profession === sg?.profession);
@@ -345,6 +349,34 @@ export default function PasserEnLiberal() {
             </label>
           ))}
         </div>
+      </div>
+
+      {/* D1: TVA libéral */}
+      <div className="card-base mb-6">
+        <h2 className="text-base font-bold text-foreground mb-3">🧾 TVA</h2>
+        <p className="text-sm text-muted-foreground mb-3">Êtes-vous assujetti à la TVA ? (Si votre CA dépasse 36 800€/an)</p>
+        <div className="flex items-center gap-3 mb-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={assujettiTVA} onChange={e => setAssujettiTVA(e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
+            <span className="text-sm text-foreground">{assujettiTVA ? 'Oui, je suis assujetti à la TVA' : 'Non, franchise en base de TVA'}</span>
+          </label>
+        </div>
+        {assujettiTVA && (
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">Numéro de TVA intracommunautaire</label>
+            <input value={numeroTVA} onChange={e => setNumeroTVA(e.target.value.toUpperCase().slice(0, 15))} placeholder="FR XX XXXXXXXXX" className="input-base" />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={async () => {
+            await supabase.from('soignants').update({ assujetti_tva: assujettiTVA, numero_tva: assujettiTVA ? numeroTVA || null : null } as any).eq('id', user!.id);
+            afficherNotification({ type: 'succes', message: 'TVA mise à jour.' });
+          }}
+          className="btn-secondary text-xs mt-3"
+        >
+          Enregistrer TVA
+        </button>
       </div>
 
       {/* Bouton final */}

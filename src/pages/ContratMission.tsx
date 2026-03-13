@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { FileText, Printer, CheckCircle, Clock } from 'lucide-react';
+import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -247,8 +248,14 @@ export default function ContratMission() {
         )}
 
         {dejaSigneParMoi && (
-          <div className="rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-4 text-center">
-            <p className="text-sm font-semibold text-green-700 dark:text-green-400">✅ Vous avez déjà signé ce contrat</p>
+          <div className="space-y-4">
+            <div className="rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-4 text-center">
+              <p className="text-sm font-semibold text-green-700 dark:text-green-400">✅ Vous avez déjà signé ce contrat</p>
+            </div>
+            {/* A1: Rappel DUE — after establishment signature */}
+            {!isSoignant && (contrat.statut === 'SIGNE_ETABLISSEMENT' || contrat.statut === 'SIGNE_COMPLET') && (
+              <BandeauRappelDUE />
+            )}
           </div>
         )}
 
