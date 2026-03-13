@@ -17,6 +17,7 @@ import { fr } from 'date-fns/locale';
 export default function ProfilSoignant() {
   const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
+  const { role } = useRole();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
