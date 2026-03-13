@@ -65,6 +65,7 @@ export default function DetailMissionSoignant() {
   const [modalPerdu, setModalPerdu] = useState(false);
   const [animationSucces, setAnimationSucces] = useState(false);
   const [conformiteOk, setConformiteOk] = useState(true);
+  const [showEvaluation, setShowEvaluation] = useState(true);
 
   useEffect(() => {
     if (!user || !id) return;
