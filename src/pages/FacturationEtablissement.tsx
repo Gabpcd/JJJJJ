@@ -204,39 +204,10 @@ export default function FacturationEtablissement() {
     }
   };
 
-  const simulerPaiement = async (facture: any) => {
-    setSimulatingId(facture.id);
-    try {
-      const { error } = await supabase
-        .from('factures')
-        .update({
-          statut: 'PAYEE',
-          date_paiement: new Date().toISOString(),
-          modifie_le: new Date().toISOString(),
-        } as any)
-        .eq('id', facture.id);
-      if (error) throw error;
-
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'FINANCE_FACTURE_PAYEE',
-        p_type_ressource: 'facture', p_id_ressource: facture.id, p_cle_s3: null,
-        p_details: { numero_facture: facture.numero_facture, montant_ttc: facture.montant_ttc, mode: 'SIMULATION_DEV' },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-
-      afficherNotification({ type: 'succes', message: `🧪 Paiement simulé pour ${facture.numero_facture}` });
-      charger();
-    } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-    } finally {
-      setSimulatingId(null);
-    }
-  };
-
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Success banner */}
       {showSuccessBanner && (
         <div className="mb-4 flex items-center gap-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">

@@ -151,10 +151,10 @@ export default function ListeMissions() {
     charger();
   };
 
-  if (loading) return <LayoutApp role="ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-foreground">Mes missions</h1>
         <button onClick={() => navigate('/etablissement/missions/creer')} className="btn-primary text-sm hidden md:inline-flex">
