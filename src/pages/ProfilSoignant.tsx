@@ -131,6 +131,14 @@ export default function ProfilSoignant() {
     try {
       const { data, error } = await supabase.rpc('fn_exporter_mes_donnees' as any);
       if (error) throw error;
+      // L3: Audit RGPD export
+      await supabase.rpc('fn_ecrire_audit_safe', {
+        p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
+        p_action: 'RGPD_EXPORT_DONNEES',
+        p_type_ressource: 'soignant', p_id_ressource: user!.id,
+        p_cle_s3: null, p_details: { format: 'json' },
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
