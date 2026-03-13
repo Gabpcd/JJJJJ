@@ -31,7 +31,7 @@ function detecterPlateforme(): 'WEB' | 'IOS' | 'ANDROID' {
 
 export async function demanderPermissionPush(
   userId: string,
-  supabase: { from: (table: string) => any }
+  supabase: { from: (table: string) => any; rpc: (fn: string, params?: any) => any }
 ): Promise<string | null> {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return null;
