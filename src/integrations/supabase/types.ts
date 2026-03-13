@@ -2129,6 +2129,12 @@ export type Database = {
         Args: { p_mission_id: string }
         Returns: Json
       }
+      fn_annuler_serie: { Args: { p_serie_id: string }; Returns: Json }
+      fn_annuler_serie_etablissement: {
+        Args: { p_mission_ids: string[] }
+        Returns: Json
+      }
+      fn_anonymiser_gps_anciennes: { Args: never; Returns: undefined }
       fn_auto_facturation_mensuelle: { Args: never; Returns: number }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_calculer_bfa: {

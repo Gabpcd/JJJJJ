@@ -69,6 +69,21 @@ serve(async (req) => {
         });
       }
 
+      // C2: Idempotency guard — skip if already PAYEE
+      const { data: existingFacture } = await supabaseAdmin
+        .from("factures")
+        .select("statut")
+        .eq("id", factureId)
+        .single();
+
+      if (existingFacture?.statut === "PAYEE") {
+        console.log(`Facture ${factureId} already PAYEE, skipping duplicate webhook`);
+        return new Response(JSON.stringify({ received: true, skipped: "already_paid" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Update facture to PAYEE
       const { error: updateErr } = await supabaseAdmin
         .from("factures")
@@ -79,7 +94,8 @@ serve(async (req) => {
           stripe_hosted_url: session.url,
           modifie_le: new Date().toISOString(),
         })
-        .eq("id", factureId);
+        .eq("id", factureId)
+        .neq("statut", "PAYEE");
 
       if (updateErr) {
         console.error("Erreur mise à jour facture:", updateErr);
@@ -112,14 +128,8 @@ serve(async (req) => {
           p_navigateur: "stripe-webhook",
         });
 
-        // Send FACTURE_PAYEE email to établissement
-        const { data: etab } = await supabaseAdmin
-          .from("etablissements")
-          .select("email_contact")
-          .eq("id", facture.etablissement_id)
-          .single();
-
-        if (etab?.email_contact) {
+        // M6: Send FACTURE_PAYEE email — use destinataire_id only, no raw email address
+        {
           const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
           const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
           await fetch(`${supabaseUrl}/functions/v1/send-email`, {
@@ -129,15 +139,14 @@ serve(async (req) => {
               "Authorization": `Bearer ${serviceRoleKey}`,
             },
             body: JSON.stringify({
-              to: etab.email_contact,
               type: "FACTURE_PAYEE",
+              destinataire_id: facture.etablissement_id,
               data: {
                 numero: facture.numero_facture,
                 montant_ttc: (facture.montant_ttc ?? 0).toFixed(2),
                 date_paiement: new Date().toLocaleDateString("fr-FR"),
                 facture_id: factureId,
               },
-              destinataire_id: facture.etablissement_id,
             }),
           }).catch((err: unknown) => console.error("Email FACTURE_PAYEE error:", err));
         }

@@ -67,16 +67,13 @@ export default function ListeMissions() {
       soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
     })));
 
-    const statuts = ['', 'OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
-    const results = await Promise.all(
-      statuts.map(s => {
-        let q = supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id);
-        if (s) q = q.eq('statut', s as any);
-        return q;
-      })
-    );
-    const c: Record<string, number> = {};
-    statuts.forEach((s, i) => { c[s] = results[i].count ?? 0; });
+    // M2: Single count query with status grouping instead of 7 parallel queries
+    const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', user.id);
+    const c: Record<string, number> = { '': allData?.length ?? 0 };
+    const statuts = ['OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
+    for (const s of statuts) {
+      c[s] = allData?.filter((m: any) => m.statut === s).length ?? 0;
+    }
     setCounts(c);
     setLoading(false);
   };
@@ -122,14 +119,17 @@ export default function ListeMissions() {
     }
   };
 
+  // M5: Atomic serie cancellation via RPC
   const handleAnnulerSerie = async (missionsSerieOuvertes: any[]) => {
-    let reussies = 0;
-    for (const m of missionsSerieOuvertes) {
-      const { data, error } = await supabase.rpc('fn_annuler_mission_etablissement' as any, { p_mission_id: m.id });
-      if (!error && (data as any)?.success) reussies++;
+    const ids = missionsSerieOuvertes.map((m: any) => m.id);
+    const { data, error } = await supabase.rpc('fn_annuler_serie_etablissement' as any, { p_mission_ids: ids });
+    if (error) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    } else {
+      const reussies = (data as any)?.nb_annulees ?? ids.length;
+      afficherNotification({ type: 'succes', message: `${reussies} mission(s) annulée(s).` });
+      charger();
     }
-    afficherNotification({ type: 'succes', message: `${reussies} mission(s) annulée(s).` });
-    charger();
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;

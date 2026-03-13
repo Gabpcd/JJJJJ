@@ -56,6 +56,14 @@ export default function ProfilEtablissement() {
       }
       setLoading(false);
     });
+    // L2: Audit consultation profil établissement
+    supabase.rpc('fn_ecrire_audit_safe', {
+      p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
+      p_action: 'DONNEES_PERSO_CONSULTATION', p_type_ressource: 'etablissement',
+      p_id_ressource: user.id, p_cle_s3: null,
+      p_details: { page: 'profil_etablissement' },
+      p_ip: null, p_navigateur: navigator.userAgent,
+    });
   }, [user]);
 
   const [geoLoading, setGeoLoading] = useState(false);
@@ -243,6 +251,14 @@ export default function ProfilEtablissement() {
               a.download = `mes-donnees-soin-direct-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
+              // C3: Audit RGPD export for establishments
+              await supabase.rpc('fn_ecrire_audit_safe', {
+                p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
+                p_action: 'RGPD_EXPORT_DONNEES', p_type_ressource: 'etablissement',
+                p_id_ressource: user!.id, p_cle_s3: null,
+                p_details: { source: 'profil_etablissement' },
+                p_ip: null, p_navigateur: navigator.userAgent,
+              });
               afficherNotification({ type: 'succes', message: 'Données exportées.' });
             } catch (err: any) {
               afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });

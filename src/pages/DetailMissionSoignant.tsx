@@ -295,6 +295,7 @@ export default function DetailMissionSoignant() {
                 <div className="mt-1">
                   <BadgeDistance distanceKm={distance} />
                 </div>
+                {/* L4: Contact info only visible after assignment */}
                 {estAssigne && (
                   <div className="mt-2 space-y-1">
                     {etablissement?.telephone_contact && (
