@@ -51,7 +51,7 @@ export function PanneauContestation({
 }: Props) {
   const { user } = useAuth();
   const { role: roleGlobal } = useRole();
-  const estAdminPlateforme = roleGlobal === 'ADMIN_PLATEFORME';
+  const estAdminPlateforme = (roleGlobal as string) === 'ADMIN_PLATEFORME';
   const [litige, setLitige] = useState<Litige | null>(null);
   const [loading, setLoading] = useState(true);
   const [motif, setMotif] = useState('');
