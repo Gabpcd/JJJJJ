@@ -2280,6 +2280,10 @@ export type Database = {
         }[]
       }
       fn_enregistrer_siret_liberal: { Args: { p_siret: string }; Returns: Json }
+      fn_est_exclu: {
+        Args: { p_etablissement_id: string; p_soignant_id: string }
+        Returns: boolean
+      }
       fn_est_exclu_par_etablissement: {
         Args: { p_etablissement_id: string }
         Returns: boolean
