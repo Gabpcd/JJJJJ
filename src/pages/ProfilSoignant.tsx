@@ -8,7 +8,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Loader2, Download, Trash2 } from 'lucide-react';
+import { MapPin, Loader2, Download, Trash2, MapPinOff } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 

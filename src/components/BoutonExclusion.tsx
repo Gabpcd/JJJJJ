@@ -22,14 +22,17 @@ export function BoutonExclusion({ excluId, typeExcluPar, label, onDone }: Bouton
   const handleExclure = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from('exclusions').insert({
-      exclu_id: excluId,
-      exclu_par: user.id,
-      type_exclu_par: typeExcluPar,
-      motif: motif.trim() || null,
+
+    const { data, error } = await supabase.rpc('fn_exclure_utilisateur' as any, {
+      p_exclu_id: excluId,
+      p_type: typeExcluPar,
+      p_motif: motif.trim() || null,
     });
+
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    } else if (data && !(data as any).success) {
+      afficherNotification({ type: 'erreur', message: (data as any).error });
     } else {
       afficherNotification({ type: 'succes', message: 'Exclusion enregistrée. Les missions ne seront plus visibles.' });
       onDone?.();

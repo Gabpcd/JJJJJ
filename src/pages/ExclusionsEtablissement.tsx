@@ -16,28 +16,27 @@ export default function ExclusionsEtablissement() {
   const { afficherNotification } = useNotification();
   const [exclusions, setExclusions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [suppressionId, setSuppressionId] = useState<string | null>(null);
+  const [suppressionExcluId, setSuppressionExcluId] = useState<string | null>(null);
 
   const charger = async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from('exclusions')
-      .select('*')
-      .eq('exclu_par', user.id)
-      .order('cree_le', { ascending: false });
+    const [{ data }, { data: soignantsData }] = await Promise.all([
+      supabase
+        .from('exclusions')
+        .select('*')
+        .eq('exclu_par', user.id)
+        .order('cree_le', { ascending: false }),
+      supabase.rpc('fn_mes_soignants_etablissement'),
+    ]);
 
     let list = data || [];
-    // Fetch soignant names for display
     if (list.length > 0) {
-      const soignantIds = list.map((e: any) => e.exclu_id);
-      const { data: soignants } = await supabase
-        .from('soignants')
-        .select('id, prenom, nom')
-        .in('id', soignantIds);
       const soignantMap: Record<string, string> = {};
-      (soignants || []).forEach((s: any) => {
-        soignantMap[s.id] = `${s.prenom} ${s.nom}`;
-      });
+      if (Array.isArray(soignantsData)) {
+        for (const s of soignantsData) {
+          soignantMap[s.id] = `${s.prenom} ${s.nom}`;
+        }
+      }
       list = list.map((e: any) => ({ ...e, nom_exclu: soignantMap[e.exclu_id] || 'Soignant inconnu' }));
     }
     setExclusions(list);
@@ -47,15 +46,19 @@ export default function ExclusionsEtablissement() {
   useEffect(() => { charger(); }, [user]);
 
   const supprimerExclusion = async () => {
-    if (!suppressionId) return;
-    const { error } = await supabase.from('exclusions').delete().eq('id', suppressionId);
+    if (!suppressionExcluId) return;
+    const { data, error } = await supabase.rpc('fn_retirer_exclusion' as any, {
+      p_exclu_id: suppressionExcluId,
+    });
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    } else if (data && !(data as any).success) {
+      afficherNotification({ type: 'erreur', message: (data as any).error });
     } else {
       afficherNotification({ type: 'succes', message: 'Exclusion supprimée.' });
       charger();
     }
-    setSuppressionId(null);
+    setSuppressionExcluId(null);
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
@@ -79,7 +82,7 @@ export default function ExclusionsEtablissement() {
                   Depuis le {format(new Date(e.cree_le), 'd MMM yyyy', { locale: fr })}
                 </p>
               </div>
-              <button onClick={() => setSuppressionId(e.id)} className="text-destructive hover:text-destructive/80 p-2">
+              <button onClick={() => setSuppressionExcluId(e.exclu_id)} className="text-destructive hover:text-destructive/80 p-2">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -88,8 +91,8 @@ export default function ExclusionsEtablissement() {
       )}
 
       <ModalConfirmation
-        ouvert={!!suppressionId}
-        onFermer={() => setSuppressionId(null)}
+        ouvert={!!suppressionExcluId}
+        onFermer={() => setSuppressionExcluId(null)}
         onConfirmer={supprimerExclusion}
         titre="Supprimer cette exclusion ?"
         message="Ce soignant pourra à nouveau postuler à vos missions."
