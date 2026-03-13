@@ -104,11 +104,14 @@ export default function SignatureCanvas({ onSave, width = 400, height = 150 }: S
         <button
           type="button"
           onClick={save}
-          disabled={!hasSignature}
+          disabled={!signatureValide}
           className="text-xs bg-primary text-primary-foreground px-3 py-1 rounded disabled:opacity-50"
         >
           Valider la signature
         </button>
+        {hasSignature && !signatureValide && (
+          <span className="text-[10px] text-destructive">Signature trop simple — continuez à signer</span>
+        )}
       </div>
     </div>
   );

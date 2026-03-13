@@ -76,11 +76,11 @@ export default function DashboardEtablissement() {
     // KPI
     try {
       const [resO, resEC, resT, resTotal, resAssigned] = await Promise.all([
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id),
-        supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
       ]);
 
       if (resO.error || resEC.error || resT.error || resTotal.error || resAssigned.error) partialError = true;

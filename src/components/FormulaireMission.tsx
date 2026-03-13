@@ -357,7 +357,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <div className="space-y-2">
             {([
               { value: 'TOUS' as const, label: 'Tous types de contrats', desc: 'CDDU, Vacation, Libéral, Salarié' },
-              { value: 'SALARIE' as const, label: 'Salariés et CDD uniquement', desc: 'CDDU, Intérim, Vacation, Salarié' },
+              { value: 'SALARIE' as const, label: 'Salariés et CDD uniquement', desc: 'CDDU, Vacation, Salarié' },
               { value: 'LIBERAL' as const, label: 'Libéraux uniquement', desc: 'Libéral' },
             ]).map(opt => (
               <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
