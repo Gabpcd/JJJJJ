@@ -2611,7 +2611,17 @@ export type Database = {
       }
       fn_missions_publiques_etablissement: {
         Args: { p_etablissement_id: string }
-        Returns: Json
+        Returns: {
+          debut_le: string
+          fin_le: string
+          id: string
+          intitule: string
+          nom_etablissement: string
+          profession_requise: Database["public"]["Enums"]["type_profession"]
+          service: string
+          taux_horaire_base: number
+          ville_etablissement: string
+        }[]
       }
       fn_modifier_mission_etablissement: {
         Args: {
