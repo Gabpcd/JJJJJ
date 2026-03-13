@@ -98,6 +98,11 @@ export default function ContratMission() {
   return (
     <LayoutApp role={role}>
       <div className="max-w-3xl mx-auto">
+        {contrat.statut === 'ANNULE' && (
+          <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 mb-4 text-center">
+            <p className="text-sm font-semibold text-destructive">❌ Ce contrat a été annulé suite à l'annulation de la mission.</p>
+          </div>
+        )}
         <div className="flex items-center gap-3 mb-4">
           <FileText className="h-6 w-6 text-primary" />
           <div>

@@ -59,8 +59,12 @@ export default function MissionsSoignant() {
       `);
 
       if (onglet === 'disponibles') {
-        query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any)
-          .order('est_urgente', { ascending: false }).order('debut_le', { ascending: true });
+        query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any);
+        // Exclude CDDU missions for liberal soignants
+        if (soignant.type_contrat === 'LIBERAL') {
+          query = query.not('description', 'ilike', '%[CONTRAT:SALARIE]%');
+        }
+        query = query.order('est_urgente', { ascending: false }).order('debut_le', { ascending: true });
         if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);
         if (filtres?.dateFin) query = query.lte('debut_le', filtres.dateFin);
         if (filtres?.tauxMin && filtres.tauxMin > 0) query = query.gte('taux_horaire_base', filtres.tauxMin);
