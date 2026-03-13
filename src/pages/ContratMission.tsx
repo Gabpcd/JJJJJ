@@ -48,25 +48,26 @@ export default function ContratMission() {
     setSigning(true);
     try {
       const isSoignant = contrat.soignant_id === user.id;
-      const updateData: any = isSoignant
-        ? {
-            signature_soignant: true,
-            signature_soignant_le: new Date().toISOString(),
-            signature_image_soignant: signatureData,
-            signature_navigateur_soignant: navigator.userAgent,
-          }
-        : {
-            signature_etablissement: true,
-            signature_etablissement_le: new Date().toISOString(),
-            signature_image_etablissement: signatureData,
-            signature_navigateur_etablissement: navigator.userAgent,
-          };
 
-      // Le trigger dec_proteger_signature_contrat gère automatiquement
-      // le passage à SIGNE_COMPLET quand les deux parties ont signé.
-
-      const { error: updateError } = await supabase.from('contrats_mission').update(updateData).eq('id', contrat.id);
-      if (updateError) throw updateError;
+      if (isSoignant) {
+        // Soignant signe via RPC sécurisée
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('fn_signer_contrat_soignant' as any, {
+          p_contrat_id: contrat.id,
+          p_signature_image: signatureData,
+        });
+        if (rpcError) throw rpcError;
+        if (rpcResult?.error) throw new Error(rpcResult.error);
+      } else {
+        // Établissement signe via UPDATE direct (autorisé par RLS)
+        const updateData: any = {
+          signature_etablissement: true,
+          signature_etablissement_le: new Date().toISOString(),
+          signature_image_etablissement: signatureData,
+          signature_navigateur_etablissement: navigator.userAgent,
+        };
+        const { error: updateError } = await supabase.from('contrats_mission').update(updateData).eq('id', contrat.id);
+        if (updateError) throw updateError;
+      }
 
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id,

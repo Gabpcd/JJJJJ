@@ -152,8 +152,7 @@ export default function PresencesSoignant() {
       afficherNotification({ type: 'erreur', message: '🚨 Alerte : un déplacement inhabituellement rapide a été détecté.', duree: 10000 });
     }
 
-    // Mission → EN_COURS
-    await supabase.from('missions').update({ statut: 'EN_COURS' } as any).eq('id', missionId).eq('statut', 'ASSIGNEE');
+    // Mission → EN_COURS (handled by trigger on presence insert)
 
     // Audit
     await supabase.rpc('fn_ecrire_audit_safe', {

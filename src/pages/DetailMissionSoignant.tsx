@@ -223,16 +223,14 @@ export default function DetailMissionSoignant() {
   };
 
   const annulerParticipation = async () => {
-    const { error } = await supabase
-      .from('missions')
-      .update({
-        soignant_assigne_id: null,
-        statut: 'ANNULEE_PAR_SOIGNANT' as any,
-      })
-      .eq('id', id!);
+    const { data, error } = await supabase.rpc('fn_annuler_mission_soignant' as any, { p_mission_id: id! });
 
     if (error) {
       toast.error(extraireMessageErreur(error));
+      return;
+    }
+    if (data?.error) {
+      toast.error(data.error);
       return;
     }
 

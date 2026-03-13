@@ -84,29 +84,28 @@ export default function ProfilSoignant() {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from('soignants').update({
-      prenom: form.prenom, nom: form.nom,
-      telephone: form.telephone || null, date_naissance: form.dateNaissance || null,
-      type_contrat: typesContrat[0] || null,
-      types_contrat_acceptes: JSON.stringify(typesContrat),
-      numero_rpps: form.rpps || null,
-      numero_adeli: form.adeli || null, rayon_deplacement_km: form.rayon,
-      adresse_lat: form.lat ? parseFloat(form.lat) : null,
-      adresse_lng: form.lng ? parseFloat(form.lng) : null,
-      modifie_le: new Date().toISOString(),
-    } as any).eq('id', user.id);
+    const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
+      p_telephone: form.telephone || null,
+      p_adresse_rue: null,
+      p_adresse_ville: null,
+      p_adresse_code_postal: null,
+      p_rayon_deplacement_km: form.rayon,
+      p_prenom: form.prenom || null,
+      p_nom: form.nom || null,
+      p_date_naissance: form.dateNaissance || null,
+      p_type_contrat: typesContrat[0] || null,
+      p_types_contrat_acceptes: JSON.stringify(typesContrat),
+      p_numero_rpps: form.rpps || null,
+      p_numero_adeli: form.adeli || null,
+      p_adresse_lat: form.lat ? parseFloat(form.lat) : null,
+      p_adresse_lng: form.lng ? parseFloat(form.lng) : null,
+    });
 
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    } else if (rpcResult?.error) {
+      afficherNotification({ type: 'erreur', message: rpcResult.error });
     } else {
-      const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
-        p_action: 'DONNEES_PERSO_MODIFICATION', p_type_ressource: 'soignant',
-        p_id_ressource: user.id, p_cle_s3: null,
-        p_details: { champs_modifies: Object.keys(form), types_contrat: typesContrat },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-      if (auditError) handleErrorSilent(auditError, 'Audit modification profil soignant');
       afficherNotification({ type: 'succes', message: 'Profil mis à jour avec succès !' });
     }
     setSaving(false);

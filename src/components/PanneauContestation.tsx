@@ -147,33 +147,12 @@ export function PanneauContestation({
     if (!user || !litige || !reponse.trim()) return;
     setEnvoi(true);
     try {
-      // Parties can only move to EN_DISCUSSION, never resolve
-      const updateData: any = {
-        reponse: sanitizeText(reponse.trim()),
-        statut: 'EN_DISCUSSION',
-      };
-
-      const { error } = await supabase.from('litiges').update(updateData).eq('id', litige.id);
+      const { data: rpcResult, error } = await supabase.rpc('fn_repondre_litige' as any, {
+        p_litige_id: litige.id,
+        p_reponse: sanitizeText(reponse.trim()),
+      });
       if (error) throw error;
-
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id, p_type_acteur: roleActeur,
-        p_action: 'CONTESTATION_REPONSE',
-        p_type_ressource: 'litige', p_id_ressource: litige.id, p_cle_s3: null,
-        p_details: { reponse: reponse.trim(), presence_id: presenceId, nouveau_statut: 'EN_DISCUSSION' },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-
-      const destId = role === 'SOIGNANT' ? etablissementId : soignantId;
-      const destType = role === 'SOIGNANT' ? 'ETABLISSEMENT' : 'SOIGNANT';
-      const lien = role === 'SOIGNANT' ? '/etablissement/presences' : '/soignant/presences';
-      await supabase.rpc('fn_creer_notification', {
-        p_destinataire_id: destId, p_type_destinataire: destType,
-        p_type: 'REPONSE_CONTESTATION',
-        p_titre: 'Réponse à la contestation',
-        p_corps: `Le ${roleLabel} a répondu à la contestation de présence.`,
-        p_lien: lien, p_type_ressource: 'presence', p_id_ressource: presenceId,
-      });
+      if (rpcResult?.error) throw new Error(rpcResult.error);
 
       toast.success('Réponse envoyée');
       setReponse('');
