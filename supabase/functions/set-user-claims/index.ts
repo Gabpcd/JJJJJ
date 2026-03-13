@@ -36,8 +36,9 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Mode 1 : appel via service_role → tout autorisé
-    if (authHeader.includes(serviceRoleKey)) {
+    // Mode 1 : appel via service_role → tout autorisé (C4: strict equality)
+    const bearerToken = authHeader.replace("Bearer ", "");
+    if (bearerToken === serviceRoleKey) {
       const appMetadata: Record<string, unknown> = { role };
       if (etablissement_id) appMetadata.etablissement_id = etablissement_id;
 

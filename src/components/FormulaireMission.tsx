@@ -260,29 +260,39 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         afficherNotification({ type: 'succes', message: 'Mission mise à jour !' });
         navigate(`/etablissement/missions/${missionSource.id}`);
       } else {
-        const { data, error } = await supabase
-          .from('missions')
-          .insert({ ...payload, etablissement_id: user.id } as any)
-          .select('id, intitule, statut, debut_le, fin_le')
-          .single();
+        // C1: Use secure RPC instead of direct INSERT
+        const { data: rpcResult, error } = await supabase.rpc('fn_creer_mission' as any, {
+          p_intitule: payload.intitule,
+          p_description: payload.description,
+          p_profession_requise: payload.profession_requise,
+          p_service: payload.service,
+          p_debut_le: payload.debut_le,
+          p_fin_le: payload.fin_le,
+          p_taux_horaire_base: payload.taux_horaire_base,
+          p_est_urgente: payload.est_urgente,
+          p_niveau_urgence: payload.niveau_urgence,
+        });
 
         if (error) {
           if (estBlocageCodeTravail(error)) { setErreurCodeTravail(error); }
           else {
-            const msg = extraireMessageErreur(error);
-            if (msg.includes('facture') && msg.includes('impayée')) {
-              afficherNotification({ type: 'erreur', message: msg });
-              setErreurFactureImpayee(true);
-            } else {
-              afficherNotification({ type: 'erreur', message: msg });
-            }
+            afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
           }
           return;
         }
 
+        if (rpcResult && !(rpcResult as any).success) {
+          const msg = (rpcResult as any).error || 'Erreur lors de la création.';
+          if (msg.includes('facture') || msg.includes('impayée')) setErreurFactureImpayee(true);
+          afficherNotification({ type: 'erreur', message: msg });
+          return;
+        }
+
+        const missionId = (rpcResult as any)?.mission_id;
+
         await supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_CREATION',
-          p_type_ressource: 'mission', p_id_ressource: data.id, p_cle_s3: null,
+          p_type_ressource: 'mission', p_id_ressource: missionId || user.id, p_cle_s3: null,
           p_details: { intitule, profession, taux: tauxHoraire, debut: debutLe, fin: finLe },
           p_ip: null, p_navigateur: navigator.userAgent,
         });

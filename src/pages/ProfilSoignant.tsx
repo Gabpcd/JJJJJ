@@ -293,6 +293,14 @@ export default function ProfilSoignant() {
                   afficherNotification({ type: 'erreur', message: (data as any).error });
                 } else {
                   setConsentementGPS(checked);
+                  // L4: Audit GPS consent change
+                  await supabase.rpc('fn_ecrire_audit_safe', {
+                    p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
+                    p_action: checked ? 'GPS_CONSENTEMENT_ACTIVE' : 'GPS_CONSENTEMENT_RETIRE',
+                    p_type_ressource: 'soignant', p_id_ressource: user!.id,
+                    p_cle_s3: null, p_details: { consentement_gps: checked },
+                    p_ip: null, p_navigateur: navigator.userAgent,
+                  });
                   afficherNotification({
                     type: checked ? 'succes' : 'avertissement',
                     message: checked ? 'Consentement GPS activé.' : 'Consentement GPS retiré. Vérification manuelle requise.',

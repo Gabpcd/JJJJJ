@@ -13,14 +13,47 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // M8: Require authentication (service_role or admin JWT)
+  const authHeader = req.headers.get('Authorization');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: 'Non autorisé' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const bearerToken = authHeader.replace('Bearer ', '');
+  const isServiceRole = bearerToken === serviceRoleKey;
+
+  if (!isServiceRole) {
+    // Verify JWT and check admin role
+    const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!);
+    const { data: { user }, error } = await supabaseAuth.auth.getUser(bearerToken);
+    if (error || !user) {
+      return new Response(JSON.stringify({ error: 'Non autorisé' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    // Only ADMIN can call health-check via JWT
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const { data: roleData } = await adminClient.rpc('fn_get_my_role_for_user', { p_user_id: user.id }).maybeSingle();
+    // Fallback: check app_metadata
+    const { data: { user: fullUser } } = await adminClient.auth.admin.getUserById(user.id);
+    if (fullUser?.app_metadata?.role !== 'ADMIN') {
+      return new Response(JSON.stringify({ error: 'Accès réservé aux administrateurs' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
     const { data, error } = await supabase.rpc('fn_health_check');
-
     if (error) throw error;
 
     return new Response(JSON.stringify(data), {

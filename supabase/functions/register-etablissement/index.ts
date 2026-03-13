@@ -8,9 +8,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// M7: Rate limiting - 5 requests per IP per 10 minutes
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 10 * 60 * 1000;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // M7: Rate limiting
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (!checkRateLimit(clientIp)) {
+    return new Response(JSON.stringify({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' }), {
+      status: 429,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -109,7 +135,7 @@ serve(async (req) => {
       });
     }
 
-    // 4. Audit inscription + CGU consent
+    // 4. Audit inscription + CGU + L1: CGV consent
     await supabaseAdmin.from('journaux_audit').insert({
       acteur_id: user.id,
       type_acteur: 'ADMIN_ETABLISSEMENT',
@@ -126,7 +152,7 @@ serve(async (req) => {
       action: 'RGPD_CONSENTEMENT_DONNE',
       type_ressource: 'etablissement',
       id_ressource: user.id,
-      details: { type: 'inscription', cgu: true, confidentialite: true },
+      details: { type: 'inscription', cgu: true, confidentialite: true, cgv: true },
       navigateur_acteur: body.navigateur || null,
     });
 
