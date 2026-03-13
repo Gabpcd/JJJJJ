@@ -67,10 +67,10 @@ export default function FacturationEtablissement() {
     if (!user) return;
 
     const [resEtab, resFact, resMNF] = await Promise.all([
-      supabase.from('etablissements').select('id, nom, type, taux_commission_negocie, palier_commission_id, groupe_sante_id, paliers_commission(nom, taux_commission)').eq('id', user.id).single(),
+      supabase.from('etablissements').select('id, nom, type, taux_commission_negocie, palier_commission_id, groupe_sante_id, paliers_commission(nom)').eq('id', user.id).single(),
       supabase.from('factures').select('id, numero_facture, statut, montant_ht, montant_tva, montant_ttc, taux_tva, nombre_missions, date_emission, date_echeance, date_paiement, est_secteur_public, mode_paiement, stripe_hosted_url, chorus_pro_statut, cree_le').eq('etablissement_id', user.id).order('cree_le', { ascending: false }),
       supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, net_a_payer, montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission, statut')
+        .select('id, intitule, debut_le, fin_le, montant_commission_ht, montant_commission_ttc, statut')
         .eq('etablissement_id', user.id)
         .eq('statut', 'TERMINEE')
         .eq('commission_facturee', false)
