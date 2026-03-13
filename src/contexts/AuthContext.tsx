@@ -83,9 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (auditError) logger.error('Audit connexion échoué', auditError);
 
-    // Update derniere_activite_le for soignants
+    // Update derniere_activite_le for soignants via RPC
     if (role === 'SOIGNANT') {
-      supabase.from('soignants').update({ derniere_activite_le: new Date().toISOString() } as any).eq('id', u.id).then(() => {});
+      supabase.rpc('fn_maj_activite_soignant' as any).then(() => {});
     }
   }, []);
 

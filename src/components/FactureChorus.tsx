@@ -18,22 +18,14 @@ export function FactureChorus({ facture, onUpdate }: Props) {
   const deposer = async () => {
     if (!user) return;
     setLoading(true);
-    await supabase.from('factures').update({
-      chorus_pro_statut: 'DEPOSEE',
-      chorus_pro_deposee_le: new Date().toISOString(),
-    } as any).eq('id', facture.id);
-
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user.id,
-      p_type_acteur: 'ADMIN_ETABLISSEMENT',
-      p_action: 'FINANCE_CHORUS_DEPOSE',
-      p_type_ressource: 'facture',
-      p_id_ressource: facture.id,
-      p_cle_s3: null,
-      p_details: { numero: facture.numero_facture },
-      p_ip: null,
-      p_navigateur: navigator.userAgent,
+    const { data, error } = await supabase.rpc('fn_deposer_chorus' as any, {
+      p_facture_id: facture.id,
     });
+    if (error || data?.error) {
+      afficherNotification({ type: 'erreur', message: data?.error || 'Erreur lors du dépôt Chorus' });
+      setLoading(false);
+      return;
+    }
 
     setLoading(false);
     setOpen(false);

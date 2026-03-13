@@ -165,18 +165,17 @@ export function PanneauContestation({
     }
   };
 
-  // Admin-only: resolve or close a litige
+  // Admin-only: resolve or close a litige via RPC
   const resoudreAdmin = async (resolution: 'RESOLUE_SOIGNANT' | 'RESOLUE_ETABLISSEMENT' | 'FERME') => {
     if (!user || !litige) return;
     setEnvoi(true);
     try {
-      const { error } = await supabase.from('litiges').update({
-        statut: resolution === 'FERME' ? 'FERME' : `RESOLUE_ADMIN`,
-        resolution: resolution === 'RESOLUE_SOIGNANT' ? 'Résolu en faveur du soignant' : resolution === 'RESOLUE_ETABLISSEMENT' ? 'Résolu en faveur de l\'établissement' : 'Fermé par l\'administrateur',
-        resolu_le: new Date().toISOString(),
-        resolu_par: user.id,
-      }).eq('id', litige.id);
+      const { data, error } = await supabase.rpc('fn_resoudre_litige' as any, {
+        p_litige_id: litige.id,
+        p_resolution: resolution,
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast.success('Litige résolu');
       charger();

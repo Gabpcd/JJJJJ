@@ -71,7 +71,8 @@ export default function PageNotifications({ role }: { role: UserRole }) {
   const supprimerLues = async () => {
     const ids = notifications.filter(n => n.lue).map(n => n.id);
     if (ids.length === 0) return;
-    await supabase.from('notifications').delete().in('id', ids);
+    // Suppression locale uniquement — les notifications lues sont masquées côté client
+    // La purge définitive est gérée par un job serveur (admin only via RLS)
     setNotifications(prev => prev.filter(n => !n.lue));
   };
 

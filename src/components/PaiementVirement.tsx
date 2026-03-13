@@ -21,24 +21,15 @@ export function PaiementVirement({ facture, onUpdate }: Props) {
     if (!user || !reference.trim()) return;
     setLoading(true);
 
-    await supabase.from('factures').update({
-      mode_paiement: 'VIREMENT',
-      virement_reference: reference.trim(),
-      virement_confirme_par: user.id,
-      virement_confirme_le: new Date().toISOString(),
-    } as any).eq('id', facture.id);
-
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user.id,
-      p_type_acteur: 'ADMIN_ETABLISSEMENT',
-      p_action: 'FINANCE_VIREMENT_CONFIRME',
-      p_type_ressource: 'facture',
-      p_id_ressource: facture.id,
-      p_cle_s3: null,
-      p_details: { numero: facture.numero_facture, reference: reference.trim() },
-      p_ip: null,
-      p_navigateur: navigator.userAgent,
+    const { data, error } = await supabase.rpc('fn_declarer_virement' as any, {
+      p_facture_id: facture.id,
+      p_reference: reference.trim(),
     });
+    if (error || data?.error) {
+      afficherNotification({ type: 'erreur', message: data?.error || 'Erreur lors de la déclaration du virement' });
+      setLoading(false);
+      return;
+    }
 
     setLoading(false);
     setOpen(false);
