@@ -356,7 +356,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <label className="text-sm font-medium text-foreground mb-2 block">Ouvert aux contrats :</label>
           <div className="space-y-2">
             {([
-              { value: 'TOUS' as const, label: 'Tous types de contrats', desc: 'CDDU, Intérim, Vacation, Libéral, Salarié' },
+              { value: 'TOUS' as const, label: 'Tous types de contrats', desc: 'CDDU, Vacation, Libéral, Salarié' },
               { value: 'SALARIE' as const, label: 'Salariés et CDD uniquement', desc: 'CDDU, Intérim, Vacation, Salarié' },
               { value: 'LIBERAL' as const, label: 'Libéraux uniquement', desc: 'Libéral' },
             ]).map(opt => (
