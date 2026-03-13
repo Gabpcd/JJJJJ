@@ -104,7 +104,7 @@ export default function DashboardEtablissement() {
         setCoutParMois(mois);
 
         // Favoris
-        const { data: favData } = await supabase.from('favoris').select('soignant_id, cree_le').eq('etablissement_id', user.id).order('cree_le', { ascending: false }).limit(5);
+        const { data: favData } = await (supabase.from('favoris' as any) as any).select('soignant_id, cree_le').eq('etablissement_id', user.id).order('cree_le', { ascending: false }).limit(5);
         if (favData && favData.length > 0) {
           const sgIds = favData.map((f: any) => f.soignant_id);
           const enriched = sgIds.map((sid: string) => ({ ...(sgMap[sid] || { id: sid }), soignant_id: sid }));
