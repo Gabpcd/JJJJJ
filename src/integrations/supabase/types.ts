@@ -170,6 +170,8 @@ export type Database = {
           modifie_le: string | null
           numero_contrat: string
           pdf_cle_s3: string | null
+          rappel_due_affiche: boolean | null
+          rappel_due_affiche_le: string | null
           signature_etablissement: boolean | null
           signature_etablissement_le: string | null
           signature_image_etablissement: string | null
@@ -195,6 +197,8 @@ export type Database = {
           modifie_le?: string | null
           numero_contrat: string
           pdf_cle_s3?: string | null
+          rappel_due_affiche?: boolean | null
+          rappel_due_affiche_le?: string | null
           signature_etablissement?: boolean | null
           signature_etablissement_le?: string | null
           signature_image_etablissement?: string | null
@@ -220,6 +224,8 @@ export type Database = {
           modifie_le?: string | null
           numero_contrat?: string
           pdf_cle_s3?: string | null
+          rappel_due_affiche?: boolean | null
+          rappel_due_affiche_le?: string | null
           signature_etablissement?: boolean | null
           signature_etablissement_le?: string | null
           signature_image_etablissement?: string | null
@@ -556,6 +562,7 @@ export type Database = {
           adresse_ville: string
           chorus_pro_actif: boolean | null
           chorus_pro_identifiant: string | null
+          convention_collective: string | null
           cree_le: string | null
           delai_paiement_jours: number | null
           email_contact: string
@@ -590,6 +597,7 @@ export type Database = {
           adresse_ville: string
           chorus_pro_actif?: boolean | null
           chorus_pro_identifiant?: string | null
+          convention_collective?: string | null
           cree_le?: string | null
           delai_paiement_jours?: number | null
           email_contact: string
@@ -624,6 +632,7 @@ export type Database = {
           adresse_ville?: string
           chorus_pro_actif?: boolean | null
           chorus_pro_identifiant?: string | null
+          convention_collective?: string | null
           cree_le?: string | null
           delai_paiement_jours?: number | null
           email_contact?: string
@@ -1677,7 +1686,10 @@ export type Database = {
           adresse_lng: number | null
           adresse_rue: string | null
           adresse_ville: string | null
+          assujetti_tva: boolean | null
           code_ape: string | null
+          consentement_gps: boolean | null
+          consentement_gps_le: string | null
           cree_le: string | null
           date_naissance: string | null
           date_passage_liberal: string | null
@@ -1694,6 +1706,7 @@ export type Database = {
           numero_adeli: string | null
           numero_rpps: string | null
           numero_secu: string | null
+          numero_tva: string | null
           prenom: string
           prevoyance_fournisseur: string | null
           prevoyance_inscrit: boolean | null
@@ -1726,7 +1739,10 @@ export type Database = {
           adresse_lng?: number | null
           adresse_rue?: string | null
           adresse_ville?: string | null
+          assujetti_tva?: boolean | null
           code_ape?: string | null
+          consentement_gps?: boolean | null
+          consentement_gps_le?: string | null
           cree_le?: string | null
           date_naissance?: string | null
           date_passage_liberal?: string | null
@@ -1743,6 +1759,7 @@ export type Database = {
           numero_adeli?: string | null
           numero_rpps?: string | null
           numero_secu?: string | null
+          numero_tva?: string | null
           prenom: string
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
@@ -1775,7 +1792,10 @@ export type Database = {
           adresse_lng?: number | null
           adresse_rue?: string | null
           adresse_ville?: string | null
+          assujetti_tva?: boolean | null
           code_ape?: string | null
+          consentement_gps?: boolean | null
+          consentement_gps_le?: string | null
           cree_le?: string | null
           date_naissance?: string | null
           date_passage_liberal?: string | null
@@ -1792,6 +1812,7 @@ export type Database = {
           numero_adeli?: string | null
           numero_rpps?: string | null
           numero_secu?: string | null
+          numero_tva?: string | null
           prenom?: string
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
@@ -2048,6 +2069,10 @@ export type Database = {
       est_soignant: { Args: never; Returns: boolean }
       fn_accepter_mission: { Args: { p_mission_id: string }; Returns: Json }
       fn_activer_liberal: { Args: never; Returns: Json }
+      fn_alerte_cddu_repetitif: {
+        Args: { p_etablissement_id: string; p_soignant_id: string }
+        Returns: Json
+      }
       fn_annuler_mission_soignant: {
         Args: { p_mission_id: string }
         Returns: Json
@@ -2248,6 +2273,7 @@ export type Database = {
           type: Database["public"]["Enums"]["type_etablissement"]
         }[]
       }
+      fn_exporter_mes_donnees: { Args: never; Returns: Json }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
       fn_generer_numero_contrat_safe: {
@@ -2261,6 +2287,7 @@ export type Database = {
       }
       fn_get_my_role: { Args: never; Returns: Json }
       fn_health_check: { Args: never; Returns: Json }
+      fn_is_valid_uuid: { Args: { p_text: string }; Returns: boolean }
       fn_maj_activite_soignant: { Args: never; Returns: Json }
       fn_matcher_soignants_mission: {
         Args: { p_mission_id: string }

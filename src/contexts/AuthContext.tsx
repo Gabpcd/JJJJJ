@@ -25,9 +25,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function extractRole(_user: User): UserRole {
+function extractRole(user: User): UserRole {
   // Le rôle affiché ici est provisoire (affichage uniquement).
   // La vérification d'accès réelle se fait via useRole() + fn_get_my_role côté serveur.
+  const metaRole = user.user_metadata?.role;
+  if (metaRole === 'ADMIN_ETABLISSEMENT' || metaRole === 'ETABLISSEMENT') return 'ADMIN_ETABLISSEMENT' as UserRole;
+  if (metaRole === 'ADMIN_GROUPE') return 'ADMIN_GROUPE' as UserRole;
+  if (metaRole === 'ADMIN') return 'ADMIN' as UserRole;
   return 'SOIGNANT' as UserRole;
 }
 
