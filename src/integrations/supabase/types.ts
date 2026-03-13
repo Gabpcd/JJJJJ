@@ -2448,7 +2448,7 @@ export type Database = {
       fn_modifier_mission_etablissement: {
         Args: {
           p_description?: string
-          p_intitule?: string
+          p_intitule: string
           p_mission_id: string
           p_service?: string
         }
