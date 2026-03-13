@@ -38,6 +38,14 @@ export default function ProfilSoignant() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Parrainage
+  const [codeParrainage, setCodeParrainage] = useState('');
+  const [codeRecu, setCodeRecu] = useState('');
+  const [parrainageLoading, setParrainageLoading] = useState(false);
+  const [parrainageSucces, setParrainageSucces] = useState(false);
+  const [filleuls, setFilleuls] = useState<any[]>([]);
+  const [codeCopied, setCodeCopied] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps').eq('id', user.id).single().then(({ data }) => {
