@@ -325,11 +325,11 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { to, type, data: templateData, destinataire_id } = body;
+    const { type, data: templateData, destinataire_id } = body;
 
-    // Strict validation: only type+data accepted, no raw HTML
-    if (!to || !type) {
-      return new Response(JSON.stringify({ error: 'Paramètres requis : to, type, data' }), {
+    // Strict validation: only type + destinataire_id accepted
+    if (!type || !destinataire_id) {
+      return new Response(JSON.stringify({ error: 'Paramètres requis : type, destinataire_id, data' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -342,18 +342,32 @@ serve(async (req) => {
       });
     }
 
-    const rendered = renderTemplate(type, templateData || {});
-    if (!rendered) {
-      return new Response(JSON.stringify({ error: 'Type inconnu' }), {
-        status: 400,
+    // Resolve email server-side from destinataire_id
+    const supabaseService = createClient(supabaseUrl, serviceRoleKey);
+
+    // Try auth.users first, then etablissements
+    let resolvedEmail: string | null = null;
+
+    const { data: authUser } = await supabaseService.auth.admin.getUserById(destinataire_id);
+    if (authUser?.user?.email) {
+      resolvedEmail = authUser.user.email;
+    } else {
+      // Could be an etablissement_id
+      const { data: etab } = await supabaseService.from('etablissements').select('email_contact').eq('id', destinataire_id).single();
+      if (etab?.email_contact) {
+        resolvedEmail = etab.email_contact;
+      }
+    }
+
+    if (!resolvedEmail) {
+      return new Response(JSON.stringify({ error: 'Destinataire introuvable' }), {
+        status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const { subject, html } = rendered;
-
-    // Restriction: user can only send to themselves unless admin
-    if (!isServiceRole && to !== userEmail) {
+    // Authorization: non-service-role users can only send to themselves
+    if (!isServiceRole && resolvedEmail !== userEmail) {
       const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
@@ -366,6 +380,16 @@ serve(async (req) => {
         });
       }
     }
+
+    const rendered = renderTemplate(type, templateData || {});
+    if (!rendered) {
+      return new Response(JSON.stringify({ error: 'Type inconnu' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { subject, html } = rendered;
 
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
     if (!RESEND_API_KEY) {
@@ -383,7 +407,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: 'Soin Direct <noreply@soindirect.com>',
-        to: [to],
+        to: [resolvedEmail],
         subject,
         html,
       }),
@@ -391,13 +415,11 @@ serve(async (req) => {
 
     const resData = await response.json();
 
-    // Log in emails_envoyes (service_role only)
-    const supabaseClient = createClient(supabaseUrl, serviceRoleKey);
-
-    await supabaseClient.from('emails_envoyes').insert({
-      destinataire_email: to,
-      destinataire_id: destinataire_id || null,
-      type: type || 'GENERIQUE',
+    // Log in emails_envoyes
+    await supabaseService.from('emails_envoyes').insert({
+      destinataire_email: resolvedEmail,
+      destinataire_id: destinataire_id,
+      type,
       sujet: subject,
       provider_id: resData.id || null,
       statut: response.ok ? 'ENVOYE' : 'ERREUR',
