@@ -184,7 +184,6 @@ export default function DetailMissionSoignant() {
       // Email au soignant
       supabase.functions.invoke('send-email', {
         body: {
-          to: user!.email,
           type: 'MISSION_ACCEPTEE_SOIGNANT',
           data: {
             prenom: soignant.prenom,
