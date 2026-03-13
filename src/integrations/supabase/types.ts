@@ -2609,6 +2609,20 @@ export type Database = {
           tous_documents_valides: boolean
         }[]
       }
+      fn_missions_publiques_etablissement: {
+        Args: { p_etablissement_id: string }
+        Returns: {
+          debut_le: string
+          fin_le: string
+          id: string
+          intitule: string
+          nom_etablissement: string
+          profession_requise: Database["public"]["Enums"]["type_profession"]
+          service: string
+          taux_horaire_base: number
+          ville_etablissement: string
+        }[]
+      }
       fn_modifier_mission_etablissement: {
         Args: {
           p_description?: string
@@ -2699,6 +2713,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_purger_audit_ancien: { Args: never; Returns: number }
       fn_purger_gps_ancien: { Args: never; Returns: number }
       fn_recalculer_palier_commission: {
         Args: { p_etablissement_id: string }

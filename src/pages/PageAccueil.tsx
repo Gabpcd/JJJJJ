@@ -77,7 +77,7 @@ export default function PageAccueil() {
           Soignants et établissements, connectez-vous en un clic
         </h1>
         <p className="text-lg text-muted-foreground mb-10 max-w-xl mx-auto">
-          La plateforme de confiance pour le remplacement et l'intérim en santé. 100% conforme Code du Travail et RGPD.
+          La plateforme de confiance pour le remplacement et le staffing en santé. 100% conforme Code du Travail et RGPD.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <button

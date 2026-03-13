@@ -49,3 +49,12 @@ export function getPointagesEnAttente(): PointageHorsLigne[] {
 export function clearPointagesEnAttente() {
   localStorage.removeItem('pointages_hors_ligne');
 }
+
+/** Replace localStorage with only the failed pointages (for partial sync) */
+export function sauvegarderPointagesRestants(pointages: PointageHorsLigne[]) {
+  if (pointages.length === 0) {
+    localStorage.removeItem('pointages_hors_ligne');
+  } else {
+    localStorage.setItem('pointages_hors_ligne', JSON.stringify(pointages));
+  }
+}

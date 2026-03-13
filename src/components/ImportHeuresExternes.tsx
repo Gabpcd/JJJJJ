@@ -8,7 +8,7 @@ interface ImportHeuresExternesProps {
   onDone: () => void;
 }
 
-const TYPES_EMPLOYEUR = ['Hôpital public', 'Clinique privée', 'EHPAD', 'Intérim', 'Autre'];
+const TYPES_EMPLOYEUR = ['Hôpital public', 'Clinique privée', 'EHPAD', 'Agence de staffing', 'Autre'];
 const TYPES_PREUVE = ['BULLETIN_PAIE', 'ATTESTATION_EMPLOYEUR', 'CERTIFICAT_TRAVAIL'];
 
 export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesProps) {

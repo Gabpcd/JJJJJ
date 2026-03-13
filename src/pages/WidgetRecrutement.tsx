@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Clock, HeartPulse } from 'lucide-react';
+import { Clock, HeartPulse } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export default function WidgetRecrutement() {
@@ -14,13 +14,13 @@ export default function WidgetRecrutement() {
   useEffect(() => {
     if (!etabId) { setLoading(false); return; }
 
-    Promise.all([
-      supabase.from('etablissements').select('nom, adresse_ville').eq('id', etabId).single(),
-      supabase.from('missions').select('id, intitule, profession_requise, debut_le, fin_le, taux_horaire_base, service')
-        .eq('etablissement_id', etabId).eq('statut', 'OUVERTE').order('debut_le').limit(10),
-    ]).then(([etabRes, missionsRes]) => {
-      if (etabRes.data) setEtabNom(etabRes.data.nom);
-      if (missionsRes.data) setMissions(missionsRes.data);
+    supabase.rpc('fn_missions_publiques_etablissement' as any, {
+      p_etablissement_id: etabId,
+    }).then(({ data, error }) => {
+      if (data && Array.isArray(data) && data.length > 0) {
+        setEtabNom((data[0] as any).nom_etablissement || '');
+        setMissions(data);
+      }
       setLoading(false);
     });
   }, [etabId]);
@@ -33,7 +33,7 @@ export default function WidgetRecrutement() {
   return (
     <div className="max-w-lg mx-auto font-sans">
       {/* Header */}
-      <div className="bg-[hsl(187,75%,40%)] text-white px-4 py-3 rounded-t-xl flex items-center gap-2">
+      <div className="bg-primary text-primary-foreground px-4 py-3 rounded-t-xl flex items-center gap-2">
         <HeartPulse className="h-5 w-5" />
         <div>
           <p className="font-semibold text-sm">{etabNom || 'Établissement'}</p>
@@ -48,7 +48,7 @@ export default function WidgetRecrutement() {
         ) : missions.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">Aucune mission ouverte actuellement.</div>
         ) : (
-          missions.map((m) => (
+          missions.map((m: any) => (
             <div key={m.id} className="px-4 py-3 space-y-1.5">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -71,7 +71,7 @@ export default function WidgetRecrutement() {
           <a
             href="/inscription/soignant"
             target="_top"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-[hsl(187,75%,40%)] hover:bg-[hsl(187,75%,33%)] transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-colors"
           >
             Postuler sur Soin Direct
           </a>
