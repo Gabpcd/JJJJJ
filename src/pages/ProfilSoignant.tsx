@@ -8,7 +8,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Loader2, Download, Trash2 } from 'lucide-react';
+import { MapPin, Loader2, Download, Trash2, MapPinOff } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -26,6 +27,8 @@ export default function ProfilSoignant() {
     lat: '', lng: '', rayon: 30,
   });
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
+  const [consentementGPS, setConsentementGPS] = useState(true);
+  const [gpsToggling, setGpsToggling] = useState(false);
 
   // RGPD states
   const [exportLoading, setExportLoading] = useState(false);
@@ -55,6 +58,7 @@ export default function ProfilSoignant() {
           rayon: data.rayon_deplacement_km ?? 30,
         });
         setTypesContrat(getTypesContratSoignant(data as any));
+        setConsentementGPS((data as any).consentement_gps !== false);
       }
       setLoading(false);
     });
@@ -252,6 +256,41 @@ export default function ProfilSoignant() {
               <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full accent-primary" />
               <div className="flex justify-between text-[10px] text-muted-foreground"><span>5 km</span><span>100 km</span></div>
             </div>
+          </div>
+        </div>
+
+        {/* Consentement GPS */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">Consentement GPS</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm text-foreground font-medium">Autoriser la géolocalisation lors des pointages</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {consentementGPS
+                  ? 'Votre position sera capturée uniquement au moment de l\'arrivée et du départ.'
+                  : '⚠️ Sans GPS, vos pointages nécessiteront une vérification manuelle par l\'établissement.'}
+              </p>
+            </div>
+            <Switch
+              checked={consentementGPS}
+              disabled={gpsToggling}
+              onCheckedChange={async (checked) => {
+                setGpsToggling(true);
+                const { data, error } = await supabase.rpc('fn_consentir_gps' as any, { p_accepte: checked });
+                if (error) {
+                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+                } else if (data && (data as any).error) {
+                  afficherNotification({ type: 'erreur', message: (data as any).error });
+                } else {
+                  setConsentementGPS(checked);
+                  afficherNotification({
+                    type: checked ? 'succes' : 'avertissement',
+                    message: checked ? 'Consentement GPS activé.' : 'Consentement GPS retiré. Vérification manuelle requise.',
+                  });
+                }
+                setGpsToggling(false);
+              }}
+            />
           </div>
         </div>
         <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50">
