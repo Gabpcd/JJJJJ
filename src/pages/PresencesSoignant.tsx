@@ -63,6 +63,24 @@ export default function PresencesSoignant() {
       setContrats(map);
     }
 
+    // Load recently validated presences (last 7 days) for contestation
+    const il7jours = new Date();
+    il7jours.setDate(il7jours.getDate() - 7);
+    const { data: validees } = await supabase
+      .from('presences')
+      .select(`
+        id, mission_id, soignant_id, pointage_arrivee_le, pointage_depart_le,
+        valide_par_etablissement, valide_le,
+        missions!inner(id, intitule, etablissement_id, debut_le, fin_le,
+          etablissements(nom))
+      `)
+      .eq('soignant_id', user!.id)
+      .eq('valide_par_etablissement', true)
+      .gte('valide_le', il7jours.toISOString())
+      .order('valide_le', { ascending: false });
+
+    setPresencesValidees(validees || []);
+
     setLoading(false);
   }, [user]);
 
