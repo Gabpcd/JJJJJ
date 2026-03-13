@@ -67,6 +67,7 @@ export default function DashboardSoignant() {
   const [missionProchaine, setMissionProchaine] = useState<any>(null);
   const [missionsOubliDepart, setMissionsOubliDepart] = useState<any[]>([]);
   const [gainsCeMois, setGainsCeMois] = useState({ net: 0, nb: 0 });
+  const [missionsWeekend, setMissionsWeekend] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
