@@ -229,7 +229,6 @@ export default function FacturationEtablissement() {
                     <tr key={m.id} className="border-b border-border/50">
                       <td className="py-2 text-muted-foreground">{m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
                       <td className="py-2 text-foreground">{m.intitule}</td>
-                      <td className="py-2 text-right">{(m.net_a_payer ?? 0).toFixed(2)} €</td>
                       <td className="py-2 text-right font-medium">{(m.montant_commission_ht ?? 0).toFixed(2)} €</td>
                     </tr>
                   ))}
