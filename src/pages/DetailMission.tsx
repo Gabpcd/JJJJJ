@@ -38,6 +38,7 @@ export default function DetailMission() {
   const [loading, setLoading] = useState(true);
   const [modalAnnuler, setModalAnnuler] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState(false);
+  const [showEvaluation, setShowEvaluation] = useState(true);
 
   useEffect(() => {
     if (!id) return;
