@@ -325,35 +325,32 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { to, type, data: templateData, subject: legacySubject, html: legacyHtml, destinataire_id } = body;
+    const { to, type, data: templateData, destinataire_id } = body;
 
-    // Resolve subject & html: prefer type+data templates, fall back to legacy subject+html
-    let subject: string;
-    let html: string;
-
-    if (type && templateData) {
-      const rendered = renderTemplate(type, templateData || {});
-      if (rendered) {
-        subject = rendered.subject;
-        html = rendered.html;
-      } else if (legacySubject && legacyHtml) {
-        subject = legacySubject;
-        html = legacyHtml;
-      } else {
-        return new Response(JSON.stringify({ error: `Type de template inconnu: ${type}` }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    } else if (legacySubject && legacyHtml) {
-      subject = legacySubject;
-      html = legacyHtml;
-    } else {
-      return new Response(JSON.stringify({ error: 'type+data ou subject+html requis' }), {
+    // Strict validation: only type+data accepted, no raw HTML
+    if (!to || !type) {
+      return new Response(JSON.stringify({ error: 'Paramètres requis : to, type, data' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    if (!ALLOWED_TYPES.has(type)) {
+      return new Response(JSON.stringify({ error: 'Type inconnu' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const rendered = renderTemplate(type, templateData || {});
+    if (!rendered) {
+      return new Response(JSON.stringify({ error: 'Type inconnu' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { subject, html } = rendered;
 
     // Restriction: user can only send to themselves unless admin
     if (!isServiceRole && to !== userEmail) {
