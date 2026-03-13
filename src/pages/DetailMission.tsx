@@ -138,7 +138,6 @@ export default function DetailMission() {
                 </p>
                 {m.soignants.telephone && <p className="text-sm text-muted-foreground">📱 {m.soignants.telephone}</p>}
                 {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
-                </p>
               </div>
             ) : (
               <div className="text-center py-6">
