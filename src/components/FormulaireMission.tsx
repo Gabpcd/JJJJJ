@@ -261,7 +261,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         const { data, error } = await supabase
           .from('missions')
           .insert({ ...payload, etablissement_id: user.id } as any)
-          .select()
+          .select('id, intitule, statut, debut_le, fin_le')
           .single();
 
         if (error) {

@@ -250,20 +250,7 @@ export default function ProfilEtablissement() {
           <Download className="h-4 w-4" /> 📥 Télécharger mes données (RGPD)
         </button>
         <button
-          onClick={async () => {
-            const confirmText = prompt('Tapez SUPPRIMER pour confirmer la suppression définitive de votre compte :');
-            if (confirmText !== 'SUPPRIMER') return;
-            try {
-              const { data, error } = await supabase.rpc('fn_supprimer_mon_compte' as any);
-              if (error) throw error;
-              if (data?.error) { afficherNotification({ type: 'erreur', message: data.error }); return; }
-              afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection…' });
-              await supabase.auth.signOut();
-              navigate('/');
-            } catch (err: any) {
-              afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-            }
-          }}
+          onClick={() => setShowDeleteModal(true)}
           className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition"
         >
           <Trash2 className="h-4 w-4" /> Supprimer mon compte

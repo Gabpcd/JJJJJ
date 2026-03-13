@@ -124,7 +124,7 @@ serve(async (req) => {
     await supabaseAdmin.from('journaux_audit').insert({
       acteur_id: user.id,
       type_acteur: 'SOIGNANT',
-      action: 'CONNEXION',
+      action: 'INSCRIPTION',
       type_ressource: 'soignant',
       id_ressource: user.id,
       details: { evenement: 'inscription', profession },

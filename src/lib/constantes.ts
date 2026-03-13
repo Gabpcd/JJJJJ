@@ -96,8 +96,8 @@ export function getContratBadge(pref: ContratPreference): { label: string; class
 export function missionCompatibleContrat(pref: ContratPreference, typesContratSoignant: string[]): boolean {
   if (pref === 'TOUS') return true;
   if (pref === 'LIBERAL') return typesContratSoignant.includes('LIBERAL');
-  // SALARIE = CDDU, INTERIM, VACATION, SALARIE
-  return typesContratSoignant.some(t => ['CDDU', 'INTERIM', 'VACATION', 'SALARIE'].includes(t));
+  // SALARIE = CDDU, VACATION, SALARIE
+  return typesContratSoignant.some(t => ['CDDU', 'VACATION', 'SALARIE'].includes(t));
 }
 
 /** Parse the types_contrat_acceptes JSON string or fall back to type_contrat */
