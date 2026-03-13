@@ -22,6 +22,7 @@ const CONVENTIONS_COLLECTIVES = [
 export default function ProfilEtablissement() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [siret, setSiret] = useState('');
