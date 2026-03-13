@@ -31,13 +31,13 @@ export default function PageMentionsLegales() {
       <section id="hebergeur">
         <h2 className="text-xl font-bold text-primary mb-4">2. Hébergeur</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Hébergeur HDS :</strong> Supabase Inc.</p>
+          <p><strong className="text-foreground">Hébergeur :</strong> Supabase Inc.</p>
           <p><strong className="text-foreground">Adresse :</strong> 970 Toa Payoh North, #07-04, Singapore 318992</p>
           <p><strong className="text-foreground">Infrastructure :</strong> Amazon Web Services (AWS) — Région eu-west-3 (Paris, France)</p>
-          <p><strong className="text-foreground">Certifications :</strong> HDS (Hébergeur de Données de Santé), SOC 2 Type II, ISO 27001</p>
+          <p><strong className="text-foreground">Sécurité :</strong> Chiffrement AES-256 au repos, TLS 1.3 en transit, SOC 2 Type II, ISO 27001</p>
           <p><strong className="text-foreground">Site web :</strong> <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">supabase.com</a></p>
         </div>
-        <p className="mt-3 text-muted-foreground">L'hébergement des données de santé est réalisé conformément à l'article L.1111-8 du Code de la santé publique. L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne.</p>
+        <p className="mt-3 text-muted-foreground">L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne. Soin Direct ne stocke aucune donnée de santé à caractère personnel au sens de l'article L.1111-8 du Code de la santé publique.</p>
       </section>
 
       {/* Nom de domaine */}
