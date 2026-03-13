@@ -140,7 +140,7 @@ const App = () => (
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
-              <BandeauCookies />
+              
             </BrowserRouter>
           </NotificationProvider>
         </AuthProvider>
