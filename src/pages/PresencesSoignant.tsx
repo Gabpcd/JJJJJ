@@ -152,8 +152,7 @@ export default function PresencesSoignant() {
       afficherNotification({ type: 'erreur', message: '🚨 Alerte : un déplacement inhabituellement rapide a été détecté.', duree: 10000 });
     }
 
-    // Mission → EN_COURS
-    await supabase.from('missions').update({ statut: 'EN_COURS' } as any).eq('id', missionId).eq('statut', 'ASSIGNEE');
+    // Mission → EN_COURS (handled by trigger on presence insert)
 
     // Audit
     await supabase.rpc('fn_ecrire_audit_safe', {
@@ -182,33 +181,25 @@ export default function PresencesSoignant() {
       return;
     }
 
-    const { error } = await supabase
-      .from('presences')
-      .update({
-        pointage_depart_le: new Date().toISOString(),
-        depart_lat: position.coords.latitude,
-        depart_lng: position.coords.longitude,
-        depart_precision_gps_m: position.coords.accuracy,
-        depart_id_terminal: genererIdTerminal(),
-        modifie_le: new Date().toISOString(),
-      } as any)
-      .eq('id', presenceId);
+    const { data: rpcResult, error } = await supabase.rpc('fn_pointer_depart' as any, {
+      p_presence_id: presenceId,
+      p_lat: position.coords.latitude,
+      p_lng: position.coords.longitude,
+      p_precision: position.coords.accuracy,
+      p_terminal_id: genererIdTerminal(),
+      p_modele: navigator.userAgent.slice(0, 100),
+    });
 
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
       return;
     }
+    if (rpcResult?.error) {
+      afficherNotification({ type: 'erreur', message: rpcResult.error });
+      return;
+    }
 
     if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
-
-    await supabase.from('missions').update({ statut: 'TERMINEE' } as any).eq('id', missionId);
-
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'PRESENCE_POINTAGE_DEPART',
-      p_type_ressource: 'presence', p_id_ressource: presenceId, p_cle_s3: null,
-      p_details: { mission_id: missionId, lat: position.coords.latitude, lng: position.coords.longitude, precision_m: position.coords.accuracy },
-      p_ip: null, p_navigateur: navigator.userAgent,
-    });
 
     // Email MISSION_TERMINEE au soignant
     const missionData = missions.find((m: any) => m.id === missionId);

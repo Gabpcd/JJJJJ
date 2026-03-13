@@ -164,13 +164,7 @@ export default function DetailSerieSoignant() {
     let echouees = 0;
 
     for (const mission of toAccept) {
-      const { data, error } = await supabase
-        .from('missions')
-        .update({ soignant_assigne_id: user!.id, statut: 'ASSIGNEE' as any, modifie_le: new Date().toISOString() })
-        .eq('id', mission.id)
-        .eq('statut', 'OUVERTE')
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('fn_accepter_mission' as any, { p_mission_id: mission.id });
 
       if (error) {
         echouees++;
@@ -178,10 +172,10 @@ export default function DetailSerieSoignant() {
           setModalCodeTravail(error);
           break;
         }
-      } else if (data) {
-        reussies++;
-      } else {
+      } else if (data?.error) {
         echouees++;
+      } else {
+        reussies++;
       }
     }
 

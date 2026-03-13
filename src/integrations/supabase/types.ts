@@ -2046,6 +2046,11 @@ export type Database = {
       est_admin: { Args: never; Returns: boolean }
       est_admin_etablissement: { Args: never; Returns: boolean }
       est_soignant: { Args: never; Returns: boolean }
+      fn_accepter_mission: { Args: { p_mission_id: string }; Returns: Json }
+      fn_annuler_mission_soignant: {
+        Args: { p_mission_id: string }
+        Returns: Json
+      }
       fn_auto_facturation_mensuelle: { Args: never; Returns: number }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_calculer_bfa: {
@@ -2293,15 +2298,40 @@ export type Database = {
           tous_documents_valides: boolean
         }[]
       }
+      fn_modifier_mon_profil: {
+        Args: {
+          p_adresse_code_postal?: string
+          p_adresse_rue?: string
+          p_adresse_ville?: string
+          p_rayon_deplacement_km?: number
+          p_telephone?: string
+        }
+        Returns: Json
+      }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
+      fn_pointer_depart: {
+        Args: {
+          p_lat: number
+          p_lng: number
+          p_modele: string
+          p_precision: number
+          p_presence_id: string
+          p_terminal_id: string
+        }
+        Returns: Json
+      }
       fn_recalculer_palier_commission: {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
       fn_recalculer_tous_paliers: { Args: never; Returns: number }
       fn_relancer_signatures_contrats: { Args: never; Returns: number }
+      fn_repondre_litige: {
+        Args: { p_litige_id: string; p_reponse: string }
+        Returns: Json
+      }
       fn_rgpd_exporter_donnees_soignant: {
         Args: { p_soignant_id: string }
         Returns: Json
@@ -2318,6 +2348,10 @@ export type Database = {
       fn_set_user_role: {
         Args: { p_etablissement_id?: string; p_role: string; p_user_id: string }
         Returns: undefined
+      }
+      fn_signer_contrat_soignant: {
+        Args: { p_contrat_id: string; p_signature_image: string }
+        Returns: Json
       }
       fn_soignant_pour_etablissement: {
         Args: { p_soignant_id: string }

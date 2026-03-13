@@ -142,29 +142,20 @@ export default function DetailMissionSoignant() {
   const accepterMission = async () => {
     setAcceptationEnCours(true);
     try {
-      const { data, error } = await supabase
-        .from('missions')
-        .update({
-          soignant_assigne_id: user!.id,
-          statut: 'ASSIGNEE' as any,
-        })
-        .eq('id', id!)
-        .eq('statut', 'OUVERTE')
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('fn_accepter_mission' as any, { p_mission_id: id! });
 
-      if (!data && !error) {
-        setModalPerdu(true);
-        return;
-      }
       if (error) {
         if (estBlocageCodeTravail(error)) {
           setModalCodeTravail(error);
-        } else if (error.message?.includes('0 rows')) {
+        } else if (error.message?.includes('0 rows') || error.message?.includes('déjà prise')) {
           setModalPerdu(true);
         } else {
           toast.error(extraireMessageErreur(error));
         }
+        return;
+      }
+      if (data?.error) {
+        toast.error(data.error);
         return;
       }
 
@@ -232,16 +223,14 @@ export default function DetailMissionSoignant() {
   };
 
   const annulerParticipation = async () => {
-    const { error } = await supabase
-      .from('missions')
-      .update({
-        soignant_assigne_id: null,
-        statut: 'ANNULEE_PAR_SOIGNANT' as any,
-      })
-      .eq('id', id!);
+    const { data, error } = await supabase.rpc('fn_annuler_mission_soignant' as any, { p_mission_id: id! });
 
     if (error) {
       toast.error(extraireMessageErreur(error));
+      return;
+    }
+    if (data?.error) {
+      toast.error(data.error);
       return;
     }
 
