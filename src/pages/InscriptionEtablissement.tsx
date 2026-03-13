@@ -40,7 +40,7 @@ export default function InscriptionEtablissement() {
   });
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
-  const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
+  const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
   const etape2Valide = form.nom && form.siret.length === 14 && form.type && form.ville;
 
   const handleSubmit = async (e: React.FormEvent) => {
