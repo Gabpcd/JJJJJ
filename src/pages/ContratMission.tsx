@@ -65,7 +65,8 @@ export default function ContratMission() {
       // Le trigger dec_proteger_signature_contrat gère automatiquement
       // le passage à SIGNE_COMPLET quand les deux parties ont signé.
 
-      await supabase.from('contrats_mission').update(updateData).eq('id', contrat.id);
+      const { error: updateError } = await supabase.from('contrats_mission').update(updateData).eq('id', contrat.id);
+      if (updateError) throw updateError;
 
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id,
@@ -82,6 +83,42 @@ export default function ContratMission() {
       afficherNotification({ type: 'succes', message: 'Contrat signé avec succès !' });
       const { data: updated } = await supabase.from('contrats_mission').select('*').eq('id', contrat.id).single();
       setContrat(updated);
+
+      // Check if both parties have now signed → send CONTRAT_SIGNE emails
+      if (updated) {
+        const bothSigned = updated.signature_soignant && updated.signature_etablissement;
+        if (bothSigned) {
+          // Fetch mission name for email
+          const { data: missionData } = await supabase.from('missions').select('intitule, soignant_assigne_id, etablissement_id').eq('id', contrat.mission_id).single();
+          const missionName = missionData?.intitule || 'Mission';
+
+          // Email to current user
+          supabase.functions.invoke('send-email', {
+            body: {
+              to: user.email,
+              type: 'CONTRAT_SIGNE',
+              data: { prenom: user.prenom || '', mission: missionName, contrat_id: contrat.id },
+              destinataire_id: user.id,
+            },
+          }).catch(() => {});
+
+          // Email to the other party via edge function (service handles authorization)
+          // We fetch the other party's email from the etablissement table
+          if (missionData?.etablissement_id && isSoignant) {
+            const { data: etab } = await supabase.from('etablissements').select('email_contact').eq('id', missionData.etablissement_id).single();
+            if (etab?.email_contact) {
+              supabase.functions.invoke('send-email', {
+                body: {
+                  to: etab.email_contact,
+                  type: 'CONTRAT_SIGNE',
+                  data: { mission: missionName, contrat_id: contrat.id },
+                  destinataire_id: missionData.etablissement_id,
+                },
+              }).catch(() => {});
+            }
+          }
+        }
+      }
     } catch (err) {
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la signature' });
     } finally {

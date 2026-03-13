@@ -210,6 +210,25 @@ export default function PresencesSoignant() {
       p_ip: null, p_navigateur: navigator.userAgent,
     });
 
+    // Email MISSION_TERMINEE au soignant
+    const missionData = missions.find((m: any) => m.id === missionId);
+    if (missionData) {
+      supabase.functions.invoke('send-email', {
+        body: {
+          to: user.email,
+          type: 'MISSION_TERMINEE',
+          data: {
+            prenom: user.prenom || '',
+            mission: missionData.intitule || missionData.missions?.intitule || 'Mission',
+            etablissement: missionData.etablissements?.nom || missionData.missions?.etablissements?.nom || '',
+            heures: missionData.duree_heures || missionData.missions?.duree_heures || 0,
+            net: missionData.net_a_payer || missionData.missions?.net_a_payer || 0,
+          },
+          destinataire_id: user.id,
+        },
+      }).catch(() => {});
+    }
+
     afficherNotification({ type: 'succes', message: '🏁 Départ pointé ! Mission terminée.' });
     charger();
   };

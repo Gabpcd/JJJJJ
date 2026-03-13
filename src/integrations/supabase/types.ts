@@ -2136,6 +2136,63 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_email_documents_expirants: {
+        Args: never
+        Returns: {
+          date_expiration: string
+          email: string
+          prenom: string
+          soignant_id: string
+          type_document: string
+        }[]
+      }
+      fn_email_eligible_liberal: {
+        Args: never
+        Returns: {
+          email: string
+          heures: number
+          montant_offert: number
+          prenom: string
+          soignant_id: string
+          taux_prise_en_charge: number
+        }[]
+      }
+      fn_email_factures_impayees: {
+        Args: never
+        Returns: {
+          email: string
+          etablissement_id: string
+          jours_depuis: number
+          montant_ttc: string
+          nom_etablissement: string
+          numero_facture: string
+        }[]
+      }
+      fn_email_rappels_j1: {
+        Args: never
+        Returns: {
+          email: string
+          etablissement: string
+          heure_debut: string
+          mission: string
+          prenom: string
+          soignant_id: string
+        }[]
+      }
+      fn_email_recap_hebdo: {
+        Args: never
+        Returns: {
+          email: string
+          gains_semaine: number
+          heures_semaine: number
+          heures_totales: number
+          missions_dispo: number
+          missions_terminees: number
+          prenom: string
+          score: number
+          soignant_id: string
+        }[]
+      }
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
       fn_etablissement_pour_soignant: {
         Args: { p_etablissement_id: string }
