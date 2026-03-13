@@ -21,7 +21,7 @@ export default function PageCGU() {
         <h2 className="text-xl font-bold text-primary mb-4">Article 1 — Définitions</h2>
         <p className="mb-3">Dans les présentes Conditions Générales d'Utilisation (ci-après « CGU »), les termes suivants ont la signification qui leur est attribuée ci-dessous :</p>
         <ul className="list-disc pl-6 space-y-2">
-          <li><strong>« Plateforme »</strong> : le site web et l'application mobile Soin Direct, édités par Soin Direct SAS, permettant la mise en relation entre Établissements de santé et Soignants pour des missions d'intérim paramédical.</li>
+          <li><strong>« Plateforme »</strong> : le site web et l'application mobile Soin Direct, édités par Soin Direct SAS, permettant la mise en relation entre Établissements de santé et Soignants pour des missions de remplacement paramédical.</li>
           <li><strong>« Éditeur »</strong> : Soin Direct SAS, société par actions simplifiée, dont le siège social est situé à Paris (75006).</li>
           <li><strong>« Soignant »</strong> : toute personne physique exerçant une profession paramédicale (aide-soignant·e, infirmier·ère, kinésithérapeute, sage-femme, manipulateur·rice en électroradiologie, préparateur·rice en pharmacie) inscrite sur la Plateforme.</li>
           <li><strong>« Établissement »</strong> : tout établissement de santé public ou privé (hôpital, clinique, EHPAD, centre de soins) inscrit sur la Plateforme en vue de publier des missions.</li>
