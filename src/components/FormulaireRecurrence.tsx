@@ -61,8 +61,6 @@ export function genererCreneauxFlex(
   const debut = parseDateLocale(dateDebut);
   const fin = parseDateLocale(dateFin);
 
-  logger.debug('[genererCreneauxFlex] dateDebut:', dateDebut, '| dateFin:', dateFin);
-  logger.debug('[genererCreneauxFlex] joursActifs:', joursActifs.length);
 
   const d = new Date(debut);
   while (d <= fin) {
