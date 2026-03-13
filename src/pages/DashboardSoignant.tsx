@@ -147,6 +147,34 @@ export default function DashboardSoignant() {
         const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_a_payer || 0), 0);
         setGainsCeMois({ net, nb: (gainsMois as any[]).length });
       }
+      // Missions weekend prochain
+      if (profession) {
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0=dim
+        const daysToSat = dayOfWeek === 0 ? 6 : (6 - dayOfWeek);
+        const samedi = new Date(today);
+        samedi.setDate(today.getDate() + daysToSat);
+        samedi.setHours(0, 0, 0, 0);
+        const lundi = new Date(samedi);
+        lundi.setDate(samedi.getDate() + 2);
+        lundi.setHours(23, 59, 59);
+
+        const { data: wkData } = await supabase.from('missions')
+          .select('id, intitule, debut_le, fin_le, taux_horaire_base, est_urgente, etablissement_id')
+          .eq('statut', 'OUVERTE')
+          .eq('profession_requise', profession)
+          .gte('debut_le', samedi.toISOString())
+          .lte('debut_le', lundi.toISOString())
+          .order('debut_le', { ascending: true })
+          .limit(3);
+
+        if (wkData && wkData.length > 0) {
+          const { fetchEtablissementsSafe } = await import('@/lib/etablissements');
+          const etabMap2 = await fetchEtablissementsSafe(wkData.map((m: any) => m.etablissement_id));
+          setMissionsWeekend(wkData.map((m: any) => ({ ...m, etablissements: etabMap2[m.etablissement_id] || null })));
+        }
+      }
+
       setLoading(false);
     };
     load();
