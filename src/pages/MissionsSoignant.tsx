@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SearchX, Briefcase, History } from 'lucide-react';
+import { SearchX, Briefcase, History, AlertTriangle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
+import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 type Onglet = 'disponibles' | 'mes_missions' | 'historique';
@@ -38,6 +39,7 @@ export default function MissionsSoignant() {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtres, setFiltres] = useState<FiltresMissionsState | null>(null);
+  const [heuresSemaine, setHeuresSemaine] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -45,6 +47,20 @@ export default function MissionsSoignant() {
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes')
       .eq('id', user.id).single()
       .then(({ data }) => { if (data) setSoignant(data as any); });
+
+    // M6: Compteur heures planifiées cette semaine
+    const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
+    supabase.from('missions')
+      .select('duree_heures')
+      .eq('soignant_assigne_id', user.id)
+      .in('statut', ['ASSIGNEE', 'EN_COURS'])
+      .gte('debut_le', lundi.toISOString())
+      .lte('debut_le', dimanche.toISOString())
+      .then(({ data }) => {
+        const total = (data ?? []).reduce((s: number, m: any) => s + (m.duree_heures ?? 0), 0);
+        setHeuresSemaine(total);
+      });
   }, [user]);
 
   useEffect(() => {
@@ -166,7 +182,10 @@ export default function MissionsSoignant() {
       </div>
 
       {onglet === 'disponibles' && (
-        <FiltresMissions rayonDefaut={soignant.rayon_deplacement_km} onFiltreChange={setFiltres} />
+        <>
+          <BandeauAlerte48h heuresSemaine={heuresSemaine} />
+          <FiltresMissions rayonDefaut={soignant.rayon_deplacement_km} onFiltreChange={setFiltres} />
+        </>
       )}
 
       {loading ? <ChargementPage /> : (

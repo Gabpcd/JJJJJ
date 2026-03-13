@@ -238,24 +238,22 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       };
 
       if (modeEdition && missionSource) {
-        const { error } = await supabase
-          .from('missions')
-          .update({ ...payload, modifie_le: new Date().toISOString() } as any)
-          .eq('id', missionSource.id)
-          .eq('statut', 'OUVERTE');
+        const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mission_etablissement' as any, {
+          p_mission_id: missionSource.id,
+          p_intitule: intitule,
+          p_description: descriptionFinale || null,
+          p_service: service || null,
+        });
 
         if (error) {
           if (estBlocageCodeTravail(error)) { setErreurCodeTravail(error); }
           else afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
           return;
         }
-
-        await supabase.rpc('fn_ecrire_audit_safe', {
-          p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_MODIFICATION',
-          p_type_ressource: 'mission', p_id_ressource: missionSource.id, p_cle_s3: null,
-          p_details: { intitule, profession, taux: tauxHoraire, debut: debutLe, fin: finLe },
-          p_ip: null, p_navigateur: navigator.userAgent,
-        });
+        if ((rpcResult as any)?.success === false) {
+          afficherNotification({ type: 'erreur', message: (rpcResult as any).error });
+          return;
+        }
 
         afficherNotification({ type: 'succes', message: 'Mission mise à jour !' });
         navigate(`/etablissement/missions/${missionSource.id}`);

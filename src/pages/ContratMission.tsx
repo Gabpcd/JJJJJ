@@ -35,7 +35,7 @@ export default function ContratMission() {
     const load = async () => {
       const { data } = await supabase
         .from('contrats_mission')
-        .select('*')
+        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le')
         .eq('id', id)
         .single();
       setContrat(data);
@@ -254,7 +254,7 @@ export default function ContratMission() {
             </div>
             {/* A1: Rappel DUE — after establishment signature */}
             {!isSoignant && (contrat.statut === 'SIGNE_ETABLISSEMENT' || contrat.statut === 'SIGNE_COMPLET') && (
-              <BandeauRappelDUE />
+              <BandeauRappelDUE contratId={contrat.id} dueEffectuee={contrat.due_effectuee} dueEffectueeLe={contrat.due_effectuee_le} />
             )}
           </div>
         )}

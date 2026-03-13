@@ -16,6 +16,11 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
   if (authLoading || roleLoading) return <ChargementPage />;
   if (!user || !session) return <Navigate to="/connexion" replace />;
 
+  // C2: Vérifier que l'email est confirmé
+  if (!session.user.email_confirmed_at) {
+    return <Navigate to="/confirmer-email" replace />;
+  }
+
   if (!roleServeur || roleServeur === 'INCONNU' || !rolesAutorises.includes(roleServeur)) {
     switch (roleServeur) {
       case 'SOIGNANT': return <Navigate to="/soignant/tableau-de-bord" replace />;

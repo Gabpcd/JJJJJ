@@ -7,6 +7,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RouteProtegee } from "@/components/RouteProtegee";
 import PageAccueil from "./pages/PageAccueil";
 import PageConnexion from "./pages/PageConnexion";
+import ConfirmerEmail from "./pages/ConfirmerEmail";
 import InscriptionSoignant from "./pages/InscriptionSoignant";
 import InscriptionEtablissement from "./pages/InscriptionEtablissement";
 import DashboardSoignant from "./pages/DashboardSoignant";
@@ -61,6 +62,7 @@ const App = () => (
                 <Route path="/" element={<PageAccueil />} />
                 <Route path="/tarifs" element={<Tarifs />} />
                 <Route path="/connexion" element={<PageConnexion />} />
+                <Route path="/confirmer-email" element={<ConfirmerEmail />} />
                 <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
                 <Route path="/inscription/etablissement" element={<InscriptionEtablissement />} />
 

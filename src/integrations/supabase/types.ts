@@ -164,6 +164,8 @@ export type Database = {
         Row: {
           contenu_html: string | null
           cree_le: string | null
+          due_effectuee: boolean | null
+          due_effectuee_le: string | null
           etablissement_id: string
           id: string
           mission_id: string
@@ -191,6 +193,8 @@ export type Database = {
         Insert: {
           contenu_html?: string | null
           cree_le?: string | null
+          due_effectuee?: boolean | null
+          due_effectuee_le?: string | null
           etablissement_id: string
           id?: string
           mission_id: string
@@ -218,6 +222,8 @@ export type Database = {
         Update: {
           contenu_html?: string | null
           cree_le?: string | null
+          due_effectuee?: boolean | null
+          due_effectuee_le?: string | null
           etablissement_id?: string
           id?: string
           mission_id?: string
@@ -2115,6 +2121,10 @@ export type Database = {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: Json
       }
+      fn_annuler_mission_etablissement: {
+        Args: { p_mission_id: string }
+        Returns: Json
+      }
       fn_annuler_mission_soignant: {
         Args: { p_mission_id: string }
         Returns: Json
@@ -2159,6 +2169,7 @@ export type Database = {
         Args: { p_soignant_id: string }
         Returns: Json
       }
+      fn_confirmer_due: { Args: { p_contrat_id: string }; Returns: Json }
       fn_consentir_gps: { Args: { p_accepte: boolean }; Returns: Json }
       fn_contester_presence: {
         Args: { p_motif: string; p_presence_id: string }
@@ -2433,6 +2444,15 @@ export type Database = {
           total_missions_terminees: number
           tous_documents_valides: boolean
         }[]
+      }
+      fn_modifier_mission_etablissement: {
+        Args: {
+          p_description?: string
+          p_intitule: string
+          p_mission_id: string
+          p_service?: string
+        }
+        Returns: Json
       }
       fn_modifier_mon_etablissement:
         | {

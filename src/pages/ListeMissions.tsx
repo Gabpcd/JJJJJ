@@ -111,19 +111,12 @@ export default function ListeMissions() {
   }, [missions]);
 
   const handleAnnuler = async (mission: any) => {
-    const { error } = await supabase
-      .from('missions')
-      .update({ statut: 'ANNULEE_PAR_ETABLISSEMENT', modifie_le: new Date().toISOString() } as any)
-      .eq('id', mission.id);
-
+    const { data, error } = await supabase.rpc('fn_annuler_mission_etablissement' as any, { p_mission_id: mission.id });
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    } else if ((data as any)?.success === false) {
+      afficherNotification({ type: 'erreur', message: (data as any).error });
     } else {
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_ANNULATION',
-        p_type_ressource: 'mission', p_id_ressource: mission.id, p_cle_s3: null,
-        p_details: { intitule: mission.intitule }, p_ip: null, p_navigateur: navigator.userAgent,
-      });
       afficherNotification({ type: 'succes', message: 'Mission annulée.' });
       charger();
     }
@@ -132,20 +125,8 @@ export default function ListeMissions() {
   const handleAnnulerSerie = async (missionsSerieOuvertes: any[]) => {
     let reussies = 0;
     for (const m of missionsSerieOuvertes) {
-      const { error } = await supabase
-        .from('missions')
-        .update({ statut: 'ANNULEE_PAR_ETABLISSEMENT', modifie_le: new Date().toISOString() } as any)
-        .eq('id', m.id)
-        .eq('statut', 'OUVERTE');
-      if (!error) reussies++;
-    }
-    // Audit HDS — un log par mission annulée
-    for (const m of missionsSerieOuvertes) {
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_ANNULATION',
-        p_type_ressource: 'mission', p_id_ressource: m.id, p_cle_s3: null,
-        p_details: { type: 'annulation_serie', intitule: m.intitule }, p_ip: null, p_navigateur: navigator.userAgent,
-      });
+      const { data, error } = await supabase.rpc('fn_annuler_mission_etablissement' as any, { p_mission_id: m.id });
+      if (!error && (data as any)?.success) reussies++;
     }
     afficherNotification({ type: 'succes', message: `${reussies} mission(s) annulée(s).` });
     charger();
