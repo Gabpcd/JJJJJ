@@ -147,28 +147,20 @@ export function PanneauContestation({
     if (!user || !litige || !reponse.trim()) return;
     setEnvoi(true);
     try {
-      // Response moves to EN_DISCUSSION; resolution closes it
-      const nouveauStatut = litige.statut === 'CONTESTEE' ? 'EN_DISCUSSION' : `RESOLUE_${role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT'}`;
-      const estResolution = litige.statut === 'EN_DISCUSSION';
-
+      // Parties can only move to EN_DISCUSSION, never resolve
       const updateData: any = {
         reponse: sanitizeText(reponse.trim()),
-        statut: nouveauStatut,
+        statut: 'EN_DISCUSSION',
       };
-      if (estResolution) {
-        updateData.resolution = sanitizeText(reponse.trim());
-        updateData.resolu_le = new Date().toISOString();
-        updateData.resolu_par = user.id;
-      }
 
       const { error } = await supabase.from('litiges').update(updateData).eq('id', litige.id);
       if (error) throw error;
 
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: roleActeur,
-        p_action: estResolution ? 'CONTESTATION_RESOLUTION' : 'CONTESTATION_REPONSE',
+        p_action: 'CONTESTATION_REPONSE',
         p_type_ressource: 'litige', p_id_ressource: litige.id, p_cle_s3: null,
-        p_details: { reponse: reponse.trim(), presence_id: presenceId, nouveau_statut: nouveauStatut },
+        p_details: { reponse: reponse.trim(), presence_id: presenceId, nouveau_statut: 'EN_DISCUSSION' },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
@@ -178,13 +170,36 @@ export function PanneauContestation({
       await supabase.rpc('fn_creer_notification', {
         p_destinataire_id: destId, p_type_destinataire: destType,
         p_type: 'REPONSE_CONTESTATION',
-        p_titre: estResolution ? 'Contestation résolue' : 'Réponse à la contestation',
-        p_corps: `Le ${roleLabel} a ${estResolution ? 'résolu' : 'répondu à'} la contestation de présence.`,
+        p_titre: 'Réponse à la contestation',
+        p_corps: `Le ${roleLabel} a répondu à la contestation de présence.`,
         p_lien: lien, p_type_ressource: 'presence', p_id_ressource: presenceId,
       });
 
-      toast.success(estResolution ? 'Contestation résolue' : 'Réponse envoyée');
+      toast.success('Réponse envoyée');
       setReponse('');
+      charger();
+      onUpdate?.();
+    } catch (err: any) {
+      toast.error(extraireMessageErreur(err));
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  // Admin-only: resolve or close a litige
+  const resoudreAdmin = async (resolution: 'RESOLUE_SOIGNANT' | 'RESOLUE_ETABLISSEMENT' | 'FERME') => {
+    if (!user || !litige) return;
+    setEnvoi(true);
+    try {
+      const { error } = await supabase.from('litiges').update({
+        statut: resolution === 'FERME' ? 'FERME' : `RESOLUE_ADMIN`,
+        resolution: resolution === 'RESOLUE_SOIGNANT' ? 'Résolu en faveur du soignant' : resolution === 'RESOLUE_ETABLISSEMENT' ? 'Résolu en faveur de l\'établissement' : 'Fermé par l\'administrateur',
+        resolu_le: new Date().toISOString(),
+        resolu_par: user.id,
+      }).eq('id', litige.id);
+      if (error) throw error;
+
+      toast.success('Litige résolu');
       charger();
       onUpdate?.();
     } catch (err: any) {
