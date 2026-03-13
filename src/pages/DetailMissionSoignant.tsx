@@ -208,7 +208,7 @@ export default function DetailMissionSoignant() {
       .eq('id', id!);
 
     if (error) {
-      toast.error('Une erreur est survenue. Veuillez réessayer.');
+      toast.error(extraireMessageErreur(error));
       return;
     }
 
