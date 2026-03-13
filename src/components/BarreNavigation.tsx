@@ -52,7 +52,7 @@ const NAV_GROUPE: NavItem[] = [
 function getNavItems(role: UserRole): NavItem[] {
   switch (role) {
     case 'SOIGNANT': return NAV_SOIGNANT;
-    case 'ETABLISSEMENT': return NAV_ETABLISSEMENT;
+    case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT;
     case 'ADMIN_GROUPE': return NAV_GROUPE;
   }
 }
@@ -60,7 +60,7 @@ function getNavItems(role: UserRole): NavItem[] {
 function getMobileNavItems(role: UserRole): NavItem[] {
   switch (role) {
     case 'SOIGNANT': return NAV_SOIGNANT_MOBILE;
-    case 'ETABLISSEMENT': return NAV_ETABLISSEMENT;
+    case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT;
     case 'ADMIN_GROUPE': return NAV_GROUPE;
   }
 }
