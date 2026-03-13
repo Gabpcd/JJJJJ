@@ -67,6 +67,7 @@ export default function DetailMissionSoignant() {
   const [conformiteOk, setConformiteOk] = useState(true);
   const [showEvaluation, setShowEvaluation] = useState(true);
   const [chevauchement, setChevauchement] = useState(false);
+  const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
 
   useEffect(() => {
     if (!user || !id) return;
