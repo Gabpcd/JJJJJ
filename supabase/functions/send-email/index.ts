@@ -45,6 +45,16 @@ const SECURITY_NOTE = `<p style="font-size:12px;color:#94A3B8;text-align:center;
 
 // ─── Template registry ───────────────────────────────────
 
+const ALLOWED_TYPES = new Set([
+  'BIENVENUE_SOIGNANT', 'BIENVENUE_ETABLISSEMENT',
+  'MISSION_ACCEPTEE_SOIGNANT', 'MISSION_ACCEPTEE_ETABLISSEMENT',
+  'RAPPEL_MISSION', 'MISSION_TERMINEE',
+  'CONTRAT_A_SIGNER', 'CONTRAT_SIGNE',
+  'FACTURE_EMISE', 'FACTURE_PAYEE',
+  'DOCUMENT_EXPIRANT', 'RAPPEL_FACTURE',
+  'ELIGIBLE_LIBERAL', 'RECAP_HEBDO',
+]);
+
 interface TemplateResult { subject: string; html: string }
 
 function renderTemplate(type: string, data: Record<string, unknown>): TemplateResult | null {
@@ -194,6 +204,80 @@ function renderTemplate(type: string, data: Record<string, unknown>): TemplateRe
         `),
       };
 
+    case 'RAPPEL_MISSION':
+      return {
+        subject: `Rappel : mission demain — ${data.mission}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📅 Rappel mission J-1</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom},</p>
+          <p style="color:#334155;">Votre mission <strong>"${data.mission}"</strong> commence demain.</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">${data.mission}</strong><br/>
+            <span style="color:#334155;">📍 ${data.etablissement}</span><br/>
+            <span style="color:#334155;">🕐 ${data.heure_debut} → ${data.heure_fin}</span>
+          `)}
+          ${INFO_BOX('Assurez-vous que votre contrat est signé et vos documents à jour.')}
+          ${BUTTON('Voir la mission →', `${APP_URL}/soignant/missions/${data.mission_id || ''}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'DOCUMENT_EXPIRANT':
+      return {
+        subject: `Document expirant : ${data.type_document}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⚠️ Document bientôt expiré</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom},</p>
+          <p style="color:#334155;">Votre document <strong>"${data.type_document}"</strong> expire le <strong>${data.date_expiration}</strong>.</p>
+          ${INFO_BOX('Sans ce document à jour, vous ne pourrez plus postuler à de nouvelles missions.')}
+          ${BUTTON('Mettre à jour →', `${APP_URL}/soignant/documents`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'RAPPEL_FACTURE':
+      return {
+        subject: `Rappel : facture ${data.numero} en attente`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">💳 Rappel de paiement</h2>
+          <p style="color:#334155;">Bonjour,</p>
+          <p style="color:#334155;">La facture <strong>${data.numero}</strong> d'un montant de <strong>${data.montant_ttc} € TTC</strong> est toujours en attente de paiement.</p>
+          ${INFO_BOX(`Échéance : <strong>${data.date_echeance}</strong>`)}
+          ${BUTTON('Consulter et payer →', `${APP_URL}/etablissement/facturation/${data.facture_id || ''}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'ELIGIBLE_LIBERAL':
+      return {
+        subject: 'Vous êtes éligible au passage en libéral ! 🎉',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">🎉 Éligible au passage en libéral</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom},</p>
+          <p style="color:#334155;">Vous avez cumulé <strong>${data.heures_totales}h</strong> et êtes désormais éligible au passage en exercice libéral.</p>
+          ${INFO_BOX('Soin Direct vous accompagne dans toutes les démarches : SIRET, assurance RCP, compte bancaire pro.')}
+          ${BUTTON('Découvrir le parcours →', `${APP_URL}/soignant/passer-en-liberal`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'RECAP_HEBDO':
+      return {
+        subject: 'Votre récap hebdomadaire — Soin Direct',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📊 Récap de la semaine</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom},</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Semaine du ${data.periode}</strong><br/>
+            <span style="color:#334155;">✅ Missions réalisées : <strong>${data.missions_terminees}</strong></span><br/>
+            <span style="color:#334155;">🕐 Heures travaillées : <strong>${data.heures}h</strong></span><br/>
+            <span style="color:#334155;">💰 Gains nets : <strong>${data.gains_nets} €</strong></span>
+          `)}
+          ${BUTTON('Voir le détail →', `${APP_URL}/soignant/gains`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
     default:
       return null;
   }
@@ -241,35 +325,32 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { to, type, data: templateData, subject: legacySubject, html: legacyHtml, destinataire_id } = body;
+    const { to, type, data: templateData, destinataire_id } = body;
 
-    // Resolve subject & html: prefer type+data templates, fall back to legacy subject+html
-    let subject: string;
-    let html: string;
-
-    if (type && templateData) {
-      const rendered = renderTemplate(type, templateData || {});
-      if (rendered) {
-        subject = rendered.subject;
-        html = rendered.html;
-      } else if (legacySubject && legacyHtml) {
-        subject = legacySubject;
-        html = legacyHtml;
-      } else {
-        return new Response(JSON.stringify({ error: `Type de template inconnu: ${type}` }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    } else if (legacySubject && legacyHtml) {
-      subject = legacySubject;
-      html = legacyHtml;
-    } else {
-      return new Response(JSON.stringify({ error: 'type+data ou subject+html requis' }), {
+    // Strict validation: only type+data accepted, no raw HTML
+    if (!to || !type) {
+      return new Response(JSON.stringify({ error: 'Paramètres requis : to, type, data' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    if (!ALLOWED_TYPES.has(type)) {
+      return new Response(JSON.stringify({ error: 'Type inconnu' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const rendered = renderTemplate(type, templateData || {});
+    if (!rendered) {
+      return new Response(JSON.stringify({ error: 'Type inconnu' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { subject, html } = rendered;
 
     // Restriction: user can only send to themselves unless admin
     if (!isServiceRole && to !== userEmail) {
