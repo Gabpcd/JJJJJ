@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Audit HDS
     const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: u.id,
-      p_type_acteur: role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT',
+      p_type_acteur: role,
       p_action: 'CONNEXION',
       p_type_ressource: role === 'SOIGNANT' ? 'soignant' : 'etablissement',
       p_id_ressource: u.id,
