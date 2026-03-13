@@ -20,6 +20,7 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
 const NAV_SOIGNANT: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
+  { icone: MapPinned, label: 'Recherche', route: '/soignant/recherche-missions' },
   { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
   { icone: FileText, label: 'Mes contrats', route: '/soignant/contrats' },
   { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
