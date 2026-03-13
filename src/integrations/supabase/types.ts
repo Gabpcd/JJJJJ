@@ -2046,6 +2046,8 @@ export type Database = {
       est_admin: { Args: never; Returns: boolean }
       est_admin_etablissement: { Args: never; Returns: boolean }
       est_soignant: { Args: never; Returns: boolean }
+      fn_auto_facturation_mensuelle: { Args: never; Returns: number }
+      fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_calculer_bfa: {
         Args: {
           p_annee?: number
@@ -2183,6 +2185,17 @@ export type Database = {
           soignant_id: string
         }[]
       }
+      fn_mes_evaluations_recues: {
+        Args: never
+        Returns: {
+          commentaire: string
+          cree_le: string
+          mission_id: string
+          mission_intitule: string
+          note: number
+          type_evaluateur: string
+        }[]
+      }
       fn_mes_missions_soignant: {
         Args: never
         Returns: {
@@ -2208,12 +2221,15 @@ export type Database = {
           total_brut: number
         }[]
       }
+      fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
+      fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
       fn_recalculer_palier_commission: {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
       fn_recalculer_tous_paliers: { Args: never; Returns: number }
+      fn_relancer_signatures_contrats: { Args: never; Returns: number }
       fn_rgpd_exporter_donnees_soignant: {
         Args: { p_soignant_id: string }
         Returns: Json
