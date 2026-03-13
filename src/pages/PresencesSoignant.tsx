@@ -276,6 +276,45 @@ export default function PresencesSoignant() {
           sousTitre="Vos missions assignées apparaîtront ici le jour J pour le pointage."
         />
       )}
+
+      {/* Presences validated recently — contestation possible */}
+      {presencesValidees.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2 mb-4">
+            <CheckCircle className="h-4 w-4 text-success" /> Présences validées récemment
+          </h2>
+          <div className="space-y-3">
+            {presencesValidees.map((p: any) => {
+              const m = p.missions;
+              return (
+                <div key={p.id} className="rounded-2xl border border-border p-4">
+                  <div className="flex items-start justify-between mb-1">
+                    <div>
+                      <p className="font-semibold text-sm text-foreground">{m?.intitule}</p>
+                      <p className="text-xs text-muted-foreground">{m?.etablissements?.nom}</p>
+                    </div>
+                    <span className="text-[11px] bg-success/10 text-success px-2 py-0.5 rounded-full font-medium">
+                      Validée
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    {p.valide_le && format(new Date(p.valide_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                  </p>
+                  <PanneauContestation
+                    presenceId={p.id}
+                    missionId={p.mission_id}
+                    etablissementId={m?.etablissement_id}
+                    soignantId={p.soignant_id}
+                    presenceValideeLe={p.valide_le}
+                    role="SOIGNANT"
+                    onUpdate={charger}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </LayoutApp>
   );
 }
