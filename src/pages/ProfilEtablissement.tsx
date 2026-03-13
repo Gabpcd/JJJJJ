@@ -84,18 +84,21 @@ export default function ProfilEtablissement() {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from('etablissements').update({
-      nom: form.nom, finess: form.finess || null,
-      adresse_rue: form.rue, adresse_ville: form.ville,
-      adresse_code_postal: form.codePostal, adresse_departement: form.departement || null,
-      email_contact: form.emailContact, telephone_contact: form.telephoneContact || null,
-      adresse_lat: lat ? parseFloat(lat) : null,
-      adresse_lng: lng ? parseFloat(lng) : null,
-      taux_majoration_nuit_pourcent: form.tauxNuit,
-      taux_majoration_dimanche_pourcent: form.tauxDimanche,
-      taux_majoration_ferie_pourcent: form.tauxFerie,
-      modifie_le: new Date().toISOString(),
-    } as any).eq('id', user.id);
+    const { error } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
+      p_nom: form.nom,
+      p_finess: form.finess || null,
+      p_adresse_rue: form.rue,
+      p_adresse_ville: form.ville,
+      p_adresse_code_postal: form.codePostal,
+      p_adresse_departement: form.departement || null,
+      p_email_contact: form.emailContact,
+      p_telephone_contact: form.telephoneContact || null,
+      p_adresse_lat: lat ? parseFloat(lat) : null,
+      p_adresse_lng: lng ? parseFloat(lng) : null,
+      p_taux_majoration_nuit: form.tauxNuit,
+      p_taux_majoration_dimanche: form.tauxDimanche,
+      p_taux_majoration_ferie: form.tauxFerie,
+    });
 
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
