@@ -96,7 +96,7 @@ serve(async (req) => {
 
     // 3. Set app_metadata role — server-side, no client involvement
     const { error: claimsError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-      app_metadata: { role: 'ETABLISSEMENT', etablissement_id: user.id },
+      app_metadata: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: user.id },
     });
 
     if (claimsError) {
