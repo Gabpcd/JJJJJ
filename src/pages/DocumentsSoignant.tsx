@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
-import { FolderOpen, AlertCircle, Clock } from 'lucide-react';
+import { FolderOpen, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
@@ -9,11 +9,122 @@ import { ModalTeleversement } from '@/components/ModalTeleversement';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
+import { TYPES_DOCUMENTS, STATUTS_VERIFICATION, TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '@/lib/documents';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+
+function AttestationSante({ userId }: { userId: string }) {
+  const [checkVaccin, setCheckVaccin] = useState(false);
+  const [checkMedecine, setCheckMedecine] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [signedAt, setSignedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Charger l'attestation existante
+    supabase.from('soignants')
+      .select('attestation_sante_signee_le')
+      .eq('id', userId)
+      .single()
+      .then(({ data }) => {
+        if (data && (data as any).attestation_sante_signee_le) {
+          setSignedAt((data as any).attestation_sante_signee_le);
+          setCheckVaccin(true);
+          setCheckMedecine(true);
+        }
+      });
+  }, [userId]);
+
+  const signer = async () => {
+    setSigning(true);
+    const { data, error } = await supabase.rpc('fn_signer_attestation_sante' as any);
+    if (error) {
+      toast.error('Erreur lors de la signature. Veuillez réessayer.');
+      handleErrorSilent(error, 'Signature attestation santé');
+    } else {
+      setSignedAt(new Date().toISOString());
+      toast.success('Attestation signée avec succès !');
+      // Audit
+      await supabase.rpc('fn_ecrire_audit_safe', {
+        p_acteur_id: userId, p_type_acteur: 'SOIGNANT',
+        p_action: 'ATTESTATION_SANTE_SIGNEE',
+        p_type_ressource: 'soignant', p_id_ressource: userId,
+        p_cle_s3: null, p_details: { vaccinations: true, medecine_travail: true },
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
+    }
+    setSigning(false);
+  };
+
+  const canSign = checkVaccin && checkMedecine && !signedAt;
+
+  return (
+    <div className="card-base mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-lg">📋</span>
+        <h2 className="text-base font-bold text-foreground">Attestation sur l'honneur</h2>
+        {signedAt && (
+          <span className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Signée
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-3 mb-4">
+        <label className="flex items-start gap-3 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={checkVaccin}
+            onChange={(e) => !signedAt && setCheckVaccin(e.target.checked)}
+            disabled={!!signedAt}
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary accent-primary mt-0.5 shrink-0"
+          />
+          <span className="text-sm text-foreground leading-snug">
+            J'atteste sur l'honneur que mes vaccinations obligatoires sont à jour conformément aux recommandations du calendrier vaccinal en vigueur et aux obligations de mon établissement d'exercice.
+          </span>
+        </label>
+
+        <label className="flex items-start gap-3 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={checkMedecine}
+            onChange={(e) => !signedAt && setCheckMedecine(e.target.checked)}
+            disabled={!!signedAt}
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary accent-primary mt-0.5 shrink-0"
+          />
+          <span className="text-sm text-foreground leading-snug">
+            J'atteste sur l'honneur avoir bénéficié d'une visite d'information et de prévention (médecine du travail) dans les délais réglementaires.
+          </span>
+        </label>
+      </div>
+
+      <p className="text-xs text-muted-foreground mb-4 italic">
+        Je reconnais que toute fausse déclaration est passible de poursuites (Art. 441-7 du Code pénal).
+      </p>
+
+      {signedAt ? (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+          <p className="text-sm text-emerald-700 font-medium">
+            ✅ Attestation signée le {format(new Date(signedAt), 'd MMMM yyyy', { locale: fr })}
+          </p>
+        </div>
+      ) : (
+        <button
+          onClick={signer}
+          disabled={!canSign || signing}
+          className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {signing ? 'Signature en cours…' : '✅ Signer mon attestation'}
+        </button>
+      )}
+
+      <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
+        Les documents originaux (carnet de vaccination, attestation de médecine du travail) sont vérifiés par l'établissement lors de votre première mission. Soin Direct ne stocke aucune donnée de santé.
+      </p>
+    </div>
+  );
+}
 
 export default function DocumentsSoignant() {
   const navigate = useNavigate();
@@ -37,7 +148,13 @@ export default function DocumentsSoignant() {
     ]);
     if (sg) {
       setSoignant(sg);
-      setDocumentsRequis((dr || []).filter((d: any) => d.profession === (sg as any).profession));
+      // Exclure les types gérés par attestation sur l'honneur
+      setDocumentsRequis(
+        (dr || []).filter((d: any) =>
+          d.profession === (sg as any).profession &&
+          !TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)
+        )
+      );
     }
     setMesDocuments(md || []);
     setLoading(false);
@@ -138,6 +255,9 @@ export default function DocumentsSoignant() {
         Téléversez et gérez vos documents. Les documents marqués ★ sont obligatoires pour postuler aux missions.
       </p>
 
+      {/* Attestation sur l'honneur */}
+      {user && <AttestationSante userId={user.id} />}
+
       {/* Alertes expiration */}
       {documentsExpirantBientot.map(d => (
         <div key={d.id} className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-3 flex items-start gap-2">
@@ -151,16 +271,16 @@ export default function DocumentsSoignant() {
 
       {/* Jauge globale */}
       {completionDocs >= 100 ? (
-        <div className="rounded-2xl bg-success/5 border border-success/20 p-4 mb-4 text-center">
-          <p className="text-sm font-semibold text-success">✅ Tous vos documents obligatoires sont à jour</p>
+        <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4 text-center">
+          <p className="text-sm font-semibold text-emerald-700">✅ Tous vos documents obligatoires sont à jour</p>
         </div>
       ) : (
-        <div className="rounded-2xl bg-warning/5 border border-warning/20 p-4 mb-4">
+        <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 mb-4">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-semibold text-foreground">{docsRequis.length - docsValides.length} document(s) manquant(s) ou expiré(s)</p>
-            <span className="text-xs text-warning font-medium">⚠️ Vous ne pouvez pas postuler</span>
+            <span className="text-xs text-amber-700 font-medium">⚠️ Vous ne pouvez pas postuler</span>
           </div>
-          <JaugeProgression valeur={docsValides.length} max={docsRequis.length} couleurBarre="bg-warning" couleurFond="bg-warning/10" />
+          <JaugeProgression valeur={docsValides.length} max={docsRequis.length} couleurBarre="bg-amber-500" couleurFond="bg-amber-100" />
         </div>
       )}
 
@@ -214,7 +334,7 @@ export default function DocumentsSoignant() {
                 ) : estExpire ? (
                   <div className="mt-2">
                     <p className="text-xs text-destructive">⏰ Expiré depuis le {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}</p>
-                    <span className={`badge-base bg-red-200 text-red-800 text-[10px] mt-1`}>Expiré ⏰</span>
+                    <span className="badge-base bg-destructive/10 text-destructive text-[10px] mt-1">Expiré ⏰</span>
                     <div className="flex gap-2 mt-2">
                       <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Téléverser un nouveau document</button>
                     </div>
@@ -222,14 +342,14 @@ export default function DocumentsSoignant() {
                 ) : estRejete ? (
                   <div className="mt-2">
                     <p className="text-xs text-destructive">✗ Rejeté {doc.motif_rejet && `— Motif : "${doc.motif_rejet}"`}</p>
-                    <span className="badge-base bg-red-100 text-red-700 text-[10px] mt-1">Rejeté ✗</span>
+                    <span className="badge-base bg-destructive/10 text-destructive text-[10px] mt-1">Rejeté ✗</span>
                     <div className="flex gap-2 mt-2">
                       <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Téléverser un nouveau document</button>
                     </div>
                   </div>
                 ) : (
                   <div className="mt-2">
-                    <p className="text-xs text-warning">⚠️ Document non téléversé</p>
+                    <p className="text-xs text-amber-600">⚠️ Document non téléversé</p>
                     <div className="flex gap-2 mt-2">
                       <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="btn-primary text-xs px-3 py-1.5">+ Téléverser</button>
                     </div>
