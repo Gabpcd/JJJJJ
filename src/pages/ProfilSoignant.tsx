@@ -58,6 +58,7 @@ export default function ProfilSoignant() {
           rayon: data.rayon_deplacement_km ?? 30,
         });
         setTypesContrat(getTypesContratSoignant(data as any));
+        setConsentementGPS((data as any).consentement_gps !== false);
       }
       setLoading(false);
     });
