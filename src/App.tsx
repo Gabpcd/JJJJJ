@@ -52,6 +52,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUtilisateurs from "./pages/admin/AdminUtilisateurs";
 import AdminModeration from "./pages/admin/AdminModeration";
 import AdminFacturation from "./pages/admin/AdminFacturation";
+import RechercheMissions from "./pages/RechercheMissions";
 
 const queryClient = new QueryClient();
 
