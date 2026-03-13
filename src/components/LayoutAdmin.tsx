@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV_ADMIN = [
   { icone: BarChart3, label: 'Dashboard', route: '/admin' },
