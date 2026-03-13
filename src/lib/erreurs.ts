@@ -6,11 +6,11 @@ export function extraireMessageErreur(error: any): string {
   const msg = error.message || error.details || error.hint || '';
 
   // Trigger messages in French: surface them directly to the user
-  const TRIGGER_PREFIXES = ['Impossible', 'Ce soignant', 'Le taux', 'Pointage trop', 'Le départ', 'Le délai'];
+  const TRIGGER_PREFIXES = ['Impossible', 'Ce soignant', 'Le taux', 'Pointage trop', 'Le départ', 'Le délai', 'Vous avez', 'En tant que', 'Une pharmacie'];
   for (const prefix of TRIGGER_PREFIXES) {
     if (msg.includes(prefix)) {
       // Extract the meaningful part after any Postgres wrapper
-      const clean = msg.replace(/^.*?(?=Impossible|Ce soignant|Le taux|Pointage trop|Le départ|Le délai)/, '').trim();
+      const clean = msg.replace(/^.*?(?=Impossible|Ce soignant|Le taux|Pointage trop|Le départ|Le délai|Vous avez|En tant que|Une pharmacie)/, '').trim();
       return clean;
     }
   }

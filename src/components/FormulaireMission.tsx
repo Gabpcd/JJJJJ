@@ -53,6 +53,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [progressionActuel, setProgressionActuel] = useState(0);
 
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
+  const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
 
   // Load rist_plafond_actif + commission info + type
   useEffect(() => {
@@ -267,7 +268,15 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
         if (error) {
           if (estBlocageCodeTravail(error)) { setErreurCodeTravail(error); }
-          else afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+          else {
+            const msg = extraireMessageErreur(error);
+            if (msg.includes('facture') && msg.includes('impayée')) {
+              afficherNotification({ type: 'erreur', message: msg });
+              setErreurFactureImpayee(true);
+            } else {
+              afficherNotification({ type: 'erreur', message: msg });
+            }
+          }
           return;
         }
 
@@ -295,6 +304,16 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       {dupliquerInfo && (
         <div className="bg-info/10 border border-info/20 rounded-xl p-3 mb-4 text-sm text-info">
           📋 Vous dupliquez la mission « {dupliquerInfo} ». Ajustez les dates ci-dessous.
+        </div>
+      )}
+
+      {erreurFactureImpayee && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 mb-4">
+          <p className="text-sm font-semibold text-destructive">⚠️ Vous avez des factures impayées.</p>
+          <p className="text-xs text-destructive/80 mt-1">Vous devez régulariser vos factures avant de publier de nouvelles missions.</p>
+          <a href="/etablissement/facturation" className="text-sm font-medium text-destructive underline mt-2 inline-block">
+            Régulariser mes factures →
+          </a>
         </div>
       )}
 

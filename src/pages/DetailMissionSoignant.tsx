@@ -67,6 +67,7 @@ export default function DetailMissionSoignant() {
   const [conformiteOk, setConformiteOk] = useState(true);
   const [showEvaluation, setShowEvaluation] = useState(true);
   const [chevauchement, setChevauchement] = useState(false);
+  const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -114,6 +115,16 @@ export default function DetailMissionSoignant() {
         setChevauchement((data || []).length > 0);
       });
   }, [mission, user]);
+
+  // Fetch average rating for the establishment
+  useEffect(() => {
+    if (!mission?.etablissement_id) return;
+    supabase.rpc('fn_note_moyenne' as any, { p_user_id: mission.etablissement_id })
+      .then(({ data }: any) => {
+        if (data && typeof data === 'object') setNoteMoyenne(data);
+        else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
+      });
+  }, [mission?.etablissement_id]);
 
   if (loading || !mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
@@ -283,7 +294,12 @@ export default function DetailMissionSoignant() {
                     )}
                   </div>
                 )}
-                <p className="text-[10px] text-muted-foreground/60 mt-2">
+                {noteMoyenne && noteMoyenne.total > 0 && (
+                  <p className="text-xs text-foreground mt-2">
+                    ⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}
+                  </p>
+                )}
+                <p className="text-[10px] text-muted-foreground/60 mt-1">
                   Cet établissement a publié {countMissions} mission{countMissions > 1 ? 's' : ''} sur Soin Direct
                 </p>
               </div>
@@ -400,6 +416,13 @@ export default function DetailMissionSoignant() {
               </div>
             )}
 
+            {mission.statut === 'ABSENCE' && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-center space-y-1">
+                <p className="text-sm font-semibold text-destructive">❌ Mission marquée absence — score impacté (-20 pts)</p>
+                <p className="text-xs text-destructive/80">Si c'est une erreur, contactez l'établissement pour correction.</p>
+              </div>
+            )}
+
             {estAssigneAutre && (
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-3">Cette mission a déjà été attribuée</p>
@@ -437,7 +460,14 @@ export default function DetailMissionSoignant() {
         onFermer={() => setModalAnnuler(false)}
         onConfirmer={annulerParticipation}
         titre="⚠️ Annuler votre participation ?"
-        message="Cette action est irréversible. Votre score de fiabilité sera impacté de -8 points."
+        message={(() => {
+          const debut = new Date(mission.debut_le);
+          const maintenant = new Date();
+          const heuresAvant = (debut.getTime() - maintenant.getTime()) / 3600000;
+          if (heuresAvant < 4) return 'Annulation à moins de 4h du début : pénalité de -25 points sur votre score de fiabilité. Cette action est irréversible.';
+          if (heuresAvant < 24) return 'Annulation à moins de 24h du début : pénalité de -15 points sur votre score de fiabilité. Cette action est irréversible.';
+          return 'Pénalité de -8 points sur votre score de fiabilité. Cette action est irréversible.';
+        })()}
         labelConfirmer="Oui, annuler"
         labelAnnuler="Non, garder"
         variante="danger"
