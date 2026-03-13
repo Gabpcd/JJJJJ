@@ -68,11 +68,13 @@ export default function PasserEnLiberal() {
 
   const handleSaveSiret = async () => {
     if (!user || siret.length !== 14) return;
-    await supabase.from('soignants').update({
-      siret_liberal: siret,
-      statut_liberal: 'SIRET_RECU',
-      modifie_le: new Date().toISOString(),
-    } as any).eq('id', user.id);
+    const { data, error } = await supabase.rpc('fn_enregistrer_siret_liberal' as any, {
+      p_siret: siret,
+    });
+    if (error || data?.error) {
+      afficherNotification({ type: 'erreur', message: data?.error || 'Erreur lors de l\'enregistrement du SIRET' });
+      return;
+    }
     setChecklist(prev => ({ ...prev, siret: true }));
     afficherNotification({ type: 'succes', message: 'SIRET enregistré !' });
   };
