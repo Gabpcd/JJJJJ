@@ -14,6 +14,7 @@ import { WidgetBFA } from '@/components/WidgetBFA';
 import { BadgePalier } from '@/components/BadgePalier';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
+import { OnboardingGuide } from '@/components/OnboardingGuide';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 
