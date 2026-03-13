@@ -20,7 +20,7 @@ export default function ConformiteSoignant() {
     if (!user) return;
     supabase
       .from('conformite_travail')
-      .select('*, missions(intitule, debut_le, fin_le, etablissement_id)')
+      .select('id, type_controle, resultat, controle_le, motif_derogation, missions(intitule, debut_le, fin_le, etablissement_id)')
       .eq('soignant_id', user.id)
       .order('controle_le', { ascending: false })
       .limit(50)
