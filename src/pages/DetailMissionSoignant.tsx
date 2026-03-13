@@ -153,7 +153,7 @@ export default function DetailMissionSoignant() {
         } else if (error.message?.includes('0 rows')) {
           setModalPerdu(true);
         } else {
-      toast.error('Une erreur est survenue. Veuillez réessayer.');
+          toast.error(extraireMessageErreur(error));
         }
         return;
       }
