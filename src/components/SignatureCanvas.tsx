@@ -10,6 +10,8 @@ export default function SignatureCanvas({ onSave, width = 400, height = 150 }: S
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const strokeCountRef = useRef(0);
+  const MIN_STROKES = 2; // Minimum number of strokes for a valid signature (eIDAS)
 
   useEffect(() => {
     const canvas = canvasRef.current;
