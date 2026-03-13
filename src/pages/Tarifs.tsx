@@ -54,7 +54,7 @@ export default function Tarifs() {
 
       {/* Footer */}
       <footer className="py-8 text-center text-sm text-muted-foreground border-t border-border bg-card">
-        <p>© 2026 Soin Direct SAS — Conforme RGPD · HDS · Code du Travail</p>
+        <p>© 2026 Soin Direct SAS — Conforme RGPD · Code du Travail</p>
       </footer>
     </div>
   );

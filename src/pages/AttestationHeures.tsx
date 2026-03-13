@@ -169,8 +169,8 @@ export default function AttestationHeures() {
           <p>Identifiant : {identifiant}</p>
           <p className="font-medium">{ENTREPRISE.nom} — SIRET {ENTREPRISE.siret}</p>
           <p>{ENTREPRISE.adresse} · {ENTREPRISE.email}</p>
-          <p>Hébergeur HDS : {ENTREPRISE.hebergeurHDS}</p>
-          <p>Conforme RGPD · HDS · Code du Travail</p>
+          <p>Hébergement sécurisé : {ENTREPRISE.hebergeur}</p>
+          <p>Conforme RGPD · Code du Travail</p>
           <p className="italic mt-3">⚠️ Les montants financiers ne figurent pas sur cette attestation. Pour les justificatifs de rémunération, consultez vos bulletins de paie.</p>
         </div>
       </div>

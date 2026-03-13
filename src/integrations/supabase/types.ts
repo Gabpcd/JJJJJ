@@ -1687,6 +1687,11 @@ export type Database = {
           adresse_rue: string | null
           adresse_ville: string | null
           assujetti_tva: boolean | null
+          attestation_medecine_travail: boolean | null
+          attestation_medecine_travail_le: string | null
+          attestation_sante_signee_le: string | null
+          attestation_vaccinations: boolean | null
+          attestation_vaccinations_le: string | null
           code_ape: string | null
           consentement_gps: boolean | null
           consentement_gps_le: string | null
@@ -1740,6 +1745,11 @@ export type Database = {
           adresse_rue?: string | null
           adresse_ville?: string | null
           assujetti_tva?: boolean | null
+          attestation_medecine_travail?: boolean | null
+          attestation_medecine_travail_le?: string | null
+          attestation_sante_signee_le?: string | null
+          attestation_vaccinations?: boolean | null
+          attestation_vaccinations_le?: string | null
           code_ape?: string | null
           consentement_gps?: boolean | null
           consentement_gps_le?: string | null
@@ -1793,6 +1803,11 @@ export type Database = {
           adresse_rue?: string | null
           adresse_ville?: string | null
           assujetti_tva?: boolean | null
+          attestation_medecine_travail?: boolean | null
+          attestation_medecine_travail_le?: string | null
+          attestation_sante_signee_le?: string | null
+          attestation_vaccinations?: boolean | null
+          attestation_vaccinations_le?: string | null
           code_ape?: string | null
           consentement_gps?: boolean | null
           consentement_gps_le?: string | null
@@ -2437,6 +2452,7 @@ export type Database = {
         Args: { p_etablissement_id?: string; p_role: string; p_user_id: string }
         Returns: undefined
       }
+      fn_signer_attestation_sante: { Args: never; Returns: Json }
       fn_signer_contrat_etablissement: {
         Args: { p_contrat_id: string; p_signature_image: string }
         Returns: Json
