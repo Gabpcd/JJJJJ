@@ -147,6 +147,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   // Bulk publish
   const publierSerieRecurrente = async () => {
     if (!user || !recurrenceConfig || creneaux.length === 0) return;
+    if (creneaux.length > 90) {
+      afficherNotification({ type: 'erreur', message: 'Maximum 90 créneaux par série récurrente.' });
+      return;
+    }
     setPublicationEnCours(true);
     setProgression(0);
     setProgressionActuel(0);
