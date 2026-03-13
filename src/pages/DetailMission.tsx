@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
+import { ChatMission } from '@/components/ChatMission';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ChargementPage } from '@/components/ChargementPage';
