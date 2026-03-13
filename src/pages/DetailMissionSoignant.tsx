@@ -437,7 +437,14 @@ export default function DetailMissionSoignant() {
         onFermer={() => setModalAnnuler(false)}
         onConfirmer={annulerParticipation}
         titre="⚠️ Annuler votre participation ?"
-        message="Cette action est irréversible. Votre score de fiabilité sera impacté de -8 points."
+        message={(() => {
+          const debut = new Date(mission.debut_le);
+          const maintenant = new Date();
+          const heuresAvant = (debut.getTime() - maintenant.getTime()) / 3600000;
+          if (heuresAvant < 4) return 'Annulation à moins de 4h du début : pénalité de -25 points sur votre score de fiabilité. Cette action est irréversible.';
+          if (heuresAvant < 24) return 'Annulation à moins de 24h du début : pénalité de -15 points sur votre score de fiabilité. Cette action est irréversible.';
+          return 'Pénalité de -8 points sur votre score de fiabilité. Cette action est irréversible.';
+        })()}
         labelConfirmer="Oui, annuler"
         labelAnnuler="Non, garder"
         variante="danger"
