@@ -40,11 +40,18 @@ export default function ExclusionsSoignant() {
   useEffect(() => { charger(); }, [user]);
 
   const supprimerExclusion = async () => {
-    if (!suppressionId) return;
+    if (!suppressionId || !user) return;
     const { error } = await supabase.from('exclusions').delete().eq('id', suppressionId);
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     } else {
+      await supabase.rpc('fn_ecrire_audit_safe', {
+        p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
+        p_action: 'EXCLUSION_SUPPRIMEE', p_type_ressource: 'exclusion',
+        p_id_ressource: suppressionId, p_cle_s3: null,
+        p_details: {},
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
       afficherNotification({ type: 'succes', message: 'Exclusion supprimée.' });
       charger();
     }

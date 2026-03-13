@@ -43,7 +43,6 @@ export default function FacturationEtablissement() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
-  const [simulatingId, setSimulatingId] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [factures, setFactures] = useState<any[]>([]);
   const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
