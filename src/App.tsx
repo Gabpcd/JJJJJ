@@ -48,6 +48,10 @@ import PageCGV from "./pages/PageCGV";
 import PageConfidentialite from "./pages/PageConfidentialite";
 import PageMentionsLegales from "./pages/PageMentionsLegales";
 import NotFound from "./pages/NotFound";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUtilisateurs from "./pages/admin/AdminUtilisateurs";
+import AdminModeration from "./pages/admin/AdminModeration";
+import AdminFacturation from "./pages/admin/AdminFacturation";
 
 const queryClient = new QueryClient();
 
