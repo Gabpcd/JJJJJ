@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV_ADMIN = [
   { icone: BarChart3, label: 'Dashboard', route: '/admin' },
@@ -25,9 +26,12 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[240px] bg-sidebar flex-col z-40">
-        <div className="p-5 flex items-center gap-2 border-b border-sidebar-border">
-          <HeartPulse className="h-6 w-6 text-sidebar-primary" />
-          <span className="text-lg font-bold text-sidebar-foreground">Admin</span>
+        <div className="p-5 flex items-center justify-between border-b border-sidebar-border">
+          <div className="flex items-center gap-2">
+            <HeartPulse className="h-6 w-6 text-sidebar-primary" />
+            <span className="text-lg font-bold text-sidebar-foreground">Admin</span>
+          </div>
+          <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {NAV_ADMIN.map((item) => {
