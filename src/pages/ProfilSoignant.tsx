@@ -9,7 +9,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Loader2, Download, Trash2, MapPinOff } from 'lucide-react';
+import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -38,9 +38,17 @@ export default function ProfilSoignant() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Parrainage
+  const [codeParrainage, setCodeParrainage] = useState('');
+  const [codeRecu, setCodeRecu] = useState('');
+  const [parrainageLoading, setParrainageLoading] = useState(false);
+  const [parrainageSucces, setParrainageSucces] = useState(false);
+  const [filleuls, setFilleuls] = useState<any[]>([]);
+  const [codeCopied, setCodeCopied] = useState(false);
+
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage').eq('id', user.id).single().then(({ data }: any) => {
       if (data) {
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
@@ -51,6 +59,7 @@ export default function ProfilSoignant() {
         });
         setEmail(data.email);
         setProfession(data.profession);
+        setCodeParrainage(data.code_parrainage || '');
         setForm({
           prenom: data.prenom, nom: data.nom,
           telephone: data.telephone || '', dateNaissance: data.date_naissance || '',
@@ -63,6 +72,11 @@ export default function ProfilSoignant() {
         setConsentementGPS((data as any).consentement_gps !== false);
       }
       setLoading(false);
+    });
+
+    // Load filleuls
+    supabase.rpc('fn_mes_filleuls' as any).then(({ data }: any) => {
+      if (Array.isArray(data)) setFilleuls(data);
     });
   }, [user]);
 
@@ -316,11 +330,89 @@ export default function ProfilSoignant() {
         </button>
       </form>
 
+      {/* Parrainage */}
+      <div className="max-w-2xl mt-8">
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Gift className="h-5 w-5 text-primary" /> Parrainage
+          </h2>
+
+          {codeParrainage && (
+            <div className="mb-4">
+              <p className="text-sm text-muted-foreground mb-2">Votre code parrainage :</p>
+              <div className="flex items-center gap-2">
+                <code className="bg-muted px-4 py-2 rounded-xl font-mono text-lg font-bold text-foreground">{codeParrainage}</code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(codeParrainage);
+                    setCodeCopied(true);
+                    setTimeout(() => setCodeCopied(false), 2000);
+                  }}
+                  className="btn-secondary text-xs py-2 px-3 flex items-center gap-1"
+                >
+                  {codeCopied ? <><CheckCircle className="h-3.5 w-3.5" /> Copié !</> : <><Copy className="h-3.5 w-3.5" /> Copier</>}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Partagez ce code pour obtenir +50h bonus chacun !</p>
+            </div>
+          )}
+
+          <div className="border-t border-border pt-4">
+            <p className="text-sm text-muted-foreground mb-2">Vous avez un code parrainage ?</p>
+            <div className="flex gap-2">
+              <input
+                value={codeRecu}
+                onChange={e => setCodeRecu(e.target.value.toUpperCase())}
+                placeholder="Ex: SOIN-ABCD"
+                className="input-base flex-1"
+                disabled={parrainageSucces}
+              />
+              <button
+                onClick={async () => {
+                  if (!codeRecu.trim()) return;
+                  setParrainageLoading(true);
+                  const { data, error } = await supabase.rpc('fn_appliquer_parrainage' as any, { p_code: codeRecu.trim() });
+                  if (error) {
+                    afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+                  } else if (data?.error) {
+                    afficherNotification({ type: 'erreur', message: data.error });
+                  } else {
+                    setParrainageSucces(true);
+                    afficherNotification({ type: 'succes', message: '+50h bonus appliquées ! 🎉' });
+                  }
+                  setParrainageLoading(false);
+                }}
+                disabled={parrainageLoading || parrainageSucces || !codeRecu.trim()}
+                className="btn-primary text-sm disabled:opacity-50"
+              >
+                {parrainageLoading ? '…' : parrainageSucces ? '✓ Appliqué' : 'Appliquer'}
+              </button>
+            </div>
+            {parrainageSucces && (
+              <p className="text-sm text-success font-semibold mt-2">🎉 +50h bonus ajoutées à votre compteur !</p>
+            )}
+          </div>
+
+          {filleuls.length > 0 && (
+            <div className="border-t border-border pt-4 mt-4">
+              <p className="text-sm font-medium text-foreground mb-2">Vos filleuls ({filleuls.length})</p>
+              <div className="space-y-1">
+                {filleuls.map((f: any, i: number) => (
+                  <div key={i} className="text-sm text-muted-foreground flex items-center gap-2">
+                    <CheckCircle className="h-3.5 w-3.5 text-success" />
+                    {f.prenom} {f.nom} — inscrit le {f.cree_le ? format(new Date(f.cree_le), 'd MMM yyyy', { locale: fr }) : '—'}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* RGPD Section */}
       <div className="max-w-2xl mt-12 space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
 
-        {/* B2: Export RGPD */}
         <button
           onClick={handleExportRGPD}
           disabled={exportLoading}
@@ -330,7 +422,6 @@ export default function ProfilSoignant() {
           {exportLoading ? 'Export en cours…' : '📥 Télécharger mes données (RGPD)'}
         </button>
 
-        {/* B3: Suppression compte */}
         <button
           onClick={() => setShowDeleteModal(true)}
           className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition"

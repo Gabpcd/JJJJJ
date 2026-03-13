@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star } from 'lucide-react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { CarteMission } from '@/components/CarteMission';
@@ -31,6 +32,9 @@ export default function DashboardEtablissement() {
   const [modalAnnuler, setModalAnnuler] = useState<any>(null);
   const [paliers, setPaliers] = useState<any[]>([]);
   const [missionsCeMois, setMissionsCeMois] = useState(0);
+  const [missionsParSemaine, setMissionsParSemaine] = useState<any[]>([]);
+  const [coutParMois, setCoutParMois] = useState<any[]>([]);
+  const [favoris, setFavoris] = useState<any[]>([]);
 
   const charger = async () => {
     if (!user) return;
@@ -68,6 +72,46 @@ export default function DashboardEtablissement() {
 
       if (resPaliers.data) setPaliers(resPaliers.data);
       setMissionsCeMois(resMissionsCeMois.count ?? 0);
+
+      // Graphiques + favoris (non-bloquant)
+      try {
+        const now = new Date();
+        // Missions terminées par semaine (8 dernières semaines)
+        const semaines: { label: string; count: number }[] = [];
+        for (let i = 7; i >= 0; i--) {
+          const end = new Date(now);
+          end.setDate(end.getDate() - i * 7);
+          const start = new Date(end);
+          start.setDate(start.getDate() - 7);
+          const { count } = await supabase.from('missions').select('id', { count: 'exact', head: true })
+            .eq('etablissement_id', user.id).eq('statut', 'TERMINEE')
+            .gte('fin_le', start.toISOString()).lt('fin_le', end.toISOString());
+          semaines.push({ label: `S-${i}`, count: count ?? 0 });
+        }
+        setMissionsParSemaine(semaines);
+
+        // Coût par mois (4 derniers mois)
+        const mois: { label: string; total: number }[] = [];
+        for (let i = 3; i >= 0; i--) {
+          const moisDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const finMois = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+          const { data: mData } = await supabase.from('missions').select('total_brut')
+            .eq('etablissement_id', user.id).eq('statut', 'TERMINEE')
+            .gte('fin_le', moisDate.toISOString()).lte('fin_le', finMois.toISOString());
+          const total = (mData || []).reduce((s: number, m: any) => s + (m.total_brut || 0), 0);
+          mois.push({ label: moisDate.toLocaleDateString('fr-FR', { month: 'short' }), total });
+        }
+        setCoutParMois(mois);
+
+        // Favoris
+        const { data: favData } = await (supabase.from('favoris' as any) as any).select('soignant_id, cree_le').eq('etablissement_id', user.id).order('cree_le', { ascending: false }).limit(5);
+        if (favData && favData.length > 0) {
+          const sgIds = favData.map((f: any) => f.soignant_id);
+          const enriched = sgIds.map((sid: string) => ({ ...(sgMap[sid] || { id: sid }), soignant_id: sid }));
+          setFavoris(enriched);
+        }
+      } catch {}
+
     } catch (err) {
       handleErrorSilent(err, '[DashboardEtab] Erreur critique');
       partialError = true;

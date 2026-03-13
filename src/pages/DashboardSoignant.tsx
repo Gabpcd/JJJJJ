@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket } from 'lucide-react';
+import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin } from 'lucide-react';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
@@ -67,6 +67,7 @@ export default function DashboardSoignant() {
   const [missionProchaine, setMissionProchaine] = useState<any>(null);
   const [missionsOubliDepart, setMissionsOubliDepart] = useState<any[]>([]);
   const [gainsCeMois, setGainsCeMois] = useState({ net: 0, nb: 0 });
+  const [missionsWeekend, setMissionsWeekend] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -146,6 +147,34 @@ export default function DashboardSoignant() {
         const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_a_payer || 0), 0);
         setGainsCeMois({ net, nb: (gainsMois as any[]).length });
       }
+      // Missions weekend prochain
+      if (profession) {
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0=dim
+        const daysToSat = dayOfWeek === 0 ? 6 : (6 - dayOfWeek);
+        const samedi = new Date(today);
+        samedi.setDate(today.getDate() + daysToSat);
+        samedi.setHours(0, 0, 0, 0);
+        const lundi = new Date(samedi);
+        lundi.setDate(samedi.getDate() + 2);
+        lundi.setHours(23, 59, 59);
+
+        const { data: wkData } = await supabase.from('missions')
+          .select('id, intitule, debut_le, fin_le, taux_horaire_base, est_urgente, etablissement_id')
+          .eq('statut', 'OUVERTE')
+          .eq('profession_requise', profession)
+          .gte('debut_le', samedi.toISOString())
+          .lte('debut_le', lundi.toISOString())
+          .order('debut_le', { ascending: true })
+          .limit(3);
+
+        if (wkData && wkData.length > 0) {
+          const { fetchEtablissementsSafe } = await import('@/lib/etablissements');
+          const etabMap2 = await fetchEtablissementsSafe(wkData.map((m: any) => m.etablissement_id));
+          setMissionsWeekend(wkData.map((m: any) => ({ ...m, etablissements: etabMap2[m.etablissement_id] || null })));
+        }
+      }
+
       setLoading(false);
     };
     load();
@@ -264,6 +293,37 @@ export default function DashboardSoignant() {
           </div>
         </div>
       </div>
+
+      {/* Missions près de chez vous ce week-end */}
+      {missionsWeekend.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" /> Missions ce week-end
+            </h2>
+            <button onClick={() => navigate('/soignant/recherche-missions')} className="text-sm text-primary font-medium hover:underline">Voir tout →</button>
+          </div>
+          <div className="space-y-3">
+            {missionsWeekend.map((m: any) => (
+              <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {m.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
+                      <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{m.etablissements?.nom} · {m.etablissements?.adresse_ville}</p>
+                  </div>
+                  <span className="text-primary font-bold text-sm whitespace-nowrap ml-2">{m.taux_horaire_base} €/h</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {format(new Date(m.debut_le), "EEE d MMM · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Compteur hebdomadaire */}
       <div className="mb-6">
