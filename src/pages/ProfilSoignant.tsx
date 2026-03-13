@@ -27,6 +27,8 @@ export default function ProfilSoignant() {
     lat: '', lng: '', rayon: 30,
   });
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
+  const [consentementGPS, setConsentementGPS] = useState(true);
+  const [gpsToggling, setGpsToggling] = useState(false);
 
   // RGPD states
   const [exportLoading, setExportLoading] = useState(false);
