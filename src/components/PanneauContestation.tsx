@@ -4,6 +4,7 @@ import { fr } from 'date-fns/locale';
 import { AlertTriangle, Send, Clock, CheckCircle, Shield, MessageSquare, Ban, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/hooks/useRole';
 import { sanitizeText } from '@/lib/sanitize';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { toast } from 'sonner';
