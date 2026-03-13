@@ -2398,9 +2398,10 @@ export type Database = {
         Args: never
         Returns: {
           cree_le: string
-          exclu_par_nom: string
-          exclu_par_type: string
+          exclu_par: string
+          id: string
           motif: string
+          nom_etablissement: string
         }[]
       }
       fn_mes_missions_soignant: {
