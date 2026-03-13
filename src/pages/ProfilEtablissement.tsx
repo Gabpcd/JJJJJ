@@ -73,10 +73,11 @@ export default function ProfilEtablissement() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('adresse_lat, adresse_lng').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('adresse_lat, adresse_lng, couleur_theme').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         setLat(data.adresse_lat?.toString() || '');
         setLng(data.adresse_lng?.toString() || '');
+        setCouleurTheme(data.couleur_theme || '#17A2B8');
       }
     });
   }, [user]);
