@@ -75,4 +75,4 @@ export interface Mission {
   modifie_le: string;
 }
 
-export type UserRole = 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' | 'ADMIN_GROUPE' | 'ADMIN' | 'ADMIN_PLATEFORME';
+export type UserRole = 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' | 'ADMIN_GROUPE' | 'ADMIN_PLATEFORME';

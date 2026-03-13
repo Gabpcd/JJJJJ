@@ -75,8 +75,16 @@ serve(async (req) => {
       });
     }
 
+    // E7: dateNaissance is mandatory
+    if (!dateNaissance) {
+      return new Response(JSON.stringify({ error: 'Date de naissance requise.' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // L2: Server-side age verification (must be 18+)
-    if (dateNaissance) {
+    {
       const birth = new Date(dateNaissance);
       const today = new Date();
       const age = today.getFullYear() - birth.getFullYear();

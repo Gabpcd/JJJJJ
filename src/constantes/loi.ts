@@ -50,6 +50,14 @@ export const PLAFONDS_RIST: Record<string, number> = {
   'SAGE_FEMME': 27.30,
   'AES': 17.55,
   'KINE': 24.70,
+  'MEDECIN': 347.60,
+  'PHARMACIEN': 186.20,
+  'MANIPULATEUR_RADIO': 78.40,
+  'PREPARATEUR_PHARMA': 56.30,
+  'DIETETICIEN': 62.50,
+  'ERGOTHERAPEUTE': 72.80,
+  'PSYCHOMOTRICIEN': 72.80,
+  'ORTHOPHONISTE': 78.40,
 };
 
 export function extraireCodeArticle(messageErreur: string): string | null {

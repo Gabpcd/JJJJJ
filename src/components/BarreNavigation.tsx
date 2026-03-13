@@ -58,6 +58,8 @@ function getNavItems(role: UserRole): NavItem[] {
     case 'SOIGNANT': return NAV_SOIGNANT;
     case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT;
     case 'ADMIN_GROUPE': return NAV_GROUPE;
+    case 'ADMIN_PLATEFORME': return []; // Admin uses LayoutAdmin
+    default: return [];
   }
 }
 
@@ -66,6 +68,8 @@ function getMobileNavItems(role: UserRole): NavItem[] {
     case 'SOIGNANT': return NAV_SOIGNANT_MOBILE;
     case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT;
     case 'ADMIN_GROUPE': return NAV_GROUPE;
+    case 'ADMIN_PLATEFORME': return [];
+    default: return [];
   }
 }
 
