@@ -11,6 +11,8 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide } from '@/components/EtatVide';
 import { JaugeProgression } from '@/components/JaugeProgression';
+import { OnboardingGuide } from '@/components/OnboardingGuide';
+import { BarreCompletionProfil } from '@/components/BarreCompletionProfil';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
@@ -137,8 +139,21 @@ export default function DashboardSoignant() {
   const heures = soignant.heures_cumulees ?? 0;
   const missionsTerminees = soignant.total_missions_terminees ?? 0;
 
+  const aDocuments = !!(soignant as any).tous_documents_valides || missions.length > 0;
+
   return (
     <LayoutApp role="SOIGNANT">
+      <OnboardingGuide role="SOIGNANT" userId={user!.id} />
+
+      {/* Barre complétion profil (critères onboarding) */}
+      <BarreCompletionProfil
+        nom={!!soignant.nom}
+        rppsVerifie={!!(soignant as any).rpps_verifie || !!soignant.numero_rpps}
+        auMoinsUnDocument={aDocuments}
+        adresseRenseignee={!!(soignant.adresse_lat && soignant.adresse_lng)}
+        telephoneRenseigne={!!soignant.telephone}
+      />
+
       <div className="mb-6">
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-xl font-bold text-foreground">Bonjour, <span className="text-primary">{soignant.prenom}</span> 👋</h1>

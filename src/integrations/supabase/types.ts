@@ -666,6 +666,50 @@ export type Database = {
           },
         ]
       }
+      evaluations: {
+        Row: {
+          commentaire: string | null
+          cree_le: string | null
+          evaluateur_id: string
+          evalue_id: string
+          id: string
+          mission_id: string
+          note: number
+          type_evaluateur: string
+          visible: boolean | null
+        }
+        Insert: {
+          commentaire?: string | null
+          cree_le?: string | null
+          evaluateur_id: string
+          evalue_id: string
+          id?: string
+          mission_id: string
+          note: number
+          type_evaluateur: string
+          visible?: boolean | null
+        }
+        Update: {
+          commentaire?: string | null
+          cree_le?: string | null
+          evaluateur_id?: string
+          evalue_id?: string
+          id?: string
+          mission_id?: string
+          note?: number
+          type_evaluateur?: string
+          visible?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluations_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       factures: {
         Row: {
           chorus_pro_deposee_le: string | null
@@ -1047,6 +1091,107 @@ export type Database = {
           nom?: string
         }
         Relationships: []
+      }
+      litiges: {
+        Row: {
+          cree_le: string | null
+          etablissement_id: string
+          id: string
+          initie_par: string
+          mission_id: string
+          motif: string
+          presence_id: string
+          reponse: string | null
+          resolu_le: string | null
+          resolu_par: string | null
+          resolution: string | null
+          soignant_id: string
+          statut: string | null
+        }
+        Insert: {
+          cree_le?: string | null
+          etablissement_id: string
+          id?: string
+          initie_par: string
+          mission_id: string
+          motif: string
+          presence_id: string
+          reponse?: string | null
+          resolu_le?: string | null
+          resolu_par?: string | null
+          resolution?: string | null
+          soignant_id: string
+          statut?: string | null
+        }
+        Update: {
+          cree_le?: string | null
+          etablissement_id?: string
+          id?: string
+          initie_par?: string
+          mission_id?: string
+          motif?: string
+          presence_id?: string
+          reponse?: string | null
+          resolu_le?: string | null
+          resolu_par?: string | null
+          resolution?: string | null
+          soignant_id?: string
+          statut?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "litiges_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "litiges_presence_id_fkey"
+            columns: ["presence_id"]
+            isOneToOne: false
+            referencedRelation: "presences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages_mission: {
+        Row: {
+          auteur_id: string
+          contenu: string
+          cree_le: string | null
+          id: string
+          lu: boolean | null
+          mission_id: string
+          type_auteur: string
+        }
+        Insert: {
+          auteur_id: string
+          contenu: string
+          cree_le?: string | null
+          id?: string
+          lu?: boolean | null
+          mission_id: string
+          type_auteur: string
+        }
+        Update: {
+          auteur_id?: string
+          contenu?: string
+          cree_le?: string | null
+          id?: string
+          lu?: boolean | null
+          mission_id?: string
+          type_auteur?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_mission_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       missions: {
         Row: {
