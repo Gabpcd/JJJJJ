@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { handleErrorSilent } from '@/lib/handleError';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -7,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2 } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2 } from 'lucide-react';
 
 const CONVENTIONS_COLLECTIVES = [
   { valeur: 'CCN_51_FEHAP', label: 'CCN 51 (FEHAP)' },
