@@ -150,6 +150,7 @@ serve(async (req) => {
             }),
           }).catch((err: unknown) => console.error("Email FACTURE_PAYEE error:", err));
         }
+      }
     }
 
     // Handle payment_intent.succeeded (backup reconciliation)
