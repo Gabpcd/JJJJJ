@@ -132,13 +132,12 @@ export default function DetailMission() {
                 <p className="font-semibold text-foreground">👤 {m.soignants.prenom} {m.soignants.nom}</p>
                 <p className="text-sm text-muted-foreground">
                   {getLabelProfession(m.soignants.profession)} ·{' '}
-                  <span className={`font-semibold ${scoreColor(m.soignants.score_fiabilite)}`}>
-                    ⭐ {m.soignants.score_fiabilite}/100 ({scoreLabel(m.soignants.score_fiabilite)})
+                  <span className={`font-semibold ${scoreColor(m.soignants.score_fiabilite || 0)}`}>
+                    ⭐ {m.soignants.score_fiabilite || 0}/100 ({scoreLabel(m.soignants.score_fiabilite || 0)})
                   </span>
                 </p>
                 {m.soignants.telephone && <p className="text-sm text-muted-foreground">📱 {m.soignants.telephone}</p>}
-                <p className="text-xs text-muted-foreground">
-                  📊 {m.soignants.total_missions_terminees} missions terminées · {m.soignants.total_absences} absences
+                {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
                 </p>
               </div>
             ) : (
