@@ -52,7 +52,10 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUtilisateurs from "./pages/admin/AdminUtilisateurs";
 import AdminModeration from "./pages/admin/AdminModeration";
 import AdminFacturation from "./pages/admin/AdminFacturation";
+import AdminConformite from "./pages/admin/AdminConformite";
 import RechercheMissions from "./pages/RechercheMissions";
+import PremiumSoignant from "./pages/PremiumSoignant";
+import WidgetRecrutement from "./pages/WidgetRecrutement";
 
 const queryClient = new QueryClient();
 
@@ -96,6 +99,7 @@ const App = () => (
                 <Route path="/soignant/passer-en-liberal" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PasserEnLiberal /></RouteProtegee>} />
                 <Route path="/soignant/exclusions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ExclusionsSoignant /></RouteProtegee>} />
                 <Route path="/soignant/contrats" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ListeContrats role="SOIGNANT" /></RouteProtegee>} />
+                <Route path="/soignant/premium" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PremiumSoignant /></RouteProtegee>} />
                 <Route path="/soignant/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageNotifications role="SOIGNANT" /></RouteProtegee>} />
 
                 {/* Établissement */}
@@ -126,6 +130,10 @@ const App = () => (
                 <Route path="/admin/utilisateurs" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminUtilisateurs /></RouteProtegee>} />
                 <Route path="/admin/moderation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminModeration /></RouteProtegee>} />
                 <Route path="/admin/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminFacturation /></RouteProtegee>} />
+                <Route path="/admin/conformite" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminConformite /></RouteProtegee>} />
+
+                {/* Widget public */}
+                <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

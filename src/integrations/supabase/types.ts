@@ -569,6 +569,7 @@ export type Database = {
           chorus_pro_actif: boolean | null
           chorus_pro_identifiant: string | null
           convention_collective: string | null
+          couleur_theme: string | null
           cree_le: string | null
           delai_paiement_jours: number | null
           email_contact: string
@@ -604,6 +605,7 @@ export type Database = {
           chorus_pro_actif?: boolean | null
           chorus_pro_identifiant?: string | null
           convention_collective?: string | null
+          couleur_theme?: string | null
           cree_le?: string | null
           delai_paiement_jours?: number | null
           email_contact: string
@@ -639,6 +641,7 @@ export type Database = {
           chorus_pro_actif?: boolean | null
           chorus_pro_identifiant?: string | null
           convention_collective?: string | null
+          couleur_theme?: string | null
           cree_le?: string | null
           delai_paiement_jours?: number | null
           email_contact?: string
@@ -849,6 +852,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      favoris: {
+        Row: {
+          cree_le: string | null
+          etablissement_id: string
+          id: string
+          soignant_id: string
+        }
+        Insert: {
+          cree_le?: string | null
+          etablissement_id: string
+          id?: string
+          soignant_id: string
+        }
+        Update: {
+          cree_le?: string | null
+          etablissement_id?: string
+          id?: string
+          soignant_id?: string
+        }
+        Relationships: []
       }
       file_revue_manuelle: {
         Row: {
@@ -1502,6 +1526,42 @@ export type Database = {
         }
         Relationships: []
       }
+      parrainages: {
+        Row: {
+          bonus_heures_filleul: number | null
+          bonus_heures_parrain: number | null
+          code_parrainage: string
+          cree_le: string | null
+          filleul_id: string
+          id: string
+          parrain_id: string
+          statut: string | null
+          valide_le: string | null
+        }
+        Insert: {
+          bonus_heures_filleul?: number | null
+          bonus_heures_parrain?: number | null
+          code_parrainage: string
+          cree_le?: string | null
+          filleul_id: string
+          id?: string
+          parrain_id: string
+          statut?: string | null
+          valide_le?: string | null
+        }
+        Update: {
+          bonus_heures_filleul?: number | null
+          bonus_heures_parrain?: number | null
+          code_parrainage?: string
+          cree_le?: string | null
+          filleul_id?: string
+          id?: string
+          parrain_id?: string
+          statut?: string | null
+          valide_le?: string | null
+        }
+        Relationships: []
+      }
       plans_prevoyance: {
         Row: {
           cree_le: string | null
@@ -1726,6 +1786,7 @@ export type Database = {
           attestation_vaccinations: boolean | null
           attestation_vaccinations_le: string | null
           code_ape: string | null
+          code_parrainage: string | null
           consentement_gps: boolean | null
           consentement_gps_le: string | null
           cree_le: string | null
@@ -1745,6 +1806,7 @@ export type Database = {
           numero_rpps: string | null
           numero_secu: string | null
           numero_tva: string | null
+          parraine_par: string | null
           prenom: string
           prevoyance_fournisseur: string | null
           prevoyance_inscrit: boolean | null
@@ -1784,6 +1846,7 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           code_ape?: string | null
+          code_parrainage?: string | null
           consentement_gps?: boolean | null
           consentement_gps_le?: string | null
           cree_le?: string | null
@@ -1803,6 +1866,7 @@ export type Database = {
           numero_rpps?: string | null
           numero_secu?: string | null
           numero_tva?: string | null
+          parraine_par?: string | null
           prenom: string
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
@@ -1842,6 +1906,7 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           code_ape?: string | null
+          code_parrainage?: string | null
           consentement_gps?: boolean | null
           consentement_gps_le?: string | null
           cree_le?: string | null
@@ -1861,6 +1926,7 @@ export type Database = {
           numero_rpps?: string | null
           numero_secu?: string | null
           numero_tva?: string | null
+          parraine_par?: string | null
           prenom?: string
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
@@ -2117,6 +2183,7 @@ export type Database = {
       est_soignant: { Args: never; Returns: boolean }
       fn_accepter_mission: { Args: { p_mission_id: string }; Returns: Json }
       fn_activer_liberal: { Args: never; Returns: Json }
+      fn_admin_conformite: { Args: never; Returns: Json }
       fn_alerte_cddu_repetitif: {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: Json
@@ -2135,6 +2202,7 @@ export type Database = {
         Returns: Json
       }
       fn_anonymiser_gps_anciennes: { Args: never; Returns: undefined }
+      fn_appliquer_parrainage: { Args: { p_code: string }; Returns: Json }
       fn_auto_facturation_mensuelle: { Args: never; Returns: Json }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_calculer_bfa: {
@@ -2394,7 +2462,28 @@ export type Database = {
         Args: { p_exclu_id: string; p_motif?: string; p_type: string }
         Returns: Json
       }
+      fn_export_fec: {
+        Args: { p_annee?: number }
+        Returns: {
+          comp_aux_lib: string
+          comp_aux_num: string
+          compte_lib: string
+          compte_num: string
+          credit: number
+          debit: number
+          ecriture_date: string
+          ecriture_lib: string
+          ecriture_num: string
+          idevise: string
+          journal_code: string
+          journal_lib: string
+          montant_devise: number
+          piece_date: string
+          piece_ref: string
+        }[]
+      }
       fn_exporter_mes_donnees: { Args: never; Returns: Json }
+      fn_generer_code_parrainage: { Args: never; Returns: string }
       fn_generer_facture_mensuelle:
         | { Args: never; Returns: Json }
         | { Args: { p_etablissement_id: string }; Returns: Json }
@@ -2592,6 +2681,19 @@ export type Database = {
         Returns: Json
       }
       fn_recalculer_tous_paliers: { Args: never; Returns: number }
+      fn_recommander_soignants: {
+        Args: { p_limit?: number; p_mission_id: string }
+        Returns: {
+          distance_km: number
+          missions_etab: number
+          nom: string
+          prenom: string
+          profession: Database["public"]["Enums"]["type_profession"]
+          score_fiabilite: number
+          score_matching: number
+          soignant_id: string
+        }[]
+      }
       fn_relancer_signatures_contrats: { Args: never; Returns: number }
       fn_repondre_litige: {
         Args: { p_litige_id: string; p_reponse: string }

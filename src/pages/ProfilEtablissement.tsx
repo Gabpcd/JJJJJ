@@ -236,6 +236,27 @@ export default function ProfilEtablissement() {
         </button>
       </form>
 
+      {/* Widget embarquable */}
+      <div className="max-w-2xl mt-8">
+        <div className="card-base space-y-3">
+          <h2 className="text-base font-semibold text-foreground">Widget recrutement</h2>
+          <p className="text-xs text-muted-foreground">Intégrez vos missions ouvertes sur votre site web :</p>
+          <div className="bg-muted rounded-lg p-3 font-mono text-xs text-foreground break-all select-all">
+            {`<iframe src="${window.location.origin}/widget-recrutement?etab=${user?.id}" width="100%" height="500" frameborder="0"></iframe>`}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(`<iframe src="${window.location.origin}/widget-recrutement?etab=${user?.id}" width="100%" height="500" frameborder="0"></iframe>`);
+              afficherNotification({ type: 'succes', message: 'Snippet copié !' });
+            }}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            📋 Copier le snippet
+          </button>
+        </div>
+      </div>
+
       {/* RGPD / Suppression compte (obligation Apple) */}
       <div className="max-w-2xl mt-12 space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
