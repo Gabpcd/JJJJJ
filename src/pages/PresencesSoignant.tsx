@@ -206,7 +206,6 @@ export default function PresencesSoignant() {
     if (missionData) {
       supabase.functions.invoke('send-email', {
         body: {
-          to: user.email,
           type: 'MISSION_TERMINEE',
           data: {
             prenom: user.prenom || '',

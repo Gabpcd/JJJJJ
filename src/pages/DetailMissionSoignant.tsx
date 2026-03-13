@@ -184,7 +184,6 @@ export default function DetailMissionSoignant() {
       // Email au soignant
       supabase.functions.invoke('send-email', {
         body: {
-          to: user!.email,
           type: 'MISSION_ACCEPTEE_SOIGNANT',
           data: {
             prenom: soignant.prenom,
@@ -201,10 +200,9 @@ export default function DetailMissionSoignant() {
       }).catch(() => {});
 
       // Email à l'établissement (établissement role can send to other addresses)
-      if (etablissement?.email_contact) {
+      {
         supabase.functions.invoke('send-email', {
           body: {
-            to: etablissement.email_contact,
             type: 'MISSION_ACCEPTEE_ETABLISSEMENT',
             data: {
               soignant_nom: `${soignant.prenom} ${soignant.nom}`,
