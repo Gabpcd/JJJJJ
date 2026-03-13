@@ -32,6 +32,9 @@ export default function DashboardEtablissement() {
   const [modalAnnuler, setModalAnnuler] = useState<any>(null);
   const [paliers, setPaliers] = useState<any[]>([]);
   const [missionsCeMois, setMissionsCeMois] = useState(0);
+  const [missionsParSemaine, setMissionsParSemaine] = useState<any[]>([]);
+  const [coutParMois, setCoutParMois] = useState<any[]>([]);
+  const [favoris, setFavoris] = useState<any[]>([]);
 
   const charger = async () => {
     if (!user) return;
