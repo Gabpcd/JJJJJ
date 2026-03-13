@@ -66,7 +66,7 @@ export default function DocumentsSoignant() {
     if (!user || !televersementType) return;
     const chemin = `${user.id}/${televersementType}/${Date.now()}_${fichier.name}`;
     const { error: uploadError } = await supabase.storage.from('soin-direct-documents').upload(chemin, fichier, { contentType: fichier.type, upsert: false });
-    if (uploadError) { toast.error('Erreur de téléversement : ' + uploadError.message); return; }
+    if (uploadError) { toast.error('Erreur lors du téléversement. Veuillez réessayer.'); return; }
 
     const docReqData = documentsRequis.find(d => d.type_document === televersementType);
     const { data, error } = await supabase.from('documents_soignants').insert({

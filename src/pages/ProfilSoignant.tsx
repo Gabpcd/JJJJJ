@@ -29,6 +29,15 @@ export default function ProfilSoignant() {
     if (!user) return;
     supabase.from('soignants').select('*').eq('id', user.id).single().then(({ data }) => {
       if (data) {
+        // Audit HDS — consultation profil
+        supabase.rpc('fn_ecrire_audit_safe', {
+          p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
+          p_action: 'DONNEES_PERSO_CONSULTATION',
+          p_type_ressource: 'soignant', p_id_ressource: user.id,
+          p_cle_s3: null,
+          p_details: { page: 'profil' },
+          p_ip: null, p_navigateur: navigator.userAgent,
+        });
         setEmail(data.email);
         setProfession(data.profession);
         setForm({
