@@ -35,7 +35,7 @@ export function ConsentementGPS({ onAccepter, onRefuser }: ConsentementGPSProps)
             </ul>
           </div>
           <p className="text-[11px] text-muted-foreground/70 italic">
-            Base légale : intérêt légitime (Art. 6.1.f RGPD). Vous pouvez retirer votre consentement à tout moment depuis votre profil.
+            Base légale : consentement (Art. 6.1.a RGPD). Vous pouvez retirer votre consentement à tout moment depuis votre profil.
           </p>
         </div>
         <div className="flex gap-3">
