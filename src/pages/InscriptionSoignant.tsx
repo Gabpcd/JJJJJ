@@ -76,7 +76,10 @@ export default function InscriptionSoignant() {
     });
   };
 
+  // L1: Date de naissance obligatoire
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
+  const dateNaissanceRequise = !form.dateNaissance;
+  const rppsRequis = form.profession && !PROFESSIONS_SANS_RPPS.includes(form.profession);
   const rppsRequis = form.profession && !PROFESSIONS_SANS_RPPS.includes(form.profession);
   const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && (!rppsResultat.trouve || !rppsResultat.correspond);
   const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant;
