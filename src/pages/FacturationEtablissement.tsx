@@ -280,8 +280,8 @@ export default function FacturationEtablissement() {
                     <span>HT: {(f.montant_ht ?? 0).toFixed(2)} €</span>
                     <span>TVA: {(f.montant_tva ?? 0).toFixed(2)} €</span>
                     <span className="font-semibold text-foreground">TTC: {(f.montant_ttc ?? 0).toFixed(2)} €</span>
-                    {f.taux_commission && (
-                      <span>Commission au taux {etab?.paliers_commission?.nom ?? 'standard'} ({etab?.taux_commission_negocie ?? 15}%)</span>
+                    {etab?.paliers_commission?.nom && (
+                      <span>Palier : {etab.paliers_commission.nom}</span>
                     )}
                   </div>
                   {f.date_echeance && (

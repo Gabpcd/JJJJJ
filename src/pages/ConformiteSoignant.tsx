@@ -37,6 +37,15 @@ export default function ConformiteSoignant() {
         }
         setControles(items);
         setLoading(false);
+
+        // M1: Audit HDS consultation données de conformité
+        supabase.rpc('fn_ecrire_audit_safe', {
+          p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
+          p_action: 'DONNEES_PERSO_CONSULTATION',
+          p_type_ressource: 'conformite_travail', p_id_ressource: user.id,
+          p_cle_s3: null, p_details: { page: 'conformite_soignant' },
+          p_ip: null, p_navigateur: navigator.userAgent,
+        }).catch(() => {});
       });
   }, [user]);
 

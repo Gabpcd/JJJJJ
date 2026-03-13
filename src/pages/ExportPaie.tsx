@@ -88,7 +88,7 @@ export default function ExportPaie() {
         'IFM': m.montant_ifm || 0,
         'ICP': m.montant_icp || 0,
         'Total brut': m.total_brut || 0,
-        'Type contrat': m.type_paiement_soignant === 'NOTE_HONORAIRES' ? 'LIBERAL' : (m.type_contrat || 'CDDU'),
+        'Type contrat': m.type_paiement_soignant === 'NOTE_HONORAIRES' ? 'LIBERAL' : (m.contrats_mission?.[0]?.type_contrat || 'CDDU'),
       };
     });
 

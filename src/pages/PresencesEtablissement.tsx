@@ -35,7 +35,8 @@ export default function PresencesEtablissement() {
         `)
         .eq('missions.etablissement_id', user.id)
         .not('pointage_arrivee_le', 'is', null)
-        .order('pointage_arrivee_le', { ascending: false }),
+        .order('pointage_arrivee_le', { ascending: false })
+        .limit(200),
       supabase.rpc('fn_mes_soignants_etablissement'),
     ]);
 

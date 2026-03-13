@@ -46,7 +46,7 @@ export default function DashboardEtablissement() {
           .eq('etablissement_id', user.id)
           .order('cree_le', { ascending: false })
           .limit(5),
-        supabase.from('paliers_commission').select('id, nom, taux_commission, missions_min, missions_max, ordre').eq('est_actif', true).order('ordre', { ascending: true }),
+        supabase.from('paliers_commission').select('id, nom, missions_min, missions_max, ordre').eq('est_actif', true).order('ordre', { ascending: true }),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
         supabase.rpc('fn_mes_soignants_etablissement'),
       ]);
