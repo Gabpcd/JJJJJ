@@ -103,8 +103,8 @@ serve(async (req) => {
         },
       ],
       mode: "payment",
-      success_url: `https://soinc-direct.lovable.app/etablissement/facturation/${facture_id}?paiement=succes`,
-      cancel_url: `https://soinc-direct.lovable.app/etablissement/facturation/${facture_id}?paiement=annule`,
+      success_url: `https://app.soindirect.com/etablissement/facturation/${facture_id}?paiement=succes`,
+      cancel_url: `https://app.soindirect.com/etablissement/facturation/${facture_id}?paiement=annule`,
       metadata: {
         facture_id: facture.id,
         numero_facture: facture.numero_facture,

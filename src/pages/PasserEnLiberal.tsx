@@ -280,7 +280,7 @@ export default function PasserEnLiberal() {
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4 space-y-3">
                 <p className="text-sm text-muted-foreground">L'inscription au {profData.nom_ordre || "Conseil de l'Ordre"} est obligatoire pour exercer en libéral.</p>
-                <a href="#" className="btn-primary text-xs inline-flex items-center gap-1">
+                <a href="https://www.conseil-national.medecin.fr/" target="_blank" rel="noopener noreferrer" className="btn-primary text-xs inline-flex items-center gap-1">
                   Ouvrir le site de l'Ordre <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </AccordionContent>
