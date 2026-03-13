@@ -191,6 +191,7 @@ export default function ProfilSoignant() {
 
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
   const [evaluations, setEvaluations] = useState<any[]>([]);
+  const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
 
   useEffect(() => {
     if (!user) return;
