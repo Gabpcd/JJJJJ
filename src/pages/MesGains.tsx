@@ -12,6 +12,7 @@ import { ModalAttestation } from '@/components/ModalAttestation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { enrichirEtablissements } from '@/lib/etablissements';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -43,8 +44,7 @@ export default function MesGains() {
           montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
           montant_ifm, montant_icp, total_brut, net_a_payer,
           type_paiement_soignant, numero_note_honoraires,
-          statut, cree_le,
-          etablissements(nom, adresse_ville, siret, finess, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent)`)
+          statut, cree_le, etablissement_id`)
         .eq('soignant_assigne_id', user.id)
         .eq('statut', 'TERMINEE')
         .order('debut_le', { ascending: false });
@@ -56,7 +56,8 @@ export default function MesGains() {
         query,
         supabase.from('soignants').select('prenom, nom, profession').eq('id', user.id).single(),
       ]);
-      setMissions((ms as any[]) || []);
+      const enriched = ms ? await enrichirEtablissements(ms as any) : [];
+      setMissions(enriched as any[]);
       setSoignant(sg);
       setLoading(false);
 

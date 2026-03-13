@@ -9,6 +9,7 @@ import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { genererIdTerminal } from '@/lib/terminal';
 import { stockerPointageHorsLigne } from '@/lib/horsLigne';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -36,8 +37,7 @@ export default function PresencesSoignant() {
     const { data } = await supabase
       .from('missions')
       .select(`
-        id, intitule, service, debut_le, fin_le, duree_heures, statut,
-        etablissements(nom, adresse_ville, adresse_lat, adresse_lng),
+        id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id,
         presences(id, pointage_arrivee_le, pointage_depart_le,
           perimetre_gps_valide, alerte_teleportation, distance_etablissement_m,
           arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le)
@@ -48,7 +48,12 @@ export default function PresencesSoignant() {
       .lt('debut_le', demain.toISOString())
       .order('debut_le', { ascending: true });
 
-    const missionsList = data || [];
+    let missionsList = data || [];
+    // Enrich with safe establishment data
+    if (missionsList.length > 0) {
+      const etabMap = await fetchEtablissementsSafe(missionsList.map((m: any) => m.etablissement_id));
+      missionsList = missionsList.map((m: any) => ({ ...m, etablissements: etabMap[m.etablissement_id] || null }));
+    }
     setMissions(missionsList);
 
     // Check contract status for each mission
@@ -71,15 +76,24 @@ export default function PresencesSoignant() {
       .select(`
         id, mission_id, soignant_id, pointage_arrivee_le, pointage_depart_le,
         valide_par_etablissement, valide_le,
-        missions!inner(id, intitule, etablissement_id, debut_le, fin_le,
-          etablissements(nom))
+        missions!inner(id, intitule, etablissement_id, debut_le, fin_le)
       `)
       .eq('soignant_id', user!.id)
       .eq('valide_par_etablissement', true)
       .gte('valide_le', il7jours.toISOString())
       .order('valide_le', { ascending: false });
 
-    setPresencesValidees(validees || []);
+    // Enrich presences with establishment names
+    let presencesList = validees || [];
+    if (presencesList.length > 0) {
+      const etabIds = presencesList.map((p: any) => p.missions?.etablissement_id).filter(Boolean);
+      const etabMap = await fetchEtablissementsSafe(etabIds);
+      presencesList = presencesList.map((p: any) => ({
+        ...p,
+        missions: { ...p.missions, etablissements: etabMap[p.missions?.etablissement_id] || null },
+      }));
+    }
+    setPresencesValidees(presencesList);
 
     setLoading(false);
   }, [user]);

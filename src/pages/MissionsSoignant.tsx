@@ -10,6 +10,7 @@ import { FiltresMissions, type FiltresMissionsState } from '@/components/Filtres
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
 import { format } from 'date-fns';
@@ -54,8 +55,7 @@ export default function MissionsSoignant() {
         id, intitule, description, service, profession_requise,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
-        soignant_assigne_id, cree_le,
-        etablissements(id, nom, adresse_ville, adresse_departement, adresse_lat, adresse_lng, type)
+        soignant_assigne_id, cree_le, etablissement_id
       `);
 
       if (onglet === 'disponibles') {
@@ -78,7 +78,8 @@ export default function MissionsSoignant() {
       }
 
       const { data } = await query;
-      setMissions(data || []);
+      const enriched = data ? await enrichirEtablissements(data as any) : [];
+      setMissions(enriched);
       setLoading(false);
     };
     fetchMissions();

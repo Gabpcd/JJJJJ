@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CalendarDays, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -48,14 +49,19 @@ export function CompteurHebdomadaire({ compact = false, missionCandidateHeures }
     if (!user) return;
     supabase
       .from('missions')
-      .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissements(nom)')
+      .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissement_id')
       .eq('soignant_assigne_id', user.id)
       .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
       .gte('debut_le', lundi.toISOString())
       .lt('debut_le', dimanche.toISOString())
       .order('debut_le', { ascending: true })
-      .then(({ data }) => {
-        setMissions(data || []);
+      .then(async ({ data }) => {
+        const items = data || [];
+        if (items.length > 0) {
+          const etabMap = await fetchEtablissementsSafe(items.map((m: any) => m.etablissement_id));
+          items.forEach((m: any) => { m.etablissements = etabMap[m.etablissement_id] || null; });
+        }
+        setMissions(items);
         setLoading(false);
       });
   }, [user]);

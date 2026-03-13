@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { ARTICLES_CODE_TRAVAIL } from '@/constantes/loi';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -39,7 +40,7 @@ export function BlocConformite({ missionId, onResultat }: BlocConformiteProps) {
     const [{ data: missionCible }, { data: missionsExistantes }] = await Promise.all([
       supabase.from('missions').select('debut_le, fin_le, duree_heures').eq('id', missionId).single(),
       supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissements(nom)')
+        .select('id, intitule, debut_le, fin_le, duree_heures, statut, etablissement_id')
         .eq('soignant_assigne_id', user!.id)
         .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
         .order('debut_le', { ascending: true }),
