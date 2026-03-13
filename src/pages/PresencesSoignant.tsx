@@ -4,6 +4,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CartePointage } from '@/components/CartePointage';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
+import { PanneauContestation } from '@/components/PanneauContestation';
 import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -11,7 +12,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { genererIdTerminal } from '@/lib/terminal';
 import { stockerPointageHorsLigne } from '@/lib/horsLigne';
 import { extraireMessageErreur } from '@/lib/erreurs';
-import { CalendarDays, Clock } from 'lucide-react';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { CalendarDays, Clock, CheckCircle } from 'lucide-react';
 
 export default function PresencesSoignant() {
   const { user } = useAuth();
