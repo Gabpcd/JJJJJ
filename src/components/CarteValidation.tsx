@@ -178,6 +178,18 @@ export function CarteValidation({ presence, onValider, onContester }: CarteValid
           )}
         </div>
       )}
+
+      {/* Contestation panel for validated presences */}
+      {presence.valide_par_etablissement && (
+        <PanneauContestation
+          presenceId={presence.id}
+          missionId={presence.mission_id}
+          etablissementId={mission.etablissement_id}
+          soignantId={presence.soignant_id}
+          presenceValideeLe={presence.valide_le}
+          role="ETABLISSEMENT"
+        />
+      )}
     </div>
   );
 }
