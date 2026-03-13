@@ -168,8 +168,17 @@ export default function DetailMission() {
         </div>
 
         {/* Colonne droite */}
-        <div>
+        <div className="space-y-4">
           <DecompositionFinanciere mission={m} />
+
+          {/* Chat — visible si ASSIGNEE ou EN_COURS */}
+          {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
+            <ChatMission
+              missionId={m.id}
+              role="ETABLISSEMENT"
+              prenomUtilisateur={etab?.nom || 'Établissement'}
+            />
+          )}
         </div>
       </div>
 
