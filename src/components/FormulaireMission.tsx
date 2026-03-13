@@ -144,11 +144,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     setRecurrenceValidation(validation);
   };
 
-  // Bulk publish
+  // Bulk publish via atomic RPC (C2)
   const publierSerieRecurrente = async () => {
     if (!user || !recurrenceConfig || creneaux.length === 0) return;
-    if (creneaux.length > 90) {
-      afficherNotification({ type: 'erreur', message: 'Maximum 90 créneaux par série récurrente.' });
+    if (creneaux.length > 30) {
+      afficherNotification({ type: 'erreur', message: 'Maximum 30 créneaux par série récurrente.' });
       return;
     }
     setPublicationEnCours(true);
@@ -158,34 +158,25 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     const serieId = `SERIE_${Date.now()}`;
     const descWithContrat = injecterContratTag(description || '', contratPreference);
     const descriptionAvecTag = `[SERIE_ID:${serieId}] ${descWithContrat}`.trim();
-    const resultats: { ok: boolean; erreur?: string }[] = [];
 
-    for (let i = 0; i < creneaux.length; i++) {
-      const creneau = creneaux[i];
-      const { data, error } = await supabase
-        .from('missions')
-        .insert({
-          etablissement_id: user.id,
-          intitule,
-          description: descriptionAvecTag,
-          profession_requise: profession as any,
-          service: service || null,
-          debut_le: new Date(creneau.debut).toISOString(),
-          fin_le: new Date(creneau.fin).toISOString(),
-          taux_horaire_base: parseFloat(tauxHoraire),
-          est_urgente: estUrgente,
-          niveau_urgence: estUrgente ? niveauUrgence : 0,
-        } as any)
-        .select('id, intitule, statut, debut_le, fin_le')
-        .single();
+    const missionsPayload = creneaux.map(c => ({
+      debut: new Date(c.debut).toISOString(),
+      fin: new Date(c.fin).toISOString(),
+    }));
 
-      resultats.push({ ok: !error, erreur: error?.message });
-      setProgressionActuel(i + 1);
-      setProgression(Math.round(((i + 1) / creneaux.length) * 100));
-    }
+    const { data: rpcResult, error } = await supabase.rpc('fn_creer_serie' as any, {
+      p_intitule: intitule,
+      p_description: descriptionAvecTag,
+      p_profession_requise: profession,
+      p_service: service || null,
+      p_taux_horaire_base: parseFloat(tauxHoraire),
+      p_est_urgente: estUrgente,
+      p_niveau_urgence: estUrgente ? niveauUrgence : 0,
+      p_missions: JSON.stringify(missionsPayload),
+    });
 
-    const reussies = resultats.filter(r => r.ok).length;
-    const echouees = resultats.filter(r => !r.ok).length;
+    setProgression(100);
+    setProgressionActuel(creneaux.length);
 
     // Audit
     await supabase.rpc('fn_ecrire_audit_safe', {
@@ -193,7 +184,6 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       p_type_ressource: 'mission', p_id_ressource: user.id, p_cle_s3: null,
       p_details: {
         type: 'serie_recurrente', serie_id: serieId, nb_creneaux: creneaux.length,
-        nb_reussies: reussies, nb_echouees: echouees,
         periode: { du: recurrenceConfig.dateDebut, au: recurrenceConfig.dateFin },
         horaires_par_jour: recurrenceConfig.horairesParJour.filter(j => j.actif).map(j => ({
           jour: j.label, debut: j.heureDebut, fin: j.heureFin, duree: j.dureeHeures,
@@ -204,11 +194,19 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     setPublicationEnCours(false);
 
-    if (echouees === 0) {
-      afficherNotification({ type: 'succes', message: `✅ ${reussies} missions créées avec succès !` });
-    } else {
-      afficherNotification({ type: 'avertissement', message: `${reussies} missions créées, ${echouees} en erreur.` });
+    if (error) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+      return;
     }
+    if (rpcResult && !(rpcResult as any).success) {
+      const msg = (rpcResult as any).error || 'Erreur lors de la création de la série.';
+      if (msg.includes('facture') || msg.includes('impayée')) setErreurFactureImpayee(true);
+      afficherNotification({ type: 'erreur', message: msg });
+      return;
+    }
+
+    const count = (rpcResult as any)?.count || creneaux.length;
+    afficherNotification({ type: 'succes', message: `✅ ${count} missions créées avec succès !` });
     navigate('/etablissement/missions');
   };
 
