@@ -108,15 +108,15 @@ export default function FacturationEtablissement() {
         body: {
           type: 'FACTURE_EMISE',
           data: {
-            numero: data.numero_facture,
-            montant_ttc: Number(data.montant_ttc).toFixed(2),
-            facture_id: data.facture_id,
+            numero: result.numero_facture,
+            montant_ttc: Number(result.montant_ttc).toFixed(2),
+            facture_id: result.facture_id,
           },
           destinataire_id: user!.id,
         },
       }).catch(() => {});
 
-      afficherNotification({ type: 'succes', message: `Facture ${data.numero_facture} générée avec succès !` });
+      afficherNotification({ type: 'succes', message: `Facture ${result.numero_facture} générée avec succès !` });
       charger();
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
