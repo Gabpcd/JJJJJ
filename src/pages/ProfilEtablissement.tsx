@@ -25,6 +25,9 @@ export default function ProfilEtablissement() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [siret, setSiret] = useState('');
   const [type, setType] = useState('');
   const [conventionCollective, setConventionCollective] = useState('');
