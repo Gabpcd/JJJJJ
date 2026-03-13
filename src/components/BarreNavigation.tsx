@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -38,6 +38,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
   { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
   { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
+  { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
   { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
   { icone: User, label: 'Profil', route: '/etablissement/profil' },
 ];

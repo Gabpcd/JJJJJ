@@ -27,6 +27,7 @@ export default function InscriptionEtablissement() {
   const [etape, setEtape] = useState(1);
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [cgu, setCgu] = useState(false);
+  const [cgv, setCgv] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
@@ -39,7 +40,7 @@ export default function InscriptionEtablissement() {
   });
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
-  const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
+  const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
   const etape2Valide = form.nom && form.siret.length === 14 && form.type && form.ville;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,6 +94,10 @@ export default function InscriptionEtablissement() {
               <label className="flex items-start gap-2 cursor-pointer">
                 <input type="checkbox" checked={cgu} onChange={e => setCgu(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
                 <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgu" target="_blank" className="text-primary hover:underline">Conditions Générales d'Utilisation</a> et la <a href="/confidentialite" target="_blank" className="text-primary hover:underline">Politique de confidentialité</a> *</span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" checked={cgv} onChange={e => setCgv(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
+                <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgv" target="_blank" className="text-primary hover:underline">Conditions Générales de Vente</a> *</span>
               </label>
               <button type="button" onClick={() => setEtape(2)} disabled={!etape1Valide} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
             </div>
