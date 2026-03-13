@@ -224,6 +224,16 @@ export default function DetailMission() {
         message={`Une copie de « ${m.intitule} » sera créée avec le statut OUVERTE.`}
         labelConfirmer="Dupliquer"
       />
+
+      {m.statut === 'TERMINEE' && m.soignant_assigne_id && showEvaluation && (
+        <EvaluationPostMission
+          missionId={m.id}
+          evalueId={m.soignant_assigne_id}
+          typeEvaluateur="ETABLISSEMENT"
+          nomEvalue={m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : 'Soignant'}
+          onTermine={() => setShowEvaluation(false)}
+        />
+      )}
     </LayoutApp>
   );
 }

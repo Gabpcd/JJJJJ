@@ -436,6 +436,16 @@ export default function DetailMissionSoignant() {
           onTermine={() => { setAnimationSucces(false); navigate('/soignant/missions'); }}
         />
       )}
+
+      {mission.statut === 'TERMINEE' && mission.etablissement_id && showEvaluation && (
+        <EvaluationPostMission
+          missionId={mission.id}
+          evalueId={mission.etablissement_id}
+          typeEvaluateur="SOIGNANT"
+          nomEvalue={etablissement?.nom || 'Établissement'}
+          onTermine={() => setShowEvaluation(false)}
+        />
+      )}
     </LayoutApp>
   );
 }
