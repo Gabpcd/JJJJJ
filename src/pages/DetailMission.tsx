@@ -140,6 +140,10 @@ export default function DetailMission() {
                 </p>
                 {m.soignants.telephone && <p className="text-sm text-muted-foreground">📱 {m.soignants.telephone}</p>}
                 {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
+                {/* E2: Blacklist */}
+                <div className="mt-2 pt-2 border-t border-border">
+                  <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
+                </div>
               </div>
             ) : (
               <div className="text-center py-6">
