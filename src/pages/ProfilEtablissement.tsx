@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2 } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette } from 'lucide-react';
 
 const CONVENTIONS_COLLECTIVES = [
   { valeur: 'CCN_51_FEHAP', label: 'CCN 51 (FEHAP)' },
