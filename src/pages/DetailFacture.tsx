@@ -156,8 +156,6 @@ export default function DetailFacture() {
                     {m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
                   </td>
                   <td className="py-2.5 text-foreground">{m.intitule}</td>
-                  <td className="py-2.5 text-right">{(m.net_a_payer ?? 0).toFixed(2)} €</td>
-                  <td className="py-2.5 text-right text-muted-foreground">{m.taux_commission ?? 15}%</td>
                   <td className="py-2.5 text-right font-medium">{(m.montant_commission_ht ?? 0).toFixed(2)} €</td>
                 </tr>
               ))}
