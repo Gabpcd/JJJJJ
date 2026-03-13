@@ -176,7 +176,7 @@ export default function DetailMission() {
             <ChatMission
               missionId={m.id}
               role="ETABLISSEMENT"
-              prenomUtilisateur={etab?.nom || 'Établissement'}
+              prenomUtilisateur={m.etablissements?.nom || 'Établissement'}
             />
           )}
         </div>
