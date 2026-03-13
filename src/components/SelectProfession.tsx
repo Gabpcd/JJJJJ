@@ -4,9 +4,14 @@ interface SelectProfessionProps {
   value: string;
   onChange: (val: string) => void;
   disabled?: boolean;
+  filtresProfessions?: string[];
 }
 
-export function SelectProfession({ value, onChange, disabled }: SelectProfessionProps) {
+export function SelectProfession({ value, onChange, disabled, filtresProfessions }: SelectProfessionProps) {
+  const options = filtresProfessions
+    ? PROFESSIONS.filter(p => filtresProfessions.includes(p.valeur))
+    : PROFESSIONS;
+
   return (
     <select
       value={value}
@@ -15,7 +20,7 @@ export function SelectProfession({ value, onChange, disabled }: SelectProfession
       className="input-base disabled:bg-muted disabled:cursor-not-allowed"
     >
       <option value="">Sélectionnez votre profession</option>
-      {PROFESSIONS.map((p) => (
+      {options.map((p) => (
         <option key={p.valeur} value={p.valeur}>{p.label}</option>
       ))}
     </select>

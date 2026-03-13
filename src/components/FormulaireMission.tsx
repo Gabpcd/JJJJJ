@@ -410,9 +410,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <label className="text-sm font-medium text-foreground mb-1 block">Taux horaire brut * (€/h)</label>
           <div className="relative">
             <input type="number" step="0.01" min="11.65" value={tauxHoraire}
-              onChange={(e) => setTauxHoraire(e.target.value)} placeholder="25.00" required className="input-base pr-12" />
+              onChange={(e) => setTauxHoraire(e.target.value)} placeholder="25.00" required
+              readOnly={modeEdition && missionSource?.statut !== 'OUVERTE'}
+              className={`input-base pr-12 ${modeEdition && missionSource?.statut !== 'OUVERTE' ? 'bg-muted cursor-not-allowed' : ''}`} />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€/h</span>
           </div>
+          {modeEdition && missionSource?.statut !== 'OUVERTE' && (
+            <p className="text-[10px] text-muted-foreground mt-1">🔒 Ces champs ne sont plus modifiables après acceptation.</p>
+          )}
         </div>
 
         {/* Warning Rist */}
