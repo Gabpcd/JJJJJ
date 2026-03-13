@@ -185,52 +185,49 @@ export default function PresencesSoignant() {
     }
 
     const idTerminal = genererIdTerminal();
-    const modeleTerminal = navigator.userAgent.substring(0, 200);
+    const modeleTerminal = navigator.userAgent.substring(0, 100);
 
-    const { data, error } = await supabase
-      .from('presences')
-      .insert({
-        mission_id: missionId,
-        soignant_id: user.id,
-        pointage_arrivee_le: new Date().toISOString(),
-        arrivee_lat: position?.coords.latitude ?? null,
-        arrivee_lng: position?.coords.longitude ?? null,
-        arrivee_precision_gps_m: position?.coords.accuracy ?? null,
-        arrivee_id_terminal: idTerminal,
-        arrivee_modele_terminal: modeleTerminal,
-      } as any)
-      .select()
-      .single();
+    const { data: rpcResult, error } = await supabase.rpc('fn_pointer_arrivee' as any, {
+      p_mission_id: missionId,
+      p_lat: position?.coords.latitude ?? 0,
+      p_lng: position?.coords.longitude ?? 0,
+      p_precision: position?.coords.accuracy ?? 0,
+      p_terminal_id: idTerminal,
+      p_modele: modeleTerminal,
+    });
 
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
       return;
     }
+    if (rpcResult?.error) {
+      afficherNotification({ type: 'erreur', message: rpcResult.error });
+      return;
+    }
 
     if ('vibrate' in navigator) navigator.vibrate(200);
 
-    const { data: pc } = await supabase
-      .from('presences')
-      .select('perimetre_gps_valide, alerte_teleportation, distance_etablissement_m, alertes_fraude, arrivee_precision_gps_m')
-      .eq('id', (data as any).id)
-      .single();
+    const presenceId = rpcResult?.presence_id;
+    const perimetreOk = rpcResult?.perimetre_gps_valide;
+    const distanceM = rpcResult?.distance_etablissement_m;
+    const alerteTeleportation = rpcResult?.alerte_teleportation;
 
     if (!consentementGPS) {
       afficherNotification({ type: 'avertissement', message: '⚠️ Arrivée pointée sans GPS. Vérification manuelle requise.' });
-    } else if (pc?.perimetre_gps_valide) {
-      afficherNotification({ type: 'succes', message: `✅ Arrivée pointée ! Vous êtes à ${Math.round(pc.distance_etablissement_m)}m de l'établissement.` });
+    } else if (perimetreOk) {
+      afficherNotification({ type: 'succes', message: `✅ Arrivée pointée ! Vous êtes à ${Math.round(distanceM || 0)}m de l'établissement.` });
     } else {
-      afficherNotification({ type: 'avertissement', message: `⚠️ Arrivée pointée, mais vous êtes à ${Math.round(pc?.distance_etablissement_m || 0)}m (périmètre : 500m).` });
+      afficherNotification({ type: 'avertissement', message: `⚠️ Arrivée pointée, mais vous êtes à ${Math.round(distanceM || 0)}m (périmètre : 500m).` });
     }
 
-    if (pc?.alerte_teleportation) {
+    if (alerteTeleportation) {
       afficherNotification({ type: 'erreur', message: '🚨 Alerte : un déplacement inhabituellement rapide a été détecté.', duree: 10000 });
     }
 
     await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'PRESENCE_POINTAGE_ARRIVEE',
-      p_type_ressource: 'presence', p_id_ressource: (data as any).id, p_cle_s3: null,
-      p_details: { mission_id: missionId, lat: position?.coords.latitude, lng: position?.coords.longitude, precision_m: position?.coords.accuracy, perimetre_ok: pc?.perimetre_gps_valide, distance_m: pc?.distance_etablissement_m, gps_consent: consentementGPS },
+      p_type_ressource: 'presence', p_id_ressource: presenceId, p_cle_s3: null,
+      p_details: { mission_id: missionId, lat: position?.coords.latitude, lng: position?.coords.longitude, precision_m: position?.coords.accuracy, perimetre_ok: perimetreOk, distance_m: distanceM, gps_consent: consentementGPS },
       p_ip: null, p_navigateur: navigator.userAgent,
     });
 

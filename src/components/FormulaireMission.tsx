@@ -147,6 +147,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   // Bulk publish
   const publierSerieRecurrente = async () => {
     if (!user || !recurrenceConfig || creneaux.length === 0) return;
+    if (creneaux.length > 90) {
+      afficherNotification({ type: 'erreur', message: 'Maximum 90 créneaux par série récurrente.' });
+      return;
+    }
     setPublicationEnCours(true);
     setProgression(0);
     setProgressionActuel(0);
@@ -172,7 +176,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           est_urgente: estUrgente,
           niveau_urgence: estUrgente ? niveauUrgence : 0,
         } as any)
-        .select()
+        .select('id, intitule, statut, debut_le, fin_le')
         .single();
 
       resultats.push({ ok: !error, erreur: error?.message });
@@ -261,7 +265,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         const { data, error } = await supabase
           .from('missions')
           .insert({ ...payload, etablissement_id: user.id } as any)
-          .select()
+          .select('id, intitule, statut, debut_le, fin_le')
           .single();
 
         if (error) {

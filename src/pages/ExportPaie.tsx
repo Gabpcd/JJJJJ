@@ -43,7 +43,7 @@ export default function ExportPaie() {
       const [{ data: missionsData }, { data: soignantsData }] = await Promise.all([
         supabase
           .from('missions')
-          .select('id, intitule, debut_le, fin_le, duree_heures, heures_nuit, heures_dimanche, heures_ferie, taux_horaire_base, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, soignant_assigne_id')
+          .select('id, intitule, debut_le, fin_le, duree_heures, heures_nuit, heures_dimanche, heures_ferie, taux_horaire_base, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, soignant_assigne_id, type_paiement_soignant')
           .eq('etablissement_id', user.id)
           .eq('statut', 'TERMINEE')
           .eq('type_paiement_soignant', 'BULLETIN_PAIE')
@@ -88,7 +88,7 @@ export default function ExportPaie() {
         'IFM': m.montant_ifm || 0,
         'ICP': m.montant_icp || 0,
         'Total brut': m.total_brut || 0,
-        'Type contrat': 'CDDU',
+        'Type contrat': m.type_paiement_soignant === 'NOTE_HONORAIRES' ? 'LIBERAL' : (m.type_contrat || 'CDDU'),
       };
     });
 

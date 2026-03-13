@@ -2513,6 +2513,17 @@ export type Database = {
       fn_nettoyer_tokens_push: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
+      fn_pointer_arrivee: {
+        Args: {
+          p_lat: number
+          p_lng: number
+          p_mission_id: string
+          p_modele: string
+          p_precision: number
+          p_terminal_id: string
+        }
+        Returns: Json
+      }
       fn_pointer_depart: {
         Args: {
           p_lat: number
