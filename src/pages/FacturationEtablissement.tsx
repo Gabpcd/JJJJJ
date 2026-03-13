@@ -97,65 +97,25 @@ export default function FacturationEtablissement() {
     setGenerating(true);
 
     try {
-      const { data: numFacture } = await supabase.rpc('fn_generer_numero_facture');
+      const { data, error } = await supabase.rpc('fn_generer_facture_mensuelle');
 
-      const totalHT = missionsNonFacturees.reduce((s, m) => s + (m.montant_commission_ht ?? 0), 0);
-      const totalTVA = missionsNonFacturees.reduce((s, m) => s + (m.montant_commission_tva ?? 0), 0);
-      const totalTTC = missionsNonFacturees.reduce((s, m) => s + (m.montant_commission_ttc ?? 0), 0);
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erreur de génération');
 
-      const now = new Date();
-      const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
-      const finMois = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-      const { data: facture, error: errFacture } = await supabase
-        .from('factures')
-        .insert({
-          etablissement_id: user.id,
-          numero_facture: numFacture ?? `SD-${format(now, 'yyyyMM')}-0001`,
-          montant_ht: Math.round(totalHT * 100) / 100,
-          montant_tva: Math.round(totalTVA * 100) / 100,
-          montant_ttc: Math.round(totalTTC * 100) / 100,
-          nombre_missions: missionsNonFacturees.length,
-          periode_debut: format(debutMois, 'yyyy-MM-dd'),
-          periode_fin: format(finMois, 'yyyy-MM-dd'),
-          date_emission: now.toISOString(),
-          date_echeance: new Date(now.getTime() + 30 * 86400000).toISOString().split('T')[0],
-          statut: 'EMISE',
-        } as any)
-        .select()
-        .single();
-
-      if (errFacture) throw errFacture;
-
-      const missionIds = missionsNonFacturees.map(m => m.id);
-      await supabase
-        .from('missions')
-        .update({ commission_facturee: true, facture_id: facture.id, modifie_le: new Date().toISOString() } as any)
-        .in('id', missionIds);
-
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'FACTURE_GENEREE',
-        p_type_ressource: 'facture', p_id_ressource: facture.id, p_cle_s3: null,
-        p_details: { numero: facture.numero_facture, montant_ttc: totalTTC, nb_missions: missionIds.length },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-
-      // Email facture
+      // Send email notification (non-blocking)
       supabase.functions.invoke('send-email', {
         body: {
           type: 'FACTURE_EMISE',
           data: {
-            numero: facture.numero_facture,
-            montant_ht: totalHT.toFixed(2),
-            montant_tva: totalTVA.toFixed(2),
-            montant_ttc: totalTTC.toFixed(2),
-            facture_id: facture.id,
+            numero: data.numero_facture,
+            montant_ttc: Number(data.montant_ttc).toFixed(2),
+            facture_id: data.facture_id,
           },
           destinataire_id: user!.id,
         },
       }).catch(() => {});
 
-      afficherNotification({ type: 'succes', message: `Facture ${facture.numero_facture} générée avec succès !` });
+      afficherNotification({ type: 'succes', message: `Facture ${data.numero_facture} générée avec succès !` });
       charger();
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
