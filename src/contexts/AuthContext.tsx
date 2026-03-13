@@ -71,14 +71,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
 
     const u = data.user;
-    const role = extractRole(u);
 
-    // Audit HDS
+    // C3: Resolve role server-side to prevent identity spoofing in audit logs
+    let verifiedRole: string = extractRole(u);
+    try {
+      const { data: roleData } = await supabase.rpc('fn_get_my_role');
+      if (roleData && (roleData as any).role) {
+        verifiedRole = (roleData as any).role;
+      }
+    } catch { /* fallback to extractRole */ }
+
+    // Audit HDS with server-verified role
     const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: u.id,
-      p_type_acteur: role,
+      p_type_acteur: verifiedRole,
       p_action: 'CONNEXION',
-      p_type_ressource: role === 'SOIGNANT' ? 'soignant' : 'etablissement',
+      p_type_ressource: verifiedRole === 'SOIGNANT' ? 'soignant' : 'etablissement',
       p_id_ressource: u.id,
       p_cle_s3: null,
       p_details: { methode: 'email_password', horodatage: new Date().toISOString() },
@@ -88,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (auditError) logger.error('Audit connexion échoué', auditError);
 
     // Update derniere_activite_le for soignants via RPC
-    if (role === 'SOIGNANT') {
+    if (verifiedRole === 'SOIGNANT') {
       supabase.rpc('fn_maj_activite_soignant' as any).then(() => {});
     }
   }, []);

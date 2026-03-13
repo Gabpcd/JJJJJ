@@ -2175,6 +2175,36 @@ export type Database = {
         Args: { p_motif: string; p_presence_id: string }
         Returns: Json
       }
+      fn_creer_mission:
+        | {
+            Args: {
+              p_debut_le?: string
+              p_description?: string
+              p_est_urgente?: boolean
+              p_fin_le?: string
+              p_intitule: string
+              p_niveau_urgence?: number
+              p_profession_requise?: Database["public"]["Enums"]["type_profession"]
+              p_service?: string
+              p_taux_horaire_base?: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_debut_le?: string
+              p_description?: string
+              p_est_urgente?: boolean
+              p_fin_le?: string
+              p_intitule: string
+              p_niveau_urgence?: string
+              p_profession_requise?: Database["public"]["Enums"]["type_profession"]
+              p_serie_id?: string
+              p_service?: string
+              p_taux_horaire_base?: number
+            }
+            Returns: Json
+          }
       fn_creer_notification: {
         Args: {
           p_corps: string
@@ -2188,6 +2218,21 @@ export type Database = {
         }
         Returns: string
       }
+      fn_creer_serie:
+        | {
+            Args: {
+              p_description?: string
+              p_est_urgente?: boolean
+              p_intitule: string
+              p_missions?: Json
+              p_niveau_urgence?: number
+              p_profession_requise?: Database["public"]["Enums"]["type_profession"]
+              p_service?: string
+              p_taux_horaire_base?: number
+            }
+            Returns: Json
+          }
+        | { Args: { p_missions: Json }; Returns: Json }
       fn_declarer_virement: {
         Args: { p_facture_id: string; p_reference: string }
         Returns: Json

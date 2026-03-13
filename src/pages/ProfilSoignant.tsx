@@ -6,6 +6,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { CONTRATS, getLabelProfession, getTypesContratSoignant } from '@/lib/constantes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
+import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { MapPin, Loader2, Download, Trash2, MapPinOff } from 'lucide-react';
@@ -16,6 +17,7 @@ import { fr } from 'date-fns/locale';
 export default function ProfilSoignant() {
   const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
+  const { role } = useRole();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -129,6 +131,14 @@ export default function ProfilSoignant() {
     try {
       const { data, error } = await supabase.rpc('fn_exporter_mes_donnees' as any);
       if (error) throw error;
+      // L3: Audit RGPD export
+      await supabase.rpc('fn_ecrire_audit_safe', {
+        p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
+        p_action: 'RGPD_EXPORT_DONNEES',
+        p_type_ressource: 'soignant', p_id_ressource: user!.id,
+        p_cle_s3: null, p_details: { format: 'json' },
+        p_ip: null, p_navigateur: navigator.userAgent,
+      });
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -283,6 +293,14 @@ export default function ProfilSoignant() {
                   afficherNotification({ type: 'erreur', message: (data as any).error });
                 } else {
                   setConsentementGPS(checked);
+                  // L4: Audit GPS consent change
+                  await supabase.rpc('fn_ecrire_audit_safe', {
+                    p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
+                    p_action: checked ? 'GPS_CONSENTEMENT_ACTIVE' : 'GPS_CONSENTEMENT_RETIRE',
+                    p_type_ressource: 'soignant', p_id_ressource: user!.id,
+                    p_cle_s3: null, p_details: { consentement_gps: checked },
+                    p_ip: null, p_navigateur: navigator.userAgent,
+                  });
                   afficherNotification({
                     type: checked ? 'succes' : 'avertissement',
                     message: checked ? 'Consentement GPS activé.' : 'Consentement GPS retiré. Vérification manuelle requise.',
