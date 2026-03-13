@@ -52,7 +52,10 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUtilisateurs from "./pages/admin/AdminUtilisateurs";
 import AdminModeration from "./pages/admin/AdminModeration";
 import AdminFacturation from "./pages/admin/AdminFacturation";
+import AdminConformite from "./pages/admin/AdminConformite";
 import RechercheMissions from "./pages/RechercheMissions";
+import PremiumSoignant from "./pages/PremiumSoignant";
+import WidgetRecrutement from "./pages/WidgetRecrutement";
 
 const queryClient = new QueryClient();
 
