@@ -356,14 +356,21 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Date et heure de début *</label>
-                <input type="datetime-local" value={debutLe} onChange={(e) => setDebutLe(e.target.value)} required className="input-base" />
+                <input
+                  type="datetime-local"
+                  value={debutLe}
+                  onChange={(e) => setDebutLe(e.target.value)}
+                  min={!modeEdition ? new Date().toISOString().slice(0, 16) : undefined}
+                  required
+                  className="input-base"
+                />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Date et heure de fin *</label>
                 <input type="datetime-local" value={finLe} onChange={(e) => setFinLe(e.target.value)} required className="input-base" />
               </div>
             </div>
-            {erreurDates && <p className="text-xs text-destructive font-medium">{erreurDates}</p>}
+            {erreurDates && <p className="text-xs text-destructive font-medium">{erreurDates === 'La mission ne peut pas commencer dans le passé' ? '⛔ La mission doit commencer dans le futur.' : erreurDates}</p>}
             {warningDureeLongue && <p className="text-xs text-warning font-medium">⚠️ Mission longue — assurez-vous que les repos légaux sont respectés</p>}
             {warningDureeTresLongue && <p className="text-xs text-destructive font-medium">⚠️ Pour un remplacement de plusieurs jours, utilisez le mode récurrent ci-dessous</p>}
             {dureeEstimee > 0 && !erreurDates && (
