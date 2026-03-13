@@ -351,6 +351,34 @@ export default function PasserEnLiberal() {
         </div>
       </div>
 
+      {/* D1: TVA libéral */}
+      <div className="card-base mb-6">
+        <h2 className="text-base font-bold text-foreground mb-3">🧾 TVA</h2>
+        <p className="text-sm text-muted-foreground mb-3">Êtes-vous assujetti à la TVA ? (Si votre CA dépasse 36 800€/an)</p>
+        <div className="flex items-center gap-3 mb-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={assujettiTVA} onChange={e => setAssujettiTVA(e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
+            <span className="text-sm text-foreground">{assujettiTVA ? 'Oui, je suis assujetti à la TVA' : 'Non, franchise en base de TVA'}</span>
+          </label>
+        </div>
+        {assujettiTVA && (
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">Numéro de TVA intracommunautaire</label>
+            <input value={numeroTVA} onChange={e => setNumeroTVA(e.target.value.toUpperCase().slice(0, 15))} placeholder="FR XX XXXXXXXXX" className="input-base" />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={async () => {
+            await supabase.from('soignants').update({ assujetti_tva: assujettiTVA, numero_tva: assujettiTVA ? numeroTVA || null : null } as any).eq('id', user!.id);
+            afficherNotification({ type: 'succes', message: 'TVA mise à jour.' });
+          }}
+          className="btn-secondary text-xs mt-3"
+        >
+          Enregistrer TVA
+        </button>
+      </div>
+
       {/* Bouton final */}
       <button
         onClick={handleActiverLiberal}

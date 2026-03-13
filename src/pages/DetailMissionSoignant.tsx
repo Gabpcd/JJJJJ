@@ -317,6 +317,12 @@ export default function DetailMissionSoignant() {
                 <p className="text-[10px] text-muted-foreground/60 mt-1">
                   Cet établissement a publié {countMissions} mission{countMissions > 1 ? 's' : ''} sur Soin Direct
                 </p>
+                {/* E2: Blacklist côté soignant */}
+                {mission.etablissement_id && (
+                  <div className="mt-2 pt-2 border-t border-border">
+                    <BoutonExclusion excluId={mission.etablissement_id} typeExcluPar="SOIGNANT" />
+                  </div>
+                )}
               </div>
             </div>
           </div>
