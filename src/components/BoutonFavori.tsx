@@ -5,33 +5,32 @@ import { supabase } from '@/integrations/supabase/client';
 interface Props {
   soignantId: string;
   etablissementId: string;
-  compact?: boolean;
 }
 
-export function BoutonFavori({ soignantId, etablissementId, compact }: Props) {
+export function BoutonFavori({ soignantId, etablissementId }: Props) {
   const [favori, setFavori] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.from('favoris')
+    (supabase.from('favoris' as any) as any)
       .select('id')
       .eq('etablissement_id', etablissementId)
       .eq('soignant_id', soignantId)
       .maybeSingle()
-      .then(({ data }) => setFavori(!!data));
+      .then(({ data }: any) => setFavori(!!data));
   }, [soignantId, etablissementId]);
 
   const toggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setLoading(true);
     if (favori) {
-      await supabase.from('favoris')
+      await (supabase.from('favoris' as any) as any)
         .delete()
         .eq('etablissement_id', etablissementId)
         .eq('soignant_id', soignantId);
       setFavori(false);
     } else {
-      await supabase.from('favoris')
+      await (supabase.from('favoris' as any) as any)
         .insert({ etablissement_id: etablissementId, soignant_id: soignantId });
       setFavori(true);
     }
