@@ -2609,6 +2609,10 @@ export type Database = {
           tous_documents_valides: boolean
         }[]
       }
+      fn_missions_publiques_etablissement: {
+        Args: { p_etablissement_id: string }
+        Returns: Json
+      }
       fn_modifier_mission_etablissement: {
         Args: {
           p_description?: string
@@ -2699,6 +2703,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_purger_audit_ancien: { Args: never; Returns: number }
       fn_purger_gps_ancien: { Args: never; Returns: number }
       fn_recalculer_palier_commission: {
         Args: { p_etablissement_id: string }
