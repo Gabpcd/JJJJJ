@@ -89,6 +89,10 @@ export function PanneauContestation({
   const peutRelancer = estInitiateur && litige?.statut === 'EN_DISCUSSION' && !!litige?.reponse;
   // Parties can move to EN_DISCUSSION, only admin can resolve/close
   const peutPasserEnDiscussion = (peutRepondre || peutRelancer) && litige?.statut === 'CONTESTEE';
+
+  const estResolu = litige && ['RESOLUE_SOIGNANT', 'RESOLUE_ETABLISSEMENT', 'RESOLUE_ADMIN', 'FERME'].includes(litige.statut);
+
+  const roleActeur = role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
   const roleLabel = role === 'SOIGNANT' ? 'soignant' : 'établissement';
   const autreRoleLabel = role === 'SOIGNANT' ? 'établissement' : 'soignant';
 
