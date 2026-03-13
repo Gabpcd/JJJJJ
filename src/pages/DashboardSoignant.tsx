@@ -11,6 +11,8 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide } from '@/components/EtatVide';
 import { JaugeProgression } from '@/components/JaugeProgression';
+import { OnboardingGuide } from '@/components/OnboardingGuide';
+import { BarreCompletionProfil } from '@/components/BarreCompletionProfil';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
