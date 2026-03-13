@@ -52,7 +52,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [progression, setProgression] = useState(0);
   const [progressionActuel, setProgressionActuel] = useState(0);
 
-  // Load rist_plafond_actif + commission info
+  const [etablissementType, setEtablissementType] = useState<string | null>(null);
+
+  // Load rist_plafond_actif + commission info + type
   useEffect(() => {
     if (!user) return;
     supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom)').eq('id', user.id).single().then(({ data }) => {
@@ -60,6 +62,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
         setRistPlafondActif(data.rist_plafond_actif === true || typesPublics.includes(data.type));
         setTauxCommission(data.taux_commission_negocie ?? 15);
+        setEtablissementType(data.type);
         if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);
       }
     });
