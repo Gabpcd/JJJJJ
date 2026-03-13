@@ -61,8 +61,6 @@ export function genererCreneauxFlex(
   const debut = parseDateLocale(dateDebut);
   const fin = parseDateLocale(dateFin);
 
-  logger.debug('[genererCreneauxFlex] dateDebut:', dateDebut, '| dateFin:', dateFin);
-  logger.debug('[genererCreneauxFlex] joursActifs:', joursActifs.length);
 
   const d = new Date(debut);
   while (d <= fin) {
@@ -88,7 +86,7 @@ export function genererCreneauxFlex(
         finCreneau = `${dateStr}T${horaireJour.heureFin}:00`;
       }
 
-      logger.debug(`[genererCreneauxFlex] ✅ ${dateStr}`);
+      
       creneaux.push({
         debut: `${dateStr}T${horaireJour.heureDebut}:00`,
         fin: finCreneau,
@@ -100,7 +98,7 @@ export function genererCreneauxFlex(
     d.setDate(d.getDate() + 1);
   }
 
-  logger.debug('[genererCreneauxFlex] Total créneaux:', creneaux.length);
+  
   return creneaux;
 }
 

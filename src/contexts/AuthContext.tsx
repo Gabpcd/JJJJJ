@@ -144,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       adresse_lat: data.lat || null,
       adresse_lng: data.lng || null,
     };
-    logger.debug('INSERT soignants pour userId:', userId);
+    
     const { error: insertError } = await supabase.from('soignants').insert(insertPayload as any);
     if (insertError) {
       logger.error('INSERT soignants échoué', insertError);
