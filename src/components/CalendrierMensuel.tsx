@@ -49,7 +49,7 @@ export function CalendrierMensuel() {
       .from('missions')
       .select('id, intitule, debut_le, fin_le, statut, etablissement_id, service')
       .eq('soignant_assigne_id', user.id)
-      .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE'])
+      .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT'])
       .gte('fin_le', debutGrille.toISOString())
       .lte('debut_le', finGrille.toISOString())
       .order('debut_le')
