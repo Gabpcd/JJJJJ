@@ -2657,6 +2657,18 @@ export type Database = {
         | {
             Args: {
               p_adresse_code_postal?: string
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_convention_collective?: string
+              p_couleur_theme?: string
+              p_nom?: string
+              p_telephone?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
               p_adresse_departement?: string
               p_adresse_lat?: number
               p_adresse_lng?: number
@@ -2804,7 +2816,7 @@ export type Database = {
         | "EXPIRE"
         | "REVUE_MANUELLE_REQUISE"
         | "API_INDISPONIBLE"
-      type_contrat: "CDDU" | "INTERIM" | "VACATION" | "LIBERAL" | "SALARIE"
+      type_contrat: "CDDU" | "CDDU_USAGE" | "VACATION" | "LIBERAL" | "SALARIE"
       type_document:
         | "CARTE_IDENTITE"
         | "PASSEPORT"
@@ -2998,7 +3010,7 @@ export const Constants = {
         "REVUE_MANUELLE_REQUISE",
         "API_INDISPONIBLE",
       ],
-      type_contrat: ["CDDU", "INTERIM", "VACATION", "LIBERAL", "SALARIE"],
+      type_contrat: ["CDDU", "CDDU_USAGE", "VACATION", "LIBERAL", "SALARIE"],
       type_document: [
         "CARTE_IDENTITE",
         "PASSEPORT",
