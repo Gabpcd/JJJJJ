@@ -234,9 +234,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.functions.invoke('send-email', {
       body: {
         to: data.email,
-        subject: 'Bienvenue sur Soin Direct !',
-        html: emailBienvenueEtablissement(data.nom),
         type: 'BIENVENUE_ETABLISSEMENT',
+        data: { nom: data.nom },
         destinataire_id: authData.user!.id,
       },
     }).catch(() => {});
