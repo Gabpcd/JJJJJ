@@ -182,7 +182,10 @@ export default function MissionsSoignant() {
       </div>
 
       {onglet === 'disponibles' && (
-        <FiltresMissions rayonDefaut={soignant.rayon_deplacement_km} onFiltreChange={setFiltres} />
+        <>
+          <BandeauAlerte48h heuresSemaine={heuresSemaine} />
+          <FiltresMissions rayonDefaut={soignant.rayon_deplacement_km} onFiltreChange={setFiltres} />
+        </>
       )}
 
       {loading ? <ChargementPage /> : (

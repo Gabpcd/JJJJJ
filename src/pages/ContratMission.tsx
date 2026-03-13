@@ -254,7 +254,7 @@ export default function ContratMission() {
             </div>
             {/* A1: Rappel DUE — after establishment signature */}
             {!isSoignant && (contrat.statut === 'SIGNE_ETABLISSEMENT' || contrat.statut === 'SIGNE_COMPLET') && (
-              <BandeauRappelDUE />
+              <BandeauRappelDUE contratId={contrat.id} dueEffectuee={contrat.due_effectuee} dueEffectueeLe={contrat.due_effectuee_le} />
             )}
           </div>
         )}

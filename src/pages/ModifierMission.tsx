@@ -13,7 +13,7 @@ export default function ModifierMission() {
 
   useEffect(() => {
     if (!id) return;
-    supabase.from('missions').select('*').eq('id', id).single().then(({ data }) => {
+    supabase.from('missions').select('id, intitule, description, service, profession_requise, debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence, statut').eq('id', id).single().then(({ data }) => {
       setMission(data);
       setLoading(false);
     });
