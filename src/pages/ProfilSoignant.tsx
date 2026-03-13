@@ -258,6 +258,41 @@ export default function ProfilSoignant() {
             </div>
           </div>
         </div>
+
+        {/* Consentement GPS */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">Consentement GPS</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm text-foreground font-medium">Autoriser la géolocalisation lors des pointages</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {consentementGPS
+                  ? 'Votre position sera capturée uniquement au moment de l\'arrivée et du départ.'
+                  : '⚠️ Sans GPS, vos pointages nécessiteront une vérification manuelle par l\'établissement.'}
+              </p>
+            </div>
+            <Switch
+              checked={consentementGPS}
+              disabled={gpsToggling}
+              onCheckedChange={async (checked) => {
+                setGpsToggling(true);
+                const { data, error } = await supabase.rpc('fn_consentir_gps' as any, { p_accepte: checked });
+                if (error) {
+                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+                } else if (data && (data as any).error) {
+                  afficherNotification({ type: 'erreur', message: (data as any).error });
+                } else {
+                  setConsentementGPS(checked);
+                  afficherNotification({
+                    type: checked ? 'succes' : 'avertissement',
+                    message: checked ? 'Consentement GPS activé.' : 'Consentement GPS retiré. Vérification manuelle requise.',
+                  });
+                }
+                setGpsToggling(false);
+              }}
+            />
+          </div>
+        </div>
         <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50">
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>
