@@ -6,6 +6,201 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const APP_URL = 'https://soindirect.com';
+
+// ─── Email template helpers ──────────────────────────────
+
+const WRAPPER = (content: string) => `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="margin:0;padding:0;background:#F8FAFC;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:white;border-radius:0 0 12px 12px;overflow:hidden;">
+    <div style="background:#0F172A;padding:28px 24px;text-align:center;">
+      <span style="color:#17A2B8;font-size:30px;font-weight:bold;letter-spacing:-0.5px;">❤️ Soin Direct</span>
+    </div>
+    <div style="padding:36px 28px 24px;">
+      ${content}
+    </div>
+    <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;">
+      <p style="margin:0 0 6px;">Soin Direct SAS — <a href="${APP_URL}" style="color:#17A2B8;text-decoration:none;">soindirect.com</a></p>
+      <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> · 
+         <a href="${APP_URL}/confidentialite" style="color:#94A3B8;text-decoration:none;">Confidentialité</a></p>
+      <p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+const BUTTON = (text: string, url: string) =>
+  `<div style="text-align:center;margin:24px 0;"><a href="${url}" style="display:inline-block;background:#17A2B8;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">${text}</a></div>`;
+
+const INFO_BOX = (content: string) =>
+  `<div style="background:#F0FDFA;border-left:4px solid #17A2B8;padding:16px 18px;margin:16px 0;border-radius:0 8px 8px 0;">${content}</div>`;
+
+const CARD_BOX = (content: string) =>
+  `<div style="background:#F0FDFA;border:1px solid #17A2B8;border-radius:8px;padding:16px 18px;margin:16px 0;">${content}</div>`;
+
+const SECURITY_NOTE = `<p style="font-size:12px;color:#94A3B8;text-align:center;margin-top:20px;">🔒 Pour votre sécurité, connectez-vous à l'app pour consulter les détails.</p>`;
+
+// ─── Template registry ───────────────────────────────────
+
+interface TemplateResult { subject: string; html: string }
+
+function renderTemplate(type: string, data: Record<string, unknown>): TemplateResult | null {
+  switch (type) {
+    case 'BIENVENUE_SOIGNANT':
+      return {
+        subject: 'Bienvenue sur Soin Direct ! 🎉',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.prenom} ! 🎉</h2>
+          <p style="color:#334155;">Votre compte soignant est créé. Voici les prochaines étapes :</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">1.</strong> Complétez votre profil (RPPS, adresse)<br/>
+            <strong style="color:#0F172A;">2.</strong> Téléversez vos documents (diplôme, RCP, identité)<br/>
+            <strong style="color:#0F172A;">3.</strong> Parcourez les missions près de chez vous
+          `)}
+          ${BUTTON('Compléter mon profil →', `${APP_URL}/soignant/profil`)}
+        `),
+      };
+
+    case 'BIENVENUE_ETABLISSEMENT':
+      return {
+        subject: 'Bienvenue sur Soin Direct !',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.nom} !</h2>
+          <p style="color:#334155;">Votre établissement est enregistré sur Soin Direct.</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">1.</strong> Complétez votre profil (SIRET, FINESS, adresse)<br/>
+            <strong style="color:#0F172A;">2.</strong> Publiez votre première mission<br/>
+            <strong style="color:#0F172A;">3.</strong> Recevez des candidatures en quelques heures
+          `)}
+          ${BUTTON('Publier une mission →', `${APP_URL}/etablissement/missions/creer`)}
+        `),
+      };
+
+    case 'MISSION_ACCEPTEE_SOIGNANT':
+      return {
+        subject: `Mission confirmée : ${data.mission}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Mission confirmée ✅</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom},</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">${data.mission}</strong><br/>
+            <span style="color:#334155;">📍 ${data.etablissement}</span><br/>
+            <span style="color:#334155;">📅 ${data.date}</span><br/>
+            <span style="color:#334155;">🕐 ${data.heure_debut} → ${data.heure_fin}</span><br/>
+            <span style="color:#334155;">💰 ${data.taux_horaire} €/h</span>
+          `)}
+          <p style="color:#334155;">⚠️ Pensez à <strong>signer votre contrat</strong> dans l'app avant le début de la mission.</p>
+          ${BUTTON('Voir la mission →', `${APP_URL}/soignant/missions/${data.mission_id || ''}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'MISSION_ACCEPTEE_ETABLISSEMENT':
+      return {
+        subject: `Mission acceptée : ${data.mission}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Mission acceptée par un soignant ✅</h2>
+          <p style="color:#334155;">Bonjour,</p>
+          <p style="color:#334155;"><strong>${data.soignant_nom}</strong> (${data.profession || 'soignant'}) a accepté votre mission :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">${data.mission}</strong><br/>
+            <span style="color:#334155;">📅 ${data.date}</span>
+          `)}
+          <p style="color:#334155;">Un contrat sera généré automatiquement. Vous recevrez un email pour le signer.</p>
+          ${BUTTON('Voir la mission →', `${APP_URL}/etablissement/missions/${data.mission_id || ''}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'CONTRAT_A_SIGNER':
+      return {
+        subject: `Contrat à signer : ${data.mission}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📝 Contrat à signer</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+          <p style="color:#334155;">Un contrat a été généré pour la mission <strong>"${data.mission}"</strong>.</p>
+          ${INFO_BOX('Vous devez le signer <strong>avant le début de la mission</strong> pour pouvoir pointer votre arrivée.')}
+          ${BUTTON('Signer le contrat →', `${APP_URL}/contrat/${data.contrat_id}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'CONTRAT_SIGNE':
+      return {
+        subject: `Contrat signé : ${data.mission}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">✅ Contrat signé par les deux parties</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+          <p style="color:#334155;">Le contrat pour la mission <strong>"${data.mission}"</strong> est désormais signé par les deux parties.</p>
+          ${INFO_BOX('Le soignant peut maintenant pointer son arrivée le jour de la mission.')}
+          ${BUTTON('Voir le contrat →', `${APP_URL}/contrat/${data.contrat_id}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'MISSION_TERMINEE':
+      return {
+        subject: `Mission terminée : ${data.mission}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">✅ Mission terminée</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom},</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">${data.mission}</strong><br/>
+            <span style="color:#334155;">📍 ${data.etablissement}</span><br/>
+            <span style="color:#334155;">🕐 ${data.heures}h travaillées</span><br/>
+            <span style="color:#334155;">💰 Net à payer : <strong>${data.net} €</strong></span>
+          `)}
+          <p style="color:#334155;">N'oubliez pas d'évaluer l'établissement !</p>
+          ${BUTTON('Voir mes gains →', `${APP_URL}/soignant/gains`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'FACTURE_EMISE':
+      return {
+        subject: `Facture ${data.numero} — Soin Direct`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Facture ${data.numero}</h2>
+          <p style="color:#334155;">Bonjour,</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Facture ${data.numero}</strong><br/>
+            <span style="color:#334155;">Montant HT : ${data.montant_ht} €</span><br/>
+            <span style="color:#334155;">TVA : ${data.montant_tva} €</span><br/>
+            <span style="color:#334155;">Montant TTC : <strong>${data.montant_ttc} €</strong></span><br/>
+            <span style="color:#334155;">Échéance : 30 jours</span>
+          `)}
+          ${BUTTON('💳 Consulter et payer →', `${APP_URL}/etablissement/facturation/${data.facture_id || ''}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'FACTURE_PAYEE':
+      return {
+        subject: `Paiement confirmé — Facture ${data.numero}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">💳 Paiement confirmé</h2>
+          <p style="color:#334155;">Bonjour,</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Facture ${data.numero}</strong><br/>
+            <span style="color:#334155;">Montant TTC : <strong>${data.montant_ttc} €</strong></span><br/>
+            <span style="color:#334155;">Date de paiement : ${data.date_paiement}</span>
+          `)}
+          <p style="color:#334155;">Merci pour votre règlement. Votre facture est disponible dans l'app.</p>
+          ${BUTTON('Voir la facture →', `${APP_URL}/etablissement/facturation/${data.facture_id || ''}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    default:
+      return null;
+  }
+}
+
+// ─── Main handler ────────────────────────────────────────
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -23,22 +218,61 @@ serve(async (req) => {
   const token = authHeader.replace('Bearer ', '');
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
-  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
-  if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Token invalide' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  // Allow service_role calls (from stripe-webhook, cron, etc.) without user check
+  const isServiceRole = authHeader.includes(serviceRoleKey);
+
+  let userId: string | null = null;
+  let userEmail: string | null = null;
+
+  if (!isServiceRole) {
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Token invalide' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    userId = user.id;
+    userEmail = user.email || null;
   }
 
   try {
-    const { to, subject, html, type, destinataire_id } = await req.json();
+    const body = await req.json();
+    const { to, type, data: templateData, subject: legacySubject, html: legacyHtml, destinataire_id } = body;
 
-    // Restriction: l'utilisateur ne peut envoyer un email qu'à lui-même,
-    // sauf s'il est ADMIN_ETABLISSEMENT ou ADMIN_PLATEFORME
-    if (to !== user.email) {
+    // Resolve subject & html: prefer type+data templates, fall back to legacy subject+html
+    let subject: string;
+    let html: string;
+
+    if (type && templateData) {
+      const rendered = renderTemplate(type, templateData || {});
+      if (rendered) {
+        subject = rendered.subject;
+        html = rendered.html;
+      } else if (legacySubject && legacyHtml) {
+        subject = legacySubject;
+        html = legacyHtml;
+      } else {
+        return new Response(JSON.stringify({ error: `Type de template inconnu: ${type}` }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } else if (legacySubject && legacyHtml) {
+      subject = legacySubject;
+      html = legacyHtml;
+    } else {
+      return new Response(JSON.stringify({ error: 'type+data ou subject+html requis' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Restriction: user can only send to themselves unless admin
+    if (!isServiceRole && to !== userEmail) {
       const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
@@ -74,19 +308,19 @@ serve(async (req) => {
       }),
     });
 
-    const data = await response.json();
+    const resData = await response.json();
 
     // Log in emails_envoyes (service_role only)
-    const supabaseClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const supabaseClient = createClient(supabaseUrl, serviceRoleKey);
 
     await supabaseClient.from('emails_envoyes').insert({
       destinataire_email: to,
       destinataire_id: destinataire_id || null,
       type: type || 'GENERIQUE',
       sujet: subject,
-      provider_id: data.id || null,
+      provider_id: resData.id || null,
       statut: response.ok ? 'ENVOYE' : 'ERREUR',
-      erreur: response.ok ? null : JSON.stringify(data),
+      erreur: response.ok ? null : JSON.stringify(resData),
     });
 
     return new Response(JSON.stringify({ success: response.ok }), {
