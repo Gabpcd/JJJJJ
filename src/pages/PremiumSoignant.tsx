@@ -1,64 +1,134 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { Crown, Zap, BarChart3, Award, CheckCircle2 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Crown, Zap, BarChart3, Award, Bell, FileText, Calculator, Receipt, ClipboardList, HelpCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
-const AVANTAGES = [
-  { icone: Zap, titre: 'Accès prioritaire aux missions', description: 'Recevez les nouvelles missions avant les autres soignants et postulez en premier.' },
-  { icone: BarChart3, titre: 'Statistiques avancées', description: 'Visualisez vos gains par mois, taux d\'acceptation, et évolution de votre score de fiabilité.' },
-  { icone: Award, titre: 'Badge doré Premium', description: 'Un badge distinctif visible par les établissements pour maximiser vos chances de sélection.' },
-  { icone: Crown, titre: 'Support prioritaire', description: 'Assistance dédiée avec un temps de réponse garanti sous 24h.' },
+const PREMIUM_FEATURES = [
+  { icone: Zap, label: 'Accès prioritaire aux missions' },
+  { icone: BarChart3, label: 'Statistiques avancées de vos gains' },
+  { icone: Award, label: 'Badge doré visible par les établissements' },
+  { icone: Bell, label: 'Alertes missions personnalisées' },
+];
+
+const LIBERAL_FEATURES = [
+  { icone: Zap, label: 'Tout Premium inclus' },
+  { icone: FileText, label: 'Génération automatique des notes d\'honoraires' },
+  { icone: Receipt, label: 'Export comptable compatible Indy' },
+  { icone: Calculator, label: 'Tableau de bord charges sociales (URSSAF, CARPIMKO)' },
+  { icone: ClipboardList, label: 'Rappels déclarations fiscales' },
+  { icone: HelpCircle, label: 'Assistant TVA' },
 ];
 
 export default function PremiumSoignant() {
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const inscrire = async () => {
+    const trimmed = email.trim();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      toast({ title: 'Email invalide', variant: 'destructive' });
+      return;
+    }
+    setSubmitting(true);
+    const { error } = await (supabase.from('liste_attente_premium' as any) as any).insert({ email: trimmed, type_offre: 'PREMIUM', role_demandeur: 'SOIGNANT' });
+    setSubmitting(false);
+    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: '✅ Inscrit(e) à la liste d\'attente !' });
+    setEmail('');
+  };
+
   return (
     <LayoutApp role="SOIGNANT">
-      <div className="max-w-2xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-8">
         {/* Hero */}
         <div className="text-center space-y-3">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-warning/10 mx-auto">
             <Crown className="h-8 w-8 text-warning" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">Soin Direct Premium</h1>
-          <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Boostez votre visibilité et accédez à des fonctionnalités exclusives pour décrocher plus de missions.
+          <p className="text-muted-foreground text-sm max-w-lg mx-auto">
+            Boostez votre carrière avec des outils exclusifs pour décrocher plus de missions et gérer votre activité.
           </p>
         </div>
 
-        {/* Avantages */}
-        <div className="grid gap-4">
-          {AVANTAGES.map((a) => (
-            <Card key={a.titre}>
-              <CardContent className="flex items-start gap-4 pt-5 pb-5">
-                <div className="rounded-xl bg-primary/10 p-2.5 shrink-0">
-                  <a.icone className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground text-sm">{a.titre}</h3>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{a.description}</p>
-                </div>
-                <CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-1 ml-auto" />
-              </CardContent>
-            </Card>
-          ))}
+        {/* Two cards side by side */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Premium */}
+          <Card className="border-primary/20 relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-primary" />
+            <CardHeader className="pb-2">
+              <Badge variant="secondary" className="w-fit text-xs mb-2">Premium</Badge>
+              <CardTitle className="text-lg">Premium</CardTitle>
+              <div className="mt-1">
+                <span className="text-3xl font-bold text-foreground">9,99 €</span>
+                <span className="text-muted-foreground text-sm"> / mois</span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ul className="space-y-2.5">
+                {PREMIUM_FEATURES.map((f) => (
+                  <li key={f.label} className="flex items-start gap-2.5 text-sm">
+                    <CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span className="text-foreground">{f.label}</span>
+                  </li>
+                ))}
+              </ul>
+              <Button disabled className="w-full opacity-60">
+                🚀 Bientôt disponible
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Pack Libéral */}
+          <Card className="border-warning/30 relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-warning" />
+            <CardHeader className="pb-2">
+              <Badge className="w-fit text-xs mb-2 bg-warning/10 text-warning border-warning/30">Recommandé</Badge>
+              <CardTitle className="text-lg">Pack Libéral</CardTitle>
+              <div className="mt-1">
+                <span className="text-3xl font-bold text-foreground">19,99 €</span>
+                <span className="text-muted-foreground text-sm"> / mois</span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ul className="space-y-2.5">
+                {LIBERAL_FEATURES.map((f) => (
+                  <li key={f.label} className="flex items-start gap-2.5 text-sm">
+                    <CheckCircle2 className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+                    <span className="text-foreground">{f.label}</span>
+                  </li>
+                ))}
+              </ul>
+              <Button disabled className="w-full opacity-60">
+                🚀 Bientôt disponible
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Prix + CTA */}
-        <Card className="border-warning/30 bg-warning/5">
+        {/* Waitlist */}
+        <Card>
           <CardContent className="pt-6 text-center space-y-4">
-            <div>
-              <span className="text-3xl font-bold text-foreground">9,99 €</span>
-              <span className="text-muted-foreground text-sm"> / mois</span>
+            <p className="font-semibold text-foreground">📬 Inscrivez-vous à la liste d'attente</p>
+            <p className="text-xs text-muted-foreground">Soyez parmi les premiers informés du lancement.</p>
+            <div className="flex gap-2 max-w-md mx-auto">
+              <Input
+                type="email"
+                placeholder="votre@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && inscrire()}
+              />
+              <Button onClick={inscrire} disabled={submitting} className="shrink-0 gap-2">
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                S'inscrire
+              </Button>
             </div>
-            <Button disabled size="lg" className="w-full gap-2 opacity-70">
-              <Crown className="h-4 w-4" />
-              S'abonner — 9,99 €/mois
-            </Button>
-            <Badge variant="secondary" className="text-xs">
-              🚀 Bientôt disponible
-            </Badge>
             <p className="text-[11px] text-muted-foreground">Sans engagement. Annulation à tout moment.</p>
           </CardContent>
         </Card>

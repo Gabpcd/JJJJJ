@@ -42,6 +42,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
   { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
   { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
+  { icone: Crown, label: 'Premium', route: '/etablissement/premium' },
   { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
   { icone: User, label: 'Profil', route: '/etablissement/profil' },
 ];

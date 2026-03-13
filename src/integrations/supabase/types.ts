@@ -1158,6 +1158,30 @@ export type Database = {
         }
         Relationships: []
       }
+      liste_attente_premium: {
+        Row: {
+          cree_le: string | null
+          email: string
+          id: string
+          type_offre: string
+          utilisateur_id: string | null
+        }
+        Insert: {
+          cree_le?: string | null
+          email: string
+          id?: string
+          type_offre: string
+          utilisateur_id?: string | null
+        }
+        Update: {
+          cree_le?: string | null
+          email?: string
+          id?: string
+          type_offre?: string
+          utilisateur_id?: string | null
+        }
+        Relationships: []
+      }
       litiges: {
         Row: {
           cree_le: string | null

@@ -55,6 +55,7 @@ import AdminFacturation from "./pages/admin/AdminFacturation";
 import AdminConformite from "./pages/admin/AdminConformite";
 import RechercheMissions from "./pages/RechercheMissions";
 import PremiumSoignant from "./pages/PremiumSoignant";
+import PremiumEtablissement from "./pages/PremiumEtablissement";
 import WidgetRecrutement from "./pages/WidgetRecrutement";
 
 const queryClient = new QueryClient();
@@ -117,6 +118,7 @@ const App = () => (
                 <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
                 <Route path="/etablissement/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageNotifications role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
                 <Route path="/etablissement/exclusions" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExclusionsEtablissement /></RouteProtegee>} />
+                <Route path="/etablissement/premium" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PremiumEtablissement /></RouteProtegee>} />
 
                 {/* Contrat (accessible par soignant et établissement) */}
                 <Route path="/contrat/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT', 'ADMIN_ETABLISSEMENT']}><ContratMission /></RouteProtegee>} />
