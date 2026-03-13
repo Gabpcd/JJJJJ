@@ -119,14 +119,17 @@ export default function ListeMissions() {
     }
   };
 
+  // M5: Atomic serie cancellation via RPC
   const handleAnnulerSerie = async (missionsSerieOuvertes: any[]) => {
-    let reussies = 0;
-    for (const m of missionsSerieOuvertes) {
-      const { data, error } = await supabase.rpc('fn_annuler_mission_etablissement' as any, { p_mission_id: m.id });
-      if (!error && (data as any)?.success) reussies++;
+    const ids = missionsSerieOuvertes.map((m: any) => m.id);
+    const { data, error } = await supabase.rpc('fn_annuler_serie_etablissement' as any, { p_mission_ids: ids });
+    if (error) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    } else {
+      const reussies = (data as any)?.nb_annulees ?? ids.length;
+      afficherNotification({ type: 'succes', message: `${reussies} mission(s) annulée(s).` });
+      charger();
     }
-    afficherNotification({ type: 'succes', message: `${reussies} mission(s) annulée(s).` });
-    charger();
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;

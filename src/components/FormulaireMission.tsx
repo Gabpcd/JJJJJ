@@ -217,7 +217,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     setLoading(true);
     try {
-      const descriptionFinale = injecterContratTag(description || '', contratPreference);
+      // C6: Sanitize description — strip injected tags
+      const cleanDescription = (description || '').replace(/\[SERIE_ID:[^\]]*\]/g, '').replace(/\[CONTRAT:[^\]]*\]/g, '').trim();
+      const descriptionFinale = injecterContratTag(cleanDescription, contratPreference);
       const payload = {
         intitule,
         description: descriptionFinale || null,

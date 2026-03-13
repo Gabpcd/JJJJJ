@@ -93,7 +93,8 @@ export default function MissionsSoignant() {
           .order('debut_le', { ascending: false });
       }
 
-      const { data } = await query;
+      // M1: Add pagination limit to prevent silently capped data
+      query = query.limit(500);
       const enriched = data ? await enrichirEtablissements(data as any) : [];
       setMissions(enriched);
       setLoading(false);
