@@ -2261,6 +2261,7 @@ export type Database = {
       }
       fn_get_my_role: { Args: never; Returns: Json }
       fn_health_check: { Args: never; Returns: Json }
+      fn_is_valid_uuid: { Args: { p_text: string }; Returns: boolean }
       fn_maj_activite_soignant: { Args: never; Returns: Json }
       fn_matcher_soignants_mission: {
         Args: { p_mission_id: string }
