@@ -26,6 +26,7 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
       case 'SOIGNANT': return <Navigate to="/soignant/tableau-de-bord" replace />;
       case 'ADMIN_ETABLISSEMENT': return <Navigate to="/etablissement/tableau-de-bord" replace />;
       case 'ADMIN_GROUPE': return <Navigate to="/groupe/tableau-de-bord" replace />;
+      case 'ADMIN_PLATEFORME': return <Navigate to="/admin" replace />;
       default: return <Navigate to="/" replace />;
     }
   }
