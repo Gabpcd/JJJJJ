@@ -27,6 +27,7 @@ export default function InscriptionEtablissement() {
   const [etape, setEtape] = useState(1);
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [cgu, setCgu] = useState(false);
+  const [cgv, setCgv] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
