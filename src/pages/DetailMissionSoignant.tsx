@@ -100,6 +100,21 @@ export default function DetailMissionSoignant() {
     load();
   }, [user, id]);
 
+  // Check for overlapping missions (must be before early return)
+  useEffect(() => {
+    if (!mission || mission.statut !== 'OUVERTE' || !user) return;
+    supabase
+      .from('missions')
+      .select('id')
+      .eq('soignant_assigne_id', user.id)
+      .in('statut', ['ASSIGNEE', 'EN_COURS'])
+      .lt('debut_le', mission.fin_le)
+      .gt('fin_le', mission.debut_le)
+      .then(({ data }) => {
+        setChevauchement((data || []).length > 0);
+      });
+  }, [mission, user]);
+
   if (loading || !mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
   const distance = calculerDistanceKm(
@@ -113,22 +128,6 @@ export default function DetailMissionSoignant() {
   const estTerminee = mission.statut === 'TERMINEE';
   const estAssigneAutre = !estOuverte && !estAssigne && mission.soignant_assigne_id;
   const duree = mission.duree_heures ?? ((new Date(mission.fin_le).getTime() - new Date(mission.debut_le).getTime()) / 3600000);
-
-  // Check for overlapping missions
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useEffect(() => {
-    if (!estOuverte || !user) return;
-    supabase
-      .from('missions')
-      .select('id, intitule, debut_le, fin_le')
-      .eq('soignant_assigne_id', user.id)
-      .in('statut', ['ASSIGNEE', 'EN_COURS'])
-      .lt('debut_le', mission.fin_le)
-      .gt('fin_le', mission.debut_le)
-      .then(({ data }) => {
-        setChevauchement((data || []).length > 0);
-      });
-  }, [estOuverte, user, mission.debut_le, mission.fin_le]);
 
   const accepterMission = async () => {
     setAcceptationEnCours(true);
