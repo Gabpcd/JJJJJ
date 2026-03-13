@@ -37,7 +37,7 @@ export default function PageConfidentialite() {
         <p className="mb-3">Nom, prénom, date de naissance, adresse e-mail, numéro de téléphone, adresse postale, photo de profil (facultative). Pour les Soignants : numéro RPPS, numéro ADELI, numéro de sécurité sociale, profession.</p>
 
         <h3 className="text-base font-semibold text-foreground mt-6 mb-2">2.2 — Données professionnelles</h3>
-        <p className="mb-3">Diplômes, attestations (RCP, vaccinations), habilitations, statut (salarié/libéral), numéro SIRET le cas échéant, historique des missions réalisées, score de fiabilité, heures cumulées.</p>
+        <p className="mb-3">Diplômes, habilitations, attestation RCP, statut (salarié/libéral), numéro SIRET le cas échéant, historique des missions réalisées, score de fiabilité, heures cumulées. Les vaccinations et aptitudes médicales sont déclarées sur l'honneur (aucun document de santé n'est stocké).</p>
 
         <h3 className="text-base font-semibold text-foreground mt-6 mb-2">2.3 — Données de géolocalisation</h3>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
