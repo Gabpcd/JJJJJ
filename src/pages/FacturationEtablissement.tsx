@@ -235,7 +235,7 @@ export default function FacturationEtablissement() {
                 </tbody>
                 <tfoot>
                   <tr className="font-bold">
-                    <td colSpan={3} className="pt-3 text-right text-foreground">Total TTC</td>
+                    <td colSpan={2} className="pt-3 text-right text-foreground">Total TTC</td>
                     <td className="pt-3 text-right text-primary">
                       {missionsNonFacturees.reduce((s, m) => s + (m.montant_commission_ttc ?? 0), 0).toFixed(2)} €
                     </td>
