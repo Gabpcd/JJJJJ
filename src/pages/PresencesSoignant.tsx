@@ -65,8 +65,8 @@ export default function PresencesSoignant() {
 
   const handleRefuserGPS = async () => {
     if (!user) return;
-    await supabase.rpc('fn_modifier_consentement_gps' as any, {
-      p_consentement_gps: false,
+    await supabase.rpc('fn_consentir_gps' as any, {
+      p_accepte: false,
     });
     setConsentementGPS(false);
     setShowConsentementGPS(false);
