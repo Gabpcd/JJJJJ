@@ -87,10 +87,8 @@ export function PanneauContestation({
   const peutRepondre = estRepondant && statutOuvert && !litige?.reponse;
   // Initiator can reply again if status moved to EN_DISCUSSION and there's a response
   const peutRelancer = estInitiateur && litige?.statut === 'EN_DISCUSSION' && !!litige?.reponse;
-
-  const estResolu = litige && ['RESOLUE_SOIGNANT', 'RESOLUE_ETABLISSEMENT', 'RESOLUE_ADMIN', 'FERME'].includes(litige.statut);
-
-  const roleActeur = role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
+  // Parties can move to EN_DISCUSSION, only admin can resolve/close
+  const peutPasserEnDiscussion = (peutRepondre || peutRelancer) && litige?.statut === 'CONTESTEE';
   const roleLabel = role === 'SOIGNANT' ? 'soignant' : 'établissement';
   const autreRoleLabel = role === 'SOIGNANT' ? 'établissement' : 'soignant';
 
