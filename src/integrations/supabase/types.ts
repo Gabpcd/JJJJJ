@@ -2394,6 +2394,15 @@ export type Database = {
           type_evaluateur: string
         }[]
       }
+      fn_mes_exclusions_recues: {
+        Args: never
+        Returns: {
+          cree_le: string
+          exclu_par_nom: string
+          exclu_par_type: string
+          motif: string
+        }[]
+      }
       fn_mes_missions_soignant: {
         Args: never
         Returns: {
