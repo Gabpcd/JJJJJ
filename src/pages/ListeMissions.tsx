@@ -70,7 +70,7 @@ export default function ListeMissions() {
     const statuts = ['', 'OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
     const results = await Promise.all(
       statuts.map(s => {
-        let q = supabase.from('missions').select('*', { count: 'exact', head: true }).eq('etablissement_id', user.id);
+        let q = supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id);
         if (s) q = q.eq('statut', s as any);
         return q;
       })

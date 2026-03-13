@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const APP_URL = 'https://soindirect.com';
+const APP_URL = Deno.env.get('APP_URL') || 'https://app.soindirect.com';
 
 // ─── Email template helpers ──────────────────────────────
 
