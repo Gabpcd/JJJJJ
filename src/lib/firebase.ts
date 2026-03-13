@@ -31,7 +31,7 @@ function detecterPlateforme(): 'WEB' | 'IOS' | 'ANDROID' {
 
 export async function demanderPermissionPush(
   userId: string,
-  supabase: { from: (table: string) => any }
+  supabase: { from: (table: string) => any; rpc: (fn: string, params?: any) => any }
 ): Promise<string | null> {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return null;
@@ -56,10 +56,10 @@ export async function demanderPermissionPush(
   const token = JSON.stringify(subscription);
   const plateforme = detecterPlateforme();
 
-  await supabase.from('tokens_push').upsert(
-    { utilisateur_id: userId, token, plateforme },
-    { onConflict: 'token' }
-  );
+  await supabase.rpc('fn_upsert_token_push' as any, {
+    p_token: token,
+    p_plateforme: plateforme,
+  });
 
   return token;
 }

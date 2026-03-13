@@ -13,10 +13,12 @@ export default function ModifierMission() {
 
   useEffect(() => {
     if (!id) return;
-    supabase.from('missions').select('id, intitule, description, service, profession_requise, debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence, statut').eq('id', id).single().then(({ data }) => {
+    (async () => {
+      const { data, error } = await supabase.from('missions').select('id, intitule, description, service, profession_requise, debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence, statut').eq('id', id).single();
+      if (error) console.error('[ModifierMission] Erreur chargement:', error.message);
       setMission(data);
       setLoading(false);
-    });
+    })();
   }, [id]);
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;

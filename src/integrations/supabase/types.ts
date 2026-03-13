@@ -2586,6 +2586,10 @@ export type Database = {
         Returns: Json
       }
       fn_supprimer_mon_compte: { Args: never; Returns: Json }
+      fn_upsert_token_push: {
+        Args: { p_plateforme: string; p_token: string }
+        Returns: undefined
+      }
       fn_valider_presence: { Args: { p_presence_id: string }; Returns: Json }
       fn_valider_presences_lot: { Args: { p_ids: string[] }; Returns: Json }
       mon_etablissement_id: { Args: never; Returns: string }

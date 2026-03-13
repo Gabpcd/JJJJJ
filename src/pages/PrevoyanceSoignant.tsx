@@ -25,8 +25,8 @@ export default function PrevoyanceSoignant() {
     if (!user) return;
     Promise.all([
       supabase.from('plans_prevoyance').select('id, nom, type, fournisseur, description, prime_mensuelle, heures_minimum_requises, missions_minimum_requises, subvention_plateforme_pourcent, subvention_max_mensuelle').eq('est_actif', true).order('prime_mensuelle', { ascending: true }),
-      supabase.from('souscriptions_prevoyance').select('*, plans_prevoyance(id, nom, prime_mensuelle)').eq('soignant_id', user.id),
-      supabase.from('soignants').select('heures_cumulees, prevoyance_inscrit').eq('id', user.id).single(),
+      supabase.from('souscriptions_prevoyance').select('id, plan_id, statut, soignant_id, cree_le, plans_prevoyance(id, nom, prime_mensuelle)').eq('soignant_id', user.id),
+      supabase.from('soignants').select('heures_cumulees').eq('id', user.id).single(),
     ]).then(([{ data: p }, { data: s }, { data: sg }]) => {
       setPlans((p as any[]) || []);
       setSouscriptions((s as any[]) || []);
@@ -57,7 +57,7 @@ export default function PrevoyanceSoignant() {
     afficherNotification({ type: 'succes', message: `✅ Souscription au plan ${plan.nom} confirmée !` });
     setPlanASouscrire(null);
     // Refresh
-    const { data: s } = await supabase.from('souscriptions_prevoyance').select('*, plans_prevoyance(*)').eq('soignant_id', user.id);
+    const { data: s } = await supabase.from('souscriptions_prevoyance').select('id, plan_id, statut, soignant_id, cree_le, plans_prevoyance(id, nom, prime_mensuelle)').eq('soignant_id', user.id);
     setSouscriptions((s as any[]) || []);
   }
 
