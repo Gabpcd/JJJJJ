@@ -53,6 +53,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [progressionActuel, setProgressionActuel] = useState(0);
 
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
+  const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
 
   // Load rist_plafond_actif + commission info + type
   useEffect(() => {
