@@ -2047,6 +2047,7 @@ export type Database = {
       est_admin_etablissement: { Args: never; Returns: boolean }
       est_soignant: { Args: never; Returns: boolean }
       fn_accepter_mission: { Args: { p_mission_id: string }; Returns: Json }
+      fn_activer_liberal: { Args: never; Returns: Json }
       fn_annuler_mission_soignant: {
         Args: { p_mission_id: string }
         Returns: Json
@@ -2103,6 +2104,14 @@ export type Database = {
           p_type_ressource?: string
         }
         Returns: string
+      }
+      fn_declarer_virement: {
+        Args: { p_facture_id: string; p_reference: string }
+        Returns: Json
+      }
+      fn_deposer_chorus: {
+        Args: { p_chorus_id?: string; p_facture_id: string }
+        Returns: Json
       }
       fn_detecter_teleportation: {
         Args: {
@@ -2198,6 +2207,7 @@ export type Database = {
           soignant_id: string
         }[]
       }
+      fn_enregistrer_siret_liberal: { Args: { p_siret: string }; Returns: Json }
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
       fn_etablissement_pour_soignant: {
         Args: { p_etablissement_id: string }
@@ -2251,6 +2261,7 @@ export type Database = {
       }
       fn_get_my_role: { Args: never; Returns: Json }
       fn_health_check: { Args: never; Returns: Json }
+      fn_maj_activite_soignant: { Args: never; Returns: Json }
       fn_matcher_soignants_mission: {
         Args: { p_mission_id: string }
         Returns: {
@@ -2378,6 +2389,10 @@ export type Database = {
         Args: { p_litige_id: string; p_reponse: string }
         Returns: Json
       }
+      fn_resoudre_litige: {
+        Args: { p_litige_id: string; p_resolution: string; p_statut: string }
+        Returns: Json
+      }
       fn_rgpd_exporter_donnees_soignant: {
         Args: { p_soignant_id: string }
         Returns: Json
@@ -2405,6 +2420,10 @@ export type Database = {
       }
       fn_soignant_pour_etablissement: {
         Args: { p_soignant_id: string }
+        Returns: Json
+      }
+      fn_souscrire_prevoyance: {
+        Args: { p_numero_contrat?: string; p_plan_id: string }
         Returns: Json
       }
       mon_etablissement_id: { Args: never; Returns: string }
