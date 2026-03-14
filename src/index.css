@@ -151,7 +151,7 @@
   }
 
   .btn-danger {
-    @apply bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-200;
+    @apply bg-destructive hover:bg-destructive/90 active:scale-[0.97] text-destructive-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150;
   }
 
   .card-base {
