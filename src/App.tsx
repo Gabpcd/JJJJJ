@@ -72,6 +72,10 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<PageAccueil />} />
         <Route path="/tarifs" element={<Tarifs />} />
+        <Route path="/devenir-soignant" element={<DevenirSoignant />} />
+        <Route path="/recruter-soignants" element={<RecruterSoignants />} />
+        <Route path="/infirmiere-liberale" element={<InfirmiereLiberal />} />
+        <Route path="/pharmacie-remplacement" element={<PharmacieRemplacement />} />
         <Route path="/connexion" element={<PageConnexion />} />
         <Route path="/confirmer-email" element={<ConfirmerEmail />} />
         <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
