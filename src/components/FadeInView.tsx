@@ -4,10 +4,9 @@ interface FadeInViewProps {
   children: React.ReactNode;
   delay?: number;
   className?: string;
-  as?: keyof JSX.IntrinsicElements;
 }
 
-export function FadeInView({ children, delay = 0, className = '', as: Tag = 'div' }: FadeInViewProps) {
+export function FadeInView({ children, delay = 0, className = '' }: FadeInViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -23,12 +22,12 @@ export function FadeInView({ children, delay = 0, className = '', as: Tag = 'div
   }, []);
 
   return (
-    <Tag
-      ref={ref as any}
+    <div
+      ref={ref}
       className={`fade-in-view ${visible ? 'fade-in-visible' : ''} ${className}`}
       style={{ transitionDelay: `${delay}ms` }}
     >
       {children}
-    </Tag>
+    </div>
   );
 }
