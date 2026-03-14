@@ -135,7 +135,10 @@ export default function DetailMissionSoignant() {
     etablissement?.adresse_lat, etablissement?.adresse_lng
   );
   const completionProfil = calculerCompletionProfil(soignant);
-  const peutPostuler = completionProfil >= 100 && soignant.tous_documents_valides;
+  const premiereMissionLe = (soignant as any).premiere_mission_le;
+  const enPeriodeGrace = premiereMissionLe && !soignant.tous_documents_valides &&
+    new Date(premiereMissionLe).getTime() + 7 * 24 * 60 * 60 * 1000 > Date.now();
+  const peutPostuler = completionProfil >= 100 && (soignant.tous_documents_valides || enPeriodeGrace);
   const estAssigne = mission.soignant_assigne_id === user!.id;
   const estOuverte = mission.statut === 'OUVERTE';
   const estTerminee = mission.statut === 'TERMINEE';
