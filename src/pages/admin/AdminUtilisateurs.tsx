@@ -46,8 +46,8 @@ export default function AdminUtilisateurs() {
 
   const suspendre = async (table: string, id: string) => {
     const { error } = await supabase.from(table as any).update({ supprime_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Utilisateur suspendu' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Utilisateur suspendu');
     charger();
   };
 
