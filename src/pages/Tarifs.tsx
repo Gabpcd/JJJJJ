@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SEOHead } from '@/components/SEOHead';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { GrilleTarifaire } from '@/components/GrilleTarifaire';

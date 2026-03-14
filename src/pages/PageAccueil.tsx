@@ -407,5 +407,6 @@ export default function PageAccueil() {
         </div>
       </footer>
     </div>
+    </>
   );
 }
