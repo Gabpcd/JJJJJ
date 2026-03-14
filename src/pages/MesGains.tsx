@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { Banknote, Gift, Palmtree, Clock, Copy, FileDown } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
