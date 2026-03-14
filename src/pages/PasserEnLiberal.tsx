@@ -207,8 +207,8 @@ export default function PasserEnLiberal() {
             valeur={heures}
             max={3200}
             marqueurs={[800, 1600, 2400, 3200]}
-            couleurBarre="bg-gradient-to-r from-purple-500 to-primary"
-            couleurFond="bg-purple-100"
+            couleurBarre="bg-gradient-to-r from-primary to-primary-dark"
+            couleurFond="bg-primary/10"
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
             <span>0h</span><span>800h (25%)</span><span>1600h (50%)</span><span>2400h (75%)</span><span>3200h (100%)</span>

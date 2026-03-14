@@ -174,13 +174,13 @@ export default function FacturationEtablissement() {
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Success banner */}
       {showSuccessBanner && (
-        <div className="mb-4 flex items-center gap-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
-          <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
+        <div className="mb-4 flex items-center gap-2 bg-success/10 border border-success/20 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle className="h-5 w-5 text-success shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-green-700 dark:text-green-400">Paiement confirmé !</p>
-            <p className="text-xs text-green-600 dark:text-green-500">Votre paiement a été reçu. Le statut sera mis à jour sous quelques instants.</p>
+            <p className="text-sm font-semibold text-success">Paiement confirmé !</p>
+            <p className="text-xs text-success/80">Votre paiement a été reçu. Le statut sera mis à jour sous quelques instants.</p>
           </div>
-          <button onClick={() => { setShowSuccessBanner(false); charger(); }} className="text-xs text-green-700 dark:text-green-400 underline hover:no-underline">
+          <button onClick={() => { setShowSuccessBanner(false); charger(); }} className="text-xs text-success underline hover:no-underline">
             Rafraîchir
           </button>
         </div>

@@ -444,9 +444,9 @@ export default function DashboardSoignant() {
               <span className="text-xs text-primary font-medium">Mon parcours →</span>
             </div>
             <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
-            <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-purple-500 to-purple-600" couleurFond="bg-purple-100 dark:bg-purple-900/30" />
+            <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-primary to-primary-dark" couleurFond="bg-primary/10" />
             <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
-            <p className="text-sm font-semibold text-foreground mt-3"><span className="text-purple-600 dark:text-purple-400">{heures}h</span> / 3 200h</p>
+            <p className="text-sm font-semibold text-foreground mt-3"><span className="text-primary">{heures}h</span> / 3 200h</p>
           </div>
 
           {heures >= 800 && (soignant as any).statut_liberal !== 'ACTIF' && (
