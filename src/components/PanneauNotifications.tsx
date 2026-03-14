@@ -131,6 +131,8 @@ export function BadgeNotification() {
   const { toast } = useToast();
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const [bouncing, setBouncing] = useState(false);
+  const prevCount = useRef(0);
 
   useEffect(() => {
     if (!user) return;
@@ -141,6 +143,7 @@ export function BadgeNotification() {
         .eq('destinataire_id', user.id)
         .eq('lue', false);
       setCount(c || 0);
+      prevCount.current = c || 0;
     };
     load();
 
@@ -153,6 +156,8 @@ export function BadgeNotification() {
         filter: `destinataire_id=eq.${user.id}`,
       }, (payload) => {
         setCount(prev => prev + 1);
+        setBouncing(true);
+        setTimeout(() => setBouncing(false), 350);
         const n = payload.new as any;
         toast({
           title: n.titre,
@@ -168,7 +173,7 @@ export function BadgeNotification() {
       <button onClick={() => setOpen(true)} className="relative text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors p-2">
         <Bell className="h-5 w-5" />
         {count > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+          <span className={`absolute -top-0.5 -right-0.5 h-4 min-w-[16px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 ${bouncing ? 'animate-bounce-badge' : ''}`}>
             {count > 99 ? '99+' : count}
           </span>
         )}
