@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Banknote, User, Copy, XCircle, RotateCcw } from 'lucide-react';
+import { AvatarDisplay } from '@/components/AvatarUpload';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { getLabelProfession, extraireContratPreference, getContratBadge } from '@/lib/constantes';
 import { format } from 'date-fns';
