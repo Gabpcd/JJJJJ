@@ -2273,6 +2273,7 @@ export type Database = {
         Args: { p_soignant_id: string }
         Returns: Json
       }
+      fn_charger_demo_investisseur: { Args: never; Returns: Json }
       fn_confirmer_due: { Args: { p_contrat_id: string }; Returns: Json }
       fn_consentir_gps: { Args: { p_accepte: boolean }; Returns: Json }
       fn_contester_presence: {
@@ -2759,6 +2760,7 @@ export type Database = {
         Returns: Json
       }
       fn_purger_audit_ancien: { Args: never; Returns: number }
+      fn_purger_demo: { Args: never; Returns: Json }
       fn_purger_gps_ancien: { Args: never; Returns: number }
       fn_recalculer_palier_commission: {
         Args: { p_etablissement_id: string }
