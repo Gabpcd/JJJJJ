@@ -99,18 +99,28 @@ export function CarteMission({ mission, afficherEtablissement, onDupliquer, onAn
       )}
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-        <User className="h-3.5 w-3.5" />
         {m.soignants ? (
-          <span>
-            {m.soignants.prenom} {m.soignants.nom}
-            {m.soignants.score_fiabilite != null && (
-              <span className={`ml-1 font-semibold ${scoreColor(m.soignants.score_fiabilite)}`}>
-                (⭐ {m.soignants.score_fiabilite}/100)
-              </span>
-            )}
-          </span>
+          <>
+            <AvatarDisplay
+              src={m.soignants.avatar_url}
+              prenom={m.soignants.prenom}
+              nom={m.soignants.nom}
+              size={24}
+            />
+            <span>
+              {m.soignants.prenom} {m.soignants.nom}
+              {m.soignants.score_fiabilite != null && (
+                <span className={`ml-1 font-semibold ${scoreColor(m.soignants.score_fiabilite)}`}>
+                  (⭐ {m.soignants.score_fiabilite}/100)
+                </span>
+              )}
+            </span>
+          </>
         ) : (
-          <span className="italic">— En attente d'un soignant</span>
+          <>
+            <User className="h-3.5 w-3.5" />
+            <span className="italic">— En attente d'un soignant</span>
+          </>
         )}
       </div>
 

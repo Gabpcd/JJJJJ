@@ -45,6 +45,7 @@ export default function ProfilEtablissement() {
         setSiret(data.siret);
         setType(data.type);
         setConventionCollective(data.convention_collective || '');
+        (setForm as any)(prev => ({ ...prev, logoUrl: (data as any).logo_url || '' }));
         setForm({
           nom: data.nom, finess: data.finess || '',
           rue: data.adresse_rue || '', ville: data.adresse_ville || '',

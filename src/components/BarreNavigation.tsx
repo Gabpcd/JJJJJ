@@ -148,7 +148,21 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-sidebar-border">
+        <div className="p-3 border-t border-sidebar-border space-y-2">
+          {userInfo && (
+            <div className="flex items-center gap-2 px-3 py-2">
+              <AvatarDisplay
+                src={userInfo.avatarUrl}
+                prenom={userInfo.prenom}
+                nom={userInfo.nom}
+                size={32}
+                rounded={role === 'ADMIN_ETABLISSEMENT' ? 'lg' : 'full'}
+              />
+              <span className="text-sm font-medium text-sidebar-foreground truncate">
+                {userInfo.prenom} {userInfo.nom}
+              </span>
+            </div>
+          )}
           <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="sidebar-item w-full text-left text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent">
             <LogOut className="h-5 w-5" /><span>Déconnexion</span>
           </button>

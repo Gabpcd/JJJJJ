@@ -54,10 +54,15 @@ export function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissio
       </div>
 
       <h3 className="font-semibold text-sm text-foreground mb-1">{m.intitule}</h3>
-      <p className="text-xs text-muted-foreground mb-1">
-        🏥 {m.etablissements?.nom} · {m.etablissements?.adresse_ville}
-        {m.etablissements?.adresse_departement && ` (${m.etablissements.adresse_departement})`}
-      </p>
+      <div className="flex items-center gap-2 mb-1">
+        {m.etablissements?.logo_url && (
+          <img src={m.etablissements.logo_url} alt="" className="h-5 w-5 rounded object-cover shrink-0" />
+        )}
+        <p className="text-xs text-muted-foreground">
+          🏥 {m.etablissements?.nom} · {m.etablissements?.adresse_ville}
+          {m.etablissements?.adresse_departement && ` (${m.etablissements.adresse_departement})`}
+        </p>
+      </div>
       <BadgeDistance distanceKm={m.distance_km} />
       <span className={`badge-base text-[10px] ${contratBadge.classes}`}>{contratBadge.label}</span>
 
