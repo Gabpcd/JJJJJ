@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, X, Check, ExternalLink } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -126,14 +126,40 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
   );
 }
 
+function playNotifSound() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+    setTimeout(() => ctx.close(), 300);
+  } catch { /* silence errors */ }
+}
+
 export function BadgeNotification() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const location = useLocation();
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [bouncing, setBouncing] = useState(false);
-  const prevCount = useRef(0);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    try { return localStorage.getItem('notif_sound') !== 'off'; } catch { return true; }
+  });
 
+  // Persist sound preference
+  useEffect(() => {
+    try { localStorage.setItem('notif_sound', soundEnabled ? 'on' : 'off'); } catch {}
+  }, [soundEnabled]);
+
+  // Load count + realtime
   useEffect(() => {
     if (!user) return;
     const load = async () => {
@@ -143,7 +169,6 @@ export function BadgeNotification() {
         .eq('destinataire_id', user.id)
         .eq('lue', false);
       setCount(c || 0);
-      prevCount.current = c || 0;
     };
     load();
 
@@ -158,23 +183,37 @@ export function BadgeNotification() {
         setCount(prev => prev + 1);
         setBouncing(true);
         setTimeout(() => setBouncing(false), 350);
+        if (document.visibilityState === 'visible' && soundEnabled) {
+          playNotifSound();
+        }
         const n = payload.new as any;
-        toast({
-          title: n.titre,
-          description: n.corps?.substring(0, 80),
-        });
+        toast({ title: n.titre, description: n.corps?.substring(0, 80) });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, soundEnabled]);
+
+  // Reset count when visiting /notifications
+  useEffect(() => {
+    if (!user) return;
+    if (location.pathname.endsWith('/notifications')) {
+      setCount(0);
+      supabase
+        .from('notifications')
+        .update({ lue: true, lue_le: new Date().toISOString() } as any)
+        .eq('destinataire_id', user.id)
+        .eq('lue', false)
+        .then();
+    }
+  }, [location.pathname, user]);
 
   return (
     <>
       <button onClick={() => setOpen(true)} className="relative text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors p-2">
         <Bell className="h-5 w-5" />
         {count > 0 && (
-          <span className={`absolute -top-0.5 -right-0.5 h-4 min-w-[16px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 ${bouncing ? 'animate-bounce-badge' : ''}`}>
-            {count > 99 ? '99+' : count}
+          <span className={`absolute -top-0.5 -right-0.5 h-[18px] min-w-[18px] flex items-center justify-center rounded-full bg-[#EF4444] text-white text-[10px] font-bold px-1 leading-none ${bouncing ? 'animate-bounce-badge' : ''}`}>
+            {count > 9 ? '9+' : count}
           </span>
         )}
       </button>
