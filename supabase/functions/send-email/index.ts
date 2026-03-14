@@ -184,7 +184,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             <span style="color:#334155;">💰 Net à payer : <strong>${data.net} €</strong></span>
           `)}
           <p style="color:#334155;">N'oubliez pas d'évaluer l'établissement !</p>
-          ${BUTTON('Voir mes gains →', `${APP_URL}/soignant/gains`)}
+          ${BUTTON('Voir mes gains →', `${APP_URL}/soignant/mes-gains`)}
           ${SECURITY_NOTE}
         `),
       };
