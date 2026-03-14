@@ -60,8 +60,8 @@ export default function AdminModeration() {
 
   const validerDocument = async (id: string) => {
     const { error } = await supabase.from('documents_soignants').update({ statut_verification: 'VALIDE', verifie_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Document validé' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Document validé');
     charger();
   };
 
