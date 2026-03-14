@@ -26,6 +26,7 @@ import { JaugeTauxRemplissage } from '@/components/dashboard/JaugeTauxRemplissag
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
+import { CompteurSoignantsDisponibles } from '@/components/dashboard/CompteurSoignantsDisponibles';
 
 export default function DashboardEtablissement() {
   usePageTitle('Dashboard');
