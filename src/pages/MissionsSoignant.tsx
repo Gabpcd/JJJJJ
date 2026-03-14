@@ -193,7 +193,7 @@ export default function MissionsSoignant() {
         </>
       )}
 
-      {loading ? <ChargementPage /> : (
+      {loading ? <SkeletonList count={4} /> : (
         <>
           {onglet === 'disponibles' && (
             groupes.length > 0 ? (
