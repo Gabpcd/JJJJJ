@@ -65,6 +65,7 @@ import InfirmiereLiberal from "./pages/InfirmiereLiberal";
 import PharmacieRemplacement from "./pages/PharmacieRemplacement";
 import BlogListe from "./pages/BlogListe";
 import BlogArticle from "./pages/BlogArticle";
+import APropos from "./pages/APropos";
 
 const queryClient = new QueryClient();
 
