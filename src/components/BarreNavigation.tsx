@@ -6,6 +6,7 @@ import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
 import { supabase } from '@/integrations/supabase/client';
 import { BadgeNotification } from '@/components/PanneauNotifications';
+import { AvatarDisplay } from '@/components/AvatarUpload';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
