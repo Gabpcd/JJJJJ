@@ -180,7 +180,7 @@ export default function DashboardSoignant() {
     load();
   }, [user]);
 
-  if (loading || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading || !soignant) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
   const profil = calculerCompletionProfil(soignant);
   const score = soignant.score_fiabilite ?? 50;
