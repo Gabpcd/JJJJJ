@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EtatVide, IllustrationBouclier } from '@/components/EtatVide';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
