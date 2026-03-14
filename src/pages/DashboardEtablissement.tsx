@@ -163,7 +163,7 @@ export default function DashboardEtablissement() {
     else { afficherNotification({ type: 'succes', message: 'Mission annulée.' }); charger(); }
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
