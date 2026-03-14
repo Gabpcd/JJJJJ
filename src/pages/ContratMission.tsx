@@ -19,6 +19,7 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { logger } from '@/lib/logger';
 
 export default function ContratMission() {
+  usePageTitle('Contrat');
   const { id } = useParams();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();

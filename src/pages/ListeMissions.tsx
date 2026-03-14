@@ -30,6 +30,7 @@ const STATUTS_FILTRES = [
 type GroupeMission = { type: 'single'; mission: any } | { type: 'serie'; serieId: string; missions: any[] };
 
 export default function ListeMissions() {
+  usePageTitle('Mes missions');
   const navigate = useNavigate();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();

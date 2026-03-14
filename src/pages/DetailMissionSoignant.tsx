@@ -49,6 +49,7 @@ function calculerCompletionProfil(s: SoignantData) {
 }
 
 export default function DetailMissionSoignant() {
+  usePageTitle('Détail mission');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();

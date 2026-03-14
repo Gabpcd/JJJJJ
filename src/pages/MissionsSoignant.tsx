@@ -35,6 +35,7 @@ interface SoignantData {
 type GroupeItem = { type: 'single'; mission: any } | { type: 'serie'; serieId: string; missions: any[] };
 
 export default function MissionsSoignant() {
+  usePageTitle('Missions');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [onglet, setOnglet] = useState<Onglet>('disponibles');

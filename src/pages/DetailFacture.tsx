@@ -16,6 +16,7 @@ const STATUT_LABELS: Record<string, string> = {
 };
 
 export default function DetailFacture() {
+  usePageTitle('Détail facture');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
