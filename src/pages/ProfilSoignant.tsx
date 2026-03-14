@@ -11,6 +11,7 @@ import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle } from 'lucide-react';
+import { EncartInvitation } from '@/components/EncartInvitation';
 import { BadgesGamification, BadgeStats } from '@/components/BadgesGamification';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
@@ -356,6 +357,13 @@ export default function ProfilSoignant() {
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>
       </form>
+
+      {/* Inviter des collègues */}
+      {codeParrainage && (
+        <div className="max-w-2xl mt-8">
+          <EncartInvitation codeParrainage={codeParrainage} />
+        </div>
+      )}
 
       {/* Parrainage */}
       <div className="max-w-2xl mt-8">

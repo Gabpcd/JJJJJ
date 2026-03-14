@@ -1835,6 +1835,7 @@ export type Database = {
           numero_secu: string | null
           numero_tva: string | null
           parraine_par: string | null
+          premiere_mission_le: string | null
           prenom: string
           prevoyance_fournisseur: string | null
           prevoyance_inscrit: boolean | null
@@ -1896,6 +1897,7 @@ export type Database = {
           numero_secu?: string | null
           numero_tva?: string | null
           parraine_par?: string | null
+          premiere_mission_le?: string | null
           prenom: string
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
@@ -1957,6 +1959,7 @@ export type Database = {
           numero_secu?: string | null
           numero_tva?: string | null
           parraine_par?: string | null
+          premiere_mission_le?: string | null
           prenom?: string
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null

@@ -13,6 +13,7 @@ import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatMission } from '@/components/ChatMission';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { BlocConformite } from '@/components/BlocConformite';
+import { BandeauGraceDocuments } from '@/components/BandeauGraceDocuments';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -86,7 +87,7 @@ export default function DetailMissionSoignant() {
           type_paiement_soignant, numero_note_honoraires,
           yousign_statut
         `).eq('id', id).single(),
-        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, heures_cumulees').eq('id', user.id).single(),
+        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, heures_cumulees, premiere_mission_le').eq('id', user.id).single(),
       ]);
       if (m) {
         setMission(m);
@@ -135,7 +136,10 @@ export default function DetailMissionSoignant() {
     etablissement?.adresse_lat, etablissement?.adresse_lng
   );
   const completionProfil = calculerCompletionProfil(soignant);
-  const peutPostuler = completionProfil >= 100 && soignant.tous_documents_valides;
+  const premiereMissionLe = (soignant as any).premiere_mission_le;
+  const enPeriodeGrace = premiereMissionLe && !soignant.tous_documents_valides &&
+    new Date(premiereMissionLe).getTime() + 7 * 24 * 60 * 60 * 1000 > Date.now();
+  const peutPostuler = completionProfil >= 100 && (soignant.tous_documents_valides || enPeriodeGrace);
   const estAssigne = mission.soignant_assigne_id === user!.id;
   const estOuverte = mission.statut === 'OUVERTE';
   const estTerminee = mission.statut === 'TERMINEE';
@@ -262,6 +266,14 @@ export default function DetailMissionSoignant() {
       <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary mb-4 hover:underline">
         <ArrowLeft className="h-4 w-4" /> Retour
       </button>
+
+      {/* Bandeau grâce documents */}
+      {enPeriodeGrace && (
+        <BandeauGraceDocuments
+          premiereMissionLe={premiereMissionLe}
+          tousDocumentsValides={soignant.tous_documents_valides}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Col 1 — Infos */}

@@ -26,6 +26,7 @@ import { JaugeTauxRemplissage } from '@/components/dashboard/JaugeTauxRemplissag
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
+import { CompteurSoignantsDisponibles } from '@/components/dashboard/CompteurSoignantsDisponibles';
 
 export default function DashboardEtablissement() {
   usePageTitle('Dashboard');
@@ -288,6 +289,13 @@ export default function DashboardEtablissement() {
             <Users className="h-4 w-4" /> Mon groupe
           </button>
         )}
+      </div>
+
+      {/* Compteur soignants disponibles */}
+      <div className="mb-6">
+        <FadeInView delay={50}>
+          <CompteurSoignantsDisponibles etablissementId={user!.id} />
+        </FadeInView>
       </div>
 
       {/* KPI row 1 */}

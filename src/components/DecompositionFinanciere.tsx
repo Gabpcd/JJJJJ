@@ -112,9 +112,12 @@ export function DecompositionFinanciere({ mission, etablissement }: Decompositio
         </div>
       </div>
 
-      {/* A2: Mention convention collective */}
+      {/* A2: Mention convention collective + charges patronales */}
       <p className="text-[10px] text-muted-foreground/60 italic mt-4">
         Majorations indicatives. L'établissement est responsable d'appliquer les taux de sa convention collective.
+      </p>
+      <p className="text-[10px] text-muted-foreground/60 italic mt-1">
+        Montants indicatifs hors charges patronales légales (CFP, taxe d'apprentissage). L'établissement reste responsable de ses déclarations sociales.
       </p>
     </div>
   );
