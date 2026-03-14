@@ -134,7 +134,7 @@ export default function ListeMissions() {
     }
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonList count={4} /></LayoutApp>;
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
