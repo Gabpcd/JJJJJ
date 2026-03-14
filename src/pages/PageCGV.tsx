@@ -9,6 +9,7 @@ const TOC = [
   { id: 'art5', label: 'Article 5 — Facturation et paiement' },
   { id: 'art6', label: 'Article 6 — Programme Free Transition' },
   { id: 'art7', label: 'Article 7 — Secteur public et affacturage' },
+  { id: 'art8', label: 'Article 8 — Non-sollicitation' },
 ];
 
 export default function PageCGV() {
@@ -156,6 +157,13 @@ export default function PageCGV() {
           <li><strong>Affacturage</strong> : Soin Direct se réserve le droit de recourir à l'affacturage pour les créances sur le secteur public, sans impact pour l'Établissement. En cas de cession de créance, l'Établissement en sera informé conformément aux dispositions des articles L.313-23 et suivants du Code monétaire et financier (cession Dailly).</li>
         </ul>
         <p>Les frais de service applicables au secteur public sont identiques à ceux du secteur privé (grille de l'article 3).</p>
+      </section>
+
+      {/* Article 8 */}
+      <section id="art8">
+        <h2 className="text-xl font-bold text-primary mb-4">Article 8 — Non-sollicitation</h2>
+        <p className="mb-3">L'Établissement s'engage à ne pas recruter, embaucher ou solliciter directement, par quelque moyen que ce soit, un Soignant rencontré par l'intermédiaire de la Plateforme, pendant une durée de douze (12) mois suivant la dernière mission réalisée via Soin Direct.</p>
+        <p>En cas de manquement, l'Établissement sera redevable d'une indemnité forfaitaire de cinq mille (5 000) euros par Soignant sollicité, sans préjudice de dommages et intérêts complémentaires.</p>
       </section>
     </LayoutLegal>
   );
