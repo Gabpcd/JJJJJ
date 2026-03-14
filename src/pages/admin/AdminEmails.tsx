@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
   BIENVENUE_SOIGNANT: { prenom: 'Marie', lien_profil: 'https://app.soindirect.com/soignant/profil' },
@@ -89,9 +89,9 @@ export default function AdminEmails() {
     });
     setSending(null);
     if (error) {
-      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+      toast.error(error.message);
     } else {
-      toast({ title: 'Email test envoyé', description: 'Email test envoyé à votre adresse.' });
+      toast.success('Email test envoyé à votre adresse');
       chargerHistorique();
     }
   };

@@ -4,7 +4,7 @@ import { SEOHead } from '@/components/SEOHead';
 import { articlesBlog, getTagClasses, getArticleGradient } from '@/lib/blog-data';
 import { ArrowLeft, ArrowRight, Clock, Calendar, Link2, Linkedin, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -73,7 +73,7 @@ export default function BlogArticle() {
 
   const copierLien = () => {
     navigator.clipboard.writeText(url);
-    toast({ title: 'Lien copié !', description: 'Le lien de l\'article a été copié dans le presse-papiers.' });
+    toast.success('Lien copié dans le presse-papiers');
   };
 
   return (

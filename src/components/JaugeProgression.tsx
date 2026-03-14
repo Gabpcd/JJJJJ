@@ -36,7 +36,7 @@ export function JaugeProgression({
             >
               <div className={`h-4 w-4 rounded-full border-2 ${
                 atteint
-                  ? 'bg-purple-500 border-purple-500'
+                  ? 'bg-primary border-primary'
                   : 'bg-card border-muted-foreground/30'
               }`} />
             </div>

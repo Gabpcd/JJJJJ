@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 const PREMIUM_FEATURES = [
   { icone: Zap, label: 'Accès prioritaire aux missions' },
@@ -31,14 +31,14 @@ export default function PremiumSoignant() {
   const inscrire = async () => {
     const trimmed = email.trim();
     if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      toast({ title: 'Email invalide', variant: 'destructive' });
+      toast.error('Email invalide');
       return;
     }
     setSubmitting(true);
     const { error } = await (supabase.from('liste_attente_premium' as any) as any).insert({ email: trimmed, type_offre: 'PREMIUM', role_demandeur: 'SOIGNANT' });
     setSubmitting(false);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: '✅ Inscrit(e) à la liste d\'attente !' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Inscrit(e) à la liste d\'attente !');
     setEmail('');
   };
 

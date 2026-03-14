@@ -16,7 +16,7 @@ export function FooterLegal() {
           <span>|</span>
           <a href="mailto:contact@soindirect.com" className="hover:text-primary hover:underline">Contact</a>
         </div>
-        <p className="text-[10px] text-muted-foreground/60 mt-2">© 2026 Soin Direct SAS — Tous droits réservés</p>
+        <p className="text-[10px] text-muted-foreground/60 mt-2">© {new Date().getFullYear()} Soin Direct SAS — Tous droits réservés</p>
       </div>
     </footer>
   );

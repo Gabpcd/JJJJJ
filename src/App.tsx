@@ -9,6 +9,7 @@ import { RouteProtegee } from "@/components/RouteProtegee";
 import { PageTransition } from "@/components/PageTransition";
 import { ChargementPage } from "@/components/ChargementPage";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { Toaster } from "sonner";
 
 /* ─── Public pages ─── */
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
@@ -184,6 +185,7 @@ const App = () => (
           <NotificationProvider>
             <BrowserRouter>
               <AppRoutes />
+              <Toaster position="top-right" richColors closeButton />
             </BrowserRouter>
           </NotificationProvider>
         </AuthProvider>

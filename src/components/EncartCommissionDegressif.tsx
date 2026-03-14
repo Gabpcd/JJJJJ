@@ -50,9 +50,9 @@ export function EncartCommissionDegressif({ netEstime, tauxActuel, palierNom }: 
       </div>
 
       {aEconomie && economie > 0 && (
-        <div className="mt-3 flex items-start gap-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-3">
-          <TrendingDown className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-          <p className="text-xs text-green-700 dark:text-green-400">
+        <div className="mt-3 flex items-start gap-2 bg-success/10 border border-success/20 rounded-xl p-3">
+          <TrendingDown className="h-4 w-4 text-success mt-0.5 shrink-0" />
+          <p className="text-xs text-success">
             Avec le palier Découverte ({tauxDecouv}%), cette commission aurait été de{' '}
             <span className="font-bold">{commissionDecouv.toFixed(2)} €</span> — vous économisez{' '}
             <span className="font-bold">{economie.toFixed(2)} €</span> !

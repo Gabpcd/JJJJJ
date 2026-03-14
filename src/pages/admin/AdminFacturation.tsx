@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Loader2, Search, Zap, Download, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 
@@ -65,29 +65,29 @@ export default function AdminFacturation() {
     setGenerating(true);
     const { data, error } = await supabase.rpc('fn_auto_facturation_mensuelle' as any);
     setGenerating(false);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
+    if (error) { toast.error(error.message); return; }
     const result = data as any;
     if (result?.success) {
-      toast({ title: `${result.factures_generees} facture(s) générée(s)` });
+      toast.success(`${result.factures_generees} facture(s) générée(s)`);
       charger();
     } else {
-      toast({ title: 'Erreur', description: result?.error || 'Erreur inconnue', variant: 'destructive' });
+      toast.error(result?.error || 'Erreur inconnue');
     }
   };
 
   const exporterFEC = async () => {
     const annee = new Date().getFullYear();
     const { data, error } = await supabase.rpc('fn_export_fec' as any, { p_annee: annee });
-    if (error) { toast({ title: 'Erreur FEC', description: error.message, variant: 'destructive' }); return; }
+    if (error) { toast.error(error.message); return; }
     const lignes = Array.isArray(data) ? data : [];
-    if (lignes.length === 0) { toast({ title: 'Aucune donnée FEC pour ' + annee }); return; }
+    if (lignes.length === 0) { toast.info('Aucune donnée FEC pour ' + annee); return; }
     const cols = Object.keys(lignes[0]);
     const csv = [cols.join('\t'), ...lignes.map((l: any) => cols.map(c => l[c] ?? '').join('\t'))].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `FEC_${annee}.csv`; a.click();
     URL.revokeObjectURL(url);
-    toast({ title: `FEC ${annee} exporté` });
+    toast.success(`FEC ${annee} exporté`);
   };
 
   const genererRapportPDF = async () => {
@@ -128,7 +128,7 @@ export default function AdminFacturation() {
     });
 
     doc.save(`rapport_mensuel_${new Date().toISOString().slice(0, 7)}.pdf`);
-    toast({ title: 'Rapport PDF généré' });
+    toast.success('Rapport PDF généré');
   };
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;

@@ -181,9 +181,9 @@ export default function DetailFacture() {
 
         {/* Payment info */}
         {facture.statut === 'PAYEE' && facture.date_paiement && (
-          <div className="mt-6 flex items-center gap-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-3">
-            <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-            <p className="text-sm text-green-700 dark:text-green-400">
+          <div className="mt-6 flex items-center gap-2 bg-success/10 border border-success/20 rounded-xl p-3">
+            <CheckCircle className="h-4 w-4 text-success shrink-0" />
+            <p className="text-sm text-success">
               Payée le {format(new Date(facture.date_paiement), 'dd MMMM yyyy', { locale: fr })}
             </p>
           </div>

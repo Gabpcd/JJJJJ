@@ -93,7 +93,7 @@ export function GrilleTarifaire({ paliers }: GrilleTarifaireProps) {
           'Les groupes de santé cumulent les missions de tous leurs établissements pour le palier',
         ].map((txt, i) => (
           <div key={i} className="flex items-start gap-2 text-sm text-foreground">
-            <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+            <Check className="h-4 w-4 text-success mt-0.5 shrink-0" />
             <span>{txt}</span>
           </div>
         ))}

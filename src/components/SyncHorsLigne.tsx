@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { getPointagesEnAttente, sauvegarderPointagesRestants, PointageHorsLigne } from '@/lib/horsLigne';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 export function SyncHorsLigne() {
   const syncing = useRef(false);
@@ -46,12 +46,12 @@ export function SyncHorsLigne() {
     sauvegarderPointagesRestants(echoues);
 
     if (synced > 0) {
-      toast({
-        title: `✅ ${synced} action${synced > 1 ? 's' : ''} synchronisée${synced > 1 ? 's' : ''}`,
-        description: echoues.length > 0
+      toast.success(
+        `${synced} action${synced > 1 ? 's' : ''} synchronisée${synced > 1 ? 's' : ''}`,
+        { description: echoues.length > 0
           ? `${echoues.length} action(s) en attente de réessai.`
-          : 'Vos pointages hors-ligne ont été envoyés.',
-      });
+          : 'Vos pointages hors-ligne ont été envoyés.' }
+      );
     }
     syncing.current = false;
   };

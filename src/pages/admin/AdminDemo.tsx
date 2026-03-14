@@ -6,7 +6,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { CarteKPI } from '@/components/CarteKPI';
 
 export default function AdminDemo() {
@@ -29,9 +29,9 @@ export default function AdminDemo() {
     const { error } = await supabase.rpc('fn_charger_demo_investisseur' as any);
     setLoading(null);
     if (error) {
-      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+      toast.error(error.message);
     } else {
-      toast({ title: 'Données de démo chargées', description: '4 établissements, 12 soignants, 35 missions' });
+      toast.success('Données de démo chargées — 4 établissements, 12 soignants, 35 missions');
       chargerKpi();
     }
   };
@@ -41,9 +41,9 @@ export default function AdminDemo() {
     const { error } = await supabase.rpc('fn_purger_demo' as any);
     setLoading(null);
     if (error) {
-      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+      toast.error(error.message);
     } else {
-      toast({ title: 'Données de démo supprimées', description: 'La base a été nettoyée.' });
+      toast.success('Données de démo supprimées — La base a été nettoyée');
       chargerKpi();
     }
   };

@@ -4,7 +4,7 @@ import { fr } from 'date-fns/locale';
 import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { ARTICLES_CODE_TRAVAIL } from '@/constantes/loi';
 import { LigneHoraireJour, type HorairesJour, parseHeure, calculerDuree } from '@/components/LigneHoraireJour';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 
 const JOURS_SEMAINE_DEF = [
@@ -236,7 +236,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
           : j
       )
     );
-    toast({ title: '✅ Horaires appliqués à tous les jours' });
+    toast.success('Horaires appliqués à tous les jours');
   }, [horairesParJour]);
 
   const joursEnErreur = new Set(validation.erreurs.flatMap(e => e.joursAffectes || []));
@@ -319,7 +319,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
           {/* Récap hebdo */}
           <div className="border-t border-border mt-3 pt-3 flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Total hebdomadaire :</span>
-            <span className={`font-bold ${validation.totalHebdo > 48 ? 'text-destructive' : validation.totalHebdo > 36 ? 'text-amber-600' : 'text-teal-600'}`}>
+            <span className={`font-bold ${validation.totalHebdo > 48 ? 'text-destructive' : validation.totalHebdo > 36 ? 'text-warning' : 'text-primary'}`}>
               {validation.totalHebdo}h {validation.totalHebdo > 48 && '← 🔴 DÉPASSE 48h !'}
             </span>
           </div>
@@ -330,7 +330,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
       {validation.erreurs.length > 0 && (
         <div className="space-y-2">
           {validation.erreurs.map((e, i) => (
-            <div key={i} className={`flex items-start gap-2 text-xs font-medium ${e.gravite === 'bloquant' ? 'text-destructive' : 'text-amber-600'}`}>
+            <div key={i} className={`flex items-start gap-2 text-xs font-medium ${e.gravite === 'bloquant' ? 'text-destructive' : 'text-warning'}`}>
               {e.gravite === 'bloquant' ? <XCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
               <div>
                 <p>{e.message}</p>
@@ -348,11 +348,11 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
 
       {validation.erreurs.length === 0 && joursActifs.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-medium text-teal-600">
+          <div className="flex items-center gap-2 text-xs font-medium text-primary">
             <CheckCircle2 className="h-4 w-4" />
             Repos inter-créneaux : conforme (≥ 11h)
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-teal-600">
+          <div className="flex items-center gap-2 text-xs font-medium text-primary">
             <CheckCircle2 className="h-4 w-4" />
             Heures hebdomadaires : {validation.totalHebdo}h / 48h — conforme
           </div>
@@ -371,14 +371,14 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
               <div key={key}>
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs font-semibold text-foreground">Semaine ({sem.label})</p>
-                  <span className={`text-xs font-bold ${sem.totalHeures > 48 ? 'text-destructive' : 'text-teal-600'}`}>
+                  <span className={`text-xs font-bold ${sem.totalHeures > 48 ? 'text-destructive' : 'text-primary'}`}>
                     {sem.totalHeures}h {sem.totalHeures > 48 ? '❌' : '✅'}
                   </span>
                 </div>
                 <div className="space-y-0.5">
                   {sem.creneaux.map((c, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs text-foreground">
-                      <span className="text-teal-500">✅</span>
+                      <span className="text-primary">✅</span>
                       <span className="font-medium w-32">
                         {format(new Date(c.debut), 'EEE d MMM', { locale: fr })}
                       </span>

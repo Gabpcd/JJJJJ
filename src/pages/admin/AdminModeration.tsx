@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Shield, FileCheck, MessageSquare, Check, X, Eye } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
@@ -39,36 +39,36 @@ export default function AdminModeration() {
   const resoudreLitige = async (id: string, statut: string) => {
     const resolution = statut === 'FERME' ? 'Fermé par admin' : `Résolu en faveur du ${statut === 'RESOLUE_SOIGNANT' ? 'soignant' : 'établissement'}`;
     const { data, error } = await supabase.rpc('fn_resoudre_litige' as any, { p_litige_id: id, p_statut: statut, p_resolution: resolution });
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Litige résolu' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Litige résolu');
     charger();
   };
 
   const publierEvaluation = async (id: string) => {
     const { error } = await supabase.from('evaluations').update({ visible: true } as any).eq('id', id);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Évaluation publiée' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Évaluation publiée');
     charger();
   };
 
   const supprimerEvaluation = async (id: string) => {
     const { error } = await supabase.from('evaluations').delete().eq('id', id);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Évaluation supprimée' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Évaluation supprimée');
     charger();
   };
 
   const validerDocument = async (id: string) => {
     const { error } = await supabase.from('documents_soignants').update({ statut_verification: 'VALIDE', verifie_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Document validé' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Document validé');
     charger();
   };
 
   const rejeterDocument = async (id: string) => {
     const { error } = await supabase.from('documents_soignants').update({ statut_verification: 'REJETE', verifie_le: new Date().toISOString(), motif_rejet: 'Rejeté par admin' } as any).eq('id', id);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Document rejeté' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Document rejeté');
     charger();
   };
 
