@@ -29,6 +29,7 @@ const PageConfidentialite = lazy(() => import("./pages/PageConfidentialite"));
 const PageMentionsLegales = lazy(() => import("./pages/PageMentionsLegales"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
+const Telecharger = lazy(() => import("./pages/Telecharger"));
 
 /* ─── Soignant pages ─── */
 const DashboardSoignant = lazy(() => import("./pages/DashboardSoignant"));
@@ -94,6 +95,7 @@ function AppRoutes() {
           <Route path="/blog" element={<BlogListe />} />
           <Route path="/blog/:slug" element={<BlogArticle />} />
           <Route path="/a-propos" element={<APropos />} />
+          <Route path="/telecharger" element={<Telecharger />} />
           <Route path="/connexion" element={<PageConnexion />} />
           <Route path="/confirmer-email" element={<ConfirmerEmail />} />
           <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
