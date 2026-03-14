@@ -28,6 +28,7 @@ import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
 
 export default function DashboardEtablissement() {
+  usePageTitle('Dashboard');
   const navigate = useNavigate();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();

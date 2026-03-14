@@ -41,6 +41,7 @@ function scoreBadgeClasses(score: number): string {
 }
 
 export default function DetailMission() {
+  usePageTitle('Détail mission');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();

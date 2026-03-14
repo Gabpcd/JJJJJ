@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { CheckAnimation } from '@/components/CheckAnimation';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
