@@ -4,9 +4,12 @@ interface SEOHeadProps {
   title: string;
   description: string;
   url?: string;
+  image?: string;
 }
 
-export function SEOHead({ title, description, url }: SEOHeadProps) {
+const DEFAULT_OG_IMAGE = 'https://app.soindirect.com/og-default.png';
+
+export function SEOHead({ title, description, url, image }: SEOHeadProps) {
   useEffect(() => {
     document.title = title;
 
@@ -20,18 +23,23 @@ export function SEOHead({ title, description, url }: SEOHeadProps) {
       el.setAttribute('content', content);
     };
 
+    const ogImage = image || DEFAULT_OG_IMAGE;
+
     setMeta('name', 'description', description);
     setMeta('property', 'og:title', title);
     setMeta('property', 'og:description', description);
-    if (url) setMeta('property', 'og:url', url);
+    setMeta('property', 'og:image', ogImage);
     setMeta('property', 'og:type', 'website');
+    if (url) setMeta('property', 'og:url', url);
+    setMeta('name', 'twitter:card', 'summary_large_image');
     setMeta('name', 'twitter:title', title);
     setMeta('name', 'twitter:description', description);
+    setMeta('name', 'twitter:image', ogImage);
 
     return () => {
       document.title = 'Soin Direct — Staffing médical simplifié';
     };
-  }, [title, description, url]);
+  }, [title, description, url, image]);
 
   return null;
 }
