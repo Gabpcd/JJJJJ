@@ -9,6 +9,7 @@ const TOC = [
   { id: 'art5', label: 'Article 5 — Facturation et paiement' },
   { id: 'art6', label: 'Article 6 — Programme Free Transition' },
   { id: 'art7', label: 'Article 7 — Secteur public et affacturage' },
+  { id: 'art8', label: 'Article 8 — Non-sollicitation' },
 ];
 
 export default function PageCGV() {
