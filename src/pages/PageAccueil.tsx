@@ -95,9 +95,13 @@ export default function PageAccueil() {
             <HeartPulse className="h-7 w-7 text-primary" />
             <span className="text-xl font-bold text-foreground">Soin Direct</span>
           </div>
-          <button onClick={() => navigate('/connexion')} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
-            Se connecter
-          </button>
+          <div className="flex items-center gap-4">
+            <a href="/blog" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Blog</a>
+            <a href="/tarifs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Tarifs</a>
+            <button onClick={() => navigate('/connexion')} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
+              Se connecter
+            </button>
+          </div>
         </div>
       </header>
 
@@ -373,6 +377,7 @@ export default function PageAccueil() {
                 <li><a href="/recruter-soignants" className="hover:text-foreground transition-colors">Recruter des soignants</a></li>
                 <li><a href="/infirmiere-liberale" className="hover:text-foreground transition-colors">Passer en libéral</a></li>
                 <li><a href="/pharmacie-remplacement" className="hover:text-foreground transition-colors">Remplacement pharmacie</a></li>
+                <li><a href="/blog" className="hover:text-foreground transition-colors">Blog</a></li>
               </ul>
             </div>
             {/* Col 4 */}

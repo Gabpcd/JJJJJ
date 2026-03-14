@@ -63,6 +63,8 @@ import DevenirSoignant from "./pages/DevenirSoignant";
 import RecruterSoignants from "./pages/RecruterSoignants";
 import InfirmiereLiberal from "./pages/InfirmiereLiberal";
 import PharmacieRemplacement from "./pages/PharmacieRemplacement";
+import BlogListe from "./pages/BlogListe";
+import BlogArticle from "./pages/BlogArticle";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +78,8 @@ function AppRoutes() {
         <Route path="/recruter-soignants" element={<RecruterSoignants />} />
         <Route path="/infirmiere-liberale" element={<InfirmiereLiberal />} />
         <Route path="/pharmacie-remplacement" element={<PharmacieRemplacement />} />
+        <Route path="/blog" element={<BlogListe />} />
+        <Route path="/blog/:slug" element={<BlogArticle />} />
         <Route path="/connexion" element={<PageConnexion />} />
         <Route path="/confirmer-email" element={<ConfirmerEmail />} />
         <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
