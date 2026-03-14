@@ -87,7 +87,7 @@ export default function AdminFacturation() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `FEC_${annee}.csv`; a.click();
     URL.revokeObjectURL(url);
-    toast({ title: `FEC ${annee} exporté` });
+    toast.success(`FEC ${annee} exporté`);
   };
 
   const genererRapportPDF = async () => {

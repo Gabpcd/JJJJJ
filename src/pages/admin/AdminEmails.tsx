@@ -89,9 +89,9 @@ export default function AdminEmails() {
     });
     setSending(null);
     if (error) {
-      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+      toast.error(error.message);
     } else {
-      toast({ title: 'Email test envoyé', description: 'Email test envoyé à votre adresse.' });
+      toast.success('Email test envoyé à votre adresse');
       chargerHistorique();
     }
   };

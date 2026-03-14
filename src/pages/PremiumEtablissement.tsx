@@ -30,8 +30,8 @@ export default function PremiumEtablissement() {
     setSubmitting(true);
     const { error } = await (supabase.from('liste_attente_premium' as any) as any).insert({ email: trimmed, type_offre: 'PRO_ETABLISSEMENT', role_demandeur: 'ADMIN_ETABLISSEMENT' });
     setSubmitting(false);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: '✅ Inscrit(e) à la liste d\'attente !' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Inscrit(e) à la liste d\'attente !');
     setEmail('');
   };
 

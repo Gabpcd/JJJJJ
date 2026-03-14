@@ -73,7 +73,7 @@ export default function BlogArticle() {
 
   const copierLien = () => {
     navigator.clipboard.writeText(url);
-    toast({ title: 'Lien copié !', description: 'Le lien de l\'article a été copié dans le presse-papiers.' });
+    toast.success('Lien copié dans le presse-papiers');
   };
 
   return (

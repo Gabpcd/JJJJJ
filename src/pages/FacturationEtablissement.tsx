@@ -207,7 +207,7 @@ export default function FacturationEtablissement() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <FadeInView delay={0}><CarteKPI icone={Clock} valeur={`${kpi.enAttente.toFixed(0)} €`} label="Commissions en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" /></FadeInView>
         <FadeInView delay={100}><CarteKPI icone={FileText} valeur={`${kpi.enCours.toFixed(0)} €`} label="Factures en cours" couleurIcone="text-primary" couleurFond="bg-primary/10" /></FadeInView>
-        <FadeInView delay={200}><CarteKPI icone={CheckCircle} valeur={`${kpi.totalPaye.toFixed(0)} €`} label="Total payé" couleurIcone="text-green-600" couleurFond="bg-green-100 dark:bg-green-900/20" /></FadeInView>
+        <FadeInView delay={200}><CarteKPI icone={CheckCircle} valeur={`${kpi.totalPaye.toFixed(0)} €`} label="Total payé" couleurIcone="text-success" couleurFond="bg-success/10" /></FadeInView>
       </div>
 
       {/* Missions non facturées */}

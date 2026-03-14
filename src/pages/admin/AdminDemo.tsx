@@ -41,9 +41,9 @@ export default function AdminDemo() {
     const { error } = await supabase.rpc('fn_purger_demo' as any);
     setLoading(null);
     if (error) {
-      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+      toast.error(error.message);
     } else {
-      toast({ title: 'Données de démo supprimées', description: 'La base a été nettoyée.' });
+      toast.success('Données de démo supprimées — La base a été nettoyée');
       chargerKpi();
     }
   };

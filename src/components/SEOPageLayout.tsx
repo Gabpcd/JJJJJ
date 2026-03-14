@@ -51,7 +51,7 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
           <h2 className="text-2xl md:text-3xl font-bold mb-4">Prêt à commencer ?</h2>
           <button
             onClick={() => navigate(ctaHref)}
-            className="inline-flex items-center gap-2 bg-white text-primary font-semibold px-8 py-3 rounded-lg hover:bg-white/90 transition-colors text-base"
+            className="inline-flex items-center gap-2 bg-primary-foreground text-primary font-semibold px-8 py-3 rounded-lg hover:bg-primary-foreground/90 transition-colors text-base"
           >
             {ctaText} <ArrowRight className="h-4 w-4" />
           </button>

@@ -185,6 +185,7 @@ const App = () => (
           <NotificationProvider>
             <BrowserRouter>
               <AppRoutes />
+              <Toaster position="top-right" richColors closeButton />
             </BrowserRouter>
           </NotificationProvider>
         </AuthProvider>

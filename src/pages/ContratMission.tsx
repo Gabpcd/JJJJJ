@@ -197,9 +197,9 @@ export default function ContratMission() {
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               {contrat.signature_soignant ? (
-                <CheckCircle className="h-5 w-5 text-green-600" />
+                <CheckCircle className="h-5 w-5 text-success" />
               ) : (
-                <Clock className="h-5 w-5 text-yellow-600" />
+                <Clock className="h-5 w-5 text-warning" />
               )}
               <span className="text-sm text-foreground">
                 Soignant(e) : {contrat.signature_soignant

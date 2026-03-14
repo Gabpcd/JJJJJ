@@ -378,7 +378,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
                 <div className="space-y-0.5">
                   {sem.creneaux.map((c, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs text-foreground">
-                      <span className="text-teal-500">✅</span>
+                      <span className="text-primary">✅</span>
                       <span className="font-medium w-32">
                         {format(new Date(c.debut), 'EEE d MMM', { locale: fr })}
                       </span>

@@ -187,7 +187,7 @@ export function BadgeNotification() {
           playNotifSound();
         }
         const n = payload.new as any;
-        toast({ title: n.titre, description: n.corps?.substring(0, 80) });
+        toast.info(n.titre, { description: n.corps?.substring(0, 80) });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };

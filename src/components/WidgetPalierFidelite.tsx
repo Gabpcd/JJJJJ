@@ -114,9 +114,9 @@ export function WidgetPalierFidelite({ etab, paliers, missionsCeMois }: WidgetPa
       {/* Économie */}
       {economiePourcent > 0 && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <TrendingDown className="h-4 w-4 text-green-600" />
-          <span>
-            Vous économisez <span className="font-bold text-green-600">{economiePourcent.toFixed(1)}%</span> par rapport au taux Découverte
+           <TrendingDown className="h-4 w-4 text-success" />
+           <span>
+             Vous économisez <span className="font-bold text-success">{economiePourcent.toFixed(1)}%</span> par rapport au taux Découverte
           </span>
         </div>
       )}

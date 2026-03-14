@@ -67,8 +67,8 @@ export default function AdminModeration() {
 
   const rejeterDocument = async (id: string) => {
     const { error } = await supabase.from('documents_soignants').update({ statut_verification: 'REJETE', verifie_le: new Date().toISOString(), motif_rejet: 'Rejeté par admin' } as any).eq('id', id);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Document rejeté' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Document rejeté');
     charger();
   };
 
