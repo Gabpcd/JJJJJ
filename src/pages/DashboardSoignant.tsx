@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SkeletonDashboard } from '@/components/SkeletonCard';
+import { FadeInView } from '@/components/FadeInView';
 import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin } from 'lucide-react';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
