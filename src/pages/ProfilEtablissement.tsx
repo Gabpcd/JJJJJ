@@ -167,7 +167,17 @@ export default function ProfilEtablissement() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <h1 className="text-xl font-bold text-foreground mb-6">Profil de l'établissement</h1>
+      <div className="flex items-center gap-4 mb-6">
+        <AvatarUpload
+          src={(form as any).logoUrl}
+          prenom={form.nom}
+          nom=""
+          size={96}
+          mode="etablissement"
+          onUploaded={(url) => setForm(prev => ({ ...prev, logoUrl: url } as any))}
+        />
+        <h1 className="text-xl font-bold text-foreground">Profil de l'établissement</h1>
+      </div>
 
       {noteMoyenne && noteMoyenne.total > 0 && (
         <div className="card-base mb-6">
