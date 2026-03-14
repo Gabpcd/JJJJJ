@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { SearchX, Briefcase, History, AlertTriangle } from 'lucide-react';
+import { Briefcase, History, AlertTriangle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
@@ -211,8 +211,9 @@ export default function MissionsSoignant() {
                 })}
               </div>
             ) : (
-              <EtatVide icone={SearchX} titre="Aucune mission disponible pour votre profil"
-                sousTitre={`De nouvelles missions pour les ${getLabelProfession(soignant.profession)} sont publiées régulièrement. Revenez bientôt !`} />
+              <EtatVide illustration={<IllustrationBoussole />} titre="Aucune mission pour le moment"
+                sousTitre="Les missions apparaîtront ici dès qu'un établissement en publiera une correspondant à votre profil."
+                boutonLabel="Rechercher des missions →" boutonRoute="/soignant/recherche-missions" />
             )
           )}
 

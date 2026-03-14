@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { ClipboardPlus, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteMission } from '@/components/CarteMission';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
-import { EtatVide } from '@/components/EtatVide';
+import { EtatVide, IllustrationMegaphone } from '@/components/EtatVide';
 import { ChargementPage } from '@/components/ChargementPage';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { useAuth } from '@/contexts/AuthContext';
@@ -197,9 +197,9 @@ export default function ListeMissions() {
           })}
         </div>
       ) : (
-        <EtatVide icone={ClipboardPlus} titre="Publiez votre première mission"
-          sousTitre="Les soignants qualifiés seront notifiés immédiatement"
-          boutonLabel="Publier une mission" boutonRoute="/etablissement/missions/creer" />
+        <EtatVide illustration={<IllustrationMegaphone />} titre="Publiez votre première mission"
+          sousTitre="Trouvez un soignant qualifié en quelques heures."
+          boutonLabel="Créer une mission →" boutonRoute="/etablissement/missions/creer" />
       )}
 
       <FABCreerMission />

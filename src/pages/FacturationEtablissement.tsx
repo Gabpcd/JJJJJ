@@ -7,7 +7,7 @@ import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw } 
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
 import { BadgePalier } from '@/components/BadgePalier';
 import { FactureChorus } from '@/components/FactureChorus';
 import { PaiementVirement } from '@/components/PaiementVirement';
@@ -343,7 +343,7 @@ export default function FacturationEtablissement() {
             ))}
           </div>
         ) : (
-          <EtatVide icone={FileText} titre="Aucune facture" sousTitre="Les factures apparaîtront ici une fois générées" />
+          <EtatVide illustration={<IllustrationCalculatrice />} titre="Aucune facture" sousTitre="Les factures seront générées automatiquement après vos premières missions." />
         )}
       </div>
     </LayoutApp>

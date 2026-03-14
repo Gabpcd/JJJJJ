@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EtatVide, IllustrationBouclier } from '@/components/EtatVide';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -70,7 +70,7 @@ export default function ExclusionsEtablissement() {
       </h1>
 
       {exclusions.length === 0 ? (
-        <EtatVide icone={Ban} titre="Aucune exclusion" sousTitre="Vous n'avez bloqué aucun soignant." />
+        <EtatVide illustration={<IllustrationBouclier />} titre="Aucune exclusion" sousTitre="Vous n'avez bloqué personne." />
       ) : (
         <div className="space-y-3">
           {exclusions.map((e: any) => (

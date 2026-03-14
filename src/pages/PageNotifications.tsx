@@ -5,7 +5,8 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Bell, ExternalLink, Trash2 } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
+import { IllustrationCloche } from '@/components/EtatVide';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { UserRole } from '@/lib/types';
@@ -98,7 +99,7 @@ export default function PageNotifications({ role }: { role: UserRole }) {
       </div>
 
       {filtered.length === 0 ? (
-        <EtatVide icone={Bell} titre="Aucune notification" sousTitre="Vous serez notifié(e) ici en temps réel." />
+        <EtatVide illustration={<IllustrationCloche />} titre="Tout est lu !" sousTitre="Vous n'avez aucune notification." />
       ) : (
         <div className="space-y-2">
           {filtered.map((n: any) => (

@@ -7,6 +7,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { FileText } from 'lucide-react';
+import { IllustrationStylo } from '@/components/EtatVide';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { UserRole } from '@/lib/types';
@@ -52,7 +53,7 @@ export default function ListeContrats({ role }: { role: UserRole }) {
       </div>
 
       {filtered.length === 0 ? (
-        <EtatVide icone={FileText} titre="Aucun contrat" sousTitre="Les contrats seront générés automatiquement lors de l'acceptation des missions." />
+        <EtatVide illustration={<IllustrationStylo />} titre="Aucun contrat" sousTitre="Vos contrats apparaîtront ici après avoir accepté une mission." />
       ) : (
         <div className="space-y-3">
           {filtered.map((c: any) => (
