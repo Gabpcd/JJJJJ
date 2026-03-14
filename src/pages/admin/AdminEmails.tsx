@@ -74,7 +74,7 @@ export default function AdminEmails() {
     setHistLoading(true);
     const { data } = await supabase
       .from('emails_envoyes')
-      .select('*')
+      .select('id, type, sujet, destinataire_email, destinataire_id, statut, erreur, provider_id, cree_le')
       .order('cree_le', { ascending: false })
       .limit(20);
     setHistorique(data || []);
