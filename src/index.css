@@ -147,7 +147,7 @@
   }
 
   .btn-secondary {
-    @apply bg-card border-2 border-primary text-primary hover:bg-primary/5 rounded-xl px-6 py-3 font-semibold transition-all duration-200;
+    @apply bg-card border-2 border-primary text-primary hover:bg-primary/5 active:scale-[0.97] rounded-xl px-6 py-3 font-semibold transition-all duration-150;
   }
 
   .btn-danger {
