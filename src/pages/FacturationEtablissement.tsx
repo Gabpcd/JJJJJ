@@ -7,7 +7,7 @@ import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw } 
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
 import { BadgePalier } from '@/components/BadgePalier';
 import { FactureChorus } from '@/components/FactureChorus';
 import { PaiementVirement } from '@/components/PaiementVirement';
