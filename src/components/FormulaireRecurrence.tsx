@@ -330,7 +330,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
       {validation.erreurs.length > 0 && (
         <div className="space-y-2">
           {validation.erreurs.map((e, i) => (
-            <div key={i} className={`flex items-start gap-2 text-xs font-medium ${e.gravite === 'bloquant' ? 'text-destructive' : 'text-amber-600'}`}>
+            <div key={i} className={`flex items-start gap-2 text-xs font-medium ${e.gravite === 'bloquant' ? 'text-destructive' : 'text-warning'}`}>
               {e.gravite === 'bloquant' ? <XCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
               <div>
                 <p>{e.message}</p>
