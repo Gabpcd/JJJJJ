@@ -6,6 +6,7 @@ import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
 import { supabase } from '@/integrations/supabase/client';
 import { BadgeNotification } from '@/components/PanneauNotifications';
+import { AvatarDisplay } from '@/components/AvatarUpload';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
@@ -78,16 +79,25 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const navigate = useNavigate();
   const { deconnexion, user } = useAuth();
   const [showLiberal, setShowLiberal] = useState(false);
+  const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
 
   useEffect(() => {
-    if (role !== 'SOIGNANT' || !user) return;
-    supabase.from('soignants').select('profession, heures_cumulees, statut_liberal').eq('id', user.id).single()
-      .then(({ data, error }) => {
-        if (error) return;
-        if (data && !PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
-          setShowLiberal(true);
-        }
-      });
+    if (!user) return;
+    if (role === 'SOIGNANT') {
+      supabase.from('soignants').select('profession, heures_cumulees, statut_liberal, prenom, nom, avatar_url').eq('id', user.id).single()
+        .then(({ data }) => {
+          if (!data) return;
+          setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
+          if (!PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
+            setShowLiberal(true);
+          }
+        });
+    } else if (role === 'ADMIN_ETABLISSEMENT') {
+      supabase.from('etablissements').select('nom, logo_url').eq('id', user.id).single()
+        .then(({ data }) => {
+          if (data) setUserInfo({ prenom: data.nom, nom: '', avatarUrl: (data as any).logo_url });
+        });
+    }
   }, [role, user]);
 
   const baseItems = getNavItems(role);
@@ -138,7 +148,21 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-sidebar-border">
+        <div className="p-3 border-t border-sidebar-border space-y-2">
+          {userInfo && (
+            <div className="flex items-center gap-2 px-3 py-2">
+              <AvatarDisplay
+                src={userInfo.avatarUrl}
+                prenom={userInfo.prenom}
+                nom={userInfo.nom}
+                size={32}
+                rounded={role === 'ADMIN_ETABLISSEMENT' ? 'lg' : 'full'}
+              />
+              <span className="text-sm font-medium text-sidebar-foreground truncate">
+                {userInfo.prenom} {userInfo.nom}
+              </span>
+            </div>
+          )}
           <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="sidebar-item w-full text-left text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent">
             <LogOut className="h-5 w-5" /><span>Déconnexion</span>
           </button>

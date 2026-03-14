@@ -11,6 +11,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle } from 'lucide-react';
 import { BadgesGamification, BadgeStats } from '@/components/BadgesGamification';
+import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -49,7 +50,7 @@ export default function ProfilSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage').eq('id', user.id).single().then(({ data }: any) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url').eq('id', user.id).single().then(({ data }: any) => {
       if (data) {
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
@@ -61,6 +62,7 @@ export default function ProfilSoignant() {
         setEmail(data.email);
         setProfession(data.profession);
         setCodeParrainage(data.code_parrainage || '');
+        (setForm as any)(prev => ({ ...prev, avatarUrl: data.avatar_url || '' }));
         setForm({
           prenom: data.prenom, nom: data.nom,
           telephone: data.telephone || '', dateNaissance: data.date_naissance || '',
@@ -214,7 +216,17 @@ export default function ProfilSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <h1 className="text-xl font-bold text-foreground mb-6">Mon profil</h1>
+      <div className="flex items-center gap-4 mb-6">
+        <AvatarUpload
+          src={(form as any).avatarUrl}
+          prenom={form.prenom}
+          nom={form.nom}
+          size={96}
+          mode="soignant"
+          onUploaded={(url) => setForm(prev => ({ ...prev, avatarUrl: url } as any))}
+        />
+        <h1 className="text-xl font-bold text-foreground">Mon profil</h1>
+      </div>
 
       {noteMoyenne && noteMoyenne.total > 0 && (
         <div className="card-base mb-6">

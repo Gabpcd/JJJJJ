@@ -9,6 +9,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2, Download, Trash2, Palette } from 'lucide-react';
+import { AvatarUpload } from '@/components/AvatarUpload';
 
 const CONVENTIONS_COLLECTIVES = [
   { valeur: 'CCN_51_FEHAP', label: 'CCN 51 (FEHAP)' },
@@ -39,11 +40,12 @@ export default function ProfilEtablissement() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent, logo_url').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         setSiret(data.siret);
         setType(data.type);
         setConventionCollective(data.convention_collective || '');
+        (setForm as any)(prev => ({ ...prev, logoUrl: (data as any).logo_url || '' }));
         setForm({
           nom: data.nom, finess: data.finess || '',
           rue: data.adresse_rue || '', ville: data.adresse_ville || '',
@@ -166,7 +168,17 @@ export default function ProfilEtablissement() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <h1 className="text-xl font-bold text-foreground mb-6">Profil de l'établissement</h1>
+      <div className="flex items-center gap-4 mb-6">
+        <AvatarUpload
+          src={(form as any).logoUrl}
+          prenom={form.nom}
+          nom=""
+          size={96}
+          mode="etablissement"
+          onUploaded={(url) => setForm(prev => ({ ...prev, logoUrl: url } as any))}
+        />
+        <h1 className="text-xl font-bold text-foreground">Profil de l'établissement</h1>
+      </div>
 
       {noteMoyenne && noteMoyenne.total > 0 && (
         <div className="card-base mb-6">
