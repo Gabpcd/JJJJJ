@@ -358,6 +358,13 @@ export default function ProfilSoignant() {
         </button>
       </form>
 
+      {/* Inviter des collègues */}
+      {codeParrainage && (
+        <div className="max-w-2xl mt-8">
+          <EncartInvitation codeParrainage={codeParrainage} />
+        </div>
+      )}
+
       {/* Parrainage */}
       <div className="max-w-2xl mt-8">
         <div className="card-base">

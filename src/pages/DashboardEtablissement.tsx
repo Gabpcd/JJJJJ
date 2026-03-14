@@ -291,6 +291,13 @@ export default function DashboardEtablissement() {
         )}
       </div>
 
+      {/* Compteur soignants disponibles */}
+      <div className="mb-6">
+        <FadeInView delay={50}>
+          <CompteurSoignantsDisponibles etablissementId={user!.id} />
+        </FadeInView>
+      </div>
+
       {/* KPI row 1 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <FadeInView delay={0}><CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" /></FadeInView>

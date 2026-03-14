@@ -267,6 +267,14 @@ export default function DetailMissionSoignant() {
         <ArrowLeft className="h-4 w-4" /> Retour
       </button>
 
+      {/* Bandeau grâce documents */}
+      {enPeriodeGrace && (
+        <BandeauGraceDocuments
+          premiereMissionLe={premiereMissionLe}
+          tousDocumentsValides={soignant.tous_documents_valides}
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Col 1 — Infos */}
         <div className="space-y-4">
