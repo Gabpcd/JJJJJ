@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check } from 'lucide-react';
+import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleError } from '@/lib/handleError';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
+import { validerSiret } from '@/lib/luhn';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
   const [asked, setAsked] = useState(false);
