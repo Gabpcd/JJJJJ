@@ -143,7 +143,7 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-200 shadow-sm;
+    @apply bg-primary hover:bg-primary/90 active:scale-[0.97] active:bg-primary/80 text-primary-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150 shadow-sm;
   }
 
   .btn-secondary {
