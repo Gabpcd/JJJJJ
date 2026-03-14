@@ -59,6 +59,7 @@ function isWeekend(debut: string): boolean {
 }
 
 export default function RechercheMissions() {
+  usePageTitle('Recherche missions');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [soignant, setSoignant] = useState<SoignantData | null>(null);

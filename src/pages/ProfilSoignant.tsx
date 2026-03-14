@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 export default function ProfilSoignant() {
+  usePageTitle('Profil');
   const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
   const { role } = useRole();

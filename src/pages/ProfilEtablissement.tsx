@@ -22,6 +22,7 @@ const CONVENTIONS_COLLECTIVES = [
 ];
 
 export default function ProfilEtablissement() {
+  usePageTitle('Profil');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();

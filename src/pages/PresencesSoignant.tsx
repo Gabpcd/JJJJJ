@@ -21,6 +21,7 @@ import { fr } from 'date-fns/locale';
 import { CalendarDays, Clock, CheckCircle } from 'lucide-react';
 
 export default function PresencesSoignant() {
+  usePageTitle('Présences');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();

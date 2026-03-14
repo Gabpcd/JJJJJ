@@ -56,6 +56,7 @@ function calculerCompletionProfil(s: SoignantData) {
 }
 
 export default function DashboardSoignant() {
+  usePageTitle('Dashboard');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [soignant, setSoignant] = useState<SoignantData | null>(null);

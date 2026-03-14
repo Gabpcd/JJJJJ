@@ -128,6 +128,7 @@ function AttestationSante({ userId }: { userId: string }) {
 }
 
 export default function DocumentsSoignant() {
+  usePageTitle('Documents');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [soignant, setSoignant] = useState<any>(null);

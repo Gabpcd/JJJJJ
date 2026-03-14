@@ -13,6 +13,7 @@ import { ClipboardCheck, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 export default function PresencesEtablissement() {
+  usePageTitle('Présences');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [presences, setPresences] = useState<any[]>([]);

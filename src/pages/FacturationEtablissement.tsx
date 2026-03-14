@@ -39,6 +39,7 @@ const STATUT_LABELS: Record<string, string> = {
 
 
 export default function FacturationEtablissement() {
+  usePageTitle('Facturation');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();

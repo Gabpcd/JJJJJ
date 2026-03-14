@@ -24,6 +24,7 @@ const TYPE_MAP: Record<Filtre, string[]> = {
 };
 
 export default function PageNotifications({ role }: { role: UserRole }) {
+  usePageTitle('Notifications');
   const { user } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
