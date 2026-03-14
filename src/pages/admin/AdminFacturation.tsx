@@ -27,6 +27,7 @@ const statutColor: Record<string, string> = {
 };
 
 export default function AdminFacturation() {
+  usePageTitle('Facturation');
   const [factures, setFactures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);

@@ -15,6 +15,7 @@ const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'curren
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 
 export default function AdminDashboard() {
+  usePageTitle('Admin');
   const navigate = useNavigate();
   const [kpi, setKpi] = useState<any>(null);
   const [graphiques, setGraphiques] = useState<any>(null);

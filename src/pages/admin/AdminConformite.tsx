@@ -36,6 +36,7 @@ function getBgCouleur(val: number): string {
 }
 
 export default function AdminConformite() {
+  usePageTitle('Conformité');
   const [data, setData] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
 

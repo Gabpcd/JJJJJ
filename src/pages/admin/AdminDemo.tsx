@@ -10,6 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { CarteKPI } from '@/components/CarteKPI';
 
 export default function AdminDemo() {
+  usePageTitle('Données de démo');
   const [loading, setLoading] = useState<'charger' | 'purger' | null>(null);
   const [kpi, setKpi] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(true);
