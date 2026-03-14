@@ -2173,6 +2173,27 @@ export type Database = {
         }
         Relationships: []
       }
+      tokens_calendrier: {
+        Row: {
+          cree_le: string | null
+          id: string
+          soignant_id: string
+          token: string
+        }
+        Insert: {
+          cree_le?: string | null
+          id?: string
+          soignant_id: string
+          token?: string
+        }
+        Update: {
+          cree_le?: string | null
+          id?: string
+          soignant_id?: string
+          token?: string
+        }
+        Relationships: []
+      }
       tokens_push: {
         Row: {
           actif: boolean | null
