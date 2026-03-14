@@ -53,8 +53,8 @@ export default function AdminModeration() {
 
   const supprimerEvaluation = async (id: string) => {
     const { error } = await supabase.from('evaluations').delete().eq('id', id);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Évaluation supprimée' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Évaluation supprimée');
     charger();
   };
 
