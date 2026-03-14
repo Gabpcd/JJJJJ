@@ -99,7 +99,7 @@ export default function PageNotifications({ role }: { role: UserRole }) {
       </div>
 
       {filtered.length === 0 ? (
-        <EtatVide icone={Bell} titre="Aucune notification" sousTitre="Vous serez notifié(e) ici en temps réel." />
+        <EtatVide illustration={<IllustrationCloche />} titre="Tout est lu !" sousTitre="Vous n'avez aucune notification." />
       ) : (
         <div className="space-y-2">
           {filtered.map((n: any) => (

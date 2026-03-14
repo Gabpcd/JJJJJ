@@ -197,9 +197,9 @@ export default function ListeMissions() {
           })}
         </div>
       ) : (
-        <EtatVide icone={ClipboardPlus} titre="Publiez votre première mission"
-          sousTitre="Les soignants qualifiés seront notifiés immédiatement"
-          boutonLabel="Publier une mission" boutonRoute="/etablissement/missions/creer" />
+        <EtatVide illustration={<IllustrationMegaphone />} titre="Publiez votre première mission"
+          sousTitre="Trouvez un soignant qualifié en quelques heures."
+          boutonLabel="Créer une mission →" boutonRoute="/etablissement/missions/creer" />
       )}
 
       <FABCreerMission />

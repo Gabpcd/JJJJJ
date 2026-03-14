@@ -194,7 +194,7 @@ export default function MesGains() {
             })}
           </Accordion>
         ) : (
-          <EtatVide icone={Banknote} titre="Aucune mission terminée" sousTitre="Vos fiches de paie apparaîtront ici après chaque mission." />
+          <EtatVide illustration={<IllustrationTirelire />} titre="Pas encore de gains" sousTitre="Vos gains apparaîtront ici après votre première mission terminée." />
         )}
       </div>
       <ModalAttestation open={modalAttestation} onClose={() => setModalAttestation(false)} />

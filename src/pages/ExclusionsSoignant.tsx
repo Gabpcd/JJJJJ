@@ -143,7 +143,7 @@ export default function ExclusionsSoignant() {
           </div>
 
           {exclusionsRecues.length === 0 ? (
-            <EtatVide icone={Ban} titre="Aucune exclusion reçue" sousTitre="Aucun établissement ne vous a exclu." />
+            <EtatVide illustration={<IllustrationBouclier />} titre="Aucune exclusion reçue" sousTitre="Aucun établissement ne vous a exclu." />
           ) : (
             <div className="space-y-3">
               {exclusionsRecues.map((e) => (

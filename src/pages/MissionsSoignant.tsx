@@ -211,8 +211,9 @@ export default function MissionsSoignant() {
                 })}
               </div>
             ) : (
-              <EtatVide icone={SearchX} titre="Aucune mission disponible pour votre profil"
-                sousTitre={`De nouvelles missions pour les ${getLabelProfession(soignant.profession)} sont publiées régulièrement. Revenez bientôt !`} />
+              <EtatVide illustration={<IllustrationBoussole />} titre="Aucune mission pour le moment"
+                sousTitre="Les missions apparaîtront ici dès qu'un établissement en publiera une correspondant à votre profil."
+                boutonLabel="Rechercher des missions →" boutonRoute="/soignant/recherche-missions" />
             )
           )}
 

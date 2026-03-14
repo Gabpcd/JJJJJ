@@ -343,7 +343,7 @@ export default function FacturationEtablissement() {
             ))}
           </div>
         ) : (
-          <EtatVide icone={FileText} titre="Aucune facture" sousTitre="Les factures apparaîtront ici une fois générées" />
+          <EtatVide illustration={<IllustrationCalculatrice />} titre="Aucune facture" sousTitre="Les factures seront générées automatiquement après vos premières missions." />
         )}
       </div>
     </LayoutApp>
