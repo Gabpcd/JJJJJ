@@ -4,7 +4,7 @@ import { SEOHead } from '@/components/SEOHead';
 import { articlesBlog, getTagClasses, getArticleGradient } from '@/lib/blog-data';
 import { ArrowLeft, ArrowRight, Clock, Calendar, Link2, Linkedin, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
