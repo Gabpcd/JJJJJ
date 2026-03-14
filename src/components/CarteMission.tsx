@@ -36,7 +36,7 @@ function scoreColor(score: number): string {
   return 'text-destructive';
 }
 
-export function CarteMission({ mission, afficherEtablissement, onDupliquer, onAnnuler, onRepublier }: CarteMissionProps) {
+export const CarteMission = React.memo(function CarteMission({ mission, afficherEtablissement, onDupliquer, onAnnuler, onRepublier }: CarteMissionProps) {
   const navigate = useNavigate();
   const m = mission;
   const debut = new Date(m.debut_le);
@@ -149,4 +149,4 @@ export function CarteMission({ mission, afficherEtablissement, onDupliquer, onAn
       </div>
     </div>
   );
-}
+});

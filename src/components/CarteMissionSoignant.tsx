@@ -1,3 +1,4 @@
+import React from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { BadgeDistance } from '@/components/BadgeDistance';
@@ -30,7 +31,7 @@ function fmt(v: number | null): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
-export function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissionSoignantProps) {
+export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissionSoignantProps) {
   const m = mission;
   const temps = getTempsEcoule(m.cree_le);
   const profilComplet = soignant?.tous_documents_valides;
@@ -95,4 +96,4 @@ export function CarteMissionSoignant({ mission, soignant, onClick }: CarteMissio
       </div>
     </div>
   );
-}
+});

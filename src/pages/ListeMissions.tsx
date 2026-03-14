@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
@@ -51,7 +52,7 @@ export default function ListeMissions() {
       .order('debut_le', { ascending: false });
 
     if (filtreStatut) query = query.eq('statut', filtreStatut as any);
-    if (recherche) query = query.ilike('intitule', `%${recherche}%`);
+    if (debouncedRecherche) query = query.ilike('intitule', `%${debouncedRecherche}%`);
 
     const [{ data }, { data: sgData }] = await Promise.all([
       query,
@@ -80,7 +81,9 @@ export default function ListeMissions() {
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, [user, filtreStatut, recherche]);
+  const debouncedRecherche = useDebounce(recherche, 300);
+
+  useEffect(() => { charger(); }, [user, filtreStatut, debouncedRecherche]);
 
   // Group missions by serie
   const groupes = useMemo((): GroupeMission[] => {
