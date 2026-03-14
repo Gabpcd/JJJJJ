@@ -78,9 +78,9 @@ export default function AdminFacturation() {
   const exporterFEC = async () => {
     const annee = new Date().getFullYear();
     const { data, error } = await supabase.rpc('fn_export_fec' as any, { p_annee: annee });
-    if (error) { toast({ title: 'Erreur FEC', description: error.message, variant: 'destructive' }); return; }
+    if (error) { toast.error(error.message); return; }
     const lignes = Array.isArray(data) ? data : [];
-    if (lignes.length === 0) { toast({ title: 'Aucune donnée FEC pour ' + annee }); return; }
+    if (lignes.length === 0) { toast.info('Aucune donnée FEC pour ' + annee); return; }
     const cols = Object.keys(lignes[0]);
     const csv = [cols.join('\t'), ...lignes.map((l: any) => cols.map(c => l[c] ?? '').join('\t'))].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
