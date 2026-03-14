@@ -157,6 +157,13 @@ export default function PageCGV() {
         </ul>
         <p>Les frais de service applicables au secteur public sont identiques à ceux du secteur privé (grille de l'article 3).</p>
       </section>
+
+      {/* Article 8 */}
+      <section id="art8">
+        <h2 className="text-xl font-bold text-primary mb-4">Article 8 — Non-sollicitation</h2>
+        <p className="mb-3">L'Établissement s'engage à ne pas recruter, embaucher ou solliciter directement, par quelque moyen que ce soit, un Soignant rencontré par l'intermédiaire de la Plateforme, pendant une durée de douze (12) mois suivant la dernière mission réalisée via Soin Direct.</p>
+        <p>En cas de manquement, l'Établissement sera redevable d'une indemnité forfaitaire de cinq mille (5 000) euros par Soignant sollicité, sans préjudice de dommages et intérêts complémentaires.</p>
+      </section>
     </LayoutLegal>
   );
 }

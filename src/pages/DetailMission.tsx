@@ -200,7 +200,9 @@ export default function DetailMission() {
                         ⭐ {m.soignants.score_fiabilite || 0}/100 ({scoreLabel(m.soignants.score_fiabilite || 0)})
                       </span>
                     </p>
-                    {m.soignants.telephone && <p className="text-sm text-muted-foreground">📱 {m.soignants.telephone}</p>}
+                    <p className="text-sm text-muted-foreground">
+                      {m.soignants.telephone ? `📱 ${m.soignants.telephone}` : '📞 Numéro disponible le jour de la mission'}
+                    </p>
                     {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
                     <div className="mt-2 pt-2 border-t border-border">
                       <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
