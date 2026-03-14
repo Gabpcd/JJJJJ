@@ -14,7 +14,7 @@ export default function PharmacieRemplacement() {
   return (
     <>
       <SEOHead
-        title="Remplacement pharmacie | Trouvez un pharmacien | Soin Direct"
+        title="Remplacement pharmacie | Soin Direct"
         description="Trouvez un pharmacien remplaçant ou un préparateur en pharmacie rapidement. Soin Direct, partenaire du Groupe Leader Santé, simplifie le remplacement en officine."
         url="https://app.soindirect.com/pharmacie-remplacement"
       />
