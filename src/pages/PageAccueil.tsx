@@ -172,7 +172,7 @@ export default function PageAccueil() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-6">
             {[
               { cible: 15, suffixe: '+', label: 'professions' },
-              { cible: 600, suffixe: '+', label: 'pharmacies partenaires' },
+              { cible: 24, suffixe: '/7', label: 'missions jour et nuit' },
               { cible: 100, suffixe: '%', label: 'conforme Code du travail' },
               { cible: 0, suffixe: '€', label: "d'abonnement" },
             ].map((c, i) => (
