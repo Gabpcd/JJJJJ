@@ -26,6 +26,12 @@ export default function Tarifs() {
   if (loading) return <ChargementPage />;
 
   return (
+    <>
+      <SEOHead
+        title="Tarifs Soin Direct | Commission dégressive"
+        description="Découvrez la grille tarifaire Soin Direct : commission dégressive à partir de 15%, facturation transparente, pas de frais cachés."
+        url="https://app.soindirect.com/tarifs"
+      />
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card py-4 px-4">
