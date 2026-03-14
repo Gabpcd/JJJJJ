@@ -128,7 +128,7 @@ export default function AdminFacturation() {
     });
 
     doc.save(`rapport_mensuel_${new Date().toISOString().slice(0, 7)}.pdf`);
-    toast({ title: 'Rapport PDF généré' });
+    toast.success('Rapport PDF généré');
   };
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;

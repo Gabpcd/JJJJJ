@@ -24,7 +24,7 @@ export default function PremiumEtablissement() {
   const inscrire = async () => {
     const trimmed = email.trim();
     if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      toast({ title: 'Email invalide', variant: 'destructive' });
+      toast.error('Email invalide');
       return;
     }
     setSubmitting(true);
