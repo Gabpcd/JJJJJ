@@ -11,31 +11,17 @@ export function CompteurSoignantsDisponibles({ etablissementId }: CompteurSoigna
 
   useEffect(() => {
     const load = async () => {
-      // Get professions from open missions of this establishment
-      const { data: missions } = await supabase
-        .from('missions')
-        .select('profession_requise')
-        .eq('etablissement_id', etablissementId)
-        .eq('statut', 'OUVERTE');
+      const { data, error } = await supabase.rpc('fn_compteur_soignants_disponibles', {
+        p_etablissement_id: etablissementId,
+      });
 
-      if (!missions || missions.length === 0) {
+      if (error) {
+        console.error('[CompteurSoignantsDisponibles]', error.message);
         setCount(0);
         return;
       }
 
-      const professions = [...new Set(missions.map(m => m.profession_requise))];
-
-      // Count active soignants with matching profession
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-      const { count: c } = await supabase
-        .from('soignants')
-        .select('id', { count: 'exact', head: true })
-        .in('profession', professions)
-        .gte('derniere_activite_le', sevenDaysAgo.toISOString());
-
-      setCount(c ?? 0);
+      setCount((data as any)?.disponibles ?? 0);
     };
 
     load();
