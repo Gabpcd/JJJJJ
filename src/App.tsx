@@ -87,6 +87,7 @@ const queryClient = new QueryClient();
 function AppRoutes() {
   return (
     <PageTransition>
+      <ScrollToTop />
       <Suspense fallback={<ChargementPage />}>
         <Routes>
           <Route path="/" element={<PageAccueil />} />
