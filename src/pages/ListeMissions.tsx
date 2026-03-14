@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SkeletonList } from '@/components/SkeletonCard';
+import { FadeInView } from '@/components/FadeInView';
 import { ClipboardPlus, Search, X } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteMission } from '@/components/CarteMission';
@@ -132,7 +134,7 @@ export default function ListeMissions() {
     }
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonList count={4} /></LayoutApp>;
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -173,22 +175,24 @@ export default function ListeMissions() {
           {groupes.map((g, i) => {
             if (g.type === 'serie') {
               return (
-                <CarteSerie
-                  key={g.serieId}
-                  missions={g.missions}
-                  role="etablissement"
-                  onAnnulerSerie={() => setModalAnnulerSerie(g.missions.filter((m: any) => m.statut === 'OUVERTE'))}
-                />
+                <FadeInView key={g.serieId} delay={i * 100}>
+                  <CarteSerie
+                    missions={g.missions}
+                    role="etablissement"
+                    onAnnulerSerie={() => setModalAnnulerSerie(g.missions.filter((m: any) => m.statut === 'OUVERTE'))}
+                  />
+                </FadeInView>
               );
             }
             return (
-              <CarteMission
-                key={g.mission.id}
-                mission={g.mission}
-                onDupliquer={(m) => setModalDupliquer(m)}
-                onAnnuler={(m) => setModalAnnuler(m)}
-                onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
-              />
+              <FadeInView key={g.mission.id} delay={i * 100}>
+                <CarteMission
+                  mission={g.mission}
+                  onDupliquer={(m) => setModalDupliquer(m)}
+                  onAnnuler={(m) => setModalAnnuler(m)}
+                  onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
+                />
+              </FadeInView>
             );
           })}
         </div>

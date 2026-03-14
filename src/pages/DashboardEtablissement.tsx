@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { handleErrorSilent } from '@/lib/handleError';
+import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
+import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -163,7 +165,7 @@ export default function DashboardEtablissement() {
     else { afficherNotification({ type: 'succes', message: 'Mission annulée.' }); charger(); }
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -211,10 +213,10 @@ export default function DashboardEtablissement() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" />
-        <CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" />
-        <CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
-        <CarteKPI icone={TrendingUp} valeur={`${kpi.taux}%`} label="Taux d'occupation" couleurIcone={kpi.taux > 70 ? 'text-success' : 'text-warning'} couleurFond={kpi.taux > 70 ? 'bg-success/10' : 'bg-warning/10'} />
+        <FadeInView delay={0}><CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" /></FadeInView>
+        <FadeInView delay={100}><CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" /></FadeInView>
+        <FadeInView delay={200}><CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" /></FadeInView>
+        <FadeInView delay={300}><CarteKPI icone={TrendingUp} valeur={`${kpi.taux}%`} label="Taux d'occupation" couleurIcone={kpi.taux > 70 ? 'text-success' : 'text-warning'} couleurFond={kpi.taux > 70 ? 'bg-success/10' : 'bg-warning/10'} /></FadeInView>
       </div>
 
       {/* Widget Palier de Fidélité */}
@@ -235,12 +237,14 @@ export default function DashboardEtablissement() {
 
         {missions.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {missions.map(m => (
-              <CarteMission key={m.id} mission={m}
-                onDupliquer={(m) => setModalDupliquer(m)}
-                onAnnuler={(m) => setModalAnnuler(m)}
-                onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
-              />
+            {missions.map((m, i) => (
+              <FadeInView key={m.id} delay={i * 100}>
+                <CarteMission mission={m}
+                  onDupliquer={(m) => setModalDupliquer(m)}
+                  onAnnuler={(m) => setModalAnnuler(m)}
+                  onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
+                />
+              </FadeInView>
             ))}
           </div>
         ) : (

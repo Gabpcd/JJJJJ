@@ -1,5 +1,6 @@
 import React from 'react';
 import { MapPin, Radio, AlertTriangle } from 'lucide-react';
+import { PulseCircle } from '@/components/PulseCircle';
 
 interface ResultatPointageProps {
   type: 'arrivee' | 'depart';
@@ -16,6 +17,7 @@ export function ResultatPointage({ type, heure, distanceM, perimetreOk, precisio
 
   return (
     <div className="space-y-1">
+      {type === 'arrivee' && <PulseCircle active={true} />}
       <div className="flex items-center gap-2 text-sm">
         <span className="text-success font-medium">✅ {label} pointé{type === 'arrivee' ? 'e' : ''} à {heureFormatee}</span>
       </div>

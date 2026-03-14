@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SkeletonList } from '@/components/SkeletonCard';
+import { FadeInView } from '@/components/FadeInView';
 import { SearchX, Briefcase, History, AlertTriangle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -162,7 +164,7 @@ export default function MissionsSoignant() {
     return result;
   }, [missionsAvecDistance, onglet]);
 
-  if (!soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (!soignant) return <LayoutApp role="SOIGNANT"><SkeletonList count={4} /></LayoutApp>;
 
   const onglets: { id: Onglet; label: string }[] = [
     { id: 'disponibles', label: 'Disponibles' },
@@ -191,18 +193,20 @@ export default function MissionsSoignant() {
         </>
       )}
 
-      {loading ? <ChargementPage /> : (
+      {loading ? <SkeletonList count={4} /> : (
         <>
           {onglet === 'disponibles' && (
             groupes.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {groupes.map((g, i) => {
                   if (g.type === 'serie') {
-                    return <CarteSerie key={g.serieId} missions={g.missions} role="soignant" soignant={soignant} />;
+                    return <FadeInView key={g.serieId} delay={i * 100}><CarteSerie missions={g.missions} role="soignant" soignant={soignant} /></FadeInView>;
                   }
                   return (
-                    <CarteMissionSoignant key={g.mission.id} mission={g.mission} soignant={soignant}
-                      onClick={() => navigate(`/soignant/missions/${g.mission.id}`)} />
+                    <FadeInView key={g.mission.id} delay={i * 100}>
+                      <CarteMissionSoignant mission={g.mission} soignant={soignant}
+                        onClick={() => navigate(`/soignant/missions/${g.mission.id}`)} />
+                    </FadeInView>
                   );
                 })}
               </div>

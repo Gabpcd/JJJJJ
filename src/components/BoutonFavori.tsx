@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Star } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -10,6 +10,7 @@ interface Props {
 export function BoutonFavori({ soignantId, etablissementId }: Props) {
   const [favori, setFavori] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [bouncing, setBouncing] = useState(false);
 
   useEffect(() => {
     (supabase.from('favoris' as any) as any)
@@ -33,6 +34,8 @@ export function BoutonFavori({ soignantId, etablissementId }: Props) {
       await (supabase.from('favoris' as any) as any)
         .insert({ etablissement_id: etablissementId, soignant_id: soignantId });
       setFavori(true);
+      setBouncing(true);
+      setTimeout(() => setBouncing(false), 400);
     }
     setLoading(false);
   };
@@ -42,7 +45,7 @@ export function BoutonFavori({ soignantId, etablissementId }: Props) {
       onClick={toggle}
       disabled={loading}
       title={favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-      className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+      className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${bouncing ? 'animate-bounce-fav' : ''} ${
         favori ? 'text-warning' : 'text-muted-foreground hover:text-warning'
       }`}
     >

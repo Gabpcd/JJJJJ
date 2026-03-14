@@ -143,15 +143,15 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-200 shadow-sm;
+    @apply bg-primary hover:bg-primary/90 active:scale-[0.97] active:bg-primary/80 text-primary-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150 shadow-sm;
   }
 
   .btn-secondary {
-    @apply bg-card border-2 border-primary text-primary hover:bg-primary/5 rounded-xl px-6 py-3 font-semibold transition-all duration-200;
+    @apply bg-card border-2 border-primary text-primary hover:bg-primary/5 active:scale-[0.97] rounded-xl px-6 py-3 font-semibold transition-all duration-150;
   }
 
   .btn-danger {
-    @apply bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-200;
+    @apply bg-destructive hover:bg-destructive/90 active:scale-[0.97] text-destructive-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150;
   }
 
   .card-base {
@@ -266,6 +266,154 @@
 }
 .animate-pulse-once {
   animation: pulse-once 0.8s ease-in-out 3;
+}
+
+/* ═══ Page transitions ═══ */
+.page-transition {
+  will-change: opacity;
+}
+.page-enter {
+  animation: page-fade-in 0.3s ease-out both;
+}
+.page-exit {
+  animation: page-fade-out 0.15s ease-in both;
+}
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes page-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* ═══ FadeInView — card cascade ═══ */
+.fade-in-view {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+  will-change: opacity, transform;
+}
+.fade-in-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ═══ Confetti mini ═══ */
+.confetti-mini-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 50;
+}
+.confetti-mini-particle {
+  position: absolute;
+  border-radius: 50%;
+  animation: confetti-mini-fall linear forwards;
+}
+@keyframes confetti-mini-fall {
+  0% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+  100% { transform: translateY(-60px) rotate(360deg) scale(0); opacity: 0; }
+}
+
+/* ═══ Check animation ═══ */
+.check-animation-circle {
+  width: 80px;
+  height: 80px;
+  animation: check-scale 0.5s ease-out both, check-fade-out 0.4s ease-in 1.5s both;
+}
+.check-animation-svg { width: 100%; height: 100%; }
+.check-animation-ring {
+  fill: none;
+  stroke-dasharray: 160;
+  stroke-dashoffset: 160;
+  animation: check-ring-draw 0.6s ease-out 0.1s both;
+}
+.check-animation-path {
+  fill: none;
+  stroke-dasharray: 50;
+  stroke-dashoffset: 50;
+  animation: check-path-draw 0.4s ease-out 0.5s both;
+}
+@keyframes check-scale {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes check-fade-out {
+  to { opacity: 0; transform: scale(1.3); }
+}
+@keyframes check-ring-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes check-path-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ═══ Pulse ring (pointage) ═══ */
+.pulse-ring-animation {
+  animation: pulse-ring 0.8s ease-out 3;
+}
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 hsl(var(--success) / 0.5); }
+  70% { box-shadow: 0 0 0 12px hsl(var(--success) / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--success) / 0); }
+}
+
+/* ═══ Bounce (favori, notification) ═══ */
+.animate-bounce-fav {
+  animation: bounce-fav 0.4s ease-out;
+}
+@keyframes bounce-fav {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.35); }
+  60% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.animate-bounce-badge {
+  animation: bounce-badge 0.35s ease-out;
+}
+@keyframes bounce-badge {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+/* ═══ prefers-reduced-motion ═══ */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .page-exit,
+  .fade-in-view,
+  .confetti-mini-particle,
+  .check-animation-circle,
+  .check-animation-ring,
+  .check-animation-path,
+  .pulse-ring-animation,
+  .animate-bounce-fav,
+  .animate-bounce-badge,
+  .animate-bounce-in,
+  .confetti-piece,
+  .animate-shimmer,
+  .animate-slide-in,
+  .animate-fade-out,
+  .animate-count-up {
+    animation: none !important;
+    transition: none !important;
+  }
+  .fade-in-view {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .page-transition {
+    animation: none !important;
+  }
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .card-kpi {
+    transition: none !important;
+  }
 }
 
 @media print {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { CheckAnimation } from '@/components/CheckAnimation';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -27,6 +28,7 @@ export default function ContratMission() {
   const [signing, setSigning] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [showConfirmSign, setShowConfirmSign] = useState(false);
+  const [showCheckAnim, setShowCheckAnim] = useState(false);
 
   const role: UserRole = user?.role || 'SOIGNANT';
 
@@ -81,6 +83,7 @@ export default function ContratMission() {
       });
 
       afficherNotification({ type: 'succes', message: 'Contrat signé avec succès !' });
+      setShowCheckAnim(true);
       const { data: updated } = await supabase.from('contrats_mission').select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le').eq('id', contrat.id).single();
       setContrat(updated);
 
@@ -131,6 +134,7 @@ export default function ContratMission() {
 
   return (
     <LayoutApp role={role}>
+      <CheckAnimation active={showCheckAnim} />
       <div className="max-w-3xl mx-auto">
         {contrat.statut === 'ANNULE' && (
           <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 mb-4 text-center">
