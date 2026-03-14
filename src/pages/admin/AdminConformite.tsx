@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Eye, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';

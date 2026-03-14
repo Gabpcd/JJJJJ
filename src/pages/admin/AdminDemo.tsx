@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Database, Loader2, Trash2, Building2, Users, Briefcase, FileText } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
