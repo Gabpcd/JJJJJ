@@ -355,6 +355,15 @@ serve(async (req) => {
       });
     }
 
+    // C2-FIX: Validate destinataire_id is a strict UUID to prevent PostgREST filter injection
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(destinataire_id)) {
+      return new Response(JSON.stringify({ error: 'destinataire_id invalide' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (!ALLOWED_TYPES.has(type)) {
       return new Response(JSON.stringify({ error: 'Type inconnu' }), {
         status: 400,
