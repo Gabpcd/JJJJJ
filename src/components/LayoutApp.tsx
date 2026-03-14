@@ -5,7 +5,7 @@ import { DemandePermissionPush } from '@/components/DemandePermissionPush';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { SyncHorsLigne } from '@/components/SyncHorsLigne';
 import { UserRole } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface LayoutAppProps {
   role: UserRole;
