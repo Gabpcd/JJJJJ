@@ -1799,6 +1799,27 @@ export type Database = {
         }
         Relationships: []
       }
+      rpps_test: {
+        Row: {
+          nom: string
+          prenom: string
+          profession: string
+          rpps: string
+        }
+        Insert: {
+          nom: string
+          prenom: string
+          profession: string
+          rpps: string
+        }
+        Update: {
+          nom?: string
+          prenom?: string
+          profession?: string
+          rpps?: string
+        }
+        Relationships: []
+      }
       soignants: {
         Row: {
           adresse_code_postal: string | null
@@ -2298,6 +2319,10 @@ export type Database = {
         Returns: Json
       }
       fn_charger_demo_investisseur: { Args: never; Returns: Json }
+      fn_compteur_soignants_disponibles: {
+        Args: { p_etablissement_id: string }
+        Returns: Json
+      }
       fn_confirmer_due: { Args: { p_contrat_id: string }; Returns: Json }
       fn_consentir_gps: { Args: { p_accepte: boolean }; Returns: Json }
       fn_contester_presence: {
