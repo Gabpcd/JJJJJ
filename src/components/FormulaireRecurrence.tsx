@@ -236,7 +236,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
           : j
       )
     );
-    toast({ title: '✅ Horaires appliqués à tous les jours' });
+    toast.success('Horaires appliqués à tous les jours');
   }, [horairesParJour]);
 
   const joursEnErreur = new Set(validation.erreurs.flatMap(e => e.joursAffectes || []));
