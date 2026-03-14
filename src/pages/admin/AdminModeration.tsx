@@ -39,8 +39,8 @@ export default function AdminModeration() {
   const resoudreLitige = async (id: string, statut: string) => {
     const resolution = statut === 'FERME' ? 'Fermé par admin' : `Résolu en faveur du ${statut === 'RESOLUE_SOIGNANT' ? 'soignant' : 'établissement'}`;
     const { data, error } = await supabase.rpc('fn_resoudre_litige' as any, { p_litige_id: id, p_statut: statut, p_resolution: resolution });
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Litige résolu' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Litige résolu');
     charger();
   };
 
