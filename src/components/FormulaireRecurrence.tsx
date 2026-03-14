@@ -371,7 +371,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
               <div key={key}>
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs font-semibold text-foreground">Semaine ({sem.label})</p>
-                  <span className={`text-xs font-bold ${sem.totalHeures > 48 ? 'text-destructive' : 'text-teal-600'}`}>
+                  <span className={`text-xs font-bold ${sem.totalHeures > 48 ? 'text-destructive' : 'text-primary'}`}>
                     {sem.totalHeures}h {sem.totalHeures > 48 ? '❌' : '✅'}
                   </span>
                 </div>
