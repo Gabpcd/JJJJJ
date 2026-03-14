@@ -20,14 +20,26 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const uid = url.searchParams.get("uid");
+  const token = url.searchParams.get("token");
 
-  if (!uid) {
-    return new Response("Missing uid", { status: 400, headers: corsHeaders });
+  if (!uid || !token) {
+    return new Response("Missing uid or token", { status: 400, headers: corsHeaders });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+  // Verify token against stored token
+  const { data: tokenRow, error: tokenError } = await supabase
+    .from("tokens_calendrier")
+    .select("token")
+    .eq("soignant_id", uid)
+    .single();
+
+  if (tokenError || !tokenRow || tokenRow.token !== token) {
+    return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+  }
 
   const { data: missions, error } = await supabase
     .from("missions")

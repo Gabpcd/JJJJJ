@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Apple, Download, Calendar } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,10 +8,18 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 export function SyncCalendrier() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
 
-  if (!user) return null;
+  useEffect(() => {
+    if (!user) return;
+    supabase.rpc('fn_mon_token_calendrier' as any).then(({ data }) => {
+      if (data) setToken(data as string);
+    });
+  }, [user]);
 
-  const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-feed?uid=${user.id}`;
+  if (!user || !token) return null;
+
+  const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/calendar-feed?uid=${user.id}&token=${token}`;
   const webcalUrl = baseUrl.replace(/^https?:\/\//, 'webcal://');
   const googleUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}`;
 
