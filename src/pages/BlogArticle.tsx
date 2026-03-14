@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { articlesBlog, getTagClasses, getArticleGradient } from '@/lib/blog-data';
 import { ArrowLeft, ArrowRight, Clock, Calendar, Link2, Linkedin, MessageCircle } from 'lucide-react';
+import { sanitizeHTML } from '@/lib/sanitize';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -69,7 +70,7 @@ export default function BlogArticle() {
   }
 
   const url = `https://app.soindirect.com/blog/${article.slug}`;
-  const contenuHtml = markdownToHtml(article.contenu);
+  const contenuHtml = sanitizeHTML(markdownToHtml(article.contenu));
 
   const copierLien = () => {
     navigator.clipboard.writeText(url);

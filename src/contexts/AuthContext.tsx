@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { UserRole } from '@/lib/types';
 
 import { Session, User } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
@@ -8,7 +7,6 @@ import { logger } from '@/lib/logger';
 interface AppUser {
   id: string;
   email: string;
-  role: UserRole;
   prenom?: string;
   nom?: string;
 }
@@ -25,19 +23,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function extractRole(user: User): UserRole {
-  const metaRole = user.user_metadata?.role;
-  if (metaRole === 'ADMIN_ETABLISSEMENT' || metaRole === 'ETABLISSEMENT') return 'ADMIN_ETABLISSEMENT';
-  if (metaRole === 'ADMIN_GROUPE') return 'ADMIN_GROUPE';
-  if (metaRole === 'ADMIN' || metaRole === 'ADMIN_PLATEFORME') return 'ADMIN_PLATEFORME';
-  return 'SOIGNANT';
-}
-
 function toAppUser(user: User): AppUser {
   return {
     id: user.id,
     email: user.email || '',
-    role: extractRole(user),
     prenom: user.user_metadata?.prenom,
     nom: user.user_metadata?.nom,
   };
@@ -70,13 +59,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const u = data.user;
 
-    let verifiedRole: string = extractRole(u);
+    // Get verified role from server — never trust client metadata
+    let verifiedRole = 'INCONNU';
     try {
       const { data: roleData } = await supabase.rpc('fn_get_my_role');
       if (roleData && (roleData as any).role) {
         verifiedRole = (roleData as any).role;
       }
-    } catch { /* fallback to extractRole */ }
+    } catch { /* fallback */ }
 
     const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: u.id,
@@ -99,11 +89,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const deconnexion = useCallback(async () => {
     const currentUser = user;
     if (currentUser) {
+      // Get server-side role for audit — never use client-side role
+      let auditRole = 'INCONNU';
+      try {
+        const { data: roleData } = await supabase.rpc('fn_get_my_role');
+        if (roleData && (roleData as any).role) {
+          auditRole = (roleData as any).role;
+        }
+      } catch { /* fallback */ }
+
       const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: currentUser.id,
-        p_type_acteur: currentUser.role,
+        p_type_acteur: auditRole,
         p_action: 'DECONNEXION',
-        p_type_ressource: currentUser.role === 'SOIGNANT' ? 'soignant' : 'etablissement',
+        p_type_ressource: auditRole === 'SOIGNANT' ? 'soignant' : 'etablissement',
         p_id_ressource: currentUser.id,
         p_cle_s3: null,
         p_details: { horodatage: new Date().toISOString() },
@@ -146,7 +145,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (fnError || result?.error) {
       logger.error('register-soignant échoué', fnError || result?.error);
-      // Flag orphan account for cleanup on next login attempt
       try {
         await supabase.auth.signOut();
       } catch { /* ignore */ }
