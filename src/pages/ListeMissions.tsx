@@ -166,7 +166,7 @@ export default function ListeMissions() {
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input value={recherche} onChange={(e) => setRecherche(e.target.value)}
-          placeholder="🔍 Rechercher par intitulé, service ou soignant..." className="input-base pl-9 pr-9" />
+          placeholder="Rechercher par intitulé, profession, ville..." className="input-base pl-9 pr-9" />
         {recherche && (
           <button onClick={() => setRecherche('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
