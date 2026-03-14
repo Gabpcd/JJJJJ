@@ -29,6 +29,7 @@ const PageConfidentialite = lazy(() => import("./pages/PageConfidentialite"));
 const PageMentionsLegales = lazy(() => import("./pages/PageMentionsLegales"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
+const Telecharger = lazy(() => import("./pages/Telecharger"));
 
 /* ─── Soignant pages ─── */
 const DashboardSoignant = lazy(() => import("./pages/DashboardSoignant"));
