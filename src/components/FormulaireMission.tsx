@@ -56,16 +56,22 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
   const [siretInvalide, setSiretInvalide] = useState(false);
 
-  // Load rist_plafond_actif + commission info + type
+  // Load rist_plafond_actif + commission info + type + siret validation
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom)').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom), siret').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
         setRistPlafondActif(data.rist_plafond_actif === true || typesPublics.includes(data.type));
         setTauxCommission(data.taux_commission_negocie ?? 15);
         setEtablissementType(data.type);
         if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);
+        // Luhn check on siret
+        const s = data.siret || '';
+        if (!/^\d{14}$/.test(s) || /^0+$/.test(s)) { setSiretInvalide(true); return; }
+        let sum = 0;
+        for (let i = 0; i < 14; i++) { let d = parseInt(s[i], 10); if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
+        if (sum % 10 !== 0) setSiretInvalide(true);
       }
     });
   }, [user]);
