@@ -108,7 +108,7 @@ export default function ExclusionsSoignant() {
       {onglet === 'envoyees' && (
         <>
           {exclusions.length === 0 ? (
-            <EtatVide icone={Ban} titre="Aucune exclusion" sousTitre="Vous n'avez bloqué aucun établissement." />
+            <EtatVide illustration={<IllustrationBouclier />} titre="Aucune exclusion" sousTitre="Vous n'avez bloqué personne." />
           ) : (
             <div className="space-y-3">
               {exclusions.map((e: any) => (
