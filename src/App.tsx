@@ -81,6 +81,7 @@ function AppRoutes() {
         <Route path="/pharmacie-remplacement" element={<PharmacieRemplacement />} />
         <Route path="/blog" element={<BlogListe />} />
         <Route path="/blog/:slug" element={<BlogArticle />} />
+        <Route path="/a-propos" element={<APropos />} />
         <Route path="/connexion" element={<PageConnexion />} />
         <Route path="/confirmer-email" element={<ConfirmerEmail />} />
         <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
