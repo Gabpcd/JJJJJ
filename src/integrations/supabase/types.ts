@@ -2796,6 +2796,7 @@ export type Database = {
         Args: { p_limit?: number; p_mission_id: string }
         Returns: {
           distance_km: number
+          est_favori: boolean
           missions_etab: number
           nom: string
           prenom: string
