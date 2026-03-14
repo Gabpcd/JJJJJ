@@ -2479,8 +2479,10 @@ export type Database = {
           adresse_lng: number
           adresse_rue: string
           adresse_ville: string
+          couleur_theme: string
           finess: string
           id: string
+          logo_url: string
           nom: string
           taux_majoration_dimanche_pourcent: number
           taux_majoration_ferie_pourcent: number
