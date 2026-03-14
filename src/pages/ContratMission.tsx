@@ -33,7 +33,7 @@ export default function ContratMission() {
   const [showConfirmSign, setShowConfirmSign] = useState(false);
   const [showCheckAnim, setShowCheckAnim] = useState(false);
 
-  const role: UserRole = user?.role || 'SOIGNANT';
+  const { role } = useRole();
 
   useEffect(() => {
     if (!id) return;
