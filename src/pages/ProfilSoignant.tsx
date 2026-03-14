@@ -62,6 +62,7 @@ export default function ProfilSoignant() {
         setEmail(data.email);
         setProfession(data.profession);
         setCodeParrainage(data.code_parrainage || '');
+        (setForm as any)(prev => ({ ...prev, avatarUrl: data.avatar_url || '' }));
         setForm({
           prenom: data.prenom, nom: data.nom,
           telephone: data.telephone || '', dateNaissance: data.date_naissance || '',
