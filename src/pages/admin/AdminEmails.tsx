@@ -1,0 +1,223 @@
+import React, { useState, useEffect } from 'react';
+import { Mail, Eye, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from '@/hooks/use-toast';
+
+const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
+  BIENVENUE_SOIGNANT: { prenom: 'Marie', lien_profil: 'https://app.soindirect.com/soignant/profil' },
+  BIENVENUE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', lien_profil: 'https://app.soindirect.com/etablissement/profil' },
+  MISSION_ACCEPTEE_SOIGNANT: { prenom: 'Marie', mission: 'Remplacement IDE — Jour', etablissement: 'EHPAD Les Oliviers', date: '15 mars 2026', heure: '07h00 – 19h00' },
+  MISSION_ACCEPTEE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', mission: 'Remplacement IDE — Jour', soignant: 'Marie Dupont', date: '15 mars 2026' },
+  MISSION_ANNULEE_SOIGNANT: { prenom: 'Marie', mission: 'Remplacement AS — Nuit', motif: 'Annulation par l\'établissement' },
+  MISSION_ANNULEE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', mission: 'Remplacement AS — Nuit', soignant: 'Marie Dupont' },
+  CONTRAT_SIGNE: { prenom: 'Marie', numero_contrat: 'CTR-2026-0042', mission: 'Remplacement IDE — Jour' },
+  RAPPEL_POINTAGE: { prenom: 'Marie', mission: 'Remplacement IDE — Jour', heure_debut: '07h00', etablissement: 'EHPAD Les Oliviers' },
+  FACTURE_EMISE: { nom_etablissement: 'EHPAD Les Oliviers', numero_facture: 'FA-2026-0018', montant_ttc: '1 250,00 €' },
+  PAIEMENT_RECU: { nom_etablissement: 'EHPAD Les Oliviers', numero_facture: 'FA-2026-0018', montant: '1 250,00 €' },
+  DOCUMENT_EXPIRE: { prenom: 'Marie', type_document: 'Attestation vaccinale', date_expiration: '20 avril 2026' },
+  EVALUATION_RECUE: { prenom: 'Marie', note: '5/5', commentaire: 'Excellente professionnelle, ponctuelle et compétente.', mission: 'Remplacement IDE — Jour' },
+  RAPPEL_DUE: { nom_etablissement: 'EHPAD Les Oliviers', soignant: 'Marie Dupont', numero_contrat: 'CTR-2026-0042' },
+  LITIGE_OUVERT: { prenom: 'Marie', mission: 'Remplacement IDE — Jour', motif: 'Heures contestées', reference: 'LIT-2026-007' },
+};
+
+const TEMPLATES = Object.keys(DONNEES_FICTIVES);
+
+function genererHtmlPreview(type: string, data: Record<string, string>): string {
+  const vars = Object.entries(data).map(([k, v]) => `<tr><td style="padding:4px 12px;color:#64748b;font-size:13px">${k}</td><td style="padding:4px 12px;font-size:13px">${v}</td></tr>`).join('');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
+    body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:32px;background:#f8fafc;color:#0f172a}
+    .card{max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .header{background:#0f172a;padding:24px;text-align:center}
+    .logo{color:#17a2b8;font-size:20px;font-weight:700}
+    .body{padding:32px}
+    h1{font-size:18px;margin:0 0 16px;color:#0f172a}
+    p{font-size:14px;line-height:1.6;color:#334155;margin:0 0 12px}
+    .vars{width:100%;border-collapse:collapse;margin:16px 0;background:#f1f5f9;border-radius:8px;overflow:hidden}
+    .vars td{border-bottom:1px solid #e2e8f0}
+    .footer{text-align:center;padding:16px;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0}
+    .badge{display:inline-block;background:#17a2b8;color:#fff;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600}
+  </style></head><body>
+    <div class="card">
+      <div class="header"><span class="logo">♥ Soin Direct</span></div>
+      <div class="body">
+        <span class="badge">${type.replace(/_/g, ' ')}</span>
+        <h1 style="margin-top:16px">Prévisualisation du template</h1>
+        <p>Voici les variables injectées dans ce template :</p>
+        <table class="vars">${vars}</table>
+        <p style="color:#94a3b8;font-size:12px;margin-top:24px">Ceci est un aperçu de développement. L'email réel utilise le template serveur complet.</p>
+      </div>
+      <div class="footer">© 2026 Soin Direct — contact@soindirect.com</div>
+    </div>
+  </body></html>`;
+}
+
+export default function AdminEmails() {
+  const { user } = useAuth();
+  const [previewType, setPreviewType] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
+  const [historique, setHistorique] = useState<any[]>([]);
+  const [histLoading, setHistLoading] = useState(true);
+
+  useEffect(() => {
+    chargerHistorique();
+  }, []);
+
+  const chargerHistorique = async () => {
+    setHistLoading(true);
+    const { data } = await supabase
+      .from('emails_envoyes')
+      .select('*')
+      .order('cree_le', { ascending: false })
+      .limit(20);
+    setHistorique(data || []);
+    setHistLoading(false);
+  };
+
+  const envoyerTest = async (type: string) => {
+    if (!user) return;
+    setSending(type);
+    const { error } = await supabase.functions.invoke('send-email', {
+      body: { type, destinataire_id: user.id, data: DONNEES_FICTIVES[type] },
+    });
+    setSending(null);
+    if (error) {
+      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Email test envoyé', description: 'Email test envoyé à votre adresse.' });
+      chargerHistorique();
+    }
+  };
+
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <LayoutAdmin>
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Mail className="h-6 w-6 text-primary" /> Templates emails
+          </h1>
+          <p className="text-muted-foreground mt-1">Prévisualisez et testez les 14 templates transactionnels.</p>
+        </div>
+
+        {/* Templates table */}
+        <div className="rounded-lg border border-border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[50%]">Template</TableHead>
+                <TableHead className="text-center">Prévisualiser</TableHead>
+                <TableHead className="text-center">Envoyer un test</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {TEMPLATES.map((t) => (
+                <TableRow key={t} className={previewType === t ? 'bg-muted/50' : ''}>
+                  <TableCell className="font-mono text-sm">{t}</TableCell>
+                  <TableCell className="text-center">
+                    <Button
+                      variant={previewType === t ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setPreviewType(previewType === t ? null : t)}
+                      className="gap-1.5"
+                    >
+                      <Eye className="h-4 w-4" />
+                      {previewType === t ? 'Masquer' : 'Prévisualiser'}
+                    </Button>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => envoyerTest(t)}
+                      disabled={sending !== null}
+                      className="gap-1.5"
+                    >
+                      {sending === t ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Envoyer
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Preview iframe */}
+        {previewType && (
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold text-foreground">
+              Aperçu : <span className="font-mono text-primary">{previewType}</span>
+            </h2>
+            <div className="rounded-lg border border-border overflow-hidden bg-muted">
+              <iframe
+                title={`Aperçu ${previewType}`}
+                srcDoc={genererHtmlPreview(previewType, DONNEES_FICTIVES[previewType])}
+                className="w-full border-0"
+                style={{ height: '500px' }}
+                sandbox="allow-same-origin"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Historique */}
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">Derniers emails envoyés</h2>
+          <div className="rounded-lg border border-border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Destinataire</TableHead>
+                  <TableHead className="text-center">Statut</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {histLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Chargement…
+                    </TableCell>
+                  </TableRow>
+                ) : historique.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      Aucun email envoyé.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  historique.map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell className="text-sm">{formatDate(e.cree_le)}</TableCell>
+                      <TableCell className="font-mono text-xs">{e.type}</TableCell>
+                      <TableCell className="text-sm">{e.destinataire_email}</TableCell>
+                      <TableCell className="text-center">
+                        {e.statut === 'ENVOYE' ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1">
+                            <CheckCircle className="h-3 w-3" /> Envoyé
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="gap-1">
+                            <XCircle className="h-3 w-3" /> Erreur
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </div>
+    </LayoutAdmin>
+  );
+}
