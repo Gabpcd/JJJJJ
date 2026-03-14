@@ -7,7 +7,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { CarteMission } from '@/components/CarteMission';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
-import { EtatVide } from '@/components/EtatVide';
+import { EtatVide, IllustrationMegaphone } from '@/components/EtatVide';
 import { ChargementPage } from '@/components/ChargementPage';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { useAuth } from '@/contexts/AuthContext';
