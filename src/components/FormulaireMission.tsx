@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { extraireContratPreference, injecterContratTag, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { WarningRist } from '@/components/WarningRist';
@@ -54,17 +54,24 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
   const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
+  const [siretInvalide, setSiretInvalide] = useState(false);
 
-  // Load rist_plafond_actif + commission info + type
+  // Load rist_plafond_actif + commission info + type + siret validation
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom)').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom), siret').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
         setRistPlafondActif(data.rist_plafond_actif === true || typesPublics.includes(data.type));
         setTauxCommission(data.taux_commission_negocie ?? 15);
         setEtablissementType(data.type);
         if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);
+        // Luhn check on siret
+        const s = data.siret || '';
+        if (!/^\d{14}$/.test(s) || /^0+$/.test(s)) { setSiretInvalide(true); return; }
+        let sum = 0;
+        for (let i = 0; i < 14; i++) { let d = parseInt(s[i], 10); if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
+        if (sum % 10 !== 0) setSiretInvalide(true);
       }
     });
   }, [user]);
@@ -304,6 +311,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   return (
     <>
+      {siretInvalide && (
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
+          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          <span>Complétez votre SIRET pour publier des missions. <Link to="/etablissement/profil" className="text-primary hover:underline font-medium">Aller au profil →</Link></span>
+        </div>
+      )}
+
       {dupliquerInfo && (
         <div className="bg-info/10 border border-info/20 rounded-xl p-3 mb-4 text-sm text-info">
           📋 Vous dupliquez la mission « {dupliquerInfo} ». Ajustez les dates ci-dessous.
