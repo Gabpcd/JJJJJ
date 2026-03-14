@@ -70,7 +70,7 @@ export default function BlogArticle() {
   }
 
   const url = `https://app.soindirect.com/blog/${article.slug}`;
-  const contenuHtml = markdownToHtml(article.contenu);
+  const contenuHtml = sanitizeHTML(markdownToHtml(article.contenu));
 
   const copierLien = () => {
     navigator.clipboard.writeText(url);
