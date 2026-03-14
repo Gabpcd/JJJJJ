@@ -79,16 +79,25 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const navigate = useNavigate();
   const { deconnexion, user } = useAuth();
   const [showLiberal, setShowLiberal] = useState(false);
+  const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
 
   useEffect(() => {
-    if (role !== 'SOIGNANT' || !user) return;
-    supabase.from('soignants').select('profession, heures_cumulees, statut_liberal').eq('id', user.id).single()
-      .then(({ data, error }) => {
-        if (error) return;
-        if (data && !PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
-          setShowLiberal(true);
-        }
-      });
+    if (!user) return;
+    if (role === 'SOIGNANT') {
+      supabase.from('soignants').select('profession, heures_cumulees, statut_liberal, prenom, nom, avatar_url').eq('id', user.id).single()
+        .then(({ data }) => {
+          if (!data) return;
+          setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
+          if (!PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
+            setShowLiberal(true);
+          }
+        });
+    } else if (role === 'ADMIN_ETABLISSEMENT') {
+      supabase.from('etablissements').select('nom, logo_url').eq('id', user.id).single()
+        .then(({ data }) => {
+          if (data) setUserInfo({ prenom: data.nom, nom: '', avatarUrl: (data as any).logo_url });
+        });
+    }
   }, [role, user]);
 
   const baseItems = getNavItems(role);
