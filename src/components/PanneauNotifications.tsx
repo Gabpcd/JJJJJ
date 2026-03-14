@@ -145,7 +145,7 @@ function playNotifSound() {
 
 export function BadgeNotification() {
   const { user } = useAuth();
-  const { toast } = useToast();
+  
   const location = useLocation();
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
