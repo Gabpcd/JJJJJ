@@ -76,11 +76,26 @@ serve(async (req) => {
       });
     }
 
-    if (siret.length !== 14) {
+    // Luhn validation
+    if (!/^\d{14}$/.test(siret) || /^0+$/.test(siret)) {
       return new Response(JSON.stringify({ error: 'Le SIRET doit contenir 14 chiffres' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+    {
+      let sum = 0;
+      for (let i = 0; i < 14; i++) {
+        let d = parseInt(siret[i], 10);
+        if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; }
+        sum += d;
+      }
+      if (sum % 10 !== 0) {
+        return new Response(JSON.stringify({ error: 'SIRET invalide (checksum incorrecte)' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);

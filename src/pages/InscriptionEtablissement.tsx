@@ -122,7 +122,15 @@ export default function InscriptionEtablissement() {
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre établissement</p>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom de l'établissement *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">SIRET * (14 chiffres)</label><input value={form.siret} onChange={e => maj('siret', e.target.value.replace(/\D/g, '').slice(0, 14))} className="input-base" required /></div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1.5 block">SIRET * (14 chiffres)</label>
+                  <div className="relative">
+                    <input value={form.siret} onChange={e => { maj('siret', e.target.value.replace(/\D/g, '').slice(0, 14)); setSiretValidation(null); }} onBlur={handleSiretBlur} className={`input-base pr-10 ${siretValidation && !siretValidation.valide ? 'border-destructive' : ''} ${siretEstValide ? 'border-green-500' : ''}`} required />
+                    {siretEstValide && <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />}
+                    {siretValidation && !siretValidation.valide && <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />}
+                  </div>
+                  {siretValidation && !siretValidation.valide && <p className="text-xs text-destructive mt-1">{siretValidation.message}</p>}
+                </div>
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">{form.type === 'PHARMACIE_OFFICINE' ? 'N° Licence' : 'FINESS (9 chiffres)'}</label><input value={form.type === 'PHARMACIE_OFFICINE' ? form.numeroLicence : form.finess} onChange={e => form.type === 'PHARMACIE_OFFICINE' ? maj('numeroLicence', e.target.value) : maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9))} className="input-base" /></div>
               </div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Type d'établissement *</label><SelectTypeEtablissement value={form.type} onChange={v => maj('type', v)} /></div>
