@@ -15,7 +15,7 @@ export default function BlogListe() {
   return (
     <>
       <SEOHead
-        title="Blog Soin Direct — Conseils, guides et actualités santé"
+        title="Blog Soin Direct | Actualités santé et staffing"
         description="Retrouvez nos articles sur le passage en libéral, la réglementation du staffing médical, le remplacement en pharmacie et les actualités Soin Direct."
         url="https://app.soindirect.com/blog"
       />

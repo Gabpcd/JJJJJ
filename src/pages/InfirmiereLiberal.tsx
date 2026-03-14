@@ -31,7 +31,7 @@ export default function InfirmiereLiberal() {
   return (
     <>
       <SEOHead
-        title="Devenir infirmière libérale | Guide complet | Soin Direct"
+        title="Devenir infirmière libérale | Guide complet"
         description="Découvrez comment passer infirmière libérale avec Soin Direct : parcours 3200h, programme Free Transition, étapes d'installation CPAM, Ordre, URSSAF. Guide complet."
         url="https://app.soindirect.com/infirmiere-liberale"
       />

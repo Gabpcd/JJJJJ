@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SEOHead } from '@/components/SEOHead';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { GrilleTarifaire } from '@/components/GrilleTarifaire';
@@ -25,6 +26,12 @@ export default function Tarifs() {
   if (loading) return <ChargementPage />;
 
   return (
+    <>
+      <SEOHead
+        title="Tarifs Soin Direct | Commission dégressive"
+        description="Découvrez la grille tarifaire Soin Direct : commission dégressive à partir de 15%, facturation transparente, pas de frais cachés."
+        url="https://app.soindirect.com/tarifs"
+      />
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card py-4 px-4">
@@ -57,5 +64,6 @@ export default function Tarifs() {
         <p>© 2026 Soin Direct SAS — Conforme RGPD · Code du Travail</p>
       </footer>
     </div>
+    </>
   );
 }

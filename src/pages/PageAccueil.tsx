@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SEOHead } from '@/components/SEOHead';
 import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, HeartPulse, ArrowRight } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
@@ -87,6 +88,12 @@ export default function PageAccueil() {
   }, []);
 
   return (
+    <>
+      <SEOHead
+        title="Soin Direct — Staffing médical simplifié"
+        description="Plateforme de mise en relation entre établissements de santé et soignants qualifiés. Publiez des missions, signez vos contrats et pointez en ligne."
+        url="https://app.soindirect.com/"
+      />
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* ═══ Header ═══ */}
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
@@ -400,5 +407,6 @@ export default function PageAccueil() {
         </div>
       </footer>
     </div>
+    </>
   );
 }
