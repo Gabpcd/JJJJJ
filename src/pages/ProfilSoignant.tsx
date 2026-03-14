@@ -215,7 +215,17 @@ export default function ProfilSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <h1 className="text-xl font-bold text-foreground mb-6">Mon profil</h1>
+      <div className="flex items-center gap-4 mb-6">
+        <AvatarUpload
+          src={(form as any).avatarUrl}
+          prenom={form.prenom}
+          nom={form.nom}
+          size={96}
+          mode="soignant"
+          onUploaded={(url) => setForm(prev => ({ ...prev, avatarUrl: url } as any))}
+        />
+        <h1 className="text-xl font-bold text-foreground">Mon profil</h1>
+      </div>
 
       {noteMoyenne && noteMoyenne.total > 0 && (
         <div className="card-base mb-6">
