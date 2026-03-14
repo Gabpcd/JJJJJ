@@ -23,6 +23,7 @@ function fmt(v: number): string {
 }
 
 export default function MesGains() {
+  usePageTitle('Mes gains');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [missions, setMissions] = useState<any[]>([]);
