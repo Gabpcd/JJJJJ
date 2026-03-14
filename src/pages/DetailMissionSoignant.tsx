@@ -86,7 +86,7 @@ export default function DetailMissionSoignant() {
           type_paiement_soignant, numero_note_honoraires,
           yousign_statut
         `).eq('id', id).single(),
-        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, heures_cumulees').eq('id', user.id).single(),
+        supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, heures_cumulees, premiere_mission_le').eq('id', user.id).single(),
       ]);
       if (m) {
         setMission(m);
