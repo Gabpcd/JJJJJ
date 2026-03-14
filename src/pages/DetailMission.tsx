@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send } from 'lucide-react';
