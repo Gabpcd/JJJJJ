@@ -76,6 +76,7 @@ export default function AdminModeration() {
 
   return (
     <LayoutAdmin>
+      <BreadcrumbAdmin pageName="Modération" />
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Modération</h1>
 

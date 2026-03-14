@@ -101,6 +101,7 @@ export default function AdminEmails() {
 
   return (
     <LayoutAdmin>
+      <BreadcrumbAdmin pageName="Emails" />
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">

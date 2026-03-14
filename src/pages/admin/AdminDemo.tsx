@@ -50,6 +50,7 @@ export default function AdminDemo() {
 
   return (
     <LayoutAdmin>
+      <BreadcrumbAdmin pageName="Données de démo" />
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Données de démonstration</h1>
