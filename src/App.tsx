@@ -63,6 +63,8 @@ import DevenirSoignant from "./pages/DevenirSoignant";
 import RecruterSoignants from "./pages/RecruterSoignants";
 import InfirmiereLiberal from "./pages/InfirmiereLiberal";
 import PharmacieRemplacement from "./pages/PharmacieRemplacement";
+import BlogListe from "./pages/BlogListe";
+import BlogArticle from "./pages/BlogArticle";
 
 const queryClient = new QueryClient();
 
