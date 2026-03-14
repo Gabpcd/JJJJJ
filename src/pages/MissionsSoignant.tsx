@@ -197,6 +197,7 @@ export default function MissionsSoignant() {
 
       {loading ? <SkeletonList count={4} /> : (
         <>
+          <p className="text-sm text-muted-foreground mb-3">{missionsAvecDistance.length} mission{missionsAvecDistance.length !== 1 ? 's' : ''} trouvée{missionsAvecDistance.length !== 1 ? 's' : ''}</p>
           {onglet === 'disponibles' && (
             groupes.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -174,6 +174,9 @@ export default function ListeMissions() {
         )}
       </div>
 
+      {/* Nombre de résultats */}
+      <p className="text-sm text-muted-foreground mb-3">{missions.length} mission{missions.length !== 1 ? 's' : ''} trouvée{missions.length !== 1 ? 's' : ''}</p>
+
       {/* Liste */}
       {groupes.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
