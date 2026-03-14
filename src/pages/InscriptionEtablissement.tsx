@@ -40,9 +40,20 @@ export default function InscriptionEtablissement() {
     lat: null as number | null, lng: null as number | null,
   });
 
+  const [siretValidation, setSiretValidation] = useState<{ valide: boolean; message: string } | null>(null);
+
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
-  const etape2Valide = form.nom && form.siret.length === 14 && form.type && form.ville;
+  const siretEstValide = siretValidation?.valide === true;
+  const etape2Valide = form.nom && siretEstValide && form.type && form.ville;
+
+  const handleSiretBlur = () => {
+    if (form.siret.length > 0) {
+      setSiretValidation(validerSiret(form.siret));
+    } else {
+      setSiretValidation(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
