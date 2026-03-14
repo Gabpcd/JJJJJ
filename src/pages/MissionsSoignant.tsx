@@ -200,11 +200,13 @@ export default function MissionsSoignant() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {groupes.map((g, i) => {
                   if (g.type === 'serie') {
-                    return <CarteSerie key={g.serieId} missions={g.missions} role="soignant" soignant={soignant} />;
+                    return <FadeInView key={g.serieId} delay={i * 100}><CarteSerie missions={g.missions} role="soignant" soignant={soignant} /></FadeInView>;
                   }
                   return (
-                    <CarteMissionSoignant key={g.mission.id} mission={g.mission} soignant={soignant}
-                      onClick={() => navigate(`/soignant/missions/${g.mission.id}`)} />
+                    <FadeInView key={g.mission.id} delay={i * 100}>
+                      <CarteMissionSoignant mission={g.mission} soignant={soignant}
+                        onClick={() => navigate(`/soignant/missions/${g.mission.id}`)} />
+                    </FadeInView>
                   );
                 })}
               </div>

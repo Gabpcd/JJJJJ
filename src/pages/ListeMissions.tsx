@@ -175,22 +175,24 @@ export default function ListeMissions() {
           {groupes.map((g, i) => {
             if (g.type === 'serie') {
               return (
-                <CarteSerie
-                  key={g.serieId}
-                  missions={g.missions}
-                  role="etablissement"
-                  onAnnulerSerie={() => setModalAnnulerSerie(g.missions.filter((m: any) => m.statut === 'OUVERTE'))}
-                />
+                <FadeInView key={g.serieId} delay={i * 100}>
+                  <CarteSerie
+                    missions={g.missions}
+                    role="etablissement"
+                    onAnnulerSerie={() => setModalAnnulerSerie(g.missions.filter((m: any) => m.statut === 'OUVERTE'))}
+                  />
+                </FadeInView>
               );
             }
             return (
-              <CarteMission
-                key={g.mission.id}
-                mission={g.mission}
-                onDupliquer={(m) => setModalDupliquer(m)}
-                onAnnuler={(m) => setModalAnnuler(m)}
-                onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
-              />
+              <FadeInView key={g.mission.id} delay={i * 100}>
+                <CarteMission
+                  mission={g.mission}
+                  onDupliquer={(m) => setModalDupliquer(m)}
+                  onAnnuler={(m) => setModalAnnuler(m)}
+                  onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
+                />
+              </FadeInView>
             );
           })}
         </div>

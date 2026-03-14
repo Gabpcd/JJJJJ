@@ -237,12 +237,14 @@ export default function DashboardEtablissement() {
 
         {missions.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {missions.map(m => (
-              <CarteMission key={m.id} mission={m}
-                onDupliquer={(m) => setModalDupliquer(m)}
-                onAnnuler={(m) => setModalAnnuler(m)}
-                onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
-              />
+            {missions.map((m, i) => (
+              <FadeInView key={m.id} delay={i * 100}>
+                <CarteMission mission={m}
+                  onDupliquer={(m) => setModalDupliquer(m)}
+                  onAnnuler={(m) => setModalAnnuler(m)}
+                  onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
+                />
+              </FadeInView>
             ))}
           </div>
         ) : (
