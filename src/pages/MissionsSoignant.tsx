@@ -164,7 +164,7 @@ export default function MissionsSoignant() {
     return result;
   }, [missionsAvecDistance, onglet]);
 
-  if (!soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (!soignant) return <LayoutApp role="SOIGNANT"><SkeletonList count={4} /></LayoutApp>;
 
   const onglets: { id: Onglet; label: string }[] = [
     { id: 'disponibles', label: 'Disponibles' },
