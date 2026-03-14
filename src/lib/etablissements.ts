@@ -14,6 +14,8 @@ export interface EtablissementSafe {
   taux_majoration_nuit_pourcent: number | null;
   taux_majoration_dimanche_pourcent: number | null;
   taux_majoration_ferie_pourcent: number | null;
+  couleur_theme?: string | null;
+  logo_url?: string | null;
 }
 
 /**
