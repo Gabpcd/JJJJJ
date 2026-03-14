@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { CheckAnimation } from '@/components/CheckAnimation';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
