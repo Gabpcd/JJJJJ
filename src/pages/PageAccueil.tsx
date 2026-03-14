@@ -365,7 +365,17 @@ export default function PageAccueil() {
                 <li><a href="/tarifs" className="hover:text-foreground transition-colors">Tarifs</a></li>
               </ul>
             </div>
-            {/* Col 3 */}
+            {/* Col 3 — Ressources */}
+            <div>
+              <h4 className="font-semibold text-foreground text-sm mb-3">Ressources</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><a href="/devenir-soignant" className="hover:text-foreground transition-colors">Devenir soignant</a></li>
+                <li><a href="/recruter-soignants" className="hover:text-foreground transition-colors">Recruter des soignants</a></li>
+                <li><a href="/infirmiere-liberale" className="hover:text-foreground transition-colors">Passer en libéral</a></li>
+                <li><a href="/pharmacie-remplacement" className="hover:text-foreground transition-colors">Remplacement pharmacie</a></li>
+              </ul>
+            </div>
+            {/* Col 4 */}
             <div>
               <h4 className="font-semibold text-foreground text-sm mb-3">Légal</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
@@ -373,13 +383,6 @@ export default function PageAccueil() {
                 <li><a href="/cgv" className="hover:text-foreground transition-colors">CGV</a></li>
                 <li><a href="/confidentialite" className="hover:text-foreground transition-colors">Confidentialité</a></li>
                 <li><a href="/mentions-legales" className="hover:text-foreground transition-colors">Mentions légales</a></li>
-              </ul>
-            </div>
-            {/* Col 4 */}
-            <div>
-              <h4 className="font-semibold text-foreground text-sm mb-3">Contact</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="mailto:contact@soindirect.com" className="hover:text-foreground transition-colors">contact@soindirect.com</a></li>
               </ul>
             </div>
           </div>

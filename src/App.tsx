@@ -59,6 +59,10 @@ import RechercheMissions from "./pages/RechercheMissions";
 import PremiumSoignant from "./pages/PremiumSoignant";
 import PremiumEtablissement from "./pages/PremiumEtablissement";
 import WidgetRecrutement from "./pages/WidgetRecrutement";
+import DevenirSoignant from "./pages/DevenirSoignant";
+import RecruterSoignants from "./pages/RecruterSoignants";
+import InfirmiereLiberal from "./pages/InfirmiereLiberal";
+import PharmacieRemplacement from "./pages/PharmacieRemplacement";
 
 const queryClient = new QueryClient();
 
@@ -68,6 +72,10 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<PageAccueil />} />
         <Route path="/tarifs" element={<Tarifs />} />
+        <Route path="/devenir-soignant" element={<DevenirSoignant />} />
+        <Route path="/recruter-soignants" element={<RecruterSoignants />} />
+        <Route path="/infirmiere-liberale" element={<InfirmiereLiberal />} />
+        <Route path="/pharmacie-remplacement" element={<PharmacieRemplacement />} />
         <Route path="/connexion" element={<PageConnexion />} />
         <Route path="/confirmer-email" element={<ConfirmerEmail />} />
         <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
