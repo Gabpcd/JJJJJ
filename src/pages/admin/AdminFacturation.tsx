@@ -65,13 +65,13 @@ export default function AdminFacturation() {
     setGenerating(true);
     const { data, error } = await supabase.rpc('fn_auto_facturation_mensuelle' as any);
     setGenerating(false);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
+    if (error) { toast.error(error.message); return; }
     const result = data as any;
     if (result?.success) {
-      toast({ title: `${result.factures_generees} facture(s) générée(s)` });
+      toast.success(`${result.factures_generees} facture(s) générée(s)`);
       charger();
     } else {
-      toast({ title: 'Erreur', description: result?.error || 'Erreur inconnue', variant: 'destructive' });
+      toast.error(result?.error || 'Erreur inconnue');
     }
   };
 
