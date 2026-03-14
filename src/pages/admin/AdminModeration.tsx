@@ -46,8 +46,8 @@ export default function AdminModeration() {
 
   const publierEvaluation = async (id: string) => {
     const { error } = await supabase.from('evaluations').update({ visible: true } as any).eq('id', id);
-    if (error) { toast({ title: 'Erreur', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Évaluation publiée' });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Évaluation publiée');
     charger();
   };
 
