@@ -11,7 +11,7 @@ import { BadgeNiveau } from '@/components/BadgeNiveau';
 import { BandeauGoalGradient, CelebrationJalonManager } from '@/components/GoalGradient';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
-import { EtatVide } from '@/components/EtatVide';
+import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { OnboardingGuide } from '@/components/OnboardingGuide';
 import { BarreCompletionProfil } from '@/components/BarreCompletionProfil';
@@ -19,11 +19,17 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
+import { GraphiqueGains6Mois } from '@/components/GraphiqueGains6Mois';
+import { ProgressionCirculaire3200h } from '@/components/ProgressionCirculaire3200h';
+import { ProchainBadgeWidget } from '@/components/ProchainBadgeWidget';
+import { CalendrierMiniSemaine } from '@/components/CalendrierMiniSemaine';
+import { JaugeSpeedometer } from '@/components/JaugeSpeedometer';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
-import { format, differenceInDays } from 'date-fns';
+import { format, differenceInDays, startOfWeek, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import type { BadgeStats } from '@/components/BadgesGamification';
 
 interface SoignantData {
   prenom: string; nom: string; telephone: string | null;
@@ -48,14 +54,6 @@ function calculerCompletionProfil(s: SoignantData) {
   return { pourcentage: Math.round((completes.length / checks.length) * 100), manquants, completes };
 }
 
-function getScoreConfig(score: number) {
-  if (score >= 90) return { couleurIcone: 'text-success', couleurFond: 'bg-success/10', label: 'Excellent' };
-  if (score >= 70) return { couleurIcone: 'text-primary', couleurFond: 'bg-primary/10', label: 'Fiable' };
-  if (score >= 50) return { couleurIcone: 'text-warning', couleurFond: 'bg-warning/10', label: 'Correct' };
-  if (score >= 30) return { couleurIcone: 'text-warning', couleurFond: 'bg-warning/10', label: 'À améliorer' };
-  return { couleurIcone: 'text-destructive', couleurFond: 'bg-destructive/10', label: 'Critique' };
-}
-
 export default function DashboardSoignant() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -65,16 +63,17 @@ export default function DashboardSoignant() {
   const [docsExpirant, setDocsExpirant] = useState<any[]>([]);
   const [heuresSemaine, setHeuresSemaine] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [modalScore, setModalScore] = useState(false);
   const [missionProchaine, setMissionProchaine] = useState<any>(null);
   const [missionsOubliDepart, setMissionsOubliDepart] = useState<any[]>([]);
   const [gainsCeMois, setGainsCeMois] = useState({ net: 0, nb: 0 });
   const [missionsWeekend, setMissionsWeekend] = useState<any[]>([]);
+  const [gains6Mois, setGains6Mois] = useState<{ debut_le: string; net_a_payer: number | null }[]>([]);
+  const [missionsSemaine, setMissionsSemaine] = useState<{ debut_le: string; statut: string }[]>([]);
+  const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      // Calcul semaine courante
       const now = new Date();
       const jour = now.getDay();
       const lundi = new Date(now);
@@ -83,27 +82,30 @@ export default function DashboardSoignant() {
       const dimanche = new Date(lundi);
       dimanche.setDate(lundi.getDate() + 7);
 
-      // Gains ce mois
       const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
       const finMois = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-      // Fetch soignant first to get profession for filtering
-      // C4: Minimized select — only fields needed for dashboard display
+      // 6 months ago for gains chart
+      const sixMoisAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
       const { data: sg } = await supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single();
 
       const profession = sg?.profession;
 
-      // Build mission query with profession filter
       let missionsQuery = supabase.from('missions').select('id, intitule, service, debut_le, fin_le, taux_horaire_base, est_urgente, etablissement_id').eq('statut', 'OUVERTE').order('debut_le', { ascending: true }).limit(3);
       if (profession) missionsQuery = missionsQuery.eq('profession_requise', profession);
 
-      const [{ data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }, { data: gainsMois }] = await Promise.all([
+      const [{ data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }, { data: gainsMois }, { data: gains6m }, { data: msSemaineCal }] = await Promise.all([
         missionsQuery,
         supabase.from('missions').select('id, intitule, debut_le, fin_le, statut, etablissement_id').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true }).limit(3),
         supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
         supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
         supabase.from('missions').select('id, intitule, fin_le, presences(id, pointage_arrivee_le, pointage_depart_le)').eq('soignant_assigne_id', user.id).eq('statut', 'EN_COURS').lt('fin_le', new Date(Date.now() - 30 * 60000).toISOString()),
         supabase.from('missions').select('net_a_payer').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', debutMois.toISOString()).lte('debut_le', finMois.toISOString()),
+        // 6-month gains
+        supabase.from('missions').select('debut_le, net_a_payer').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', sixMoisAgo.toISOString()).order('debut_le', { ascending: true }),
+        // Week calendar missions
+        supabase.from('missions').select('debut_le, statut').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
       ]);
 
       // Enrich missions with safe establishment data
@@ -129,7 +131,6 @@ export default function DashboardSoignant() {
           differenceInDays(new Date(d.valide_jusqua), new Date()) < 30
         ));
       }
-      // Mission prochaine (dans moins d'1h)
       if (mm) {
         const prochaine = (mm as any[]).find(m => {
           const mins = (new Date(m.debut_le).getTime() - Date.now()) / 60000;
@@ -137,36 +138,52 @@ export default function DashboardSoignant() {
         });
         if (prochaine) setMissionProchaine(prochaine);
       }
-      // Oubli de départ
       if (missionsOubliees) {
         const oublis = (missionsOubliees as any[]).filter(m =>
           m.presences?.length > 0 && m.presences[0].pointage_arrivee_le && !m.presences[0].pointage_depart_le
         );
         setMissionsOubliDepart(oublis);
       }
-      // Gains ce mois
       if (gainsMois) {
         const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_a_payer || 0), 0);
         setGainsCeMois({ net, nb: (gainsMois as any[]).length });
       }
-      // Missions weekend prochain
+      if (gains6m) setGains6Mois(gains6m as any);
+      if (msSemaineCal) setMissionsSemaine(msSemaineCal as any);
+
+      // Badge stats (simple computation from soignant data)
+      if (sg) {
+        setBadgeStats({
+          missionsTerminees: sg.total_missions_terminees || 0,
+          scoreFiabilite: sg.score_fiabilite || 0,
+          heuresCumulees: sg.heures_cumulees || 0,
+          annulations: 0,
+          missionsNuit: 0,
+          missionsWeekend: 0,
+          maxMissionsMemeEtab: 0,
+          retards: 0,
+          totalMissions: sg.total_missions_terminees || 0,
+        });
+      }
+
+      // Missions weekend
       if (profession) {
         const today = new Date();
-        const dayOfWeek = today.getDay(); // 0=dim
+        const dayOfWeek = today.getDay();
         const daysToSat = dayOfWeek === 0 ? 6 : (6 - dayOfWeek);
         const samedi = new Date(today);
         samedi.setDate(today.getDate() + daysToSat);
         samedi.setHours(0, 0, 0, 0);
-        const lundi = new Date(samedi);
-        lundi.setDate(samedi.getDate() + 2);
-        lundi.setHours(23, 59, 59);
+        const lundiProchain = new Date(samedi);
+        lundiProchain.setDate(samedi.getDate() + 2);
+        lundiProchain.setHours(23, 59, 59);
 
         const { data: wkData } = await supabase.from('missions')
           .select('id, intitule, debut_le, fin_le, taux_horaire_base, est_urgente, etablissement_id')
           .eq('statut', 'OUVERTE')
           .eq('profession_requise', profession)
           .gte('debut_le', samedi.toISOString())
-          .lte('debut_le', lundi.toISOString())
+          .lte('debut_le', lundiProchain.toISOString())
           .order('debut_le', { ascending: true })
           .limit(3);
 
@@ -186,7 +203,6 @@ export default function DashboardSoignant() {
 
   const profil = calculerCompletionProfil(soignant);
   const score = soignant.score_fiabilite ?? 50;
-  const scoreConfig = getScoreConfig(score);
   const heures = soignant.heures_cumulees ?? 0;
   const missionsTerminees = soignant.total_missions_terminees ?? 0;
 
@@ -196,7 +212,6 @@ export default function DashboardSoignant() {
     <LayoutApp role="SOIGNANT">
       <OnboardingGuide role="SOIGNANT" userId={user!.id} />
 
-      {/* Barre complétion profil (critères onboarding) */}
       <BarreCompletionProfil
         nom={!!soignant.nom}
         rppsVerifie={!!(soignant as any).rpps_verifie || !!soignant.numero_rpps}
@@ -217,24 +232,17 @@ export default function DashboardSoignant() {
         )}
       </div>
 
-      {/* Alerte 48h */}
       <BandeauAlerte48h heuresSemaine={heuresSemaine} />
 
-      {/* Oubli de départ */}
       {missionsOubliDepart.map(m => (
         <BandeauOubliDepart key={m.id} mission={m} onPointer={() => navigate('/soignant/presences')} />
       ))}
 
-      {/* Mission prochaine — aller pointer */}
       {missionProchaine && <WidgetAllerPointer mission={missionProchaine} />}
 
-      {/* Goal Gradient — Proximité de jalon */}
       <BandeauGoalGradient heures={heures} />
-
-      {/* Célébration de jalon */}
       <CelebrationJalonManager heures={heures} />
 
-      {/* Alerte documents expirant */}
       {docsExpirant.map(d => (
         <div key={d.id} className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-3 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
@@ -245,7 +253,6 @@ export default function DashboardSoignant() {
         </div>
       ))}
 
-      {/* Profil completion */}
       {profil.pourcentage < 100 ? (
         <div className="rounded-2xl bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 p-4 md:p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
@@ -264,23 +271,13 @@ export default function DashboardSoignant() {
         </div>
       )}
 
-      {/* KPI */}
+      {/* KPI — Score fiabilité remplacé par speedometer */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <FadeInView delay={0}>
           <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
         </FadeInView>
         <FadeInView delay={100}>
-          <div className="card-kpi cursor-pointer" onClick={() => navigate('/soignant/fiabilite')}>
-            <div className="flex items-start gap-3">
-              <div className={`rounded-xl p-2.5 ${scoreConfig.couleurFond}`}><Star className={`h-5 w-5 ${scoreConfig.couleurIcone}`} /></div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{score}<span className="text-sm text-muted-foreground">/100</span></p>
-                <p className="text-xs text-muted-foreground">Score · {scoreConfig.label}</p>
-                <BadgeNiveau score={score} compact />
-                <p className="text-[10px] text-primary mt-0.5">Voir le détail →</p>
-              </div>
-            </div>
-          </div>
+          <JaugeSpeedometer score={score} onClick={() => navigate('/soignant/fiabilite')} />
         </FadeInView>
         <FadeInView delay={200}>
           <CarteKPI icone={Clock} valeur={`${heures}h`} label="Heures cumulées" sousLabel="sur 3 200h objectif" couleurIcone="text-purple-600" couleurFond="bg-purple-100" />
@@ -304,7 +301,30 @@ export default function DashboardSoignant() {
         </FadeInView>
       </div>
 
-      {/* Missions près de chez vous ce week-end */}
+      {/* Graphique gains 6 mois */}
+      <FadeInView>
+        {gains6Mois.length > 0 ? (
+          <GraphiqueGains6Mois missions={gains6Mois} />
+        ) : (
+          <div className="mb-6">
+            <EtatVide illustration={<IllustrationTirelire />} titre="Pas encore de gains" sousTitre="Vos gains apparaîtront ici après votre première mission terminée." />
+          </div>
+        )}
+      </FadeInView>
+
+      {/* Progression 3200h + Prochain badge — side by side on desktop */}
+      {!PROFESSIONS_NON_LIBERAL.includes(soignant.profession) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+          <FadeInView delay={0}>
+            <ProgressionCirculaire3200h heures={heures} />
+          </FadeInView>
+          <FadeInView delay={100}>
+            {badgeStats && <ProchainBadgeWidget stats={badgeStats} />}
+          </FadeInView>
+        </div>
+      )}
+
+      {/* Missions weekend */}
       {missionsWeekend.length > 0 && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
@@ -339,6 +359,11 @@ export default function DashboardSoignant() {
       <div className="mb-6">
         <CompteurHebdomadaire />
       </div>
+
+      {/* Calendrier mini semaine */}
+      <FadeInView>
+        <CalendrierMiniSemaine missions={missionsSemaine} />
+      </FadeInView>
 
       {/* Mes missions en cours */}
       {mesMissions.length > 0 && (
@@ -408,23 +433,22 @@ export default function DashboardSoignant() {
         </div>
       )}
 
-      {/* Parcours libéral — masqué pour pharmaciens */}
+      {/* Parcours libéral */}
       {!PROFESSIONS_NON_LIBERAL.includes(soignant.profession) ? (
         <>
-          <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 border border-purple-200 p-4 md:p-6 mb-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
+          <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 dark:from-purple-950/20 dark:to-purple-900/10 border border-purple-200 dark:border-purple-800 p-4 md:p-6 mb-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-base font-bold text-foreground">Mon parcours vers le libéral</h2>
               <span className="text-xs text-primary font-medium">Mon parcours →</span>
             </div>
             <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
-            <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-purple-500 to-purple-600" couleurFond="bg-purple-100" />
+            <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-purple-500 to-purple-600" couleurFond="bg-purple-100 dark:bg-purple-900/30" />
             <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
-            <p className="text-sm font-semibold text-foreground mt-3"><span className="text-purple-600">{heures}h</span> / 3 200h</p>
+            <p className="text-sm font-semibold text-foreground mt-3"><span className="text-purple-600 dark:text-purple-400">{heures}h</span> / 3 200h</p>
           </div>
 
-          {/* Bouton passer en libéral */}
           {heures >= 800 && (soignant as any).statut_liberal !== 'ACTIF' && (
-            <div className="rounded-2xl bg-gradient-to-r from-primary/5 to-purple-50 border border-primary/20 p-4 mb-6 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/passer-en-liberal')}>
+            <div className="rounded-2xl bg-gradient-to-r from-primary/5 to-purple-50 dark:to-purple-900/10 border border-primary/20 p-4 mb-6 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/passer-en-liberal')}>
               <div className="flex items-center gap-3">
                 <div className="rounded-xl p-2.5 bg-primary/10"><Rocket className="h-5 w-5 text-primary" /></div>
                 <div>
@@ -437,7 +461,7 @@ export default function DashboardSoignant() {
           )}
         </>
       ) : (
-        <div className="rounded-2xl bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 p-4 mb-6">
+        <div className="rounded-2xl bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-900/10 border border-blue-200 dark:border-blue-800 p-4 mb-6">
           <p className="text-sm font-semibold text-foreground">💊 Vous exercez en pharmacie d'officine</p>
           <p className="text-xs text-muted-foreground mt-1">Les missions sont en CDD de remplacement.</p>
         </div>
@@ -445,7 +469,7 @@ export default function DashboardSoignant() {
 
       {/* Prévoyance CTA */}
       {!(soignant as any).prevoyance_inscrit && (
-        <div className="rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 p-4 mb-6 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
+        <div className="rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/20 dark:to-purple-900/10 border border-violet-200 dark:border-violet-800 p-4 mb-6 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
           <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protégez-vous avec la Prévoyance Soin Direct</h3>
           <p className="text-xs text-muted-foreground mb-2">Assurance santé subventionnée jusqu'à 30%. Bonus : +3 points de fiabilité.</p>
           <span className="text-xs text-primary font-medium">Découvrir les plans →</span>
