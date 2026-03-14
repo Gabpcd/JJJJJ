@@ -172,7 +172,7 @@ export default function PageAccueil() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-6">
             {[
               { cible: 15, suffixe: '+', label: 'professions' },
-              { cible: 600, suffixe: '+', label: 'pharmacies partenaires' },
+              { cible: 24, suffixe: '/7', label: 'missions jour et nuit' },
               { cible: 100, suffixe: '%', label: 'conforme Code du travail' },
               { cible: 0, suffixe: '€', label: "d'abonnement" },
             ].map((c, i) => (
@@ -260,11 +260,29 @@ export default function PageAccueil() {
             <p className="text-sm font-semibold text-muted-foreground uppercase tracking-widest text-center mb-8">Ils nous font confiance</p>
           </RevealOnScroll>
           <RevealOnScroll delay={100}>
-            <div className="flex justify-center mb-10">
-              <div className="px-6 py-3 rounded-xl border border-border bg-card">
-                <span className="text-lg font-bold text-foreground tracking-tight">Groupe Leader Santé</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto mb-10">
+              {/* Carte GLS */}
+              <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-5">
+                <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="text-lg font-extrabold text-primary tracking-tight">GLS</span>
+                </div>
+                <div>
+                  <p className="font-bold text-foreground text-sm">Groupe Leader Santé</p>
+                  <p className="text-xs text-muted-foreground">Réseau de 600+ pharmacies d'officine</p>
+                </div>
+              </div>
+              {/* Carte CB */}
+              <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-5">
+                <div className="w-14 h-14 rounded-xl bg-accent-navy/10 dark:bg-foreground/10 flex items-center justify-center shrink-0">
+                  <span className="text-lg font-extrabold text-accent-navy dark:text-foreground tracking-tight">CB</span>
+                </div>
+                <div>
+                  <p className="font-bold text-foreground text-sm">Clinique des Bluets</p>
+                  <p className="text-xs text-muted-foreground">Maternité et chirurgie — Paris</p>
+                </div>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground text-center mb-10">Lettre d'intention signée</p>
           </RevealOnScroll>
           <RevealOnScroll delay={200}>
             <div className="flex flex-wrap justify-center gap-4">
