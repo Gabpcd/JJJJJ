@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { getPointagesEnAttente, sauvegarderPointagesRestants, PointageHorsLigne } from '@/lib/horsLigne';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 export function SyncHorsLigne() {
   const syncing = useRef(false);
