@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { PlanningHebdomadaire } from '@/components/PlanningHebdomadaire';
 import { CalendrierMensuel } from '@/components/CalendrierMensuel';

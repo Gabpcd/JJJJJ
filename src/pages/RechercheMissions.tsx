@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
