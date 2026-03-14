@@ -348,11 +348,11 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
 
       {validation.erreurs.length === 0 && joursActifs.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-medium text-teal-600">
+          <div className="flex items-center gap-2 text-xs font-medium text-primary">
             <CheckCircle2 className="h-4 w-4" />
             Repos inter-créneaux : conforme (≥ 11h)
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-teal-600">
+          <div className="flex items-center gap-2 text-xs font-medium text-primary">
             <CheckCircle2 className="h-4 w-4" />
             Heures hebdomadaires : {validation.totalHebdo}h / 48h — conforme
           </div>
