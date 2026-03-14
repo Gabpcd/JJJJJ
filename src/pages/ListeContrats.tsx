@@ -7,6 +7,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { FileText } from 'lucide-react';
+import { IllustrationStylo } from '@/components/EtatVide';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { UserRole } from '@/lib/types';
