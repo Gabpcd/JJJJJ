@@ -52,7 +52,7 @@ export default function ListeMissions() {
       .order('debut_le', { ascending: false });
 
     if (filtreStatut) query = query.eq('statut', filtreStatut as any);
-    if (recherche) query = query.ilike('intitule', `%${recherche}%`);
+    if (debouncedRecherche) query = query.ilike('intitule', `%${debouncedRecherche}%`);
 
     const [{ data }, { data: sgData }] = await Promise.all([
       query,
