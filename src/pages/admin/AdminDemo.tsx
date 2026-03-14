@@ -29,9 +29,9 @@ export default function AdminDemo() {
     const { error } = await supabase.rpc('fn_charger_demo_investisseur' as any);
     setLoading(null);
     if (error) {
-      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+      toast.error(error.message);
     } else {
-      toast({ title: 'Données de démo chargées', description: '4 établissements, 12 soignants, 35 missions' });
+      toast.success('Données de démo chargées — 4 établissements, 12 soignants, 35 missions');
       chargerKpi();
     }
   };
