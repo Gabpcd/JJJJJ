@@ -1,24 +1,9 @@
 import React, { useState } from 'react';
 import { Copy, CheckCircle, MessageCircle } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface EncartInvitationProps {
   codeParrainage: string;
-}
-
-function QRCodeSVG({ url, size = 120 }: { url: string; size?: number }) {
-  // Simple QR-like visual placeholder using SVG
-  // In production, use a proper QR library; here we render a branded placeholder
-  const encoded = encodeURIComponent(url);
-  return (
-    <img
-      src={`https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}&format=svg&margin=4`}
-      alt="QR Code d'invitation"
-      width={size}
-      height={size}
-      className="rounded-lg"
-      loading="lazy"
-    />
-  );
 }
 
 export function EncartInvitation({ codeParrainage }: EncartInvitationProps) {
@@ -44,9 +29,16 @@ export function EncartInvitation({ codeParrainage }: EncartInvitationProps) {
       </p>
 
       <div className="flex flex-col sm:flex-row gap-4 items-center">
-        {/* QR Code */}
-        <div className="shrink-0">
-          <QRCodeSVG url={lienRef} size={120} />
+        {/* QR Code — generated locally, no third-party service (RGPD compliant) */}
+        <div className="shrink-0 bg-background p-2 rounded-lg">
+          <QRCodeSVG
+            value={lienRef}
+            size={120}
+            level="M"
+            bgColor="transparent"
+            fgColor="currentColor"
+            className="text-foreground"
+          />
         </div>
 
         <div className="flex-1 space-y-3 w-full">
