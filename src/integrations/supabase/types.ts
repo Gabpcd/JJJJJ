@@ -2733,6 +2733,7 @@ export type Database = {
         Args: { p_assujetti_tva: boolean; p_numero_tva?: string }
         Returns: Json
       }
+      fn_mon_token_calendrier: { Args: never; Returns: string }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
       fn_nettoyer_tokens_push: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
