@@ -74,10 +74,10 @@ export default function AdminDemo() {
             </div>
           ) : kpi ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <CarteKPI titre="Soignants" valeur={kpi.total_soignants ?? 0} icone={Users} />
-              <CarteKPI titre="Établissements" valeur={kpi.total_etablissements ?? 0} icone={Building2} />
-              <CarteKPI titre="Missions" valeur={kpi.total_missions ?? 0} icone={Briefcase} />
-              <CarteKPI titre="Factures" valeur={kpi.total_factures ?? 0} icone={FileText} />
+              <CarteKPI label="Soignants" valeur={kpi.total_soignants ?? 0} icone={Users} couleurIcone="text-primary" couleurFond="bg-primary/10" />
+              <CarteKPI label="Établissements" valeur={kpi.total_etablissements ?? 0} icone={Building2} couleurIcone="text-primary" couleurFond="bg-primary/10" />
+              <CarteKPI label="Missions" valeur={kpi.total_missions ?? 0} icone={Briefcase} couleurIcone="text-primary" couleurFond="bg-primary/10" />
+              <CarteKPI label="Factures" valeur={kpi.total_factures ?? 0} icone={FileText} couleurIcone="text-primary" couleurFond="bg-primary/10" />
             </div>
           ) : (
             <p className="text-muted-foreground">Impossible de charger les KPI.</p>
