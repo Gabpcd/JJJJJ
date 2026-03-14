@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { extraireContratPreference, injecterContratTag, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { WarningRist } from '@/components/WarningRist';
