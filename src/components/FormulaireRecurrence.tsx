@@ -319,7 +319,7 @@ export function FormulaireRecurrence({ onChange }: FormulaireRecurrenceProps) {
           {/* Récap hebdo */}
           <div className="border-t border-border mt-3 pt-3 flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Total hebdomadaire :</span>
-            <span className={`font-bold ${validation.totalHebdo > 48 ? 'text-destructive' : validation.totalHebdo > 36 ? 'text-amber-600' : 'text-teal-600'}`}>
+            <span className={`font-bold ${validation.totalHebdo > 48 ? 'text-destructive' : validation.totalHebdo > 36 ? 'text-warning' : 'text-primary'}`}>
               {validation.totalHebdo}h {validation.totalHebdo > 48 && '← 🔴 DÉPASSE 48h !'}
             </span>
           </div>
