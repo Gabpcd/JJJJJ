@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { handleErrorSilent } from '@/lib/handleError';
+import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
+import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
