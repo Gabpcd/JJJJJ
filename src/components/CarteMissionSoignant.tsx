@@ -95,4 +95,4 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
       </div>
     </div>
   );
-}
+});
