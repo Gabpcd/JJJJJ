@@ -8,6 +8,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RouteProtegee } from "@/components/RouteProtegee";
 import { PageTransition } from "@/components/PageTransition";
 import { ChargementPage } from "@/components/ChargementPage";
+import { ScrollToTop } from "@/components/ScrollToTop";
 
 /* ─── Public pages ─── */
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
