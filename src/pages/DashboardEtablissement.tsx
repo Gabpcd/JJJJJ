@@ -10,7 +10,6 @@ import { CarteKPI } from '@/components/CarteKPI';
 import { CarteMission } from '@/components/CarteMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EtatVide } from '@/components/EtatVide';
-import { ChargementPage } from '@/components/ChargementPage';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { WidgetPalierFidelite } from '@/components/WidgetPalierFidelite';
 import { WidgetBFA } from '@/components/WidgetBFA';
@@ -20,6 +19,12 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { OnboardingGuide } from '@/components/OnboardingGuide';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+
+import { KPICoutMoyenHeure } from '@/components/dashboard/KPICoutMoyenHeure';
+import { JaugeTauxRemplissage } from '@/components/dashboard/JaugeTauxRemplissage';
+import { TopSoignants } from '@/components/dashboard/TopSoignants';
+import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
+import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
 
 export default function DashboardEtablissement() {
   const navigate = useNavigate();
@@ -38,13 +43,22 @@ export default function DashboardEtablissement() {
   const [coutParMois, setCoutParMois] = useState<any[]>([]);
   const [favoris, setFavoris] = useState<any[]>([]);
 
+  // New HR state
+  const [coutMoyen, setCoutMoyen] = useState({ totalBrut: 0, totalHeures: 0 });
+  const [remplissage, setRemplissage] = useState({ pourvues: 0, total: 0 });
+  const [topSoignants, setTopSoignants] = useState<any[]>([]);
+  const [turnover, setTurnover] = useState({ ceMois: 0, moisPrec: 0 });
+  const [prochaines, setProchaines] = useState<any[]>([]);
+
   const charger = async () => {
     if (!user) return;
     let partialError = false;
+    const now = new Date();
+    const debutMois = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const debutMoisPrec = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+    const finMoisPrec = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
 
     try {
-      const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-
       const [resEtab, resMissions, resPaliers, resMissionsCeMois, resSoignants] = await Promise.all([
         supabase.from('etablissements').select('id, nom, type, email_contact, groupe_sante_id, taux_commission_negocie, palier_commission_id, groupes_sante(nom), paliers_commission(nom)').eq('id', user.id).single(),
         supabase.from('missions')
@@ -60,7 +74,6 @@ export default function DashboardEtablissement() {
       if (resEtab.error) { handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
       else if (resEtab.data) setEtab(resEtab.data);
 
-      // Map soignant data by ID
       const sgMap: Record<string, any> = {};
       if (Array.isArray(resSoignants.data)) {
         for (const s of resSoignants.data) sgMap[s.id] = s;
@@ -75,16 +88,84 @@ export default function DashboardEtablissement() {
       if (resPaliers.data) setPaliers(resPaliers.data);
       setMissionsCeMois(resMissionsCeMois.count ?? 0);
 
+      // --- NEW HR QUERIES (non-blocking) ---
+      try {
+        // Coût moyen + remplissage + turnover + top soignants + prochaines
+        const [resCout, resTotalMois, resPourvues, resSgCeMois, resSgMoisPrec, resProchaines] = await Promise.all([
+          // Missions terminées ce mois avec montants
+          supabase.from('missions').select('total_brut, duree_heures, soignant_assigne_id')
+            .eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
+          // Total missions publiées ce mois
+          supabase.from('missions').select('id', { count: 'exact', head: true })
+            .eq('etablissement_id', user.id).gte('cree_le', debutMois),
+          // Missions pourvues ce mois
+          supabase.from('missions').select('id', { count: 'exact', head: true })
+            .eq('etablissement_id', user.id).gte('cree_le', debutMois).not('soignant_assigne_id', 'is', null),
+          // Soignants distincts ce mois
+          supabase.from('missions').select('soignant_assigne_id')
+            .eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null).gte('debut_le', debutMois),
+          // Soignants distincts mois précédent
+          supabase.from('missions').select('soignant_assigne_id')
+            .eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null)
+            .gte('debut_le', debutMoisPrec).lt('debut_le', debutMois),
+          // 5 prochaines missions
+          supabase.from('missions')
+            .select('id, intitule, debut_le, statut, soignant_assigne_id')
+            .eq('etablissement_id', user.id).gte('debut_le', now.toISOString())
+            .in('statut', ['OUVERTE', 'ASSIGNEE', 'EN_COURS'])
+            .order('debut_le', { ascending: true }).limit(5),
+        ]);
+
+        // Coût moyen
+        if (resCout.data) {
+          const tb = resCout.data.reduce((s: number, m: any) => s + (m.total_brut || 0), 0);
+          const th = resCout.data.reduce((s: number, m: any) => s + (m.duree_heures || 0), 0);
+          setCoutMoyen({ totalBrut: tb, totalHeures: th });
+
+          // Top 3 soignants from terminated missions
+          const counts: Record<string, number> = {};
+          for (const m of resCout.data) {
+            if (m.soignant_assigne_id) counts[m.soignant_assigne_id] = (counts[m.soignant_assigne_id] || 0) + 1;
+          }
+          const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+          const top = sorted.map(([id, count]) => {
+            const sg = sgMap[id];
+            return {
+              id,
+              prenom: sg?.prenom || 'Soignant',
+              nom: sg?.nom || '',
+              score_fiabilite: sg?.score_fiabilite ?? 0,
+              count,
+            };
+          });
+          setTopSoignants(top);
+        }
+
+        // Remplissage
+        setRemplissage({ pourvues: resPourvues.count ?? 0, total: resTotalMois.count ?? 0 });
+
+        // Turnover
+        const distinctCe = new Set((resSgCeMois.data || []).map((m: any) => m.soignant_assigne_id)).size;
+        const distinctPrec = new Set((resSgMoisPrec.data || []).map((m: any) => m.soignant_assigne_id)).size;
+        setTurnover({ ceMois: distinctCe, moisPrec: distinctPrec });
+
+        // Prochaines missions
+        if (resProchaines.data) {
+          setProchaines(resProchaines.data.map((m: any) => ({
+            ...m,
+            soignant_nom: m.soignant_assigne_id && sgMap[m.soignant_assigne_id]
+              ? `${sgMap[m.soignant_assigne_id].prenom} ${sgMap[m.soignant_assigne_id].nom}`
+              : null,
+          })));
+        }
+      } catch {}
+
       // Graphiques + favoris (non-bloquant)
       try {
-        const now = new Date();
-        // Missions terminées par semaine (8 dernières semaines)
         const semaines: { label: string; count: number }[] = [];
         for (let i = 7; i >= 0; i--) {
-          const end = new Date(now);
-          end.setDate(end.getDate() - i * 7);
-          const start = new Date(end);
-          start.setDate(start.getDate() - 7);
+          const end = new Date(now); end.setDate(end.getDate() - i * 7);
+          const start = new Date(end); start.setDate(start.getDate() - 7);
           const { count } = await supabase.from('missions').select('id', { count: 'exact', head: true })
             .eq('etablissement_id', user.id).eq('statut', 'TERMINEE')
             .gte('fin_le', start.toISOString()).lt('fin_le', end.toISOString());
@@ -92,24 +173,21 @@ export default function DashboardEtablissement() {
         }
         setMissionsParSemaine(semaines);
 
-        // Coût par mois (4 derniers mois)
         const mois: { label: string; total: number }[] = [];
         for (let i = 3; i >= 0; i--) {
           const moisDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          const finMois = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+          const finMoisD = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
           const { data: mData } = await supabase.from('missions').select('total_brut')
             .eq('etablissement_id', user.id).eq('statut', 'TERMINEE')
-            .gte('fin_le', moisDate.toISOString()).lte('fin_le', finMois.toISOString());
+            .gte('fin_le', moisDate.toISOString()).lte('fin_le', finMoisD.toISOString());
           const total = (mData || []).reduce((s: number, m: any) => s + (m.total_brut || 0), 0);
           mois.push({ label: moisDate.toLocaleDateString('fr-FR', { month: 'short' }), total });
         }
         setCoutParMois(mois);
 
-        // Favoris
         const { data: favData } = await (supabase.from('favoris' as any) as any).select('soignant_id, cree_le').eq('etablissement_id', user.id).order('cree_le', { ascending: false }).limit(5);
         if (favData && favData.length > 0) {
-          const sgIds = favData.map((f: any) => f.soignant_id);
-          const enriched = sgIds.map((sid: string) => ({ ...(sgMap[sid] || { id: sid }), soignant_id: sid }));
+          const enriched = favData.map((f: any) => ({ ...(sgMap[f.soignant_id] || { id: f.soignant_id }), soignant_id: f.soignant_id }));
           setFavoris(enriched);
         }
       } catch {}
@@ -124,13 +202,11 @@ export default function DashboardEtablissement() {
       const [resO, resEC, resT, resTotal, resAssigned] = await Promise.all([
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
-        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', debutMois),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
       ]);
-
       if (resO.error || resEC.error || resT.error || resTotal.error || resAssigned.error) partialError = true;
-
       const totalN = resTotal.count ?? 0;
       setKpi({
         ouvertes: resO.count ?? 0,
@@ -143,7 +219,7 @@ export default function DashboardEtablissement() {
       partialError = true;
     }
 
-    // Audit HDS (non bloquant)
+    // Audit HDS
     try {
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'DONNEES_PERSO_CONSULTATION',
@@ -212,11 +288,38 @@ export default function DashboardEtablissement() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      {/* KPI row 1 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <FadeInView delay={0}><CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" /></FadeInView>
         <FadeInView delay={100}><CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" /></FadeInView>
         <FadeInView delay={200}><CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" /></FadeInView>
         <FadeInView delay={300}><CarteKPI icone={TrendingUp} valeur={`${kpi.taux}%`} label="Taux d'occupation" couleurIcone={kpi.taux > 70 ? 'text-success' : 'text-warning'} couleurFond={kpi.taux > 70 ? 'bg-success/10' : 'bg-warning/10'} /></FadeInView>
+      </div>
+
+      {/* KPI row 2 — HR indicators */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <FadeInView delay={400}>
+          <KPICoutMoyenHeure totalBrut={coutMoyen.totalBrut} totalHeures={coutMoyen.totalHeures} />
+        </FadeInView>
+        <FadeInView delay={500}>
+          <JaugeTauxRemplissage pourvues={remplissage.pourvues} total={remplissage.total} />
+        </FadeInView>
+        <FadeInView delay={600}>
+          <IndicateurTurnover soignantsCeMois={turnover.ceMois} soignantsMoisPrecedent={turnover.moisPrec} />
+        </FadeInView>
+        <FadeInView delay={700}>
+          <CarteKPI icone={CheckCircle} valeur={missionsCeMois} label="Missions terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
+        </FadeInView>
+      </div>
+
+      {/* Top soignants + Prochaines missions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <FadeInView delay={800}>
+          <TopSoignants soignants={topSoignants} etablissementId={user!.id} />
+        </FadeInView>
+        <FadeInView delay={900}>
+          <ProchaineMissions missions={prochaines} />
+        </FadeInView>
       </div>
 
       {/* Widget Palier de Fidélité */}
