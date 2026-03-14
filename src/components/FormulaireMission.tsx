@@ -293,7 +293,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         const missionId = (rpcResult as any)?.mission_id;
 
         await supabase.rpc('fn_ecrire_audit_safe', {
-          p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'MISSION_CREATION',
+          p_acteur_id: user.id, p_type_acteur: role, p_action: 'MISSION_CREATION',
           p_type_ressource: 'mission', p_id_ressource: missionId || user.id, p_cle_s3: null,
           p_details: { intitule, profession, taux: tauxHoraire, debut: debutLe, fin: finLe },
           p_ip: null, p_navigateur: navigator.userAgent,
