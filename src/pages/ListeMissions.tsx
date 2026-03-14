@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { ClipboardPlus, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteMission } from '@/components/CarteMission';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
