@@ -184,7 +184,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             <span style="color:#334155;">💰 Net à payer : <strong>${data.net} €</strong></span>
           `)}
           <p style="color:#334155;">N'oubliez pas d'évaluer l'établissement !</p>
-          ${BUTTON('Voir mes gains →', `${APP_URL}/soignant/gains`)}
+          ${BUTTON('Voir mes gains →', `${APP_URL}/soignant/mes-gains`)}
           ${SECURITY_NOTE}
         `),
       };
@@ -350,6 +350,15 @@ serve(async (req) => {
     // Strict validation: only type + destinataire_id accepted
     if (!type || !destinataire_id) {
       return new Response(JSON.stringify({ error: 'Paramètres requis : type, destinataire_id, data' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // C2-FIX: Validate destinataire_id is a strict UUID to prevent PostgREST filter injection
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(destinataire_id)) {
+      return new Response(JSON.stringify({ error: 'destinataire_id invalide' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
