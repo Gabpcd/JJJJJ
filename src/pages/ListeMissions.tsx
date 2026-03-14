@@ -81,7 +81,9 @@ export default function ListeMissions() {
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, [user, filtreStatut, recherche]);
+  const debouncedRecherche = useDebounce(recherche, 300);
+
+  useEffect(() => { charger(); }, [user, filtreStatut, debouncedRecherche]);
 
   // Group missions by serie
   const groupes = useMemo((): GroupeMission[] => {
