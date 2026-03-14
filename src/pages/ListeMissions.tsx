@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
@@ -29,6 +30,7 @@ const STATUTS_FILTRES = [
 type GroupeMission = { type: 'single'; mission: any } | { type: 'serie'; serieId: string; missions: any[] };
 
 export default function ListeMissions() {
+  usePageTitle('Mes missions');
   const navigate = useNavigate();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
@@ -164,13 +166,16 @@ export default function ListeMissions() {
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input value={recherche} onChange={(e) => setRecherche(e.target.value)}
-          placeholder="🔍 Rechercher par intitulé, service ou soignant..." className="input-base pl-9 pr-9" />
+          placeholder="Rechercher par intitulé, profession, ville..." className="input-base pl-9 pr-9" />
         {recherche && (
           <button onClick={() => setRecherche('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         )}
       </div>
+
+      {/* Nombre de résultats */}
+      <p className="text-sm text-muted-foreground mb-3">{missions.length} mission{missions.length !== 1 ? 's' : ''} trouvée{missions.length !== 1 ? 's' : ''}</p>
 
       {/* Liste */}
       {groupes.length > 0 ? (

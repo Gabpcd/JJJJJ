@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { PlanningHebdomadaire } from '@/components/PlanningHebdomadaire';
 import { CalendrierMensuel } from '@/components/CalendrierMensuel';
@@ -9,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function PlanningSoignant() {
+  usePageTitle('Planning');
   const { user } = useAuth();
 
   useEffect(() => {

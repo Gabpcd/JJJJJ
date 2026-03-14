@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -15,6 +16,7 @@ const STATUT_LABELS: Record<string, string> = {
 };
 
 export default function DetailFacture() {
+  usePageTitle('Détail facture');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CarteValidation } from '@/components/CarteValidation';
@@ -12,6 +13,7 @@ import { ClipboardCheck, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 export default function PresencesEtablissement() {
+  usePageTitle('Présences');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [presences, setPresences] = useState<any[]>([]);

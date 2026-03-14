@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Eye, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -57,6 +59,7 @@ function genererHtmlPreview(type: string, data: Record<string, string>): string 
 }
 
 export default function AdminEmails() {
+  usePageTitle('Emails');
   const { user } = useAuth();
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
@@ -98,6 +101,7 @@ export default function AdminEmails() {
 
   return (
     <LayoutAdmin>
+      <BreadcrumbAdmin pageName="Emails" />
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">

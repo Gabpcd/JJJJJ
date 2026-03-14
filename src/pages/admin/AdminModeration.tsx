@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
+import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,10 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
 import { Shield, FileCheck, MessageSquare, Check, X, Eye } from 'lucide-react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 
 export default function AdminModeration() {
+  usePageTitle('Modération');
   const [litiges, setLitiges] = useState<any[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
@@ -73,6 +76,7 @@ export default function AdminModeration() {
 
   return (
     <LayoutAdmin>
+      <BreadcrumbAdmin pageName="Modération" />
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Modération</h1>
 

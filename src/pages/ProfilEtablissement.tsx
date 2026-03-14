@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { handleErrorSilent } from '@/lib/handleError';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -21,6 +22,7 @@ const CONVENTIONS_COLLECTIVES = [
 ];
 
 export default function ProfilEtablissement() {
+  usePageTitle('Profil');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();

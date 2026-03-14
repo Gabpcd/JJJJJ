@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -58,6 +59,7 @@ function isWeekend(debut: string): boolean {
 }
 
 export default function RechercheMissions() {
+  usePageTitle('Recherche missions');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [soignant, setSoignant] = useState<SoignantData | null>(null);

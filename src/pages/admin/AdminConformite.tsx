@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -34,6 +36,7 @@ function getBgCouleur(val: number): string {
 }
 
 export default function AdminConformite() {
+  usePageTitle('Conformité');
   const [data, setData] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -49,6 +52,7 @@ export default function AdminConformite() {
 
   return (
     <LayoutAdmin>
+      <BreadcrumbAdmin pageName="Conformité" />
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Conformité</h1>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPI } from '@/components/CarteKPI';
@@ -14,6 +15,7 @@ const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'curren
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 
 export default function AdminDashboard() {
+  usePageTitle('Admin');
   const navigate = useNavigate();
   const [kpi, setKpi] = useState<any>(null);
   const [graphiques, setGraphiques] = useState<any>(null);

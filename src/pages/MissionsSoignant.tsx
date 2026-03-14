@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
@@ -34,6 +35,7 @@ interface SoignantData {
 type GroupeItem = { type: 'single'; mission: any } | { type: 'serie'; serieId: string; missions: any[] };
 
 export default function MissionsSoignant() {
+  usePageTitle('Missions');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [onglet, setOnglet] = useState<Onglet>('disponibles');
@@ -195,6 +197,7 @@ export default function MissionsSoignant() {
 
       {loading ? <SkeletonList count={4} /> : (
         <>
+          <p className="text-sm text-muted-foreground mb-3">{missionsAvecDistance.length} mission{missionsAvecDistance.length !== 1 ? 's' : ''} trouvée{missionsAvecDistance.length !== 1 ? 's' : ''}</p>
           {onglet === 'disponibles' && (
             groupes.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

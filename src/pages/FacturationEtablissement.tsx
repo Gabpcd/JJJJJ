@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
@@ -38,6 +39,7 @@ const STATUT_LABELS: Record<string, string> = {
 
 
 export default function FacturationEtablissement() {
+  usePageTitle('Facturation');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
@@ -55,6 +56,7 @@ function calculerCompletionProfil(s: SoignantData) {
 }
 
 export default function DashboardSoignant() {
+  usePageTitle('Dashboard');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [soignant, setSoignant] = useState<SoignantData | null>(null);

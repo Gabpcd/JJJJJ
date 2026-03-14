@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
@@ -27,6 +28,7 @@ import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
 
 export default function DashboardEtablissement() {
+  usePageTitle('Dashboard');
   const navigate = useNavigate();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();

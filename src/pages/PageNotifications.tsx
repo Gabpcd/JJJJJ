@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -23,6 +24,7 @@ const TYPE_MAP: Record<Filtre, string[]> = {
 };
 
 export default function PageNotifications({ role }: { role: UserRole }) {
+  usePageTitle('Notifications');
   const { user } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);

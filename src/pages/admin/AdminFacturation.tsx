@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -25,6 +27,7 @@ const statutColor: Record<string, string> = {
 };
 
 export default function AdminFacturation() {
+  usePageTitle('Facturation');
   const [factures, setFactures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -132,6 +135,7 @@ export default function AdminFacturation() {
 
   return (
     <LayoutAdmin>
+      <BreadcrumbAdmin pageName="Facturation" />
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl font-bold text-foreground">Facturation</h1>

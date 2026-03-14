@@ -8,6 +8,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RouteProtegee } from "@/components/RouteProtegee";
 import { PageTransition } from "@/components/PageTransition";
 import { ChargementPage } from "@/components/ChargementPage";
+import { ScrollToTop } from "@/components/ScrollToTop";
 
 /* ─── Public pages ─── */
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
@@ -86,6 +87,7 @@ const queryClient = new QueryClient();
 function AppRoutes() {
   return (
     <PageTransition>
+      <ScrollToTop />
       <Suspense fallback={<ChargementPage />}>
         <Routes>
           <Route path="/" element={<PageAccueil />} />

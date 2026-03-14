@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -20,6 +21,7 @@ import { fr } from 'date-fns/locale';
 import { CalendarDays, Clock, CheckCircle } from 'lucide-react';
 
 export default function PresencesSoignant() {
+  usePageTitle('Présences');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
