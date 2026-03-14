@@ -577,6 +577,7 @@ export type Database = {
           formule_abonnement: string | null
           groupe_sante_id: string | null
           id: string
+          logo_url: string | null
           missions_mois_precedent: number | null
           mode_facturation: string | null
           modifie_le: string | null
@@ -613,6 +614,7 @@ export type Database = {
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
           id?: string
+          logo_url?: string | null
           missions_mois_precedent?: number | null
           mode_facturation?: string | null
           modifie_le?: string | null
@@ -649,6 +651,7 @@ export type Database = {
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
           id?: string
+          logo_url?: string | null
           missions_mois_precedent?: number | null
           mode_facturation?: string | null
           modifie_le?: string | null
@@ -1809,6 +1812,7 @@ export type Database = {
           attestation_sante_signee_le: string | null
           attestation_vaccinations: boolean | null
           attestation_vaccinations_le: string | null
+          avatar_url: string | null
           code_ape: string | null
           code_parrainage: string | null
           consentement_gps: boolean | null
@@ -1869,6 +1873,7 @@ export type Database = {
           attestation_sante_signee_le?: string | null
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
+          avatar_url?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
           consentement_gps?: boolean | null
@@ -1929,6 +1934,7 @@ export type Database = {
           attestation_sante_signee_le?: string | null
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
+          avatar_url?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
           consentement_gps?: boolean | null
@@ -2669,6 +2675,19 @@ export type Database = {
         | {
             Args: {
               p_adresse_code_postal?: string
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_convention_collective?: string
+              p_couleur_theme?: string
+              p_logo_url?: string
+              p_nom?: string
+              p_telephone?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
               p_adresse_departement?: string
               p_adresse_lat?: number
               p_adresse_lng?: number
@@ -2685,16 +2704,28 @@ export type Database = {
             }
             Returns: Json
           }
-      fn_modifier_mon_profil: {
-        Args: {
-          p_adresse_code_postal?: string
-          p_adresse_rue?: string
-          p_adresse_ville?: string
-          p_rayon_deplacement_km?: number
-          p_telephone?: string
-        }
-        Returns: Json
-      }
+      fn_modifier_mon_profil:
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_rayon_deplacement_km?: number
+              p_telephone?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_avatar_url?: string
+              p_rayon_deplacement_km?: number
+              p_telephone?: string
+            }
+            Returns: Json
+          }
       fn_modifier_tva_liberal: {
         Args: { p_assujetti_tva: boolean; p_numero_tva?: string }
         Returns: Json
