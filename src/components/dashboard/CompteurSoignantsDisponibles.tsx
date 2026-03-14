@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { PulseCircle } from '@/components/PulseCircle';
 
 interface CompteurSoignantsDisponiblesProps {
   etablissementId: string;
