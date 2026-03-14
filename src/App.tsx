@@ -78,6 +78,7 @@ const AdminUtilisateurs = lazy(() => import("./pages/admin/AdminUtilisateurs"));
 const AdminModeration = lazy(() => import("./pages/admin/AdminModeration"));
 const AdminFacturation = lazy(() => import("./pages/admin/AdminFacturation"));
 const AdminConformite = lazy(() => import("./pages/admin/AdminConformite"));
+const AdminDemo = lazy(() => import("./pages/admin/AdminDemo"));
 
 const queryClient = new QueryClient();
 
@@ -159,6 +160,7 @@ function AppRoutes() {
           <Route path="/admin/moderation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminModeration /></RouteProtegee>} />
           <Route path="/admin/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminFacturation /></RouteProtegee>} />
           <Route path="/admin/conformite" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminConformite /></RouteProtegee>} />
+          <Route path="/admin/demo" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDemo /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
