@@ -59,6 +59,7 @@ function genererHtmlPreview(type: string, data: Record<string, string>): string 
 }
 
 export default function AdminEmails() {
+  usePageTitle('Emails');
   const { user } = useAuth();
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
