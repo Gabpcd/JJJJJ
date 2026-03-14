@@ -25,6 +25,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const { role } = useRole();
   const { afficherNotification } = useNotification();
 
   const [intitule, setIntitule] = useState('');
