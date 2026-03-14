@@ -64,5 +64,6 @@ export default function Tarifs() {
         <p>© 2026 Soin Direct SAS — Conforme RGPD · Code du Travail</p>
       </footer>
     </div>
+    </>
   );
 }
