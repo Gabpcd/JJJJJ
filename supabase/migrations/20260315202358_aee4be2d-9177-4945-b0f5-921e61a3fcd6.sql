@@ -1,0 +1,1 @@
+UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || '{"role": "ADMIN_PLATEFORME"}'::jsonb WHERE id = 'ec814d29-3c4d-43fd-a8ae-914e0cb8d42c';
