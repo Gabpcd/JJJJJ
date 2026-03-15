@@ -34,9 +34,9 @@ function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
 
     const { error: stripeErr, paymentMethod } = await stripe.createPaymentMethod({
       type: 'sepa_debit',
-      sepa_debit: ibanElement,
+      sepa_debit: ibanElement as any,
       billing_details: { name: 'Établissement' },
-    });
+    } as any);
 
     if (stripeErr) {
       setError(stripeErr.message || 'Erreur IBAN');
