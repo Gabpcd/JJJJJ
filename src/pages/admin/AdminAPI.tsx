@@ -44,21 +44,34 @@ export default function AdminAPI() {
 
   useEffect(() => { charger(); }, []);
 
+  const [generating, setGenerating] = useState(false);
+
   const genererCle = async () => {
-    if (!newName.trim()) return;
-    const cleApi = `sd_live_${crypto.randomUUID().replace(/-/g, '')}`;
-    const cleSecret = crypto.randomUUID();
-    const { error } = await supabase.from('api_keys').insert({
-      nom: newName.trim(),
-      cle_api: cleApi,
-      cle_secret: cleSecret,
-      permissions: newPerms,
-    } as any);
-    if (!error) {
-      setGeneratedKey(cleApi);
-      setNewName('');
-      setNewPerms(['missions:read']);
-      charger();
+    if (!newName.trim() || generating) return;
+    setGenerating(true);
+    try {
+      const cleApi = `sd_live_${crypto.randomUUID().replace(/-/g, '')}`;
+      const cleSecret = crypto.randomUUID();
+      const { error } = await supabase.from('api_keys').insert({
+        nom: newName.trim(),
+        cle_api: cleApi,
+        cle_secret: cleSecret,
+        permissions: newPerms,
+        etablissement_id: null,
+        groupe_sante_id: null,
+      } as any);
+      if (error) {
+        console.error('Erreur génération clé API:', error);
+        const { toast } = await import('sonner');
+        toast.error('Erreur lors de la génération de la clé API.');
+      } else {
+        setGeneratedKey(cleApi);
+        setNewName('');
+        setNewPerms(['missions:read']);
+        charger();
+      }
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -218,7 +231,7 @@ export default function AdminAPI() {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={genererCle} disabled={!newName.trim()} className="btn-primary flex-1 text-sm disabled:opacity-50">Générer</button>
+                  <button onClick={genererCle} disabled={!newName.trim() || generating} className="btn-primary flex-1 text-sm disabled:opacity-50">{generating ? 'Génération…' : 'Générer'}</button>
                   <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 text-sm">Annuler</button>
                 </div>
               </>
