@@ -51,6 +51,8 @@ export default function ProfilSoignant() {
   const [parrainageSucces, setParrainageSucces] = useState(false);
   const [filleuls, setFilleuls] = useState<any[]>([]);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
+  const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
 
   useEffect(() => {
     if (!user) return;
