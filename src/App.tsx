@@ -56,6 +56,7 @@ const ChargesSociales = lazy(() => import("./pages/ChargesSociales"));
 
 /* ─── Établissement pages ─── */
 const DashboardEtablissement = lazy(() => import("./pages/DashboardEtablissement"));
+const APIEtablissement = lazy(() => import("./pages/APIEtablissement"));
 const ProfilEtablissement = lazy(() => import("./pages/ProfilEtablissement"));
 const ListeMissions = lazy(() => import("./pages/ListeMissions"));
 const CreerMission = lazy(() => import("./pages/CreerMission"));
