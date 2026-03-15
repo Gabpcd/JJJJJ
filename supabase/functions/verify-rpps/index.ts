@@ -36,6 +36,16 @@ function isRateLimited(ip: string): boolean {
   return entry.count > RATE_LIMIT_MAX;
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 6000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
@@ -54,25 +64,42 @@ serve(async (req) => {
   // La fonction ne retourne que des données publiques RPPS.
 
   try {
-    const { numero_rpps, prenom, nom } = await req.json();
+    const { numero_rpps, rpps, prenom, nom } = await req.json();
+    const numeroRpps = String(numero_rpps || rpps || '').trim();
 
-    if (!numero_rpps || !/^\d{11}$/.test(numero_rpps)) {
+    if (!numeroRpps || !/^\d{11}$/.test(numeroRpps)) {
       return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
         status: 400,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
+    // Mode test explicite
+    if (numeroRpps === '00000000001') {
+      return new Response(JSON.stringify({
+        trouve: true,
+        correspond: true,
+        rpps: numeroRpps,
+        nom: 'PICARD',
+        prenom: 'Gabrielle',
+        profession: 'IDE',
+        actif: true,
+        source: 'Mode test',
+      }), {
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
     // Fetch from Annuaire Santé API
-    const url = `https://annuaire.sante.fr/web/site/professionnel-de-sante?rpps=${numero_rpps}`;
+    const url = `https://annuaire.sante.fr/web/site/professionnel-de-sante?rpps=${numeroRpps}`;
     
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers: {
           'User-Agent': 'SoinDirect/1.0',
           'Accept': 'text/html,application/xhtml+xml',
         },
-      });
+      }, 6000);
 
       if (response.ok) {
         const html = await response.text();
@@ -111,10 +138,10 @@ serve(async (req) => {
 
     // If direct fetch fails, try the search API
     try {
-      const searchUrl = `https://annuaire.sante.fr/web/site/professionnel-de-sante/search?identifiant=${numero_rpps}`;
-      const searchResponse = await fetch(searchUrl, {
+      const searchUrl = `https://annuaire.sante.fr/web/site/professionnel-de-sante/search?identifiant=${numeroRpps}`;
+      const searchResponse = await fetchWithTimeout(searchUrl, {
         headers: { 'User-Agent': 'SoinDirect/1.0', 'Accept': 'application/json, text/html' },
-      });
+      }, 6000);
 
       if (searchResponse.ok) {
         const contentType = searchResponse.headers.get('content-type') || '';
