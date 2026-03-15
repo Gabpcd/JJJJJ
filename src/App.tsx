@@ -64,6 +64,7 @@ const PresencesEtablissement = lazy(() => import("./pages/PresencesEtablissement
 const FacturationEtablissement = lazy(() => import("./pages/FacturationEtablissement"));
 const DetailFacture = lazy(() => import("./pages/DetailFacture"));
 const ExportPaie = lazy(() => import("./pages/ExportPaie"));
+const DashboardRH = lazy(() => import("./pages/DashboardRH"));
 const MonGroupe = lazy(() => import("./pages/MonGroupe"));
 const ExclusionsEtablissement = lazy(() => import("./pages/ExclusionsEtablissement"));
 const PremiumEtablissement = lazy(() => import("./pages/PremiumEtablissement"));
