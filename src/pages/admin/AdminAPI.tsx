@@ -231,7 +231,7 @@ export default function AdminAPI() {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={genererCle} disabled={!newName.trim()} className="btn-primary flex-1 text-sm disabled:opacity-50">Générer</button>
+                  <button onClick={genererCle} disabled={!newName.trim() || generating} className="btn-primary flex-1 text-sm disabled:opacity-50">{generating ? 'Génération…' : 'Générer'}</button>
                   <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 text-sm">Annuler</button>
                 </div>
               </>
