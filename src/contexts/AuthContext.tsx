@@ -138,9 +138,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const userId = authData.user!.id;
-    const accessToken = authData.session?.access_token;
-
-    // Étape 2 : register-soignant via fetch direct (pas supabase.functions.invoke pour éviter CORS)
+    let accessToken = authData.session?.access_token;
+    if (!accessToken) {
+      console.warn('[INSCRIPTION] 3b. Aucun token dans signUp, tentative via getSession...');
+      const { data: sessionData } = await supabase.auth.getSession();
+      accessToken = sessionData.session?.access_token;
+      console.log('[INSCRIPTION] 3c. Token via getSession:', !!accessToken);
+    }
+    if (!accessToken) {
+      throw new Error('Session introuvable après inscription. Veuillez réessayer.');
+    }
     const registerBody = {
       prenom: data.prenom,
       nom: data.nom,
