@@ -44,7 +44,7 @@ export default function MesGains() {
           taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
           heures_nuit, heures_dimanche, heures_ferie,
           montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
-          montant_ifm, montant_icp, total_brut, net_a_payer,
+          montant_ifm, montant_icp, total_brut, net_a_payer, net_estime,
           type_paiement_soignant,
           statut, cree_le, etablissement_id`)
         .eq('soignant_assigne_id', user.id)
