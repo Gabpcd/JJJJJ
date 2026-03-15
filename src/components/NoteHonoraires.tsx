@@ -1,6 +1,7 @@
-import { Printer, Send } from 'lucide-react';
+import { Printer, Send, FileDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import jsPDF from 'jspdf';
 
 interface NoteHonorairesProps {
   mission: any;
@@ -14,16 +15,144 @@ function fmt(v: number | null | undefined): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
+function genererPDFNote(m: any, soignant: any, etab: any) {
+  const doc = new jsPDF();
+  const duree = m.duree_heures ?? 0;
+  const tauxEffectif = m.taux_rist_plafonne || m.taux_horaire_base;
+  const sousTotal = duree * tauxEffectif;
+  const totalHT = m.total_brut || sousTotal;
+  const assujettiTVA = soignant?.assujetti_tva === true;
+  const tva = assujettiTVA ? totalHT * 0.2 : 0;
+  const totalTTC = totalHT + tva;
+
+  // Header
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text('NOTE D\'HONORAIRES', 105, 20, { align: 'center' });
+  doc.setFontSize(12);
+  doc.setTextColor(23, 162, 184);
+  doc.text(`N° ${m.numero_note_honoraires || 'NH-XXXX-XXXX'}`, 105, 28, { align: 'center' });
+  doc.setDrawColor(200);
+  doc.line(14, 32, 196, 32);
+
+  // Soignant info
+  doc.setFontSize(9);
+  doc.setTextColor(0);
+  let y = 40;
+  doc.setFont('helvetica', 'bold');
+  doc.text('DE :', 14, y);
+  doc.setFont('helvetica', 'normal');
+  y += 5;
+  doc.text(`${soignant?.prenom || ''} ${soignant?.nom || ''}`, 14, y);
+  if (soignant?.numero_rpps) { y += 4; doc.text(`RPPS : ${soignant.numero_rpps}`, 14, y); }
+  if (soignant?.siret_liberal) { y += 4; doc.text(`SIRET : ${soignant.siret_liberal}`, 14, y); }
+  if (soignant?.adresse_rue) { y += 4; doc.text(`${soignant.adresse_rue}, ${soignant.adresse_code_postal} ${soignant.adresse_ville}`, 14, y); }
+  if (soignant?.iban) { y += 4; doc.text(`RIB : ${soignant.iban}`, 14, y); }
+
+  // Etablissement info
+  let yE = 40;
+  doc.setFont('helvetica', 'bold');
+  doc.text('À :', 110, yE);
+  doc.setFont('helvetica', 'normal');
+  yE += 5;
+  doc.text(etab?.nom || '', 110, yE);
+  if (etab?.siret) { yE += 4; doc.text(`SIRET : ${etab.siret}`, 110, yE); }
+  if (etab?.finess) { yE += 4; doc.text(`FINESS : ${etab.finess}`, 110, yE); }
+  if (etab?.adresse_rue) { yE += 4; doc.text(`${etab.adresse_rue}`, 110, yE); yE += 4; doc.text(`${etab.adresse_code_postal} ${etab.adresse_ville}`, 110, yE); }
+
+  // Date de la note
+  const startY = Math.max(y, yE) + 12;
+  doc.text(`Date : ${format(new Date(), 'd MMMM yyyy', { locale: fr })}`, 14, startY);
+
+  // Prestation
+  let pY = startY + 10;
+  doc.setDrawColor(200);
+  doc.line(14, pY - 2, 196, pY - 2);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRESTATION', 14, pY + 4);
+  doc.setFont('helvetica', 'normal');
+  pY += 10;
+  doc.text(`Mission : ${m.intitule}${m.service ? ` — ${m.service}` : ''}`, 14, pY);
+  pY += 5;
+  doc.text(`Date : ${format(new Date(m.debut_le), 'd MMMM yyyy', { locale: fr })} — ${format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → ${format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}`, 14, pY);
+  pY += 5;
+  doc.text(`Durée : ${duree}h`, 14, pY);
+
+  // Financial breakdown
+  pY += 10;
+  doc.line(14, pY - 2, 196, pY - 2);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DÉCOMPTE', 14, pY + 4);
+  doc.setFont('helvetica', 'normal');
+  pY += 10;
+
+  const addLine = (label: string, amount: string) => {
+    doc.text(label, 14, pY);
+    doc.text(amount, 180, pY, { align: 'right' });
+    pY += 5;
+  };
+
+  addLine(`${duree}h × ${tauxEffectif?.toFixed(2)} €/h`, `${sousTotal.toFixed(2)} €`);
+  if ((m.montant_majoration_nuit || 0) > 0) addLine('Majoration nuit', `+${(m.montant_majoration_nuit).toFixed(2)} €`);
+  if ((m.montant_majoration_dimanche || 0) > 0) addLine('Majoration dimanche', `+${(m.montant_majoration_dimanche).toFixed(2)} €`);
+  if ((m.montant_majoration_ferie || 0) > 0) addLine('Majoration jour férié', `+${(m.montant_majoration_ferie).toFixed(2)} €`);
+
+  pY += 3;
+  doc.line(14, pY, 196, pY);
+  pY += 6;
+  doc.setFont('helvetica', 'bold');
+  addLine('TOTAL HT', `${totalHT.toFixed(2)} €`);
+
+  if (assujettiTVA) {
+    doc.setFont('helvetica', 'normal');
+    addLine('TVA 20%', `${tva.toFixed(2)} €`);
+    pY += 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    addLine('TOTAL TTC', `${totalTTC.toFixed(2)} €`);
+    doc.setFontSize(9);
+  }
+
+  // Legal mentions
+  pY += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(120);
+  if (!assujettiTVA) {
+    doc.text('TVA non applicable, art. 293 B du CGI', 14, pY);
+    pY += 4;
+  }
+  doc.text('Dispensé d\'immatriculation au RCS et au RM', 14, pY);
+  pY += 4;
+  doc.text('En cas de retard de paiement, indemnité forfaitaire de recouvrement : 40 €', 14, pY);
+
+  // Footer
+  const pageH = doc.internal.pageSize.height;
+  doc.setFontSize(7);
+  doc.setTextColor(150);
+  doc.text('Document généré par Soin Direct — Valeur indicative', 105, pageH - 10, { align: 'center' });
+
+  doc.save(`note_honoraires_${m.numero_note_honoraires || m.id}.pdf`);
+}
+
 export function NoteHonoraires({ mission, soignant, etablissement, onAudit }: NoteHonorairesProps) {
   const m = mission;
   const etab = etablissement || m.etablissements;
   const duree = m.duree_heures ?? 0;
   const tauxEffectif = m.taux_rist_plafonne || m.taux_horaire_base;
   const sousTotal = duree * tauxEffectif;
+  const assujettiTVA = soignant?.assujetti_tva === true;
+  const tva = assujettiTVA ? (m.total_brut || sousTotal) * 0.2 : 0;
+  const totalTTC = (m.total_brut || sousTotal) + tva;
 
   const handlePrint = () => {
     onAudit?.();
     window.print();
+  };
+
+  const handlePDF = () => {
+    onAudit?.();
+    genererPDFNote(m, soignant, etab);
   };
 
   return (
@@ -42,6 +171,7 @@ export function NoteHonoraires({ mission, soignant, etablissement, onAudit }: No
           {soignant?.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {soignant.numero_rpps}</p>}
           {soignant?.siret_liberal && <p className="text-xs text-muted-foreground">SIRET : {soignant.siret_liberal}</p>}
           {soignant?.adresse_rue && <p className="text-xs text-muted-foreground mt-1">{soignant.adresse_rue}, {soignant.adresse_code_postal} {soignant.adresse_ville}</p>}
+          {soignant?.iban && <p className="text-xs text-muted-foreground">RIB : {soignant.iban}</p>}
         </div>
         <div className="bg-muted/30 rounded-xl p-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">À :</p>
@@ -99,29 +229,47 @@ export function NoteHonoraires({ mission, soignant, etablissement, onAudit }: No
           </div>
         </div>
 
-        {/* TVA exemption */}
-        <div className="bg-muted/30 rounded-xl p-3 mt-3">
-          <p className="text-xs text-muted-foreground italic">
-            Dispensé de TVA — Art. 261-4-1° du CGI<br />
-            (Soins dispensés par les professions médicales et paramédicales réglementées)
-          </p>
-        </div>
+        {assujettiTVA ? (
+          <>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">TVA 20%</span>
+              <span className="font-medium">{fmt(tva)}</span>
+            </div>
+            <div className="border-t-2 border-foreground/20 pt-3">
+              <div className="flex justify-between">
+                <span className="font-bold text-foreground text-lg">TOTAL TTC</span>
+                <span className="text-2xl font-bold text-primary">{fmt(totalTTC)}</span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-muted/30 rounded-xl p-3 mt-3">
+              <p className="text-xs text-muted-foreground italic">
+                TVA non applicable, art. 293 B du CGI
+              </p>
+            </div>
+            <div className="border-t-2 border-foreground/20 pt-3">
+              <div className="flex justify-between">
+                <span className="font-bold text-foreground text-lg">TOTAL À PAYER</span>
+                <span className="text-2xl font-bold text-primary">{fmt(m.total_brut)}</span>
+              </div>
+            </div>
+          </>
+        )}
 
-        <div className="border-t-2 border-foreground/20 pt-3">
-          <div className="flex justify-between">
-            <span className="font-bold text-foreground text-lg">TOTAL À PAYER</span>
-            <span className="text-2xl font-bold text-primary">{fmt(m.total_brut)}</span>
-          </div>
-        </div>
+        <p className="text-[10px] text-muted-foreground italic mt-2">
+          Dispensé d'immatriculation au RCS et au RM
+        </p>
       </div>
 
       {/* Actions */}
       <div className="flex gap-3 mt-6 print:hidden">
-        <button onClick={handlePrint} className="btn-primary flex-1 flex items-center justify-center gap-2">
-          <Printer className="h-4 w-4" /> Imprimer
+        <button onClick={handlePDF} className="btn-primary flex-1 flex items-center justify-center gap-2">
+          <FileDown className="h-4 w-4" /> Télécharger PDF
         </button>
-        <button className="btn-secondary flex-1 flex items-center justify-center gap-2 opacity-50 cursor-not-allowed" disabled>
-          <Send className="h-4 w-4" /> Envoyer à ma compta
+        <button onClick={handlePrint} className="btn-secondary flex-1 flex items-center justify-center gap-2">
+          <Printer className="h-4 w-4" /> Imprimer
         </button>
       </div>
 
