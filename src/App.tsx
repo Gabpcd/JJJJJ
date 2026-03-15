@@ -159,6 +159,7 @@ function AppRoutes() {
           <Route path="/etablissement/exclusions" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExclusionsEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/api" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><APIEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/premium" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PremiumEtablissement /></RouteProtegee>} />
+          <Route path="/etablissement/chorus-config" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ChorusConfig /></RouteProtegee>} />
 
           {/* Contrat (accessible par soignant et établissement) */}
           <Route path="/contrat/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT', 'ADMIN_ETABLISSEMENT']}><ContratMission /></RouteProtegee>} />
