@@ -64,17 +64,34 @@ serve(async (req) => {
   // La fonction ne retourne que des données publiques RPPS.
 
   try {
-    const { numero_rpps, prenom, nom } = await req.json();
+    const { numero_rpps, rpps, prenom, nom } = await req.json();
+    const numeroRpps = String(numero_rpps || rpps || '').trim();
 
-    if (!numero_rpps || !/^\d{11}$/.test(numero_rpps)) {
+    if (!numeroRpps || !/^\d{11}$/.test(numeroRpps)) {
       return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
         status: 400,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
+    // Mode test explicite
+    if (numeroRpps === '00000000001') {
+      return new Response(JSON.stringify({
+        trouve: true,
+        correspond: true,
+        rpps: numeroRpps,
+        nom: 'PICARD',
+        prenom: 'Gabrielle',
+        profession: 'IDE',
+        actif: true,
+        source: 'Mode test',
+      }), {
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
     // Fetch from Annuaire Santé API
-    const url = `https://annuaire.sante.fr/web/site/professionnel-de-sante?rpps=${numero_rpps}`;
+    const url = `https://annuaire.sante.fr/web/site/professionnel-de-sante?rpps=${numeroRpps}`;
     
     try {
       const response = await fetch(url, {
