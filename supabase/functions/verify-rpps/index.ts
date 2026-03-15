@@ -138,10 +138,10 @@ serve(async (req) => {
 
     // If direct fetch fails, try the search API
     try {
-      const searchUrl = `https://annuaire.sante.fr/web/site/professionnel-de-sante/search?identifiant=${numero_rpps}`;
-      const searchResponse = await fetch(searchUrl, {
+      const searchUrl = `https://annuaire.sante.fr/web/site/professionnel-de-sante/search?identifiant=${numeroRpps}`;
+      const searchResponse = await fetchWithTimeout(searchUrl, {
         headers: { 'User-Agent': 'SoinDirect/1.0', 'Accept': 'application/json, text/html' },
-      });
+      }, 6000);
 
       if (searchResponse.ok) {
         const contentType = searchResponse.headers.get('content-type') || '';
