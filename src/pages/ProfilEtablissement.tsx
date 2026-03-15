@@ -9,8 +9,155 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2, Palette } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2 } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+const stripePromise = STRIPE_PK ? loadStripe(STRIPE_PK) : null;
+
+// SEPA IBAN Form (inside Stripe Elements)
+function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    setError('');
+
+    const ibanElement = elements.getElement(IbanElement);
+    if (!ibanElement) { setSubmitting(false); return; }
+
+    const { error: stripeErr, paymentMethod } = await stripe.createPaymentMethod({
+      type: 'sepa_debit',
+      sepa_debit: ibanElement as any,
+      billing_details: { name: 'Établissement' },
+    } as any);
+
+    if (stripeErr) {
+      setError(stripeErr.message || 'Erreur IBAN');
+      setSubmitting(false);
+      return;
+    }
+
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-sepa`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm_sepa', payment_method_id: paymentMethod?.id }),
+      }
+    );
+    const data = await res.json();
+    if (data.success) {
+      onSuccess(data.last4);
+    } else {
+      setError(data.error || 'Erreur lors de la configuration SEPA');
+    }
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="p-3 border border-border rounded-xl bg-background">
+        <IbanElement
+          options={{
+            supportedCountries: ['SEPA'],
+            style: {
+              base: { fontSize: '16px', color: '#333', '::placeholder': { color: '#aab7c4' } },
+            },
+          }}
+        />
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={submitting || !stripe}
+        className="btn-primary text-sm w-full disabled:opacity-50"
+      >
+        {submitting ? 'Validation…' : '🏦 Valider le mandat SEPA'}
+      </button>
+      <p className="text-[10px] text-muted-foreground">
+        En fournissant votre IBAN, vous autorisez Soin Direct à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA.
+      </p>
+    </div>
+  );
+}
+
+// SEPA Setup Section wrapper
+function SepaSetupSection({ userId }: { userId?: string }) {
+  const [sepaStatus, setSepaStatus] = useState<{ has_sepa: boolean; last4?: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-sepa`,
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get_sepa_status' }),
+          }
+        );
+        const data = await res.json();
+        setSepaStatus(data);
+      } catch {
+        setSepaStatus({ has_sepa: false });
+      }
+      setLoading(false);
+    })();
+  }, [userId]);
+
+  if (loading) return <div className="mt-4 text-sm text-muted-foreground">Chargement…</div>;
+
+  if (sepaStatus?.has_sepa && !showForm) {
+    return (
+      <div className="mt-4 p-3 rounded-xl bg-success/10 border border-success/20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-success" />
+            <span className="text-sm font-medium text-success">IBAN enregistré : FR76 •••• •••• {sepaStatus.last4}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="text-xs text-primary hover:underline"
+          >
+            Modifier
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stripePromise) {
+    return (
+      <div className="mt-4 p-3 rounded-xl bg-warning/10 border border-warning/20">
+        <p className="text-xs text-warning">Configuration Stripe manquante. Contactez le support.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <Elements stripe={stripePromise} options={{ locale: 'fr' }}>
+        <SepaIbanForm onSuccess={(last4) => { setSepaStatus({ has_sepa: true, last4 }); setShowForm(false); }} />
+      </Elements>
+    </div>
+  );
+}
 
 const CONVENTIONS_COLLECTIVES = [
   { valeur: 'CCN_51_FEHAP', label: 'CCN 51 (FEHAP)' },
@@ -265,6 +412,7 @@ export default function ProfilEtablissement() {
           <div className="space-y-3">
             {[
               { value: 'STRIPE_RESERVATION', icon: '💳', label: 'Carte bancaire', desc: 'Commission prélevée à chaque mission (autorisée à la réservation, capturée à la fin)' },
+              { value: 'SEPA_DEBIT', icon: '🏦', label: 'Prélèvement SEPA (recommandé)', desc: '', isSEPA: true },
               { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle', desc: 'Paiement à 30 jours par virement ou carte' },
               { value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' },
             ].map(opt => (
@@ -284,13 +432,22 @@ export default function ProfilEtablissement() {
                   onChange={() => setModePaiement(opt.value)}
                   className="mt-1 accent-primary"
                 />
-                <div>
+                <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">{opt.icon} {opt.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                  {opt.isSEPA ? (
+                    <p className="text-xs text-success mt-0.5">✅ Prélèvement automatique — Plus de factures à payer manuellement. Commission prélevée uniquement après chaque mission terminée.</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                  )}
                 </div>
               </label>
             ))}
           </div>
+
+          {/* SEPA IBAN setup section */}
+          {modePaiement === 'SEPA_DEBIT' && (
+            <SepaSetupSection userId={user?.id} />
+          )}
         </div>
 
         {/* Couleur de thème */}

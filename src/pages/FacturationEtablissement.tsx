@@ -4,7 +4,7 @@ import { ENTREPRISE } from '@/constantes/entreprise';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw } from 'lucide-react';
+import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, Building2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -52,6 +52,7 @@ export default function FacturationEtablissement() {
   const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
   const [etab, setEtab] = useState<any>(null);
   const [kpi, setKpi] = useState({ enAttente: 0, enCours: 0, totalPaye: 0 });
+  const [prelevements, setPrelevements] = useState<any[]>([]);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
 
   // Detect payment success from URL
@@ -70,8 +71,8 @@ export default function FacturationEtablissement() {
   const charger = async () => {
     if (!user) return;
 
-    const [resEtab, resFact, resMNF] = await Promise.all([
-      supabase.from('etablissements').select('id, nom, type, taux_commission_negocie, palier_commission_id, groupe_sante_id, paliers_commission(nom)').eq('id', user.id).single(),
+    const [resEtab, resFact, resMNF, resPrelev] = await Promise.all([
+      supabase.from('etablissements').select('id, nom, type, taux_commission_negocie, palier_commission_id, groupe_sante_id, paliers_commission(nom), mode_paiement_commission').eq('id', user.id).single(),
       supabase.from('factures').select('id, numero_facture, statut, montant_ht, montant_tva, montant_ttc, taux_tva, nombre_missions, date_emission, date_echeance, date_paiement, est_secteur_public, mode_paiement, stripe_hosted_url, chorus_pro_statut, cree_le').eq('etablissement_id', user.id).order('cree_le', { ascending: false }),
       supabase.from('missions')
         .select('id, intitule, debut_le, fin_le, montant_commission_ht, montant_commission_ttc, statut')
@@ -79,11 +80,17 @@ export default function FacturationEtablissement() {
         .eq('statut', 'TERMINEE')
         .eq('commission_facturee', false)
         .order('fin_le', { ascending: false }),
+      supabase.from('paiements_mission')
+        .select('id, mission_id, montant_ttc, statut, capture_le, missions(intitule)')
+        .eq('etablissement_id', user.id)
+        .order('capture_le', { ascending: false })
+        .limit(20),
     ]);
 
     if (resEtab.data) setEtab(resEtab.data);
     if (resFact.data) setFactures(resFact.data);
     if (resMNF.data) setMissionsNonFacturees(resMNF.data);
+    if (resPrelev.data) setPrelevements(resPrelev.data);
 
     const facturesData = resFact.data ?? [];
     const enAttente = (resMNF.data ?? []).reduce((s: number, m: any) => s + (m.montant_commission_ttc ?? 0), 0);
@@ -202,6 +209,17 @@ export default function FacturationEtablissement() {
           <BadgePalier palierNom={etab.paliers_commission.nom} taux={etab.taux_commission_negocie ?? 15} />
         )}
       </div>
+
+      {/* SEPA banner */}
+      {etab?.mode_paiement_commission === 'SEPA_DEBIT' && (
+        <div className="mb-6 flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
+          <Building2 className="h-5 w-5 text-primary shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Prélèvement automatique activé 🏦</p>
+            <p className="text-xs text-muted-foreground">Les commissions sont prélevées automatiquement après chaque mission terminée. Aucune action requise.</p>
+          </div>
+        </div>
+      )}
 
       {/* KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
@@ -348,6 +366,33 @@ export default function FacturationEtablissement() {
           <EtatVide illustration={<IllustrationCalculatrice />} titre="Aucune facture" sousTitre="Les factures seront générées automatiquement après vos premières missions." />
         )}
       </div>
+
+      {/* Historique des prélèvements SEPA */}
+      {etab?.mode_paiement_commission === 'SEPA_DEBIT' && prelevements.length > 0 && (
+        <div className="mt-6">
+          <h2 className="font-bold text-foreground mb-3">🏦 Historique des prélèvements</h2>
+          <div className="space-y-2">
+            {prelevements.map((p: any) => (
+              <div key={p.id} className="card-base flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{(p.missions as any)?.intitule || 'Mission'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {p.capture_le ? format(new Date(p.capture_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-foreground">{(p.montant_ttc ?? 0).toFixed(2)} €</p>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    p.statut === 'CAPTURE' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {p.statut === 'CAPTURE' ? 'Prélevé' : p.statut}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </LayoutApp>
   );
 }
