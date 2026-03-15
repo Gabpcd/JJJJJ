@@ -17,6 +17,148 @@ import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-str
 const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 const stripePromise = STRIPE_PK ? loadStripe(STRIPE_PK) : null;
 
+// SEPA IBAN Form (inside Stripe Elements)
+function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    setError('');
+
+    const ibanElement = elements.getElement(IbanElement);
+    if (!ibanElement) { setSubmitting(false); return; }
+
+    const { error: stripeErr, paymentMethod } = await stripe.createPaymentMethod({
+      type: 'sepa_debit',
+      sepa_debit: ibanElement,
+      billing_details: { name: 'Établissement' },
+    });
+
+    if (stripeErr) {
+      setError(stripeErr.message || 'Erreur IBAN');
+      setSubmitting(false);
+      return;
+    }
+
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-sepa`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm_sepa', payment_method_id: paymentMethod?.id }),
+      }
+    );
+    const data = await res.json();
+    if (data.success) {
+      onSuccess(data.last4);
+    } else {
+      setError(data.error || 'Erreur lors de la configuration SEPA');
+    }
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="p-3 border border-border rounded-xl bg-background">
+        <IbanElement
+          options={{
+            supportedCountries: ['SEPA'],
+            style: {
+              base: { fontSize: '16px', color: '#333', '::placeholder': { color: '#aab7c4' } },
+            },
+          }}
+        />
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={submitting || !stripe}
+        className="btn-primary text-sm w-full disabled:opacity-50"
+      >
+        {submitting ? 'Validation…' : '🏦 Valider le mandat SEPA'}
+      </button>
+      <p className="text-[10px] text-muted-foreground">
+        En fournissant votre IBAN, vous autorisez Soin Direct à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA.
+      </p>
+    </div>
+  );
+}
+
+// SEPA Setup Section wrapper
+function SepaSetupSection({ userId }: { userId?: string }) {
+  const [sepaStatus, setSepaStatus] = useState<{ has_sepa: boolean; last4?: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-sepa`,
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get_sepa_status' }),
+          }
+        );
+        const data = await res.json();
+        setSepaStatus(data);
+      } catch {
+        setSepaStatus({ has_sepa: false });
+      }
+      setLoading(false);
+    })();
+  }, [userId]);
+
+  if (loading) return <div className="mt-4 text-sm text-muted-foreground">Chargement…</div>;
+
+  if (sepaStatus?.has_sepa && !showForm) {
+    return (
+      <div className="mt-4 p-3 rounded-xl bg-success/10 border border-success/20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-success" />
+            <span className="text-sm font-medium text-success">IBAN enregistré : FR76 •••• •••• {sepaStatus.last4}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="text-xs text-primary hover:underline"
+          >
+            Modifier
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stripePromise) {
+    return (
+      <div className="mt-4 p-3 rounded-xl bg-warning/10 border border-warning/20">
+        <p className="text-xs text-warning">Configuration Stripe manquante. Contactez le support.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <Elements stripe={stripePromise} options={{ locale: 'fr' }}>
+        <SepaIbanForm onSuccess={(last4) => { setSepaStatus({ has_sepa: true, last4 }); setShowForm(false); }} />
+      </Elements>
+    </div>
+  );
+}
+
 const CONVENTIONS_COLLECTIVES = [
   { valeur: 'CCN_51_FEHAP', label: 'CCN 51 (FEHAP)' },
   { valeur: 'CCN_66_SOCIAL', label: 'CCN 66 (Social)' },
