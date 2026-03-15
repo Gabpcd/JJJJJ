@@ -74,8 +74,8 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
 
       <div className="mt-2 flex items-center justify-between">
         <span className="text-primary font-bold text-sm">💰 {m.taux_horaire_base?.toFixed(2)} €/h</span>
-        {m.net_a_payer && m.net_a_payer > 0 ? (
-          <span className="text-xs text-muted-foreground">Net estimé : ~{fmt(m.net_a_payer)}</span>
+        {(m.net_estime || m.net_a_payer) && (m.net_estime || m.net_a_payer) > 0 ? (
+          <span className="text-xs text-muted-foreground">Net estimé* : ~{fmt(m.net_estime || m.net_a_payer * 0.78)}</span>
         ) : (
           <span className="text-xs text-muted-foreground/50">Calculé après assignation</span>
         )}

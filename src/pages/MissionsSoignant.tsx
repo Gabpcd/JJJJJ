@@ -74,7 +74,7 @@ export default function MissionsSoignant() {
       let query = supabase.from('missions').select(`
         id, intitule, description, service, profession_requise,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
-        total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
+        total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
         soignant_assigne_id, cree_le, etablissement_id
       `);
 

@@ -90,8 +90,8 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
       <div className="flex items-center gap-2 text-xs mb-2">
         <Banknote className="h-3.5 w-3.5 text-primary" />
         <span className="text-foreground font-medium">{m.taux_horaire_base?.toFixed(2)} €/h</span>
-        {m.net_a_payer > 0 && (
-          <span className="text-muted-foreground">→ Net estimé : <strong className="text-primary">{formatMontant(m.net_a_payer)}</strong></span>
+        {(m.net_estime || m.net_a_payer) > 0 && (
+          <span className="text-muted-foreground">→ Net estimé* : <strong className="text-primary">{formatMontant(m.net_estime || (m.net_a_payer * 0.78))}</strong></span>
         )}
       </div>
       {m.rist_plafond_applique && (

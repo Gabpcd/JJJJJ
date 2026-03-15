@@ -177,7 +177,7 @@ export default function MesGains() {
                           {iconeType} {labelType}
                         </span>
                         {' '}{m.duree_heures}h · {m.taux_horaire_base} €/h
-                        <span className="float-right font-bold text-primary">{estLiberal ? 'HT' : 'Net'} : {fmt(montantAffiche || 0)}</span>
+                        <span className="float-right font-bold text-primary">{estLiberal ? 'HT' : 'Net estimé*'} : {fmt(montantAffiche || 0)}</span>
                       </p>
                     </div>
                   </AccordionTrigger>

@@ -82,7 +82,7 @@ export default function DetailMissionSoignant() {
           heures_nuit, heures_dimanche, heures_ferie,
           montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
           taux_ifm, taux_icp, montant_ifm, montant_icp,
-          total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
+          total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_paiement_soignant, numero_note_honoraires,
           yousign_statut
