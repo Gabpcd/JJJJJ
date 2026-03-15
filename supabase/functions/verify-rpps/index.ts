@@ -94,12 +94,12 @@ serve(async (req) => {
     const url = `https://annuaire.sante.fr/web/site/professionnel-de-sante?rpps=${numeroRpps}`;
     
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers: {
           'User-Agent': 'SoinDirect/1.0',
           'Accept': 'text/html,application/xhtml+xml',
         },
-      });
+      }, 6000);
 
       if (response.ok) {
         const html = await response.text();
