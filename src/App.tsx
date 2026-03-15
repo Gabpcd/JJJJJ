@@ -52,6 +52,7 @@ const AttestationHeures = lazy(() => import("./pages/AttestationHeures"));
 const PasserEnLiberal = lazy(() => import("./pages/PasserEnLiberal"));
 const ExclusionsSoignant = lazy(() => import("./pages/ExclusionsSoignant"));
 const PremiumSoignant = lazy(() => import("./pages/PremiumSoignant"));
+const ChargesSociales = lazy(() => import("./pages/ChargesSociales"));
 
 /* ─── Établissement pages ─── */
 const DashboardEtablissement = lazy(() => import("./pages/DashboardEtablissement"));
@@ -133,6 +134,7 @@ function AppRoutes() {
           <Route path="/soignant/exclusions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ExclusionsSoignant /></RouteProtegee>} />
           <Route path="/soignant/contrats" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ListeContrats role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/premium" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PremiumSoignant /></RouteProtegee>} />
+          <Route path="/soignant/charges" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ChargesSociales /></RouteProtegee>} />
           <Route path="/soignant/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageNotifications role="SOIGNANT" /></RouteProtegee>} />
 
           {/* Établissement */}

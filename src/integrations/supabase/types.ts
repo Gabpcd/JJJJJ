@@ -1964,9 +1964,11 @@ export type Database = {
           attestation_vaccinations: boolean | null
           attestation_vaccinations_le: string | null
           avatar_url: string | null
+          bic: string | null
           bio: string | null
           code_ape: string | null
           code_parrainage: string | null
+          compteur_notes_honoraires: number | null
           consentement_gps: boolean | null
           consentement_gps_le: string | null
           cree_le: string | null
@@ -1979,6 +1981,7 @@ export type Database = {
           email: string
           heures_cumulees: number | null
           heures_plateforme: number | null
+          iban: string | null
           id: string
           identite_verifiee: boolean | null
           modifie_le: string | null
@@ -2033,9 +2036,11 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
+          bic?: string | null
           bio?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
+          compteur_notes_honoraires?: number | null
           consentement_gps?: boolean | null
           consentement_gps_le?: string | null
           cree_le?: string | null
@@ -2048,6 +2053,7 @@ export type Database = {
           email: string
           heures_cumulees?: number | null
           heures_plateforme?: number | null
+          iban?: string | null
           id?: string
           identite_verifiee?: boolean | null
           modifie_le?: string | null
@@ -2102,9 +2108,11 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
+          bic?: string | null
           bio?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
+          compteur_notes_honoraires?: number | null
           consentement_gps?: boolean | null
           consentement_gps_le?: string | null
           cree_le?: string | null
@@ -2117,6 +2125,7 @@ export type Database = {
           email?: string
           heures_cumulees?: number | null
           heures_plateforme?: number | null
+          iban?: string | null
           id?: string
           identite_verifiee?: boolean | null
           modifie_le?: string | null
@@ -2730,10 +2739,7 @@ export type Database = {
         Returns: string
       }
       fn_generer_numero_facture: { Args: never; Returns: string }
-      fn_generer_numero_note_honoraires: {
-        Args: { p_soignant_id: string }
-        Returns: string
-      }
+      fn_generer_numero_note_honoraires: { Args: never; Returns: string }
       fn_get_my_role: { Args: never; Returns: Json }
       fn_health_check: { Args: never; Returns: Json }
       fn_is_valid_uuid: { Args: { p_text: string }; Returns: boolean }
