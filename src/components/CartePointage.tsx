@@ -3,8 +3,11 @@ import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Clock } from 'lucide-react';
 import { BoutonPointage } from './BoutonPointage';
+import { SaisieCodePointage } from './SaisieCodePointage';
 import { ResultatPointage } from './ResultatPointage';
 import { BadgeCertification } from './BadgeCertification';
+import { supabase } from '@/integrations/supabase/client';
+import { extraireMessageErreur } from '@/lib/erreurs';
 
 interface CartePointageProps {
   mission: any;
