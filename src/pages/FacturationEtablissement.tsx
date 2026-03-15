@@ -210,6 +210,17 @@ export default function FacturationEtablissement() {
         )}
       </div>
 
+      {/* SEPA banner */}
+      {etab?.mode_paiement_commission === 'SEPA_DEBIT' && (
+        <div className="mb-6 flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
+          <Building2 className="h-5 w-5 text-primary shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Prélèvement automatique activé 🏦</p>
+            <p className="text-xs text-muted-foreground">Les commissions sont prélevées automatiquement après chaque mission terminée. Aucune action requise.</p>
+          </div>
+        </div>
+      )}
+
       {/* KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <FadeInView delay={0}><CarteKPI icone={Clock} valeur={`${kpi.enAttente.toFixed(0)} €`} label="Commissions en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" /></FadeInView>
