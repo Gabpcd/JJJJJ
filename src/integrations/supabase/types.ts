@@ -2914,6 +2914,27 @@ export type Database = {
               p_adresse_rue?: string
               p_adresse_ville?: string
               p_convention_collective?: string
+              p_couleur_theme?: string
+              p_email_contact?: string
+              p_finess?: string
+              p_mode_paiement_commission?: string
+              p_nom: string
+              p_taux_majoration_dimanche?: number
+              p_taux_majoration_ferie?: number
+              p_taux_majoration_nuit?: number
+              p_telephone_contact?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_departement?: string
+              p_adresse_lat?: number
+              p_adresse_lng?: number
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_convention_collective?: string
               p_email_contact?: string
               p_finess?: string
               p_nom: string
