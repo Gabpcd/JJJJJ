@@ -204,7 +204,8 @@ export default function DashboardSoignant() {
   if (loading || !soignant) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
   const profil = calculerCompletionProfil(soignant);
-  const score = soignant.score_fiabilite ?? 50;
+  const score = soignant.score_fiabilite;
+  const hasEvaluations = missionsTerminees > 0;
   const heures = soignant.heures_cumulees ?? 0;
   const missionsTerminees = soignant.total_missions_terminees ?? 0;
 
