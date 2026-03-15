@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Printer, CheckCircle, Clock } from 'lucide-react';
+import { FileText, Printer, CheckCircle, Clock, Shield, ExternalLink } from 'lucide-react';
 import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -18,6 +18,7 @@ import SignatureCanvas from '@/components/SignatureCanvas';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { logger } from '@/lib/logger';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 export default function ContratMission() {
   usePageTitle('Contrat');
@@ -32,6 +33,9 @@ export default function ContratMission() {
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [showConfirmSign, setShowConfirmSign] = useState(false);
   const [showCheckAnim, setShowCheckAnim] = useState(false);
+  const [modeSignature, setModeSignature] = useState<'CANVAS' | 'YOUSIGN'>('CANVAS');
+  const [yousignLoading, setYousignLoading] = useState(false);
+  const [yousignUrl, setYousignUrl] = useState<string | null>(null);
 
   const { role: serverRole } = useRole();
   const role: UserRole = serverRole === 'INCONNU' ? 'SOIGNANT' : serverRole;
