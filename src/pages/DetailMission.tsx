@@ -7,6 +7,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
+import { CodesPointageMission } from '@/components/CodesPointageMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
