@@ -52,6 +52,7 @@ export default function FacturationEtablissement() {
   const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
   const [etab, setEtab] = useState<any>(null);
   const [kpi, setKpi] = useState({ enAttente: 0, enCours: 0, totalPaye: 0 });
+  const [prelevements, setPrelevements] = useState<any[]>([]);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
 
   // Detect payment success from URL
