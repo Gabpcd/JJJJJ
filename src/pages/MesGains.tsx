@@ -77,7 +77,7 @@ export default function MesGains() {
   }, [user, filtre]);
 
   const stats = useMemo(() => {
-    const totalNet = missions.reduce((s, m) => s + (m.net_a_payer || 0), 0);
+    const totalNet = missions.reduce((s, m) => s + (m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0)), 0);
     const totalIFM = missions.reduce((s, m) => s + (m.montant_ifm || 0), 0);
     const totalICP = missions.reduce((s, m) => s + (m.montant_icp || 0), 0);
     const totalHeures = missions.reduce((s, m) => s + (m.duree_heures || 0), 0);
