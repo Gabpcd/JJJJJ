@@ -1288,6 +1288,8 @@ export type Database = {
       }
       missions: {
         Row: {
+          code_arrivee: string | null
+          code_depart: string | null
           commission_facturee: boolean | null
           cree_le: string | null
           debut_le: string
@@ -1312,6 +1314,7 @@ export type Database = {
           montant_majoration_ferie: number | null
           montant_majoration_nuit: number | null
           net_a_payer: number | null
+          net_estime: number | null
           niveau_urgence: number | null
           numero_note_honoraires: string | null
           profession_requise: Database["public"]["Enums"]["type_profession"]
@@ -1330,6 +1333,8 @@ export type Database = {
           yousign_statut: string | null
         }
         Insert: {
+          code_arrivee?: string | null
+          code_depart?: string | null
           commission_facturee?: boolean | null
           cree_le?: string | null
           debut_le: string
@@ -1354,6 +1359,7 @@ export type Database = {
           montant_majoration_ferie?: number | null
           montant_majoration_nuit?: number | null
           net_a_payer?: number | null
+          net_estime?: number | null
           niveau_urgence?: number | null
           numero_note_honoraires?: string | null
           profession_requise: Database["public"]["Enums"]["type_profession"]
@@ -1372,6 +1378,8 @@ export type Database = {
           yousign_statut?: string | null
         }
         Update: {
+          code_arrivee?: string | null
+          code_depart?: string | null
           commission_facturee?: boolean | null
           cree_le?: string | null
           debut_le?: string
@@ -1396,6 +1404,7 @@ export type Database = {
           montant_majoration_ferie?: number | null
           montant_majoration_nuit?: number | null
           net_a_payer?: number | null
+          net_estime?: number | null
           niveau_urgence?: number | null
           numero_note_honoraires?: string | null
           profession_requise?: Database["public"]["Enums"]["type_profession"]
@@ -1652,6 +1661,8 @@ export type Database = {
           depart_precision_gps_m: number | null
           distance_etablissement_m: number | null
           id: string
+          methode_pointage_arrivee: string | null
+          methode_pointage_depart: string | null
           mission_id: string
           modifie_le: string | null
           motif_litige: string | null
@@ -1679,6 +1690,8 @@ export type Database = {
           depart_precision_gps_m?: number | null
           distance_etablissement_m?: number | null
           id?: string
+          methode_pointage_arrivee?: string | null
+          methode_pointage_depart?: string | null
           mission_id: string
           modifie_le?: string | null
           motif_litige?: string | null
@@ -1706,6 +1719,8 @@ export type Database = {
           depart_precision_gps_m?: number | null
           distance_etablissement_m?: number | null
           id?: string
+          methode_pointage_arrivee?: string | null
+          methode_pointage_depart?: string | null
           mission_id?: string
           modifie_le?: string | null
           motif_litige?: string | null
@@ -2319,6 +2334,10 @@ export type Database = {
         Returns: Json
       }
       fn_charger_demo_investisseur: { Args: never; Returns: Json }
+      fn_codes_pointage_mission: {
+        Args: { p_mission_id: string }
+        Returns: Json
+      }
       fn_compteur_soignants_disponibles: {
         Args: { p_etablissement_id: string }
         Returns: Json
@@ -2760,6 +2779,25 @@ export type Database = {
         | {
             Args: {
               p_adresse_code_postal?: string
+              p_adresse_lat?: number
+              p_adresse_lng?: number
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_avatar_url?: string
+              p_date_naissance?: string
+              p_nom?: string
+              p_numero_adeli?: string
+              p_numero_rpps?: string
+              p_prenom?: string
+              p_rayon_deplacement_km?: number
+              p_telephone?: string
+              p_types_contrat?: string[]
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
               p_adresse_rue?: string
               p_adresse_ville?: string
               p_rayon_deplacement_km?: number
@@ -2806,28 +2844,54 @@ export type Database = {
       fn_nettoyer_tokens_push: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
-      fn_pointer_arrivee: {
-        Args: {
-          p_lat: number
-          p_lng: number
-          p_mission_id: string
-          p_modele: string
-          p_precision: number
-          p_terminal_id: string
-        }
-        Returns: Json
-      }
-      fn_pointer_depart: {
-        Args: {
-          p_lat: number
-          p_lng: number
-          p_modele: string
-          p_precision: number
-          p_presence_id: string
-          p_terminal_id: string
-        }
-        Returns: Json
-      }
+      fn_pointer_arrivee:
+        | {
+            Args: {
+              p_code_arrivee?: string
+              p_lat?: number
+              p_lng?: number
+              p_mission_id: string
+              p_modele?: string
+              p_precision?: number
+              p_terminal_id?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_lat: number
+              p_lng: number
+              p_mission_id: string
+              p_modele: string
+              p_precision: number
+              p_terminal_id: string
+            }
+            Returns: Json
+          }
+      fn_pointer_depart:
+        | {
+            Args: {
+              p_code_depart?: string
+              p_lat?: number
+              p_lng?: number
+              p_modele?: string
+              p_precision?: number
+              p_presence_id: string
+              p_terminal_id?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_lat: number
+              p_lng: number
+              p_modele: string
+              p_precision: number
+              p_presence_id: string
+              p_terminal_id: string
+            }
+            Returns: Json
+          }
       fn_purger_audit_ancien: { Args: never; Returns: number }
       fn_purger_demo: { Args: never; Returns: Json }
       fn_purger_gps_ancien: { Args: never; Returns: number }
