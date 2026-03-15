@@ -110,7 +110,7 @@ export default function InscriptionSoignant() {
           body: { numero_rpps: form.rpps, prenom: form.prenom, nom: form.nom },
         });
         if (!error && data) setRppsResultat(data);
-        else setRppsResultat({ trouve: false, correspond: false });
+        else setRppsResultat({ trouve: false });
       } catch {
         setRppsResultat(null);
       }
