@@ -272,10 +272,10 @@ export default function DashboardRH() {
           <p className="text-sm text-muted-foreground">
             Votre coût moyen/heure : <span className="font-bold text-foreground">{currentMonth.coutMoyenHeure.toFixed(1)} €</span> — Moyenne du secteur : <span className="font-bold text-foreground">{COUT_MOYEN_SECTEUR} €</span>
             {currentMonth.coutMoyenHeure > 0 && currentMonth.coutMoyenHeure < COUT_MOYEN_SECTEUR && (
-              <span className="text-xs text-green-600 ml-1">✅ En dessous de la moyenne</span>
+              <span className="text-xs text-primary ml-1">✅ En dessous de la moyenne</span>
             )}
             {currentMonth.coutMoyenHeure >= COUT_MOYEN_SECTEUR && (
-              <span className="text-xs text-amber-600 ml-1">⚠️ Au-dessus de la moyenne</span>
+              <span className="text-xs text-destructive ml-1">⚠️ Au-dessus de la moyenne</span>
             )}
           </p>
         </div>
