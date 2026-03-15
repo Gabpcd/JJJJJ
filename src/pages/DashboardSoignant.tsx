@@ -204,9 +204,10 @@ export default function DashboardSoignant() {
   if (loading || !soignant) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
   const profil = calculerCompletionProfil(soignant);
-  const score = soignant.score_fiabilite ?? 50;
-  const heures = soignant.heures_cumulees ?? 0;
   const missionsTerminees = soignant.total_missions_terminees ?? 0;
+  const score = soignant.score_fiabilite;
+  const hasEvaluations = missionsTerminees > 0;
+  const heures = soignant.heures_cumulees ?? 0;
 
   const aDocuments = !!(soignant as any).tous_documents_valides || missions.length > 0;
 
@@ -216,7 +217,7 @@ export default function DashboardSoignant() {
 
       <BarreCompletionProfil
         nom={!!soignant.nom}
-        rppsVerifie={!!(soignant as any).rpps_verifie || !!soignant.numero_rpps}
+        rppsVerifie={!!(soignant as any).rpps_verifie}
         auMoinsUnDocument={aDocuments}
         adresseRenseignee={!!(soignant.adresse_lat && soignant.adresse_lng)}
         telephoneRenseigne={!!soignant.telephone}
@@ -279,7 +280,15 @@ export default function DashboardSoignant() {
           <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
         </FadeInView>
         <FadeInView delay={100}>
-          <JaugeSpeedometer score={score} onClick={() => navigate('/soignant/fiabilite')} />
+          {hasEvaluations ? (
+            <JaugeSpeedometer score={score ?? 50} onClick={() => navigate('/soignant/fiabilite')} />
+          ) : (
+            <div className="card-kpi flex flex-col items-center justify-center text-center cursor-pointer" onClick={() => navigate('/soignant/fiabilite')}>
+              <Star className="h-6 w-6 text-muted-foreground/40 mb-1" />
+              <p className="text-xs font-semibold text-muted-foreground">Pas encore d'évaluation</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">Complétez votre 1ère mission</p>
+            </div>
+          )}
         </FadeInView>
         <FadeInView delay={200}>
           <CarteKPI icone={Clock} valeur={`${heures}h`} label="Heures cumulées" sousLabel="sur 3 200h objectif" couleurIcone="text-purple-600" couleurFond="bg-purple-100" />

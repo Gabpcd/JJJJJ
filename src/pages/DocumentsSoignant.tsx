@@ -188,7 +188,7 @@ export default function DocumentsSoignant() {
     if (uploadError) { toast.error('Erreur lors du téléversement. Veuillez réessayer.'); return; }
 
     const docReqData = documentsRequis.find(d => d.type_document === televersementType);
-    const { data, error } = await supabase.from('documents_soignants').insert({
+    const insertData: any = {
       soignant_id: user.id,
       type_document: televersementType as any,
       libelle: libelle || null,
@@ -197,10 +197,11 @@ export default function DocumentsSoignant() {
       nom_fichier: fichier.name,
       type_mime: fichier.type,
       taille_octets: fichier.size,
-      valide_depuis: valideDepuis || new Date().toISOString().split('T')[0],
+      valide_depuis: valideDepuis || null,
       valide_jusqua: valideJusqua || null,
       est_critique: docReqData?.est_critique || false,
-    } as any).select().single();
+    };
+    const { data, error } = await supabase.from('documents_soignants').insert(insertData).select().single();
 
     if (error) { toast.error(extraireMessageErreur(error)); return; }
 

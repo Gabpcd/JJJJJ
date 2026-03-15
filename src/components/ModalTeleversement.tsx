@@ -2,6 +2,28 @@ import { useState, useRef, useCallback } from 'react';
 import { X, Upload, Camera } from 'lucide-react';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
 
+// Types de documents sans dates de validité
+const TYPES_SANS_DATES = ['RIB', 'KBIS'];
+const TYPES_SANS_EXPIRATION = ['RIB', 'KBIS', 'DIPLOME', 'CASIER_JUDICIAIRE'];
+
+// Placeholders adaptés par type de document
+const PLACEHOLDERS_LIBELLE: Record<string, string> = {
+  'CARTE_IDENTITE': 'Ex : CNI recto-verso',
+  'PASSEPORT': 'Ex : Passeport page 2-3',
+  'TITRE_SEJOUR': 'Ex : Titre de séjour recto',
+  'DIPLOME': 'Ex : Diplôme IDE 2020',
+  'RPPS_ADELI': 'Ex : Attestation RPPS ordre infirmier',
+  'RCP_ASSURANCE': 'Ex : Attestation RCP 2025-2026',
+  'VACCINATIONS': 'Ex : Carnet de vaccination',
+  'CASIER_JUDICIAIRE': 'Ex : Extrait B3',
+  'RIB': 'Ex : RIB BNP',
+  'KBIS': 'Ex : KBIS janvier 2025',
+  'ATTESTATION_URSSAF': 'Ex : Attestation URSSAF trimestre',
+  'AUTORISATION_EXERCICE': 'Ex : Autorisation ARS',
+  'FORMATION_OBLIGATOIRE': 'Ex : Attestation AFGSU',
+  'AUTRE': 'Ex : Document complémentaire',
+};
+
 interface ModalTeleversementProps {
   typeDocument: string;
   onConfirmer: (fichier: File, libelle: string, valideDepuis: string, valideJusqua: string) => Promise<void>;
@@ -12,13 +34,17 @@ interface ModalTeleversementProps {
 export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpiration }: ModalTeleversementProps) {
   const [fichier, setFichier] = useState<File | null>(null);
   const [libelle, setLibelle] = useState('');
-  const [valideDepuis, setValideDepuis] = useState(new Date().toISOString().split('T')[0]);
+  const [valideDepuis, setValideDepuis] = useState('');
   const [valideJusqua, setValideJusqua] = useState('');
   const [envoi, setEnvoi] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const isMobile = typeof window !== 'undefined' && 'ontouchstart' in window;
+
+  const sansDate = TYPES_SANS_DATES.includes(typeDocument);
+  const sansExpiration = TYPES_SANS_EXPIRATION.includes(typeDocument) || aExpiration === false;
+  const placeholder = PLACEHOLDERS_LIBELLE[typeDocument] || 'Ex : Description du document';
 
   const handleFile = (f: File) => {
     if (f.size > 10 * 1024 * 1024) {
@@ -45,9 +71,9 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onFermer} />
-      <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[10vh] p-4" style={{ position: 'fixed' }}>
+      <div className="fixed inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onFermer} />
+      <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full max-h-[80vh] overflow-y-auto z-[201]">
         <button onClick={onFermer} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
           <X className="h-5 w-5" />
         </button>
@@ -97,20 +123,22 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
         <div className="mt-4 space-y-3">
           <div>
             <label className="text-xs text-muted-foreground">Libellé (optionnel)</label>
-            <input value={libelle} onChange={e => setLibelle(e.target.value)} className="input-base text-sm mt-1" placeholder="Ex: CNI recto-verso" />
+            <input value={libelle} onChange={e => setLibelle(e.target.value)} className="input-base text-sm mt-1" placeholder={placeholder} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Valide depuis</label>
-              <input type="date" value={valideDepuis} onChange={e => setValideDepuis(e.target.value)} className="input-base text-sm mt-1" />
-            </div>
-            {aExpiration !== false && (
+          {!sansDate && (
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground">Valide jusqu'au</label>
-                <input type="date" value={valideJusqua} onChange={e => setValideJusqua(e.target.value)} className="input-base text-sm mt-1" />
+                <label className="text-xs text-muted-foreground">Valide depuis</label>
+                <input type="date" value={valideDepuis} onChange={e => setValideDepuis(e.target.value)} className="input-base text-sm mt-1" />
               </div>
-            )}
-          </div>
+              {!sansExpiration && (
+                <div>
+                  <label className="text-xs text-muted-foreground">Valide jusqu'au</label>
+                  <input type="date" value={valideJusqua} onChange={e => setValideJusqua(e.target.value)} className="input-base text-sm mt-1" />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 mt-6">
