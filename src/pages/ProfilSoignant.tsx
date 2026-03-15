@@ -79,7 +79,9 @@ export default function ProfilSoignant() {
           adeli: data.numero_adeli || '',
           lat: data.adresse_lat?.toString() || '', lng: data.adresse_lng?.toString() || '',
           rayon: data.rayon_deplacement_km ?? 30,
+          bio: data.bio || '', anneesExperience: data.annees_experience || 0,
         });
+        setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
         setTypesContrat(getTypesContratSoignant(data as any));
         setConsentementGPS((data as any).consentement_gps !== false);
         setPoolUrgenceActif(data.pool_urgence_actif || false);
