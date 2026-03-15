@@ -79,6 +79,8 @@ export default function ProfilSoignant() {
         });
         setTypesContrat(getTypesContratSoignant(data as any));
         setConsentementGPS((data as any).consentement_gps !== false);
+        setPoolUrgenceActif(data.pool_urgence_actif || false);
+        setPoolUrgenceRayon(data.pool_urgence_rayon_km || 15);
       }
       setLoading(false);
     });
