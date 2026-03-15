@@ -109,6 +109,54 @@ export type Database = {
           },
         ]
       }
+      candidatures: {
+        Row: {
+          cree_le: string | null
+          id: string
+          message: string | null
+          mission_id: string
+          motif_refus: string | null
+          soignant_id: string
+          statut: string | null
+          traite_le: string | null
+        }
+        Insert: {
+          cree_le?: string | null
+          id?: string
+          message?: string | null
+          mission_id: string
+          motif_refus?: string | null
+          soignant_id: string
+          statut?: string | null
+          traite_le?: string | null
+        }
+        Update: {
+          cree_le?: string | null
+          id?: string
+          message?: string | null
+          mission_id?: string
+          motif_refus?: string | null
+          soignant_id?: string
+          statut?: string | null
+          traite_le?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidatures_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidatures_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conformite_travail: {
         Row: {
           controle_le: string | null
@@ -1304,6 +1352,7 @@ export type Database = {
           heures_nuit: number | null
           id: string
           intitule: string
+          mode_attribution: string | null
           modifie_le: string | null
           montant_commission_ht: number | null
           montant_commission_ttc: number | null
@@ -1349,6 +1398,7 @@ export type Database = {
           heures_nuit?: number | null
           id?: string
           intitule: string
+          mode_attribution?: string | null
           modifie_le?: string | null
           montant_commission_ht?: number | null
           montant_commission_ttc?: number | null
@@ -1394,6 +1444,7 @@ export type Database = {
           heures_nuit?: number | null
           id?: string
           intitule?: string
+          mode_attribution?: string | null
           modifie_le?: string | null
           montant_commission_ht?: number | null
           montant_commission_ttc?: number | null
@@ -1842,6 +1893,7 @@ export type Database = {
           adresse_lng: number | null
           adresse_rue: string | null
           adresse_ville: string | null
+          annees_experience: number | null
           assujetti_tva: boolean | null
           attestation_medecine_travail: boolean | null
           attestation_medecine_travail_le: string | null
@@ -1849,6 +1901,7 @@ export type Database = {
           attestation_vaccinations: boolean | null
           attestation_vaccinations_le: string | null
           avatar_url: string | null
+          bio: string | null
           code_ape: string | null
           code_parrainage: string | null
           consentement_gps: boolean | null
@@ -1885,6 +1938,7 @@ export type Database = {
           rpps_verifie_le: string | null
           score_fiabilite: number | null
           siret_liberal: string | null
+          specialites: string[] | null
           statut_liberal: string | null
           statut_verification_aria:
             | Database["public"]["Enums"]["statut_verification"]
@@ -1908,6 +1962,7 @@ export type Database = {
           adresse_lng?: number | null
           adresse_rue?: string | null
           adresse_ville?: string | null
+          annees_experience?: number | null
           assujetti_tva?: boolean | null
           attestation_medecine_travail?: boolean | null
           attestation_medecine_travail_le?: string | null
@@ -1915,6 +1970,7 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
+          bio?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
           consentement_gps?: boolean | null
@@ -1951,6 +2007,7 @@ export type Database = {
           rpps_verifie_le?: string | null
           score_fiabilite?: number | null
           siret_liberal?: string | null
+          specialites?: string[] | null
           statut_liberal?: string | null
           statut_verification_aria?:
             | Database["public"]["Enums"]["statut_verification"]
@@ -1974,6 +2031,7 @@ export type Database = {
           adresse_lng?: number | null
           adresse_rue?: string | null
           adresse_ville?: string | null
+          annees_experience?: number | null
           assujetti_tva?: boolean | null
           attestation_medecine_travail?: boolean | null
           attestation_medecine_travail_le?: string | null
@@ -1981,6 +2039,7 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
+          bio?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
           consentement_gps?: boolean | null
@@ -2017,6 +2076,7 @@ export type Database = {
           rpps_verifie_le?: string | null
           score_fiabilite?: number | null
           siret_liberal?: string | null
+          specialites?: string[] | null
           statut_liberal?: string | null
           statut_verification_aria?:
             | Database["public"]["Enums"]["statut_verification"]
@@ -2810,6 +2870,28 @@ export type Database = {
         | {
             Args: {
               p_adresse_code_postal?: string
+              p_adresse_lat?: number
+              p_adresse_lng?: number
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_annees_experience?: number
+              p_avatar_url?: string
+              p_bio?: string
+              p_date_naissance?: string
+              p_nom?: string
+              p_numero_adeli?: string
+              p_numero_rpps?: string
+              p_prenom?: string
+              p_rayon_deplacement_km?: number
+              p_specialites?: string[]
+              p_telephone?: string
+              p_types_contrat?: string[]
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
               p_adresse_rue?: string
               p_adresse_ville?: string
               p_rayon_deplacement_km?: number
@@ -2912,6 +2994,10 @@ export type Database = {
         Args: { p_code: string; p_presence_id: string }
         Returns: Json
       }
+      fn_postuler_mission: {
+        Args: { p_message?: string; p_mission_id: string }
+        Returns: Json
+      }
       fn_purger_audit_ancien: { Args: never; Returns: number }
       fn_purger_demo: { Args: never; Returns: Json }
       fn_purger_gps_ancien: { Args: never; Returns: number }
@@ -2993,6 +3079,10 @@ export type Database = {
       fn_supprimer_mon_compte: { Args: never; Returns: Json }
       fn_toggle_pool_urgence: {
         Args: { p_actif: boolean; p_creneaux?: Json; p_rayon_km?: number }
+        Returns: Json
+      }
+      fn_traiter_candidature: {
+        Args: { p_candidature_id: string; p_decision: string; p_motif?: string }
         Returns: Json
       }
       fn_upsert_token_push: {
