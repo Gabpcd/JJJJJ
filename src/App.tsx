@@ -56,6 +56,7 @@ const ChargesSociales = lazy(() => import("./pages/ChargesSociales"));
 
 /* ─── Établissement pages ─── */
 const DashboardEtablissement = lazy(() => import("./pages/DashboardEtablissement"));
+const APIEtablissement = lazy(() => import("./pages/APIEtablissement"));
 const ProfilEtablissement = lazy(() => import("./pages/ProfilEtablissement"));
 const ListeMissions = lazy(() => import("./pages/ListeMissions"));
 const CreerMission = lazy(() => import("./pages/CreerMission"));
@@ -84,6 +85,8 @@ const AdminFacturation = lazy(() => import("./pages/admin/AdminFacturation"));
 const AdminConformite = lazy(() => import("./pages/admin/AdminConformite"));
 const AdminDemo = lazy(() => import("./pages/admin/AdminDemo"));
 const AdminEmails = lazy(() => import("./pages/admin/AdminEmails"));
+const AdminAPI = lazy(() => import("./pages/admin/AdminAPI"));
+const AdminGroupes = lazy(() => import("./pages/admin/AdminGroupes"));
 
 const queryClient = new QueryClient();
 
@@ -153,6 +156,7 @@ function AppRoutes() {
           <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
           <Route path="/etablissement/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageNotifications role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/exclusions" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExclusionsEtablissement /></RouteProtegee>} />
+          <Route path="/etablissement/api" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><APIEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/premium" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PremiumEtablissement /></RouteProtegee>} />
 
           {/* Contrat (accessible par soignant et établissement) */}
@@ -170,6 +174,8 @@ function AppRoutes() {
           <Route path="/admin/conformite" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminConformite /></RouteProtegee>} />
           <Route path="/admin/demo" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDemo /></RouteProtegee>} />
           <Route path="/admin/emails" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEmails /></RouteProtegee>} />
+          <Route path="/admin/api" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAPI /></RouteProtegee>} />
+          <Route path="/admin/groupes" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminGroupes /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
