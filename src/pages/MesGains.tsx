@@ -164,7 +164,7 @@ export default function MesGains() {
               const estLiberal = m.type_paiement_soignant === 'NOTE_HONORAIRES';
               const iconeType = estLiberal ? '🧾' : '📋';
               const labelType = estLiberal ? 'Note d\'honoraires' : 'Bulletin de paie';
-              const montantAffiche = estLiberal ? m.total_brut : m.net_a_payer;
+              const montantAffiche = estLiberal ? m.total_brut : (m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0));
               return (
                 <AccordionItem key={m.id} value={m.id} className="card-base !p-0 overflow-hidden border">
                   <AccordionTrigger className="px-4 py-3 hover:no-underline">
