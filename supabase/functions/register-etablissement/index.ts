@@ -37,7 +37,7 @@ function checkRateLimit(ip: string): boolean {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   // M7: Rate limiting
@@ -45,7 +45,7 @@ serve(async (req) => {
   if (!checkRateLimit(clientIp)) {
     return new Response(JSON.stringify({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' }), {
       status: 429,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -58,7 +58,7 @@ serve(async (req) => {
   if (!authHeader) {
     return new Response(JSON.stringify({ error: 'Non authentifié' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -68,7 +68,7 @@ serve(async (req) => {
   if (authError || !user) {
     return new Response(JSON.stringify({ error: 'Non authentifié' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -82,7 +82,7 @@ serve(async (req) => {
     if (!nom || !siret || !type || !adresse_ville) {
       return new Response(JSON.stringify({ error: 'Champs obligatoires manquants' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -90,7 +90,7 @@ serve(async (req) => {
     if (!/^\d{14}$/.test(siret) || /^0+$/.test(siret)) {
       return new Response(JSON.stringify({ error: 'Le SIRET doit contenir 14 chiffres' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
     {
@@ -103,7 +103,7 @@ serve(async (req) => {
       if (sum % 10 !== 0) {
         return new Response(JSON.stringify({ error: 'SIRET invalide (checksum incorrecte)' }), {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
         });
       }
     }
@@ -137,12 +137,12 @@ serve(async (req) => {
       if (msg.includes('duplicate key') && msg.includes('siret')) {
         return new Response(JSON.stringify({ error: 'Ce numéro SIRET est déjà enregistré.' }), {
           status: 409,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
         });
       }
       return new Response(JSON.stringify({ error: 'Erreur lors de la création du profil établissement.' }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -156,7 +156,7 @@ serve(async (req) => {
       await supabaseAdmin.from('etablissements').delete().eq('id', user.id);
       return new Response(JSON.stringify({ error: 'Erreur lors de la configuration du compte.' }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -183,13 +183,13 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ success: true, etablissement_id: user.id }), {
       status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   } catch (err) {
     console.error('register-etablissement error:', err);
     return new Response(JSON.stringify({ error: 'Erreur interne' }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 });

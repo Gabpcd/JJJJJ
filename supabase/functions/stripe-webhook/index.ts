@@ -21,7 +21,7 @@ function corsHeaders(req: Request) {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
@@ -40,7 +40,7 @@ serve(async (req) => {
     if (!signature) {
       return new Response(JSON.stringify({ error: "Missing stripe-signature header" }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -49,7 +49,7 @@ serve(async (req) => {
       console.error("STRIPE_WEBHOOK_SECRET not configured");
       return new Response(JSON.stringify({ error: "Webhook secret not configured" }), {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -60,7 +60,7 @@ serve(async (req) => {
       console.error("Signature verification failed:", err);
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -75,7 +75,7 @@ serve(async (req) => {
         console.warn("checkout.session.completed sans facture_id dans metadata");
         return new Response(JSON.stringify({ received: true }), {
           status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         });
       }
 
@@ -90,7 +90,7 @@ serve(async (req) => {
         console.log(`Facture ${factureId} already PAYEE, skipping duplicate webhook`);
         return new Response(JSON.stringify({ received: true, skipped: "already_paid" }), {
           status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         });
       }
 
@@ -202,14 +202,14 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Erreur inconnue";
     console.error("Erreur stripe-webhook:", message);
     return new Response(JSON.stringify({ error: "Erreur interne" }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 });

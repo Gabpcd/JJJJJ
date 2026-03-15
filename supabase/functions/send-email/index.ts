@@ -82,7 +82,6 @@ const ALLOWED_TYPES = new Set([
 interface TemplateResult { subject: string; html: string }
 
 function renderTemplate(type: string, rawData: Record<string, unknown>): TemplateResult | null {
-  // Escape all string values to prevent XSS injection in email HTML
   const data: Record<string, string> = {};
   for (const [key, value] of Object.entries(rawData)) {
     data[key] = escapeHtml(value);
@@ -317,7 +316,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   // Vérification stricte du JWT
@@ -325,7 +324,7 @@ serve(async (req) => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: 'Non autorisé' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -346,7 +345,7 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Token invalide' }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
     userId = user.id;
@@ -361,7 +360,7 @@ serve(async (req) => {
     if (!type || !destinataire_id) {
       return new Response(JSON.stringify({ error: 'Paramètres requis : type, destinataire_id, data' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -370,14 +369,14 @@ serve(async (req) => {
     if (!UUID_REGEX.test(destinataire_id)) {
       return new Response(JSON.stringify({ error: 'destinataire_id invalide' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
     if (!ALLOWED_TYPES.has(type)) {
       return new Response(JSON.stringify({ error: 'Type inconnu' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -401,7 +400,7 @@ serve(async (req) => {
     if (!resolvedEmail) {
       return new Response(JSON.stringify({ error: 'Destinataire introuvable' }), {
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -439,7 +438,7 @@ serve(async (req) => {
       if (!count && !isGroupeAdmin) {
         return new Response(JSON.stringify({ error: 'Non autorisé à envoyer un email à ce destinataire' }), {
           status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
         });
       }
     }
@@ -448,7 +447,7 @@ serve(async (req) => {
     if (!rendered) {
       return new Response(JSON.stringify({ error: 'Type inconnu' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -458,7 +457,7 @@ serve(async (req) => {
     if (!RESEND_API_KEY) {
       console.log('RESEND_API_KEY not configured — email skipped');
       return new Response(JSON.stringify({ success: true, skipped: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -490,13 +489,13 @@ serve(async (req) => {
     });
 
     return new Response(JSON.stringify({ success: response.ok }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('send-email error:', error);
     return new Response(JSON.stringify({ success: false, error: 'Erreur interne' }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 });

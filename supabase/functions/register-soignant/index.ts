@@ -37,7 +37,7 @@ function checkRateLimit(ip: string): boolean {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   // M7: Rate limiting
@@ -45,7 +45,7 @@ serve(async (req) => {
   if (!checkRateLimit(clientIp)) {
     return new Response(JSON.stringify({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' }), {
       status: 429,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -58,7 +58,7 @@ serve(async (req) => {
   if (!authHeader) {
     return new Response(JSON.stringify({ error: 'Non authentifié' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -68,7 +68,7 @@ serve(async (req) => {
   if (authError || !user) {
     return new Response(JSON.stringify({ error: 'Non authentifié' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -81,7 +81,7 @@ serve(async (req) => {
     if (!prenom || !nom || !profession) {
       return new Response(JSON.stringify({ error: 'Champs obligatoires manquants (prenom, nom, profession)' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -89,7 +89,7 @@ serve(async (req) => {
     if (!dateNaissance) {
       return new Response(JSON.stringify({ error: 'Date de naissance requise.' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -104,7 +104,7 @@ serve(async (req) => {
       if (actualAge < 18) {
         return new Response(JSON.stringify({ error: 'Vous devez avoir au moins 18 ans pour vous inscrire.' }), {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
         });
       }
     }
@@ -113,7 +113,7 @@ serve(async (req) => {
     if (rpps && !/^\d{11}$/.test(rpps)) {
       return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -156,12 +156,12 @@ serve(async (req) => {
       if (msg.includes('duplicate key')) {
         return new Response(JSON.stringify({ error: 'Un compte avec cet identifiant existe déjà.' }), {
           status: 409,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
         });
       }
       return new Response(JSON.stringify({ error: 'Erreur lors de la création du profil soignant.' }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -176,7 +176,7 @@ serve(async (req) => {
       await supabaseAdmin.from('soignants').delete().eq('id', user.id);
       return new Response(JSON.stringify({ error: 'Erreur lors de la configuration du compte.' }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -203,13 +203,13 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ success: true, soignant_id: user.id }), {
       status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   } catch (err) {
     console.error('register-soignant error:', err);
     return new Response(JSON.stringify({ error: 'Erreur interne' }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 });

@@ -21,7 +21,7 @@ function corsHeaders(req: Request) {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   const supabaseClient = createClient(
@@ -29,9 +29,10 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_ANON_KEY") ?? ""
   );
 
+  const authHeader = req.headers.get("Authorization")!;
+
   try {
     // Authenticate user
-    const authHeader = req.headers.get("Authorization")!;
     const token = authHeader.replace("Bearer ", "");
     const { data: { user } } = await supabaseClient.auth.getUser(token);
     if (!user?.email) throw new Error("Non authentifié");
@@ -65,7 +66,7 @@ serve(async (req) => {
     if (!userEtabId || userEtabId !== facture.etablissement_id) {
       return new Response(JSON.stringify({ error: "Accès interdit : cette facture ne vous appartient pas" }), {
         status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -98,6 +99,8 @@ serve(async (req) => {
         .eq("id", facture.etablissement_id);
     }
 
+    const appUrl = getCorsOrigin(req);
+
     // Create Checkout session for one-time payment
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -115,8 +118,8 @@ serve(async (req) => {
         },
       ],
       mode: "payment",
-      success_url: `${allowedOrigin}/etablissement/facturation/${facture_id}?paiement=succes`,
-      cancel_url: `${allowedOrigin}/etablissement/facturation/${facture_id}?paiement=annule`,
+      success_url: `${appUrl}/etablissement/facturation/${facture_id}?paiement=succes`,
+      cancel_url: `${appUrl}/etablissement/facturation/${facture_id}?paiement=annule`,
       metadata: {
         facture_id: facture.id,
         numero_facture: facture.numero_facture,
@@ -135,13 +138,13 @@ serve(async (req) => {
       .eq("id", facture_id);
 
     return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error: unknown) {
     console.error("Erreur create-invoice-payment:", error instanceof Error ? error.message : error);
     return new Response(JSON.stringify({ error: "Erreur interne" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       status: 500,
     });
   }

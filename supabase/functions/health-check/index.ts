@@ -20,7 +20,7 @@ function corsHeaders(req: Request) {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   // M8: Require authentication (service_role or admin JWT)
@@ -31,7 +31,7 @@ serve(async (req) => {
   if (!authHeader) {
     return new Response(JSON.stringify({ error: 'Non autorisé' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -45,7 +45,7 @@ serve(async (req) => {
     if (error || !user) {
       return new Response(JSON.stringify({ error: 'Non autorisé' }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
     // Only ADMIN can call health-check via JWT
@@ -56,7 +56,7 @@ serve(async (req) => {
     if (fullUser?.app_metadata?.role !== 'ADMIN') {
       return new Response(JSON.stringify({ error: 'Accès réservé aux administrateurs' }), {
         status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
   }
@@ -67,13 +67,13 @@ serve(async (req) => {
     if (error) throw error;
 
     return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       status: data?.status === 'OK' ? 200 : 500,
     });
   } catch (err) {
     console.error('health-check error:', err);
     return new Response(JSON.stringify({ status: 'ERROR', error: 'Erreur interne' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       status: 500,
     });
   }

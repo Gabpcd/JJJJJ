@@ -36,7 +36,7 @@ function isRateLimited(ip: string): boolean {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   // Rate limiting par IP
@@ -44,7 +44,7 @@ serve(async (req) => {
   if (isRateLimited(clientIp)) {
     return new Response(JSON.stringify({ error: 'Trop de requêtes' }), {
       status: 429,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -53,7 +53,7 @@ serve(async (req) => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: 'Non autorisé' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -66,7 +66,7 @@ serve(async (req) => {
   if (authError || !user) {
     return new Response(JSON.stringify({ error: 'Token invalide' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -76,7 +76,7 @@ serve(async (req) => {
     if (!numero_rpps || !/^\d{11}$/.test(numero_rpps)) {
       return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -117,7 +117,7 @@ serve(async (req) => {
               nom_api: nomRetourne,
               profession_api: profRetournee,
             }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
             });
           }
         }
@@ -151,7 +151,7 @@ serve(async (req) => {
               nom_api: nomRetourne,
               profession_api: profRetournee,
             }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
             });
           }
         }
@@ -167,14 +167,14 @@ serve(async (req) => {
       nom_api: null,
       profession_api: null,
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('Erreur verify-rpps:', error);
     return new Response(JSON.stringify({ error: 'Erreur interne' }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 });
