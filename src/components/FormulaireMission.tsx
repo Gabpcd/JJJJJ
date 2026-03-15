@@ -111,6 +111,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       setTauxHoraire(String(missionSource.taux_horaire_base));
       setEstUrgente(missionSource.est_urgente || false);
       setNiveauUrgence(missionSource.niveau_urgence || 1);
+      setModeAttribution(missionSource.mode_attribution || 'PREMIER_ARRIVE');
     }
   }, [missionSource]);
 
