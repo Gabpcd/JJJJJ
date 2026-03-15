@@ -31,7 +31,15 @@ export default function PageConnexion() {
       if (role === 'ADMIN_PLATEFORME') navigate('/admin');
       else if (role === 'ADMIN_ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
       else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
-      else navigate('/soignant/tableau-de-bord');
+      else if (role === 'SOIGNANT') navigate('/soignant/tableau-de-bord');
+      else {
+        // Pas de rôle trouvé — l'inscription n'a pas été complétée
+        afficherNotification({ type: 'erreur', message: 'Votre inscription n\'est pas complète. Veuillez vous réinscrire.' });
+        // Déconnecter pour permettre une réinscription propre
+        const { supabase: sb } = await import('@/integrations/supabase/client');
+        await sb.auth.signOut();
+        navigate('/inscription/soignant');
+      }
     } catch (err) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
