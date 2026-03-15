@@ -125,7 +125,7 @@ export default function MesGains() {
 
       {/* KPI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-        <CarteKPI icone={Banknote} valeur={fmt(stats.totalNet)} label="Net total gagné" couleurIcone="text-primary" couleurFond="bg-primary/10" />
+        <CarteKPI icone={Banknote} valeur={fmt(stats.totalNet)} label="Net estimé* total" couleurIcone="text-primary" couleurFond="bg-primary/10" />
         <CarteKPI icone={Gift} valeur={fmt(stats.totalIFM)} label="Dont IFM" couleurIcone="text-emerald-600" couleurFond="bg-emerald-100" />
         <CarteKPI icone={Palmtree} valeur={fmt(stats.totalICP)} label="Dont ICP" couleurIcone="text-info" couleurFond="bg-info/10" />
         <CarteKPI icone={Clock} valeur={`${Math.round(stats.totalHeures)}h`} label={`sur ${stats.nbMissions} missions`} couleurIcone="text-purple-600" couleurFond="bg-purple-100" />
