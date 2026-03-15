@@ -290,6 +290,7 @@ export default function DetailMission() {
               <h2 className="font-semibold text-foreground mb-4">📋 Candidatures reçues</h2>
               <ListeCandidatures
                 missionId={m.id}
+                modePaiement={(m.etablissements as any)?.mode_paiement_commission}
                 onAccepted={() => window.location.reload()}
                 onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
                 onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
