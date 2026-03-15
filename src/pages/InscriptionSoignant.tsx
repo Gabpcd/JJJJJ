@@ -62,7 +62,20 @@ export default function InscriptionSoignant() {
 
   // RPPS verification state
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
-  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; correspond: boolean; nom_api?: string; profession_api?: string } | null>(null);
+  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_api?: string; profession_api?: string } | null>(null);
+
+  const normaliser = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+
+  const rppsCorrespond = (): boolean | null => {
+    if (!rppsResultat || !rppsResultat.trouve) return null;
+    const nomApi = normaliser(rppsResultat.nom_api || '');
+    const nomForm = normaliser(form.nom);
+    const prenomForm3 = normaliser(form.prenom).slice(0, 3);
+    const partiesApi = (rppsResultat.nom_api || '').split(/[\s-]+/);
+    const nomMatch = nomApi.includes(nomForm) || nomForm.includes(nomApi);
+    const prenomMatch = partiesApi.some(p => normaliser(p).slice(0, 3) === prenomForm3);
+    return nomMatch && prenomMatch;
+  };
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
 
@@ -80,7 +93,8 @@ export default function InscriptionSoignant() {
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
   const dateNaissanceRequise = !form.dateNaissance;
   const rppsRequis = form.profession && !PROFESSIONS_SANS_RPPS.includes(form.profession);
-  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && !rppsResultat.trouve;
+  const rppsMatch = rppsCorrespond();
+  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && (!rppsResultat.trouve || rppsMatch === false);
   const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise;
 
   // Verify RPPS when 11 digits entered
@@ -96,7 +110,7 @@ export default function InscriptionSoignant() {
           body: { numero_rpps: form.rpps, prenom: form.prenom, nom: form.nom },
         });
         if (!error && data) setRppsResultat(data);
-        else setRppsResultat({ trouve: false, correspond: false });
+        else setRppsResultat({ trouve: false });
       } catch {
         setRppsResultat(null);
       }
@@ -207,10 +221,16 @@ export default function InscriptionSoignant() {
                   {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
                 </div>
                 {rppsVerifiant && <p className="text-xs text-primary mt-1">Vérification en cours...</p>}
-                {rppsResultat && rppsResultat.trouve && (
+                {rppsResultat && rppsResultat.trouve && rppsMatch === true && (
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
                     <ShieldCheck className="h-3.5 w-3.5" />
-                    ✅ RPPS Vérifié — {rppsResultat.nom_api} {rppsResultat.profession_api ? `— ${rppsResultat.profession_api}` : ''}
+                    ✅ RPPS Vérifié — {rppsResultat.nom_api}
+                  </div>
+                )}
+                {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    ❌ Ce RPPS ne correspond pas à votre identité
                   </div>
                 )}
                 {rppsResultat && !rppsResultat.trouve && form.rpps.length === 11 && (
