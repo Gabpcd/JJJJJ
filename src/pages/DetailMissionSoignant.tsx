@@ -104,6 +104,14 @@ export default function DetailMissionSoignant() {
         setCountMissions(count || 0);
       }
       if (s) setSoignant(s as any);
+
+      // Check if already applied (candidature mode)
+      if (m && (m as any).mode_attribution === 'CANDIDATURE' && (m as any).statut === 'OUVERTE') {
+        const { data: cands } = await supabase.from('candidatures')
+          .select('id').eq('mission_id', id).eq('soignant_id', user.id).limit(1);
+        if (cands && cands.length > 0) setCandidatureEnvoyee(true);
+      }
+
       setLoading(false);
     };
     load();
