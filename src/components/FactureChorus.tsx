@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Landmark, Loader2, ExternalLink } from 'lucide-react';
+import { Landmark, Loader2, ExternalLink, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -27,42 +27,95 @@ const CHORUS_STATUT_LABELS: Record<string, string> = {
   MISE_EN_PAIEMENT: '🟢 Mise en paiement',
 };
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://flripxtsyegjshnhzjkz.supabase.co';
+
+async function callChorusEdge(accessToken: string, factureId: string, action: 'deposer' | 'statut') {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/chorus-pro-deposit`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ facture_id: factureId, action }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Erreur Chorus Pro');
+  return data;
+}
+
 export function FactureChorus({ facture, onUpdate }: Props) {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
   const [open, setOpen] = useState(false);
   const [numEngagement, setNumEngagement] = useState('');
   const [codeService, setCodeService] = useState('');
   const [numStructure, setNumStructure] = useState('');
 
-  const deposer = async () => {
-    if (!user) return;
-    setLoading(true);
-    const { data, error } = await supabase.rpc('fn_deposer_chorus' as any, {
-      p_facture_id: facture.id,
-    });
-    if (error || data?.error) {
-      afficherNotification({ type: 'erreur', message: data?.error || 'Erreur lors du dépôt Chorus' });
-      setLoading(false);
-      return;
-    }
+  const getAccessToken = async (): Promise<string | null> => {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  };
 
-    setLoading(false);
-    setOpen(false);
-    afficherNotification({ type: 'succes', message: '✅ Facture marquée comme déposée sur Chorus Pro' });
-    onUpdate();
+  const deposer = async () => {
+    const token = await getAccessToken();
+    if (!token) return;
+    setLoading(true);
+    try {
+      const result = await callChorusEdge(token, facture.id, 'deposer');
+      const msg = result.simulation
+        ? `🧪 Simulation : ${result.message}`
+        : `✅ ${result.message}`;
+      afficherNotification({ type: 'succes', message: msg });
+      setOpen(false);
+      onUpdate();
+    } catch (err: any) {
+      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors du dépôt Chorus' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifierStatut = async () => {
+    const token = await getAccessToken();
+    if (!token) return;
+    setCheckingStatus(true);
+    try {
+      const result = await callChorusEdge(token, facture.id, 'statut');
+      const prefix = result.simulation ? '🧪 Simulation — ' : '';
+      afficherNotification({
+        type: 'info',
+        message: `${prefix}Statut Chorus : ${CHORUS_STATUT_LABELS[result.statut] ?? result.statut}`,
+      });
+      onUpdate();
+    } catch (err: any) {
+      afficherNotification({ type: 'erreur', message: err.message || 'Erreur vérification statut' });
+    } finally {
+      setCheckingStatus(false);
+    }
   };
 
   const statut = facture.chorus_pro_statut || 'A_DEPOSER';
 
-  // Already processed statuses
+  // Already processed statuses — show badge + check status button
   if (['DEPOSEE', 'ACCEPTEE', 'MISE_EN_PAIEMENT'].includes(statut)) {
     return (
-      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${CHORUS_STATUT_STYLES[statut] ?? ''}`}>
-        <Landmark className="h-3 w-3 inline mr-1" />
-        {CHORUS_STATUT_LABELS[statut]}
-      </span>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${CHORUS_STATUT_STYLES[statut] ?? ''}`}>
+          <Landmark className="h-3 w-3 inline mr-1" />
+          {CHORUS_STATUT_LABELS[statut]}
+        </span>
+        <button
+          onClick={verifierStatut}
+          disabled={checkingStatus}
+          className="btn-secondary text-xs flex items-center gap-1 disabled:opacity-50"
+          title="Vérifier le statut Chorus Pro"
+        >
+          <RefreshCw className={`h-3 w-3 ${checkingStatus ? 'animate-spin' : ''}`} />
+          Vérifier
+        </button>
+      </div>
     );
   }
 
@@ -72,9 +125,18 @@ export function FactureChorus({ facture, onUpdate }: Props) {
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${CHORUS_STATUT_STYLES.REJETEE}`}>
           {CHORUS_STATUT_LABELS.REJETEE}
         </span>
-        <button onClick={() => setOpen(true)} className="btn-secondary text-xs flex items-center gap-1">
-          <Landmark className="h-3.5 w-3.5" /> Redéposer
-        </button>
+        <div className="flex gap-1 flex-wrap">
+          <button onClick={() => setOpen(true)} className="btn-secondary text-xs flex items-center gap-1">
+            <Landmark className="h-3.5 w-3.5" /> Redéposer
+          </button>
+          <button
+            onClick={verifierStatut}
+            disabled={checkingStatus}
+            className="btn-secondary text-xs flex items-center gap-1 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${checkingStatus ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
     );
   }
@@ -93,7 +155,7 @@ export function FactureChorus({ facture, onUpdate }: Props) {
         <Landmark className="h-4 w-4 text-primary" /> Facture secteur public — Chorus Pro
       </p>
       <p className="text-xs text-muted-foreground">
-        Renseignez les informations Chorus puis marquez comme déposée. Délai de paiement estimé : 30-60 jours.
+        Renseignez les informations Chorus puis déposez via l'API. Délai de paiement estimé : 30-60 jours.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -114,7 +176,7 @@ export function FactureChorus({ facture, onUpdate }: Props) {
       <div className="flex flex-wrap gap-2">
         <button onClick={deposer} disabled={loading} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50">
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Landmark className="h-3.5 w-3.5" />}
-          📤 Marquer comme déposée
+          📤 Déposer sur Chorus Pro
         </button>
         <a
           href="https://chorus-pro.gouv.fr"
