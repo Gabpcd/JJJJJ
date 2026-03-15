@@ -1,9 +1,21 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+function getCorsOrigin(req: Request): string {
+  const origin = req.headers.get("origin") || "";
+  const allowed = [
+    "https://app.soindirect.com",
+    "https://soinc-direct.lovable.app",
+    "http://localhost:5173",
+  ];
+  return allowed.includes(origin) ? origin : allowed[0];
+}
+
+function corsHeaders(req: Request) {
+  return {
+    "Access-Control-Allow-Origin": getCorsOrigin(req),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  };
+}
 
 function escapeIcal(str: string): string {
   return (str || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
@@ -15,7 +27,7 @@ function formatIcalDate(d: Date): string {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   const url = new URL(req.url);
@@ -23,7 +35,7 @@ Deno.serve(async (req) => {
   const token = url.searchParams.get("token");
 
   if (!uid || !token) {
-    return new Response("Missing uid or token", { status: 400, headers: corsHeaders });
+    return new Response("Missing uid or token", { status: 400, headers: corsHeaders(req) });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -38,7 +50,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (tokenError || !tokenRow || tokenRow.token !== token) {
-    return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+    return new Response("Unauthorized", { status: 401, headers: corsHeaders(req) });
   }
 
   const { data: missions, error } = await supabase
@@ -49,7 +61,7 @@ Deno.serve(async (req) => {
     .order("debut_le");
 
   if (error) {
-    return new Response("Erreur interne", { status: 500, headers: corsHeaders });
+    return new Response("Erreur interne", { status: 500, headers: corsHeaders(req) });
   }
 
   // Fetch establishment info
@@ -100,7 +112,7 @@ Deno.serve(async (req) => {
 
   return new Response(lines.join("\r\n"), {
     headers: {
-      ...corsHeaders,
+      ...corsHeaders(req),
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": 'attachment; filename="missions.ics"',
       "Cache-Control": "no-cache, no-store, must-revalidate",

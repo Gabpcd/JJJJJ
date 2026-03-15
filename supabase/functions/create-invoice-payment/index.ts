@@ -2,16 +2,26 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
-const allowedOrigin = Deno.env.get("APP_URL") || "https://app.soindirect.com";
+function getCorsOrigin(req: Request): string {
+  const origin = req.headers.get("origin") || "";
+  const allowed = [
+    "https://app.soindirect.com",
+    "https://soinc-direct.lovable.app",
+    "http://localhost:5173",
+  ];
+  return allowed.includes(origin) ? origin : allowed[0];
+}
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": allowedOrigin,
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+function corsHeaders(req: Request) {
+  return {
+    "Access-Control-Allow-Origin": getCorsOrigin(req),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   const supabaseClient = createClient(
@@ -19,9 +29,10 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_ANON_KEY") ?? ""
   );
 
+  const authHeader = req.headers.get("Authorization")!;
+
   try {
     // Authenticate user
-    const authHeader = req.headers.get("Authorization")!;
     const token = authHeader.replace("Bearer ", "");
     const { data: { user } } = await supabaseClient.auth.getUser(token);
     if (!user?.email) throw new Error("Non authentifié");
@@ -55,7 +66,7 @@ serve(async (req) => {
     if (!userEtabId || userEtabId !== facture.etablissement_id) {
       return new Response(JSON.stringify({ error: "Accès interdit : cette facture ne vous appartient pas" }), {
         status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -88,6 +99,8 @@ serve(async (req) => {
         .eq("id", facture.etablissement_id);
     }
 
+    const appUrl = getCorsOrigin(req);
+
     // Create Checkout session for one-time payment
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -105,8 +118,8 @@ serve(async (req) => {
         },
       ],
       mode: "payment",
-      success_url: `${allowedOrigin}/etablissement/facturation/${facture_id}?paiement=succes`,
-      cancel_url: `${allowedOrigin}/etablissement/facturation/${facture_id}?paiement=annule`,
+      success_url: `${appUrl}/etablissement/facturation/${facture_id}?paiement=succes`,
+      cancel_url: `${appUrl}/etablissement/facturation/${facture_id}?paiement=annule`,
       metadata: {
         facture_id: facture.id,
         numero_facture: facture.numero_facture,
@@ -125,13 +138,13 @@ serve(async (req) => {
       .eq("id", facture_id);
 
     return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error: unknown) {
     console.error("Erreur create-invoice-payment:", error instanceof Error ? error.message : error);
     return new Response(JSON.stringify({ error: "Erreur interne" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       status: 500,
     });
   }
