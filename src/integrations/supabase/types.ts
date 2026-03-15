@@ -2778,6 +2778,25 @@ export type Database = {
             }
             Returns: Json
           }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_lat?: number
+              p_adresse_lng?: number
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_date_naissance?: string
+              p_nom?: string
+              p_numero_adeli?: string
+              p_numero_rpps?: string
+              p_prenom?: string
+              p_rayon_deplacement_km?: number
+              p_telephone?: string
+              p_type_contrat?: string
+              p_types_contrat_acceptes?: string
+            }
+            Returns: Json
+          }
       fn_modifier_tva_liberal: {
         Args: { p_assujetti_tva: boolean; p_numero_tva?: string }
         Returns: Json
