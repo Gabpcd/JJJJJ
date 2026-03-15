@@ -37,6 +37,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [tauxHoraire, setTauxHoraire] = useState('');
   const [estUrgente, setEstUrgente] = useState(false);
   const [niveauUrgence, setNiveauUrgence] = useState(1);
+  const [modeAttribution, setModeAttribution] = useState<'PREMIER_ARRIVE' | 'CANDIDATURE'>('PREMIER_ARRIVE');
   const [contratPreference, setContratPreference] = useState<'TOUS' | 'SALARIE' | 'LIBERAL'>('TOUS');
   const [loading, setLoading] = useState(false);
   const [erreurCodeTravail, setErreurCodeTravail] = useState<any>(null);
