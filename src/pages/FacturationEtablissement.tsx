@@ -90,6 +90,7 @@ export default function FacturationEtablissement() {
     if (resEtab.data) setEtab(resEtab.data);
     if (resFact.data) setFactures(resFact.data);
     if (resMNF.data) setMissionsNonFacturees(resMNF.data);
+    if (resPrelev.data) setPrelevements(resPrelev.data);
 
     const facturesData = resFact.data ?? [];
     const enAttente = (resMNF.data ?? []).reduce((s: number, m: any) => s + (m.montant_commission_ttc ?? 0), 0);
