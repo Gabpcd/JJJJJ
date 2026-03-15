@@ -33,7 +33,7 @@ export function BarreCompletionProfil({
   if (pourcentage === 100) return null;
 
   return (
-    <div className="rounded-2xl bg-gradient-to-r from-[hsl(187,75%,40%)]/5 to-[hsl(217,91%,60%)]/5 border border-[hsl(187,75%,40%)]/20 p-4 md:p-5 mb-6">
+    <div className="rounded-2xl bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 p-4 md:p-5 mb-6">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-foreground">
           Profil complété à {pourcentage}%
