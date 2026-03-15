@@ -57,11 +57,9 @@ export default function AdminAPI() {
         cle_api: cleApi,
         cle_secret: cleSecret,
         permissions: newPerms,
-        etablissement_id: null,
-        groupe_sante_id: null,
       } as any);
       if (error) {
-        console.error('Erreur génération clé API:', error);
+        console.error('Erreur génération clé API:', JSON.stringify(error));
         const { toast } = await import('sonner');
         toast.error('Erreur lors de la génération de la clé API.');
       } else {
