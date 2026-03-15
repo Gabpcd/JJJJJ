@@ -76,7 +76,7 @@ export default function ChargesSociales() {
           .from('documents_soignants')
           .select('valide_jusqua')
           .eq('soignant_id', user.id)
-          .eq('type_document', 'RCP')
+          .eq('type_document', 'RCP' as any)
           .eq('statut_verification', 'VERIFIE')
           .is('supprime_le', null)
           .order('valide_jusqua', { ascending: false })
