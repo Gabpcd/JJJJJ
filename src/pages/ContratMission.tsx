@@ -220,45 +220,113 @@ export default function ContratMission() {
         </div>
 
         {/* Signing section */}
-        {!dejaSigneParMoi && contrat.statut !== 'SIGNE_COMPLET' && contrat.statut !== 'ANNULE' && (
+        {!dejaSigneParMoi && contrat.statut !== 'SIGNE_COMPLET' && contrat.statut !== 'ANNULE' && contrat.statut !== 'EXPIRE' && (
           <div className="card-base space-y-4">
             <h3 className="font-bold text-foreground">Votre signature</h3>
 
-            <SignatureCanvas onSave={(data) => setSignatureData(data)} />
-
-            {signatureData && (
-              <div className="flex items-center gap-2 text-xs text-green-700">
-                <CheckCircle className="h-3.5 w-3.5" /> Signature validée
+            {/* Yousign active — show status */}
+            {contrat.mode_signature === 'YOUSIGN' ? (
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <span className="font-semibold text-foreground">🔒 Signature Yousign en cours</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  La procédure de signature électronique eIDAS est en cours. Vous recevrez un email de Yousign pour signer le contrat.
+                </p>
+                {yousignUrl && (
+                  <a
+                    href={yousignUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary inline-flex items-center gap-2"
+                  >
+                    Signer avec Yousign <ExternalLink className="h-4 w-4" />
+                  </a>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Vous pouvez aussi utiliser la <button type="button" onClick={() => handleFallbackCanvas()} className="underline text-primary">signature manuscrite</button> si vous préférez.
+                </p>
               </div>
+            ) : (
+              <>
+                {/* Mode selector */}
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-foreground">Choisissez votre mode de signature :</p>
+                  <RadioGroup value={modeSignature} onValueChange={(v) => setModeSignature(v as 'CANVAS' | 'YOUSIGN')}>
+                    <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors">
+                      <RadioGroupItem value="CANVAS" />
+                      <div>
+                        <span className="text-sm font-medium text-foreground">✍️ Signature manuscrite (canvas)</span>
+                        <p className="text-xs text-muted-foreground">Signez directement sur votre écran</p>
+                      </div>
+                    </label>
+                    <label className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
+                      <RadioGroupItem value="YOUSIGN" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">🔒 Signature électronique Yousign</span>
+                          <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">eIDAS</span>
+                          <span className="text-[10px] text-muted-foreground italic">(recommandée)</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Signature à valeur juridique renforcée, conforme au règlement européen eIDAS.</p>
+                      </div>
+                    </label>
+                  </RadioGroup>
+                </div>
+
+                {modeSignature === 'YOUSIGN' ? (
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleYousignCreate}
+                      disabled={yousignLoading}
+                      className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <Shield className="h-4 w-4" />
+                      {yousignLoading ? 'Initialisation Yousign...' : '🔒 Lancer la signature Yousign'}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <SignatureCanvas onSave={(data) => setSignatureData(data)} />
+
+                    {signatureData && (
+                      <div className="flex items-center gap-2 text-xs text-green-700">
+                        <CheckCircle className="h-3.5 w-3.5" /> Signature validée
+                      </div>
+                    )}
+
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <Checkbox checked={accepte} onCheckedChange={(v) => setAccepte(!!v)} />
+                      <span className="text-sm text-foreground">Je reconnais avoir lu et accepté les termes de ce contrat.</span>
+                    </label>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setShowConfirmSign(true)}
+                        disabled={!accepte || signing || !signatureData}
+                        className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <FileText className="h-4 w-4" /> {signing ? 'Signature...' : '✍️ Signer définitivement'}
+                      </button>
+                      <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
+                        <Printer className="h-4 w-4" /> Imprimer
+                      </button>
+                    </div>
+
+                    <ModalConfirmation
+                      ouvert={showConfirmSign}
+                      onFermer={() => setShowConfirmSign(false)}
+                      onConfirmer={handleSigner}
+                      titre="Confirmer la signature"
+                      message="Cette action est irréversible. En signant ce contrat, vous vous engagez légalement. Souhaitez-vous continuer ?"
+                      labelConfirmer="✍️ Signer"
+                      variante="primaire"
+                    />
+                  </>
+                )}
+              </>
             )}
-
-            <label className="flex items-start gap-3 cursor-pointer">
-              <Checkbox checked={accepte} onCheckedChange={(v) => setAccepte(!!v)} />
-              <span className="text-sm text-foreground">Je reconnais avoir lu et accepté les termes de ce contrat.</span>
-            </label>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirmSign(true)}
-                disabled={!accepte || signing || !signatureData}
-                className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <FileText className="h-4 w-4" /> {signing ? 'Signature...' : '✍️ Signer définitivement'}
-              </button>
-              <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
-                <Printer className="h-4 w-4" /> Imprimer
-              </button>
-            </div>
-
-            <ModalConfirmation
-              ouvert={showConfirmSign}
-              onFermer={() => setShowConfirmSign(false)}
-              onConfirmer={handleSigner}
-              titre="Confirmer la signature"
-              message="Cette action est irréversible. En signant ce contrat, vous vous engagez légalement. Souhaitez-vous continuer ?"
-              labelConfirmer="✍️ Signer"
-              variante="primaire"
-            />
           </div>
         )}
 
