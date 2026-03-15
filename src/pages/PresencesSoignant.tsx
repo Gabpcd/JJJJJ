@@ -356,6 +356,7 @@ export default function PresencesSoignant() {
                 presence={presence}
                 onPointerArrivee={() => pointerArrivee(m.id)}
                 onPointerDepart={() => presence ? pointerDepart(presence.id, m.id) : Promise.resolve()}
+                onRecharger={charger}
               />
             );
           })}
