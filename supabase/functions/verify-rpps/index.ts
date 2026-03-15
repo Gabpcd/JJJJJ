@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// createClient supprimé : verify-rpps est accessible sans JWT
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -50,27 +50,8 @@ serve(async (req) => {
     });
   }
 
-  // Vérification JWT stricte
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({ error: 'Non autorisé' }), {
-      status: 401,
-      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  const supabaseAuth = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!
-  );
-  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
-  if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Token invalide' }), {
-      status: 401,
-      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
-  }
+  // Vérification JWT désactivée pour permettre l'usage avant connexion (inscription)
+  // La fonction ne retourne que des données publiques RPPS.
 
   try {
     const { numero_rpps, prenom, nom } = await req.json();
