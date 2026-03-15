@@ -226,6 +226,16 @@ export default function DetailMission() {
                 <span>0 soignants ont vu cette mission</span>
               </div>
 
+              {/* Recherche remplaçant urgence si ABSENCE */}
+              {m.statut === 'ABSENCE' && (
+                <RechercheRemplacantUrgence
+                  missionId={m.id}
+                  onPropose={() => {}}
+                  onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
+                  onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
+                />
+              )}
+
               <div className="card-base">
                 <h2 className="font-semibold text-foreground mb-3">Historique</h2>
                 <div className="space-y-3 text-sm">

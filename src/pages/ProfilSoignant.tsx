@@ -363,6 +363,17 @@ export default function ProfilSoignant() {
         </button>
       </form>
 
+      {/* Pool Urgence */}
+      <div className="max-w-2xl mt-6">
+        <PoolUrgenceToggle
+          actif={poolUrgenceActif}
+          rayonKm={poolUrgenceRayon}
+          onUpdate={(a, r) => { setPoolUrgenceActif(a); setPoolUrgenceRayon(r); }}
+          onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
+          onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
+        />
+      </div>
+
       {/* Inviter des collègues */}
       {codeParrainage && (
         <div className="max-w-2xl mt-8">
