@@ -3065,11 +3065,11 @@ export type Database = {
         Returns: {
           distance_km: number
           nom: string
+          pool_urgence_rayon_km: number
           prenom: string
-          profession: Database["public"]["Enums"]["type_profession"]
           score_fiabilite: number
           soignant_id: string
-          total_missions_urgence: number
+          telephone: string
         }[]
       }
       fn_souscrire_prevoyance: {
