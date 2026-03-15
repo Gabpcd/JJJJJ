@@ -217,6 +217,7 @@ export type Database = {
           etablissement_id: string
           id: string
           mission_id: string
+          mode_signature: string | null
           modifie_le: string | null
           numero_contrat: string
           pdf_cle_s3: string | null
@@ -246,6 +247,7 @@ export type Database = {
           etablissement_id: string
           id?: string
           mission_id: string
+          mode_signature?: string | null
           modifie_le?: string | null
           numero_contrat: string
           pdf_cle_s3?: string | null
@@ -275,6 +277,7 @@ export type Database = {
           etablissement_id?: string
           id?: string
           mission_id?: string
+          mode_signature?: string | null
           modifie_le?: string | null
           numero_contrat?: string
           pdf_cle_s3?: string | null
@@ -1948,6 +1951,50 @@ export type Database = {
           rpps?: string
         }
         Relationships: []
+      }
+      signatures_yousign: {
+        Row: {
+          contrat_id: string
+          cree_le: string | null
+          id: string
+          signataire_etablissement_id: string | null
+          signataire_soignant_id: string | null
+          signe_le: string | null
+          statut: string | null
+          yousign_document_id: string | null
+          yousign_signature_request_id: string | null
+        }
+        Insert: {
+          contrat_id: string
+          cree_le?: string | null
+          id?: string
+          signataire_etablissement_id?: string | null
+          signataire_soignant_id?: string | null
+          signe_le?: string | null
+          statut?: string | null
+          yousign_document_id?: string | null
+          yousign_signature_request_id?: string | null
+        }
+        Update: {
+          contrat_id?: string
+          cree_le?: string | null
+          id?: string
+          signataire_etablissement_id?: string | null
+          signataire_soignant_id?: string | null
+          signe_le?: string | null
+          statut?: string | null
+          yousign_document_id?: string | null
+          yousign_signature_request_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signatures_yousign_contrat_id_fkey"
+            columns: ["contrat_id"]
+            isOneToOne: false
+            referencedRelation: "contrats_mission"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       soignants: {
         Row: {
