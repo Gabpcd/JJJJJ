@@ -113,7 +113,12 @@ export default function InscriptionSoignant() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rpps: rppsValue }),
+            body: JSON.stringify({
+              rpps: rppsValue,
+              numero_rpps: rppsValue,
+              prenom: form.prenom,
+              nom: form.nom,
+            }),
           }
         );
 
@@ -122,7 +127,7 @@ export default function InscriptionSoignant() {
 
         if (!response.ok) {
           console.error('verify-rpps fetch error:', data);
-          setRppsResultat({ trouve: false });
+          setRppsResultat(data?.trouve === false ? { trouve: false } : null);
         } else if (data) {
           const nomAffiche = data.nom_api || data.nom || '';
           const prenomAffiche = data.prenom || '';
