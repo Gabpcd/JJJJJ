@@ -72,12 +72,13 @@ export default function DetailMission() {
           total_brut, net_a_payer, montant_ifm, montant_icp, montant_majoration_nuit,
           montant_majoration_dimanche, montant_majoration_ferie,
           heures_nuit, heures_dimanche, heures_ferie,
+          montant_commission_ttc,
           statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
           mode_attribution,
           cree_le, modifie_le,
           etablissements(nom, adresse_ville, adresse_departement,
             taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
-            taux_majoration_ferie_pourcent)
+            taux_majoration_ferie_pourcent, mode_paiement_commission)
         `)
         .eq('id', id)
         .single();
