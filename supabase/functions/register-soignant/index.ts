@@ -129,7 +129,10 @@ serve(async (req) => {
       : ['CDDU'];
     if (contrats.length === 0) contrats.push('CDDU');
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      db: { schema: 'public' },
+    });
 
     // 2. Insert into soignants table (server-side, no client manipulation possible)
     const insertPayload = {
