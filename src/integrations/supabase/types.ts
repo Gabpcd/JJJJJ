@@ -214,6 +214,44 @@ export type Database = {
           },
         ]
       }
+      chorus_pro_config: {
+        Row: {
+          actif: boolean | null
+          code_service: string | null
+          cree_le: string | null
+          etablissement_id: string
+          id: string
+          identifiant_cpro: string | null
+          numero_structure: string
+        }
+        Insert: {
+          actif?: boolean | null
+          code_service?: string | null
+          cree_le?: string | null
+          etablissement_id: string
+          id?: string
+          identifiant_cpro?: string | null
+          numero_structure: string
+        }
+        Update: {
+          actif?: boolean | null
+          code_service?: string | null
+          cree_le?: string | null
+          etablissement_id?: string
+          id?: string
+          identifiant_cpro?: string | null
+          numero_structure?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chorus_pro_config_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: true
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conformite_travail: {
         Row: {
           controle_le: string | null
