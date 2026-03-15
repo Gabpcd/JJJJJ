@@ -445,6 +445,11 @@ export default function DashboardSoignant() {
         </div>
       )}
 
+      {/* Rappels fiscaux libéral */}
+      {soignant.type_contrat === 'LIBERAL' && (
+        <RappelsFiscaux />
+      )}
+
       {/* Parcours libéral */}
       {!PROFESSIONS_NON_LIBERAL.includes(soignant.profession) ? (
         <>
