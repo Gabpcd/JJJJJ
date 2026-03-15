@@ -92,13 +92,14 @@ export default function MesGains() {
     texte += `────────────────────────────\n`;
     texte += `Missions terminées : ${stats.nbMissions}\n`;
     texte += `Heures travaillées : ${stats.totalHeures}h\n`;
-    texte += `Net total : ${stats.totalNet.toFixed(2)} €\n`;
+    texte += `Net estimé total : ${stats.totalNet.toFixed(2)} €\n`;
     texte += `────────────────────────────\n`;
     texte += `Détail :\n`;
     for (const m of missions) {
-      texte += `• ${new Date(m.debut_le).toLocaleDateString('fr-FR')} — ${m.intitule} — ${m.duree_heures}h — ${m.net_a_payer?.toFixed(2)} €\n`;
+      const netM = m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
+      texte += `• ${new Date(m.debut_le).toLocaleDateString('fr-FR')} — ${m.intitule} — ${m.duree_heures}h — ${netM.toFixed(2)} €\n`;
     }
-    texte += `\n⚠️ Simulation à titre indicatif.\n`;
+    texte += `\n⚠️ Estimation après cotisations salariales (~22%). Les montants exacts dépendent de votre situation personnelle.\n`;
     texte += `Généré par Soin Direct le ${new Date().toLocaleDateString('fr-FR')}`;
     await navigator.clipboard.writeText(texte);
     // L6: Audit clipboard copy

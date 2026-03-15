@@ -437,7 +437,7 @@ export default function DashboardSoignant() {
           <div className="flex items-center gap-3">
             <div className="rounded-xl p-2.5 bg-primary/10"><Banknote className="h-5 w-5 text-primary" /></div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">💰 Ce mois : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.net)} net sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}</p>
+              <p className="text-sm font-semibold text-foreground">💰 Ce mois : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.net)} net estimé* sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}</p>
               <p className="text-xs text-primary mt-0.5">Voir le détail →</p>
             </div>
           </div>
