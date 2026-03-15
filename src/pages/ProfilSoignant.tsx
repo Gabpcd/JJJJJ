@@ -144,6 +144,9 @@ export default function ProfilSoignant() {
       p_numero_rpps: form.rpps || null, p_numero_adeli: form.adeli || null,
       p_adresse_lat: form.lat ? parseFloat(form.lat) : null,
       p_adresse_lng: form.lng ? parseFloat(form.lng) : null,
+      p_bio: form.bio || null,
+      p_annees_experience: form.anneesExperience || null,
+      p_specialites: JSON.stringify(specialites),
     });
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
