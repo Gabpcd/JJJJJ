@@ -52,6 +52,7 @@ const AttestationHeures = lazy(() => import("./pages/AttestationHeures"));
 const PasserEnLiberal = lazy(() => import("./pages/PasserEnLiberal"));
 const ExclusionsSoignant = lazy(() => import("./pages/ExclusionsSoignant"));
 const PremiumSoignant = lazy(() => import("./pages/PremiumSoignant"));
+const ChargesSociales = lazy(() => import("./pages/ChargesSociales"));
 
 /* ─── Établissement pages ─── */
 const DashboardEtablissement = lazy(() => import("./pages/DashboardEtablissement"));
