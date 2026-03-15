@@ -237,7 +237,7 @@ export default function InscriptionSoignant() {
                 {rppsResultat && rppsResultat.trouve && rppsMatch === true && (
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
                     <ShieldCheck className="h-3.5 w-3.5" />
-                    ✅ RPPS Vérifié — {rppsResultat.nom_api}
+                    ✅ RPPS Vérifié — {rppsResultat.nom_affiche}
                   </div>
                 )}
                 {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && (
