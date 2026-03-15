@@ -90,7 +90,7 @@ export default function DetailMissionSoignant() {
           total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_paiement_soignant, numero_note_honoraires,
-          yousign_statut
+          yousign_statut, mode_attribution
         `).eq('id', id).single(),
         supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, heures_cumulees, premiere_mission_le').eq('id', user.id).single(),
       ]);
