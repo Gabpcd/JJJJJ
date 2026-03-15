@@ -34,6 +34,7 @@ export default function ProfilEtablissement() {
   const [siret, setSiret] = useState('');
   const [type, setType] = useState('');
   const [conventionCollective, setConventionCollective] = useState('');
+  const [modePaiement, setModePaiement] = useState('FACTURE_MENSUELLE');
   const [form, setForm] = useState({
     nom: '', finess: '', rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
