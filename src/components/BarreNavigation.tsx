@@ -40,6 +40,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
   { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
+  { icone: BarChart3, label: 'Gestion RH', route: '/etablissement/rh' },
   { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
   { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
   { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
