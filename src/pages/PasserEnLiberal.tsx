@@ -1,22 +1,81 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Rocket, ExternalLink, Download, Check, Circle, Loader2, PartyPopper, ClipboardList } from 'lucide-react';
+import {
+  Rocket, ExternalLink, Check, Circle, Loader2, PartyPopper,
+  ClipboardCheck, FileText, Building2, Heart, Shield, Landmark,
+  Copy, CheckCircle2, XCircle, ArrowRight,
+} from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import ImportHeuresExternes from '@/components/ImportHeuresExternes';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { ConfettiMini } from '@/components/ConfettiMini';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import jsPDF from 'jspdf';
+
+const STORAGE_KEY = 'liberal_parcours_checks';
+
+function getChecks(userId: string): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(`${STORAGE_KEY}_${userId}`) || '{}');
+  } catch { return {}; }
+}
+function saveChecks(userId: string, checks: Record<string, boolean>) {
+  localStorage.setItem(`${STORAGE_KEY}_${userId}`, JSON.stringify(checks));
+}
 
 function fmt(v: number): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div className="flex items-center justify-between gap-2 py-1.5 px-3 rounded-lg bg-muted/40 text-sm">
+      <div><span className="text-muted-foreground">{label} :</span> <span className="font-medium text-foreground">{value}</span></div>
+      <button onClick={copy} className="text-primary hover:text-primary/80 transition-colors shrink-0" title="Copier">
+        {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+}
+
+function DocBadge({ label, ok, lien }: { label: string; ok: boolean; lien?: string }) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <div className="flex items-center gap-2 text-sm">
+        {ok ? <CheckCircle2 className="h-4 w-4 text-success shrink-0" /> : <XCircle className="h-4 w-4 text-destructive shrink-0" />}
+        <span className={ok ? 'text-foreground' : 'text-muted-foreground'}>{label}</span>
+      </div>
+      {!ok && lien && (
+        <a href={lien} className="text-xs text-primary hover:underline flex items-center gap-0.5">
+          Ajouter <ArrowRight className="h-3 w-3" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+type StepStatus = 'done' | 'current' | 'todo';
+
+function TimelineIcon({ status, icon: Icon }: { status: StepStatus; icon: React.ElementType }) {
+  const base = 'relative z-10 flex items-center justify-center h-10 w-10 rounded-full border-2 transition-all duration-300';
+  if (status === 'done') return <div className={`${base} border-success bg-success text-success-foreground`}><Check className="h-5 w-5" /></div>;
+  if (status === 'current') return <div className={`${base} border-primary bg-primary/10 text-primary ring-4 ring-primary/20`}><Icon className="h-5 w-5" /></div>;
+  return <div className={`${base} border-border bg-muted text-muted-foreground`}><Icon className="h-5 w-5" /></div>;
+}
+
 export default function PasserEnLiberal() {
+  usePageTitle('Passer en libéral');
   const navigate = useNavigate();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
@@ -24,95 +83,131 @@ export default function PasserEnLiberal() {
   const [soignant, setSoignant] = useState<any>(null);
   const [profData, setProfData] = useState<any>(null);
   const [freeTransition, setFreeTransition] = useState<any>(null);
-  const [siret, setSiret] = useState('');
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [heuresExternes, setHeuresExternes] = useState<any[]>([]);
-  const [assujettiTVA, setAssujettiTVA] = useState(false);
-  const [numeroTVA, setNumeroTVA] = useState('');
-
-  const [checklist, setChecklist] = useState({
-    siret: false, cpam: false, ordre: false, rcp: false, banque: false, compta: false,
-  });
 
   useEffect(() => {
     if (!user) return;
+    setChecks(getChecks(user.id));
     const load = async () => {
-      const [{ data: sg }, { data: prof }, { data: ft }, { data: he }] = await Promise.all([
-        supabase.from('soignants').select('prenom, nom, profession, siret_liberal, statut_liberal, type_contrat, heures_cumulees, eligible_conversion_3200h, assujetti_tva, numero_tva').eq('id', user.id).single(),
+      const [{ data: sg }, { data: prof }, { data: ft }, { data: docs }] = await Promise.all([
+        supabase.from('soignants').select('prenom, nom, profession, siret_liberal, statut_liberal, type_contrat, heures_cumulees, eligible_conversion_3200h, date_naissance, adresse_ville, numero_rpps').eq('id', user.id).single(),
         supabase.from('professions_liberal_eligible').select('profession, code_ape, libelle_urssaf, nom_ordre, ordre_obligatoire, plafond_micro').limit(20),
         supabase.rpc('fn_calculer_taux_free_transition_safe', { p_soignant_id: user.id }),
-        supabase.from('heures_externes').select('id, soignant_id, employeur_nom, employeur_type, heures_declarees, date_debut, date_fin, statut, motif_rejet, type_preuve').eq('soignant_id', user.id).order('date_debut', { ascending: false }),
+        supabase.from('documents_soignants').select('type_document, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
       ]);
-      if (sg) {
-        setSoignant(sg);
-        setSiret(sg.siret_liberal || '');
-        setAssujettiTVA(sg.assujetti_tva || false);
-        setNumeroTVA(sg.numero_tva || '');
-      }
+      if (sg) setSoignant(sg);
       if (prof) {
         const match = (prof as any[]).find((p: any) => p.profession === sg?.profession);
         setProfData(match || null);
       }
       if (ft) setFreeTransition(ft);
-      if (he) setHeuresExternes(he);
-
-      // Audit
-      supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
-        p_action: 'DONNEES_PERSO_CONSULTATION',
-        p_type_ressource: 'soignant', p_id_ressource: user.id,
-        p_cle_s3: null, p_details: { page: 'passer_en_liberal' },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-
+      if (docs) setDocuments(docs);
       setLoading(false);
     };
     load();
   }, [user]);
 
-  const handleSaveSiret = async () => {
-    if (!user || siret.length !== 14) return;
-    const { data, error } = await supabase.rpc('fn_enregistrer_siret_liberal' as any, {
-      p_siret: siret,
+  const toggleCheck = useCallback((key: string, val: boolean) => {
+    if (!user) return;
+    setChecks(prev => {
+      const next = { ...prev, [key]: val };
+      saveChecks(user.id, next);
+      return next;
     });
-    if (error || data?.error) {
-      afficherNotification({ type: 'erreur', message: data?.error || 'Erreur lors de l\'enregistrement du SIRET' });
-      return;
-    }
-    setChecklist(prev => ({ ...prev, siret: true }));
-    afficherNotification({ type: 'succes', message: 'SIRET enregistré !' });
+  }, [user]);
+
+  // Eligibility auto-check (step 1)
+  const heures = soignant?.heures_cumulees || 0;
+  const hasEnoughHours = heures >= 3200;
+  const hasDocsCritiques = documents.some(d => d.type_document === 'DIPLOME' && d.statut_verification === 'VERIFIE')
+    && documents.some(d => d.type_document === 'CARTE_IDENTITE' && d.statut_verification === 'VERIFIE');
+  const professionEligible = !!profData;
+  const step1Done = hasEnoughHours && hasDocsCritiques && professionEligible;
+
+  // Document checks for step 3
+  const hasDoc = (type: string) => documents.some(d => d.type_document === type && ['VERIFIE', 'EN_ATTENTE'].includes(d.statut_verification || ''));
+  const hasRCP = hasDoc('RCP_ASSURANCE');
+
+  // Steps completion
+  const stepsCompleted = [
+    step1Done,
+    checks['step2'] || false,
+    checks['step3'] || false,
+    checks['step4'] || false,
+    checks['step5'] || false,
+    checks['step6'] || false,
+  ];
+  const completedCount = stepsCompleted.filter(Boolean).length;
+  const allDone = completedCount === 6;
+
+  useEffect(() => {
+    if (allDone && !showConfetti) setShowConfetti(true);
+  }, [allDone]);
+
+  const getStatus = (idx: number): StepStatus => {
+    if (stepsCompleted[idx]) return 'done';
+    // First incomplete step is current
+    const firstIncomplete = stepsCompleted.findIndex(s => !s);
+    if (idx === firstIncomplete) return 'current';
+    return 'todo';
   };
 
   const handleActiverLiberal = async () => {
-    if (!user || !profData) return;
+    if (!user) return;
     setSaving(true);
     try {
       const { data, error } = await supabase.rpc('fn_activer_liberal' as any, {
-        p_siret: siret,
+        p_siret: soignant?.siret_liberal || '',
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-
-      setShowConfetti(true);
-      afficherNotification({ type: 'succes', message: '🎉 Profil libéral activé avec succès !' });
-      setTimeout(() => navigate('/soignant/tableau-de-bord'), 3000);
+      afficherNotification({ type: 'succes', message: '🎉 Profil libéral activé !' });
+      setTimeout(() => navigate('/soignant/tableau-de-bord'), 2000);
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de l\'activation' });
-    } finally {
-      setSaving(false);
-    }
+      afficherNotification({ type: 'erreur', message: err.message || 'Erreur' });
+    } finally { setSaving(false); }
   };
 
-  const handleDownloadGuide = () => {
-    supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT',
-      p_action: 'DONNEES_PERSO_EXPORT',
-      p_type_ressource: 'soignant', p_id_ressource: user!.id,
-      p_cle_s3: null, p_details: { type: 'guide_liberal_pdf' },
-      p_ip: null, p_navigateur: navigator.userAgent,
-    });
-    window.print();
+  const genererLettreBanque = () => {
+    const doc = new jsPDF();
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Soin Direct', 20, 20);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    const nom = `${soignant?.prenom || ''} ${soignant?.nom || ''}`;
+    const date = new Date().toLocaleDateString('fr-FR');
+    doc.text(nom, 20, 35);
+    doc.text(`Profession : ${profData?.libelle_urssaf || soignant?.profession || ''}`, 20, 42);
+    if (soignant?.numero_rpps) doc.text(`RPPS : ${soignant.numero_rpps}`, 20, 49);
+    if (soignant?.siret_liberal) doc.text(`SIRET : ${soignant.siret_liberal}`, 20, 56);
+    doc.text(`${soignant?.adresse_ville || ''}`, 20, 63);
+    doc.text(`Le ${date}`, 20, 78);
+    doc.text('Objet : Demande d\'ouverture de compte bancaire professionnel', 20, 92);
+    doc.setFontSize(10);
+    const body = [
+      'Madame, Monsieur,',
+      '',
+      `Je soussigné(e) ${nom}, exerçant la profession de ${profData?.libelle_urssaf || ''} en libéral,`,
+      'vous prie de bien vouloir procéder à l\'ouverture d\'un compte bancaire dédié à mon activité',
+      'professionnelle libérale.',
+      '',
+      'Vous trouverez ci-joint les pièces justificatives nécessaires :',
+      '— Pièce d\'identité en cours de validité',
+      '— Justificatif de domicile',
+      '— Attestation d\'inscription RPPS',
+      soignant?.siret_liberal ? `— Extrait SIRENE / SIRET : ${soignant.siret_liberal}` : '',
+      '',
+      'Je vous remercie par avance et reste à votre disposition.',
+      '',
+      'Cordialement,',
+      nom,
+    ].filter(Boolean);
+    doc.text(body, 20, 105);
+    doc.save(`lettre-banque-${nom.replace(/\s/g, '-')}.pdf`);
   };
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
@@ -122,72 +217,212 @@ export default function PasserEnLiberal() {
       <LayoutApp role="SOIGNANT">
         <div className="text-center py-12">
           <p className="text-lg font-semibold text-foreground mb-2">Votre profession n'est pas éligible au libéral</p>
-          <p className="text-sm text-muted-foreground">Les professions éligibles sont : IDE, IBODE, IADE, Sage-Femme, Kiné, Médecin, Diététicien, Ergothérapeute, Psychomotricien, Orthophoniste.</p>
-          <button onClick={() => navigate(-1)} className="btn-secondary mt-4">Retour</button>
+          <button onClick={() => navigate(-1)} className="text-sm text-primary hover:underline mt-4">Retour</button>
         </div>
       </LayoutApp>
     );
   }
 
-  const heures = soignant?.heures_plateforme || 0;
+  const heuresPlat = freeTransition?.heures_plateforme || 0;
   const tauxPC = freeTransition?.taux_prise_en_charge || 0;
   const montantPC = freeTransition?.montant_pris_en_charge || 0;
-  const canActivate = siret.length === 14;
+
+  const STEPS = [
+    { icon: ClipboardCheck, title: 'Vérifier l\'éligibilité' },
+    { icon: FileText, title: 'Déclarer votre activité' },
+    { icon: Building2, title: 'Inscription à l\'Ordre' },
+    { icon: Heart, title: 'Conventionnement CPAM' },
+    { icon: Shield, title: 'Assurance RCP' },
+    { icon: Landmark, title: 'Compte bancaire pro' },
+  ];
 
   return (
     <LayoutApp role="SOIGNANT">
-      {showConfetti && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="text-center animate-in fade-in zoom-in">
-            <PartyPopper className="h-20 w-20 text-primary mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-foreground mb-2">🎉 Félicitations !</h2>
-            <p className="text-muted-foreground">Votre profil libéral est maintenant actif.</p>
-            <p className="text-sm text-muted-foreground mt-2">Redirection en cours...</p>
-          </div>
-        </div>
-      )}
+      <ConfettiMini active={showConfetti} duration={3000} count={12} />
 
+      {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Rocket className="h-6 w-6 text-primary" /> Passer en libéral
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Module de conversion en 3 étapes</p>
+        <p className="text-sm text-muted-foreground mt-1">Parcours guidé en 6 étapes</p>
       </div>
 
-      {/* Section 0: Heures d'expérience */}
+      {/* Progress bar */}
       <div className="card-base mb-6">
-        <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2"><ClipboardList className="h-5 w-5 text-primary" /> Mes heures d'expérience</h2>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-muted-foreground">Heures sur Soin Direct :</span><span className="font-bold text-foreground">{soignant?.heures_plateforme || 0}h ✅</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Heures externes validées :</span><span className="font-bold text-foreground">{heuresExternes.filter(h => h.statut === 'VALIDEE').reduce((s: number, h: any) => s + (h.heures_declarees || 0), 0)}h</span></div>
-          <div className="border-t border-border pt-2 flex justify-between"><span className="font-bold text-foreground">TOTAL :</span><span className="font-bold text-primary">{soignant?.heures_cumulees || 0}h</span></div>
-          {(soignant?.heures_cumulees || 0) < 3200 && <p className="text-xs text-primary">💡 Encore {3200 - (soignant?.heures_cumulees || 0)}h pour le palier 3 200h (100%)</p>}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold text-foreground">{completedCount}/6 étapes complétées</span>
+          <span className="text-xs text-muted-foreground">{Math.round((completedCount / 6) * 100)}%</span>
         </div>
-        <div className="mt-3">
-          <ImportHeuresExternes onDone={() => { supabase.from('heures_externes').select('id, soignant_id, employeur_nom, employeur_type, heures_declarees, date_debut, date_fin, statut, motif_rejet, type_preuve').eq('soignant_id', user!.id).order('date_debut', { ascending: false }).then(({ data }) => { if (data) setHeuresExternes(data); }); }} />
-        </div>
-        {heuresExternes.length > 0 && (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead><tr className="border-b border-border text-muted-foreground"><th className="pb-1 text-left">Employeur</th><th className="pb-1 text-left">Période</th><th className="pb-1 text-right">Heures</th><th className="pb-1 text-right">Statut</th></tr></thead>
-              <tbody>{heuresExternes.map((h: any) => (
-                <tr key={h.id} className="border-b border-border/50">
-                  <td className="py-1.5">{h.employeur_nom}</td>
-                  <td className="py-1.5 text-muted-foreground">{h.date_debut} → {h.date_fin}</td>
-                  <td className="py-1.5 text-right">{h.heures_declarees}h</td>
-                  <td className="py-1.5 text-right">{h.statut === 'VALIDEE' ? '✅' : h.statut === 'REJETEE' ? '❌' : '⏳'}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        )}
+        <Progress value={(completedCount / 6) * 100} className="h-2" />
       </div>
 
-      {/* Section 1: Free Transition */}
-      <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-primary/5 border border-purple-200 p-5 mb-6">
+      {/* All done banner */}
+      {allDone && (
+        <div className="rounded-2xl bg-success/10 border border-success/30 p-5 mb-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <PartyPopper className="h-10 w-10 text-success mx-auto mb-3" />
+          <h2 className="text-lg font-bold text-foreground mb-1">🎉 Félicitations !</h2>
+          <p className="text-sm text-muted-foreground mb-4">Votre installation libérale est complète. Activez votre profil libéral ci-dessous.</p>
+          <button
+            onClick={handleActiverLiberal}
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Activer mon statut libéral <ArrowRight className="h-4 w-4" /></>}
+          </button>
+        </div>
+      )}
+
+      {/* Timeline */}
+      <div className="relative ml-5 pl-8 border-l-2 border-border space-y-0">
+        {STEPS.map((step, idx) => {
+          const status = getStatus(idx);
+          return (
+            <div key={idx} className="relative pb-8 last:pb-0">
+              {/* Icon on the line */}
+              <div className="absolute -left-[calc(1.25rem+1px)] top-0">
+                <TimelineIcon status={status} icon={step.icon} />
+              </div>
+
+              <div className={`ml-4 card-base transition-all duration-300 ${status === 'current' ? 'ring-2 ring-primary/20' : ''}`}>
+                <h3 className="text-sm font-bold text-foreground mb-1">
+                  Étape {idx + 1} — {step.title}
+                </h3>
+
+                {/* Step 1: Eligibility */}
+                {idx === 0 && (
+                  <div className="space-y-2 mt-2">
+                    <DocBadge label={`Heures cumulées ≥ 3 200h (${heures}h)`} ok={hasEnoughHours} lien="/soignant/passer-en-liberal" />
+                    <DocBadge label="Documents critiques valides (diplôme, identité)" ok={hasDocsCritiques} lien="/soignant/documents" />
+                    <DocBadge label={`Profession éligible (${soignant?.profession || ''})`} ok={professionEligible} lien="/soignant/profil" />
+                    {step1Done && <p className="text-xs font-semibold text-success mt-1">Éligible ✅</p>}
+                    {!step1Done && <p className="text-xs text-muted-foreground mt-1">Complétez les éléments manquants pour continuer.</p>}
+                  </div>
+                )}
+
+                {/* Step 2: Guichet Unique */}
+                {idx === 1 && (
+                  <div className="space-y-3 mt-2">
+                    <p className="text-sm text-muted-foreground">Depuis 2023, la déclaration se fait en ligne sur le Guichet Unique des formalités d'entreprises.</p>
+                    <a href="https://formalites.entreprises.gouv.fr" target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-colors">
+                      Accéder au Guichet Unique <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                    <div className="rounded-xl bg-muted/40 p-3 space-y-1.5">
+                      <p className="text-xs font-semibold text-foreground mb-2">📋 Vos informations à copier-coller</p>
+                      <CopyField label="Nom" value={soignant?.nom || ''} />
+                      <CopyField label="Prénom" value={soignant?.prenom || ''} />
+                      {soignant?.date_naissance && <CopyField label="Date de naissance" value={soignant.date_naissance} />}
+                      {soignant?.adresse_ville && <CopyField label="Ville" value={soignant.adresse_ville} />}
+                      <CopyField label="Profession" value={profData?.libelle_urssaf || soignant?.profession || ''} />
+                      <CopyField label="Code APE" value={profData?.code_ape || '86.90D'} />
+                    </div>
+                    <label className="flex items-center gap-3 cursor-pointer pt-1">
+                      <Checkbox checked={checks['step2'] || false} onCheckedChange={(v) => toggleCheck('step2', !!v)} />
+                      <span className="text-sm text-foreground font-medium">J'ai déclaré mon activité ✅</span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Step 3: Ordre */}
+                {idx === 2 && (
+                  <div className="space-y-3 mt-2">
+                    <a href="https://www.ordre-infirmiers.fr" target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-colors">
+                      Conseil de l'Ordre <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-foreground mb-1.5">Documents requis :</p>
+                      <DocBadge label="Diplôme d'État" ok={hasDoc('DIPLOME')} lien="/soignant/documents" />
+                      <DocBadge label="Pièce d'identité" ok={hasDoc('CARTE_IDENTITE')} lien="/soignant/documents" />
+                      <DocBadge label="Assurance RCP" ok={hasRCP} lien="/soignant/documents" />
+                      <DocBadge label="Justificatif de domicile" ok={false} />
+                    </div>
+                    <label className="flex items-center gap-3 cursor-pointer pt-1">
+                      <Checkbox checked={checks['step3'] || false} onCheckedChange={(v) => toggleCheck('step3', !!v)} />
+                      <span className="text-sm text-foreground font-medium">Inscrit à l'Ordre ✅</span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Step 4: CPAM */}
+                {idx === 3 && (
+                  <div className="space-y-3 mt-2">
+                    <p className="text-sm text-muted-foreground">Prenez rendez-vous avec votre CPAM.</p>
+                    <a href="https://www.ameli.fr/assure/adresses-et-contacts" target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-colors">
+                      Trouver ma CPAM <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-foreground mb-1.5">Documents nécessaires :</p>
+                      <DocBadge label="Attestation de l'Ordre" ok={checks['step3'] || false} />
+                      <DocBadge label="RPPS" ok={!!soignant?.numero_rpps} lien="/soignant/profil" />
+                      <DocBadge label="SIRET" ok={!!soignant?.siret_liberal} lien="/soignant/profil" />
+                      <DocBadge label="RIB professionnel" ok={false} />
+                    </div>
+                    <label className="flex items-center gap-3 cursor-pointer pt-1">
+                      <Checkbox checked={checks['step4'] || false} onCheckedChange={(v) => toggleCheck('step4', !!v)} />
+                      <span className="text-sm text-foreground font-medium">Conventionné CPAM ✅</span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Step 5: RCP */}
+                {idx === 4 && (
+                  <div className="space-y-3 mt-2">
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: 'MACSF', url: 'https://www.macsf.fr' },
+                        { label: 'La Médicale', url: 'https://www.lamedicale.fr' },
+                        { label: 'GPM Assurances', url: 'https://www.gpm.fr' },
+                      ].map(a => (
+                        <a key={a.label} href={a.url} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border text-foreground hover:bg-muted transition-colors">
+                          {a.label} <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ))}
+                    </div>
+                    <div className="rounded-xl bg-muted/40 p-3 space-y-1">
+                      <p className="text-xs font-semibold text-foreground mb-1.5">Infos à communiquer :</p>
+                      <CopyField label="Nom" value={`${soignant?.prenom || ''} ${soignant?.nom || ''}`} />
+                      <CopyField label="Profession" value={profData?.libelle_urssaf || ''} />
+                      {soignant?.numero_rpps && <CopyField label="RPPS" value={soignant.numero_rpps} />}
+                    </div>
+                    {hasRCP && <p className="text-xs font-semibold text-success">RCP valide ✅ (déjà dans votre coffre-fort)</p>}
+                    <label className="flex items-center gap-3 cursor-pointer pt-1">
+                      <Checkbox checked={checks['step5'] || false} onCheckedChange={(v) => toggleCheck('step5', !!v)} />
+                      <span className="text-sm text-foreground font-medium">RCP souscrite ✅</span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Step 6: Banque */}
+                {idx === 5 && (
+                  <div className="space-y-3 mt-2">
+                    <p className="text-sm text-muted-foreground">Ouvrez un compte dédié à votre activité libérale.</p>
+                    <button
+                      onClick={genererLettreBanque}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border border-border text-foreground hover:bg-muted transition-colors"
+                    >
+                      📄 Télécharger la lettre type (PDF)
+                    </button>
+                    <label className="flex items-center gap-3 cursor-pointer pt-1">
+                      <Checkbox checked={checks['step6'] || false} onCheckedChange={(v) => toggleCheck('step6', !!v)} />
+                      <span className="text-sm text-foreground font-medium">Compte pro ouvert ✅</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Free Transition section */}
+      <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-primary/5 dark:from-purple-950/20 dark:to-primary/5 border border-purple-200 dark:border-purple-800 p-5 mt-8">
         <h2 className="text-base font-bold text-foreground mb-3">🎁 Votre Free Transition</h2>
         <div className="space-y-2 text-sm">
-          <p className="text-muted-foreground">Heures sur Soin Direct : <span className="font-bold text-foreground">{heures}h</span></p>
+          <p className="text-muted-foreground">Heures sur Soin Direct : <span className="font-bold text-foreground">{heuresPlat}h</span></p>
           <p className="text-muted-foreground">Taux de prise en charge : <span className="font-bold text-primary">{tauxPC}%</span></p>
           <p className="text-muted-foreground">
             Soin Direct prend en charge <span className="font-bold text-primary">{fmt(montantPC)}</span> de vos frais d'installation :
@@ -197,14 +432,13 @@ export default function PasserEnLiberal() {
             <p className="text-xs">{tauxPC >= 75 ? '✅' : '⚠️'} Banque pro Qonto {tauxPC >= 75 ? '(6 mois offerts)' : `(non couverte à ${tauxPC}%)`}</p>
             <p className="text-xs">{tauxPC >= 50 ? '✅' : '⚠️'} Assurance RCP {tauxPC >= 50 ? '(3 mois offerts)' : `(non couverte à ${tauxPC}%)`}</p>
           </div>
-          {heures < 3200 && (
-            <p className="text-xs text-primary mt-2">💡 Encore {3200 - heures}h pour atteindre 100% de prise en charge !</p>
+          {heuresPlat < 3200 && (
+            <p className="text-xs text-primary mt-2">💡 Encore {3200 - heuresPlat}h pour atteindre 100% de prise en charge !</p>
           )}
         </div>
-
         <div className="mt-4">
           <JaugeProgression
-            valeur={heures}
+            valeur={heuresPlat}
             max={3200}
             marqueurs={[800, 1600, 2400, 3200]}
             couleurBarre="bg-gradient-to-r from-primary to-primary-dark"
@@ -212,229 +446,6 @@ export default function PasserEnLiberal() {
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
             <span>0h</span><span>800h (25%)</span><span>1600h (50%)</span><span>2400h (75%)</span><span>3200h (100%)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Section 2: Guide étape par étape */}
-      <div className="mb-6">
-        <h2 className="text-base font-bold text-foreground mb-3">📋 Guide étape par étape</h2>
-        <Accordion type="single" collapsible className="space-y-2">
-          <AccordionItem value="etape1" className="card-base !p-0 overflow-hidden border">
-            <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="text-sm font-semibold">Étape 1 : Créer votre statut auto-entrepreneur</span>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Rendez-vous sur autoentrepreneur.urssaf.fr pour créer votre statut.</p>
-              <div className="bg-muted/30 rounded-xl p-3 space-y-1 text-xs">
-                <p><span className="font-medium">Activité :</span> {profData.libelle_urssaf}</p>
-                <p><span className="font-medium">Code APE :</span> {profData.code_ape}</p>
-                <p><span className="font-medium">Catégorie :</span> BNC</p>
-              </div>
-              <div className="flex gap-2">
-                <a href="https://autoentrepreneur.urssaf.fr" target="_blank" rel="noopener noreferrer" className="btn-primary text-xs flex items-center gap-1">
-                  Ouvrir le site URSSAF <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-                <button onClick={handleDownloadGuide} className="btn-secondary text-xs flex items-center gap-1">
-                  <Download className="h-3.5 w-3.5" /> Télécharger le guide PDF
-                </button>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-
-          <AccordionItem value="etape2" className="card-base !p-0 overflow-hidden border">
-            <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="text-sm font-semibold">Étape 2 : Saisir votre SIRET</span>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Vous le recevrez par courrier de l'URSSAF sous 1 à 4 semaines.</p>
-              <div className="flex gap-2">
-                <input
-                  value={siret}
-                  onChange={e => setSiret(e.target.value.replace(/\D/g, '').slice(0, 14))}
-                  placeholder="14 chiffres"
-                  className="input-base flex-1"
-                />
-                <button onClick={handleSaveSiret} disabled={siret.length !== 14} className="btn-primary text-sm disabled:opacity-50">Enregistrer</button>
-              </div>
-              {siret && siret.length !== 14 && <p className="text-xs text-destructive">Le SIRET doit contenir exactement 14 chiffres</p>}
-            </AccordionContent>
-          </AccordionItem>
-
-          <AccordionItem value="etape3" className="card-base !p-0 overflow-hidden border">
-            <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="text-sm font-semibold">Étape 3 : S'affilier à la CPAM</span>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4 space-y-3">
-              <p className="text-sm text-muted-foreground">En tant que libéral(e), vous devez vous affilier à la CPAM de votre lieu d'exercice.</p>
-              <a href="https://www.ameli.fr" target="_blank" rel="noopener noreferrer" className="btn-primary text-xs inline-flex items-center gap-1">
-                Ouvrir ameli.fr <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </AccordionContent>
-          </AccordionItem>
-
-          {profData.ordre_obligatoire && (
-            <AccordionItem value="etape4" className="card-base !p-0 overflow-hidden border">
-              <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                <span className="text-sm font-semibold">Étape 4 : S'inscrire à l'Ordre</span>
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pb-4 space-y-3">
-                <p className="text-sm text-muted-foreground">L'inscription au {profData.nom_ordre || "Conseil de l'Ordre"} est obligatoire pour exercer en libéral.</p>
-                <a href="https://www.conseil-national.medecin.fr/" target="_blank" rel="noopener noreferrer" className="btn-primary text-xs inline-flex items-center gap-1">
-                  Ouvrir le site de l'Ordre <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </AccordionContent>
-            </AccordionItem>
-          )}
-
-          <AccordionItem value="etape5" className="card-base !p-0 overflow-hidden border">
-            <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="text-sm font-semibold">Étape 5 : Souscrire une assurance RCP</span>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4 space-y-3">
-              <p className="text-sm text-muted-foreground">L'assurance RCP est OBLIGATOIRE pour exercer en libéral.</p>
-              {tauxPC >= 50 && <p className="text-xs text-primary font-medium">🎁 Soin Direct prend en charge 3 mois</p>}
-              <a href="https://www.macsf.fr" target="_blank" rel="noopener noreferrer" className="btn-primary text-xs inline-flex items-center gap-1">
-                Obtenir un devis MACSF <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </AccordionContent>
-          </AccordionItem>
-
-          <AccordionItem value="etape6" className="card-base !p-0 overflow-hidden border">
-            <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="text-sm font-semibold">Étape 6 : Ouvrir un compte bancaire pro</span>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Obligatoire dès 10 000€ de chiffre d'affaires annuel.</p>
-              {tauxPC >= 75 && <p className="text-xs text-primary font-medium">🎁 Soin Direct offre 6 mois de Qonto</p>}
-              <a href="https://qonto.com" target="_blank" rel="noopener noreferrer" className="btn-primary text-xs inline-flex items-center gap-1">
-                Ouvrir un compte Qonto <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </AccordionContent>
-          </AccordionItem>
-
-          <AccordionItem value="etape7" className="card-base !p-0 overflow-hidden border">
-            <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="text-sm font-semibold">Étape 7 : Configurer la comptabilité</span>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Un logiciel de comptabilité spécialisé libéral simplifie vos déclarations.</p>
-              {tauxPC >= 75 && <p className="text-xs text-primary font-medium">🎁 Soin Direct offre 6 mois d'Indy</p>}
-              <a href="https://www.indy.fr" target="_blank" rel="noopener noreferrer" className="btn-primary text-xs inline-flex items-center gap-1">
-                Créer mon compte Indy <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </div>
-
-      {/* Section 3: Checklist */}
-      <div className="card-base mb-6">
-        <h2 className="text-base font-bold text-foreground mb-3">✅ Checklist de finalisation</h2>
-        <div className="space-y-3">
-          {[
-            { key: 'siret', label: 'SIRET reçu et saisi', auto: siret.length === 14 },
-            { key: 'cpam', label: 'CPAM affilié(e)' },
-            ...(profData.ordre_obligatoire ? [{ key: 'ordre', label: 'Ordre inscrit(e)' }] : []),
-            { key: 'rcp', label: 'RCP souscrite' },
-            { key: 'banque', label: 'Banque pro ouverte' },
-            { key: 'compta', label: 'Comptabilité configurée' },
-          ].map((item: any) => (
-            <label key={item.key} className="flex items-center gap-3 cursor-pointer">
-              <Checkbox
-                checked={item.auto || (checklist as any)[item.key]}
-                onCheckedChange={(val) => setChecklist(prev => ({ ...prev, [item.key]: !!val }))}
-                disabled={item.auto}
-              />
-              <span className="text-sm text-foreground">{item.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* D1: TVA libéral */}
-      <div className="card-base mb-6">
-        <h2 className="text-base font-bold text-foreground mb-3">🧾 TVA</h2>
-        <p className="text-sm text-muted-foreground mb-3">Êtes-vous assujetti à la TVA ? (Si votre CA dépasse 36 800€/an)</p>
-        <div className="flex items-center gap-3 mb-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={assujettiTVA} onChange={e => setAssujettiTVA(e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
-            <span className="text-sm text-foreground">{assujettiTVA ? 'Oui, je suis assujetti à la TVA' : 'Non, franchise en base de TVA'}</span>
-          </label>
-        </div>
-        {assujettiTVA && (
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Numéro de TVA intracommunautaire</label>
-            <input value={numeroTVA} onChange={e => setNumeroTVA(e.target.value.toUpperCase().slice(0, 15))} placeholder="FR XX XXXXXXXXX" className="input-base" />
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={async () => {
-            const { data, error } = await supabase.rpc('fn_modifier_tva_liberal' as any, {
-              p_assujetti_tva: assujettiTVA,
-              p_numero_tva: assujettiTVA ? numeroTVA || null : null,
-            });
-            if (error) {
-              afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-            } else if (data?.error) {
-              afficherNotification({ type: 'erreur', message: data.error });
-            } else {
-              afficherNotification({ type: 'succes', message: 'TVA mise à jour.' });
-            }
-          }}
-          className="btn-secondary text-xs mt-3"
-        >
-          Enregistrer TVA
-        </button>
-      </div>
-
-      {/* Bouton final */}
-      <button
-        onClick={handleActiverLiberal}
-        disabled={!canActivate || saving}
-        className="btn-primary w-full py-4 text-base disabled:opacity-50"
-      >
-        {saving ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : '✅ Activer mon profil libéral'}
-      </button>
-      {!canActivate && <p className="text-xs text-muted-foreground text-center mt-2">Saisissez votre SIRET pour activer votre profil libéral</p>}
-
-      {/* Print styles for guide PDF */}
-      <div className="hidden print:block">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold">Félicitations {soignant?.prenom} !</h1>
-          <p className="text-lg mt-2">Votre guide pour devenir {profData?.libelle_urssaf} libéral(e)</p>
-          <p className="text-sm text-muted-foreground mt-1">Généré par Soin Direct le {new Date().toLocaleDateString('fr-FR')}</p>
-        </div>
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-lg font-bold">1. Créer votre statut auto-entrepreneur</h2>
-            <p>Site : autoentrepreneur.urssaf.fr</p>
-            <p>Activité : {profData?.libelle_urssaf}</p>
-            <p>Code APE : {profData?.code_ape}</p>
-            <p>Catégorie : BNC</p>
-          </div>
-          <div>
-            <h2 className="text-lg font-bold">2. Attendre votre SIRET</h2>
-            <p>Vous recevrez votre numéro SIRET par courrier sous 1 à 4 semaines.</p>
-          </div>
-          <div>
-            <h2 className="text-lg font-bold">3. S'affilier à la CPAM</h2>
-            <p>Site : ameli.fr — Affiliez-vous à la CPAM de votre lieu d'exercice.</p>
-          </div>
-          {profData?.ordre_obligatoire && (
-            <div>
-              <h2 className="text-lg font-bold">4. S'inscrire à l'Ordre</h2>
-              <p>L'inscription au {profData.nom_ordre} est obligatoire.</p>
-            </div>
-          )}
-          <div>
-            <h2 className="text-lg font-bold">5. Souscrire une assurance RCP</h2>
-            <p>L'assurance RCP est OBLIGATOIRE pour exercer en libéral.</p>
-          </div>
-          <div>
-            <h2 className="text-lg font-bold">6. Banque pro + Comptabilité</h2>
-            <p>Ouvrez un compte pro et configurez votre comptabilité.</p>
           </div>
         </div>
       </div>
