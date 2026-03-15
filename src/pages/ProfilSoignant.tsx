@@ -15,6 +15,7 @@ import { EncartInvitation } from '@/components/EncartInvitation';
 import { BadgesGamification, BadgeStats } from '@/components/BadgesGamification';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
+import { PoolUrgenceToggle } from '@/components/PoolUrgenceToggle';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
