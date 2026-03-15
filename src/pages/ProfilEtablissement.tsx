@@ -9,8 +9,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2, Palette } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2 } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+const stripePromise = STRIPE_PK ? loadStripe(STRIPE_PK) : null;
 
 const CONVENTIONS_COLLECTIVES = [
   { valeur: 'CCN_51_FEHAP', label: 'CCN 51 (FEHAP)' },
