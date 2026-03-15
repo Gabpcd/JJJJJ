@@ -218,8 +218,14 @@ export default function ContratMission() {
           <FileText className="h-6 w-6 text-primary" />
           <div>
             <h1 className="text-xl font-bold text-foreground">Contrat {contrat.numero_contrat}</h1>
-            <p className="text-sm text-muted-foreground">
-              Statut : {contrat.statut === 'SIGNE_COMPLET' ? '✅ Signé' : contrat.statut === 'ANNULE' ? '❌ Annulé' : '⏳ En attente de signatures'}
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              Statut : {contrat.statut === 'SIGNE_COMPLET'
+                ? (contrat.mode_signature === 'YOUSIGN' ? '🔒 Signé via Yousign (eIDAS) ✅' : '✅ Signé')
+                : contrat.statut === 'ANNULE' ? '❌ Annulé'
+                : '⏳ En attente de signatures'}
+              {contrat.mode_signature === 'YOUSIGN' && contrat.statut !== 'SIGNE_COMPLET' && (
+                <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">eIDAS</span>
+              )}
             </p>
           </div>
         </div>
