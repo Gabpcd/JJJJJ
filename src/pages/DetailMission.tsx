@@ -162,6 +162,9 @@ export default function DetailMission() {
       <Tabs defaultValue="details">
         <TabsList className="mb-4">
           <TabsTrigger value="details">Détails</TabsTrigger>
+          {m.statut === 'OUVERTE' && m.mode_attribution === 'CANDIDATURE' && (
+            <TabsTrigger value="candidatures">Candidatures</TabsTrigger>
+          )}
           {m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
         </TabsList>
 
