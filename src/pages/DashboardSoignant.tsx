@@ -217,7 +217,7 @@ export default function DashboardSoignant() {
 
       <BarreCompletionProfil
         nom={!!soignant.nom}
-        rppsVerifie={!!(soignant as any).rpps_verifie || !!soignant.numero_rpps}
+        rppsVerifie={!!(soignant as any).rpps_verifie}
         auMoinsUnDocument={aDocuments}
         adresseRenseignee={!!(soignant.adresse_lat && soignant.adresse_lng)}
         telephoneRenseigne={!!soignant.telephone}
