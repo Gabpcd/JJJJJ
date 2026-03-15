@@ -10,7 +10,11 @@ interface BlocagePostulationProps {
 export function BlocagePostulation({ completionProfil, documentsValides, premiereMissionLe }: BlocagePostulationProps) {
   const navigate = useNavigate();
 
-  // Grace period: if no premiere_mission_le or within 7 days, docs not required
+  // Grace 7 jours: Le soignant peut ACCEPTER une mission dans les 7 premiers jours
+  // après sa première acceptation, sans avoir tous ses documents.
+  // premiere_mission_le = NULL signifie qu'il n'a jamais accepté → pas de blocage docs.
+  // premiere_mission_le + 7j > now() → encore en période de grâce → pas de blocage docs.
+  // Après 7 jours → blocage si docs incomplets.
   const enPeriodeGrace = !premiereMissionLe || 
     (new Date(premiereMissionLe).getTime() + 7 * 24 * 60 * 60 * 1000 > Date.now());
   const docsOk = documentsValides || enPeriodeGrace;

@@ -42,13 +42,22 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
   const couleurTheme = m.etablissements?.couleur_theme;
 
   return (
-    <div onClick={onClick} className="card-base hover:shadow-md transition-all cursor-pointer active:scale-[0.99] overflow-hidden">
-      {couleurTheme && <div className="h-1 -mt-4 md:-mt-6 -mx-4 md:-mx-6 mb-3" style={{ backgroundColor: couleurTheme }} />}
+    <div onClick={onClick} className={`card-base hover:shadow-md transition-all cursor-pointer active:scale-[0.99] overflow-hidden ${m.est_urgente ? 'ring-2 ring-destructive/50' : ''}`}>
+      {m.est_urgente && (
+        <div className="h-1.5 -mt-4 md:-mt-6 -mx-4 md:-mx-6 mb-3 bg-destructive animate-pulse" />
+      )}
+      {couleurTheme && !m.est_urgente && <div className="h-1 -mt-4 md:-mt-6 -mx-4 md:-mx-6 mb-3" style={{ backgroundColor: couleurTheme }} />}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2 flex-wrap">
           {m.est_urgente && (() => {
             const badge = getBadgeUrgence(m.niveau_urgence || 1);
-            return <span className={`badge-base text-[10px] ${badge.classes}`}>{badge.icone} {badge.label}</span>;
+            const debutDate = new Date(m.debut_le);
+            const heuresAvant = Math.max(0, Math.round((debutDate.getTime() - Date.now()) / 3600000));
+            return (
+              <span className={`badge-base text-[10px] ${badge.classes} animate-pulse`}>
+                {badge.icone} URGENT — Début dans {heuresAvant}h
+              </span>
+            );
           })()}
         </div>
         <span className={`text-[10px] ${temps.couleur}`}>{temps.texte}</span>

@@ -15,6 +15,7 @@ import { EncartInvitation } from '@/components/EncartInvitation';
 import { BadgesGamification, BadgeStats } from '@/components/BadgesGamification';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
+import { PoolUrgenceToggle } from '@/components/PoolUrgenceToggle';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -50,10 +51,12 @@ export default function ProfilSoignant() {
   const [parrainageSucces, setParrainageSucces] = useState(false);
   const [filleuls, setFilleuls] = useState<any[]>([]);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
+  const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url').eq('id', user.id).single().then(({ data }: any) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, pool_urgence_actif, pool_urgence_rayon_km').eq('id', user.id).single().then(({ data }: any) => {
       if (data) {
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
@@ -76,6 +79,8 @@ export default function ProfilSoignant() {
         });
         setTypesContrat(getTypesContratSoignant(data as any));
         setConsentementGPS((data as any).consentement_gps !== false);
+        setPoolUrgenceActif(data.pool_urgence_actif || false);
+        setPoolUrgenceRayon(data.pool_urgence_rayon_km || 15);
       }
       setLoading(false);
     });
@@ -357,6 +362,17 @@ export default function ProfilSoignant() {
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>
       </form>
+
+      {/* Pool Urgence */}
+      <div className="max-w-2xl mt-6">
+        <PoolUrgenceToggle
+          actif={poolUrgenceActif}
+          rayonKm={poolUrgenceRayon}
+          onUpdate={(a, r) => { setPoolUrgenceActif(a); setPoolUrgenceRayon(r); }}
+          onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
+          onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
+        />
+      </div>
 
       {/* Inviter des collègues */}
       {codeParrainage && (

@@ -80,11 +80,11 @@ export default function MissionsSoignant() {
 
       if (onglet === 'disponibles') {
         query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any);
-        // Soignants libéraux : uniquement les missions libérales (note d'honoraires)
         if (soignant.type_contrat === 'LIBERAL') {
           query = query.eq('type_paiement_soignant', 'NOTE_HONORAIRES');
         }
-        query = query.order('est_urgente', { ascending: false }).order('debut_le', { ascending: true });
+        // Urgent missions first, then by date
+        query = query.order('est_urgente', { ascending: false }).order('niveau_urgence', { ascending: false }).order('debut_le', { ascending: true });
         if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);
         if (filtres?.dateFin) query = query.lte('debut_le', filtres.dateFin);
         if (filtres?.tauxMin && filtres.tauxMin > 0) query = query.gte('taux_horaire_base', filtres.tauxMin);

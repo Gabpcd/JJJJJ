@@ -14,6 +14,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { BoutonFavori } from '@/components/BoutonFavori';
+import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -224,6 +225,16 @@ export default function DetailMission() {
                 <Eye className="h-4 w-4" />
                 <span>0 soignants ont vu cette mission</span>
               </div>
+
+              {/* Recherche remplaçant urgence si ABSENCE */}
+              {m.statut === 'ABSENCE' && (
+                <RechercheRemplacantUrgence
+                  missionId={m.id}
+                  onPropose={() => {}}
+                  onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
+                  onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
+                />
+              )}
 
               <div className="card-base">
                 <h2 className="font-semibold text-foreground mb-3">Historique</h2>
