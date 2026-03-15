@@ -221,10 +221,16 @@ export default function InscriptionSoignant() {
                   {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
                 </div>
                 {rppsVerifiant && <p className="text-xs text-primary mt-1">Vérification en cours...</p>}
-                {rppsResultat && rppsResultat.trouve && (
+                {rppsResultat && rppsResultat.trouve && rppsMatch === true && (
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
                     <ShieldCheck className="h-3.5 w-3.5" />
-                    ✅ RPPS Vérifié — {rppsResultat.nom_api} {rppsResultat.profession_api ? `— ${rppsResultat.profession_api}` : ''}
+                    ✅ RPPS Vérifié — {rppsResultat.nom_api}
+                  </div>
+                )}
+                {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    ❌ Ce RPPS ne correspond pas à votre identité
                   </div>
                 )}
                 {rppsResultat && !rppsResultat.trouve && form.rpps.length === 11 && (
