@@ -110,9 +110,21 @@ export default function InscriptionSoignant() {
         const { data, error } = await supabase.functions.invoke('verify-rpps', {
           body: { numero_rpps: form.rpps, prenom: form.prenom, nom: form.nom },
         });
-        if (!error && data) setRppsResultat(data);
-        else setRppsResultat({ trouve: false });
-      } catch {
+        console.log('verify-rpps response:', data, 'error:', error);
+        if (error) {
+          console.error('verify-rpps invoke error:', error);
+          setRppsResultat({ trouve: false });
+        } else if (data) {
+          // Handle both response formats: nom_api (production) and nom (test mode)
+          const nomAffiche = data.nom_api || data.nom || '';
+          const prenomAffiche = data.prenom || '';
+          const label = [prenomAffiche, nomAffiche].filter(Boolean).join(' ') || nomAffiche;
+          setRppsResultat({ trouve: !!data.trouve, nom_affiche: label });
+        } else {
+          setRppsResultat({ trouve: false });
+        }
+      } catch (err) {
+        console.error('verify-rpps unexpected error:', err);
         setRppsResultat(null);
       }
       setRppsVerifiant(false);
