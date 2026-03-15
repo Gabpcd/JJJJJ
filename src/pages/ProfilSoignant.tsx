@@ -270,6 +270,16 @@ export default function ProfilSoignant() {
       )}
 
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
+        {/* Bio / Présentation */}
+        <SectionBio
+          bio={form.bio}
+          onBioChange={(val) => maj('bio', val)}
+          anneesExperience={form.anneesExperience}
+          onAnneesChange={(val) => maj('anneesExperience', val)}
+          specialites={specialites}
+          onSpecialitesChange={setSpecialites}
+        />
+
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Identité</h2>
           <div className="space-y-3">

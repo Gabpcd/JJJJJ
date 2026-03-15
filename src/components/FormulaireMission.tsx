@@ -487,8 +487,31 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             <option value={1}>⚡ Modéré — sous 48h</option>
             <option value={2}>🔥 Élevé — sous 24h</option>
             <option value={3}>🚨 Critique — sous 6h</option>
-          </select>
+        </select>
         )}
+
+        {/* Mode de sélection */}
+        <div className="card-base border-border">
+          <p className="text-sm font-medium text-foreground mb-3">Mode de sélection</p>
+          <div className="space-y-2">
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input type="radio" name="modeAttribution" checked={modeAttribution === 'PREMIER_ARRIVE'}
+                onChange={() => setModeAttribution('PREMIER_ARRIVE')} className="mt-0.5 accent-primary" />
+              <div>
+                <span className="text-sm text-foreground font-medium group-hover:text-primary transition-colors">⚡ Premier arrivé</span>
+                <p className="text-xs text-muted-foreground">Le premier soignant qui accepte remporte la mission.</p>
+              </div>
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input type="radio" name="modeAttribution" checked={modeAttribution === 'CANDIDATURE'}
+                onChange={() => setModeAttribution('CANDIDATURE')} className="mt-0.5 accent-primary" />
+              <div>
+                <span className="text-sm text-foreground font-medium group-hover:text-primary transition-colors">👤 Je choisis</span>
+                <p className="text-xs text-muted-foreground">Les soignants postulent, vous consultez les profils et choisissez.</p>
+              </div>
+            </label>
+          </div>
+        </div>
 
         {/* Estimation (ponctuel only) */}
         {!modeRecurrent && dureeEstimee > 0 && taux > 0 && (

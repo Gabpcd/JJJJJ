@@ -96,7 +96,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, onUpdate, onError, onSuccess
             <p className="text-xs font-semibold text-foreground">Avantages :</p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Star className="h-3.5 w-3.5 text-warning shrink-0" />
-              +10 points fiabilité par mission urgence acceptée
+              +10 points fiabilité par mission urgence terminée
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Shield className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -106,6 +106,13 @@ export function PoolUrgenceToggle({ actif, rayonKm, onUpdate, onError, onSuccess
               <Eye className="h-3.5 w-3.5 text-success shrink-0" />
               Badge Urgence visible par les établissements
             </div>
+          </div>
+
+          <div className="mt-4 bg-muted/50 border border-border rounded-xl p-3">
+            <p className="text-xs text-muted-foreground">
+              En activant le pool d'urgence, vous acceptez d'être contacté pour des remplacements de dernière minute dans votre rayon.
+              Vous restez libre de refuser. Chaque mission urgence terminée vous rapporte <strong className="text-foreground">+10 points de fiabilité</strong>.
+            </p>
           </div>
         </>
       )}
