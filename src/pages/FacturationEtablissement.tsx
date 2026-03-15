@@ -355,6 +355,33 @@ export default function FacturationEtablissement() {
           <EtatVide illustration={<IllustrationCalculatrice />} titre="Aucune facture" sousTitre="Les factures seront générées automatiquement après vos premières missions." />
         )}
       </div>
+
+      {/* Historique des prélèvements SEPA */}
+      {etab?.mode_paiement_commission === 'SEPA_DEBIT' && prelevements.length > 0 && (
+        <div className="mt-6">
+          <h2 className="font-bold text-foreground mb-3">🏦 Historique des prélèvements</h2>
+          <div className="space-y-2">
+            {prelevements.map((p: any) => (
+              <div key={p.id} className="card-base flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{(p.missions as any)?.intitule || 'Mission'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {p.capture_le ? format(new Date(p.capture_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-foreground">{(p.montant_ttc ?? 0).toFixed(2)} €</p>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    p.statut === 'CAPTURE' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {p.statut === 'CAPTURE' ? 'Prélevé' : p.statut}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </LayoutApp>
   );
 }

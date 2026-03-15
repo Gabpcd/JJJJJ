@@ -184,6 +184,33 @@ serve(async (req) => {
       }
     }
 
+    // Handle SEPA debit charge succeeded
+    if (event.type === "charge.succeeded") {
+      const charge = event.data.object as Stripe.Charge;
+      if (charge.payment_method_details?.type === "sepa_debit") {
+        const missionId = charge.metadata?.mission_id;
+        if (missionId) {
+          await supabaseAdmin
+            .from("paiements_mission")
+            .update({
+              statut: "CAPTURE",
+              capture_le: new Date().toISOString(),
+              stripe_charge_id: charge.id,
+            })
+            .eq("mission_id", missionId)
+            .eq("statut", "EN_ATTENTE");
+
+          // Mark commission as invoiced
+          await supabaseAdmin
+            .from("missions")
+            .update({ commission_facturee: true, modifie_le: new Date().toISOString() })
+            .eq("id", missionId);
+
+          console.log(`SEPA charge captured for mission ${missionId}`);
+        }
+      }
+    }
+
     // Handle invoice.payment_failed
     if (event.type === "invoice.payment_failed") {
       const invoice = event.data.object as Stripe.Invoice;
