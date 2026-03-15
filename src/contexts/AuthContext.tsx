@@ -115,50 +115,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.motDePasse,
-      options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
-    });
-    if (authError) {
-      logger.error('Inscription soignant auth échouée', authError);
-      throw authError;
+    console.log('[INSCRIPTION] 1. Début inscription soignant, données:', { email: data.email, prenom: data.prenom, nom: data.nom, profession: data.profession });
+
+    // Étape 1 : signUp Supabase Auth
+    let authData: any;
+    try {
+      console.log('[INSCRIPTION] 2. Appel supabase.auth.signUp...');
+      const { data: signUpData, error: authError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.motDePasse,
+        options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
+      });
+      if (authError) {
+        console.error('[INSCRIPTION] 3. ERREUR signUp:', authError);
+        throw authError;
+      }
+      authData = signUpData;
+      console.log('[INSCRIPTION] 3. signUp OK, user id:', authData.user?.id, 'session:', !!authData.session);
+    } catch (err) {
+      console.error('[INSCRIPTION] signUp EXCEPTION:', err);
+      throw err;
     }
 
     const userId = authData.user!.id;
+    const accessToken = authData.session?.access_token;
 
-    const { data: result, error: fnError } = await supabase.functions.invoke('register-soignant', {
-      body: {
-        prenom: data.prenom,
-        nom: data.nom,
-        telephone: data.telephone || null,
-        dateNaissance: data.dateNaissance || null,
-        profession: data.profession,
-        typesContrat: data.typesContrat || ['CDDU'],
-        rpps: data.rpps || null,
-        rayon: data.rayon,
-        lat: data.lat || null,
-        lng: data.lng || null,
-        navigateur: navigator.userAgent,
-      },
-    });
+    // Étape 2 : register-soignant via fetch direct (pas supabase.functions.invoke pour éviter CORS)
+    const registerBody = {
+      prenom: data.prenom,
+      nom: data.nom,
+      telephone: data.telephone || null,
+      dateNaissance: data.dateNaissance || null,
+      profession: data.profession,
+      typesContrat: data.typesContrat || ['CDDU'],
+      rpps: data.rpps || null,
+      rayon: data.rayon,
+      lat: data.lat || null,
+      lng: data.lng || null,
+      navigateur: navigator.userAgent,
+    };
 
-    if (fnError || result?.error) {
-      logger.error('register-soignant échoué', fnError || result?.error);
-      try {
-        await supabase.auth.signOut();
-      } catch { /* ignore */ }
-      throw new Error('Erreur lors de la création de votre profil. Veuillez réessayer.');
+    try {
+      console.log('[INSCRIPTION] 4. Appel fetch register-soignant, body:', registerBody);
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+      headers['apikey'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscmlweHRzeWVnanNobmh6amt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMTk2OTYsImV4cCI6MjA4ODc5NTY5Nn0.ywor0oGht7aYi8J1YwNRo_rfmJtQ6GBodmCp1kAB3UY';
+
+      const response = await fetch(
+        'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/register-soignant',
+        { method: 'POST', headers, body: JSON.stringify(registerBody) }
+      );
+
+      console.log('[INSCRIPTION] 5. register-soignant HTTP status:', response.status);
+      const result = await response.json();
+      console.log('[INSCRIPTION] 6. register-soignant réponse:', result);
+
+      if (!response.ok || result?.error) {
+        console.error('[INSCRIPTION] 7. ERREUR register-soignant:', result);
+        try { await supabase.auth.signOut(); } catch { /* ignore */ }
+        throw new Error(result?.error || 'Erreur lors de la création de votre profil. Veuillez réessayer.');
+      }
+
+      console.log('[INSCRIPTION] 7. register-soignant OK ✅');
+    } catch (err) {
+      console.error('[INSCRIPTION] register-soignant EXCEPTION:', err);
+      try { await supabase.auth.signOut(); } catch { /* ignore */ }
+      throw err instanceof Error ? err : new Error('Erreur lors de la création de votre profil. Veuillez réessayer.');
     }
 
-    // Email de bienvenue (fire-and-forget)
-    supabase.functions.invoke('send-email', {
-      body: {
-        type: 'BIENVENUE_SOIGNANT',
-        data: { prenom: data.prenom },
-        destinataire_id: userId,
+    // Étape 3 : Email de bienvenue (fire-and-forget)
+    console.log('[INSCRIPTION] 8. Envoi email bienvenue (fire-and-forget)');
+    fetch('https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscmlweHRzeWVnanNobmh6amt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMTk2OTYsImV4cCI6MjA4ODc5NTY5Nn0.ywor0oGht7aYi8J1YwNRo_rfmJtQ6GBodmCp1kAB3UY',
+        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
       },
-    }).catch(() => {});
+      body: JSON.stringify({ type: 'BIENVENUE_SOIGNANT', data: { prenom: data.prenom }, destinataire_id: userId }),
+    }).catch((e) => console.warn('[INSCRIPTION] Email bienvenue échoué (ignoré):', e));
   }, []);
 
   const inscriptionEtablissement = useCallback(async (data: any) => {
