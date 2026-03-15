@@ -296,6 +296,9 @@ export default function FacturationEtablissement() {
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUT_COLORS[f.statut] ?? STATUT_COLORS.BROUILLON}`}>
                       {STATUT_LABELS[f.statut] ?? f.statut}
                     </span>
+                    {f.est_secteur_public && f.chorus_pro_statut && f.chorus_pro_statut !== 'NON_APPLICABLE' && (
+                      <ChorusStatutBadge statut={f.chorus_pro_statut} />
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                     <span>{f.nombre_missions ?? 0} mission{(f.nombre_missions ?? 0) > 1 ? 's' : ''}</span>
