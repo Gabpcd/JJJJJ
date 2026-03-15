@@ -122,7 +122,23 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
             precisionM={presence.arrivee_precision_gps_m}
             alerteTeleportation={presence.alerte_teleportation}
           />
+          {presence.methode_pointage_arrivee === 'CODE' && (
+            <p className="text-xs text-primary font-medium text-center">🔑 Pointé par code</p>
+          )}
           <BoutonPointage type="depart" onPointage={onPointerDepart} />
+          <SaisieCodePointage
+            type="depart"
+            onValider={async (code) => {
+              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
+                p_presence_id: presence.id,
+                p_code: code,
+              });
+              if (error) return { success: false, message: extraireMessageErreur(error) };
+              if (data?.success === false) return { success: false, message: data.error };
+              onRecharger?.();
+              return { success: true, message: 'Départ pointé par code ✅' };
+            }}
+          />
         </div>
       )}
 
