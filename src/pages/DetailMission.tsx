@@ -270,6 +270,21 @@ export default function DetailMission() {
           </div>
         </TabsContent>
 
+        {/* Candidatures tab */}
+        {m.statut === 'OUVERTE' && m.mode_attribution === 'CANDIDATURE' && (
+          <TabsContent value="candidatures">
+            <div className="card-base">
+              <h2 className="font-semibold text-foreground mb-4">📋 Candidatures reçues</h2>
+              <ListeCandidatures
+                missionId={m.id}
+                onAccepted={() => window.location.reload()}
+                onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
+                onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
+              />
+            </div>
+          </TabsContent>
+        )}
+
         {m.statut === 'OUVERTE' && (
           <TabsContent value="recommandations">
             <div className="card-base">
