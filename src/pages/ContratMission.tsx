@@ -54,6 +54,63 @@ export default function ContratMission() {
     load();
   }, [id]);
 
+  const handleYousignCreate = async () => {
+    if (!contrat || !user) return;
+    setYousignLoading(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Non authentifié');
+
+      const res = await fetch(
+        `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/yousign-create`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ contrat_id: contrat.id }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (data.fallback) {
+        afficherNotification({ type: 'info', message: data.message || 'Yousign non disponible — utilisez la signature manuscrite.' });
+        setModeSignature('CANVAS');
+        return;
+      }
+
+      if (!res.ok) throw new Error(data.error || 'Erreur Yousign');
+
+      const isSoignant = contrat.soignant_id === user.id;
+      const url = isSoignant ? data.soignant_signing_url : data.etablissement_signing_url;
+      setYousignUrl(url);
+
+      // Reload contract to get updated mode_signature
+      const { data: updated } = await supabase
+        .from('contrats_mission')
+        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le, mode_signature')
+        .eq('id', contrat.id)
+        .single();
+      if (updated) setContrat(updated);
+
+      afficherNotification({ type: 'succes', message: 'Procédure Yousign initialisée ! Cliquez sur le bouton pour signer.' });
+    } catch (err: any) {
+      logger.error('Yousign create error', err);
+      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de l\'initialisation Yousign' });
+      setModeSignature('CANVAS');
+    } finally {
+      setYousignLoading(false);
+    }
+  };
+
+  const handleFallbackCanvas = async () => {
+    setModeSignature('CANVAS');
+    // Reset mode_signature in DB if needed (admin-only update, so just change UI)
+  };
+
   const handleSigner = async () => {
     if (!contrat || !user || !accepte || !signatureData) return;
     setSigning(true);
