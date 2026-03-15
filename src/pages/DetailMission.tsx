@@ -245,7 +245,10 @@ export default function DetailMission() {
             <div className="space-y-4">
               <DecompositionFinanciere mission={m} />
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
-                <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={m.etablissements?.nom || 'Établissement'} />
+                <>
+                  <CodesPointageMission missionId={m.id} />
+                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={m.etablissements?.nom || 'Établissement'} />
+                </>
               )}
             </div>
           </div>

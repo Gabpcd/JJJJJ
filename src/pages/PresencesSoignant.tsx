@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CartePointage } from '@/components/CartePointage';
+import { SaisieCodePointage } from '@/components/SaisieCodePointage';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { PanneauContestation } from '@/components/PanneauContestation';
 import { EtatVide } from '@/components/EtatVide';
