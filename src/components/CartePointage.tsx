@@ -17,7 +17,7 @@ interface CartePointageProps {
   onRecharger?: () => void;
 }
 
-export function CartePointage({ mission, presence, onPointerArrivee, onPointerDepart }: CartePointageProps) {
+export function CartePointage({ mission, presence, onPointerArrivee, onPointerDepart, onRecharger }: CartePointageProps) {
   const maintenant = new Date();
   const debut = new Date(mission.debut_le);
   const fin = new Date(mission.fin_le);
