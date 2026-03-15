@@ -7,7 +7,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { SelectProfession } from '@/components/SelectProfession';
 import { CONTRATS, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
-import { supabase } from '@/integrations/supabase/client';
+
 
 function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => void }) {
   const [asked, setAsked] = useState(false);
@@ -107,15 +107,23 @@ export default function InscriptionSoignant() {
     const timeout = setTimeout(async () => {
       setRppsVerifiant(true);
       try {
-        const { data, error } = await supabase.functions.invoke('verify-rpps', {
-          body: { numero_rpps: form.rpps, prenom: form.prenom, nom: form.nom },
-        });
-        console.log('verify-rpps response:', data, 'error:', error);
-        if (error) {
-          console.error('verify-rpps invoke error:', error);
+        const rppsValue = form.rpps;
+        const response = await fetch(
+          'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/verify-rpps',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rpps: rppsValue }),
+          }
+        );
+
+        const data = await response.json();
+        console.log('RPPS response:', data);
+
+        if (!response.ok) {
+          console.error('verify-rpps fetch error:', data);
           setRppsResultat({ trouve: false });
         } else if (data) {
-          // Handle both response formats: nom_api (production) and nom (test mode)
           const nomAffiche = data.nom_api || data.nom || '';
           const prenomAffiche = data.prenom || '';
           const label = [prenomAffiche, nomAffiche].filter(Boolean).join(' ') || nomAffiche;
@@ -124,7 +132,7 @@ export default function InscriptionSoignant() {
           setRppsResultat({ trouve: false });
         }
       } catch (err) {
-        console.error('verify-rpps unexpected error:', err);
+        console.error('verify-rpps fetch exception:', err);
         setRppsResultat(null);
       }
       setRppsVerifiant(false);
