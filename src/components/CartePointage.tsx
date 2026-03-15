@@ -14,6 +14,7 @@ interface CartePointageProps {
   presence: any | null;
   onPointerArrivee: () => Promise<void>;
   onPointerDepart: () => Promise<void>;
+  onRecharger?: () => void;
 }
 
 export function CartePointage({ mission, presence, onPointerArrivee, onPointerDepart }: CartePointageProps) {
