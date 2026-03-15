@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// createClient supprimé : verify-rpps est accessible sans JWT
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
