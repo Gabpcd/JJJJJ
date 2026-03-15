@@ -73,6 +73,7 @@ export default function DetailMission() {
           montant_majoration_dimanche, montant_majoration_ferie,
           heures_nuit, heures_dimanche, heures_ferie,
           statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
+          mode_attribution,
           cree_le, modifie_le,
           etablissements(nom, adresse_ville, adresse_departement,
             taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
