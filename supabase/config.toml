@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.create-mission-payment]
 verify_jwt = false
+
+[functions.yousign-create]
+verify_jwt = false

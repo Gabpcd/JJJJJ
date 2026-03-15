@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Printer, CheckCircle, Clock } from 'lucide-react';
+import { FileText, Printer, CheckCircle, Clock, Shield, ExternalLink } from 'lucide-react';
 import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -18,6 +18,7 @@ import SignatureCanvas from '@/components/SignatureCanvas';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { logger } from '@/lib/logger';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 export default function ContratMission() {
   usePageTitle('Contrat');
@@ -32,6 +33,9 @@ export default function ContratMission() {
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [showConfirmSign, setShowConfirmSign] = useState(false);
   const [showCheckAnim, setShowCheckAnim] = useState(false);
+  const [modeSignature, setModeSignature] = useState<'CANVAS' | 'YOUSIGN'>('CANVAS');
+  const [yousignLoading, setYousignLoading] = useState(false);
+  const [yousignUrl, setYousignUrl] = useState<string | null>(null);
 
   const { role: serverRole } = useRole();
   const role: UserRole = serverRole === 'INCONNU' ? 'SOIGNANT' : serverRole;
@@ -41,7 +45,7 @@ export default function ContratMission() {
     const load = async () => {
       const { data } = await supabase
         .from('contrats_mission')
-        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le')
+        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le, mode_signature')
         .eq('id', id)
         .single();
       setContrat(data);
@@ -49,6 +53,63 @@ export default function ContratMission() {
     };
     load();
   }, [id]);
+
+  const handleYousignCreate = async () => {
+    if (!contrat || !user) return;
+    setYousignLoading(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Non authentifié');
+
+      const res = await fetch(
+        `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/yousign-create`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ contrat_id: contrat.id }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (data.fallback) {
+        afficherNotification({ type: 'info', message: data.message || 'Yousign non disponible — utilisez la signature manuscrite.' });
+        setModeSignature('CANVAS');
+        return;
+      }
+
+      if (!res.ok) throw new Error(data.error || 'Erreur Yousign');
+
+      const isSoignant = contrat.soignant_id === user.id;
+      const url = isSoignant ? data.soignant_signing_url : data.etablissement_signing_url;
+      setYousignUrl(url);
+
+      // Reload contract to get updated mode_signature
+      const { data: updated } = await supabase
+        .from('contrats_mission')
+        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le, mode_signature')
+        .eq('id', contrat.id)
+        .single();
+      if (updated) setContrat(updated);
+
+      afficherNotification({ type: 'succes', message: 'Procédure Yousign initialisée ! Cliquez sur le bouton pour signer.' });
+    } catch (err: any) {
+      logger.error('Yousign create error', err);
+      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de l\'initialisation Yousign' });
+      setModeSignature('CANVAS');
+    } finally {
+      setYousignLoading(false);
+    }
+  };
+
+  const handleFallbackCanvas = async () => {
+    setModeSignature('CANVAS');
+    // Reset mode_signature in DB if needed (admin-only update, so just change UI)
+  };
 
   const handleSigner = async () => {
     if (!contrat || !user || !accepte || !signatureData) return;
@@ -157,8 +218,14 @@ export default function ContratMission() {
           <FileText className="h-6 w-6 text-primary" />
           <div>
             <h1 className="text-xl font-bold text-foreground">Contrat {contrat.numero_contrat}</h1>
-            <p className="text-sm text-muted-foreground">
-              Statut : {contrat.statut === 'SIGNE_COMPLET' ? '✅ Signé' : contrat.statut === 'ANNULE' ? '❌ Annulé' : '⏳ En attente de signatures'}
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              Statut : {contrat.statut === 'SIGNE_COMPLET'
+                ? (contrat.mode_signature === 'YOUSIGN' ? '🔒 Signé via Yousign (eIDAS) ✅' : '✅ Signé')
+                : contrat.statut === 'ANNULE' ? '❌ Annulé'
+                : '⏳ En attente de signatures'}
+              {contrat.mode_signature === 'YOUSIGN' && contrat.statut !== 'SIGNE_COMPLET' && (
+                <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">eIDAS</span>
+              )}
             </p>
           </div>
         </div>
@@ -216,45 +283,113 @@ export default function ContratMission() {
         </div>
 
         {/* Signing section */}
-        {!dejaSigneParMoi && contrat.statut !== 'SIGNE_COMPLET' && contrat.statut !== 'ANNULE' && (
+        {!dejaSigneParMoi && contrat.statut !== 'SIGNE_COMPLET' && contrat.statut !== 'ANNULE' && contrat.statut !== 'EXPIRE' && (
           <div className="card-base space-y-4">
             <h3 className="font-bold text-foreground">Votre signature</h3>
 
-            <SignatureCanvas onSave={(data) => setSignatureData(data)} />
-
-            {signatureData && (
-              <div className="flex items-center gap-2 text-xs text-green-700">
-                <CheckCircle className="h-3.5 w-3.5" /> Signature validée
+            {/* Yousign active — show status */}
+            {contrat.mode_signature === 'YOUSIGN' ? (
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <span className="font-semibold text-foreground">🔒 Signature Yousign en cours</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  La procédure de signature électronique eIDAS est en cours. Vous recevrez un email de Yousign pour signer le contrat.
+                </p>
+                {yousignUrl && (
+                  <a
+                    href={yousignUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary inline-flex items-center gap-2"
+                  >
+                    Signer avec Yousign <ExternalLink className="h-4 w-4" />
+                  </a>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Vous pouvez aussi utiliser la <button type="button" onClick={() => handleFallbackCanvas()} className="underline text-primary">signature manuscrite</button> si vous préférez.
+                </p>
               </div>
+            ) : (
+              <>
+                {/* Mode selector */}
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-foreground">Choisissez votre mode de signature :</p>
+                  <RadioGroup value={modeSignature} onValueChange={(v) => setModeSignature(v as 'CANVAS' | 'YOUSIGN')}>
+                    <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors">
+                      <RadioGroupItem value="CANVAS" />
+                      <div>
+                        <span className="text-sm font-medium text-foreground">✍️ Signature manuscrite (canvas)</span>
+                        <p className="text-xs text-muted-foreground">Signez directement sur votre écran</p>
+                      </div>
+                    </label>
+                    <label className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
+                      <RadioGroupItem value="YOUSIGN" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">🔒 Signature électronique Yousign</span>
+                          <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">eIDAS</span>
+                          <span className="text-[10px] text-muted-foreground italic">(recommandée)</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Signature à valeur juridique renforcée, conforme au règlement européen eIDAS.</p>
+                      </div>
+                    </label>
+                  </RadioGroup>
+                </div>
+
+                {modeSignature === 'YOUSIGN' ? (
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleYousignCreate}
+                      disabled={yousignLoading}
+                      className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <Shield className="h-4 w-4" />
+                      {yousignLoading ? 'Initialisation Yousign...' : '🔒 Lancer la signature Yousign'}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <SignatureCanvas onSave={(data) => setSignatureData(data)} />
+
+                    {signatureData && (
+                      <div className="flex items-center gap-2 text-xs text-green-700">
+                        <CheckCircle className="h-3.5 w-3.5" /> Signature validée
+                      </div>
+                    )}
+
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <Checkbox checked={accepte} onCheckedChange={(v) => setAccepte(!!v)} />
+                      <span className="text-sm text-foreground">Je reconnais avoir lu et accepté les termes de ce contrat.</span>
+                    </label>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setShowConfirmSign(true)}
+                        disabled={!accepte || signing || !signatureData}
+                        className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <FileText className="h-4 w-4" /> {signing ? 'Signature...' : '✍️ Signer définitivement'}
+                      </button>
+                      <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
+                        <Printer className="h-4 w-4" /> Imprimer
+                      </button>
+                    </div>
+
+                    <ModalConfirmation
+                      ouvert={showConfirmSign}
+                      onFermer={() => setShowConfirmSign(false)}
+                      onConfirmer={handleSigner}
+                      titre="Confirmer la signature"
+                      message="Cette action est irréversible. En signant ce contrat, vous vous engagez légalement. Souhaitez-vous continuer ?"
+                      labelConfirmer="✍️ Signer"
+                      variante="primaire"
+                    />
+                  </>
+                )}
+              </>
             )}
-
-            <label className="flex items-start gap-3 cursor-pointer">
-              <Checkbox checked={accepte} onCheckedChange={(v) => setAccepte(!!v)} />
-              <span className="text-sm text-foreground">Je reconnais avoir lu et accepté les termes de ce contrat.</span>
-            </label>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirmSign(true)}
-                disabled={!accepte || signing || !signatureData}
-                className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <FileText className="h-4 w-4" /> {signing ? 'Signature...' : '✍️ Signer définitivement'}
-              </button>
-              <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
-                <Printer className="h-4 w-4" /> Imprimer
-              </button>
-            </div>
-
-            <ModalConfirmation
-              ouvert={showConfirmSign}
-              onFermer={() => setShowConfirmSign(false)}
-              onConfirmer={handleSigner}
-              titre="Confirmer la signature"
-              message="Cette action est irréversible. En signant ce contrat, vous vous engagez légalement. Souhaitez-vous continuer ?"
-              labelConfirmer="✍️ Signer"
-              variante="primaire"
-            />
           </div>
         )}
 
