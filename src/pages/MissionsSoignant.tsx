@@ -255,7 +255,7 @@ export default function MissionsSoignant() {
                     </div>
                     <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
                     <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom}</p>
-                    {m.net_a_payer > 0 && <p className="text-sm font-bold text-primary mt-1">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(m.net_a_payer)}</p>}
+                    {(m.net_estime || m.net_a_payer) > 0 && <p className="text-sm font-bold text-primary mt-1">Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(m.net_estime || (m.net_a_payer * 0.78))}</p>}
                   </div>
                 ))}
               </div>
