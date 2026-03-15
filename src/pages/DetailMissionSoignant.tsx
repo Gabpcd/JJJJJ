@@ -159,6 +159,24 @@ export default function DetailMissionSoignant() {
   const estTerminee = mission.statut === 'TERMINEE';
   const estAssigneAutre = !estOuverte && !estAssigne && mission.soignant_assigne_id;
   const duree = mission.duree_heures ?? ((new Date(mission.fin_le).getTime() - new Date(mission.debut_le).getTime()) / 3600000);
+  const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
+
+  const postulerMission = async () => {
+    setPostulationEnCours(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_postuler_mission' as any, {
+        p_mission_id: id!,
+        p_message: messageCandidature || null,
+      });
+      if (error) { toast.error(extraireMessageErreur(error)); return; }
+      if (data?.error) { toast.error(data.error); return; }
+      setCandidatureEnvoyee(true);
+      toast.success('Candidature envoyée ! L\'établissement examinera votre profil.');
+    } catch (err: any) {
+      toast.error(extraireMessageErreur(err));
+    }
+    setPostulationEnCours(false);
+  };
 
   const accepterMission = async () => {
     setAcceptationEnCours(true);
