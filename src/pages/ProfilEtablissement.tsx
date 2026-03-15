@@ -139,6 +139,7 @@ export default function ProfilEtablissement() {
       p_taux_majoration_nuit: form.tauxNuit,
       p_taux_majoration_dimanche: form.tauxDimanche,
       p_taux_majoration_ferie: form.tauxFerie,
+      p_mode_paiement_commission: modePaiement,
     });
 
     if (error) {
