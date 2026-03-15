@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send } from 'lucide-react';
+import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send, CreditCard } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
@@ -72,12 +72,13 @@ export default function DetailMission() {
           total_brut, net_a_payer, montant_ifm, montant_icp, montant_majoration_nuit,
           montant_majoration_dimanche, montant_majoration_ferie,
           heures_nuit, heures_dimanche, heures_ferie,
+          montant_commission_ttc,
           statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
           mode_attribution,
           cree_le, modifie_le,
           etablissements(nom, adresse_ville, adresse_departement,
             taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
-            taux_majoration_ferie_pourcent)
+            taux_majoration_ferie_pourcent, mode_paiement_commission)
         `)
         .eq('id', id)
         .single();
@@ -260,6 +261,18 @@ export default function DetailMission() {
 
             <div className="space-y-4">
               <DecompositionFinanciere mission={m} />
+              {/* Payment mode indicator */}
+              {m.montant_commission_ttc > 0 && (
+                <div className="card-base flex items-center gap-2 text-xs text-muted-foreground">
+                  {(m.etablissements as any)?.mode_paiement_commission === 'STRIPE_RESERVATION' ? (
+                    <><CreditCard className="h-3.5 w-3.5 text-primary" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — 💳 Prélevée à la réservation</span></>
+                  ) : (m.etablissements as any)?.mode_paiement_commission === 'CHORUS_PRO' ? (
+                    <><span>🏛️ Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Chorus Pro</span></>
+                  ) : (
+                    <><span>📄 Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Facturée en fin de mois</span></>
+                  )}
+                </div>
+              )}
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <>
                   <CodesPointageMission missionId={m.id} />
@@ -277,6 +290,7 @@ export default function DetailMission() {
               <h2 className="font-semibold text-foreground mb-4">📋 Candidatures reçues</h2>
               <ListeCandidatures
                 missionId={m.id}
+                modePaiement={(m.etablissements as any)?.mode_paiement_commission}
                 onAccepted={() => window.location.reload()}
                 onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
                 onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}

@@ -628,6 +628,7 @@ export type Database = {
           logo_url: string | null
           missions_mois_precedent: number | null
           mode_facturation: string | null
+          mode_paiement_commission: string | null
           modifie_le: string | null
           nom: string
           palier_commission_id: string | null
@@ -665,6 +666,7 @@ export type Database = {
           logo_url?: string | null
           missions_mois_precedent?: number | null
           mode_facturation?: string | null
+          mode_paiement_commission?: string | null
           modifie_le?: string | null
           nom: string
           palier_commission_id?: string | null
@@ -702,6 +704,7 @@ export type Database = {
           logo_url?: string | null
           missions_mois_precedent?: number | null
           mode_facturation?: string | null
+          mode_paiement_commission?: string | null
           modifie_le?: string | null
           nom?: string
           palier_commission_id?: string | null
@@ -1546,6 +1549,66 @@ export type Database = {
           type_ressource?: string | null
         }
         Relationships: []
+      }
+      paiements_mission: {
+        Row: {
+          capture_le: string | null
+          cree_le: string | null
+          etablissement_id: string
+          id: string
+          mission_id: string
+          montant_ht: number
+          montant_ttc: number
+          montant_tva: number
+          rembourse_le: string | null
+          statut: string | null
+          stripe_charge_id: string | null
+          stripe_payment_intent_id: string | null
+        }
+        Insert: {
+          capture_le?: string | null
+          cree_le?: string | null
+          etablissement_id: string
+          id?: string
+          mission_id: string
+          montant_ht: number
+          montant_ttc: number
+          montant_tva: number
+          rembourse_le?: string | null
+          statut?: string | null
+          stripe_charge_id?: string | null
+          stripe_payment_intent_id?: string | null
+        }
+        Update: {
+          capture_le?: string | null
+          cree_le?: string | null
+          etablissement_id?: string
+          id?: string
+          mission_id?: string
+          montant_ht?: number
+          montant_ttc?: number
+          montant_tva?: number
+          rembourse_le?: string | null
+          statut?: string | null
+          stripe_charge_id?: string | null
+          stripe_payment_intent_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paiements_mission_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paiements_mission_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       paliers_bfa: {
         Row: {
@@ -2825,6 +2888,41 @@ export type Database = {
               p_logo_url?: string
               p_nom?: string
               p_telephone?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_convention_collective?: string
+              p_couleur_theme?: string
+              p_logo_url?: string
+              p_mode_paiement_commission?: string
+              p_nom?: string
+              p_telephone?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_departement?: string
+              p_adresse_lat?: number
+              p_adresse_lng?: number
+              p_adresse_rue?: string
+              p_adresse_ville?: string
+              p_convention_collective?: string
+              p_couleur_theme?: string
+              p_email_contact?: string
+              p_finess?: string
+              p_mode_paiement_commission?: string
+              p_nom: string
+              p_taux_majoration_dimanche?: number
+              p_taux_majoration_ferie?: number
+              p_taux_majoration_nuit?: number
+              p_telephone_contact?: string
             }
             Returns: Json
           }

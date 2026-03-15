@@ -34,6 +34,7 @@ export default function ProfilEtablissement() {
   const [siret, setSiret] = useState('');
   const [type, setType] = useState('');
   const [conventionCollective, setConventionCollective] = useState('');
+  const [modePaiement, setModePaiement] = useState('FACTURE_MENSUELLE');
   const [form, setForm] = useState({
     nom: '', finess: '', rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
@@ -42,11 +43,12 @@ export default function ProfilEtablissement() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent, logo_url').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent, logo_url, mode_paiement_commission').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         setSiret(data.siret);
         setType(data.type);
         setConventionCollective(data.convention_collective || '');
+        setModePaiement((data as any).mode_paiement_commission || 'FACTURE_MENSUELLE');
         (setForm as any)(prev => ({ ...prev, logoUrl: (data as any).logo_url || '' }));
         setForm({
           nom: data.nom, finess: data.finess || '',
@@ -137,6 +139,7 @@ export default function ProfilEtablissement() {
       p_taux_majoration_nuit: form.tauxNuit,
       p_taux_majoration_dimanche: form.tauxDimanche,
       p_taux_majoration_ferie: form.tauxFerie,
+      p_mode_paiement_commission: modePaiement,
     });
 
     if (error) {
@@ -256,6 +259,40 @@ export default function ProfilEtablissement() {
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Jours fériés — %</label><input type="number" step="0.01" value={form.tauxFerie} onChange={e => maj('tauxFerie', Number(e.target.value))} className="input-base" /></div>
           </div>
         </div>
+        {/* Mode de paiement commission */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">💳 Mode de paiement de la commission</h2>
+          <div className="space-y-3">
+            {[
+              { value: 'STRIPE_RESERVATION', icon: '💳', label: 'Carte bancaire', desc: 'Commission prélevée à chaque mission (autorisée à la réservation, capturée à la fin)' },
+              { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle', desc: 'Paiement à 30 jours par virement ou carte' },
+              { value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' },
+            ].map(opt => (
+              <label
+                key={opt.value}
+                className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
+                  modePaiement === opt.value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/30'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="modePaiement"
+                  value={opt.value}
+                  checked={modePaiement === opt.value}
+                  onChange={() => setModePaiement(opt.value)}
+                  className="mt-1 accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium text-foreground">{opt.icon} {opt.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
         {/* Couleur de thème */}
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">

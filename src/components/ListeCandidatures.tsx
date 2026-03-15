@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Send, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { ModalPaiementCommission } from '@/components/ModalPaiementCommission';
 
 function scoreBadge(score: number) {
   if (score >= 70) return 'bg-success/10 text-success';
@@ -11,15 +12,19 @@ function scoreBadge(score: number) {
 
 interface ListeCandidaturesProps {
   missionId: string;
+  modePaiement?: string;
   onAccepted: () => void;
   onError: (msg: string) => void;
   onSuccess: (msg: string) => void;
 }
 
-export function ListeCandidatures({ missionId, onAccepted, onError, onSuccess }: ListeCandidaturesProps) {
+export function ListeCandidatures({ missionId, modePaiement, onAccepted, onError, onSuccess }: ListeCandidaturesProps) {
   const [candidatures, setCandidatures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [traitement, setTraitement] = useState<string | null>(null);
+
+  // Stripe payment modal state
+  const [paiementModal, setPaiementModal] = useState<{ clientSecret: string; montant: number; candidatureId: string } | null>(null);
 
   useEffect(() => {
     charger();
@@ -34,7 +39,6 @@ export function ListeCandidatures({ missionId, onAccepted, onError, onSuccess }:
       .order('cree_le', { ascending: true });
 
     if (data && data.length > 0) {
-      // Enrich with soignant info
       const enriched = await Promise.all(
         data.map(async (c: any) => {
           const { data: sg } = await supabase.rpc('fn_soignant_pour_etablissement' as any, { p_soignant_id: c.soignant_id });
@@ -48,18 +52,65 @@ export function ListeCandidatures({ missionId, onAccepted, onError, onSuccess }:
     setLoading(false);
   };
 
+  const accepterAvecPaiement = async (candidatureId: string) => {
+    if (modePaiement === 'STRIPE_RESERVATION') {
+      setTraitement(candidatureId);
+      try {
+        const { data, error } = await supabase.functions.invoke('create-mission-payment', {
+          body: { mission_id: missionId },
+        });
+        if (error) throw error;
+        if (data?.client_secret) {
+          // Need card input
+          setPaiementModal({ clientSecret: data.client_secret, montant: data.amount, candidatureId });
+          setTraitement(null);
+          return;
+        }
+        // Auto-charged or skipped → proceed with acceptance
+        await finaliserAcceptation(candidatureId);
+      } catch (err: any) {
+        onError(extraireMessageErreur(err));
+        setTraitement(null);
+      }
+    } else {
+      await finaliserAcceptation(candidatureId);
+    }
+  };
+
+  const finaliserAcceptation = async (candidatureId: string) => {
+    setTraitement(candidatureId);
+    try {
+      const { data, error } = await supabase.rpc('fn_traiter_candidature' as any, {
+        p_candidature_id: candidatureId,
+        p_decision: 'ACCEPTEE',
+        p_motif: null,
+      });
+      if (error) throw error;
+      if (data?.error) { onError(data.error); return; }
+      onSuccess('Candidature acceptée ! Le soignant est assigné.');
+      onAccepted();
+      await charger();
+    } catch (err: any) {
+      onError(extraireMessageErreur(err));
+    }
+    setTraitement(null);
+  };
+
   const traiterCandidature = async (candidatureId: string, decision: 'ACCEPTEE' | 'REFUSEE') => {
+    if (decision === 'ACCEPTEE') {
+      await accepterAvecPaiement(candidatureId);
+      return;
+    }
     setTraitement(candidatureId);
     try {
       const { data, error } = await supabase.rpc('fn_traiter_candidature' as any, {
         p_candidature_id: candidatureId,
         p_decision: decision,
-        p_motif: decision === 'REFUSEE' ? 'Refusé par l\'établissement' : null,
+        p_motif: 'Refusé par l\'établissement',
       });
       if (error) throw error;
       if (data?.error) { onError(data.error); return; }
-      onSuccess(decision === 'ACCEPTEE' ? 'Candidature acceptée ! Le soignant est assigné.' : 'Candidature refusée.');
-      if (decision === 'ACCEPTEE') onAccepted();
+      onSuccess('Candidature refusée.');
       await charger();
     } catch (err: any) {
       onError(extraireMessageErreur(err));
@@ -154,6 +205,19 @@ export function ListeCandidatures({ missionId, onAccepted, onError, onSuccess }:
             </div>
           ))}
         </div>
+      )}
+
+      {/* Stripe payment modal */}
+      {paiementModal && (
+        <ModalPaiementCommission
+          clientSecret={paiementModal.clientSecret}
+          montant={paiementModal.montant}
+          onSuccess={() => {
+            setPaiementModal(null);
+            finaliserAcceptation(paiementModal.candidatureId);
+          }}
+          onCancel={() => setPaiementModal(null)}
+        />
       )}
     </div>
   );
