@@ -259,6 +259,40 @@ export default function ProfilEtablissement() {
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Jours fériés — %</label><input type="number" step="0.01" value={form.tauxFerie} onChange={e => maj('tauxFerie', Number(e.target.value))} className="input-base" /></div>
           </div>
         </div>
+        {/* Mode de paiement commission */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">💳 Mode de paiement de la commission</h2>
+          <div className="space-y-3">
+            {[
+              { value: 'STRIPE_RESERVATION', icon: '💳', label: 'Carte bancaire', desc: 'Commission prélevée à chaque mission (autorisée à la réservation, capturée à la fin)' },
+              { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle', desc: 'Paiement à 30 jours par virement ou carte' },
+              { value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' },
+            ].map(opt => (
+              <label
+                key={opt.value}
+                className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
+                  modePaiement === opt.value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/30'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="modePaiement"
+                  value={opt.value}
+                  checked={modePaiement === opt.value}
+                  onChange={() => setModePaiement(opt.value)}
+                  className="mt-1 accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium text-foreground">{opt.icon} {opt.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
         {/* Couleur de thème */}
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
