@@ -43,11 +43,12 @@ export default function ProfilEtablissement() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent, logo_url').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent, logo_url, mode_paiement_commission').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         setSiret(data.siret);
         setType(data.type);
         setConventionCollective(data.convention_collective || '');
+        setModePaiement((data as any).mode_paiement_commission || 'FACTURE_MENSUELLE');
         (setForm as any)(prev => ({ ...prev, logoUrl: (data as any).logo_url || '' }));
         setForm({
           nom: data.nom, finess: data.finess || '',
