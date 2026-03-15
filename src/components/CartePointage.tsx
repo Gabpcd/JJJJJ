@@ -93,7 +93,22 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
 
       {/* État 2: Prêt */}
       {etat === 'pret' && (
-        <BoutonPointage type="arrivee" onPointage={onPointerArrivee} />
+        <div className="space-y-2">
+          <BoutonPointage type="arrivee" onPointage={onPointerArrivee} />
+          <SaisieCodePointage
+            type="arrivee"
+            onValider={async (code) => {
+              const { data, error } = await supabase.rpc('fn_pointer_arrivee_code' as any, {
+                p_mission_id: mission.id,
+                p_code: code,
+              });
+              if (error) return { success: false, message: extraireMessageErreur(error) };
+              if (data?.success === false) return { success: false, message: data.error };
+              onRecharger?.();
+              return { success: true, message: 'Arrivée pointée par code ✅' };
+            }}
+          />
+        </div>
       )}
 
       {/* État 3: En mission */}
