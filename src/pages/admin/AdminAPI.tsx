@@ -44,21 +44,34 @@ export default function AdminAPI() {
 
   useEffect(() => { charger(); }, []);
 
+  const [generating, setGenerating] = useState(false);
+
   const genererCle = async () => {
-    if (!newName.trim()) return;
-    const cleApi = `sd_live_${crypto.randomUUID().replace(/-/g, '')}`;
-    const cleSecret = crypto.randomUUID();
-    const { error } = await supabase.from('api_keys').insert({
-      nom: newName.trim(),
-      cle_api: cleApi,
-      cle_secret: cleSecret,
-      permissions: newPerms,
-    } as any);
-    if (!error) {
-      setGeneratedKey(cleApi);
-      setNewName('');
-      setNewPerms(['missions:read']);
-      charger();
+    if (!newName.trim() || generating) return;
+    setGenerating(true);
+    try {
+      const cleApi = `sd_live_${crypto.randomUUID().replace(/-/g, '')}`;
+      const cleSecret = crypto.randomUUID();
+      const { error } = await supabase.from('api_keys').insert({
+        nom: newName.trim(),
+        cle_api: cleApi,
+        cle_secret: cleSecret,
+        permissions: newPerms,
+        etablissement_id: null,
+        groupe_sante_id: null,
+      } as any);
+      if (error) {
+        console.error('Erreur génération clé API:', error);
+        const { toast } = await import('sonner');
+        toast.error('Erreur lors de la génération de la clé API.');
+      } else {
+        setGeneratedKey(cleApi);
+        setNewName('');
+        setNewPerms(['missions:read']);
+        charger();
+      }
+    } finally {
+      setGenerating(false);
     }
   };
 
