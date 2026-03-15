@@ -444,25 +444,60 @@ export default function DetailMissionSoignant() {
                     <p className="text-xs text-warning/80 mt-1">Vous ne pouvez pas accepter deux missions qui se chevauchent.</p>
                   </div>
                 )}
-                {peutPostuler && (
+                {peutPostuler && !candidatureEnvoyee && (
                   <>
-                    <button
-                      onClick={() => setModalConfirm(true)}
-                      disabled={acceptationEnCours || !conformiteOk || chevauchement}
-                      className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
-                      title={chevauchement ? 'Mission chevauchante détectée' : !conformiteOk ? 'Résolvez les conflits ci-dessus pour accepter' : undefined}
-                    >
-                      {acceptationEnCours ? 'Acceptation en cours…' : '★ Accepter cette mission'}
-                    </button>
+                    {estModeCandidature ? (
+                      <>
+                        <div className="mb-3">
+                          <label className="text-xs font-medium text-foreground mb-1 block">Message à l'établissement (optionnel)</label>
+                          <textarea
+                            value={messageCandidature}
+                            onChange={e => setMessageCandidature(e.target.value.slice(0, 300))}
+                            placeholder="Présentez-vous brièvement…"
+                            rows={3}
+                            className="input-base resize-none text-sm"
+                            maxLength={300}
+                          />
+                          <p className="text-[10px] text-muted-foreground text-right mt-0.5">{messageCandidature.length}/300</p>
+                        </div>
+                        <button
+                          onClick={postulerMission}
+                          disabled={postulationEnCours || !conformiteOk || chevauchement}
+                          className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
+                        >
+                          {postulationEnCours ? 'Envoi en cours…' : '📨 Postuler à cette mission'}
+                        </button>
+                        <p className="text-[10px] text-muted-foreground text-center mt-2">
+                          L'établissement examinera votre candidature et vous sera notifié de sa décision.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setModalConfirm(true)}
+                          disabled={acceptationEnCours || !conformiteOk || chevauchement}
+                          className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
+                          title={chevauchement ? 'Mission chevauchante détectée' : !conformiteOk ? 'Résolvez les conflits ci-dessus pour accepter' : undefined}
+                        >
+                          {acceptationEnCours ? 'Acceptation en cours…' : '★ Accepter cette mission'}
+                        </button>
+                        <p className="text-[10px] text-muted-foreground text-center mt-2">
+                          En acceptant, vous vous engagez à être présent(e) aux dates et horaires indiqués.
+                        </p>
+                      </>
+                    )}
                     {!conformiteOk && (
                       <p className="text-[10px] text-destructive text-center mt-2">
                         ⛔ Résolvez les conflits de conformité ci-dessus pour pouvoir accepter.
                       </p>
                     )}
-                    <p className="text-[10px] text-muted-foreground text-center mt-2">
-                      En acceptant, vous vous engagez à être présent(e) aux dates et horaires indiqués.
-                    </p>
                   </>
+                )}
+                {candidatureEnvoyee && estOuverte && (
+                  <div className="bg-success/5 border border-success/20 rounded-xl p-3 text-center">
+                    <p className="text-sm font-semibold text-success">✅ Candidature envoyée — En attente de réponse</p>
+                    <p className="text-xs text-muted-foreground mt-1">L'établissement examinera votre profil et reviendra vers vous.</p>
+                  </div>
                 )}
               </>
             )}
