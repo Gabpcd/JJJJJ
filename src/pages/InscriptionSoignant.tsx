@@ -62,16 +62,17 @@ export default function InscriptionSoignant() {
 
   // RPPS verification state
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
-  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_api?: string; profession_api?: string } | null>(null);
+  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string } | null>(null);
 
   const normaliser = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
 
   const rppsCorrespond = (): boolean | null => {
     if (!rppsResultat || !rppsResultat.trouve) return null;
-    const nomApi = normaliser(rppsResultat.nom_api || '');
+    // nom_affiche is already built from the response — just check against form
+    const nomApi = normaliser(rppsResultat.nom_affiche || '');
     const nomForm = normaliser(form.nom);
     const prenomForm3 = normaliser(form.prenom).slice(0, 3);
-    const partiesApi = (rppsResultat.nom_api || '').split(/[\s-]+/);
+    const partiesApi = (rppsResultat.nom_affiche || '').split(/[\s-]+/);
     const nomMatch = nomApi.includes(nomForm) || nomForm.includes(nomApi);
     const prenomMatch = partiesApi.some(p => normaliser(p).slice(0, 3) === prenomForm3);
     return nomMatch && prenomMatch;
