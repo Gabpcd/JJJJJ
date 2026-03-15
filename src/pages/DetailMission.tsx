@@ -14,6 +14,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { BoutonFavori } from '@/components/BoutonFavori';
+import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
