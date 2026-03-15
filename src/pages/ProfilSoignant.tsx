@@ -34,7 +34,9 @@ export default function ProfilSoignant() {
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     typeContrat: '', rpps: '', adeli: '',
     lat: '', lng: '', rayon: 30,
+    bio: '', anneesExperience: 0,
   });
+  const [specialites, setSpecialites] = useState<string[]>([]);
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
   const [consentementGPS, setConsentementGPS] = useState(true);
   const [gpsToggling, setGpsToggling] = useState(false);
