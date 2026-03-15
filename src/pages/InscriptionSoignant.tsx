@@ -93,7 +93,8 @@ export default function InscriptionSoignant() {
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
   const dateNaissanceRequise = !form.dateNaissance;
   const rppsRequis = form.profession && !PROFESSIONS_SANS_RPPS.includes(form.profession);
-  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && !rppsResultat.trouve;
+  const rppsMatch = rppsCorrespond();
+  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && (!rppsResultat.trouve || rppsMatch === false);
   const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise;
 
   // Verify RPPS when 11 digits entered
