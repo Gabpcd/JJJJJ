@@ -72,6 +72,11 @@ export default function DetailMissionSoignant() {
   const [chevauchement, setChevauchement] = useState(false);
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
 
+  // Candidature mode
+  const [messageCandidature, setMessageCandidature] = useState('');
+  const [candidatureEnvoyee, setCandidatureEnvoyee] = useState(false);
+  const [postulationEnCours, setPostulationEnCours] = useState(false);
+
   useEffect(() => {
     if (!user || !id) return;
     const load = async () => {
