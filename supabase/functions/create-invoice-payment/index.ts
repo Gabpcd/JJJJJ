@@ -2,12 +2,22 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
-const allowedOrigin = Deno.env.get("APP_URL") || "https://app.soindirect.com";
+function getCorsOrigin(req: Request): string {
+  const origin = req.headers.get("origin") || "";
+  const allowed = [
+    "https://app.soindirect.com",
+    "https://soinc-direct.lovable.app",
+    "http://localhost:5173",
+  ];
+  return allowed.includes(origin) ? origin : allowed[0];
+}
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": allowedOrigin,
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+function corsHeaders(req: Request) {
+  return {
+    "Access-Control-Allow-Origin": getCorsOrigin(req),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
