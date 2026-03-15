@@ -56,7 +56,7 @@ export default function MesGains() {
 
       const [{ data: ms }, { data: sg }] = await Promise.all([
         query,
-        supabase.from('soignants').select('prenom, nom, profession').eq('id', user.id).single(),
+        supabase.from('soignants').select('prenom, nom, profession, numero_rpps, siret_liberal, adresse_rue, adresse_code_postal, adresse_ville, assujetti_tva, iban').eq('id', user.id).single(),
       ]);
       const enriched = ms ? await enrichirEtablissements(ms as any) : [];
       setMissions(enriched as any[]);
