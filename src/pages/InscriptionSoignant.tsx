@@ -62,16 +62,17 @@ export default function InscriptionSoignant() {
 
   // RPPS verification state
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
-  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_api?: string; profession_api?: string } | null>(null);
+  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string } | null>(null);
 
   const normaliser = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
 
   const rppsCorrespond = (): boolean | null => {
     if (!rppsResultat || !rppsResultat.trouve) return null;
-    const nomApi = normaliser(rppsResultat.nom_api || '');
+    // nom_affiche is already built from the response — just check against form
+    const nomApi = normaliser(rppsResultat.nom_affiche || '');
     const nomForm = normaliser(form.nom);
     const prenomForm3 = normaliser(form.prenom).slice(0, 3);
-    const partiesApi = (rppsResultat.nom_api || '').split(/[\s-]+/);
+    const partiesApi = (rppsResultat.nom_affiche || '').split(/[\s-]+/);
     const nomMatch = nomApi.includes(nomForm) || nomForm.includes(nomApi);
     const prenomMatch = partiesApi.some(p => normaliser(p).slice(0, 3) === prenomForm3);
     return nomMatch && prenomMatch;
@@ -109,9 +110,21 @@ export default function InscriptionSoignant() {
         const { data, error } = await supabase.functions.invoke('verify-rpps', {
           body: { numero_rpps: form.rpps, prenom: form.prenom, nom: form.nom },
         });
-        if (!error && data) setRppsResultat(data);
-        else setRppsResultat({ trouve: false });
-      } catch {
+        console.log('verify-rpps response:', data, 'error:', error);
+        if (error) {
+          console.error('verify-rpps invoke error:', error);
+          setRppsResultat({ trouve: false });
+        } else if (data) {
+          // Handle both response formats: nom_api (production) and nom (test mode)
+          const nomAffiche = data.nom_api || data.nom || '';
+          const prenomAffiche = data.prenom || '';
+          const label = [prenomAffiche, nomAffiche].filter(Boolean).join(' ') || nomAffiche;
+          setRppsResultat({ trouve: !!data.trouve, nom_affiche: label });
+        } else {
+          setRppsResultat({ trouve: false });
+        }
+      } catch (err) {
+        console.error('verify-rpps unexpected error:', err);
         setRppsResultat(null);
       }
       setRppsVerifiant(false);
@@ -224,7 +237,7 @@ export default function InscriptionSoignant() {
                 {rppsResultat && rppsResultat.trouve && rppsMatch === true && (
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
                     <ShieldCheck className="h-3.5 w-3.5" />
-                    ✅ RPPS Vérifié — {rppsResultat.nom_api}
+                    ✅ RPPS Vérifié — {rppsResultat.nom_affiche}
                   </div>
                 )}
                 {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && (
