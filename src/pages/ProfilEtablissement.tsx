@@ -270,6 +270,7 @@ export default function ProfilEtablissement() {
           <div className="space-y-3">
             {[
               { value: 'STRIPE_RESERVATION', icon: '💳', label: 'Carte bancaire', desc: 'Commission prélevée à chaque mission (autorisée à la réservation, capturée à la fin)' },
+              { value: 'SEPA_DEBIT', icon: '🏦', label: 'Prélèvement SEPA (recommandé)', desc: '', isSEPA: true },
               { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle', desc: 'Paiement à 30 jours par virement ou carte' },
               { value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' },
             ].map(opt => (
@@ -289,13 +290,22 @@ export default function ProfilEtablissement() {
                   onChange={() => setModePaiement(opt.value)}
                   className="mt-1 accent-primary"
                 />
-                <div>
+                <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">{opt.icon} {opt.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                  {opt.isSEPA ? (
+                    <p className="text-xs text-success mt-0.5">✅ Prélèvement automatique — Plus de factures à payer manuellement. Commission prélevée uniquement après chaque mission terminée.</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                  )}
                 </div>
               </label>
             ))}
           </div>
+
+          {/* SEPA IBAN setup section */}
+          {modePaiement === 'SEPA_DEBIT' && (
+            <SepaSetupSection userId={user?.id} />
+          )}
         </div>
 
         {/* Couleur de thème */}
