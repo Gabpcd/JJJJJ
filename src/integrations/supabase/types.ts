@@ -46,6 +46,63 @@ export type Database = {
           },
         ]
       }
+      api_keys: {
+        Row: {
+          actif: boolean | null
+          cle_api: string
+          cle_secret: string
+          cree_le: string | null
+          derniere_utilisation: string | null
+          etablissement_id: string | null
+          expire_le: string | null
+          groupe_sante_id: string | null
+          id: string
+          nom: string
+          permissions: string[] | null
+        }
+        Insert: {
+          actif?: boolean | null
+          cle_api: string
+          cle_secret: string
+          cree_le?: string | null
+          derniere_utilisation?: string | null
+          etablissement_id?: string | null
+          expire_le?: string | null
+          groupe_sante_id?: string | null
+          id?: string
+          nom: string
+          permissions?: string[] | null
+        }
+        Update: {
+          actif?: boolean | null
+          cle_api?: string
+          cle_secret?: string
+          cree_le?: string | null
+          derniere_utilisation?: string | null
+          etablissement_id?: string | null
+          expire_le?: string | null
+          groupe_sante_id?: string | null
+          id?: string
+          nom?: string
+          permissions?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_keys_groupe_sante_id_fkey"
+            columns: ["groupe_sante_id"]
+            isOneToOne: false
+            referencedRelation: "groupes_sante"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bfa_suivi: {
         Row: {
           annee: number
@@ -814,8 +871,11 @@ export type Database = {
       }
       factures: {
         Row: {
+          chorus_pro_date_acceptation: string | null
+          chorus_pro_date_depot: string | null
           chorus_pro_deposee_le: string | null
           chorus_pro_id: string | null
+          chorus_pro_numero_flux: string | null
           chorus_pro_statut: string | null
           cree_le: string | null
           date_echeance: string | null
@@ -843,8 +903,11 @@ export type Database = {
           virement_reference: string | null
         }
         Insert: {
+          chorus_pro_date_acceptation?: string | null
+          chorus_pro_date_depot?: string | null
           chorus_pro_deposee_le?: string | null
           chorus_pro_id?: string | null
+          chorus_pro_numero_flux?: string | null
           chorus_pro_statut?: string | null
           cree_le?: string | null
           date_echeance?: string | null
@@ -872,8 +935,11 @@ export type Database = {
           virement_reference?: string | null
         }
         Update: {
+          chorus_pro_date_acceptation?: string | null
+          chorus_pro_date_depot?: string | null
           chorus_pro_deposee_le?: string | null
           chorus_pro_id?: string | null
+          chorus_pro_numero_flux?: string | null
           chorus_pro_statut?: string | null
           cree_le?: string | null
           date_echeance?: string | null
@@ -985,13 +1051,18 @@ export type Database = {
       groupes_sante: {
         Row: {
           adresse_facturation: string | null
+          couleur_primaire: string | null
+          couleur_secondaire: string | null
           cree_le: string | null
+          domaine_custom: string | null
           email_admin: string | null
           formule_abonnement: string | null
           groupe_parent_id: string | null
           id: string
+          logo_url: string | null
           modifie_le: string | null
           nom: string
+          nom_marque: string | null
           raison_sociale_facturation: string | null
           remise_groupe_pourcent: number | null
           rist_plafond_personnalise: boolean | null
@@ -1002,13 +1073,18 @@ export type Database = {
         }
         Insert: {
           adresse_facturation?: string | null
+          couleur_primaire?: string | null
+          couleur_secondaire?: string | null
           cree_le?: string | null
+          domaine_custom?: string | null
           email_admin?: string | null
           formule_abonnement?: string | null
           groupe_parent_id?: string | null
           id?: string
+          logo_url?: string | null
           modifie_le?: string | null
           nom: string
+          nom_marque?: string | null
           raison_sociale_facturation?: string | null
           remise_groupe_pourcent?: number | null
           rist_plafond_personnalise?: boolean | null
@@ -1019,13 +1095,18 @@ export type Database = {
         }
         Update: {
           adresse_facturation?: string | null
+          couleur_primaire?: string | null
+          couleur_secondaire?: string | null
           cree_le?: string | null
+          domaine_custom?: string | null
           email_admin?: string | null
           formule_abonnement?: string | null
           groupe_parent_id?: string | null
           id?: string
+          logo_url?: string | null
           modifie_le?: string | null
           nom?: string
+          nom_marque?: string | null
           raison_sociale_facturation?: string | null
           remise_groupe_pourcent?: number | null
           rist_plafond_personnalise?: boolean | null
