@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CartePointage } from '@/components/CartePointage';
+import { SaisieCodePointage } from '@/components/SaisieCodePointage';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { PanneauContestation } from '@/components/PanneauContestation';
 import { EtatVide } from '@/components/EtatVide';
@@ -97,7 +98,8 @@ export default function PresencesSoignant() {
         id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id,
         presences(id, pointage_arrivee_le, pointage_depart_le,
           perimetre_gps_valide, alerte_teleportation, distance_etablissement_m,
-          arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le)
+          arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le,
+          methode_pointage_arrivee, methode_pointage_depart)
       `)
       .eq('soignant_assigne_id', user.id)
       .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
@@ -355,6 +357,7 @@ export default function PresencesSoignant() {
                 presence={presence}
                 onPointerArrivee={() => pointerArrivee(m.id)}
                 onPointerDepart={() => presence ? pointerDepart(presence.id, m.id) : Promise.resolve()}
+                onRecharger={charger}
               />
             );
           })}

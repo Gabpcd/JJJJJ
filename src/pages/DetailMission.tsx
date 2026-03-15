@@ -7,6 +7,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
+import { CodesPointageMission } from '@/components/CodesPointageMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -244,7 +245,10 @@ export default function DetailMission() {
             <div className="space-y-4">
               <DecompositionFinanciere mission={m} />
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
-                <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={m.etablissements?.nom || 'Établissement'} />
+                <>
+                  <CodesPointageMission missionId={m.id} />
+                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={m.etablissements?.nom || 'Établissement'} />
+                </>
               )}
             </div>
           </div>

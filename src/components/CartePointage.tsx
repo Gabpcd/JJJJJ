@@ -3,17 +3,21 @@ import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Clock } from 'lucide-react';
 import { BoutonPointage } from './BoutonPointage';
+import { SaisieCodePointage } from './SaisieCodePointage';
 import { ResultatPointage } from './ResultatPointage';
 import { BadgeCertification } from './BadgeCertification';
+import { supabase } from '@/integrations/supabase/client';
+import { extraireMessageErreur } from '@/lib/erreurs';
 
 interface CartePointageProps {
   mission: any;
   presence: any | null;
   onPointerArrivee: () => Promise<void>;
   onPointerDepart: () => Promise<void>;
+  onRecharger?: () => void;
 }
 
-export function CartePointage({ mission, presence, onPointerArrivee, onPointerDepart }: CartePointageProps) {
+export function CartePointage({ mission, presence, onPointerArrivee, onPointerDepart, onRecharger }: CartePointageProps) {
   const maintenant = new Date();
   const debut = new Date(mission.debut_le);
   const fin = new Date(mission.fin_le);
@@ -89,7 +93,22 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
 
       {/* État 2: Prêt */}
       {etat === 'pret' && (
-        <BoutonPointage type="arrivee" onPointage={onPointerArrivee} />
+        <div className="space-y-2">
+          <BoutonPointage type="arrivee" onPointage={onPointerArrivee} />
+          <SaisieCodePointage
+            type="arrivee"
+            onValider={async (code) => {
+              const { data, error } = await supabase.rpc('fn_pointer_arrivee_code' as any, {
+                p_mission_id: mission.id,
+                p_code: code,
+              });
+              if (error) return { success: false, message: extraireMessageErreur(error) };
+              if (data?.success === false) return { success: false, message: data.error };
+              onRecharger?.();
+              return { success: true, message: 'Arrivée pointée par code ✅' };
+            }}
+          />
+        </div>
       )}
 
       {/* État 3: En mission */}
@@ -103,7 +122,23 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
             precisionM={presence.arrivee_precision_gps_m}
             alerteTeleportation={presence.alerte_teleportation}
           />
+          {presence.methode_pointage_arrivee === 'CODE' && (
+            <p className="text-xs text-primary font-medium text-center">🔑 Pointé par code</p>
+          )}
           <BoutonPointage type="depart" onPointage={onPointerDepart} />
+          <SaisieCodePointage
+            type="depart"
+            onValider={async (code) => {
+              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
+                p_presence_id: presence.id,
+                p_code: code,
+              });
+              if (error) return { success: false, message: extraireMessageErreur(error) };
+              if (data?.success === false) return { success: false, message: data.error };
+              onRecharger?.();
+              return { success: true, message: 'Départ pointé par code ✅' };
+            }}
+          />
         </div>
       )}
 

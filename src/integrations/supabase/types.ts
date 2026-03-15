@@ -1858,6 +1858,7 @@ export type Database = {
           date_passage_liberal: string | null
           derniere_activite_le: string | null
           diplome_verifie: boolean | null
+          disponible_urgence: boolean | null
           eligible_conversion_3200h: boolean | null
           email: string
           heures_cumulees: number | null
@@ -1893,10 +1894,13 @@ export type Database = {
           total_absences: number | null
           total_missions_annulees: number | null
           total_missions_terminees: number | null
+          total_missions_urgence: number | null
           total_retards_pointage: number | null
           tous_documents_valides: boolean | null
           type_contrat: Database["public"]["Enums"]["type_contrat"] | null
           types_contrat_acceptes: string | null
+          urgence_creneaux: Json | null
+          urgence_rayon_km: number | null
         }
         Insert: {
           adresse_code_postal?: string | null
@@ -1920,6 +1924,7 @@ export type Database = {
           date_passage_liberal?: string | null
           derniere_activite_le?: string | null
           diplome_verifie?: boolean | null
+          disponible_urgence?: boolean | null
           eligible_conversion_3200h?: boolean | null
           email: string
           heures_cumulees?: number | null
@@ -1955,10 +1960,13 @@ export type Database = {
           total_absences?: number | null
           total_missions_annulees?: number | null
           total_missions_terminees?: number | null
+          total_missions_urgence?: number | null
           total_retards_pointage?: number | null
           tous_documents_valides?: boolean | null
           type_contrat?: Database["public"]["Enums"]["type_contrat"] | null
           types_contrat_acceptes?: string | null
+          urgence_creneaux?: Json | null
+          urgence_rayon_km?: number | null
         }
         Update: {
           adresse_code_postal?: string | null
@@ -1982,6 +1990,7 @@ export type Database = {
           date_passage_liberal?: string | null
           derniere_activite_le?: string | null
           diplome_verifie?: boolean | null
+          disponible_urgence?: boolean | null
           eligible_conversion_3200h?: boolean | null
           email?: string
           heures_cumulees?: number | null
@@ -2017,10 +2026,13 @@ export type Database = {
           total_absences?: number | null
           total_missions_annulees?: number | null
           total_missions_terminees?: number | null
+          total_missions_urgence?: number | null
           total_retards_pointage?: number | null
           tous_documents_valides?: boolean | null
           type_contrat?: Database["public"]["Enums"]["type_contrat"] | null
           types_contrat_acceptes?: string | null
+          urgence_creneaux?: Json | null
+          urgence_rayon_km?: number | null
         }
         Relationships: []
       }
@@ -2868,6 +2880,10 @@ export type Database = {
             }
             Returns: Json
           }
+      fn_pointer_arrivee_code: {
+        Args: { p_code: string; p_mission_id: string }
+        Returns: Json
+      }
       fn_pointer_depart:
         | {
             Args: {
@@ -2892,6 +2908,10 @@ export type Database = {
             }
             Returns: Json
           }
+      fn_pointer_depart_code: {
+        Args: { p_code: string; p_presence_id: string }
+        Returns: Json
+      }
       fn_purger_audit_ancien: { Args: never; Returns: number }
       fn_purger_demo: { Args: never; Returns: Json }
       fn_purger_gps_ancien: { Args: never; Returns: number }
@@ -2954,11 +2974,27 @@ export type Database = {
         Args: { p_soignant_id: string }
         Returns: Json
       }
+      fn_soignants_urgence: {
+        Args: { p_mission_id: string }
+        Returns: {
+          distance_km: number
+          nom: string
+          prenom: string
+          profession: Database["public"]["Enums"]["type_profession"]
+          score_fiabilite: number
+          soignant_id: string
+          total_missions_urgence: number
+        }[]
+      }
       fn_souscrire_prevoyance: {
         Args: { p_numero_contrat?: string; p_plan_id: string }
         Returns: Json
       }
       fn_supprimer_mon_compte: { Args: never; Returns: Json }
+      fn_toggle_pool_urgence: {
+        Args: { p_actif: boolean; p_creneaux?: Json; p_rayon_km?: number }
+        Returns: Json
+      }
       fn_upsert_token_push: {
         Args: { p_plateforme: string; p_token: string }
         Returns: undefined

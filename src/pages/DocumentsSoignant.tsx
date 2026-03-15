@@ -205,13 +205,31 @@ export default function DocumentsSoignant() {
 
     if (error) { toast.error(extraireMessageErreur(error)); return; }
 
+    const docId = (data as any).id;
+
     const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
       p_acteur_id: user.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_TELEVERSEMENT',
-      p_type_ressource: 'document', p_id_ressource: (data as any).id, p_cle_s3: chemin,
+      p_type_ressource: 'document', p_id_ressource: docId, p_cle_s3: chemin,
       p_details: { type_document: televersementType, nom_fichier: fichier.name, taille: fichier.size },
       p_ip: null, p_navigateur: navigator.userAgent,
     });
     if (auditError) handleErrorSilent(auditError, 'Audit téléversement document');
+
+    // Trigger OCR verification
+    supabase.functions.invoke('verify-document', {
+      body: { document_id: docId },
+    }).then(({ data: verifyData }) => {
+      if (verifyData?.verdict === 'VERIFIE') {
+        toast.success('✅ Document vérifié automatiquement !');
+      } else if (verifyData?.verdict === 'REJETE') {
+        toast.error(`❌ Document rejeté : ${verifyData?.analysis?.motif_rejet || 'Non conforme'}`);
+      } else {
+        toast.info('🔄 Document en cours de vérification...');
+      }
+      charger();
+    }).catch(() => {
+      // Verification failed silently, manual review will happen
+    });
 
     toast.success('Document téléversé avec succès !');
     setTeleversementType(null);
