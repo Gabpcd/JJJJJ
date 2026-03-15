@@ -10,7 +10,7 @@ import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
 import { BadgePalier } from '@/components/BadgePalier';
-import { FactureChorus } from '@/components/FactureChorus';
+import { FactureChorus, ChorusStatutBadge } from '@/components/FactureChorus';
 import { PaiementVirement } from '@/components/PaiementVirement';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
