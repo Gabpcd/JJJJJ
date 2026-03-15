@@ -71,8 +71,8 @@ export default function FacturationEtablissement() {
   const charger = async () => {
     if (!user) return;
 
-    const [resEtab, resFact, resMNF] = await Promise.all([
-      supabase.from('etablissements').select('id, nom, type, taux_commission_negocie, palier_commission_id, groupe_sante_id, paliers_commission(nom)').eq('id', user.id).single(),
+    const [resEtab, resFact, resMNF, resPrelev] = await Promise.all([
+      supabase.from('etablissements').select('id, nom, type, taux_commission_negocie, palier_commission_id, groupe_sante_id, paliers_commission(nom), mode_paiement_commission').eq('id', user.id).single(),
       supabase.from('factures').select('id, numero_facture, statut, montant_ht, montant_tva, montant_ttc, taux_tva, nombre_missions, date_emission, date_echeance, date_paiement, est_secteur_public, mode_paiement, stripe_hosted_url, chorus_pro_statut, cree_le').eq('etablissement_id', user.id).order('cree_le', { ascending: false }),
       supabase.from('missions')
         .select('id, intitule, debut_le, fin_le, montant_commission_ht, montant_commission_ttc, statut')
@@ -80,6 +80,11 @@ export default function FacturationEtablissement() {
         .eq('statut', 'TERMINEE')
         .eq('commission_facturee', false)
         .order('fin_le', { ascending: false }),
+      supabase.from('paiements_mission')
+        .select('id, mission_id, montant_ttc, statut, capture_le, missions(intitule)')
+        .eq('etablissement_id', user.id)
+        .order('capture_le', { ascending: false })
+        .limit(20),
     ]);
 
     if (resEtab.data) setEtab(resEtab.data);
