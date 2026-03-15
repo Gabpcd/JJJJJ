@@ -3,12 +3,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
-  const allowed = [
-    "https://app.soindirect.com",
-    "https://soinc-direct.lovable.app",
-    "http://localhost:5173",
-  ];
-  return allowed.includes(origin) ? origin : allowed[0];
+  if (
+    origin === "https://app.soindirect.com" ||
+    origin === "http://localhost:5173" ||
+    origin.endsWith(".lovable.app")
+  ) {
+    return origin;
+  }
+  return "https://app.soindirect.com";
 }
 
 function corsHeaders(req: Request) {
