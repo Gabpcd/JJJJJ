@@ -4,7 +4,7 @@ import { ENTREPRISE } from '@/constantes/entreprise';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw } from 'lucide-react';
+import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, Building2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
