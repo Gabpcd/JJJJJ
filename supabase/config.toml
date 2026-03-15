@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.setup-sepa]
 verify_jwt = false
+
+[functions.chorus-pro-deposit]
+verify_jwt = false

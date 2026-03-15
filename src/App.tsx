@@ -70,6 +70,7 @@ const DashboardRH = lazy(() => import("./pages/DashboardRH"));
 const MonGroupe = lazy(() => import("./pages/MonGroupe"));
 const ExclusionsEtablissement = lazy(() => import("./pages/ExclusionsEtablissement"));
 const PremiumEtablissement = lazy(() => import("./pages/PremiumEtablissement"));
+const ChorusConfig = lazy(() => import("./pages/ChorusConfig"));
 
 /* ─── Shared protected ─── */
 const ContratMission = lazy(() => import("./pages/ContratMission"));
