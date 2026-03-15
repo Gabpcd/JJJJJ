@@ -1,0 +1,1 @@
+DELETE FROM public.soignants WHERE id = '060159ac-e8b3-4d7b-9c0f-9019a19d0edc';
