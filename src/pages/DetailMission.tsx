@@ -15,6 +15,7 @@ import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { BoutonFavori } from '@/components/BoutonFavori';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
+import { ListeCandidatures } from '@/components/ListeCandidatures';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -72,6 +73,7 @@ export default function DetailMission() {
           montant_majoration_dimanche, montant_majoration_ferie,
           heures_nuit, heures_dimanche, heures_ferie,
           statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
+          mode_attribution,
           cree_le, modifie_le,
           etablissements(nom, adresse_ville, adresse_departement,
             taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
@@ -160,6 +162,9 @@ export default function DetailMission() {
       <Tabs defaultValue="details">
         <TabsList className="mb-4">
           <TabsTrigger value="details">Détails</TabsTrigger>
+          {m.statut === 'OUVERTE' && m.mode_attribution === 'CANDIDATURE' && (
+            <TabsTrigger value="candidatures">Candidatures</TabsTrigger>
+          )}
           {m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
         </TabsList>
 
@@ -264,6 +269,21 @@ export default function DetailMission() {
             </div>
           </div>
         </TabsContent>
+
+        {/* Candidatures tab */}
+        {m.statut === 'OUVERTE' && m.mode_attribution === 'CANDIDATURE' && (
+          <TabsContent value="candidatures">
+            <div className="card-base">
+              <h2 className="font-semibold text-foreground mb-4">📋 Candidatures reçues</h2>
+              <ListeCandidatures
+                missionId={m.id}
+                onAccepted={() => window.location.reload()}
+                onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
+                onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
+              />
+            </div>
+          </TabsContent>
+        )}
 
         {m.statut === 'OUVERTE' && (
           <TabsContent value="recommandations">

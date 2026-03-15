@@ -11,6 +11,7 @@ import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle } from 'lucide-react';
+import { SectionBio } from '@/components/SectionBio';
 import { EncartInvitation } from '@/components/EncartInvitation';
 import { BadgesGamification, BadgeStats } from '@/components/BadgesGamification';
 import { AvatarUpload } from '@/components/AvatarUpload';
@@ -33,7 +34,9 @@ export default function ProfilSoignant() {
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     typeContrat: '', rpps: '', adeli: '',
     lat: '', lng: '', rayon: 30,
+    bio: '', anneesExperience: 0,
   });
+  const [specialites, setSpecialites] = useState<string[]>([]);
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
   const [consentementGPS, setConsentementGPS] = useState(true);
   const [gpsToggling, setGpsToggling] = useState(false);
@@ -56,7 +59,7 @@ export default function ProfilSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, pool_urgence_actif, pool_urgence_rayon_km').eq('id', user.id).single().then(({ data }: any) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, pool_urgence_actif, pool_urgence_rayon_km, bio, annees_experience, specialites').eq('id', user.id).single().then(({ data }: any) => {
       if (data) {
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
@@ -76,7 +79,9 @@ export default function ProfilSoignant() {
           adeli: data.numero_adeli || '',
           lat: data.adresse_lat?.toString() || '', lng: data.adresse_lng?.toString() || '',
           rayon: data.rayon_deplacement_km ?? 30,
+          bio: data.bio || '', anneesExperience: data.annees_experience || 0,
         });
+        setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
         setTypesContrat(getTypesContratSoignant(data as any));
         setConsentementGPS((data as any).consentement_gps !== false);
         setPoolUrgenceActif(data.pool_urgence_actif || false);
@@ -139,6 +144,9 @@ export default function ProfilSoignant() {
       p_numero_rpps: form.rpps || null, p_numero_adeli: form.adeli || null,
       p_adresse_lat: form.lat ? parseFloat(form.lat) : null,
       p_adresse_lng: form.lng ? parseFloat(form.lng) : null,
+      p_bio: form.bio || null,
+      p_annees_experience: form.anneesExperience || null,
+      p_specialites: JSON.stringify(specialites),
     });
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
@@ -262,6 +270,16 @@ export default function ProfilSoignant() {
       )}
 
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
+        {/* Bio / Présentation */}
+        <SectionBio
+          bio={form.bio}
+          onBioChange={(val) => maj('bio', val)}
+          anneesExperience={form.anneesExperience}
+          onAnneesChange={(val) => maj('anneesExperience', val)}
+          specialites={specialites}
+          onSpecialitesChange={setSpecialites}
+        />
+
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Identité</h2>
           <div className="space-y-3">
