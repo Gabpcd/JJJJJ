@@ -44,7 +44,7 @@ export default function MesGains() {
           taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
           heures_nuit, heures_dimanche, heures_ferie,
           montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
-          montant_ifm, montant_icp, total_brut, net_a_payer,
+          montant_ifm, montant_icp, total_brut, net_a_payer, net_estime,
           type_paiement_soignant,
           statut, cree_le, etablissement_id`)
         .eq('soignant_assigne_id', user.id)
@@ -77,7 +77,7 @@ export default function MesGains() {
   }, [user, filtre]);
 
   const stats = useMemo(() => {
-    const totalNet = missions.reduce((s, m) => s + (m.net_a_payer || 0), 0);
+    const totalNet = missions.reduce((s, m) => s + (m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0)), 0);
     const totalIFM = missions.reduce((s, m) => s + (m.montant_ifm || 0), 0);
     const totalICP = missions.reduce((s, m) => s + (m.montant_icp || 0), 0);
     const totalHeures = missions.reduce((s, m) => s + (m.duree_heures || 0), 0);
@@ -92,13 +92,14 @@ export default function MesGains() {
     texte += `────────────────────────────\n`;
     texte += `Missions terminées : ${stats.nbMissions}\n`;
     texte += `Heures travaillées : ${stats.totalHeures}h\n`;
-    texte += `Net total : ${stats.totalNet.toFixed(2)} €\n`;
+    texte += `Net estimé total : ${stats.totalNet.toFixed(2)} €\n`;
     texte += `────────────────────────────\n`;
     texte += `Détail :\n`;
     for (const m of missions) {
-      texte += `• ${new Date(m.debut_le).toLocaleDateString('fr-FR')} — ${m.intitule} — ${m.duree_heures}h — ${m.net_a_payer?.toFixed(2)} €\n`;
+      const netM = m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
+      texte += `• ${new Date(m.debut_le).toLocaleDateString('fr-FR')} — ${m.intitule} — ${m.duree_heures}h — ${netM.toFixed(2)} €\n`;
     }
-    texte += `\n⚠️ Simulation à titre indicatif.\n`;
+    texte += `\n⚠️ Estimation après cotisations salariales (~22%). Les montants exacts dépendent de votre situation personnelle.\n`;
     texte += `Généré par Soin Direct le ${new Date().toLocaleDateString('fr-FR')}`;
     await navigator.clipboard.writeText(texte);
     // L6: Audit clipboard copy
@@ -125,7 +126,7 @@ export default function MesGains() {
 
       {/* KPI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-        <CarteKPI icone={Banknote} valeur={fmt(stats.totalNet)} label="Net total gagné" couleurIcone="text-primary" couleurFond="bg-primary/10" />
+        <CarteKPI icone={Banknote} valeur={fmt(stats.totalNet)} label="Net estimé* total" couleurIcone="text-primary" couleurFond="bg-primary/10" />
         <CarteKPI icone={Gift} valeur={fmt(stats.totalIFM)} label="Dont IFM" couleurIcone="text-emerald-600" couleurFond="bg-emerald-100" />
         <CarteKPI icone={Palmtree} valeur={fmt(stats.totalICP)} label="Dont ICP" couleurIcone="text-info" couleurFond="bg-info/10" />
         <CarteKPI icone={Clock} valeur={`${Math.round(stats.totalHeures)}h`} label={`sur ${stats.nbMissions} missions`} couleurIcone="text-purple-600" couleurFond="bg-purple-100" />
@@ -164,7 +165,7 @@ export default function MesGains() {
               const estLiberal = m.type_paiement_soignant === 'NOTE_HONORAIRES';
               const iconeType = estLiberal ? '🧾' : '📋';
               const labelType = estLiberal ? 'Note d\'honoraires' : 'Bulletin de paie';
-              const montantAffiche = estLiberal ? m.total_brut : m.net_a_payer;
+              const montantAffiche = estLiberal ? m.total_brut : (m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0));
               return (
                 <AccordionItem key={m.id} value={m.id} className="card-base !p-0 overflow-hidden border">
                   <AccordionTrigger className="px-4 py-3 hover:no-underline">
@@ -177,7 +178,7 @@ export default function MesGains() {
                           {iconeType} {labelType}
                         </span>
                         {' '}{m.duree_heures}h · {m.taux_horaire_base} €/h
-                        <span className="float-right font-bold text-primary">{estLiberal ? 'HT' : 'Net'} : {fmt(montantAffiche || 0)}</span>
+                        <span className="float-right font-bold text-primary">{estLiberal ? 'HT' : 'Net estimé*'} : {fmt(montantAffiche || 0)}</span>
                       </p>
                     </div>
                   </AccordionTrigger>

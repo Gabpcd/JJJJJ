@@ -103,7 +103,7 @@ export default function DashboardSoignant() {
         supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
         supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
         supabase.from('missions').select('id, intitule, fin_le, presences(id, pointage_arrivee_le, pointage_depart_le)').eq('soignant_assigne_id', user.id).eq('statut', 'EN_COURS').lt('fin_le', new Date(Date.now() - 30 * 60000).toISOString()),
-        supabase.from('missions').select('net_a_payer').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', debutMois.toISOString()).lte('debut_le', finMois.toISOString()),
+        supabase.from('missions').select('net_a_payer, net_estime').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', debutMois.toISOString()).lte('debut_le', finMois.toISOString()),
         // 6-month gains
         supabase.from('missions').select('debut_le, net_a_payer').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', sixMoisAgo.toISOString()).order('debut_le', { ascending: true }),
         // Week calendar missions
@@ -147,7 +147,7 @@ export default function DashboardSoignant() {
         setMissionsOubliDepart(oublis);
       }
       if (gainsMois) {
-        const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_a_payer || 0), 0);
+        const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0)), 0);
         setGainsCeMois({ net, nb: (gainsMois as any[]).length });
       }
       if (gains6m) setGains6Mois(gains6m as any);
@@ -437,7 +437,7 @@ export default function DashboardSoignant() {
           <div className="flex items-center gap-3">
             <div className="rounded-xl p-2.5 bg-primary/10"><Banknote className="h-5 w-5 text-primary" /></div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">💰 Ce mois : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.net)} net sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}</p>
+              <p className="text-sm font-semibold text-foreground">💰 Ce mois : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(gainsCeMois.net)} net estimé* sur {gainsCeMois.nb} mission{gainsCeMois.nb > 1 ? 's' : ''}</p>
               <p className="text-xs text-primary mt-0.5">Voir le détail →</p>
             </div>
           </div>

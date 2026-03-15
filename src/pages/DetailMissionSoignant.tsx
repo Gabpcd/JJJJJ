@@ -82,7 +82,7 @@ export default function DetailMissionSoignant() {
           heures_nuit, heures_dimanche, heures_ferie,
           montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie,
           taux_ifm, taux_icp, montant_ifm, montant_icp,
-          total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
+          total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_paiement_soignant, numero_note_honoraires,
           yousign_statut
@@ -137,9 +137,10 @@ export default function DetailMissionSoignant() {
   );
   const completionProfil = calculerCompletionProfil(soignant);
   const premiereMissionLe = (soignant as any).premiere_mission_le;
-  const enPeriodeGrace = premiereMissionLe && !soignant.tous_documents_valides &&
-    new Date(premiereMissionLe).getTime() + 7 * 24 * 60 * 60 * 1000 > Date.now();
-  const peutPostuler = completionProfil >= 100 && (soignant.tous_documents_valides || enPeriodeGrace);
+  const enPeriodeGrace = !premiereMissionLe || 
+    (new Date(premiereMissionLe).getTime() + 7 * 24 * 60 * 60 * 1000 > Date.now());
+  const docsOk = soignant.tous_documents_valides || enPeriodeGrace;
+  const peutPostuler = completionProfil >= 100 && docsOk;
   const estAssigne = mission.soignant_assigne_id === user!.id;
   const estOuverte = mission.statut === 'OUVERTE';
   const estTerminee = mission.statut === 'TERMINEE';
@@ -405,7 +406,7 @@ export default function DetailMissionSoignant() {
           <div className="card-base">
             {estOuverte && (
               <>
-                <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} />
+                <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} premiereMissionLe={premiereMissionLe} />
                 {chevauchement && (
                   <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-3 text-center">
                     <p className="text-sm font-semibold text-warning">⚠️ Vous avez déjà une mission sur ce créneau</p>
