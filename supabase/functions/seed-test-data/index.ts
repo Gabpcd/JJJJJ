@@ -28,7 +28,6 @@ Deno.serve(async (req) => {
         service: 'Chirurgie',
         debut_le: '2026-03-01T07:00:00+01:00',
         fin_le: '2026-03-01T19:00:00+01:00',
-        duree_heures: 12,
         taux_horaire_base: 24.05,
         total_brut: 288.60,
         net_a_payer: 270.13,
