@@ -21,7 +21,7 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2">
             <HeartPulse className="h-7 w-7 text-primary" />
-            <span className="text-xl font-bold text-foreground">Soin Direct</span>
+            <span className="text-xl font-bold text-foreground">Jolene</span>
           </a>
           <div className="flex items-center gap-4">
             <a href="/blog" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Blog</a>
