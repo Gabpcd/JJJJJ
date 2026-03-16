@@ -59,14 +59,14 @@ export default function AdminDashboard() {
 
         {/* KPI Grid 4x2 */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <CarteKPI icone={Users} valeur={kpi?.soignants_total ?? '—'} label="Soignants inscrits" sousLabel={`+${kpi?.soignants_semaine ?? 0} cette semaine`} couleurIcone="text-primary" couleurFond="bg-primary/10" />
-          <CarteKPI icone={Building2} valeur={kpi?.etablissements_total ?? '—'} label="Établissements" sousLabel={`+${kpi?.etablissements_semaine ?? 0} cette semaine`} couleurIcone="text-info" couleurFond="bg-info/10" />
-          <CarteKPI icone={CheckCircle} valeur={kpi?.missions_terminees_total ?? '—'} label="Missions terminées" sousLabel={`${kpi?.missions_terminees_mois ?? 0} ce mois`} couleurIcone="text-success" couleurFond="bg-success/10" />
-          <CarteKPI icone={Clock} valeur={kpi?.missions_ouvertes ?? '—'} label="Missions ouvertes" couleurIcone="text-warning" couleurFond="bg-warning/10" />
-          <CarteKPI icone={Banknote} valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)} label="CA commissions (contrats signés)" sousLabel={`Potentiel : ${formatEur(kpi?.ca_potentiel_mois ?? 0)} ce mois`} couleurIcone="text-success" couleurFond="bg-success/10" />
-          <CarteKPI icone={TrendingUp} valeur={formatEur(kpi?.ca_encaisse_total ?? 0)} label="CA encaissé (factures payées)" sousLabel={`Total potentiel : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`} couleurIcone="text-primary" couleurFond="bg-primary/10" />
+          <CarteKPI icone={Users} valeur={kpi?.soignants_total ?? '—'} label="Soignants inscrits" sousLabel={`+${kpi?.soignants_semaine ?? 0} cette semaine`} couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/admin/utilisateurs" />
+          <CarteKPI icone={Building2} valeur={kpi?.etablissements_total ?? '—'} label="Établissements" sousLabel={`+${kpi?.etablissements_semaine ?? 0} cette semaine`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/admin/utilisateurs" />
+          <CarteKPI icone={CheckCircle} valeur={kpi?.missions_terminees_total ?? '—'} label="Missions terminées" sousLabel={`${kpi?.missions_terminees_mois ?? 0} ce mois`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/admin/moderation" />
+          <CarteKPI icone={Clock} valeur={kpi?.missions_ouvertes ?? '—'} label="Missions ouvertes" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/admin/moderation" />
+          <CarteKPI icone={Banknote} valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)} label="CA commissions (contrats signés)" sousLabel={`Potentiel : ${formatEur(kpi?.ca_potentiel_mois ?? 0)} ce mois`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/admin/facturation" />
+          <CarteKPI icone={TrendingUp} valeur={formatEur(kpi?.ca_encaisse_total ?? 0)} label="CA encaissé (factures payées)" sousLabel={`Total potentiel : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`} couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/admin/facturation" />
           <CarteKPI icone={Target} valeur={`${kpi?.taux_acceptation_mois ?? 0}%`} label="Taux acceptation ce mois" couleurIcone="text-info" couleurFond="bg-info/10" />
-          <CarteKPI icone={Star} valeur={`${kpi?.score_fiabilite_moyen ?? 0}/100`} label="Score fiabilité moyen" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+          <CarteKPI icone={Star} valeur={`${kpi?.score_fiabilite_moyen ?? 0}/100`} label="Score fiabilité moyen" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/admin/conformite" />
         </div>
 
         {/* Charts */}
