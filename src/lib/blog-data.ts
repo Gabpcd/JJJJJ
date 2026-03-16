@@ -28,7 +28,7 @@ C'est la condition sine qua non. Pour exercer en libéral, vous devez justifier 
 
 **Comment les comptabiliser ?** Chaque heure travaillée compte, y compris les heures de nuit, les week-ends et les jours fériés. Les heures de formation continue ne sont en revanche pas incluses. Demandez des attestations d'heures à chaque employeur — elles seront indispensables pour votre dossier CPAM.
 
-Avec Soin Direct, votre compteur d'heures est mis à jour automatiquement après chaque mission. Vous pouvez également déclarer vos heures effectuées en dehors de la plateforme en fournissant les justificatifs.
+Avec Jolene, votre compteur d'heures est mis à jour automatiquement après chaque mission. Vous pouvez également déclarer vos heures effectuées en dehors de la plateforme en fournissant les justificatifs.
 
 ## Étape 2 : S'inscrire à l'Ordre National des Infirmiers
 
