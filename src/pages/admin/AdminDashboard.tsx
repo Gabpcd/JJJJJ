@@ -176,7 +176,7 @@ export default function AdminDashboard() {
           <CarteKPI icone={Banknote} valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)} label="CA commissions (contrats signés)" sousLabel={`Potentiel : ${formatEur(kpi?.ca_potentiel_mois ?? 0)} ce mois`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/admin/facturation" />
           <CarteKPI icone={TrendingUp} valeur={formatEur(kpi?.ca_encaisse_total ?? 0)} label="CA encaissé (factures payées)" sousLabel={`Total potentiel : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`} couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/admin/facturation" />
           <CarteKPI icone={Target} valeur={`${kpi?.taux_acceptation_mois ?? 0}%`} label="Taux acceptation ce mois" couleurIcone="text-info" couleurFond="bg-info/10" />
-          <CarteKPI icone={Star} valeur={`${kpi?.score_fiabilite_moyen ?? 0}/100`} label="Score fiabilité moyen" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/admin/conformite" />
+          <CarteKPI icone={Star} valeur={kpi?.score_fiabilite_moyen ? `${kpi.score_fiabilite_moyen}/100` : 'Pas encore d\'évaluation'} label="Score fiabilité moyen" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/admin/conformite" />
         </div>
 
         {/* Charts */}
