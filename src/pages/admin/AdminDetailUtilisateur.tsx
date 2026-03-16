@@ -347,14 +347,112 @@ export default function AdminDetailUtilisateur() {
 
         {/* ── 5. Profil complet ── */}
         <TabsContent value="profil">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Données brutes</CardTitle></CardHeader>
-            <CardContent>
-              <pre className="bg-muted rounded-lg p-4 text-xs overflow-auto max-h-[500px] text-foreground">
-                {JSON.stringify(entity, null, 2)}
-              </pre>
-            </CardContent>
-          </Card>
+          {type === 'soignant' && soignant ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Identité</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <ProfileRow label="Prénom" value={soignant.prenom} />
+                  <ProfileRow label="Nom" value={soignant.nom} />
+                  <ProfileRow label="Email" value={soignant.email} />
+                  <ProfileRow label="Téléphone" value={soignant.telephone || '—'} />
+                  <ProfileRow label="Date de naissance" value={soignant.date_naissance ? new Date(soignant.date_naissance).toLocaleDateString('fr-FR') : '—'} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Professionnel</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <ProfileRow label="Profession" value={soignant.profession} />
+                  <ProfileRow label="Type de contrat" value={soignant.type_contrat || '—'} />
+                  <ProfileRow label="RPPS" value={soignant.numero_rpps || '—'} />
+                  <ProfileRow label="ADELI" value={soignant.numero_adeli || '—'} />
+                  <ProfileRow label="Rayon déplacement" value={`${soignant.rayon_deplacement_km || 30} km`} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Vérifications & Conformité</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <VerifRow label="Identité vérifiée" ok={soignant.identite_verifiee} />
+                  <VerifRow label="Diplôme vérifié" ok={soignant.diplome_verifie} />
+                  <VerifRow label="RPPS vérifié" ok={soignant.rpps_verifie} />
+                  <VerifRow label="Tous documents valides" ok={soignant.tous_documents_valides} />
+                  <ProfileRow label="Statut vérification ARIA" value={soignant.statut_verification_aria || '—'} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Statistiques</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <ProfileRow label="Score fiabilité" value={`${soignant.score_fiabilite ?? 0}/100`} />
+                  <ProfileRow label="Missions terminées" value={soignant.total_missions_terminees ?? 0} />
+                  <ProfileRow label="Missions annulées" value={soignant.total_missions_annulees ?? 0} />
+                  <ProfileRow label="Heures cumulées" value={`${soignant.heures_cumulees ?? 0}h`} />
+                  <ProfileRow label="Retards pointage" value={soignant.total_retards_pointage ?? 0} />
+                  <ProfileRow label="Absences" value={soignant.total_absences ?? 0} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Prévoyance & Libéral</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <VerifRow label="Prévoyance inscrit" ok={soignant.prevoyance_inscrit} />
+                  <ProfileRow label="Fournisseur prévoyance" value={soignant.prevoyance_fournisseur || '—'} />
+                  <VerifRow label="Éligible 3200h" ok={soignant.eligible_conversion_3200h} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Localisation & Dates</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <ProfileRow label="Latitude" value={soignant.adresse_lat ?? '—'} />
+                  <ProfileRow label="Longitude" value={soignant.adresse_lng ?? '—'} />
+                  <ProfileRow label="Inscrit le" value={new Date(soignant.cree_le).toLocaleDateString('fr-FR')} />
+                  <ProfileRow label="Dernière modification" value={soignant.modifie_le ? new Date(soignant.modifie_le).toLocaleDateString('fr-FR') : '—'} />
+                </CardContent>
+              </Card>
+            </div>
+          ) : etablissement ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Identité</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <ProfileRow label="Nom" value={etablissement.nom} />
+                  <ProfileRow label="SIRET" value={etablissement.siret} />
+                  <ProfileRow label="FINESS" value={etablissement.finess || '—'} />
+                  <ProfileRow label="Type" value={etablissement.type} />
+                  <ProfileRow label="Email contact" value={etablissement.email_contact} />
+                  <ProfileRow label="Téléphone" value={etablissement.telephone_contact || '—'} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Adresse</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <ProfileRow label="Rue" value={etablissement.adresse_rue} />
+                  <ProfileRow label="Ville" value={`${etablissement.adresse_code_postal} ${etablissement.adresse_ville}`} />
+                  <ProfileRow label="Département" value={etablissement.adresse_departement || '—'} />
+                  <ProfileRow label="Coordonnées" value={etablissement.adresse_lat ? `${etablissement.adresse_lat}, ${etablissement.adresse_lng}` : '—'} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Commercial</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <ProfileRow label="Formule" value={etablissement.formule_abonnement || '—'} />
+                  <ProfileRow label="Taux commission" value={`${etablissement.taux_commission_negocie}%`} />
+                  <ProfileRow label="Mode facturation" value={etablissement.mode_facturation || '—'} />
+                  <ProfileRow label="Mode paiement" value={etablissement.mode_paiement_commission || '—'} />
+                  <ProfileRow label="Délai paiement" value={`${etablissement.delai_paiement_jours} jours`} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Configuration</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <ProfileRow label="Convention collective" value={etablissement.convention_collective || '—'} />
+                  <VerifRow label="Chorus Pro actif" ok={etablissement.chorus_pro_actif} />
+                  <VerifRow label="Rist plafond actif" ok={etablissement.rist_plafond_actif} />
+                  <ProfileRow label="Majoration nuit" value={`${etablissement.taux_majoration_nuit_pourcent}%`} />
+                  <ProfileRow label="Majoration dimanche" value={`${etablissement.taux_majoration_dimanche_pourcent}%`} />
+                  <ProfileRow label="Majoration férié" value={`${etablissement.taux_majoration_ferie_pourcent}%`} />
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
         </TabsContent>
 
         {/* ── 6. Actions admin ── */}
@@ -435,6 +533,15 @@ export default function AdminDetailUtilisateur() {
 }
 
 /* ── Small helper components ── */
+
+function ProfileRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground text-right max-w-[60%] truncate">{value}</span>
+    </div>
+  );
+}
 
 function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
