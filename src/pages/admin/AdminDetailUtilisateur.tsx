@@ -534,6 +534,15 @@ export default function AdminDetailUtilisateur() {
 
 /* ── Small helper components ── */
 
+function ProfileRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground text-right max-w-[60%] truncate">{value}</span>
+    </div>
+  );
+}
+
 function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
     <div className="flex items-start gap-3">
