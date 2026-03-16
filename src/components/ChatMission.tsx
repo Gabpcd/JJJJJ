@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { sanitizeText } from '@/lib/sanitize';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
