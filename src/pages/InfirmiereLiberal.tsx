@@ -20,11 +20,11 @@ const etapesInstallation = [
 ];
 
 const faq = [
-  { q: 'Combien de temps faut-il pour atteindre 3 200 heures ?', a: 'En effectuant des remplacements réguliers via Soin Direct, vous pouvez atteindre 3 200 heures en 18 à 24 mois. Notre tableau de bord vous permet de suivre votre progression en temps réel.' },
-  { q: 'Les heures effectuées en dehors de Soin Direct comptent-elles ?', a: 'Oui. Vous pouvez déclarer vos heures externes en fournissant les justificatifs (attestations employeur, bulletins de paie). Elles sont validées par notre équipe sous 48h.' },
+  { q: 'Combien de temps faut-il pour atteindre 3 200 heures ?', a: 'En effectuant des remplacements réguliers via Jolene, vous pouvez atteindre 3 200 heures en 18 à 24 mois. Notre tableau de bord vous permet de suivre votre progression en temps réel.' },
+  { q: 'Les heures effectuées en dehors de Jolene comptent-elles ?', a: 'Oui. Vous pouvez déclarer vos heures externes en fournissant les justificatifs (attestations employeur, bulletins de paie). Elles sont validées par notre équipe sous 48h.' },
   { q: 'Qu\'est-ce que le programme Free Transition ?', a: 'Free Transition est notre programme exclusif qui prend en charge progressivement vos frais d\'installation en libéral (comptabilité, assurance, banque) en fonction de vos heures cumulées sur la plateforme.' },
   { q: 'Faut-il un diplôme spécifique pour s\'installer en libéral ?', a: 'Vous devez être titulaire du Diplôme d\'État d\'Infirmier (DEI) et justifier de 3 200 heures d\'exercice en tant que salarié sur les 6 dernières années (ou 2 400h sur 4 ans dans certains cas).' },
-  { q: 'Soin Direct m\'accompagne-t-il après l\'installation ?', a: 'Oui. Nos partenaires Indy (comptabilité), MACSF (assurance) et Qonto (banque) proposent des offres préférentielles aux soignants Soin Direct, avec un accompagnement dédié.' },
+  { q: 'Jolene m\'accompagne-t-il après l\'installation ?', a: 'Oui. Nos partenaires Indy (comptabilité), MACSF (assurance) et Qonto (banque) proposent des offres préférentielles aux soignants Jolene, avec un accompagnement dédié.' },
 ];
 
 export default function InfirmiereLiberal() {
