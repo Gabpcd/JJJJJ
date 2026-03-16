@@ -203,7 +203,7 @@ Le secteur de la santé fait partie des secteurs autorisés, ce qui permet aux �
 
 - **Souplesse** : pas de délai de carence entre deux contrats, ce qui permet de renouveler les missions sans interruption.
 - **Adaptabilité** : durée ajustable en fonction des besoins réels de l'établissement.
-- **Simplicité administrative** : sur Soin Direct, le contrat est généré et signé électroniquement en quelques clics.
+- **Simplicité administrative** : sur Jolene, le contrat est généré et signé électroniquement en quelques clics.
 
 ## Obligations de l'employeur
 
