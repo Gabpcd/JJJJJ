@@ -150,7 +150,7 @@ export default function InscriptionSoignant() {
     setSubmitting(true);
     try {
       await inscriptionSoignant(form);
-      afficherNotification({ type: 'succes', message: 'Compte créé avec succès ! Bienvenue sur Soin Direct.' });
+      afficherNotification({ type: 'succes', message: 'Compte créé avec succès ! Bienvenue sur Jolene.' });
       navigate('/soignant/tableau-de-bord');
     } catch (err) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
