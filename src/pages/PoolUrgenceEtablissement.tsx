@@ -405,6 +405,6 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         onConfirmer={alerterTous}
         onFermer={() => setAlerterTousOpen(false)}
       />
-    </LayoutApp>
+    </Layout>
   );
 }
