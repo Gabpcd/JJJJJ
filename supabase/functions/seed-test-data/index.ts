@@ -50,7 +50,6 @@ Deno.serve(async (req) => {
         service: 'Urgences',
         debut_le: '2026-03-08T19:00:00+01:00',
         fin_le: '2026-03-09T07:00:00+01:00',
-        duree_heures: 12,
         taux_horaire_base: 24.05,
         heures_nuit: 8,
         heures_dimanche: 12,
