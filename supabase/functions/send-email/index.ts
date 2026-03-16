@@ -202,7 +202,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 
     case 'FACTURE_EMISE':
       return {
-        subject: `Facture ${data.numero} — Soin Direct`,
+        subject: `Facture ${data.numero} — Jolene`,
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">Facture ${data.numero}</h2>
           <p style="color:#334155;">Bonjour,</p>
