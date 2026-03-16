@@ -181,7 +181,7 @@ export default function AdminFacturation() {
     doc.rect(0, 0, 210, 30, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
-    doc.text('Soin Direct — Rapport mensuel', 14, 20);
+    doc.text('Jolene — Rapport mensuel', 14, 20);
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(11);
     const mois = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });

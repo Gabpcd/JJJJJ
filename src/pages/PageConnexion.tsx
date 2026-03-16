@@ -103,7 +103,7 @@ export default function PageConnexion() {
               }
               const { supabase } = await import('@/integrations/supabase/client');
               const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: 'https://app.soindirect.com/connexion',
+                redirectTo: 'https://app.joleneapp.com/connexion',
               });
               if (error) {
                 afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });

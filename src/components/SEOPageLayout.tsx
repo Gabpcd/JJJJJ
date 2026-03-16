@@ -100,7 +100,7 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
             </div>
           </div>
           <div className="border-t border-border mt-10 pt-6 text-center">
-            <p className="text-xs text-muted-foreground">© 2026 Soin Direct SAS — Tous droits réservés</p>
+            <p className="text-xs text-muted-foreground">© 2026 Jolene SAS — Tous droits réservés</p>
           </div>
         </div>
       </footer>
