@@ -68,7 +68,7 @@ Jolene est partenaire de **Qonto**, qui propose une offre spéciale pour les pro
 
 ## En résumé
 
-Le passage en libéral demande de la préparation, mais les démarches sont bien balisées. Avec le programme **Free Transition** de Soin Direct, vos frais d'installation peuvent être pris en charge jusqu'à 100% en fonction de vos heures cumulées sur la plateforme. N'hésitez pas à consulter notre page dédiée pour en savoir plus.`,
+Le passage en libéral demande de la préparation, mais les démarches sont bien balisées. Avec le programme **Free Transition** de Jolene, vos frais d'installation peuvent être pris en charge jusqu'à 100% en fonction de vos heures cumulées sur la plateforme. N'hésitez pas à consulter notre page dédiée pour en savoir plus.`,
   },
   {
     slug: 'loi-rist-2025-expliquee',
