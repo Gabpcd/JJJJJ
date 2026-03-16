@@ -81,7 +81,7 @@ export default function APropos() {
                     <p className="text-xs text-muted-foreground">Partenaire pilote</p>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Réseau de 600+ pharmacies d'officine en France. Premier partenaire de Soin Direct pour le déploiement du remplacement en pharmacie.</p>
+                <p className="text-sm text-muted-foreground">Réseau de 600+ pharmacies d'officine en France. Premier partenaire de Jolene pour le déploiement du remplacement en pharmacie.</p>
               </div>
               <div className="bg-card border border-border rounded-xl p-6">
                 <div className="flex items-center gap-3 mb-4">
