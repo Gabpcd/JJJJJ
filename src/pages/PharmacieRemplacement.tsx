@@ -14,13 +14,13 @@ export default function PharmacieRemplacement() {
   return (
     <>
       <SEOHead
-        title="Remplacement pharmacie | Soin Direct"
-        description="Trouvez un pharmacien remplaçant ou un préparateur en pharmacie rapidement. Soin Direct, partenaire du Groupe Leader Santé, simplifie le remplacement en officine."
-        url="https://app.soindirect.com/pharmacie-remplacement"
+        title="Remplacement pharmacie | Jolene"
+        description="Trouvez un pharmacien remplaçant ou un préparateur en pharmacie rapidement. Jolene, partenaire du Groupe Leader Santé, simplifie le remplacement en officine."
+        url="https://app.joleneapp.com/pharmacie-remplacement"
       />
       <SEOPageLayout
         heroTitle="Trouvez un pharmacien remplaçant rapidement"
-        heroSubtitle="Soin Direct simplifie le remplacement en pharmacie d'officine : pharmaciens titulaires, préparateurs et gardes, disponibles en quelques heures."
+        heroSubtitle="Jolene simplifie le remplacement en pharmacie d'officine : pharmaciens titulaires, préparateurs et gardes, disponibles en quelques heures."
         ctaText="Créer mon espace pharmacie"
         ctaHref="/inscription/etablissement"
       >
