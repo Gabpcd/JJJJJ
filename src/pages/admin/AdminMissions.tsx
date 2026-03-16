@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { EtatVide } from '@/components/EtatVide';
 import { ExternalLink, Clock, CheckCircle, PlayCircle, Send, ClipboardList } from 'lucide-react';
 
-type FiltreStatut = 'TOUTES' | 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE';
+type FiltreStatut = 'TOUTES' | 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE';
 
 const FILTRES: { cle: FiltreStatut; label: string; icone: React.ElementType; couleur: string }[] = [
   { cle: 'TOUTES', label: 'Toutes', icone: ClipboardList, couleur: 'bg-muted text-foreground' },
