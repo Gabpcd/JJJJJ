@@ -43,7 +43,7 @@ function scoreBadgeClasses(score: number): string {
   return 'bg-destructive/10 text-destructive';
 }
 
-export default function DetailMission() {
+export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?: 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME' }) {
   usePageTitle('Détail mission');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -134,11 +134,15 @@ export default function DetailMission() {
       afficherNotification({ type: 'erreur', message: (data as any).error });
     } else {
       afficherNotification({ type: 'succes', message: 'Mission annulée.' });
-      navigate('/etablissement/missions');
+      navigate(role === 'ADMIN_PLATEFORME' ? '/admin/calendrier' : '/etablissement/missions');
     }
   };
 
-  if (loading || !mission) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  const isAdmin = role === 'ADMIN_PLATEFORME';
+  const backUrl = isAdmin ? '/admin/calendrier' : '/etablissement/missions';
+  const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour aux missions';
+
+  if (loading || !mission) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
 
   const m = mission;
   const debut = new Date(m.debut_le);
@@ -146,9 +150,9 @@ export default function DetailMission() {
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <button onClick={() => navigate('/etablissement/missions')} className="text-sm text-primary hover:underline mb-4 inline-block">
-        ← Retour aux missions
+    <LayoutApp role={role}>
+      <button onClick={() => navigate(backUrl)} className="text-sm text-primary hover:underline mb-4 inline-block">
+        {backLabel}
       </button>
 
       {alerteCDDU?.alerte && (

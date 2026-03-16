@@ -51,6 +51,7 @@ export default function AdminCalendrier() {
   const [moisCourant, setMoisCourant] = useState(new Date());
   const [missions, setMissions] = useState<MissionCal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filtreStatut, setFiltreStatut] = useState<string | null>(null);
 
   const debutMois = startOfMonth(moisCourant);
   const finMois = endOfMonth(moisCourant);
@@ -102,7 +103,11 @@ export default function AdminCalendrier() {
       const fin = new Date(m.fin_le);
       const jourDebut = new Date(d.getFullYear(), d.getMonth(), d.getDate());
       const jourFin = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
-      return debut <= jourFin && fin >= jourDebut;
+      const dansJour = debut <= jourFin && fin >= jourDebut;
+      if (!dansJour) return false;
+      if (!filtreStatut) return true;
+      if (filtreStatut === 'NON_POURVUE') return m.statut === 'OUVERTE' && !m.soignant_assigne_id;
+      return m.statut === filtreStatut;
     });
   }
 
@@ -131,11 +136,39 @@ export default function AdminCalendrier() {
 
         {/* Stats bar */}
         <div className="flex flex-wrap gap-3">
-          <Badge variant="destructive" className="text-xs">{nonPourvues} non pourvue{nonPourvues > 1 ? 's' : ''}</Badge>
-          <Badge className="bg-info text-info-foreground text-xs">{assignees} assignée{assignees > 1 ? 's' : ''}</Badge>
-          <Badge className="bg-success text-success-foreground text-xs">{enCours} en cours</Badge>
-          <Badge variant="secondary" className="text-xs">{terminees} terminée{terminees > 1 ? 's' : ''}</Badge>
-          <Badge variant="outline" className="text-xs">{missions.length} total</Badge>
+          <Badge
+            variant="destructive"
+            className={`text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'NON_POURVUE' ? 'opacity-40' : ''}`}
+            onClick={() => setFiltreStatut(f => f === 'NON_POURVUE' ? null : 'NON_POURVUE')}
+          >
+            {nonPourvues} non pourvue{nonPourvues > 1 ? 's' : ''}
+          </Badge>
+          <Badge
+            className={`bg-info text-info-foreground text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'ASSIGNEE' ? 'opacity-40' : ''}`}
+            onClick={() => setFiltreStatut(f => f === 'ASSIGNEE' ? null : 'ASSIGNEE')}
+          >
+            {assignees} assignée{assignees > 1 ? 's' : ''}
+          </Badge>
+          <Badge
+            className={`bg-success text-success-foreground text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'EN_COURS' ? 'opacity-40' : ''}`}
+            onClick={() => setFiltreStatut(f => f === 'EN_COURS' ? null : 'EN_COURS')}
+          >
+            {enCours} en cours
+          </Badge>
+          <Badge
+            variant="secondary"
+            className={`text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'TERMINEE' ? 'opacity-40' : ''}`}
+            onClick={() => setFiltreStatut(f => f === 'TERMINEE' ? null : 'TERMINEE')}
+          >
+            {terminees} terminée{terminees > 1 ? 's' : ''}
+          </Badge>
+          <Badge
+            variant="outline"
+            className={`text-xs cursor-pointer ${filtreStatut ? 'opacity-60' : ''}`}
+            onClick={() => setFiltreStatut(null)}
+          >
+            {missions.length} total
+          </Badge>
         </div>
 
         {/* Navigation */}
@@ -200,7 +233,7 @@ export default function AdminCalendrier() {
                     const style = getStatutStyle(m);
                     return (
                       <button key={m.id}
-                        onClick={() => navigate(`/etablissement/missions/${m.id}`)}
+                        onClick={() => navigate(`/admin/missions/${m.id}`)}
                         className={`w-full rounded px-1 py-0.5 text-[8px] leading-tight truncate block text-left transition-opacity hover:opacity-80 ${style.bg} ${style.text}`}
                         title={`${m.intitule} — ${m.etab_nom || ''}${m.soignant_nom ? ` · ${m.soignant_nom}` : ' · NON POURVUE'}`}
                       >
