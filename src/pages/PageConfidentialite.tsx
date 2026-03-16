@@ -79,7 +79,7 @@ export default function PageConfidentialite() {
           <li>Opérations de pointage (avec coordonnées GPS)</li>
           <li>Opérations de facturation et de paiement</li>
         </ul>
-        <p className="mb-3">Les journaux d'audit sont conservés pendant 5 ans conformément aux recommandations de la CNIL. Ils sont accessibles uniquement aux administrateurs habilités de Soin Direct et peuvent être communiqués aux autorités judiciaires sur réquisition.</p>
+        <p className="mb-3">Les journaux d'audit sont conservés pendant 5 ans conformément aux recommandations de la CNIL. Ils sont accessibles uniquement aux administrateurs habilités de Jolene et peuvent être communiqués aux autorités judiciaires sur réquisition.</p>
         <p>Les journaux ne contiennent pas de données de santé des patients. Seules les métadonnées administratives (qui a fait quoi, quand, depuis où) sont enregistrées.</p>
       </section>
 
