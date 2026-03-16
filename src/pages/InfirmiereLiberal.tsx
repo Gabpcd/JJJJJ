@@ -32,11 +32,11 @@ export default function InfirmiereLiberal() {
     <>
       <SEOHead
         title="Devenir infirmière libérale | Guide complet"
-        description="Découvrez comment passer infirmière libérale avec Soin Direct : parcours 3200h, programme Free Transition, étapes d'installation CPAM, Ordre, URSSAF. Guide complet."
-        url="https://app.soindirect.com/infirmiere-liberale"
+        description="Découvrez comment passer infirmière libérale avec Jolene : parcours 3200h, programme Free Transition, étapes d'installation CPAM, Ordre, URSSAF. Guide complet."
+        url="https://app.joleneapp.com/infirmiere-liberale"
       />
       <SEOPageLayout
-        heroTitle="Passer infirmière libérale avec Soin Direct"
+        heroTitle="Passer infirmière libérale avec Jolene"
         heroSubtitle="Cumulez vos 3 200 heures, bénéficiez de notre programme Free Transition et installez-vous en libéral en toute sérénité."
         ctaText="Commencer mon parcours"
         ctaHref="/inscription/soignant"
