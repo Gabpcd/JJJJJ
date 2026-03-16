@@ -149,6 +149,9 @@ export default function PageAccueil() {
         </div>
       </section>
 
+      {/* ═══ Section 1b — Recherche missions publique ═══ */}
+      <RechercheMissionsPublique navigate={navigate} />
+
       {/* ═══ Section 2 — Comment ça marche ═══ */}
       <section className="py-20 md:py-28 bg-card">
         <div className="max-w-5xl mx-auto px-4">
