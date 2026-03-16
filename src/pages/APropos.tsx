@@ -93,7 +93,7 @@ export default function APropos() {
                     <p className="text-xs text-muted-foreground">Lettre d'intention signée</p>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Maternité et chirurgie — Paris. Établissement pilote pour le staffing infirmier et aide-soignant via Soin Direct.</p>
+                <p className="text-sm text-muted-foreground">Maternité et chirurgie — Paris. Établissement pilote pour le staffing infirmier et aide-soignant via Jolene.</p>
               </div>
             </div>
           </div>
