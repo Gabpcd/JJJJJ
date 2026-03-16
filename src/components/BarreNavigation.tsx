@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2 } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -38,6 +38,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
   { icone: PlusCircle, label: 'Publier', route: '/etablissement/missions/creer' },
   { icone: List, label: 'Missions', route: '/etablissement/missions' },
+  { icone: Flame, label: 'Pool urgence 🚨', route: '/etablissement/pool-urgence' },
   { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
   { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
