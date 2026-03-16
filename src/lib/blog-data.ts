@@ -168,7 +168,7 @@ Notre plateforme a été conçue pour répondre aux besoins spécifiques des pha
 
 ## En résumé
 
-Le remplacement en pharmacie ne devrait pas être une source de stress. Avec Soin Direct, trouvez un remplaçant qualifié en quelques heures, en toute conformité légale. Inscrivez-vous gratuitement et publiez votre première mission dès aujourd'hui.`,
+Le remplacement en pharmacie ne devrait pas être une source de stress. Avec Jolene, trouvez un remplaçant qualifié en quelques heures, en toute conformité légale. Inscrivez-vous gratuitement et publiez votre première mission dès aujourd'hui.`,
   },
   {
     slug: 'cddu-contrat-usage-sante',
