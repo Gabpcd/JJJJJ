@@ -14,6 +14,7 @@ const NAV_ADMIN = [
   { icone: Mail, label: 'Emails', route: '/admin/emails' },
   { icone: Code2, label: 'API', route: '/admin/api' },
   { icone: Building2, label: 'Groupes', route: '/admin/groupes' },
+  { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
 ];
 
 export function LayoutAdmin({ children }: { children: React.ReactNode }) {
