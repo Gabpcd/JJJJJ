@@ -31,6 +31,7 @@ const statutColor: Record<string, string> = {
 function FactureDetailRow({ factureId }: { factureId: string }) {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     supabase
@@ -46,7 +47,7 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
 
   if (loading) return (
     <TableRow>
-      <TableCell colSpan={8} className="bg-muted/30 py-4">
+      <TableCell colSpan={9} className="bg-muted/30 py-4">
         <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
       </TableCell>
     </TableRow>
@@ -54,7 +55,7 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
 
   if (missions.length === 0) return (
     <TableRow>
-      <TableCell colSpan={8} className="bg-muted/30 py-4 text-center text-xs text-muted-foreground">
+      <TableCell colSpan={9} className="bg-muted/30 py-4 text-center text-xs text-muted-foreground">
         Aucune mission rattachée à cette facture
       </TableCell>
     </TableRow>
@@ -62,7 +63,7 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
 
   return (
     <TableRow>
-      <TableCell colSpan={8} className="bg-muted/30 p-0">
+      <TableCell colSpan={9} className="bg-muted/30 p-0">
         <div className="px-6 py-3">
           <p className="text-xs font-semibold text-muted-foreground mb-2">Missions rattachées ({missions.length})</p>
           <table className="w-full text-xs">
@@ -83,8 +84,26 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
                 const sg = m.soignants as any;
                 return (
                   <tr key={m.id} className="border-b border-border/40 hover:bg-muted/50">
-                    <td className="py-1.5 pr-2 font-medium text-foreground">{m.intitule}</td>
-                    <td className="py-1.5 pr-2 text-foreground">{sg ? `${sg.prenom} ${sg.nom}` : '—'}</td>
+                    <td className="py-1.5 pr-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/admin/missions?mission=${m.id}`); }}
+                        className="font-medium text-primary hover:underline text-left inline-flex items-center gap-1"
+                      >
+                        {m.intitule}
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </button>
+                    </td>
+                    <td className="py-1.5 pr-2">
+                      {sg ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/admin/utilisateurs/${m.soignant_assigne_id}`); }}
+                          className="text-primary hover:underline inline-flex items-center gap-1"
+                        >
+                          {sg.prenom} {sg.nom}
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                        </button>
+                      ) : '—'}
+                    </td>
                     <td className="py-1.5 pr-2 text-muted-foreground">{m.profession_requise}</td>
                     <td className="py-1.5 pr-2 text-muted-foreground">{formatDateTime(m.debut_le)} → {formatDateTime(m.fin_le)}</td>
                     <td className="py-1.5 pr-2 text-right">{m.duree_heures}h</td>
@@ -102,6 +121,70 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
   );
 }
 
+function genererFacturePDF(facture: any) {
+  const doc = new jsPDF();
+  const etab = (facture.etablissements as any)?.nom ?? 'Établissement';
+
+  // Header
+  doc.setFillColor(23, 162, 184);
+  doc.rect(0, 0, 210, 35, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20);
+  doc.text('FACTURE', 14, 18);
+  doc.setFontSize(11);
+  doc.text(facture.numero_facture || '—', 14, 28);
+
+  // Company info
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  doc.text('Jolene SAS', 14, 46);
+  doc.text('Plateforme de mise en relation soignants', 14, 52);
+
+  // Client
+  doc.setFontSize(10);
+  doc.text('Facturé à :', 120, 46);
+  doc.setFont('helvetica', 'bold');
+  doc.text(etab, 120, 52);
+  doc.setFont('helvetica', 'normal');
+
+  // Details
+  let y = 70;
+  doc.setFontSize(9);
+  const addLine = (label: string, value: string) => {
+    doc.text(label, 14, y);
+    doc.text(value, 100, y);
+    y += 7;
+  };
+
+  addLine('Date d\'émission :', facture.date_emission ? formatDate(facture.date_emission) : '—');
+  addLine('Date d\'échéance :', facture.date_echeance ? formatDate(facture.date_echeance) : '—');
+  addLine('Nombre de missions :', String(facture.nombre_missions || 0));
+  addLine('Statut :', facture.statut || '—');
+
+  y += 5;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(14, y, 196, y);
+  y += 10;
+
+  // Amounts
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Montant HT', 14, y); doc.text(formatEur(facture.montant_ht), 160, y, { align: 'right' }); y += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.text(`TVA (${facture.taux_tva ?? 20}%)`, 14, y); doc.text(formatEur(facture.montant_tva), 160, y, { align: 'right' }); y += 8;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text('Total TTC', 14, y); doc.text(formatEur(facture.montant_ttc), 160, y, { align: 'right' });
+
+  // Footer
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 120, 120);
+  doc.text('Jolene SAS — Document généré automatiquement', 14, 285);
+
+  doc.save(`facture_${facture.numero_facture || facture.id}.pdf`);
+  toast.success(`Facture ${facture.numero_facture} téléchargée`);
+}
 export default function AdminFacturation() {
   usePageTitle('Facturation');
   const [factures, setFactures] = useState<any[]>([]);
