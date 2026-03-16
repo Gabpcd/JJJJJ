@@ -346,6 +346,7 @@ export default function AdminFacturation() {
                 <TableHead>Missions</TableHead>
                 <TableHead>Émise le</TableHead>
                 <TableHead>Statut</TableHead>
+                <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -361,12 +362,31 @@ export default function AdminFacturation() {
                         {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                       </TableCell>
                       <TableCell className="font-mono text-xs font-medium">{f.numero_facture}</TableCell>
-                      <TableCell>{(f.etablissements as any)?.nom ?? '—'}</TableCell>
+                      <TableCell>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/admin/utilisateurs/${f.etablissement_id}`); }}
+                          className="text-primary hover:underline inline-flex items-center gap-1"
+                        >
+                          {(f.etablissements as any)?.nom ?? '—'}
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                        </button>
+                      </TableCell>
                       <TableCell>{formatEur(f.montant_ht)}</TableCell>
                       <TableCell className="font-medium">{formatEur(f.montant_ttc)}</TableCell>
                       <TableCell>{f.nombre_missions}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{f.date_emission ? formatDate(f.date_emission) : '—'}</TableCell>
                       <TableCell><Badge variant={(statutColor[f.statut] || 'secondary') as any} className="text-[10px]">{f.statut}</Badge></TableCell>
+                      <TableCell className="w-10 pr-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Télécharger la facture PDF"
+                          onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                     {isExpanded && <FactureDetailRow factureId={f.id} />}
                   </React.Fragment>
