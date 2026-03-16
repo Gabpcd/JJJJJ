@@ -18,14 +18,14 @@ export default function APropos() {
   return (
     <>
       <SEOHead
-        title="À propos de Soin Direct | Staffing médical digital"
-        description="Découvrez la mission de Soin Direct : simplifier le staffing médical en connectant établissements de santé et soignants qualifiés, en toute conformité."
-        url="https://app.soindirect.com/a-propos"
+        title="À propos de Jolene | Staffing médical digital"
+        description="Découvrez la mission de Jolene : simplifier le staffing médical en connectant établissements de santé et soignants qualifiés, en toute conformité."
+        url="https://app.joleneapp.com/a-propos"
       />
       <SEOPageLayout
         heroTitle="Simplifier le staffing médical. Pour de bon."
-        heroSubtitle="Soin Direct est née d'un constat simple : trouver un soignant remplaçant ne devrait pas prendre des heures d'appels téléphoniques."
-        ctaText="Rejoindre Soin Direct"
+        heroSubtitle="Jolene est née d'un constat simple : trouver un soignant remplaçant ne devrait pas prendre des heures d'appels téléphoniques."
+        ctaText="Rejoindre Jolene"
         ctaHref="/inscription/soignant"
       >
         {/* Mission */}
@@ -51,7 +51,7 @@ export default function APropos() {
                 <h3 className="font-bold text-foreground text-xl mb-1">Gabrielle Picard</h3>
                 <p className="text-sm text-muted-foreground mb-4">Fondatrice & CEO</p>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Passionnée par l'innovation dans la santé, Gabrielle a fondé Soin Direct pour répondre à la pénurie de soignants qui touche des milliers d'établissements en France. Son ambition : devenir la référence du staffing médical digital.
+                  Passionnée par l'innovation dans la santé, Gabrielle a fondé Jolene pour répondre à la pénurie de soignants qui touche des milliers d'établissements en France. Son ambition : devenir la référence du staffing médical digital.
                 </p>
                 <a
                   href="https://linkedin.com"
@@ -81,7 +81,7 @@ export default function APropos() {
                     <p className="text-xs text-muted-foreground">Partenaire pilote</p>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Réseau de 600+ pharmacies d'officine en France. Premier partenaire de Soin Direct pour le déploiement du remplacement en pharmacie.</p>
+                <p className="text-sm text-muted-foreground">Réseau de 600+ pharmacies d'officine en France. Premier partenaire de Jolene pour le déploiement du remplacement en pharmacie.</p>
               </div>
               <div className="bg-card border border-border rounded-xl p-6">
                 <div className="flex items-center gap-3 mb-4">
@@ -93,7 +93,7 @@ export default function APropos() {
                     <p className="text-xs text-muted-foreground">Lettre d'intention signée</p>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Maternité et chirurgie — Paris. Établissement pilote pour le staffing infirmier et aide-soignant via Soin Direct.</p>
+                <p className="text-sm text-muted-foreground">Maternité et chirurgie — Paris. Établissement pilote pour le staffing infirmier et aide-soignant via Jolene.</p>
               </div>
             </div>
           </div>
@@ -123,7 +123,7 @@ export default function APropos() {
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Presse & Contact</h2>
             <p className="text-muted-foreground mb-8">
               Vous êtes journaliste ou partenaire potentiel ? Contactez-nous à{' '}
-              <a href="mailto:contact@soindirect.com" className="text-primary hover:underline font-medium">contact@soindirect.com</a>.
+              <a href="mailto:contact@joleneapp.com" className="text-primary hover:underline font-medium">contact@joleneapp.com</a>.
             </p>
             <Button variant="outline" disabled className="gap-2">
               <Download className="h-4 w-4" /> Télécharger le dossier de presse
@@ -136,8 +136,8 @@ export default function APropos() {
         <section className="py-12 md:py-16">
           <div className="max-w-2xl mx-auto px-4 text-center">
             <p className="text-sm text-muted-foreground">
-              Soin Direct prépare sa levée de fonds seed. Si vous êtes investisseur, contactez-nous à{' '}
-              <a href="mailto:contact@soindirect.com" className="text-primary hover:underline font-medium">contact@soindirect.com</a>.
+              Jolene prépare sa levée de fonds seed. Si vous êtes investisseur, contactez-nous à{' '}
+              <a href="mailto:contact@joleneapp.com" className="text-primary hover:underline font-medium">contact@joleneapp.com</a>.
             </p>
           </div>
         </section>

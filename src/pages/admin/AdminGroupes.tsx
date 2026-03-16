@@ -182,7 +182,7 @@ export default function AdminGroupes() {
                             <HeartPulse className="h-7 w-7" style={{ color: form.couleur_primaire }} />
                           )}
                           <span className="text-lg font-bold" style={{ color: '#fff' }}>
-                            {form.nom_marque || 'Soin Direct'}
+                            {form.nom_marque || 'Jolene'}
                           </span>
                         </div>
                         <div className="flex gap-2">

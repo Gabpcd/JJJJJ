@@ -14,13 +14,13 @@ export default function PharmacieRemplacement() {
   return (
     <>
       <SEOHead
-        title="Remplacement pharmacie | Soin Direct"
-        description="Trouvez un pharmacien remplaçant ou un préparateur en pharmacie rapidement. Soin Direct, partenaire du Groupe Leader Santé, simplifie le remplacement en officine."
-        url="https://app.soindirect.com/pharmacie-remplacement"
+        title="Remplacement pharmacie | Jolene"
+        description="Trouvez un pharmacien remplaçant ou un préparateur en pharmacie rapidement. Jolene, partenaire du Groupe Leader Santé, simplifie le remplacement en officine."
+        url="https://app.joleneapp.com/pharmacie-remplacement"
       />
       <SEOPageLayout
         heroTitle="Trouvez un pharmacien remplaçant rapidement"
-        heroSubtitle="Soin Direct simplifie le remplacement en pharmacie d'officine : pharmaciens titulaires, préparateurs et gardes, disponibles en quelques heures."
+        heroSubtitle="Jolene simplifie le remplacement en pharmacie d'officine : pharmaciens titulaires, préparateurs et gardes, disponibles en quelques heures."
         ctaText="Créer mon espace pharmacie"
         ctaHref="/inscription/etablissement"
       >
@@ -45,10 +45,10 @@ export default function PharmacieRemplacement() {
           </div>
         </section>
 
-        {/* Soin Direct pour les pharmacies */}
+        {/* Jolene pour les pharmacies */}
         <section className="py-16 md:py-20 bg-muted/50">
           <div className="max-w-4xl mx-auto px-4">
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Soin Direct pour les pharmacies</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Jolene pour les pharmacies</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
                 { icon: UserCheck, titre: 'Pharmaciens vérifiés', desc: 'Diplôme, inscription à l\'Ordre et assurance RCP contrôlés.' },

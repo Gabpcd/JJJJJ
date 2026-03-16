@@ -4,13 +4,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
-    origin === "https://app.soindirect.com" ||
+    origin === "https://app.joleneapp.com" ||
     origin === "http://localhost:5173" ||
     origin.endsWith(".lovable.app")
   ) {
     return origin;
   }
-  return "https://app.soindirect.com";
+  return "https://app.joleneapp.com";
 }
 
 function corsHeaders(req: Request) {
@@ -20,7 +20,7 @@ function corsHeaders(req: Request) {
   };
 }
 
-const APP_URL = Deno.env.get('APP_URL') || 'https://app.soindirect.com';
+const APP_URL = Deno.env.get('APP_URL') || 'https://app.joleneapp.com';
 
 // ─── XSS prevention ─────────────────────────────────────
 
@@ -43,13 +43,13 @@ const WRAPPER = (content: string) => `
 <body style="margin:0;padding:0;background:#F8FAFC;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;background:white;border-radius:0 0 12px 12px;overflow:hidden;">
     <div style="background:#0F172A;padding:28px 24px;text-align:center;">
-      <span style="color:#17A2B8;font-size:30px;font-weight:bold;letter-spacing:-0.5px;">❤️ Soin Direct</span>
+      <span style="color:#17A2B8;font-size:30px;font-weight:bold;letter-spacing:-0.5px;">❤️ Jolene</span>
     </div>
     <div style="padding:36px 28px 24px;">
       ${content}
     </div>
     <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;">
-      <p style="margin:0 0 6px;">Soin Direct SAS — <a href="${APP_URL}" style="color:#17A2B8;text-decoration:none;">soindirect.com</a></p>
+      <p style="margin:0 0 6px;">Jolene SAS — <a href="${APP_URL}" style="color:#17A2B8;text-decoration:none;">joleneapp.com</a></p>
       <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> · 
          <a href="${APP_URL}/confidentialite" style="color:#94A3B8;text-decoration:none;">Confidentialité</a></p>
       <p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>
@@ -92,7 +92,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
   switch (type) {
     case 'BIENVENUE_SOIGNANT':
       return {
-        subject: `Bienvenue sur Soin Direct ! 🎉`,
+        subject: `Bienvenue sur Jolene ! 🎉`,
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.prenom} ! 🎉</h2>
           <p style="color:#334155;">Votre compte soignant est créé. Voici les prochaines étapes :</p>
@@ -107,10 +107,10 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 
     case 'BIENVENUE_ETABLISSEMENT':
       return {
-        subject: 'Bienvenue sur Soin Direct !',
+        subject: 'Bienvenue sur Jolene !',
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.nom} !</h2>
-          <p style="color:#334155;">Votre établissement est enregistré sur Soin Direct.</p>
+          <p style="color:#334155;">Votre établissement est enregistré sur Jolene.</p>
           ${INFO_BOX(`
             <strong style="color:#0F172A;">1.</strong> Complétez votre profil (SIRET, FINESS, adresse)<br/>
             <strong style="color:#0F172A;">2.</strong> Publiez votre première mission<br/>
@@ -202,7 +202,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 
     case 'FACTURE_EMISE':
       return {
-        subject: `Facture ${data.numero} — Soin Direct`,
+        subject: `Facture ${data.numero} — Jolene`,
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">Facture ${data.numero}</h2>
           <p style="color:#334155;">Bonjour,</p>
@@ -286,7 +286,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           <h2 style="color:#0F172A;margin:0 0 12px;">🎉 Éligible au passage en libéral</h2>
           <p style="color:#334155;">Bonjour ${data.prenom},</p>
           <p style="color:#334155;">Vous avez cumulé <strong>${data.heures_totales}h</strong> et êtes désormais éligible au passage en exercice libéral.</p>
-          ${INFO_BOX('Soin Direct vous accompagne dans toutes les démarches : SIRET, assurance RCP, compte bancaire pro.')}
+          ${INFO_BOX('Jolene vous accompagne dans toutes les démarches : SIRET, assurance RCP, compte bancaire pro.')}
           ${BUTTON('Découvrir le parcours →', `${APP_URL}/soignant/passer-en-liberal`)}
           ${SECURITY_NOTE}
         `),
@@ -294,7 +294,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 
     case 'RECAP_HEBDO':
       return {
-        subject: 'Votre récap hebdomadaire — Soin Direct',
+        subject: 'Votre récap hebdomadaire — Jolene',
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">📊 Récap de la semaine</h2>
           <p style="color:#334155;">Bonjour ${data.prenom},</p>
@@ -470,7 +470,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Soin Direct <noreply@soindirect.com>',
+        from: 'Jolene <noreply@joleneapp.com>',
         to: [resolvedEmail],
         subject,
         html,

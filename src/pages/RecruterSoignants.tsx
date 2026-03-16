@@ -23,9 +23,9 @@ export default function RecruterSoignants() {
   return (
     <>
       <SEOHead
-        title="Recruter des soignants qualifiés | Soin Direct"
+        title="Recruter des soignants qualifiés | Jolene"
         description="Publiez vos missions de remplacement médical et recevez des candidatures de soignants vérifiés en quelques heures. Commission dégressive, facturation automatique."
-        url="https://app.soindirect.com/recruter-soignants"
+        url="https://app.joleneapp.com/recruter-soignants"
       />
       <SEOPageLayout
         heroTitle="Recrutez des soignants qualifiés en quelques heures"
@@ -48,7 +48,7 @@ export default function RecruterSoignants() {
                 </ul>
               </div>
               <div className="bg-primary/5 border border-primary/20 rounded-xl p-6">
-                <h3 className="font-semibold text-primary mb-3">✅ La solution Soin Direct</h3>
+                <h3 className="font-semibold text-primary mb-3">✅ La solution Jolene</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li>• Commission dégressive à partir de 8%</li>
                   <li>• Candidatures en quelques heures</li>

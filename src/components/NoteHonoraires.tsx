@@ -130,7 +130,7 @@ function genererPDFNote(m: any, soignant: any, etab: any) {
   const pageH = doc.internal.pageSize.height;
   doc.setFontSize(7);
   doc.setTextColor(150);
-  doc.text('Document généré par Soin Direct — Valeur indicative', 105, pageH - 10, { align: 'center' });
+  doc.text('Document généré par Jolene — Valeur indicative', 105, pageH - 10, { align: 'center' });
 
   doc.save(`note_honoraires_${m.numero_note_honoraires || m.id}.pdf`);
 }

@@ -20,11 +20,11 @@ const etapesInstallation = [
 ];
 
 const faq = [
-  { q: 'Combien de temps faut-il pour atteindre 3 200 heures ?', a: 'En effectuant des remplacements réguliers via Soin Direct, vous pouvez atteindre 3 200 heures en 18 à 24 mois. Notre tableau de bord vous permet de suivre votre progression en temps réel.' },
-  { q: 'Les heures effectuées en dehors de Soin Direct comptent-elles ?', a: 'Oui. Vous pouvez déclarer vos heures externes en fournissant les justificatifs (attestations employeur, bulletins de paie). Elles sont validées par notre équipe sous 48h.' },
+  { q: 'Combien de temps faut-il pour atteindre 3 200 heures ?', a: 'En effectuant des remplacements réguliers via Jolene, vous pouvez atteindre 3 200 heures en 18 à 24 mois. Notre tableau de bord vous permet de suivre votre progression en temps réel.' },
+  { q: 'Les heures effectuées en dehors de Jolene comptent-elles ?', a: 'Oui. Vous pouvez déclarer vos heures externes en fournissant les justificatifs (attestations employeur, bulletins de paie). Elles sont validées par notre équipe sous 48h.' },
   { q: 'Qu\'est-ce que le programme Free Transition ?', a: 'Free Transition est notre programme exclusif qui prend en charge progressivement vos frais d\'installation en libéral (comptabilité, assurance, banque) en fonction de vos heures cumulées sur la plateforme.' },
   { q: 'Faut-il un diplôme spécifique pour s\'installer en libéral ?', a: 'Vous devez être titulaire du Diplôme d\'État d\'Infirmier (DEI) et justifier de 3 200 heures d\'exercice en tant que salarié sur les 6 dernières années (ou 2 400h sur 4 ans dans certains cas).' },
-  { q: 'Soin Direct m\'accompagne-t-il après l\'installation ?', a: 'Oui. Nos partenaires Indy (comptabilité), MACSF (assurance) et Qonto (banque) proposent des offres préférentielles aux soignants Soin Direct, avec un accompagnement dédié.' },
+  { q: 'Jolene m\'accompagne-t-il après l\'installation ?', a: 'Oui. Nos partenaires Indy (comptabilité), MACSF (assurance) et Qonto (banque) proposent des offres préférentielles aux soignants Jolene, avec un accompagnement dédié.' },
 ];
 
 export default function InfirmiereLiberal() {
@@ -32,11 +32,11 @@ export default function InfirmiereLiberal() {
     <>
       <SEOHead
         title="Devenir infirmière libérale | Guide complet"
-        description="Découvrez comment passer infirmière libérale avec Soin Direct : parcours 3200h, programme Free Transition, étapes d'installation CPAM, Ordre, URSSAF. Guide complet."
-        url="https://app.soindirect.com/infirmiere-liberale"
+        description="Découvrez comment passer infirmière libérale avec Jolene : parcours 3200h, programme Free Transition, étapes d'installation CPAM, Ordre, URSSAF. Guide complet."
+        url="https://app.joleneapp.com/infirmiere-liberale"
       />
       <SEOPageLayout
-        heroTitle="Passer infirmière libérale avec Soin Direct"
+        heroTitle="Passer infirmière libérale avec Jolene"
         heroSubtitle="Cumulez vos 3 200 heures, bénéficiez de notre programme Free Transition et installez-vous en libéral en toute sérénité."
         ctaText="Commencer mon parcours"
         ctaHref="/inscription/soignant"
@@ -46,7 +46,7 @@ export default function InfirmiereLiberal() {
           <div className="max-w-4xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-6">Le parcours vers le libéral</h2>
             <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-10">
-              Pour exercer en libéral, un(e) infirmier(ère) doit justifier de <strong className="text-foreground">3 200 heures d'exercice salarié</strong> sur les 6 dernières années. Soin Direct vous aide à atteindre cet objectif en vous proposant des missions de remplacement et en suivant votre progression heure par heure.
+              Pour exercer en libéral, un(e) infirmier(ère) doit justifier de <strong className="text-foreground">3 200 heures d'exercice salarié</strong> sur les 6 dernières années. Jolene vous aide à atteindre cet objectif en vous proposant des missions de remplacement et en suivant votre progression heure par heure.
             </p>
             <div className="bg-card border border-border rounded-xl p-6 md:p-8">
               <div className="relative">

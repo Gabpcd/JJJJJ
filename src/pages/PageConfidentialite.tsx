@@ -17,13 +17,13 @@ export default function PageConfidentialite() {
       {/* Article 1 */}
       <section id="art1">
         <h2 className="text-xl font-bold text-primary mb-4">Article 1 — Responsable du traitement</h2>
-        <p className="mb-3">Le responsable du traitement des données à caractère personnel collectées via la Plateforme Soin Direct est :</p>
+        <p className="mb-3">Le responsable du traitement des données à caractère personnel collectées via la Plateforme Jolene est :</p>
         <div className="bg-muted/50 border border-border rounded-xl p-4 mb-3">
           <p className="font-semibold text-foreground">{ENTREPRISE.nom}</p>
           <p className="text-muted-foreground">SIRET : {ENTREPRISE.siret}</p>
           <p className="text-muted-foreground">Siège social : {ENTREPRISE.adresse}</p>
           <p className="text-muted-foreground">E-mail : {ENTREPRISE.email}</p>
-          <p className="text-muted-foreground mt-2">Délégué à la protection des données (DPO) : <a href="mailto:dpo@soindirect.com" className="text-primary hover:underline">dpo@soindirect.com</a></p>
+          <p className="text-muted-foreground mt-2">Délégué à la protection des données (DPO) : <a href="mailto:dpo@joleneapp.com" className="text-primary hover:underline">dpo@joleneapp.com</a></p>
         </div>
         <p>Le traitement des données est réalisé conformément au Règlement (UE) 2016/679 du 27 avril 2016 (RGPD) et à la loi n° 78-17 du 6 janvier 1978 modifiée (loi Informatique et Libertés).</p>
       </section>
@@ -61,7 +61,7 @@ export default function PageConfidentialite() {
           <p className="text-muted-foreground">Sécurité : Chiffrement AES-256 au repos, TLS 1.3 en transit, SOC 2 Type II, ISO 27001</p>
         </div>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
-          <p><strong>Soin Direct ne stocke aucune donnée de santé à caractère personnel</strong> au sens de l'article L.1111-8 du Code de la santé publique. Les vaccinations et aptitudes médicales sont déclarées sur l'honneur par le Soignant et vérifiées en présentiel par l'Établissement lors de la première mission.</p>
+          <p><strong>Jolene ne stocke aucune donnée de santé à caractère personnel</strong> au sens de l'article L.1111-8 du Code de la santé publique. Les vaccinations et aptitudes médicales sont déclarées sur l'honneur par le Soignant et vérifiées en présentiel par l'Établissement lors de la première mission.</p>
         </div>
         <p className="mb-3">L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne (France). Les sauvegardes sont chiffrées (AES-256) et répliquées sur un site secondaire au sein de l'UE.</p>
         <p>Les transferts de données hors UE, s'ils devaient avoir lieu dans le cadre de prestations techniques de sous-traitants, sont encadrés par des clauses contractuelles types approuvées par la Commission européenne (décision 2021/914).</p>
@@ -79,7 +79,7 @@ export default function PageConfidentialite() {
           <li>Opérations de pointage (avec coordonnées GPS)</li>
           <li>Opérations de facturation et de paiement</li>
         </ul>
-        <p className="mb-3">Les journaux d'audit sont conservés pendant 5 ans conformément aux recommandations de la CNIL. Ils sont accessibles uniquement aux administrateurs habilités de Soin Direct et peuvent être communiqués aux autorités judiciaires sur réquisition.</p>
+        <p className="mb-3">Les journaux d'audit sont conservés pendant 5 ans conformément aux recommandations de la CNIL. Ils sont accessibles uniquement aux administrateurs habilités de Jolene et peuvent être communiqués aux autorités judiciaires sur réquisition.</p>
         <p>Les journaux ne contiennent pas de données de santé des patients. Seules les métadonnées administratives (qui a fait quoi, quand, depuis où) sont enregistrées.</p>
       </section>
 
@@ -152,7 +152,7 @@ export default function PageConfidentialite() {
           <li><strong>Droit à la portabilité</strong> (article 20) : recevoir vos données dans un format structuré, couramment utilisé et lisible par machine (JSON ou CSV).</li>
           <li><strong>Droit d'opposition</strong> (article 21) : vous opposer au traitement de vos données pour des motifs légitimes.</li>
         </ul>
-        <p className="mb-3">Pour exercer vos droits, adressez votre demande à : <a href="mailto:dpo@soindirect.com" className="text-primary hover:underline font-medium">dpo@soindirect.com</a></p>
+        <p className="mb-3">Pour exercer vos droits, adressez votre demande à : <a href="mailto:dpo@joleneapp.com" className="text-primary hover:underline font-medium">dpo@joleneapp.com</a></p>
         <p className="mb-3">L'Éditeur s'engage à répondre dans un délai d'un mois. Ce délai peut être prolongé de deux mois en cas de complexité ou de nombre élevé de demandes.</p>
         <p>En cas de difficulté dans l'exercice de vos droits, vous pouvez introduire une réclamation auprès de la Commission Nationale de l'Informatique et des Libertés (CNIL) : <a href="https://www.cnil.fr" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">www.cnil.fr</a></p>
       </section>

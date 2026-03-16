@@ -6,7 +6,7 @@ import { Zap, FileText, MapPin, Bell, ArrowRight, Smartphone } from 'lucide-reac
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-/* ─── Inline QR Code SVG for https://app.soindirect.com ─── */
+/* ─── Inline QR Code SVG for https://app.joleneapp.com ─── */
 function QRCode() {
   // Simplified QR-like pattern representing a URL
   const modules = [
@@ -113,12 +113,12 @@ export default function Telecharger() {
   return (
     <>
       <SEOHead
-        title="Télécharger Soin Direct | App iOS et Android"
-        description="Téléchargez Soin Direct sur iPhone et Android. Trouvez des missions, signez vos contrats et pointez votre arrivée depuis votre téléphone."
-        url="https://app.soindirect.com/telecharger"
+        title="Télécharger Jolene | App iOS et Android"
+        description="Téléchargez Jolene sur iPhone et Android. Trouvez des missions, signez vos contrats et pointez votre arrivée depuis votre téléphone."
+        url="https://app.joleneapp.com/telecharger"
       />
       <SEOPageLayout
-        heroTitle="Soin Direct dans votre poche"
+        heroTitle="Jolene dans votre poche"
         heroSubtitle="Trouvez des missions, signez vos contrats et pointez votre arrivée — tout depuis votre téléphone."
         ctaText="Créer mon compte gratuitement"
         ctaHref="/inscription/soignant"
@@ -129,7 +129,7 @@ export default function Telecharger() {
             <PhoneMockup />
             <div className="flex-1 text-center md:text-left">
               <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-6">Bientôt sur les stores</h2>
-              <p className="text-muted-foreground mb-8">L'application Soin Direct sera disponible sur iOS et Android. Inscrivez-vous dès maintenant pour être notifié du lancement.</p>
+              <p className="text-muted-foreground mb-8">L'application Jolene sera disponible sur iOS et Android. Inscrivez-vous dès maintenant pour être notifié du lancement.</p>
               <div className="flex flex-wrap gap-4 justify-center md:justify-start">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -165,7 +165,7 @@ export default function Telecharger() {
           <div className="max-w-3xl mx-auto px-4 text-center">
             <Smartphone className="h-10 w-10 text-primary mx-auto mb-4" />
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">En attendant</h2>
-            <p className="text-muted-foreground mb-6">Vous pouvez déjà utiliser Soin Direct depuis votre navigateur mobile.</p>
+            <p className="text-muted-foreground mb-6">Vous pouvez déjà utiliser Jolene depuis votre navigateur mobile.</p>
             <Button onClick={() => navigate('/connexion')} className="gap-2 mb-10">
               Ouvrir l'app web <ArrowRight className="h-4 w-4" />
             </Button>
@@ -207,7 +207,7 @@ export default function Telecharger() {
         {/* QR Code */}
         <section className="py-16 md:py-20 bg-muted/50">
           <div className="max-w-md mx-auto px-4 text-center">
-            <h2 className="text-xl font-bold text-foreground mb-6">Scannez pour accéder à Soin Direct</h2>
+            <h2 className="text-xl font-bold text-foreground mb-6">Scannez pour accéder à Jolene</h2>
             <div className="bg-white p-6 rounded-2xl inline-block shadow-sm border border-border">
               <QRCode />
             </div>

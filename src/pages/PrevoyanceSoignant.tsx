@@ -70,7 +70,7 @@ export default function PrevoyanceSoignant() {
     <LayoutApp role="SOIGNANT">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground">🛡️ Prévoyance</h1>
-        <p className="text-sm text-muted-foreground mt-1">Protégez-vous avec les plans subventionnés Soin Direct</p>
+        <p className="text-sm text-muted-foreground mt-1">Protégez-vous avec les plans subventionnés Jolene</p>
       </div>
 
       {souscrit && (
@@ -99,7 +99,7 @@ export default function PrevoyanceSoignant() {
                   <p>💰 Prime : <span className="font-semibold">{fmt(plan.prime_mensuelle)}/mois</span></p>
                   {subvention > 0 && (
                     <>
-                      <p>🎁 Subvention Soin Direct : <span className="font-semibold text-primary">-{subvention}%</span> (max {fmt(plan.subvention_max_mensuelle || 0)}/mois)</p>
+                      <p>🎁 Subvention Jolene : <span className="font-semibold text-primary">-{subvention}%</span> (max {fmt(plan.subvention_max_mensuelle || 0)}/mois)</p>
                       <p>→ Votre coût : <span className="font-bold text-foreground">~{fmt(coutReel)}/mois</span></p>
                     </>
                   )}
@@ -128,7 +128,7 @@ export default function PrevoyanceSoignant() {
           ouvert={true}
           onFermer={() => setPlanASouscrire(null)}
           titre={`Souscrire au plan ${planASouscrire.nom} ?`}
-          message={`Vous allez souscrire pour ${fmt(planASouscrire.prime_mensuelle)}/mois. Soin Direct subventionne ${planASouscrire.subvention_plateforme_pourcent || 0}% de la prime. Votre score de fiabilité gagnera +3 points.`}
+          message={`Vous allez souscrire pour ${fmt(planASouscrire.prime_mensuelle)}/mois. Jolene subventionne ${planASouscrire.subvention_plateforme_pourcent || 0}% de la prime. Votre score de fiabilité gagnera +3 points.`}
           labelConfirmer="Confirmer la souscription"
           variante="primaire"
           onConfirmer={() => souscrire(planASouscrire)}

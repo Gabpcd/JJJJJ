@@ -97,7 +97,7 @@ export default function AdminAPI() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Code2 className="h-6 w-6 text-primary" /> API REST Soin Direct v1
+            <Code2 className="h-6 w-6 text-primary" /> API REST Jolene v1
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Documentation et gestion des clés d'accès</p>
         </div>
@@ -106,7 +106,7 @@ export default function AdminAPI() {
       {/* Documentation */}
       <div className="card-base mb-6">
         <h2 className="font-bold text-foreground mb-4">📖 Endpoints disponibles</h2>
-        <p className="text-xs text-muted-foreground mb-4">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">https://api.soindirect.fr/v1</code></p>
+        <p className="text-xs text-muted-foreground mb-4">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">https://api.joleneapp.com/v1</code></p>
         <div className="space-y-4">
           {ENDPOINTS.map((ep, i) => (
             <div key={i} className="border border-border rounded-lg p-4">

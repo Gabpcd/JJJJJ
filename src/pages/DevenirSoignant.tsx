@@ -28,12 +28,12 @@ export default function DevenirSoignant() {
   return (
     <>
       <SEOHead
-        title="Devenir soignant remplaçant | Soin Direct"
-        description="Rejoignez Soin Direct et accédez à des missions de remplacement en santé près de chez vous. Inscription gratuite, rémunération transparente, parcours vers le libéral."
-        url="https://app.soindirect.com/devenir-soignant"
+        title="Devenir soignant remplaçant | Jolene"
+        description="Rejoignez Jolene et accédez à des missions de remplacement en santé près de chez vous. Inscription gratuite, rémunération transparente, parcours vers le libéral."
+        url="https://app.joleneapp.com/devenir-soignant"
       />
       <SEOPageLayout
-        heroTitle="Devenir soignant sur Soin Direct"
+        heroTitle="Devenir soignant sur Jolene"
         heroSubtitle="Accédez à des centaines de missions de remplacement en santé, choisissez vos horaires et construisez votre parcours professionnel."
         ctaText="Créer mon compte gratuitement"
         ctaHref="/inscription/soignant"
@@ -41,7 +41,7 @@ export default function DevenirSoignant() {
         {/* Avantages */}
         <section className="py-16 md:py-20">
           <div className="max-w-6xl mx-auto px-4">
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Pourquoi rejoindre Soin Direct</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Pourquoi rejoindre Jolene</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
               {avantages.map((a) => (
                 <div key={a.titre} className="text-center">
@@ -78,7 +78,7 @@ export default function DevenirSoignant() {
         <section className="py-16 md:py-20">
           <div className="max-w-4xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-8">Professions recherchées</h2>
-            <p className="text-center text-muted-foreground mb-8">Soin Direct recrute des professionnels de santé diplômés dans toutes les spécialités.</p>
+            <p className="text-center text-muted-foreground mb-8">Jolene recrute des professionnels de santé diplômés dans toutes les spécialités.</p>
             <div className="flex flex-wrap justify-center gap-3">
               {professions.map((p) => (
                 <Badge key={p} variant="secondary" className="text-sm py-1.5 px-3">{p}</Badge>
@@ -92,7 +92,7 @@ export default function DevenirSoignant() {
           <div className="max-w-3xl mx-auto px-4 text-center">
             <Quote className="h-10 w-10 text-primary/30 mx-auto mb-6" />
             <blockquote className="text-lg md:text-xl text-foreground italic leading-relaxed mb-6">
-              « Grâce à Soin Direct, j'ai pu choisir mes missions librement tout en cumulant mes heures vers le libéral. L'inscription a pris 5 minutes et ma première mission était validée le lendemain. Je recommande à tous mes collègues ! »
+              « Grâce à Jolene, j'ai pu choisir mes missions librement tout en cumulant mes heures vers le libéral. L'inscription a pris 5 minutes et ma première mission était validée le lendemain. Je recommande à tous mes collègues ! »
             </blockquote>
             <p className="font-semibold text-foreground">Marie D.</p>
             <p className="text-sm text-muted-foreground">Infirmière diplômée d'État — Île-de-France</p>

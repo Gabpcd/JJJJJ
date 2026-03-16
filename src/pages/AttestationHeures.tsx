@@ -90,7 +90,7 @@ export default function AttestationHeures() {
       <div className="attestation max-w-3xl mx-auto p-8 md:p-12">
         {/* Header */}
         <div className="text-center mb-8">
-          <p className="text-2xl font-bold mb-1">❤️ Soin Direct</p>
+          <p className="text-2xl font-bold mb-1">❤️ Jolene</p>
           <h1 className="text-xl font-bold uppercase tracking-wide">Attestation d'heures travaillées</h1>
         </div>
 

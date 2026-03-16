@@ -5,13 +5,13 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
-    origin === "https://app.soindirect.com" ||
+    origin === "https://app.joleneapp.com" ||
     origin === "http://localhost:5173" ||
     origin.endsWith(".lovable.app")
   ) {
     return origin;
   }
-  return "https://app.soindirect.com";
+  return "https://app.joleneapp.com";
 }
 
 function corsHeaders(req: Request) {
@@ -112,7 +112,7 @@ serve(async (req) => {
             currency: "eur",
             product_data: {
               name: `Facture ${facture.numero_facture}`,
-              description: `Commission Soin Direct — ${facture.nombre_missions ?? 0} missions`,
+              description: `Commission Jolene — ${facture.nombre_missions ?? 0} missions`,
             },
             unit_amount: Math.round((facture.montant_ttc ?? 0) * 100),
           },
