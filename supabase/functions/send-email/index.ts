@@ -107,10 +107,10 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 
     case 'BIENVENUE_ETABLISSEMENT':
       return {
-        subject: 'Bienvenue sur Soin Direct !',
+        subject: 'Bienvenue sur Jolene !',
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.nom} !</h2>
-          <p style="color:#334155;">Votre établissement est enregistré sur Soin Direct.</p>
+          <p style="color:#334155;">Votre établissement est enregistré sur Jolene.</p>
           ${INFO_BOX(`
             <strong style="color:#0F172A;">1.</strong> Complétez votre profil (SIRET, FINESS, adresse)<br/>
             <strong style="color:#0F172A;">2.</strong> Publiez votre première mission<br/>
