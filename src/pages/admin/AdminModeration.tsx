@@ -5,43 +5,157 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Shield, FileCheck, MessageSquare, Check, X, Eye } from 'lucide-react';
+import { FileCheck, MessageSquare, Check, X, Eye, Mail, Phone, Building2, User } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
-const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+type LitigeEnrichi = {
+  id: string;
+  motif: string;
+  reponse: string | null;
+  statut: string;
+  cree_le: string;
+  soignant_id: string;
+  etablissement_id: string;
+  mission_id: string;
+  initie_par: 'SOIGNANT' | 'ETABLISSEMENT';
+  resolution: string | null;
+  resolu_le: string | null;
+  soignant?: {
+    id: string;
+    prenom: string | null;
+    nom: string | null;
+    email: string | null;
+    telephone: string | null;
+    profession: string | null;
+  } | null;
+  etablissement?: {
+    id: string;
+    nom: string;
+    email_contact: string | null;
+    telephone_contact: string | null;
+    type: string | null;
+  } | null;
+  mission?: {
+    id: string;
+    intitule: string;
+    profession_requise: string;
+    service: string | null;
+    debut_le: string;
+    fin_le: string;
+    statut: string | null;
+  } | null;
+};
+
+const formatDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const formatDateTime = (d?: string | null) => d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const formatStatutLitige = (statut: string) => statut.replaceAll('_', ' ');
 
 export default function AdminModeration() {
   usePageTitle('Modération');
-  const [litiges, setLitiges] = useState<any[]>([]);
+  const [litiges, setLitiges] = useState<LitigeEnrichi[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLitigeId, setActionLitigeId] = useState<string | null>(null);
 
   const charger = async () => {
     setLoading(true);
+
     const [resLitiges, resEvals, resDocs] = await Promise.all([
-      supabase.from('litiges').select('id, motif, reponse, statut, cree_le, soignant_id, etablissement_id, mission_id').in('statut', ['OUVERT', 'EN_DISCUSSION']).order('cree_le', { ascending: true }),
-      supabase.from('evaluations').select('id, note, commentaire, type_evaluateur, mission_id, cree_le').eq('visible', false).order('cree_le', { ascending: true }).limit(50),
-      supabase.from('documents_soignants').select('id, nom_fichier, type_document, soignant_id, televerse_le').eq('statut_verification', 'EN_ATTENTE').is('supprime_le', null).order('televerse_le', { ascending: true }).limit(50),
+      supabase
+        .from('litiges')
+        .select('id, motif, reponse, statut, cree_le, soignant_id, etablissement_id, mission_id, initie_par, resolution, resolu_le')
+        .in('statut', ['OUVERT', 'EN_DISCUSSION'])
+        .order('cree_le', { ascending: false }),
+      supabase
+        .from('evaluations')
+        .select('id, note, commentaire, type_evaluateur, mission_id, cree_le')
+        .eq('visible', false)
+        .order('cree_le', { ascending: true })
+        .limit(50),
+      supabase
+        .from('documents_soignants')
+        .select('id, nom_fichier, type_document, soignant_id, televerse_le')
+        .eq('statut_verification', 'EN_ATTENTE')
+        .is('supprime_le', null)
+        .order('televerse_le', { ascending: true })
+        .limit(50),
     ]);
-    if (resLitiges.data) setLitiges(resLitiges.data);
+
+    if (resLitiges.error || resEvals.error || resDocs.error) {
+      toast.error(resLitiges.error?.message || resEvals.error?.message || resDocs.error?.message || 'Impossible de charger la modération');
+    }
+
+    const litigesBruts = (resLitiges.data ?? []) as LitigeEnrichi[];
+
+    if (litigesBruts.length > 0) {
+      const soignantIds = [...new Set(litigesBruts.map((litige) => litige.soignant_id).filter(Boolean))];
+      const etablissementIds = [...new Set(litigesBruts.map((litige) => litige.etablissement_id).filter(Boolean))];
+      const missionIds = [...new Set(litigesBruts.map((litige) => litige.mission_id).filter(Boolean))];
+
+      const [resSoignants, resEtablissements, resMissions] = await Promise.all([
+        soignantIds.length
+          ? supabase.from('soignants').select('id, prenom, nom, email, telephone, profession').in('id', soignantIds)
+          : Promise.resolve({ data: [], error: null } as any),
+        etablissementIds.length
+          ? supabase.from('etablissements').select('id, nom, email_contact, telephone_contact, type').in('id', etablissementIds)
+          : Promise.resolve({ data: [], error: null } as any),
+        missionIds.length
+          ? supabase.from('missions').select('id, intitule, profession_requise, service, debut_le, fin_le, statut').in('id', missionIds)
+          : Promise.resolve({ data: [], error: null } as any),
+      ]);
+
+      const soignantsMap = new Map((resSoignants.data ?? []).map((item: any) => [item.id, item]));
+      const etablissementsMap = new Map((resEtablissements.data ?? []).map((item: any) => [item.id, item]));
+      const missionsMap = new Map((resMissions.data ?? []).map((item: any) => [item.id, item]));
+
+      setLitiges(
+        litigesBruts.map((litige) => ({
+          ...litige,
+          soignant: soignantsMap.get(litige.soignant_id) ?? null,
+          etablissement: etablissementsMap.get(litige.etablissement_id) ?? null,
+          mission: missionsMap.get(litige.mission_id) ?? null,
+        }))
+      );
+    } else {
+      setLitiges([]);
+    }
+
     if (resEvals.data) setEvaluations(resEvals.data);
     if (resDocs.data) setDocuments(resDocs.data);
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, []);
-
-  const resoudreLitige = async (id: string, statut: string) => {
-    const resolution = statut === 'FERME' ? 'Fermé par admin' : `Résolu en faveur du ${statut === 'RESOLUE_SOIGNANT' ? 'soignant' : 'établissement'}`;
-    const { data, error } = await supabase.rpc('fn_resoudre_litige' as any, { p_litige_id: id, p_statut: statut, p_resolution: resolution });
-    if (error) { toast.error(error.message); return; }
-    toast.success('Litige résolu');
+  useEffect(() => {
     charger();
+  }, []);
+
+  const resoudreLitige = async (id: string, statut: 'RESOLU_SOIGNANT' | 'RESOLU_ETABLISSEMENT' | 'FERME') => {
+    setActionLitigeId(id);
+
+    const resolution = statut === 'FERME'
+      ? 'Fermé par admin'
+      : `Résolu en faveur du ${statut === 'RESOLU_SOIGNANT' ? 'soignant' : 'établissement'}`;
+
+    const { data, error } = await supabase.rpc('fn_resoudre_litige' as any, {
+      p_litige_id: id,
+      p_statut: statut,
+      p_resolution: resolution,
+    });
+
+    if (error || (data as any)?.error) {
+      toast.error(error?.message || (data as any)?.error || 'Impossible de résoudre le litige');
+      setActionLitigeId(null);
+      return;
+    }
+
+    toast.success(statut === 'FERME' ? 'Litige fermé' : 'Litige résolu');
+    await charger();
+    setActionLitigeId(null);
   };
 
   const publierEvaluation = async (id: string) => {
@@ -88,30 +202,150 @@ export default function AdminModeration() {
           </TabsList>
 
           <TabsContent value="litiges" className="space-y-4">
-            {litiges.length === 0 && <p className="text-muted-foreground text-sm py-8 text-center">Aucun litige ouvert 🎉</p>}
-            {litiges.map((l) => (
-              <Card key={l.id}>
-                <CardContent className="pt-4 space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium text-foreground">{l.motif}</p>
-                      {l.reponse && <p className="text-sm text-muted-foreground mt-1">Réponse : {l.reponse}</p>}
+            {litiges.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Aucun litige ouvert 🎉</p>}
+
+            {litiges.map((litige) => {
+              const demandeLabel = litige.initie_par === 'SOIGNANT' ? 'Demande du soignant' : 'Demande de l’établissement';
+              const reponseLabel = litige.initie_par === 'SOIGNANT' ? 'Réponse de l’établissement' : 'Réponse du soignant';
+
+              return (
+                <Card key={litige.id}>
+                  <CardContent className="space-y-5 pt-6">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-2">
+                        <p className="text-xl font-semibold text-foreground">{litige.motif}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          <span>{formatDateTime(litige.cree_le)}</span>
+                          <span>•</span>
+                          <span>Litige initié par {litige.initie_par === 'SOIGNANT' ? 'le soignant' : 'l’établissement'}</span>
+                        </div>
+                      </div>
+                      <Badge variant={litige.statut === 'OUVERT' ? 'destructive' : 'secondary'}>{formatStatutLitige(litige.statut)}</Badge>
                     </div>
-                    <Badge variant={l.statut === 'OUVERT' ? 'destructive' : 'secondary'}>{l.statut}</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{formatDate(l.cree_le)}</p>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button size="sm" onClick={() => resoudreLitige(l.id, 'RESOLUE_SOIGNANT')} className="bg-success hover:bg-success/90 text-success-foreground">Résoudre soignant</Button>
-                    <Button size="sm" onClick={() => resoudreLitige(l.id, 'RESOLUE_ETABLISSEMENT')} variant="outline">Résoudre établissement</Button>
-                    <Button size="sm" onClick={() => resoudreLitige(l.id, 'FERME')} variant="destructive">Fermer</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+
+                    <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                      <div className="grid gap-4">
+                        <div className="rounded-lg border bg-background p-4">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">{demandeLabel}</p>
+                          <p className="mt-2 text-sm leading-6 text-foreground">{litige.motif}</p>
+                        </div>
+
+                        <div className="rounded-lg border bg-background p-4">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">{reponseLabel}</p>
+                          <p className="mt-2 text-sm leading-6 text-foreground">{litige.reponse || 'Aucune réponse enregistrée pour le moment.'}</p>
+                        </div>
+
+                        {litige.resolution && (
+                          <div className="rounded-lg border bg-background p-4">
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Résolution actuelle</p>
+                            <p className="mt-2 text-sm leading-6 text-foreground">{litige.resolution}</p>
+                            <p className="mt-2 text-xs text-muted-foreground">Résolu le {formatDateTime(litige.resolu_le)}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid gap-4">
+                        <div className="rounded-lg border bg-background p-4">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Mission concernée</p>
+                          <p className="mt-2 font-medium text-foreground">{litige.mission?.intitule || 'Mission liée au litige'}</p>
+                          <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                            <p>{litige.mission?.profession_requise || 'Profession non renseignée'}{litige.mission?.service ? ` · ${litige.mission.service}` : ''}</p>
+                            <p>Début : {formatDateTime(litige.mission?.debut_le)}</p>
+                            <p>Fin : {formatDateTime(litige.mission?.fin_le)}</p>
+                            <p>Statut mission : {litige.mission?.statut || '—'}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border bg-background p-4 space-y-3">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Parties prenantes</p>
+
+                          <div className="rounded-md bg-muted/40 p-3">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <p className="text-sm font-medium text-foreground">Soignant</p>
+                            </div>
+                            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                              <p className="text-foreground">{litige.soignant ? `${litige.soignant.prenom || ''} ${litige.soignant.nom || ''}`.trim() || 'Soignant introuvable' : 'Soignant introuvable'}</p>
+                              <p>{litige.soignant?.profession || 'Profession non renseignée'}</p>
+                              <p>{litige.soignant?.email || 'Email non renseigné'}</p>
+                              <p>{litige.soignant?.telephone || 'Téléphone non renseigné'}</p>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {litige.soignant?.email && (
+                                <a href={`mailto:${litige.soignant.email}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4">
+                                  <Mail className="h-3.5 w-3.5" /> Email direct
+                                </a>
+                              )}
+                              {litige.soignant?.telephone && (
+                                <a href={`tel:${litige.soignant.telephone}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4">
+                                  <Phone className="h-3.5 w-3.5" /> Appeler
+                                </a>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="rounded-md bg-muted/40 p-3">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              <p className="text-sm font-medium text-foreground">Établissement</p>
+                            </div>
+                            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                              <p className="text-foreground">{litige.etablissement?.nom || 'Établissement introuvable'}</p>
+                              <p>{litige.etablissement?.type || 'Type non renseigné'}</p>
+                              <p>{litige.etablissement?.email_contact || 'Email non renseigné'}</p>
+                              <p>{litige.etablissement?.telephone_contact || 'Téléphone non renseigné'}</p>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {litige.etablissement?.email_contact && (
+                                <a href={`mailto:${litige.etablissement.email_contact}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4">
+                                  <Mail className="h-3.5 w-3.5" /> Email direct
+                                </a>
+                              )}
+                              {litige.etablissement?.telephone_contact && (
+                                <a href={`tel:${litige.etablissement.telephone_contact}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4">
+                                  <Phone className="h-3.5 w-3.5" /> Appeler
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => resoudreLitige(litige.id, 'RESOLU_SOIGNANT')}
+                        className="bg-success text-success-foreground hover:bg-success/90"
+                        disabled={actionLitigeId === litige.id}
+                      >
+                        Résoudre soignant
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => resoudreLitige(litige.id, 'RESOLU_ETABLISSEMENT')}
+                        disabled={actionLitigeId === litige.id}
+                      >
+                        Résoudre établissement
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => resoudreLitige(litige.id, 'FERME')}
+                        disabled={actionLitigeId === litige.id}
+                      >
+                        Fermer
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </TabsContent>
 
           <TabsContent value="evaluations">
-            <div className="rounded-lg border overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -128,21 +362,21 @@ export default function AdminModeration() {
                       <TableCell><Badge variant="outline">{e.note}/5</Badge></TableCell>
                       <TableCell className="max-w-[300px] truncate">{e.commentaire || '—'}</TableCell>
                       <TableCell>{e.type_evaluateur}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{formatDate(e.cree_le)}</TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button size="sm" variant="outline" onClick={() => publierEvaluation(e.id)}><Check className="h-3.5 w-3.5 mr-1" />Publier</Button>
-                        <Button size="sm" variant="destructive" onClick={() => supprimerEvaluation(e.id)}><X className="h-3.5 w-3.5 mr-1" />Supprimer</Button>
+                      <TableCell className="text-xs text-muted-foreground">{formatDate(e.cree_le)}</TableCell>
+                      <TableCell className="space-x-1 text-right">
+                        <Button size="sm" variant="outline" onClick={() => publierEvaluation(e.id)}><Check className="mr-1 h-3.5 w-3.5" />Publier</Button>
+                        <Button size="sm" variant="destructive" onClick={() => supprimerEvaluation(e.id)}><X className="mr-1 h-3.5 w-3.5" />Supprimer</Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {evaluations.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Aucune évaluation en attente</TableCell></TableRow>}
+                  {evaluations.length === 0 && <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Aucune évaluation en attente</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
           </TabsContent>
 
           <TabsContent value="documents">
-            <div className="rounded-lg border overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -155,16 +389,16 @@ export default function AdminModeration() {
                 <TableBody>
                   {documents.map((d) => (
                     <TableRow key={d.id}>
-                      <TableCell className="font-medium max-w-[200px] truncate">{d.nom_fichier}</TableCell>
+                      <TableCell className="max-w-[200px] truncate font-medium">{d.nom_fichier}</TableCell>
                       <TableCell><Badge variant="outline" className="text-[10px]">{d.type_document}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{d.televerse_le ? formatDate(d.televerse_le) : '—'}</TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button size="sm" variant="outline" onClick={() => validerDocument(d.id)}><Check className="h-3.5 w-3.5 mr-1" />Valider</Button>
-                        <Button size="sm" variant="destructive" onClick={() => rejeterDocument(d.id)}><X className="h-3.5 w-3.5 mr-1" />Rejeter</Button>
+                      <TableCell className="text-xs text-muted-foreground">{d.televerse_le ? formatDate(d.televerse_le) : '—'}</TableCell>
+                      <TableCell className="space-x-1 text-right">
+                        <Button size="sm" variant="outline" onClick={() => validerDocument(d.id)}><Check className="mr-1 h-3.5 w-3.5" />Valider</Button>
+                        <Button size="sm" variant="destructive" onClick={() => rejeterDocument(d.id)}><X className="mr-1 h-3.5 w-3.5" />Rejeter</Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {documents.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Aucun document en attente</TableCell></TableRow>}
+                  {documents.length === 0 && <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Aucun document en attente</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
