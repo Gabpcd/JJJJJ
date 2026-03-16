@@ -71,6 +71,7 @@ const MonGroupe = lazy(() => import("./pages/MonGroupe"));
 const ExclusionsEtablissement = lazy(() => import("./pages/ExclusionsEtablissement"));
 const PremiumEtablissement = lazy(() => import("./pages/PremiumEtablissement"));
 const ChorusConfig = lazy(() => import("./pages/ChorusConfig"));
+const PoolUrgenceEtablissement = lazy(() => import("./pages/PoolUrgenceEtablissement"));
 
 /* ─── Shared protected ─── */
 const ContratMission = lazy(() => import("./pages/ContratMission"));
