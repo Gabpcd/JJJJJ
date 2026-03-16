@@ -233,7 +233,7 @@ export default function AdminCalendrier() {
                     const style = getStatutStyle(m);
                     return (
                       <button key={m.id}
-                        onClick={() => navigate(`/etablissement/missions/${m.id}`)}
+                        onClick={() => navigate(`/admin/missions/${m.id}`)}
                         className={`w-full rounded px-1 py-0.5 text-[8px] leading-tight truncate block text-left transition-opacity hover:opacity-80 ${style.bg} ${style.text}`}
                         title={`${m.intitule} — ${m.etab_nom || ''}${m.soignant_nom ? ` · ${m.soignant_nom}` : ' · NON POURVUE'}`}
                       >
