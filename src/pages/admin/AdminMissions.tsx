@@ -96,7 +96,7 @@ export default function AdminMissions() {
         </div>
 
         {missions.length === 0 ? (
-          <EtatVide titre="Aucune mission" description={`Aucune mission avec le statut "${filtre}".`} />
+          <EtatVide titre="Aucune mission" sousTexte={`Aucune mission avec le statut "${filtre}".`} />
         ) : (
           <Card>
             <CardContent className="pt-5">
