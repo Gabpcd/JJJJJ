@@ -139,15 +139,24 @@ export default function AdminFacturation() {
 
   const genererFactures = async () => {
     setGenerating(true);
-    const { data, error } = await supabase.rpc('fn_auto_facturation_mensuelle' as any);
-    setGenerating(false);
-    if (error) { toast.error(error.message); return; }
-    const result = data as any;
-    if (result?.success) {
-      toast.success(`${result.factures_generees} facture(s) générée(s)`);
-      charger();
-    } else {
-      toast.error(result?.error || 'Erreur inconnue');
+    try {
+      const { data, error } = await supabase.rpc('fn_auto_facturation_mensuelle' as any);
+      if (error) { toast.error(`Erreur : ${error.message}`); return; }
+      const result = data as any;
+      if (result?.success) {
+        if ((result.factures_generees ?? 0) === 0) {
+          toast.info('Aucune nouvelle facture à générer — toutes les missions terminées sont déjà facturées.');
+        } else {
+          toast.success(`${result.factures_generees} facture(s) générée(s) avec succès !`);
+          charger();
+        }
+      } else {
+        toast.error(result?.error || 'Erreur inconnue lors de la génération');
+      }
+    } catch (err: any) {
+      toast.error(`Erreur inattendue : ${err.message}`);
+    } finally {
+      setGenerating(false);
     }
   };
 
