@@ -29,7 +29,7 @@ const CHORUS_STATUT_LABELS: Record<string, string> = {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://flripxtsyegjshnhzjkz.supabase.co';
 
-async function callChorusEdge(accessToken: string, factureId: string, action: 'deposer' | 'statut') {
+async function callChorusEdge(accessToken: string, factureId: string, action: 'deposer' | 'statut', extra: Record<string, string> = {}) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/chorus-pro-deposit`, {
     method: 'POST',
     headers: {
