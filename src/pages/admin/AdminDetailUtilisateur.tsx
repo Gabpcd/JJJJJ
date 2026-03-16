@@ -1,0 +1,492 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ChevronRight, ArrowLeft, Mail, Phone, MapPin, Calendar, Shield, Star, Award, FileText, Clock, Ban, RefreshCw, Trash2, KeyRound, UserCog, AlertTriangle } from 'lucide-react';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { ChargementPage } from '@/components/ChargementPage';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
+import { ModalConfirmation } from '@/components/ModalConfirmation';
+
+export default function AdminDetailUtilisateur() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [type, setType] = useState<'soignant' | 'etablissement' | null>(null);
+  const [soignant, setSoignant] = useState<any>(null);
+  const [etablissement, setEtablissement] = useState<any>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [missions, setMissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalSuspendre, setModalSuspendre] = useState(false);
+  const [modalSupprimer, setModalSupprimer] = useState(false);
+
+  usePageTitle('Détail utilisateur');
+
+  useEffect(() => {
+    if (!id) return;
+    charger();
+  }, [id]);
+
+  const charger = async () => {
+    setLoading(true);
+
+    // Try soignant first
+    const { data: s } = await supabase
+      .from('soignants')
+      .select('*')
+      .eq('id', id!)
+      .maybeSingle();
+
+    if (s) {
+      setSoignant(s);
+      setType('soignant');
+
+      // Load documents & missions in parallel
+      const [docRes, missRes] = await Promise.all([
+        supabase.from('documents_soignants').select('*').eq('soignant_id', id!).is('supprime_le', null).order('televerse_le', { ascending: false }),
+        supabase.from('missions').select('id, intitule, statut, debut_le, fin_le, taux_horaire_base, duree_heures, net_a_payer, etablissement_id, etablissements(nom)').eq('soignant_assigne_id', id!).order('debut_le', { ascending: false }).limit(100),
+      ]);
+      if (docRes.data) setDocuments(docRes.data);
+      if (missRes.data) setMissions(missRes.data);
+    } else {
+      // Try etablissement
+      const { data: e } = await supabase
+        .from('etablissements')
+        .select('*')
+        .eq('id', id!)
+        .maybeSingle();
+
+      if (e) {
+        setEtablissement(e);
+        setType('etablissement');
+
+        const { data: missData } = await supabase
+          .from('missions')
+          .select('id, intitule, statut, debut_le, fin_le, taux_horaire_base, duree_heures, soignant_assigne_id, soignants(prenom, nom)')
+          .eq('etablissement_id', id!)
+          .order('debut_le', { ascending: false })
+          .limit(100);
+        if (missData) setMissions(missData);
+      }
+    }
+
+    setLoading(false);
+  };
+
+  const suspendre = async () => {
+    const table = type === 'soignant' ? 'soignants' : 'etablissements';
+    const entity = type === 'soignant' ? soignant : etablissement;
+    const isSuspended = !!entity?.supprime_le;
+
+    const { error } = await supabase
+      .from(table as any)
+      .update({ supprime_le: isSuspended ? null : new Date().toISOString() } as any)
+      .eq('id', id!);
+
+    if (error) { toast.error(error.message); return; }
+    toast.success(isSuspended ? 'Compte réactivé' : 'Compte suspendu');
+    charger();
+  };
+
+  const supprimerCompte = async () => {
+    toast.error('La suppression définitive nécessite une action manuelle dans le dashboard Supabase pour des raisons de sécurité.');
+  };
+
+  const reinitialiserMdp = async () => {
+    const email = type === 'soignant' ? soignant?.email : etablissement?.email_contact;
+    if (!email) { toast.error('Aucun email trouvé'); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Email de réinitialisation envoyé à ${email}`);
+  };
+
+  const promouvoirAdmin = async () => {
+    toast.info('Fonctionnalité de promotion admin — utilisez la fonction set-user-claims via le dashboard Supabase.');
+  };
+
+  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+
+  if (!soignant && !etablissement) {
+    return (
+      <LayoutAdmin>
+        <div className="text-center py-20">
+          <p className="text-muted-foreground">Utilisateur introuvable.</p>
+          <Button variant="outline" className="mt-4" onClick={() => navigate('/admin/utilisateurs')}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Retour
+          </Button>
+        </div>
+      </LayoutAdmin>
+    );
+  }
+
+  const entity = soignant || etablissement;
+  const isSuspended = !!entity?.supprime_le;
+  const nom = type === 'soignant' ? `${soignant.prenom} ${soignant.nom}` : etablissement.nom;
+
+  return (
+    <LayoutAdmin>
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4" aria-label="Fil d'Ariane">
+        <Link to="/admin" className="hover:text-foreground transition-colors">Admin</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <Link to="/admin/utilisateurs" className="hover:text-foreground transition-colors">Utilisateurs</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="text-foreground font-medium">{nom}</span>
+      </nav>
+
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/admin/utilisateurs')}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-foreground">{nom}</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="outline" className="text-xs">{type === 'soignant' ? 'Soignant' : 'Établissement'}</Badge>
+            {isSuspended ? (
+              <Badge variant="destructive" className="text-xs">Suspendu</Badge>
+            ) : (
+              <Badge className="bg-success text-success-foreground text-xs">Actif</Badge>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <Tabs defaultValue="infos" className="space-y-4">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="infos">Informations</TabsTrigger>
+          {type === 'soignant' && <TabsTrigger value="documents">Documents</TabsTrigger>}
+          <TabsTrigger value="missions">Missions</TabsTrigger>
+          {type === 'soignant' && <TabsTrigger value="score">Score & Badges</TabsTrigger>}
+          <TabsTrigger value="profil">Profil complet</TabsTrigger>
+          <TabsTrigger value="actions">Actions admin</TabsTrigger>
+        </TabsList>
+
+        {/* ── 1. Informations personnelles ── */}
+        <TabsContent value="infos">
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Informations personnelles</CardTitle></CardHeader>
+            <CardContent>
+              {type === 'soignant' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <InfoRow icon={Mail} label="Email" value={soignant.email} />
+                  <InfoRow icon={Phone} label="Téléphone" value={soignant.telephone || '—'} />
+                  <InfoRow icon={Calendar} label="Date de naissance" value={soignant.date_naissance ? new Date(soignant.date_naissance).toLocaleDateString('fr-FR') : '—'} />
+                  <InfoRow icon={Shield} label="Profession" value={soignant.profession} />
+                  <InfoRow icon={FileText} label="RPPS" value={soignant.numero_rpps || '—'} />
+                  <InfoRow icon={FileText} label="ADELI" value={soignant.numero_adeli || '—'} />
+                  <InfoRow icon={MapPin} label="Coordonnées GPS" value={soignant.adresse_lat ? `${soignant.adresse_lat}, ${soignant.adresse_lng}` : '—'} />
+                  <InfoRow icon={MapPin} label="Rayon déplacement" value={`${soignant.rayon_deplacement_km} km`} />
+                  <InfoRow icon={Clock} label="Inscrit le" value={new Date(soignant.cree_le).toLocaleDateString('fr-FR')} />
+                  <InfoRow icon={Clock} label="Dernière activité" value={soignant.derniere_activite_le ? new Date(soignant.derniere_activite_le).toLocaleDateString('fr-FR') : '—'} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <InfoRow icon={Mail} label="Email contact" value={etablissement.email_contact} />
+                  <InfoRow icon={Phone} label="Téléphone" value={etablissement.telephone_contact || '—'} />
+                  <InfoRow icon={FileText} label="SIRET" value={etablissement.siret} />
+                  <InfoRow icon={FileText} label="FINESS" value={etablissement.finess || '—'} />
+                  <InfoRow icon={Shield} label="Type" value={etablissement.type} />
+                  <InfoRow icon={MapPin} label="Adresse" value={`${etablissement.adresse_rue}, ${etablissement.adresse_code_postal} ${etablissement.adresse_ville}`} />
+                  <InfoRow icon={Clock} label="Inscrit le" value={new Date(etablissement.cree_le).toLocaleDateString('fr-FR')} />
+                  <InfoRow icon={FileText} label="Formule" value={etablissement.formule_abonnement || '—'} />
+                  <InfoRow icon={FileText} label="Taux commission" value={`${etablissement.taux_commission_negocie}%`} />
+                  <InfoRow icon={FileText} label="Délai paiement" value={`${etablissement.delai_paiement_jours} jours`} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── 2. Documents ── */}
+        {type === 'soignant' && (
+          <TabsContent value="documents">
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Documents ({documents.length})</CardTitle></CardHeader>
+              <CardContent>
+                {documents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun document téléversé.</p>
+                ) : (
+                  <div className="rounded-lg border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Fichier</TableHead>
+                          <TableHead>Statut</TableHead>
+                          <TableHead>Validité</TableHead>
+                          <TableHead>Téléversé le</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {documents.map((doc) => {
+                          const statutInfo = STATUTS_VERIFICATION[doc.statut_verification] || { label: doc.statut_verification, couleur: 'bg-muted text-muted-foreground' };
+                          return (
+                            <TableRow key={doc.id}>
+                              <TableCell className="font-medium">{TYPES_DOCUMENTS[doc.type_document] || doc.type_document}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{doc.nom_fichier}</TableCell>
+                              <TableCell>
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statutInfo.couleur}`}>
+                                  {statutInfo.label}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {doc.valide_jusqua ? new Date(doc.valide_jusqua).toLocaleDateString('fr-FR') : '—'}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {doc.televerse_le ? new Date(doc.televerse_le).toLocaleDateString('fr-FR') : '—'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* ── 3. Missions ── */}
+        <TabsContent value="missions">
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Historique des missions ({missions.length})</CardTitle></CardHeader>
+            <CardContent>
+              {missions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aucune mission.</p>
+              ) : (
+                <div className="rounded-lg border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Intitulé</TableHead>
+                        {type === 'soignant' && <TableHead>Établissement</TableHead>}
+                        {type === 'etablissement' && <TableHead>Soignant</TableHead>}
+                        <TableHead>Début</TableHead>
+                        <TableHead>Durée</TableHead>
+                        <TableHead>Statut</TableHead>
+                        {type === 'soignant' && <TableHead>Net</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {missions.map((m: any) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-medium">{m.intitule}</TableCell>
+                          {type === 'soignant' && <TableCell className="text-xs">{(m.etablissements as any)?.nom || '—'}</TableCell>}
+                          {type === 'etablissement' && <TableCell className="text-xs">{(m.soignants as any) ? `${(m.soignants as any).prenom} ${(m.soignants as any).nom}` : '—'}</TableCell>}
+                          <TableCell className="text-xs">{new Date(m.debut_le).toLocaleDateString('fr-FR')}</TableCell>
+                          <TableCell className="text-xs">{m.duree_heures ? `${m.duree_heures}h` : '—'}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-[10px]">{m.statut}</Badge>
+                          </TableCell>
+                          {type === 'soignant' && <TableCell className="text-xs font-mono">{m.net_a_payer ? `${Number(m.net_a_payer).toFixed(2)} €` : '—'}</TableCell>}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── 4. Score & Badges ── */}
+        {type === 'soignant' && (
+          <TabsContent value="score">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="pt-6 text-center">
+                  <div className="text-4xl font-bold text-primary">{soignant.score_fiabilite}</div>
+                  <p className="text-sm text-muted-foreground mt-1">Score de fiabilité / 100</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6 text-center">
+                  <div className="text-4xl font-bold text-foreground">{soignant.total_missions_terminees}</div>
+                  <p className="text-sm text-muted-foreground mt-1">Missions terminées</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6 text-center">
+                  <div className="text-4xl font-bold text-foreground">{soignant.heures_cumulees}h</div>
+                  <p className="text-sm text-muted-foreground mt-1">Heures cumulées</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Vérifications</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <VerifRow label="Identité vérifiée" ok={soignant.identite_verifiee} />
+                  <VerifRow label="Diplôme vérifié" ok={soignant.diplome_verifie} />
+                  <VerifRow label="RPPS vérifié" ok={soignant.rpps_verifie} />
+                  <VerifRow label="Tous documents valides" ok={soignant.tous_documents_valides} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-sm">Statistiques</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <StatRow label="Missions annulées" value={soignant.total_missions_annulees} />
+                  <StatRow label="Retards pointage" value={soignant.total_retards_pointage} />
+                  <StatRow label="Absences" value={soignant.total_absences} />
+                  <StatRow label="Éligible 3200h" value={soignant.eligible_conversion_3200h ? 'Oui' : 'Non'} />
+                  <StatRow label="Prévoyance inscrit" value={soignant.prevoyance_inscrit ? 'Oui' : 'Non'} />
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        )}
+
+        {/* ── 5. Profil complet ── */}
+        <TabsContent value="profil">
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Données brutes</CardTitle></CardHeader>
+            <CardContent>
+              <pre className="bg-muted rounded-lg p-4 text-xs overflow-auto max-h-[500px] text-foreground">
+                {JSON.stringify(entity, null, 2)}
+              </pre>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── 6. Actions admin ── */}
+        <TabsContent value="actions">
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Actions administrateur</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Suspendre / Réactiver */}
+                <ActionCard
+                  icon={isSuspended ? RefreshCw : Ban}
+                  label={isSuspended ? 'Réactiver le compte' : 'Suspendre le compte'}
+                  description={isSuspended ? 'Rétablit l\'accès de l\'utilisateur à la plateforme.' : 'Bloque temporairement l\'accès de l\'utilisateur.'}
+                  variant={isSuspended ? 'outline' : 'destructive'}
+                  onClick={() => setModalSuspendre(true)}
+                />
+
+                {/* Réinitialiser MDP */}
+                <ActionCard
+                  icon={KeyRound}
+                  label="Réinitialiser le mot de passe"
+                  description="Envoie un email de réinitialisation à l'utilisateur."
+                  variant="outline"
+                  onClick={reinitialiserMdp}
+                />
+
+                {/* Promouvoir admin */}
+                {type === 'soignant' && (
+                  <ActionCard
+                    icon={UserCog}
+                    label="Promouvoir admin"
+                    description="Donne les droits d'administration plateforme."
+                    variant="outline"
+                    onClick={promouvoirAdmin}
+                  />
+                )}
+
+                {/* Supprimer */}
+                <ActionCard
+                  icon={Trash2}
+                  label="Supprimer le compte"
+                  description="Suppression définitive et irréversible."
+                  variant="destructive"
+                  onClick={() => setModalSupprimer(true)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Modal Suspendre/Réactiver */}
+      <ModalConfirmation
+        ouvert={modalSuspendre}
+        onFermer={() => setModalSuspendre(false)}
+        onConfirmer={suspendre}
+        titre={isSuspended ? 'Réactiver le compte' : 'Suspendre le compte'}
+        message={isSuspended
+          ? `Voulez-vous réactiver le compte de ${nom} ?`
+          : `Voulez-vous suspendre le compte de ${nom} ? L'utilisateur ne pourra plus accéder à la plateforme.`
+        }
+        labelConfirmer={isSuspended ? 'Réactiver' : 'Suspendre'}
+        variante={isSuspended ? 'primaire' : 'danger'}
+      />
+
+      {/* Modal Supprimer */}
+      <ModalConfirmation
+        ouvert={modalSupprimer}
+        onFermer={() => setModalSupprimer(false)}
+        onConfirmer={supprimerCompte}
+        titre="Supprimer définitivement"
+        message={`Attention : la suppression définitive de ${nom} est irréversible. Cette action nécessite une intervention manuelle dans Supabase.`}
+        labelConfirmer="Supprimer"
+        variante="danger"
+      />
+    </LayoutAdmin>
+  );
+}
+
+/* ── Small helper components ── */
+
+function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <Icon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-sm font-medium text-foreground">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function VerifRow({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      {ok ? (
+        <Badge className="bg-success text-success-foreground text-[10px]">✓ Oui</Badge>
+      ) : (
+        <Badge variant="outline" className="text-[10px]">✗ Non</Badge>
+      )}
+    </div>
+  );
+}
+
+function StatRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function ActionCard({ icon: Icon, label, description, variant, onClick }: {
+  icon: any;
+  label: string;
+  description: string;
+  variant: 'outline' | 'destructive';
+  onClick: () => void;
+}) {
+  return (
+    <div className="border rounded-lg p-4 flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <Icon className={`h-4 w-4 ${variant === 'destructive' ? 'text-destructive' : 'text-muted-foreground'}`} />
+        <span className="text-sm font-medium text-foreground">{label}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">{description}</p>
+      <Button size="sm" variant={variant} onClick={onClick} className="mt-auto self-start">
+        {label}
+      </Button>
+    </div>
+  );
+}
