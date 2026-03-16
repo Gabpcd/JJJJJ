@@ -91,6 +91,7 @@ const AdminAPI = lazy(() => import("./pages/admin/AdminAPI"));
 const AdminGroupes = lazy(() => import("./pages/admin/AdminGroupes"));
 const AdminDetailUtilisateur = lazy(() => import("./pages/admin/AdminDetailUtilisateur"));
 const AdminCalendrier = lazy(() => import("./pages/admin/AdminCalendrier"));
+const AdminMissions = lazy(() => import("./pages/admin/AdminMissions"));
 
 const queryClient = new QueryClient();
 
@@ -183,6 +184,7 @@ function AppRoutes() {
           <Route path="/admin/emails" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEmails /></RouteProtegee>} />
           <Route path="/admin/api" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAPI /></RouteProtegee>} />
           <Route path="/admin/groupes" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminGroupes /></RouteProtegee>} />
+          <Route path="/admin/missions" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMissions /></RouteProtegee>} />
           <Route path="/admin/calendrier" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCalendrier /></RouteProtegee>} />
           <Route path="/admin/pool-urgence" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><PoolUrgenceEtablissement isAdmin /></RouteProtegee>} />
           <Route path="/admin/missions/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><DetailMission role="ADMIN_PLATEFORME" /></RouteProtegee>} />
