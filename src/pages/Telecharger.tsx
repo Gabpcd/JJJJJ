@@ -113,12 +113,12 @@ export default function Telecharger() {
   return (
     <>
       <SEOHead
-        title="Télécharger Soin Direct | App iOS et Android"
-        description="Téléchargez Soin Direct sur iPhone et Android. Trouvez des missions, signez vos contrats et pointez votre arrivée depuis votre téléphone."
-        url="https://app.soindirect.com/telecharger"
+        title="Télécharger Jolene | App iOS et Android"
+        description="Téléchargez Jolene sur iPhone et Android. Trouvez des missions, signez vos contrats et pointez votre arrivée depuis votre téléphone."
+        url="https://app.joleneapp.com/telecharger"
       />
       <SEOPageLayout
-        heroTitle="Soin Direct dans votre poche"
+        heroTitle="Jolene dans votre poche"
         heroSubtitle="Trouvez des missions, signez vos contrats et pointez votre arrivée — tout depuis votre téléphone."
         ctaText="Créer mon compte gratuitement"
         ctaHref="/inscription/soignant"
