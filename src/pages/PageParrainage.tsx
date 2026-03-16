@@ -120,7 +120,7 @@ export default function PageParrainage() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <SEOHead title="Parrainage — Jolene" />
+      <SEOHead title="Parrainage — Jolene" description="Invitez vos collègues soignants et gagnez des bonus ensemble sur Jolene." />
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
