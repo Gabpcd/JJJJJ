@@ -36,6 +36,7 @@ const Telecharger = lazy(() => import("./pages/Telecharger"));
 /* ─── Soignant pages ─── */
 const DashboardSoignant = lazy(() => import("./pages/DashboardSoignant"));
 const ProfilSoignant = lazy(() => import("./pages/ProfilSoignant"));
+const ProfilSoignantEtablissement = lazy(() => import("./pages/ProfilSoignantEtablissement"));
 const MissionsSoignant = lazy(() => import("./pages/MissionsSoignant"));
 const RechercheMissions = lazy(() => import("./pages/RechercheMissions"));
 const DetailMissionSoignant = lazy(() => import("./pages/DetailMissionSoignant"));

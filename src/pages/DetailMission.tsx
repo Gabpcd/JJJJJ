@@ -203,7 +203,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 {m.soignants ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-foreground">👤 {m.soignants.prenom} {m.soignants.nom}</p>
+                      <Link to={`/etablissement/soignants/${m.soignant_assigne_id}`} className="font-semibold text-foreground hover:text-primary hover:underline">
+                        👤 {m.soignants.prenom} {m.soignants.nom}
+                      </Link>
                       {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
                         <BoutonFavori soignantId={m.soignant_assigne_id} etablissementId={m.etablissement_id} />
                       )}
