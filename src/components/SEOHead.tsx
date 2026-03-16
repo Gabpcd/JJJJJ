@@ -7,7 +7,7 @@ interface SEOHeadProps {
   image?: string;
 }
 
-const DEFAULT_OG_IMAGE = 'https://app.soindirect.com/og-default.png';
+const DEFAULT_OG_IMAGE = 'https://app.joleneapp.com/og-default.png';
 
 export function SEOHead({ title, description, url, image }: SEOHeadProps) {
   useEffect(() => {
@@ -37,7 +37,7 @@ export function SEOHead({ title, description, url, image }: SEOHeadProps) {
     setMeta('name', 'twitter:image', ogImage);
 
     return () => {
-      document.title = 'Soin Direct — Staffing médical simplifié';
+      document.title = 'Jolene — Staffing médical simplifié';
     };
   }, [title, description, url, image]);
 

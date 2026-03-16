@@ -21,8 +21,8 @@ export default function PageCGU() {
         <h2 className="text-xl font-bold text-primary mb-4">Article 1 — Définitions</h2>
         <p className="mb-3">Dans les présentes Conditions Générales d'Utilisation (ci-après « CGU »), les termes suivants ont la signification qui leur est attribuée ci-dessous :</p>
         <ul className="list-disc pl-6 space-y-2">
-          <li><strong>« Plateforme »</strong> : le site web et l'application mobile Soin Direct, édités par Soin Direct SAS, permettant la mise en relation entre Établissements de santé et Soignants pour des missions de remplacement paramédical.</li>
-          <li><strong>« Éditeur »</strong> : Soin Direct SAS, société par actions simplifiée, dont le siège social est situé à Paris (75006).</li>
+          <li><strong>« Plateforme »</strong> : le site web et l'application mobile Jolene, édités par Jolene SAS, permettant la mise en relation entre Établissements de santé et Soignants pour des missions de remplacement paramédical.</li>
+          <li><strong>« Éditeur »</strong> : Jolene SAS, société par actions simplifiée, dont le siège social est situé à Paris (75006).</li>
           <li><strong>« Soignant »</strong> : toute personne physique exerçant une profession paramédicale (aide-soignant·e, infirmier·ère, kinésithérapeute, sage-femme, manipulateur·rice en électroradiologie, préparateur·rice en pharmacie) inscrite sur la Plateforme.</li>
           <li><strong>« Établissement »</strong> : tout établissement de santé public ou privé (hôpital, clinique, EHPAD, centre de soins) inscrit sur la Plateforme en vue de publier des missions.</li>
           <li><strong>« Mission »</strong> : une offre de travail temporaire publiée par un Établissement et pouvant être acceptée par un Soignant via la Plateforme.</li>
@@ -34,11 +34,11 @@ export default function PageCGU() {
       {/* Article 2 */}
       <section id="art2">
         <h2 className="text-xl font-bold text-primary mb-4">Article 2 — Objet</h2>
-        <p className="mb-3">Les présentes CGU ont pour objet de définir les conditions d'accès et d'utilisation de la Plateforme Soin Direct par les Soignants et les Établissements.</p>
+        <p className="mb-3">Les présentes CGU ont pour objet de définir les conditions d'accès et d'utilisation de la Plateforme Jolene par les Soignants et les Établissements.</p>
         <p className="mb-3">La Plateforme constitue un outil technique de mise en relation facilitant la conclusion de contrats de mission entre Établissements et Soignants. Elle automatise la gestion administrative (contrats, pointage, facturation) pour le compte des parties.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p className="font-semibold text-foreground">Clause essentielle :</p>
-          <p>L'Éditeur n'est en aucun cas employeur, co-employeur ou mandataire social des Soignants. La Plateforme n'est pas une agence de travail temporaire au sens des articles L.1251-1 et suivants du Code du travail. Soin Direct agit exclusivement en qualité d'intermédiaire technique de mise en relation.</p>
+          <p>L'Éditeur n'est en aucun cas employeur, co-employeur ou mandataire social des Soignants. La Plateforme n'est pas une agence de travail temporaire au sens des articles L.1251-1 et suivants du Code du travail. Jolene agit exclusivement en qualité d'intermédiaire technique de mise en relation.</p>
         </div>
         <p>Le contrat de travail ou de prestation est conclu directement entre l'Établissement et le Soignant. L'Éditeur ne participe ni à la subordination juridique, ni à la direction des soins, ni à l'évaluation clinique des Soignants.</p>
       </section>
@@ -114,8 +114,8 @@ export default function PageCGU() {
       {/* Article 6 */}
       <section id="art6">
         <h2 className="text-xl font-bold text-primary mb-4">Article 6 — Propriété intellectuelle</h2>
-        <p className="mb-3">L'ensemble des éléments constitutifs de la Plateforme (textes, graphismes, logiciels, bases de données, marques, logos, algorithmes) est la propriété exclusive de Soin Direct SAS ou de ses concédants de licence.</p>
-        <p className="mb-3">La marque « Soin Direct » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le numéro 5186614. Toute reproduction, représentation ou exploitation non autorisée constituerait une contrefaçon sanctionnée par les articles L.335-2 et suivants du Code de la propriété intellectuelle.</p>
+        <p className="mb-3">L'ensemble des éléments constitutifs de la Plateforme (textes, graphismes, logiciels, bases de données, marques, logos, algorithmes) est la propriété exclusive de Jolene SAS ou de ses concédants de licence.</p>
+        <p className="mb-3">La marque « Jolene » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le numéro 5186614. Toute reproduction, représentation ou exploitation non autorisée constituerait une contrefaçon sanctionnée par les articles L.335-2 et suivants du Code de la propriété intellectuelle.</p>
         <p>Les utilisateurs s'interdisent de copier, extraire, décompiler ou procéder à toute ingénierie inverse de la Plateforme.</p>
       </section>
 
@@ -141,7 +141,7 @@ export default function PageCGU() {
       {/* Article 8 */}
       <section id="art8">
         <h2 className="text-xl font-bold text-primary mb-4">Article 8 — Résiliation</h2>
-        <p className="mb-3">Tout utilisateur peut résilier son compte à tout moment depuis son espace personnel ou par demande adressée à contact@soindirect.com.</p>
+        <p className="mb-3">Tout utilisateur peut résilier son compte à tout moment depuis son espace personnel ou par demande adressée à contact@joleneapp.com.</p>
         <p className="mb-3">La résiliation prend effet immédiatement, sous réserve de l'achèvement des missions en cours et du règlement des sommes dues.</p>
         <p className="mb-3">L'Éditeur se réserve le droit de suspendre ou supprimer un compte en cas de :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">

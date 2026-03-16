@@ -44,7 +44,7 @@ export default function PremiumEtablissement() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mx-auto">
             <Building2 className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Soin Direct Pro</h1>
+          <h1 className="text-2xl font-bold text-foreground">Jolene Pro</h1>
           <p className="text-muted-foreground text-sm max-w-lg mx-auto">
             Des outils avancés pour piloter vos recrutements et simplifier votre gestion administrative.
           </p>

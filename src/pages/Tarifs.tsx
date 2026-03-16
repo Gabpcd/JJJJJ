@@ -28,9 +28,9 @@ export default function Tarifs() {
   return (
     <>
       <SEOHead
-        title="Tarifs Soin Direct | Commission dégressive"
-        description="Découvrez la grille tarifaire Soin Direct : commission dégressive à partir de 15%, facturation transparente, pas de frais cachés."
-        url="https://app.soindirect.com/tarifs"
+        title="Tarifs Jolene | Commission dégressive"
+        description="Découvrez la grille tarifaire Jolene : commission dégressive à partir de 15%, facturation transparente, pas de frais cachés."
+        url="https://app.joleneapp.com/tarifs"
       />
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -61,7 +61,7 @@ export default function Tarifs() {
 
       {/* Footer */}
       <footer className="py-8 text-center text-sm text-muted-foreground border-t border-border bg-card">
-        <p>© 2026 Soin Direct SAS — Conforme RGPD · Code du Travail</p>
+        <p>© 2026 Jolene SAS — Conforme RGPD · Code du Travail</p>
       </footer>
     </div>
     </>

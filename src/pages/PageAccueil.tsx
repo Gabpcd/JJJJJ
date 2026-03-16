@@ -71,12 +71,12 @@ function RevealOnScroll({ children, className = '', delay = 0 }: { children: Rea
 
 /* ─── FAQ data ─── */
 const faqData = [
-  { q: 'Comment fonctionne la commission ?', a: 'Soin Direct facture une commission dégressive à l\'établissement, calculée sur le montant brut de la mission. Plus vous publiez de missions, plus le taux baisse. Aucun frais pour le soignant.' },
-  { q: 'Soin Direct est-il une agence d\'intérim ?', a: 'Non. Soin Direct est une plateforme de mise en relation. Le contrat est signé directement entre l\'établissement et le soignant. Nous ne sommes pas employeur.' },
+  { q: 'Comment fonctionne la commission ?', a: 'Jolene facture une commission dégressive à l\'établissement, calculée sur le montant brut de la mission. Plus vous publiez de missions, plus le taux baisse. Aucun frais pour le soignant.' },
+  { q: 'Jolene est-il une agence d\'intérim ?', a: 'Non. Jolene est une plateforme de mise en relation. Le contrat est signé directement entre l\'établissement et le soignant. Nous ne sommes pas employeur.' },
   { q: 'Comment sont vérifiés les soignants ?', a: 'Chaque soignant est vérifié via le Répertoire Partagé des Professionnels de Santé (RPPS). Diplômes, assurance RCP et pièce d\'identité sont contrôlés avant toute mission.' },
   { q: 'Quels types de contrats sont générés ?', a: 'La plateforme génère automatiquement des CDD d\'usage ou des contrats de vacation conformes au Code du Travail, signés électroniquement par les deux parties.' },
   { q: 'Comment fonctionne le pointage ?', a: 'Le soignant pointe son arrivée et son départ via l\'application mobile avec géolocalisation GPS. Le périmètre est vérifié automatiquement par rapport à l\'adresse de l\'établissement.' },
-  { q: 'Puis-je passer en libéral via Soin Direct ?', a: 'Oui. Notre parcours 3 200 heures vous accompagne vers l\'installation en libéral avec un suivi personnalisé, des partenaires (comptabilité, assurance, banque) et une prise en charge partielle des frais.' },
+  { q: 'Puis-je passer en libéral via Jolene ?', a: 'Oui. Notre parcours 3 200 heures vous accompagne vers l\'installation en libéral avec un suivi personnalisé, des partenaires (comptabilité, assurance, banque) et une prise en charge partielle des frais.' },
 ];
 
 export default function PageAccueil() {
@@ -90,9 +90,9 @@ export default function PageAccueil() {
   return (
     <>
       <SEOHead
-        title="Soin Direct — Staffing médical simplifié"
+        title="Jolene — Staffing médical simplifié"
         description="Plateforme de mise en relation entre établissements de santé et soignants qualifiés. Publiez des missions, signez vos contrats et pointez en ligne."
-        url="https://app.soindirect.com/"
+        url="https://app.joleneapp.com/"
       />
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* ═══ Header ═══ */}
@@ -100,7 +100,7 @@ export default function PageAccueil() {
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <HeartPulse className="h-7 w-7 text-primary" />
-            <span className="text-xl font-bold text-foreground">Soin Direct</span>
+            <span className="text-xl font-bold text-foreground">Jolene</span>
           </div>
           <div className="flex items-center gap-4">
             <a href="/blog" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Blog</a>
@@ -337,7 +337,7 @@ export default function PageAccueil() {
         <div className="relative max-w-3xl mx-auto px-4 text-center">
           <RevealOnScroll>
             <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier votre staffing médical ?</h2>
-            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Rejoignez des centaines d'établissements et de soignants qui utilisent Soin Direct au quotidien.</p>
+            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Rejoignez des centaines d'établissements et de soignants qui utilisent Jolene au quotidien.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={() => navigate('/inscription/soignant')}
@@ -364,7 +364,7 @@ export default function PageAccueil() {
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-3">
                 <HeartPulse className="h-5 w-5 text-primary" />
-                <span className="font-bold text-foreground">Soin Direct</span>
+                <span className="font-bold text-foreground">Jolene</span>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">La plateforme de confiance pour le remplacement et le staffing en santé.</p>
             </div>
@@ -402,7 +402,7 @@ export default function PageAccueil() {
             </div>
           </div>
           <div className="border-t border-border mt-10 pt-6 text-center">
-            <p className="text-xs text-muted-foreground">© 2026 Soin Direct SAS — Tous droits réservés</p>
+            <p className="text-xs text-muted-foreground">© 2026 Jolene SAS — Tous droits réservés</p>
           </div>
         </div>
       </footer>

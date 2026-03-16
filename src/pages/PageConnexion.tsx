@@ -52,7 +52,7 @@ export default function PageConnexion() {
       <div className="card-base max-w-md w-full">
         <div className="flex items-center justify-center gap-2 mb-8">
           <HeartPulse className="h-8 w-8 text-primary" />
-          <span className="text-2xl font-bold text-primary-dark">Soin Direct</span>
+          <span className="text-2xl font-bold text-primary-dark">Jolene</span>
         </div>
 
         <h1 className="text-xl font-bold text-foreground text-center mb-6">Connexion</h1>
@@ -103,7 +103,7 @@ export default function PageConnexion() {
               }
               const { supabase } = await import('@/integrations/supabase/client');
               const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: 'https://app.soindirect.com/connexion',
+                redirectTo: 'https://app.joleneapp.com/connexion',
               });
               if (error) {
                 afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });

@@ -28,7 +28,7 @@ C'est la condition sine qua non. Pour exercer en libéral, vous devez justifier 
 
 **Comment les comptabiliser ?** Chaque heure travaillée compte, y compris les heures de nuit, les week-ends et les jours fériés. Les heures de formation continue ne sont en revanche pas incluses. Demandez des attestations d'heures à chaque employeur — elles seront indispensables pour votre dossier CPAM.
 
-Avec Soin Direct, votre compteur d'heures est mis à jour automatiquement après chaque mission. Vous pouvez également déclarer vos heures effectuées en dehors de la plateforme en fournissant les justificatifs.
+Avec Jolene, votre compteur d'heures est mis à jour automatiquement après chaque mission. Vous pouvez également déclarer vos heures effectuées en dehors de la plateforme en fournissant les justificatifs.
 
 ## Étape 2 : S'inscrire à l'Ordre National des Infirmiers
 
@@ -52,7 +52,7 @@ Les cotisations représentent environ 40 à 45% de votre bénéfice net. Elles c
 
 La Responsabilité Civile Professionnelle est **obligatoire**. Elle vous couvre en cas de dommage causé à un patient dans le cadre de votre exercice. Plusieurs assureurs proposent des contrats spécifiques aux IDEL : MACSF, Groupe Pasteur Mutualité, MNH…
 
-Comptez entre 100 et 300 € par an selon les garanties. Soin Direct a négocié des tarifs préférentiels avec la MACSF pour les soignants inscrits sur la plateforme.
+Comptez entre 100 et 300 € par an selon les garanties. Jolene a négocié des tarifs préférentiels avec la MACSF pour les soignants inscrits sur la plateforme.
 
 ## Étape 6 : Choisir son lieu d'exercice
 
@@ -64,11 +64,11 @@ En zone sous-dotée, vous pouvez bénéficier du **Contrat d'Aide à l'Installat
 
 Un compte dédié à votre activité professionnelle est fortement recommandé (et obligatoire pour certaines formes juridiques). Il facilite la gestion comptable et la séparation entre finances personnelles et professionnelles.
 
-Soin Direct est partenaire de **Qonto**, qui propose une offre spéciale pour les professionnels de santé libéraux avec des frais réduits et un accompagnement dédié.
+Jolene est partenaire de **Qonto**, qui propose une offre spéciale pour les professionnels de santé libéraux avec des frais réduits et un accompagnement dédié.
 
 ## En résumé
 
-Le passage en libéral demande de la préparation, mais les démarches sont bien balisées. Avec le programme **Free Transition** de Soin Direct, vos frais d'installation peuvent être pris en charge jusqu'à 100% en fonction de vos heures cumulées sur la plateforme. N'hésitez pas à consulter notre page dédiée pour en savoir plus.`,
+Le passage en libéral demande de la préparation, mais les démarches sont bien balisées. Avec le programme **Free Transition** de Jolene, vos frais d'installation peuvent être pris en charge jusqu'à 100% en fonction de vos heures cumulées sur la plateforme. N'hésitez pas à consulter notre page dédiée pour en savoir plus.`,
   },
   {
     slug: 'loi-rist-2025-expliquee',
@@ -103,13 +103,13 @@ Pour les hôpitaux et établissements publics, la loi Rist a des conséquences m
 
 Les soignants paramédicaux (IDE, AS, pharmaciens) sont moins touchés que les médecins, car les plafonds restent proches des rémunérations habituelles du marché. Néanmoins, la loi impose une **transparence accrue** sur les rémunérations.
 
-Sur Soin Direct, tous les taux horaires sont affichés avant la candidature. La plateforme vérifie automatiquement que les missions proposées par les établissements publics respectent les plafonds Rist en vigueur. Un **bandeau d'alerte** informe le soignant si une mission est soumise au plafonnement.
+Sur Jolene, tous les taux horaires sont affichés avant la candidature. La plateforme vérifie automatiquement que les missions proposées par les établissements publics respectent les plafonds Rist en vigueur. Un **bandeau d'alerte** informe le soignant si une mission est soumise au plafonnement.
 
 ## Le cas particulier du secteur privé
 
 Les établissements privés (cliniques, EHPAD privés, pharmacies d'officine) ne sont **pas soumis aux plafonds Rist**. Ils sont libres de fixer les rémunérations selon l'offre et la demande. Cependant, la tendance du marché tend à s'aligner progressivement sur les grilles publiques.
 
-## Ce que Soin Direct fait pour vous
+## Ce que Jolene fait pour vous
 
 Notre plateforme intègre nativement les règles de la loi Rist :
 - **Vérification automatique** des plafonds pour les établissements publics
@@ -117,12 +117,12 @@ Notre plateforme intègre nativement les règles de la loi Rist :
 - **Transparence totale** sur la décomposition de la rémunération (brut, IFM, ICP, majorations)
 - **Conformité garantie** avec les textes en vigueur
 
-La loi Rist est complexe, mais Soin Direct simplifie sa mise en application au quotidien.`,
+La loi Rist est complexe, mais Jolene simplifie sa mise en application au quotidien.`,
   },
   {
     slug: 'remplacement-pharmacie-guide',
     titre: 'Remplacement en pharmacie : guide pratique pour les titulaires',
-    extrait: 'Quand faire appel à un remplaçant, obligations légales et comment Soin Direct simplifie le processus pour les pharmacies d\'officine.',
+    extrait: 'Quand faire appel à un remplaçant, obligations légales et comment Jolene simplifie le processus pour les pharmacies d\'officine.',
     date: '2026-01-10',
     tempsLecture: 6,
     tag: 'Pharmacie',
@@ -152,13 +152,13 @@ La pharmacie d'officine connaît une **pénurie croissante de professionnels**. 
 
 Les conséquences sont directes : **délais de remplacement allongés** (parfois plusieurs semaines pour trouver un remplaçant), **coûts en hausse** et **risque de fermeture temporaire** pour les officines rurales.
 
-## Comment Soin Direct simplifie le remplacement
+## Comment Jolene simplifie le remplacement
 
 Notre plateforme a été conçue pour répondre aux besoins spécifiques des pharmacies :
 
 **Publication rapide** : décrivez votre mission (dates, horaires, type de pharmacie) et publiez-la en 5 minutes. Votre annonce est visible immédiatement par les pharmaciens remplaçants inscrits dans votre zone géographique.
 
-**Pharmaciens vérifiés** : chaque pharmacien inscrit sur Soin Direct est vérifié auprès du RPPS. Diplôme, inscription à l'Ordre et assurance RCP sont contrôlés avant toute candidature.
+**Pharmaciens vérifiés** : chaque pharmacien inscrit sur Jolene est vérifié auprès du RPPS. Diplôme, inscription à l'Ordre et assurance RCP sont contrôlés avant toute candidature.
 
 **Contrats automatiques** : le contrat de remplacement est généré automatiquement, conforme au Code de la Santé Publique, et signé électroniquement par les deux parties.
 
@@ -168,7 +168,7 @@ Notre plateforme a été conçue pour répondre aux besoins spécifiques des pha
 
 ## En résumé
 
-Le remplacement en pharmacie ne devrait pas être une source de stress. Avec Soin Direct, trouvez un remplaçant qualifié en quelques heures, en toute conformité légale. Inscrivez-vous gratuitement et publiez votre première mission dès aujourd'hui.`,
+Le remplacement en pharmacie ne devrait pas être une source de stress. Avec Jolene, trouvez un remplaçant qualifié en quelques heures, en toute conformité légale. Inscrivez-vous gratuitement et publiez votre première mission dès aujourd'hui.`,
   },
   {
     slug: 'cddu-contrat-usage-sante',
@@ -195,7 +195,7 @@ Le secteur de la santé fait partie des secteurs autorisés, ce qui permet aux �
 
 ## Les indemnités : IFM et ICP
 
-**L'Indemnité de Fin de Mission (IFM)** : dans le cadre d'un CDD classique, elle est de 10% de la rémunération brute totale. Pour le CDDU, elle n'est pas obligatoire sauf si la convention collective du secteur le prévoit. Dans la pratique, Soin Direct inclut systématiquement l'IFM pour garantir l'attractivité des missions.
+**L'Indemnité de Fin de Mission (IFM)** : dans le cadre d'un CDD classique, elle est de 10% de la rémunération brute totale. Pour le CDDU, elle n'est pas obligatoire sauf si la convention collective du secteur le prévoit. Dans la pratique, Jolene inclut systématiquement l'IFM pour garantir l'attractivité des missions.
 
 **L'Indemnité Compensatrice de Congés Payés (ICP)** : elle est de 10% de la rémunération brute (IFM incluse). Elle compense le fait que le salarié en CDD n'a pas pu prendre ses congés payés pendant la durée du contrat. L'ICP est **toujours obligatoire**, y compris pour les CDDU.
 
@@ -203,7 +203,7 @@ Le secteur de la santé fait partie des secteurs autorisés, ce qui permet aux �
 
 - **Souplesse** : pas de délai de carence entre deux contrats, ce qui permet de renouveler les missions sans interruption.
 - **Adaptabilité** : durée ajustable en fonction des besoins réels de l'établissement.
-- **Simplicité administrative** : sur Soin Direct, le contrat est généré et signé électroniquement en quelques clics.
+- **Simplicité administrative** : sur Jolene, le contrat est généré et signé électroniquement en quelques clics.
 
 ## Obligations de l'employeur
 
@@ -214,7 +214,7 @@ Même dans le cadre d'un CDDU, l'établissement reste soumis à des obligations 
 - **Respect des durées maximales de travail** : 10h/jour, 48h/semaine, repos de 11h entre deux journées.
 - **Rémunération au moins égale** à celle d'un salarié en CDI occupant le même poste.
 
-## Comment Soin Direct gère les CDDU
+## Comment Jolene gère les CDDU
 
 Notre plateforme automatise l'intégralité du processus :
 - Génération automatique du contrat CDDU conforme
@@ -223,12 +223,12 @@ Notre plateforme automatise l'intégralité du processus :
 - Vérification des durées légales de travail et des repos obligatoires
 - Signature électronique sécurisée
 
-Le CDDU est l'outil contractuel idéal pour le staffing médical. Soin Direct le rend accessible et conforme, sans paperasse.`,
+Le CDDU est l'outil contractuel idéal pour le staffing médical. Jolene le rend accessible et conforme, sans paperasse.`,
   },
   {
     slug: 'free-transition-liberal',
-    titre: 'Free Transition : Soin Direct finance votre passage en libéral',
-    extrait: 'Découvrez comment Soin Direct prend en charge jusqu\'à 100% de vos frais d\'installation en libéral grâce au programme Free Transition.',
+    titre: 'Free Transition : Jolene finance votre passage en libéral',
+    extrait: 'Découvrez comment Jolene prend en charge jusqu\'à 100% de vos frais d\'installation en libéral grâce au programme Free Transition.',
     date: '2025-11-28',
     tempsLecture: 5,
     tag: 'Libéral',
@@ -240,7 +240,7 @@ C'est pourquoi nous avons créé **Free Transition**, un programme unique qui pr
 
 ## Les 4 paliers de prise en charge
 
-Free Transition fonctionne sur un système de paliers basé sur vos heures cumulées sur Soin Direct :
+Free Transition fonctionne sur un système de paliers basé sur vos heures cumulées sur Jolene :
 
 ### Palier 1 — 800 heures : 25% pris en charge
 Dès 800 heures cumulées, Soin Direct prend en charge **25% de vos frais d'installation**. Cela couvre typiquement une partie de votre assurance RCP et de votre premier bilan comptable.

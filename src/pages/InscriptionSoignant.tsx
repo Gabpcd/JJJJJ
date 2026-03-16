@@ -150,7 +150,7 @@ export default function InscriptionSoignant() {
     setSubmitting(true);
     try {
       await inscriptionSoignant(form);
-      afficherNotification({ type: 'succes', message: 'Compte créé avec succès ! Bienvenue sur Soin Direct.' });
+      afficherNotification({ type: 'succes', message: 'Compte créé avec succès ! Bienvenue sur Jolene.' });
       navigate('/soignant/tableau-de-bord');
     } catch (err) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
@@ -164,7 +164,7 @@ export default function InscriptionSoignant() {
       <div className="card-base max-w-lg w-full">
         <div className="flex items-center justify-center gap-2 mb-6">
           <HeartPulse className="h-7 w-7 text-primary" />
-          <span className="text-xl font-bold text-primary-dark">Soin Direct</span>
+          <span className="text-xl font-bold text-primary-dark">Jolene</span>
         </div>
         <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Soignant</h1>
 

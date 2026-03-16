@@ -10,7 +10,7 @@ export default function ConfirmerEmail() {
       <div className="card-base max-w-md w-full text-center">
         <div className="flex items-center justify-center gap-2 mb-6">
           <HeartPulse className="h-8 w-8 text-primary" />
-          <span className="text-2xl font-bold text-primary-dark">Soin Direct</span>
+          <span className="text-2xl font-bold text-primary-dark">Jolene</span>
         </div>
 
         <Mail className="h-16 w-16 text-primary mx-auto mb-4" />

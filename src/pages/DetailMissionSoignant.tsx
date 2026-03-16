@@ -361,7 +361,7 @@ export default function DetailMissionSoignant() {
                   </p>
                 )}
                 <p className="text-[10px] text-muted-foreground/60 mt-1">
-                  Cet établissement a publié {countMissions} mission{countMissions > 1 ? 's' : ''} sur Soin Direct
+                  Cet établissement a publié {countMissions} mission{countMissions > 1 ? 's' : ''} sur Jolene
                 </p>
                 {/* E2: Blacklist côté soignant */}
                 {mission.etablissement_id && (

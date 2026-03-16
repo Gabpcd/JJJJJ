@@ -111,7 +111,7 @@ export default function DetailFacture() {
             )}
           </div>
           <div className="text-right">
-            <p className="text-sm font-bold text-foreground">Soin Direct SAS</p>
+            <p className="text-sm font-bold text-foreground">Jolene SAS</p>
             <p className="text-xs text-muted-foreground">Plateforme de mise en relation</p>
             <p className="text-xs text-muted-foreground mt-2">Facturé à :</p>
             <p className="text-sm font-semibold text-foreground">{etab?.nom}</p>
@@ -191,7 +191,7 @@ export default function DetailFacture() {
 
         {/* Footer */}
         <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
-          <p>Soin Direct SAS — Plateforme de mise en relation soignants-établissements</p>
+          <p>Jolene SAS — Plateforme de mise en relation soignants-établissements</p>
           <p>Facture générée automatiquement — Commission sur missions terminées</p>
         </div>
       </div>

@@ -18,7 +18,7 @@ export default function PageCGV() {
       {/* Article 1 */}
       <section id="art1">
         <h2 className="text-xl font-bold text-primary mb-4">Article 1 — Objet</h2>
-        <p className="mb-3">Les présentes Conditions Générales de Vente (ci-après « CGV ») définissent les conditions financières applicables à l'utilisation de la Plateforme Soin Direct par les Établissements de santé.</p>
+        <p className="mb-3">Les présentes Conditions Générales de Vente (ci-après « CGV ») définissent les conditions financières applicables à l'utilisation de la Plateforme Jolene par les Établissements de santé.</p>
         <p className="mb-3">Elles complètent les Conditions Générales d'Utilisation (CGU) et s'appliquent à toute mission réalisée via la Plateforme.</p>
         <p>L'inscription et l'utilisation de la Plateforme par un Établissement impliquent l'acceptation sans réserve des présentes CGV.</p>
       </section>
@@ -26,12 +26,12 @@ export default function PageCGV() {
       {/* Article 2 */}
       <section id="art2">
         <h2 className="text-xl font-bold text-primary mb-4">Article 2 — Nature des frais de service</h2>
-        <p className="mb-3">Soin Direct facture à l'Établissement des frais de service (commission) calculés en pourcentage du montant brut de chaque mission réalisée. Ces frais rémunèrent l'intermédiation technique, la gestion administrative automatisée (contrats, pointage, conformité) et la mise à disposition de la Plateforme.</p>
+        <p className="mb-3">Jolene facture à l'Établissement des frais de service (commission) calculés en pourcentage du montant brut de chaque mission réalisée. Ces frais rémunèrent l'intermédiation technique, la gestion administrative automatisée (contrats, pointage, conformité) et la mise à disposition de la Plateforme.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p className="font-semibold text-foreground">Mention obligatoire :</p>
           <p>Il ne s'agit en aucun cas d'un prélèvement sur le salaire du Soignant. Les frais de service sont exclusivement à la charge de l'Établissement et facturés en sus de la rémunération du Soignant.</p>
         </div>
-        <p>Le Soignant perçoit l'intégralité de sa rémunération brute telle que définie dans le contrat de mission, sans aucune déduction par Soin Direct.</p>
+        <p>Le Soignant perçoit l'intégralité de sa rémunération brute telle que définie dans le contrat de mission, sans aucune déduction par Jolene.</p>
       </section>
 
       {/* Article 3 */}
@@ -125,7 +125,7 @@ export default function PageCGV() {
         <p className="mb-3">Trois modes de paiement sont disponibles :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Paiement par carte bancaire (Stripe)</strong> : paiement en ligne sécurisé, traitement immédiat. Mode par défaut pour les établissements privés.</li>
-          <li><strong>Paiement par virement bancaire</strong> : l'Établissement effectue un virement sur le compte de Soin Direct SAS en indiquant le numéro de facture en référence. Délai de traitement : 2 à 5 jours ouvrés.</li>
+          <li><strong>Paiement par virement bancaire</strong> : l'Établissement effectue un virement sur le compte de Jolene SAS en indiquant le numéro de facture en référence. Délai de traitement : 2 à 5 jours ouvrés.</li>
           <li><strong>Dépôt sur Chorus Pro</strong> : pour les établissements publics soumis à l'obligation de facturation électronique (ordonnance n° 2014-697 du 26 juin 2014). La facture est déposée automatiquement sur Chorus Pro.</li>
         </ul>
 
@@ -138,7 +138,7 @@ export default function PageCGV() {
       <section id="art6">
         <h2 className="text-xl font-bold text-primary mb-4">Article 6 — Programme Free Transition</h2>
         <p className="mb-3">Le programme Free Transition permet aux Soignants ayant atteint 3 200 heures cumulées de bénéficier d'un accompagnement vers l'exercice libéral.</p>
-        <p className="mb-3">La prise en charge par Soin Direct comprend :</p>
+        <p className="mb-3">La prise en charge par Jolene comprend :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li>Génération automatique d'un guide personnalisé (démarches URSSAF, ARS, Ordre professionnel)</li>
           <li>Accès aux outils partenaires à tarif préférentiel (comptabilité Indy, banque Qonto, assurance MACSF)</li>
@@ -150,11 +150,11 @@ export default function PageCGV() {
       {/* Article 7 */}
       <section id="art7">
         <h2 className="text-xl font-bold text-primary mb-4">Article 7 — Secteur public et affacturage</h2>
-        <p className="mb-3">Pour les établissements publics de santé (hôpitaux, CHU, CH, ESPIC), Soin Direct propose des conditions adaptées :</p>
+        <p className="mb-3">Pour les établissements publics de santé (hôpitaux, CHU, CH, ESPIC), Jolene propose des conditions adaptées :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Facturation Chorus Pro</strong> : dépôt automatique des factures conformément aux obligations réglementaires.</li>
           <li><strong>Délais de paiement étendus</strong> : 50 jours conformément au Code de la commande publique.</li>
-          <li><strong>Affacturage</strong> : Soin Direct se réserve le droit de recourir à l'affacturage pour les créances sur le secteur public, sans impact pour l'Établissement. En cas de cession de créance, l'Établissement en sera informé conformément aux dispositions des articles L.313-23 et suivants du Code monétaire et financier (cession Dailly).</li>
+          <li><strong>Affacturage</strong> : Jolene se réserve le droit de recourir à l'affacturage pour les créances sur le secteur public, sans impact pour l'Établissement. En cas de cession de créance, l'Établissement en sera informé conformément aux dispositions des articles L.313-23 et suivants du Code monétaire et financier (cession Dailly).</li>
         </ul>
         <p>Les frais de service applicables au secteur public sont identiques à ceux du secteur privé (grille de l'article 3).</p>
       </section>
@@ -162,7 +162,7 @@ export default function PageCGV() {
       {/* Article 8 */}
       <section id="art8">
         <h2 className="text-xl font-bold text-primary mb-4">Article 8 — Non-sollicitation</h2>
-        <p className="mb-3">L'Établissement s'engage à ne pas recruter, embaucher ou solliciter directement, par quelque moyen que ce soit, un Soignant rencontré par l'intermédiaire de la Plateforme, pendant une durée de douze (12) mois suivant la dernière mission réalisée via Soin Direct.</p>
+        <p className="mb-3">L'Établissement s'engage à ne pas recruter, embaucher ou solliciter directement, par quelque moyen que ce soit, un Soignant rencontré par l'intermédiaire de la Plateforme, pendant une durée de douze (12) mois suivant la dernière mission réalisée via Jolene.</p>
         <p>En cas de manquement, l'Établissement sera redevable d'une indemnité forfaitaire de cinq mille (5 000) euros par Soignant sollicité, sans préjudice de dommages et intérêts complémentaires.</p>
       </section>
     </LayoutLegal>

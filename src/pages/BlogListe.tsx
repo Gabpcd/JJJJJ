@@ -15,12 +15,12 @@ export default function BlogListe() {
   return (
     <>
       <SEOHead
-        title="Blog Soin Direct | Actualités santé et staffing"
-        description="Retrouvez nos articles sur le passage en libéral, la réglementation du staffing médical, le remplacement en pharmacie et les actualités Soin Direct."
-        url="https://app.soindirect.com/blog"
+        title="Blog Jolene | Actualités santé et staffing"
+        description="Retrouvez nos articles sur le passage en libéral, la réglementation du staffing médical, le remplacement en pharmacie et les actualités Jolene."
+        url="https://app.joleneapp.com/blog"
       />
       <SEOPageLayout
-        heroTitle="Le blog Soin Direct"
+        heroTitle="Le blog Jolene"
         heroSubtitle="Guides pratiques, décryptages réglementaires et conseils pour les soignants et les établissements de santé."
         ctaText="Créer mon compte gratuitement"
         ctaHref="/inscription/soignant"
