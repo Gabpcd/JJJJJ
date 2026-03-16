@@ -136,11 +136,39 @@ export default function AdminCalendrier() {
 
         {/* Stats bar */}
         <div className="flex flex-wrap gap-3">
-          <Badge variant="destructive" className="text-xs">{nonPourvues} non pourvue{nonPourvues > 1 ? 's' : ''}</Badge>
-          <Badge className="bg-info text-info-foreground text-xs">{assignees} assignée{assignees > 1 ? 's' : ''}</Badge>
-          <Badge className="bg-success text-success-foreground text-xs">{enCours} en cours</Badge>
-          <Badge variant="secondary" className="text-xs">{terminees} terminée{terminees > 1 ? 's' : ''}</Badge>
-          <Badge variant="outline" className="text-xs">{missions.length} total</Badge>
+          <Badge
+            variant="destructive"
+            className={`text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'NON_POURVUE' ? 'opacity-40' : ''}`}
+            onClick={() => setFiltreStatut(f => f === 'NON_POURVUE' ? null : 'NON_POURVUE')}
+          >
+            {nonPourvues} non pourvue{nonPourvues > 1 ? 's' : ''}
+          </Badge>
+          <Badge
+            className={`bg-info text-info-foreground text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'ASSIGNEE' ? 'opacity-40' : ''}`}
+            onClick={() => setFiltreStatut(f => f === 'ASSIGNEE' ? null : 'ASSIGNEE')}
+          >
+            {assignees} assignée{assignees > 1 ? 's' : ''}
+          </Badge>
+          <Badge
+            className={`bg-success text-success-foreground text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'EN_COURS' ? 'opacity-40' : ''}`}
+            onClick={() => setFiltreStatut(f => f === 'EN_COURS' ? null : 'EN_COURS')}
+          >
+            {enCours} en cours
+          </Badge>
+          <Badge
+            variant="secondary"
+            className={`text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'TERMINEE' ? 'opacity-40' : ''}`}
+            onClick={() => setFiltreStatut(f => f === 'TERMINEE' ? null : 'TERMINEE')}
+          >
+            {terminees} terminée{terminees > 1 ? 's' : ''}
+          </Badge>
+          <Badge
+            variant="outline"
+            className={`text-xs cursor-pointer ${filtreStatut ? 'opacity-60' : ''}`}
+            onClick={() => setFiltreStatut(null)}
+          >
+            {missions.length} total
+          </Badge>
         </div>
 
         {/* Navigation */}
