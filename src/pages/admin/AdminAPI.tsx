@@ -97,7 +97,7 @@ export default function AdminAPI() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Code2 className="h-6 w-6 text-primary" /> API REST Soin Direct v1
+            <Code2 className="h-6 w-6 text-primary" /> API REST Jolene v1
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Documentation et gestion des clés d'accès</p>
         </div>
