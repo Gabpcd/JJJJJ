@@ -195,7 +195,7 @@ Le secteur de la santé fait partie des secteurs autorisés, ce qui permet aux �
 
 ## Les indemnités : IFM et ICP
 
-**L'Indemnité de Fin de Mission (IFM)** : dans le cadre d'un CDD classique, elle est de 10% de la rémunération brute totale. Pour le CDDU, elle n'est pas obligatoire sauf si la convention collective du secteur le prévoit. Dans la pratique, Soin Direct inclut systématiquement l'IFM pour garantir l'attractivité des missions.
+**L'Indemnité de Fin de Mission (IFM)** : dans le cadre d'un CDD classique, elle est de 10% de la rémunération brute totale. Pour le CDDU, elle n'est pas obligatoire sauf si la convention collective du secteur le prévoit. Dans la pratique, Jolene inclut systématiquement l'IFM pour garantir l'attractivité des missions.
 
 **L'Indemnité Compensatrice de Congés Payés (ICP)** : elle est de 10% de la rémunération brute (IFM incluse). Elle compense le fait que le salarié en CDD n'a pas pu prendre ses congés payés pendant la durée du contrat. L'ICP est **toujours obligatoire**, y compris pour les CDDU.
 
