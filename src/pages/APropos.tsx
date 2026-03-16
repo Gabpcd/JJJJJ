@@ -123,7 +123,7 @@ export default function APropos() {
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Presse & Contact</h2>
             <p className="text-muted-foreground mb-8">
               Vous êtes journaliste ou partenaire potentiel ? Contactez-nous à{' '}
-              <a href="mailto:contact@soindirect.com" className="text-primary hover:underline font-medium">contact@soindirect.com</a>.
+              <a href="mailto:contact@joleneapp.com" className="text-primary hover:underline font-medium">contact@joleneapp.com</a>.
             </p>
             <Button variant="outline" disabled className="gap-2">
               <Download className="h-4 w-4" /> Télécharger le dossier de presse
