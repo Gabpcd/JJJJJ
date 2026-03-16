@@ -125,7 +125,7 @@ export default function PageCGV() {
         <p className="mb-3">Trois modes de paiement sont disponibles :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Paiement par carte bancaire (Stripe)</strong> : paiement en ligne sécurisé, traitement immédiat. Mode par défaut pour les établissements privés.</li>
-          <li><strong>Paiement par virement bancaire</strong> : l'Établissement effectue un virement sur le compte de Soin Direct SAS en indiquant le numéro de facture en référence. Délai de traitement : 2 à 5 jours ouvrés.</li>
+          <li><strong>Paiement par virement bancaire</strong> : l'Établissement effectue un virement sur le compte de Jolene SAS en indiquant le numéro de facture en référence. Délai de traitement : 2 à 5 jours ouvrés.</li>
           <li><strong>Dépôt sur Chorus Pro</strong> : pour les établissements publics soumis à l'obligation de facturation électronique (ordonnance n° 2014-697 du 26 juin 2014). La facture est déposée automatiquement sur Chorus Pro.</li>
         </ul>
 
