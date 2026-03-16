@@ -3289,6 +3289,24 @@ export type Database = {
         Args: { p_code: string; p_presence_id: string }
         Returns: Json
       }
+      fn_pool_urgence_etablissement: {
+        Args: never
+        Returns: {
+          annees_experience: number
+          avatar_url: string
+          bio: string
+          distance_km: number
+          en_mission_actuellement: boolean
+          nom: string
+          prenom: string
+          profession: Database["public"]["Enums"]["type_profession"]
+          score_fiabilite: number
+          soignant_id: string
+          specialites: string[]
+          total_missions_urgence: number
+          urgence_rayon_km: number
+        }[]
+      }
       fn_postuler_mission: {
         Args: { p_message?: string; p_mission_id: string }
         Returns: Json
