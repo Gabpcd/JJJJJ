@@ -142,6 +142,7 @@ export default function AdminUtilisateurs() {
                         ) : (
                           <Button size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)}><Ban className="h-3.5 w-3.5 mr-1" />Suspendre</Button>
                         )}
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}><Eye className="h-3.5 w-3.5" /></Button>
                       </TableCell>
                     </TableRow>
                   ))}
