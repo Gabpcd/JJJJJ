@@ -406,7 +406,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         labelConfirmer="Dupliquer"
       />
 
-      {m.statut === 'TERMINEE' && m.soignant_assigne_id && showEvaluation && (
+      {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && showEvaluation && (
         <EvaluationPostMission
           missionId={m.id}
           evalueId={m.soignant_assigne_id}
