@@ -6,7 +6,7 @@ import { Zap, FileText, MapPin, Bell, ArrowRight, Smartphone } from 'lucide-reac
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-/* ─── Inline QR Code SVG for https://app.soindirect.com ─── */
+/* ─── Inline QR Code SVG for https://app.joleneapp.com ─── */
 function QRCode() {
   // Simplified QR-like pattern representing a URL
   const modules = [
