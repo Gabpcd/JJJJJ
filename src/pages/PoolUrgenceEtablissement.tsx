@@ -51,6 +51,9 @@ interface HistoriqueUrgence {
 
 export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?: boolean }) {
   const { user } = useAuth();
+  const Layout = isAdmin 
+    ? ({ children }: { children: React.ReactNode }) => <LayoutAdmin>{children}</LayoutAdmin>
+    : ({ children }: { children: React.ReactNode }) => <LayoutApp role="ADMIN_ETABLISSEMENT">{children}</LayoutApp>;
   const navigate = useNavigate();
   const [soignants, setSoignants] = useState<SoignantPool[]>([]);
   const [historique, setHistorique] = useState<HistoriqueUrgence[]>([]);
