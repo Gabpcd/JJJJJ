@@ -11,8 +11,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
-  BIENVENUE_SOIGNANT: { prenom: 'Marie', lien_profil: 'https://app.soindirect.com/soignant/profil' },
-  BIENVENUE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', lien_profil: 'https://app.soindirect.com/etablissement/profil' },
+  BIENVENUE_SOIGNANT: { prenom: 'Marie', lien_profil: 'https://app.joleneapp.com/soignant/profil' },
+  BIENVENUE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', lien_profil: 'https://app.joleneapp.com/etablissement/profil' },
   MISSION_ACCEPTEE_SOIGNANT: { prenom: 'Marie', mission: 'Remplacement IDE — Jour', etablissement: 'EHPAD Les Oliviers', date: '15 mars 2026', heure: '07h00 – 19h00' },
   MISSION_ACCEPTEE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', mission: 'Remplacement IDE — Jour', soignant: 'Marie Dupont', date: '15 mars 2026' },
   MISSION_ANNULEE_SOIGNANT: { prenom: 'Marie', mission: 'Remplacement AS — Nuit', motif: 'Annulation par l\'établissement' },
