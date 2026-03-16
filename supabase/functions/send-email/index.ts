@@ -43,7 +43,7 @@ const WRAPPER = (content: string) => `
 <body style="margin:0;padding:0;background:#F8FAFC;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;background:white;border-radius:0 0 12px 12px;overflow:hidden;">
     <div style="background:#0F172A;padding:28px 24px;text-align:center;">
-      <span style="color:#17A2B8;font-size:30px;font-weight:bold;letter-spacing:-0.5px;">❤️ Soin Direct</span>
+      <span style="color:#17A2B8;font-size:30px;font-weight:bold;letter-spacing:-0.5px;">❤️ Jolene</span>
     </div>
     <div style="padding:36px 28px 24px;">
       ${content}
