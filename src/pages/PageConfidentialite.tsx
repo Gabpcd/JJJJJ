@@ -17,7 +17,7 @@ export default function PageConfidentialite() {
       {/* Article 1 */}
       <section id="art1">
         <h2 className="text-xl font-bold text-primary mb-4">Article 1 — Responsable du traitement</h2>
-        <p className="mb-3">Le responsable du traitement des données à caractère personnel collectées via la Plateforme Soin Direct est :</p>
+        <p className="mb-3">Le responsable du traitement des données à caractère personnel collectées via la Plateforme Jolene est :</p>
         <div className="bg-muted/50 border border-border rounded-xl p-4 mb-3">
           <p className="font-semibold text-foreground">{ENTREPRISE.nom}</p>
           <p className="text-muted-foreground">SIRET : {ENTREPRISE.siret}</p>
