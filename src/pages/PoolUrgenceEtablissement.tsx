@@ -156,7 +156,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   }
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
+    <Layout>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
