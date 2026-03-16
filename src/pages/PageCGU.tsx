@@ -34,7 +34,7 @@ export default function PageCGU() {
       {/* Article 2 */}
       <section id="art2">
         <h2 className="text-xl font-bold text-primary mb-4">Article 2 — Objet</h2>
-        <p className="mb-3">Les présentes CGU ont pour objet de définir les conditions d'accès et d'utilisation de la Plateforme Soin Direct par les Soignants et les Établissements.</p>
+        <p className="mb-3">Les présentes CGU ont pour objet de définir les conditions d'accès et d'utilisation de la Plateforme Jolene par les Soignants et les Établissements.</p>
         <p className="mb-3">La Plateforme constitue un outil technique de mise en relation facilitant la conclusion de contrats de mission entre Établissements et Soignants. Elle automatise la gestion administrative (contrats, pointage, facturation) pour le compte des parties.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p className="font-semibold text-foreground">Clause essentielle :</p>
