@@ -52,7 +52,7 @@ type LitigeEnrichi = {
 
 const formatDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const formatDateTime = (d?: string | null) => d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-const formatStatutLitige = (statut: string) => statut.replaceAll('_', ' ');
+const formatStatutLitige = (statut: string) => statut.replace(/_/g, ' ');
 
 export default function AdminModeration() {
   usePageTitle('Modération');
