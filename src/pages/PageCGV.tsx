@@ -154,7 +154,7 @@ export default function PageCGV() {
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Facturation Chorus Pro</strong> : dépôt automatique des factures conformément aux obligations réglementaires.</li>
           <li><strong>Délais de paiement étendus</strong> : 50 jours conformément au Code de la commande publique.</li>
-          <li><strong>Affacturage</strong> : Soin Direct se réserve le droit de recourir à l'affacturage pour les créances sur le secteur public, sans impact pour l'Établissement. En cas de cession de créance, l'Établissement en sera informé conformément aux dispositions des articles L.313-23 et suivants du Code monétaire et financier (cession Dailly).</li>
+          <li><strong>Affacturage</strong> : Jolene se réserve le droit de recourir à l'affacturage pour les créances sur le secteur public, sans impact pour l'Établissement. En cas de cession de créance, l'Établissement en sera informé conformément aux dispositions des articles L.313-23 et suivants du Code monétaire et financier (cession Dailly).</li>
         </ul>
         <p>Les frais de service applicables au secteur public sont identiques à ceux du secteur privé (grille de l'article 3).</p>
       </section>
