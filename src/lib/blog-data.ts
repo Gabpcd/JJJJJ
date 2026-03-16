@@ -64,7 +64,7 @@ En zone sous-dotée, vous pouvez bénéficier du **Contrat d'Aide à l'Installat
 
 Un compte dédié à votre activité professionnelle est fortement recommandé (et obligatoire pour certaines formes juridiques). Il facilite la gestion comptable et la séparation entre finances personnelles et professionnelles.
 
-Soin Direct est partenaire de **Qonto**, qui propose une offre spéciale pour les professionnels de santé libéraux avec des frais réduits et un accompagnement dédié.
+Jolene est partenaire de **Qonto**, qui propose une offre spéciale pour les professionnels de santé libéraux avec des frais réduits et un accompagnement dédié.
 
 ## En résumé
 
