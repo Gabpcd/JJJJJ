@@ -63,7 +63,11 @@ export function FactureChorus({ facture, onUpdate }: Props) {
     if (!token) return;
     setLoading(true);
     try {
-      const result = await callChorusEdge(token, facture.id, 'deposer');
+      const result = await callChorusEdge(token, facture.id, 'deposer', {
+        num_engagement: numEngagement,
+        code_service: codeService,
+        num_structure: numStructure,
+      });
       const msg = result.simulation
         ? `🧪 Simulation : ${result.message}`
         : `✅ ${result.message}`;
