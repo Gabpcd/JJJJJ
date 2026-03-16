@@ -134,7 +134,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       afficherNotification({ type: 'erreur', message: (data as any).error });
     } else {
       afficherNotification({ type: 'succes', message: 'Mission annulée.' });
-      navigate('/etablissement/missions');
+      navigate(role === 'ADMIN_PLATEFORME' ? '/admin/calendrier' : '/etablissement/missions');
     }
   };
 
