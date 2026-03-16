@@ -286,7 +286,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           <h2 style="color:#0F172A;margin:0 0 12px;">🎉 Éligible au passage en libéral</h2>
           <p style="color:#334155;">Bonjour ${data.prenom},</p>
           <p style="color:#334155;">Vous avez cumulé <strong>${data.heures_totales}h</strong> et êtes désormais éligible au passage en exercice libéral.</p>
-          ${INFO_BOX('Soin Direct vous accompagne dans toutes les démarches : SIRET, assurance RCP, compte bancaire pro.')}
+          ${INFO_BOX('Jolene vous accompagne dans toutes les démarches : SIRET, assurance RCP, compte bancaire pro.')}
           ${BUTTON('Découvrir le parcours →', `${APP_URL}/soignant/passer-en-liberal`)}
           ${SECURITY_NOTE}
         `),
