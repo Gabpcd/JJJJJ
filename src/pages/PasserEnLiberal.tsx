@@ -175,7 +175,7 @@ export default function PasserEnLiberal() {
     const doc = new jsPDF();
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
-    doc.text('Soin Direct', 20, 20);
+    doc.text('Jolene', 20, 20);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
     const nom = `${soignant?.prenom || ''} ${soignant?.nom || ''}`;

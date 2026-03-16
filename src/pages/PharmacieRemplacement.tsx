@@ -45,10 +45,10 @@ export default function PharmacieRemplacement() {
           </div>
         </section>
 
-        {/* Soin Direct pour les pharmacies */}
+        {/* Jolene pour les pharmacies */}
         <section className="py-16 md:py-20 bg-muted/50">
           <div className="max-w-4xl mx-auto px-4">
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Soin Direct pour les pharmacies</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Jolene pour les pharmacies</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
                 { icon: UserCheck, titre: 'Pharmaciens vérifiés', desc: 'Diplôme, inscription à l\'Ordre et assurance RCP contrôlés.' },

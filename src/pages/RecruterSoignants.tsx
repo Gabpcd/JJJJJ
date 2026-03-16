@@ -48,7 +48,7 @@ export default function RecruterSoignants() {
                 </ul>
               </div>
               <div className="bg-primary/5 border border-primary/20 rounded-xl p-6">
-                <h3 className="font-semibold text-primary mb-3">✅ La solution Soin Direct</h3>
+                <h3 className="font-semibold text-primary mb-3">✅ La solution Jolene</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li>• Commission dégressive à partir de 8%</li>
                   <li>• Candidatures en quelques heures</li>

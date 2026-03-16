@@ -92,7 +92,7 @@ export default function DevenirSoignant() {
           <div className="max-w-3xl mx-auto px-4 text-center">
             <Quote className="h-10 w-10 text-primary/30 mx-auto mb-6" />
             <blockquote className="text-lg md:text-xl text-foreground italic leading-relaxed mb-6">
-              « Grâce à Soin Direct, j'ai pu choisir mes missions librement tout en cumulant mes heures vers le libéral. L'inscription a pris 5 minutes et ma première mission était validée le lendemain. Je recommande à tous mes collègues ! »
+              « Grâce à Jolene, j'ai pu choisir mes missions librement tout en cumulant mes heures vers le libéral. L'inscription a pris 5 minutes et ma première mission était validée le lendemain. Je recommande à tous mes collègues ! »
             </blockquote>
             <p className="font-semibold text-foreground">Marie D.</p>
             <p className="text-sm text-muted-foreground">Infirmière diplômée d'État — Île-de-France</p>

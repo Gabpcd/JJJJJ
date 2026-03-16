@@ -64,8 +64,8 @@ export default function PageMentionsLegales() {
       <section id="contact">
         <h2 className="text-xl font-bold text-primary mb-4">5. Contact</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Contact général :</strong> <a href="mailto:contact@soindirect.com" className="text-primary hover:underline">contact@soindirect.com</a></p>
-          <p><strong className="text-foreground">Délégué à la protection des données (DPO) :</strong> <a href="mailto:dpo@soindirect.com" className="text-primary hover:underline">dpo@soindirect.com</a></p>
+          <p><strong className="text-foreground">Contact général :</strong> <a href="mailto:contact@joleneapp.com" className="text-primary hover:underline">contact@joleneapp.com</a></p>
+          <p><strong className="text-foreground">Délégué à la protection des données (DPO) :</strong> <a href="mailto:dpo@joleneapp.com" className="text-primary hover:underline">dpo@joleneapp.com</a></p>
         </div>
         <p className="mt-4 text-muted-foreground">Pour toute question relative au fonctionnement de la Plateforme, à la protection de vos données personnelles ou à l'exercice de vos droits, n'hésitez pas à nous contacter aux adresses ci-dessus.</p>
       </section>

@@ -46,7 +46,7 @@ export default function InfirmiereLiberal() {
           <div className="max-w-4xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-6">Le parcours vers le libéral</h2>
             <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-10">
-              Pour exercer en libéral, un(e) infirmier(ère) doit justifier de <strong className="text-foreground">3 200 heures d'exercice salarié</strong> sur les 6 dernières années. Soin Direct vous aide à atteindre cet objectif en vous proposant des missions de remplacement et en suivant votre progression heure par heure.
+              Pour exercer en libéral, un(e) infirmier(ère) doit justifier de <strong className="text-foreground">3 200 heures d'exercice salarié</strong> sur les 6 dernières années. Jolene vous aide à atteindre cet objectif en vous proposant des missions de remplacement et en suivant votre progression heure par heure.
             </p>
             <div className="bg-card border border-border rounded-xl p-6 md:p-8">
               <div className="relative">

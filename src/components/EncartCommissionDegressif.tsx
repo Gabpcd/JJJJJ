@@ -23,7 +23,7 @@ export function EncartCommissionDegressif({ netEstime, tauxActuel, palierNom }: 
     <div className="bg-gradient-to-r from-accent/5 to-primary/5 border border-accent/20 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-3">
         <Tag className="h-4 w-4 text-primary" />
-        <p className="font-bold text-foreground">Commission Soin Direct</p>
+        <p className="font-bold text-foreground">Commission Jolene</p>
       </div>
 
       <p className="text-sm text-muted-foreground mb-3">

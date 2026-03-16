@@ -53,7 +53,7 @@ function genererHtmlPreview(type: string, data: Record<string, string>): string 
         <table class="vars">${vars}</table>
         <p style="color:#94a3b8;font-size:12px;margin-top:24px">Ceci est un aperçu de développement. L'email réel utilise le template serveur complet.</p>
       </div>
-      <div class="footer">© 2026 Soin Direct — contact@soindirect.com</div>
+      <div class="footer">© 2026 Jolene — contact@joleneapp.com</div>
     </div>
   </body></html>`;
 }

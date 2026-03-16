@@ -136,8 +136,8 @@ export default function APropos() {
         <section className="py-12 md:py-16">
           <div className="max-w-2xl mx-auto px-4 text-center">
             <p className="text-sm text-muted-foreground">
-              Soin Direct prépare sa levée de fonds seed. Si vous êtes investisseur, contactez-nous à{' '}
-              <a href="mailto:contact@soindirect.com" className="text-primary hover:underline font-medium">contact@soindirect.com</a>.
+              Jolene prépare sa levée de fonds seed. Si vous êtes investisseur, contactez-nous à{' '}
+              <a href="mailto:contact@joleneapp.com" className="text-primary hover:underline font-medium">contact@joleneapp.com</a>.
             </p>
           </div>
         </section>

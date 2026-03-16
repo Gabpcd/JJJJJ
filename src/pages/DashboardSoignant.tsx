@@ -487,7 +487,7 @@ export default function DashboardSoignant() {
       {/* Prévoyance CTA */}
       {!(soignant as any).prevoyance_inscrit && (
         <div className="rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/20 dark:to-purple-900/10 border border-violet-200 dark:border-violet-800 p-4 mb-6 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
-          <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protégez-vous avec la Prévoyance Soin Direct</h3>
+          <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protégez-vous avec la Prévoyance Jolene</h3>
           <p className="text-xs text-muted-foreground mb-2">Assurance santé subventionnée jusqu'à 30%. Bonus : +3 points de fiabilité.</p>
           <span className="text-xs text-primary font-medium">Découvrir les plans →</span>
         </div>

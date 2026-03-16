@@ -176,7 +176,7 @@ export default function ProfilSoignant() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mes-donnees-soin-direct-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       afficherNotification({ type: 'succes', message: 'Données exportées avec succès.' });
