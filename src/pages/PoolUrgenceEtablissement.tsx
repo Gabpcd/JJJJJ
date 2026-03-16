@@ -49,7 +49,7 @@ interface HistoriqueUrgence {
   soignant_assigne_id: string | null;
 }
 
-export default function PoolUrgenceEtablissement() {
+export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?: boolean }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [soignants, setSoignants] = useState<SoignantPool[]>([]);
