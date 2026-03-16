@@ -78,7 +78,7 @@ export default function DevenirSoignant() {
         <section className="py-16 md:py-20">
           <div className="max-w-4xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-8">Professions recherchées</h2>
-            <p className="text-center text-muted-foreground mb-8">Soin Direct recrute des professionnels de santé diplômés dans toutes les spécialités.</p>
+            <p className="text-center text-muted-foreground mb-8">Jolene recrute des professionnels de santé diplômés dans toutes les spécialités.</p>
             <div className="flex flex-wrap justify-center gap-3">
               {professions.map((p) => (
                 <Badge key={p} variant="secondary" className="text-sm py-1.5 px-3">{p}</Badge>
