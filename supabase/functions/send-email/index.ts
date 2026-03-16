@@ -294,7 +294,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 
     case 'RECAP_HEBDO':
       return {
-        subject: 'Votre récap hebdomadaire — Soin Direct',
+        subject: 'Votre récap hebdomadaire — Jolene',
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">📊 Récap de la semaine</h2>
           <p style="color:#334155;">Bonjour ${data.prenom},</p>
