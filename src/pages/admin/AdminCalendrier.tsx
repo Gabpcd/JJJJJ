@@ -51,6 +51,7 @@ export default function AdminCalendrier() {
   const [moisCourant, setMoisCourant] = useState(new Date());
   const [missions, setMissions] = useState<MissionCal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filtreStatut, setFiltreStatut] = useState<string | null>(null);
 
   const debutMois = startOfMonth(moisCourant);
   const finMois = endOfMonth(moisCourant);
