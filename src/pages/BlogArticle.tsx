@@ -135,9 +135,9 @@ export default function BlogArticle() {
             {/* CTA */}
             <div className="mt-12 bg-primary/5 border border-primary/20 rounded-xl p-6 md:p-8 text-center">
               <p className="font-bold text-foreground text-lg mb-2">Vous êtes soignant ?</p>
-              <p className="text-sm text-muted-foreground mb-5">Rejoignez Soin Direct et accédez à des missions de remplacement en toute conformité.</p>
+              <p className="text-sm text-muted-foreground mb-5">Rejoignez Jolene et accédez à des missions de remplacement en toute conformité.</p>
               <Button onClick={() => navigate('/inscription/soignant')} className="gap-2">
-                Rejoignez Soin Direct <ArrowRight className="h-4 w-4" />
+                Rejoignez Jolene <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           </article>

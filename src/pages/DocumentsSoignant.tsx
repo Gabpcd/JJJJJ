@@ -121,7 +121,7 @@ function AttestationSante({ userId }: { userId: string }) {
       )}
 
       <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
-        Les documents originaux (carnet de vaccination, attestation de médecine du travail) sont vérifiés par l'établissement lors de votre première mission. Soin Direct ne stocke aucune donnée de santé.
+        Les documents originaux (carnet de vaccination, attestation de médecine du travail) sont vérifiés par l'établissement lors de votre première mission. Jolene ne stocke aucune donnée de santé.
       </p>
     </div>
   );

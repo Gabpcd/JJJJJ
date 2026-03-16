@@ -137,7 +137,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <HeartPulse className="h-7 w-7 text-sidebar-primary" />
-            <span className="text-xl font-bold text-sidebar-foreground">Soin Direct</span>
+            <span className="text-xl font-bold text-sidebar-foreground">Jolene</span>
           </div>
           <BadgeNotification />
           <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />

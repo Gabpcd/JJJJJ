@@ -73,7 +73,7 @@ export default function WidgetRecrutement() {
             target="_top"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-colors"
           >
-            Postuler sur Soin Direct
+            Postuler sur Jolene
           </a>
         </div>
       </div>

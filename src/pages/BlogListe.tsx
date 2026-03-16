@@ -20,7 +20,7 @@ export default function BlogListe() {
         url="https://app.joleneapp.com/blog"
       />
       <SEOPageLayout
-        heroTitle="Le blog Soin Direct"
+        heroTitle="Le blog Jolene"
         heroSubtitle="Guides pratiques, décryptages réglementaires et conseils pour les soignants et les établissements de santé."
         ctaText="Créer mon compte gratuitement"
         ctaHref="/inscription/soignant"
