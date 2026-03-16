@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Eye, Ban, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
