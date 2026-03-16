@@ -49,7 +49,7 @@ const WRAPPER = (content: string) => `
       ${content}
     </div>
     <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;">
-      <p style="margin:0 0 6px;">Soin Direct SAS — <a href="${APP_URL}" style="color:#17A2B8;text-decoration:none;">soindirect.com</a></p>
+      <p style="margin:0 0 6px;">Jolene SAS — <a href="${APP_URL}" style="color:#17A2B8;text-decoration:none;">joleneapp.com</a></p>
       <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> · 
          <a href="${APP_URL}/confidentialite" style="color:#94A3B8;text-decoration:none;">Confidentialité</a></p>
       <p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>
