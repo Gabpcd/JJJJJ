@@ -99,7 +99,7 @@ export default function PrevoyanceSoignant() {
                   <p>💰 Prime : <span className="font-semibold">{fmt(plan.prime_mensuelle)}/mois</span></p>
                   {subvention > 0 && (
                     <>
-                      <p>🎁 Subvention Soin Direct : <span className="font-semibold text-primary">-{subvention}%</span> (max {fmt(plan.subvention_max_mensuelle || 0)}/mois)</p>
+                      <p>🎁 Subvention Jolene : <span className="font-semibold text-primary">-{subvention}%</span> (max {fmt(plan.subvention_max_mensuelle || 0)}/mois)</p>
                       <p>→ Votre coût : <span className="font-bold text-foreground">~{fmt(coutReel)}/mois</span></p>
                     </>
                   )}
