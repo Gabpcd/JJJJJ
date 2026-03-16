@@ -129,7 +129,7 @@ export default function Telecharger() {
             <PhoneMockup />
             <div className="flex-1 text-center md:text-left">
               <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-6">Bientôt sur les stores</h2>
-              <p className="text-muted-foreground mb-8">L'application Soin Direct sera disponible sur iOS et Android. Inscrivez-vous dès maintenant pour être notifié du lancement.</p>
+              <p className="text-muted-foreground mb-8">L'application Jolene sera disponible sur iOS et Android. Inscrivez-vous dès maintenant pour être notifié du lancement.</p>
               <div className="flex flex-wrap gap-4 justify-center md:justify-start">
                 <Tooltip>
                   <TooltipTrigger asChild>
