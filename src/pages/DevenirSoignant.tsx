@@ -41,7 +41,7 @@ export default function DevenirSoignant() {
         {/* Avantages */}
         <section className="py-16 md:py-20">
           <div className="max-w-6xl mx-auto px-4">
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Pourquoi rejoindre Soin Direct</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Pourquoi rejoindre Jolene</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
               {avantages.map((a) => (
                 <div key={a.titre} className="text-center">
