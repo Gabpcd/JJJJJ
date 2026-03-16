@@ -53,11 +53,11 @@ export default function PageMentionsLegales() {
       {/* Propriété intellectuelle */}
       <section id="pi">
         <h2 className="text-xl font-bold text-primary mb-4">4. Propriété intellectuelle</h2>
-        <p className="mb-3">L'ensemble des contenus présents sur le site soindirect.com (textes, graphismes, images, logos, icônes, logiciels, bases de données) est protégé par le droit d'auteur et le droit des marques.</p>
+        <p className="mb-3">L'ensemble des contenus présents sur le site joleneapp.com (textes, graphismes, images, logos, icônes, logiciels, bases de données) est protégé par le droit d'auteur et le droit des marques.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
-          <p>La marque « <strong>Soin Direct</strong> » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le <strong>numéro 5186614</strong>.</p>
+          <p>La marque « <strong>Jolene</strong> » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le <strong>numéro 5186614</strong>.</p>
         </div>
-        <p>Toute reproduction, représentation, modification, publication, adaptation ou exploitation de tout ou partie des éléments du site, quel que soit le moyen ou le procédé utilisé, est interdite sauf autorisation écrite préalable de Soin Direct SAS. Toute exploitation non autorisée constitue une contrefaçon au sens des articles L.335-2 et suivants du Code de la propriété intellectuelle.</p>
+        <p>Toute reproduction, représentation, modification, publication, adaptation ou exploitation de tout ou partie des éléments du site, quel que soit le moyen ou le procédé utilisé, est interdite sauf autorisation écrite préalable de Jolene SAS. Toute exploitation non autorisée constitue une contrefaçon au sens des articles L.335-2 et suivants du Code de la propriété intellectuelle.</p>
       </section>
 
       {/* Contact */}
