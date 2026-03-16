@@ -90,9 +90,9 @@ export default function PageAccueil() {
   return (
     <>
       <SEOHead
-        title="Soin Direct — Staffing médical simplifié"
+        title="Jolene — Staffing médical simplifié"
         description="Plateforme de mise en relation entre établissements de santé et soignants qualifiés. Publiez des missions, signez vos contrats et pointez en ligne."
-        url="https://app.soindirect.com/"
+        url="https://app.joleneapp.com/"
       />
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* ═══ Header ═══ */}
