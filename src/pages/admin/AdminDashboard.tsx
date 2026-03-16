@@ -63,8 +63,8 @@ export default function AdminDashboard() {
           <CarteKPI icone={Building2} valeur={kpi?.etablissements_total ?? '—'} label="Établissements" sousLabel={`+${kpi?.etablissements_semaine ?? 0} cette semaine`} couleurIcone="text-info" couleurFond="bg-info/10" />
           <CarteKPI icone={CheckCircle} valeur={kpi?.missions_terminees_total ?? '—'} label="Missions terminées" sousLabel={`${kpi?.missions_terminees_mois ?? 0} ce mois`} couleurIcone="text-success" couleurFond="bg-success/10" />
           <CarteKPI icone={Clock} valeur={kpi?.missions_ouvertes ?? '—'} label="Missions ouvertes" couleurIcone="text-warning" couleurFond="bg-warning/10" />
-          <CarteKPI icone={Banknote} valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)} label="CA commissions ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
-          <CarteKPI icone={TrendingUp} valeur={formatEur(kpi?.ca_commissions_ht_total ?? 0)} label="CA commissions total" couleurIcone="text-primary" couleurFond="bg-primary/10" />
+          <CarteKPI icone={Banknote} valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)} label="CA commissions ce mois" sousLabel={`Total : ${formatEur(kpi?.ca_commissions_ht_total ?? 0)}`} couleurIcone="text-success" couleurFond="bg-success/10" />
+          <CarteKPI icone={TrendingUp} valeur={formatEur(kpi?.ca_encaisse_total ?? 0)} label="CA encaissé (factures payées)" couleurIcone="text-primary" couleurFond="bg-primary/10" />
           <CarteKPI icone={Target} valeur={`${kpi?.taux_acceptation_mois ?? 0}%`} label="Taux acceptation ce mois" couleurIcone="text-info" couleurFond="bg-info/10" />
           <CarteKPI icone={Star} valeur={`${kpi?.score_fiabilite_moyen ?? 0}/100`} label="Score fiabilité moyen" couleurIcone="text-warning" couleurFond="bg-warning/10" />
         </div>
