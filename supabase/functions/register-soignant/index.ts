@@ -37,6 +37,67 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
+// Professions exemptées de RPPS (aides-soignantes, accompagnants éducatifs)
+const PROFESSIONS_SANS_RPPS = ['AS', 'AES'];
+
+function normalizeStr(s: string): string {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Server-side RPPS verification against Annuaire Santé */
+async function verifierRppsServeur(rpps: string, nom: string, prenom: string): Promise<{ valide: boolean; erreur?: string }> {
+  // Mode test
+  if (rpps === '00000000001') {
+    return { valide: true };
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+
+  try {
+    // Call our own verify-rpps Edge Function internally
+    const res = await fetchWithTimeout(
+      `${supabaseUrl}/functions/v1/verify-rpps`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rpps, nom, prenom }),
+      },
+      10000
+    );
+
+    if (!res.ok) {
+      console.error('verify-rpps HTTP error:', res.status);
+      // On network/service failure, we still block — security first
+      return { valide: false, erreur: 'Impossible de vérifier le numéro RPPS. Réessayez.' };
+    }
+
+    const data = await res.json();
+
+    if (!data.trouve) {
+      return { valide: false, erreur: 'Numéro RPPS introuvable dans l\'annuaire santé.' };
+    }
+
+    if (data.correspond === false) {
+      return { valide: false, erreur: 'Le numéro RPPS ne correspond pas à votre identité (nom/prénom).' };
+    }
+
+    return { valide: true };
+  } catch (err) {
+    console.error('RPPS verification error:', err);
+    return { valide: false, erreur: 'Impossible de vérifier le numéro RPPS. Réessayez.' };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
@@ -111,12 +172,36 @@ serve(async (req) => {
       }
     }
 
-    // Validate RPPS format if provided
-    if (rpps && !/^\d{11}$/.test(rpps)) {
-      return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
-        status: 400,
-        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+    // ══════════════════════════════════════════════════
+    // RPPS VERIFICATION — Server-side (double vérification)
+    // ══════════════════════════════════════════════════
+    const rppsObligatoire = !PROFESSIONS_SANS_RPPS.includes(profession);
+
+    if (rppsObligatoire) {
+      // RPPS is mandatory for this profession
+      if (!rpps || !/^\d{11}$/.test(rpps)) {
+        return new Response(JSON.stringify({ error: 'Le numéro RPPS est obligatoire pour votre profession (11 chiffres).' }), {
+          status: 400,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Verify against Annuaire Santé
+      const verification = await verifierRppsServeur(rpps, nom, prenom);
+      if (!verification.valide) {
+        return new Response(JSON.stringify({ error: verification.erreur }), {
+          status: 400,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+    } else {
+      // For AS/AES: RPPS optional, but validate format if provided
+      if (rpps && !/^\d{11}$/.test(rpps)) {
+        return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
+          status: 400,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Validate rayon
@@ -146,6 +231,7 @@ serve(async (req) => {
       type_contrat: contrats[0],
       types_contrat_acceptes: JSON.stringify(contrats),
       numero_rpps: rpps || null,
+      rpps_verifie: rppsObligatoire && !!rpps, // Mark as verified if server check passed
       rayon_deplacement_km: rayonKm,
       adresse_lat: typeof lat === 'number' ? lat : null,
       adresse_lng: typeof lng === 'number' ? lng : null,
@@ -192,7 +278,7 @@ serve(async (req) => {
       action: 'INSCRIPTION',
       type_ressource: 'soignant',
       id_ressource: user.id,
-      details: { evenement: 'inscription', profession },
+      details: { evenement: 'inscription', profession, rpps_verifie: rppsObligatoire && !!rpps },
       navigateur_acteur: body.navigateur || null,
     });
 
