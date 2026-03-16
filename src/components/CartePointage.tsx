@@ -4,6 +4,7 @@ import { fr } from 'date-fns/locale';
 import { Clock } from 'lucide-react';
 import { BoutonPointage } from './BoutonPointage';
 import { SaisieCodePointage } from './SaisieCodePointage';
+import { ScannerQRPointage } from './ScannerQRPointage';
 import { ResultatPointage } from './ResultatPointage';
 import { BadgeCertification } from './BadgeCertification';
 import { supabase } from '@/integrations/supabase/client';
