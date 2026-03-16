@@ -31,7 +31,7 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || payload.data?.titre || 'Soin Direct';
+  const title = payload.notification?.title || payload.data?.titre || 'Jolene';
   const body = payload.notification?.body || payload.data?.corps || '';
   const lien = payload.data?.lien || '/';
 
