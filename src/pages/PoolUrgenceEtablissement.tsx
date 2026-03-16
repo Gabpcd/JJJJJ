@@ -142,7 +142,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
   if (loading) {
     return (
-      {isAdmin ? <LayoutAdmin> : <LayoutApp role="ADMIN_ETABLISSEMENT">}
+      <Layout>
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[1, 2, 3].map(i => (
@@ -151,7 +151,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
           </div>
           <div className="card-base animate-pulse h-64" />
         </div>
-      </LayoutApp>
+      </Layout>
     );
   }
 
