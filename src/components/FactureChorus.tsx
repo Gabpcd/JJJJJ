@@ -29,14 +29,14 @@ const CHORUS_STATUT_LABELS: Record<string, string> = {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://flripxtsyegjshnhzjkz.supabase.co';
 
-async function callChorusEdge(accessToken: string, factureId: string, action: 'deposer' | 'statut') {
+async function callChorusEdge(accessToken: string, factureId: string, action: 'deposer' | 'statut', extra: Record<string, string> = {}) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/chorus-pro-deposit`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ facture_id: factureId, action }),
+    body: JSON.stringify({ facture_id: factureId, action, ...extra }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Erreur Chorus Pro');
@@ -63,7 +63,11 @@ export function FactureChorus({ facture, onUpdate }: Props) {
     if (!token) return;
     setLoading(true);
     try {
-      const result = await callChorusEdge(token, facture.id, 'deposer');
+      const result = await callChorusEdge(token, facture.id, 'deposer', {
+        num_engagement: numEngagement,
+        code_service: codeService,
+        num_structure: numStructure,
+      });
       const msg = result.simulation
         ? `🧪 Simulation : ${result.message}`
         : `✅ ${result.message}`;
