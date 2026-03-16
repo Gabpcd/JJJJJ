@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPI } from '@/components/CarteKPI';
 import { BoutonFavori } from '@/components/BoutonFavori';
 import { AvatarDisplay } from '@/components/AvatarUpload';
