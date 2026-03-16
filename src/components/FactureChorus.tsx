@@ -36,7 +36,7 @@ async function callChorusEdge(accessToken: string, factureId: string, action: 'd
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ facture_id: factureId, action }),
+    body: JSON.stringify({ facture_id: factureId, action, ...extra }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Erreur Chorus Pro');
