@@ -158,7 +158,7 @@ Notre plateforme a été conçue pour répondre aux besoins spécifiques des pha
 
 **Publication rapide** : décrivez votre mission (dates, horaires, type de pharmacie) et publiez-la en 5 minutes. Votre annonce est visible immédiatement par les pharmaciens remplaçants inscrits dans votre zone géographique.
 
-**Pharmaciens vérifiés** : chaque pharmacien inscrit sur Soin Direct est vérifié auprès du RPPS. Diplôme, inscription à l'Ordre et assurance RCP sont contrôlés avant toute candidature.
+**Pharmaciens vérifiés** : chaque pharmacien inscrit sur Jolene est vérifié auprès du RPPS. Diplôme, inscription à l'Ordre et assurance RCP sont contrôlés avant toute candidature.
 
 **Contrats automatiques** : le contrat de remplacement est généré automatiquement, conforme au Code de la Santé Publique, et signé électroniquement par les deux parties.
 
