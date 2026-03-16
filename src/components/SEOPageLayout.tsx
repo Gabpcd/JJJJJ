@@ -65,7 +65,7 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-3">
                 <HeartPulse className="h-5 w-5 text-primary" />
-                <span className="font-bold text-foreground">Soin Direct</span>
+                <span className="font-bold text-foreground">Jolene</span>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">La plateforme de confiance pour le remplacement et le staffing en santé.</p>
             </div>
