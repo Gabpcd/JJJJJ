@@ -36,11 +36,9 @@ serve(async (req) => {
       prenom: 'Gabrielle',
       nom: 'Picard',
       email: 'test@joleneapp.com',
-      telephone: '+33 6 00 00 00 01',
+      telephone: '+33600000001',
       date_naissance: '1995-06-12',
       profession: 'IDE',
-      type_contrat: 'CDDU',
-      types_contrat_acceptes: JSON.stringify(['CDDU', 'VACATION']),
       numero_rpps: '00000000001',
       rpps_verifie: true,
       rayon_deplacement_km: 30,
@@ -50,8 +48,8 @@ serve(async (req) => {
     });
     if (e1b) throw e1b;
     results.soignante = { id: uid, email: 'test@joleneapp.com', status: 'OK' };
-  } catch (err) {
-    results.soignante = { status: 'ERROR', message: String(err) };
+  } catch (err: any) {
+    results.soignante = { status: 'ERROR', detail: err?.message || JSON.stringify(err) };
   }
 
   // ─── 2. Établissement ───
@@ -79,30 +77,15 @@ serve(async (req) => {
       adresse_lng: 2.3311,
       email_contact: 'etab@joleneapp.com',
       telephone_contact: '0142000000',
-      taux_majoration_nuit_pourcent: 25,
-      taux_majoration_dimanche_pourcent: 50,
-      taux_majoration_ferie_pourcent: 100,
     });
     if (e2b) throw e2b;
     results.etablissement = { id: uid, email: 'etab@joleneapp.com', status: 'OK' };
-  } catch (err) {
-    results.etablissement = { status: 'ERROR', message: String(err) };
+  } catch (err: any) {
+    results.etablissement = { status: 'ERROR', detail: err?.message || JSON.stringify(err) };
   }
 
-  // ─── 3. Admin ───
-  try {
-    const { data: adminAuth, error: e3 } = await admin.auth.admin.createUser({
-      email: 'admin@joleneapp.com',
-      password: 'TestJolene2026!',
-      email_confirm: true,
-      app_metadata: { role: 'ADMIN_PLATEFORME' },
-      user_metadata: { prenom: 'Admin', nom: 'Jolene' },
-    });
-    if (e3) throw e3;
-    results.admin = { id: adminAuth.user.id, email: 'admin@joleneapp.com', status: 'OK' };
-  } catch (err) {
-    results.admin = { status: 'ERROR', message: String(err) };
-  }
+  // ─── 3. Admin (already created) ───
+  results.admin = { email: 'admin@joleneapp.com', status: 'ALREADY_CREATED' };
 
   return new Response(JSON.stringify(results, null, 2), {
     status: 200,
