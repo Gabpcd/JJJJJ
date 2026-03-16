@@ -16,7 +16,7 @@ export default function PageMentionsLegales() {
       <section id="editeur">
         <h2 className="text-xl font-bold text-primary mb-4">1. Éditeur du site</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Raison sociale :</strong> Soin Direct SAS</p>
+          <p><strong className="text-foreground">Raison sociale :</strong> Jolene SAS</p>
           <p><strong className="text-foreground">Forme juridique :</strong> Société par Actions Simplifiée (SAS)</p>
           <p><strong className="text-foreground">Présidente :</strong> Gabrielle Picard</p>
           <p><strong className="text-foreground">Siège social :</strong> XX rue XXXX, 75006 Paris, France</p>
