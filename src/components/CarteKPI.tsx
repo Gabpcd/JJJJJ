@@ -1,5 +1,6 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface CarteKPIProps {
   icone: LucideIcon;
@@ -11,9 +12,15 @@ interface CarteKPIProps {
   lien?: string;
 }
 
-export function CarteKPI({ icone: Icone, valeur, label, sousLabel, couleurIcone, couleurFond }: CarteKPIProps) {
+export function CarteKPI({ icone: Icone, valeur, label, sousLabel, couleurIcone, couleurFond, lien }: CarteKPIProps) {
+  const navigate = useNavigate();
+  const isClickable = !!lien;
+
   return (
-    <div className="card-kpi">
+    <div
+      className={`card-kpi ${isClickable ? 'cursor-pointer hover:shadow-md hover:ring-1 hover:ring-primary/20 transition-all' : ''}`}
+      onClick={isClickable ? () => navigate(lien!) : undefined}
+    >
       <div className="flex items-start gap-3">
         <div className={`rounded-xl p-2.5 ${couleurFond}`}>
           <Icone className={`h-5 w-5 ${couleurIcone}`} />
