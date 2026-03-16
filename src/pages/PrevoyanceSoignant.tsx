@@ -128,7 +128,7 @@ export default function PrevoyanceSoignant() {
           ouvert={true}
           onFermer={() => setPlanASouscrire(null)}
           titre={`Souscrire au plan ${planASouscrire.nom} ?`}
-          message={`Vous allez souscrire pour ${fmt(planASouscrire.prime_mensuelle)}/mois. Soin Direct subventionne ${planASouscrire.subvention_plateforme_pourcent || 0}% de la prime. Votre score de fiabilité gagnera +3 points.`}
+          message={`Vous allez souscrire pour ${fmt(planASouscrire.prime_mensuelle)}/mois. Jolene subventionne ${planASouscrire.subvention_plateforme_pourcent || 0}% de la prime. Votre score de fiabilité gagnera +3 points.`}
           labelConfirmer="Confirmer la souscription"
           variante="primaire"
           onConfirmer={() => souscrire(planASouscrire)}
