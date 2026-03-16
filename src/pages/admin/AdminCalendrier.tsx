@@ -83,8 +83,8 @@ export default function AdminCalendrier() {
             soignantIds.length ? supabase.from('soignants').select('id, prenom, nom').in('id', soignantIds) : Promise.resolve({ data: [] } as any),
           ]);
 
-          const etabMap = new Map((resEtabs.data || []).map((e: any) => [e.id, e.nom]));
-          const soignantMap = new Map((resSoignants.data || []).map((s: any) => [s.id, `${s.prenom || ''} ${s.nom || ''}`.trim()]));
+          const etabMap = new Map<string, string>((resEtabs.data || []).map((e: any) => [e.id, e.nom]));
+          const soignantMap = new Map<string, string>((resSoignants.data || []).map((s: any) => [s.id, `${s.prenom || ''} ${s.nom || ''}`.trim()]));
 
           items.forEach(m => {
             m.etab_nom = etabMap.get(m.etablissement_id) || '';
