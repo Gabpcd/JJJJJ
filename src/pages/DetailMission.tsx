@@ -203,7 +203,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 {m.soignants ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-foreground">👤 {m.soignants.prenom} {m.soignants.nom}</p>
+                      <Link to={`/etablissement/soignants/${m.soignant_assigne_id}`} className="font-semibold text-foreground hover:text-primary hover:underline">
+                        👤 {m.soignants.prenom} {m.soignants.nom}
+                      </Link>
                       {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
                         <BoutonFavori soignantId={m.soignant_assigne_id} etablissementId={m.etablissement_id} />
                       )}
@@ -280,8 +282,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <CodesPointageMission missionId={m.id} />
               )}
-              {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
-                <ChatMission missionId={m.id} role={role === 'ADMIN_PLATEFORME' ? 'ETABLISSEMENT' : 'ETABLISSEMENT'} prenomUtilisateur={role === 'ADMIN_PLATEFORME' ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={role === 'ADMIN_PLATEFORME'} />
+              {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE') && (
+                <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={role === 'ADMIN_PLATEFORME' ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={role === 'ADMIN_PLATEFORME'} />
               )}
             </div>
           </div>
@@ -364,8 +366,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         )}
       </Tabs>
 
-      <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border p-3 flex gap-3 md:static md:mt-6 md:border-0 md:p-0 md:justify-end z-30">
-        {m.statut === 'OUVERTE' && (
+      <div className="fixed bottom-16 left-0 right-0 z-30 flex gap-3 border-t border-border bg-card p-3 md:static md:mt-6 md:justify-end md:border-0 md:p-0">
+        {!isAdmin && m.statut === 'OUVERTE' && (
           <button onClick={() => navigate(`/etablissement/missions/${m.id}/modifier`)} className="btn-secondary text-sm flex-1 md:flex-none">
             Modifier
           </button>

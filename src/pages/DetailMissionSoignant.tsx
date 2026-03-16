@@ -11,7 +11,6 @@ import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatMission } from '@/components/ChatMission';
-import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { BlocConformite } from '@/components/BlocConformite';
 import { BandeauGraceDocuments } from '@/components/BandeauGraceDocuments';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
@@ -536,8 +535,8 @@ export default function DetailMissionSoignant() {
             )}
           </div>
 
-          {/* Chat — visible si ASSIGNEE ou EN_COURS */}
-          {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS') && estAssigne && (
+          {/* Chat — visible si ASSIGNEE, EN_COURS ou TERMINEE */}
+          {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS' || mission.statut === 'TERMINEE') && estAssigne && (
             <ChatMission
               missionId={mission.id}
               role="SOIGNANT"
@@ -592,15 +591,6 @@ export default function DetailMissionSoignant() {
         />
       )}
 
-      {mission.statut === 'TERMINEE' && mission.etablissement_id && showEvaluation && (
-        <EvaluationPostMission
-          missionId={mission.id}
-          evalueId={mission.etablissement_id}
-          typeEvaluateur="SOIGNANT"
-          nomEvalue={etablissement?.nom || 'Établissement'}
-          onTermine={() => setShowEvaluation(false)}
-        />
-      )}
     </LayoutApp>
   );
 }

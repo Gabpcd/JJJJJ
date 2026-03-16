@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { sanitizeText } from '@/lib/sanitize';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -100,7 +101,8 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = fals
     });
 
     if (error) {
-      setTexte(contenuBrut); // Restore on error
+      setTexte(contenuBrut);
+      toast.error("Impossible d'envoyer le message.");
     }
 
     setEnvoi(false);
