@@ -23,7 +23,7 @@ export default function PageConfidentialite() {
           <p className="text-muted-foreground">SIRET : {ENTREPRISE.siret}</p>
           <p className="text-muted-foreground">Siège social : {ENTREPRISE.adresse}</p>
           <p className="text-muted-foreground">E-mail : {ENTREPRISE.email}</p>
-          <p className="text-muted-foreground mt-2">Délégué à la protection des données (DPO) : <a href="mailto:dpo@soindirect.com" className="text-primary hover:underline">dpo@soindirect.com</a></p>
+          <p className="text-muted-foreground mt-2">Délégué à la protection des données (DPO) : <a href="mailto:dpo@joleneapp.com" className="text-primary hover:underline">dpo@joleneapp.com</a></p>
         </div>
         <p>Le traitement des données est réalisé conformément au Règlement (UE) 2016/679 du 27 avril 2016 (RGPD) et à la loi n° 78-17 du 6 janvier 1978 modifiée (loi Informatique et Libertés).</p>
       </section>
