@@ -141,7 +141,7 @@ export default function PageCGU() {
       {/* Article 8 */}
       <section id="art8">
         <h2 className="text-xl font-bold text-primary mb-4">Article 8 — Résiliation</h2>
-        <p className="mb-3">Tout utilisateur peut résilier son compte à tout moment depuis son espace personnel ou par demande adressée à contact@soindirect.com.</p>
+        <p className="mb-3">Tout utilisateur peut résilier son compte à tout moment depuis son espace personnel ou par demande adressée à contact@joleneapp.com.</p>
         <p className="mb-3">La résiliation prend effet immédiatement, sous réserve de l'achèvement des missions en cours et du règlement des sommes dues.</p>
         <p className="mb-3">L'Éditeur se réserve le droit de suspendre ou supprimer un compte en cas de :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
