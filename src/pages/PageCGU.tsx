@@ -114,8 +114,8 @@ export default function PageCGU() {
       {/* Article 6 */}
       <section id="art6">
         <h2 className="text-xl font-bold text-primary mb-4">Article 6 — Propriété intellectuelle</h2>
-        <p className="mb-3">L'ensemble des éléments constitutifs de la Plateforme (textes, graphismes, logiciels, bases de données, marques, logos, algorithmes) est la propriété exclusive de Soin Direct SAS ou de ses concédants de licence.</p>
-        <p className="mb-3">La marque « Soin Direct » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le numéro 5186614. Toute reproduction, représentation ou exploitation non autorisée constituerait une contrefaçon sanctionnée par les articles L.335-2 et suivants du Code de la propriété intellectuelle.</p>
+        <p className="mb-3">L'ensemble des éléments constitutifs de la Plateforme (textes, graphismes, logiciels, bases de données, marques, logos, algorithmes) est la propriété exclusive de Jolene SAS ou de ses concédants de licence.</p>
+        <p className="mb-3">La marque « Jolene » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le numéro 5186614. Toute reproduction, représentation ou exploitation non autorisée constituerait une contrefaçon sanctionnée par les articles L.335-2 et suivants du Code de la propriété intellectuelle.</p>
         <p>Les utilisateurs s'interdisent de copier, extraire, décompiler ou procéder à toute ingénierie inverse de la Plateforme.</p>
       </section>
 
