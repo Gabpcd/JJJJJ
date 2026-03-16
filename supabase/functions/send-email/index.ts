@@ -20,7 +20,7 @@ function corsHeaders(req: Request) {
   };
 }
 
-const APP_URL = Deno.env.get('APP_URL') || 'https://app.soindirect.com';
+const APP_URL = Deno.env.get('APP_URL') || 'https://app.joleneapp.com';
 
 // ─── XSS prevention ─────────────────────────────────────
 
