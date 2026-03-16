@@ -45,7 +45,7 @@ function genererHtmlPreview(type: string, data: Record<string, string>): string 
     .badge{display:inline-block;background:#17a2b8;color:#fff;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600}
   </style></head><body>
     <div class="card">
-      <div class="header"><span class="logo">♥ Soin Direct</span></div>
+      <div class="header"><span class="logo">♥ Jolene</span></div>
       <div class="body">
         <span class="badge">${type.replace(/_/g, ' ')}</span>
         <h1 style="margin-top:16px">Prévisualisation du template</h1>
