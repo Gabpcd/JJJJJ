@@ -2877,21 +2877,21 @@ export type Database = {
         Returns: Json
       }
       fn_export_fec: {
-        Args: { p_annee?: number }
+        Args: { p_annee: number }
         Returns: {
-          comp_aux_lib: string
+          comp_aux_libelle: string
           comp_aux_num: string
-          compte_lib: string
+          compte_libelle: string
           compte_num: string
           credit: number
           debit: number
+          devise: string
           ecriture_date: string
-          ecriture_lib: string
+          ecriture_libelle: string
           ecriture_num: string
-          idevise: string
           journal_code: string
-          journal_lib: string
-          montant_devise: number
+          journal_libelle: string
+          montant: number
           piece_date: string
           piece_ref: string
         }[]
