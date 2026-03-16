@@ -194,6 +194,8 @@ export default function AdminFacturation() {
   const [recherche, setRecherche] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const navigate = useNavigate();
+
   const charger = async () => {
     setLoading(true);
     const { data } = await supabase.from('factures')
