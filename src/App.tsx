@@ -88,6 +88,7 @@ const AdminDemo = lazy(() => import("./pages/admin/AdminDemo"));
 const AdminEmails = lazy(() => import("./pages/admin/AdminEmails"));
 const AdminAPI = lazy(() => import("./pages/admin/AdminAPI"));
 const AdminGroupes = lazy(() => import("./pages/admin/AdminGroupes"));
+const AdminDetailUtilisateur = lazy(() => import("./pages/admin/AdminDetailUtilisateur"));
 
 const queryClient = new QueryClient();
 
