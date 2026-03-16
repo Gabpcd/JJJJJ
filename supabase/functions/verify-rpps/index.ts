@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-// createClient supprimé : verify-rpps est accessible sans JWT
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -36,7 +35,7 @@ function isRateLimited(ip: string): boolean {
   return entry.count > RATE_LIMIT_MAX;
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 6000): Promise<Response> {
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -44,6 +43,100 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Normalise une chaîne pour comparaison (minuscule, sans accents, sans espaces superflus) */
+function normalize(s: string): string {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
+/** Mapping des codes profession FHIR → codes internes */
+function mapProfessionCode(code: string | undefined): string {
+  const mapping: Record<string, string> = {
+    '10': 'MEDECIN',
+    '21': 'PHARMACIEN',
+    '26': 'AUDIOPROTHESISTE',
+    '28': 'OPTICIEN',
+    '40': 'PHARMACIEN',
+    '50': 'SAGE_FEMME',
+    '60': 'IDE',
+    '69': 'IDE',   // Infirmier psychiatrique
+    '70': 'KINE',
+    '80': 'PEDICURE',
+    '86': 'AIDE_SOIGNANT',
+    '91': 'ORTHOPHONISTE',
+    '94': 'ERGOTHERAPEUTE',
+    '96': 'PSYCHOMOTRICIEN',
+    '98': 'MANIPULATEUR_RADIO',
+  };
+  return mapping[code || ''] || code || '';
+}
+
+/**
+ * Interroge l'API FHIR officielle de l'Annuaire Santé (ANS).
+ * Endpoint : https://gateway.api.esante.gouv.fr/fhir/v1/Practitioner
+ * Documentation : https://ansforge.github.io/annuaire-sante-fhir-documentation/
+ */
+async function queryFhirAnnuaire(rpps: string): Promise<{
+  trouve: boolean;
+  nom?: string;
+  prenom?: string;
+  professionCode?: string;
+  professionLabel?: string;
+  actif?: boolean;
+}> {
+  const FHIR_BASE = 'https://gateway.api.esante.gouv.fr/fhir/v1';
+  const url = `${FHIR_BASE}/Practitioner?identifier=${rpps}&_format=json`;
+
+  const response = await fetchWithTimeout(url, {
+    headers: {
+      'Accept': 'application/fhir+json',
+      'User-Agent': 'SoinDirect/1.0',
+    },
+  }, 8000);
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error(`FHIR API error ${response.status}:`, body.slice(0, 500));
+    throw new Error(`Annuaire Santé API indisponible (HTTP ${response.status})`);
+  }
+
+  const bundle = await response.json();
+
+  // FHIR Bundle — check if any entries match
+  if (!bundle.entry || bundle.entry.length === 0) {
+    return { trouve: false };
+  }
+
+  const practitioner = bundle.entry[0].resource;
+
+  // Extract name (FHIR HumanName)
+  const officialName = practitioner.name?.find((n: any) => n.use === 'official') || practitioner.name?.[0];
+  const nom = officialName?.family || '';
+  const prenom = officialName?.given?.[0] || '';
+
+  // Extract profession from qualification
+  let professionCode: string | undefined;
+  let professionLabel: string | undefined;
+  if (practitioner.qualification) {
+    for (const q of practitioner.qualification) {
+      const coding = q.code?.coding?.[0];
+      if (coding) {
+        professionCode = coding.code;
+        professionLabel = coding.display;
+        break;
+      }
+    }
+  }
+
+  return {
+    trouve: true,
+    nom,
+    prenom,
+    professionCode,
+    professionLabel,
+    actif: practitioner.active !== false,
+  };
 }
 
 serve(async (req) => {
@@ -59,9 +152,6 @@ serve(async (req) => {
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
-
-  // Vérification JWT désactivée pour permettre l'usage avant connexion (inscription)
-  // La fonction ne retourne que des données publiques RPPS.
 
   try {
     const { numero_rpps, rpps, prenom, nom } = await req.json();
@@ -80,9 +170,9 @@ serve(async (req) => {
         trouve: true,
         correspond: true,
         rpps: numeroRpps,
-        nom: 'PICARD',
-        prenom: 'Gabrielle',
-        profession: 'IDE',
+        nom_api: 'PICARD',
+        prenom_api: 'Gabrielle',
+        profession_api: 'IDE',
         actif: true,
         source: 'Mode test',
       }), {
@@ -90,95 +180,60 @@ serve(async (req) => {
       });
     }
 
-    // Fetch from Annuaire Santé API
-    const url = `https://annuaire.sante.fr/web/site/professionnel-de-sante?rpps=${numeroRpps}`;
-    
+    // Appel API FHIR officielle de l'Annuaire Santé
     try {
-      const response = await fetchWithTimeout(url, {
-        headers: {
-          'User-Agent': 'SoinDirect/1.0',
-          'Accept': 'text/html,application/xhtml+xml',
-        },
-      }, 6000);
+      const result = await queryFhirAnnuaire(numeroRpps);
 
-      if (response.ok) {
-        const html = await response.text();
-        
-        const nomMatch = html.match(/class="[^"]*nom[^"]*"[^>]*>([^<]+)</i);
-        const prenomMatch = html.match(/class="[^"]*prenom[^"]*"[^>]*>([^<]+)</i);
-        const professionMatch = html.match(/class="[^"]*profession[^"]*"[^>]*>([^<]+)</i);
-        
-        const nomCompletMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
-        const profMatch = html.match(/Profession\s*:\s*([^<]+)/i) || html.match(/profession[^>]*>([^<]+)/i);
-
-        if (nomCompletMatch || nomMatch) {
-          const nomRetourne = nomCompletMatch?.[1]?.trim() || `${prenomMatch?.[1]?.trim() || ''} ${nomMatch?.[1]?.trim() || ''}`.trim();
-          const profRetournee = profMatch?.[1]?.trim() || professionMatch?.[1]?.trim() || '';
-
-          if (nomRetourne && nomRetourne.length > 2) {
-            const nomNormalise = nomRetourne.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const nomSeul = nom?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
-            
-            const correspond = nomNormalise.includes(nomSeul) || nomSeul.includes(nomNormalise.split(' ').pop() || '');
-
-            return new Response(JSON.stringify({
-              trouve: true,
-              correspond,
-              nom_api: nomRetourne,
-              profession_api: profRetournee,
-            }), {
-              headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-            });
-          }
-        }
+      if (!result.trouve) {
+        return new Response(JSON.stringify({
+          trouve: false,
+          correspond: false,
+          nom_api: null,
+          prenom_api: null,
+          profession_api: null,
+          source: 'FHIR Annuaire Santé',
+        }), {
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
       }
-    } catch (fetchError) {
-      console.error('Erreur fetch annuaire:', fetchError);
+
+      // Vérification de correspondance d'identité
+      const nomNorm = normalize(result.nom || '');
+      const prenomNorm = normalize(result.prenom || '');
+      const nomFourni = normalize(nom || '');
+      const prenomFourni = normalize(prenom || '');
+
+      // Nom : doit correspondre (contient ou est contenu)
+      const nomCorrespond = !nomFourni || nomNorm.includes(nomFourni) || nomFourni.includes(nomNorm);
+
+      // Prénom : comparaison sur les 3 premières lettres (prénoms composés)
+      const prenomCorrespond = !prenomFourni ||
+        prenomNorm.slice(0, 3) === prenomFourni.slice(0, 3);
+
+      const correspond = nomCorrespond && prenomCorrespond;
+
+      return new Response(JSON.stringify({
+        trouve: true,
+        correspond,
+        nom_api: result.nom,
+        prenom_api: result.prenom,
+        profession_api: result.professionLabel || mapProfessionCode(result.professionCode),
+        actif: result.actif,
+        source: 'FHIR Annuaire Santé',
+      }), {
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+
+    } catch (fhirError) {
+      console.error('Erreur API FHIR Annuaire Santé:', fhirError);
+      // En cas d'indisponibilité de l'API, on bloque par sécurité
+      return new Response(JSON.stringify({
+        error: 'Impossible de vérifier le numéro RPPS auprès de l\'Annuaire Santé. Réessayez ultérieurement.',
+      }), {
+        status: 503,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
     }
-
-    // If direct fetch fails, try the search API
-    try {
-      const searchUrl = `https://annuaire.sante.fr/web/site/professionnel-de-sante/search?identifiant=${numeroRpps}`;
-      const searchResponse = await fetchWithTimeout(searchUrl, {
-        headers: { 'User-Agent': 'SoinDirect/1.0', 'Accept': 'application/json, text/html' },
-      }, 6000);
-
-      if (searchResponse.ok) {
-        const contentType = searchResponse.headers.get('content-type') || '';
-        
-        if (contentType.includes('json')) {
-          const data = await searchResponse.json();
-          if (data && (data.nom || data.results?.length > 0)) {
-            const result = data.results?.[0] || data;
-            const nomRetourne = result.nom || result.nomExercice || '';
-            const profRetournee = result.profession || result.libelleProfession || '';
-            const nomSeul = nom?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
-            const nomApiNorm = nomRetourne.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            
-            return new Response(JSON.stringify({
-              trouve: true,
-              correspond: nomApiNorm.includes(nomSeul),
-              nom_api: nomRetourne,
-              profession_api: profRetournee,
-            }), {
-              headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-            });
-          }
-        }
-      }
-    } catch (searchError) {
-      console.error('Erreur search annuaire:', searchError);
-    }
-
-    // RPPS not found
-    return new Response(JSON.stringify({
-      trouve: false,
-      correspond: false,
-      nom_api: null,
-      profession_api: null,
-    }), {
-      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
 
   } catch (error) {
     console.error('Erreur verify-rpps:', error);
