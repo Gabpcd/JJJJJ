@@ -10,6 +10,7 @@ const NAV_ADMIN = [
   { icone: Users, label: 'Utilisateurs', route: '/admin/utilisateurs' },
   { icone: Shield, label: 'Modération', route: '/admin/moderation' },
   { icone: CreditCard, label: 'Facturation', route: '/admin/facturation' },
+  { icone: ClipboardList, label: 'Missions', route: '/admin/missions' },
   { icone: ShieldCheck, label: 'Conformité', route: '/admin/conformite' },
   { icone: Mail, label: 'Emails', route: '/admin/emails' },
   { icone: Code2, label: 'API', route: '/admin/api' },
