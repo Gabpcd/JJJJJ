@@ -19,9 +19,10 @@ interface ChatMissionProps {
   missionId: string;
   role: 'SOIGNANT' | 'ETABLISSEMENT';
   prenomUtilisateur: string;
+  isAdmin?: boolean;
 }
 
-export function ChatMission({ missionId, role, prenomUtilisateur }: ChatMissionProps) {
+export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = false }: ChatMissionProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [texte, setTexte] = useState('');
