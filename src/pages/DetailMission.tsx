@@ -138,7 +138,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     }
   };
 
-  if (loading || !mission) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  const isAdmin = role === 'ADMIN_PLATEFORME';
+  const backUrl = isAdmin ? '/admin/calendrier' : '/etablissement/missions';
+  const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour aux missions';
+
+  if (loading || !mission) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
 
   const m = mission;
   const debut = new Date(m.debut_le);
