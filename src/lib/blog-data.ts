@@ -52,7 +52,7 @@ Les cotisations représentent environ 40 à 45% de votre bénéfice net. Elles c
 
 La Responsabilité Civile Professionnelle est **obligatoire**. Elle vous couvre en cas de dommage causé à un patient dans le cadre de votre exercice. Plusieurs assureurs proposent des contrats spécifiques aux IDEL : MACSF, Groupe Pasteur Mutualité, MNH…
 
-Comptez entre 100 et 300 € par an selon les garanties. Soin Direct a négocié des tarifs préférentiels avec la MACSF pour les soignants inscrits sur la plateforme.
+Comptez entre 100 et 300 € par an selon les garanties. Jolene a négocié des tarifs préférentiels avec la MACSF pour les soignants inscrits sur la plateforme.
 
 ## Étape 6 : Choisir son lieu d'exercice
 
