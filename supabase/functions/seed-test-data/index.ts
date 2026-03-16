@@ -77,7 +77,6 @@ Deno.serve(async (req) => {
         service: 'Consultation',
         debut_le: '2026-03-12T08:00:00+01:00',
         fin_le: '2026-03-12T14:00:00+01:00',
-        duree_heures: 6,
         taux_horaire_base: 24.05,
         total_brut: 144.30,
         net_a_payer: 135.00,
