@@ -165,7 +165,7 @@ export default function Telecharger() {
           <div className="max-w-3xl mx-auto px-4 text-center">
             <Smartphone className="h-10 w-10 text-primary mx-auto mb-4" />
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">En attendant</h2>
-            <p className="text-muted-foreground mb-6">Vous pouvez déjà utiliser Soin Direct depuis votre navigateur mobile.</p>
+            <p className="text-muted-foreground mb-6">Vous pouvez déjà utiliser Jolene depuis votre navigateur mobile.</p>
             <Button onClick={() => navigate('/connexion')} className="gap-2 mb-10">
               Ouvrir l'app web <ArrowRight className="h-4 w-4" />
             </Button>
