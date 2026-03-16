@@ -227,8 +227,8 @@ Le CDDU est l'outil contractuel idéal pour le staffing médical. Jolene le rend
   },
   {
     slug: 'free-transition-liberal',
-    titre: 'Free Transition : Soin Direct finance votre passage en libéral',
-    extrait: 'Découvrez comment Soin Direct prend en charge jusqu\'à 100% de vos frais d\'installation en libéral grâce au programme Free Transition.',
+    titre: 'Free Transition : Jolene finance votre passage en libéral',
+    extrait: 'Découvrez comment Jolene prend en charge jusqu\'à 100% de vos frais d\'installation en libéral grâce au programme Free Transition.',
     date: '2025-11-28',
     tempsLecture: 5,
     tag: 'Libéral',
