@@ -90,7 +90,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = fals
     setEnvoi(true);
     setTexte('');
 
-    const typeAuteur = role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT';
+    const typeAuteur = isAdmin ? 'ADMIN' : role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT';
 
     const { error } = await supabase.from('messages_mission').insert({
       mission_id: missionId,
