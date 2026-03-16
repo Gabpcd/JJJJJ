@@ -1,8 +1,8 @@
 const firebaseConfig = {
   apiKey: "AIzaSyCsj-tfliVxZl3F9ncrtnHR-5xJu3B16vQ",
-  authDomain: "jolene.firebaseapp.com",
-  projectId: "jolene",
-  storageBucket: "jolene.firebasestorage.app",
+  authDomain: "soin-direct.firebaseapp.com",
+  projectId: "soin-direct",
+  storageBucket: "soin-direct.firebasestorage.app",
   messagingSenderId: "983137696907",
   appId: "1:983137696907:web:08decd33bbd6d51e8fe88e"
 };
