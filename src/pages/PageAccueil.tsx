@@ -72,7 +72,7 @@ function RevealOnScroll({ children, className = '', delay = 0 }: { children: Rea
 /* ─── FAQ data ─── */
 const faqData = [
   { q: 'Comment fonctionne la commission ?', a: 'Jolene facture une commission dégressive à l\'établissement, calculée sur le montant brut de la mission. Plus vous publiez de missions, plus le taux baisse. Aucun frais pour le soignant.' },
-  { q: 'Soin Direct est-il une agence d\'intérim ?', a: 'Non. Soin Direct est une plateforme de mise en relation. Le contrat est signé directement entre l\'établissement et le soignant. Nous ne sommes pas employeur.' },
+  { q: 'Jolene est-il une agence d\'intérim ?', a: 'Non. Jolene est une plateforme de mise en relation. Le contrat est signé directement entre l\'établissement et le soignant. Nous ne sommes pas employeur.' },
   { q: 'Comment sont vérifiés les soignants ?', a: 'Chaque soignant est vérifié via le Répertoire Partagé des Professionnels de Santé (RPPS). Diplômes, assurance RCP et pièce d\'identité sont contrôlés avant toute mission.' },
   { q: 'Quels types de contrats sont générés ?', a: 'La plateforme génère automatiquement des CDD d\'usage ou des contrats de vacation conformes au Code du Travail, signés électroniquement par les deux parties.' },
   { q: 'Comment fonctionne le pointage ?', a: 'Le soignant pointe son arrivée et son départ via l\'application mobile avec géolocalisation GPS. Le périmètre est vérifié automatiquement par rapport à l\'adresse de l\'établissement.' },
