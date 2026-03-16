@@ -470,7 +470,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Soin Direct <noreply@soindirect.com>',
+        from: 'Jolene <noreply@joleneapp.com>',
         to: [resolvedEmail],
         subject,
         html,

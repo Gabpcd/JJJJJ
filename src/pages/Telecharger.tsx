@@ -207,7 +207,7 @@ export default function Telecharger() {
         {/* QR Code */}
         <section className="py-16 md:py-20 bg-muted/50">
           <div className="max-w-md mx-auto px-4 text-center">
-            <h2 className="text-xl font-bold text-foreground mb-6">Scannez pour accéder à Soin Direct</h2>
+            <h2 className="text-xl font-bold text-foreground mb-6">Scannez pour accéder à Jolene</h2>
             <div className="bg-white p-6 rounded-2xl inline-block shadow-sm border border-border">
               <QRCode />
             </div>

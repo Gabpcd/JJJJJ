@@ -70,7 +70,7 @@ export default function PrevoyanceSoignant() {
     <LayoutApp role="SOIGNANT">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground">🛡️ Prévoyance</h1>
-        <p className="text-sm text-muted-foreground mt-1">Protégez-vous avec les plans subventionnés Soin Direct</p>
+        <p className="text-sm text-muted-foreground mt-1">Protégez-vous avec les plans subventionnés Jolene</p>
       </div>
 
       {souscrit && (

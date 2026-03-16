@@ -112,7 +112,7 @@ serve(async (req) => {
             currency: "eur",
             product_data: {
               name: `Facture ${facture.numero_facture}`,
-              description: `Commission Soin Direct — ${facture.nombre_missions ?? 0} missions`,
+              description: `Commission Jolene — ${facture.nombre_missions ?? 0} missions`,
             },
             unit_amount: Math.round((facture.montant_ttc ?? 0) * 100),
           },
