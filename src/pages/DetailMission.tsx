@@ -150,9 +150,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <button onClick={() => navigate('/etablissement/missions')} className="text-sm text-primary hover:underline mb-4 inline-block">
-        ← Retour aux missions
+    <LayoutApp role={role}>
+      <button onClick={() => navigate(backUrl)} className="text-sm text-primary hover:underline mb-4 inline-block">
+        {backLabel}
       </button>
 
       {alerteCDDU?.alerte && (
