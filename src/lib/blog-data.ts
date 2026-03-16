@@ -103,7 +103,7 @@ Pour les hôpitaux et établissements publics, la loi Rist a des conséquences m
 
 Les soignants paramédicaux (IDE, AS, pharmaciens) sont moins touchés que les médecins, car les plafonds restent proches des rémunérations habituelles du marché. Néanmoins, la loi impose une **transparence accrue** sur les rémunérations.
 
-Sur Soin Direct, tous les taux horaires sont affichés avant la candidature. La plateforme vérifie automatiquement que les missions proposées par les établissements publics respectent les plafonds Rist en vigueur. Un **bandeau d'alerte** informe le soignant si une mission est soumise au plafonnement.
+Sur Jolene, tous les taux horaires sont affichés avant la candidature. La plateforme vérifie automatiquement que les missions proposées par les établissements publics respectent les plafonds Rist en vigueur. Un **bandeau d'alerte** informe le soignant si une mission est soumise au plafonnement.
 
 ## Le cas particulier du secteur privé
 
