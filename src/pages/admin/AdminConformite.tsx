@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
@@ -19,18 +19,17 @@ interface Indicateur {
   renderRow: (item: any) => React.ReactNode;
 }
 
-const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-/** Lien cliquable vers une fiche admin */
 function LienAdmin({ to, children }: { to: string; children: React.ReactNode }) {
   return (
     <Link
       to={to}
-      className="text-primary hover:underline inline-flex items-center gap-1 group"
+      className="group inline-flex items-center gap-1 text-primary hover:underline"
       onClick={(e) => e.stopPropagation()}
     >
       {children}
-      <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <ExternalLink className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
     </Link>
   );
 }
@@ -72,10 +71,12 @@ const INDICATEURS: Indicateur[] = [
     rpcCle: 'plafond_48h_alertes',
     label: 'Alertes 48h',
     icone: ShieldAlert,
-    colonnes: ['Soignant', 'Profession', 'Heures cette semaine'],
+    colonnes: ['Soignant', 'Mission', 'Établissement', 'Profession', 'Heures semaine'],
     renderRow: (item: any) => (
       <>
         <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
+        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
+        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
         <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
         <TableCell className="font-semibold text-destructive">{item.heures_semaine}h</TableCell>
       </>
@@ -86,10 +87,12 @@ const INDICATEURS: Indicateur[] = [
     rpcCle: 'documents_expires',
     label: 'Documents expirés',
     icone: FileWarning,
-    colonnes: ['Soignant', 'Profession', 'Document', 'Expiré le'],
+    colonnes: ['Soignant', 'Mission', 'Établissement', 'Profession', 'Document', 'Expiré le'],
     renderRow: (item: any) => (
       <>
         <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
+        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
+        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
         <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
         <TableCell>{item.type_document}</TableCell>
         <TableCell className="text-destructive">{formatDate(item.valide_jusqua)}</TableCell>
@@ -101,10 +104,12 @@ const INDICATEURS: Indicateur[] = [
     rpcCle: 'documents_en_attente',
     label: 'Documents en attente',
     icone: FileQuestion,
-    colonnes: ['Soignant', 'Profession', 'Document', 'Téléversé le'],
+    colonnes: ['Soignant', 'Mission', 'Établissement', 'Profession', 'Document', 'Téléversé le'],
     renderRow: (item: any) => (
       <>
         <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
+        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
+        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
         <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
         <TableCell>{item.type_document}</TableCell>
         <TableCell className="text-muted-foreground">{formatDate(item.televerse_le)}</TableCell>
@@ -116,10 +121,11 @@ const INDICATEURS: Indicateur[] = [
     rpcCle: 'cddu_repetitifs',
     label: 'CDDU répétitifs',
     icone: Repeat,
-    colonnes: ['Soignant', 'Établissement', 'Nb missions', 'Première', 'Dernière'],
+    colonnes: ['Soignant', 'Mission', 'Établissement', 'Nb missions', 'Première', 'Dernière'],
     renderRow: (item: any) => (
       <>
         <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
+        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
         <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
         <TableCell className="font-semibold">{item.nb_missions}</TableCell>
         <TableCell className="text-muted-foreground">{formatDate(item.premiere_mission)}</TableCell>
@@ -132,10 +138,12 @@ const INDICATEURS: Indicateur[] = [
     rpcCle: 'soignants_sans_docs',
     label: 'Soignants sans documents',
     icone: UserX,
-    colonnes: ['Soignant', 'Profession', 'Email', 'Inscrit le'],
+    colonnes: ['Soignant', 'Mission', 'Établissement', 'Profession', 'Email', 'Inscrit le'],
     renderRow: (item: any) => (
       <>
         <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
+        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
+        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
         <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
         <TableCell className="text-muted-foreground">
           {item.email ? (
@@ -212,29 +220,30 @@ export default function AdminConformite() {
 
   const mappedData: Record<string, number> = {};
   if (data) {
-    INDICATEURS.forEach(ind => {
+    INDICATEURS.forEach((ind) => {
       mappedData[ind.cle] = data[ind.cle] ?? data[ind.rpcCle] ?? 0;
     });
   }
 
-  const selectedInd = INDICATEURS.find(i => i.cle === selected);
+  const selectedInd = INDICATEURS.find((i) => i.cle === selected);
 
   return (
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Conformité" />
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Conformité</h1>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {INDICATEURS.map((ind) => {
             const val = mappedData[ind.cle] ?? 0;
             const isSelected = selected === ind.cle;
             return (
               <Card
                 key={ind.cle}
-                className={`border cursor-pointer transition-all hover:shadow-md ${getBgCouleur(val)} ${isSelected ? 'ring-2 ring-primary' : ''}`}
+                className={`cursor-pointer border transition-all hover:shadow-md ${getBgCouleur(val)} ${isSelected ? 'ring-2 ring-primary' : ''}`}
                 onClick={() => toggleDetail(ind.cle)}
               >
-                <CardContent className="pt-5 pb-5 flex items-center gap-4">
+                <CardContent className="flex items-center gap-4 pt-5 pb-5">
                   <div className={`rounded-xl p-2.5 ${getBgCouleur(val)}`}>
                     <ind.icone className={`h-5 w-5 ${getCouleur(val)}`} />
                   </div>
@@ -250,9 +259,9 @@ export default function AdminConformite() {
         </div>
 
         {selected && selectedInd && (
-          <Card className="animate-in fade-in-0 slide-in-from-top-2 duration-200">
+          <Card className="animate-in slide-in-from-top-2 fade-in-0 duration-200">
             <CardContent className="pt-5">
-              <div className="flex items-center gap-2 mb-4">
+              <div className="mb-4 flex items-center gap-2">
                 <selectedInd.icone className="h-5 w-5 text-foreground" />
                 <h2 className="text-base font-semibold text-foreground">{selectedInd.label}</h2>
                 <Badge variant="outline" className="ml-auto">{mappedData[selected] ?? 0} élément(s)</Badge>
@@ -267,7 +276,7 @@ export default function AdminConformite() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        {selectedInd.colonnes.map(col => (
+                        {selectedInd.colonnes.map((col) => (
                           <TableHead key={col} className="text-xs">{col}</TableHead>
                         ))}
                       </TableRow>
@@ -282,7 +291,7 @@ export default function AdminConformite() {
                   </Table>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-6">Aucun élément à afficher</p>
+                <p className="py-6 text-center text-sm text-muted-foreground">Aucun élément à afficher</p>
               )}
             </CardContent>
           </Card>

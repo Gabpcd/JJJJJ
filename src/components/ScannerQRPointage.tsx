@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, X, Loader2 } from 'lucide-react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Camera, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 interface ScannerQRPointageProps {
@@ -13,19 +13,20 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
   const [resultat, setResultat] = useState<{ success: boolean; message?: string } | null>(null);
   const [erreurCamera, setErreurCamera] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const containerId = `qr-reader-${type}`;
   const processingRef = useRef(false);
+  const reactId = useId();
+  const containerId = useMemo(() => `qr-reader-${type}-${reactId.replace(/[:]/g, '')}`, [reactId, type]);
 
   const stopScanner = useCallback(async () => {
-    if (scannerRef.current) {
-      try {
-        const state = scannerRef.current.getState();
-        if (state === 2) { // SCANNING
-          await scannerRef.current.stop();
-        }
-      } catch {
-        // ignore
+    if (!scannerRef.current) return;
+    try {
+      if (scannerRef.current.getState() === 2) {
+        await scannerRef.current.stop();
       }
+      await scannerRef.current.clear();
+    } catch {
+      // ignore cleanup errors
+    } finally {
       scannerRef.current = null;
     }
   }, []);
@@ -44,11 +45,25 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
 
     let cancelled = false;
 
+    const verifierAccesCamera = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('getUserMedia indisponible');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      stream.getTracks().forEach((track) => track.stop());
+    };
+
     const demarrer = async () => {
       setScanning(true);
       setErreurCamera(null);
+      setResultat(null);
 
       try {
+        await verifierAccesCamera();
         const scanner = new Html5Qrcode(containerId);
         scannerRef.current = scanner;
 
@@ -62,61 +77,54 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
           async (decodedText) => {
             if (cancelled || processingRef.current) return;
 
-            // Validate: must be exactly 6 digits
             const code = decodedText.trim();
             if (!/^\d{6}$/.test(code)) return;
 
             processingRef.current = true;
-
-            try {
-              await stopScanner();
-            } catch {
-              // ignore
-            }
+            setScanning(false);
+            await stopScanner();
 
             const result = await onCodeScanne(code);
             setResultat(result);
 
             if (result.success) {
-              setTimeout(() => fermer(), 1500);
-            } else {
-              processingRef.current = false;
-              // Restart scanner after error
               setTimeout(() => {
-                if (!cancelled && scannerRef.current === null) {
-                  setOuvert(false);
-                  setTimeout(() => setOuvert(true), 100);
-                }
-              }, 2000);
+                void fermer();
+              }, 1200);
+              return;
             }
+
+            processingRef.current = false;
           },
           () => {
-            // QR not found in frame — ignore
+            // ignore frame misses
           }
         );
       } catch (err: any) {
         if (!cancelled) {
+          const message = err?.message || '';
           setErreurCamera(
-            err?.message?.includes('NotAllowedError')
-              ? 'Accès à la caméra refusé. Autorisez l\'accès dans les paramètres de votre navigateur.'
-              : err?.message?.includes('NotFoundError')
+            message.includes('NotAllowedError')
+              ? 'Accès à la caméra refusé. Autorisez l’accès à la caméra puis réessayez.'
+              : message.includes('NotFoundError')
                 ? 'Aucune caméra détectée sur cet appareil.'
-                : `Erreur caméra : ${err?.message || 'inconnue'}`
+                : 'Impossible d’ouvrir la caméra pour scanner le QR code.'
           );
           setScanning(false);
         }
       }
     };
 
-    // Small delay for DOM to be ready
-    const timer = setTimeout(demarrer, 200);
+    const timer = window.setTimeout(() => {
+      void demarrer();
+    }, 150);
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
-      stopScanner();
+      window.clearTimeout(timer);
+      void stopScanner();
     };
-  }, [ouvert, containerId, onCodeScanne, stopScanner, fermer]);
+  }, [containerId, fermer, onCodeScanne, ouvert, stopScanner]);
 
   const isArrivee = type === 'arrivee';
 
@@ -124,10 +132,10 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
     return (
       <button
         onClick={() => setOuvert(true)}
-        className={`w-full py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 border ${
+        className={`flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition-all ${
           isArrivee
-            ? 'border-primary/30 text-primary bg-primary/5 hover:bg-primary/10'
-            : 'border-muted-foreground/30 text-muted-foreground bg-muted/30 hover:bg-muted/50'
+            ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10'
+            : 'border-muted-foreground/30 bg-muted/30 text-muted-foreground hover:bg-muted/50'
         }`}
       >
         <Camera className="h-4 w-4" />
@@ -137,24 +145,22 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
   }
 
   return (
-    <div className="rounded-xl border border-primary/30 bg-background overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-primary/5 border-b border-primary/20">
+    <div className="overflow-hidden rounded-xl border border-primary/30 bg-background">
+      <div className="flex items-center justify-between border-b border-primary/20 bg-primary/5 px-3 py-2">
         <p className="text-xs font-semibold text-primary">
           {isArrivee ? '📷 Scanner QR arrivée' : '📷 Scanner QR départ'}
         </p>
-        <button onClick={fermer} className="text-muted-foreground hover:text-foreground p-1">
+        <button onClick={() => void fermer()} className="p-1 text-muted-foreground hover:text-foreground">
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Scanner area */}
       <div className="relative">
         <div id={containerId} className="w-full" style={{ minHeight: 280 }} />
 
         {scanning && !erreurCamera && !resultat && (
           <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-            <span className="text-xs bg-background/80 backdrop-blur-sm text-muted-foreground px-3 py-1 rounded-full border border-border">
+            <span className="rounded-full border border-border bg-background/85 px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm">
               Placez le QR code dans le cadre
             </span>
           </div>
@@ -163,19 +169,16 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
         {erreurCamera && (
           <div className="p-4 text-center">
             <p className="text-sm text-destructive">{erreurCamera}</p>
-            <button
-              onClick={fermer}
-              className="mt-2 text-xs text-primary hover:underline"
-            >
+            <button onClick={() => void fermer()} className="mt-2 text-xs text-primary hover:underline">
               Fermer
             </button>
           </div>
         )}
 
         {resultat && (
-          <div className={`absolute inset-0 flex items-center justify-center ${resultat.success ? 'bg-success/20' : 'bg-destructive/20'} backdrop-blur-sm`}>
-            <div className="bg-background rounded-xl p-4 text-center shadow-lg border border-border">
-              <p className={`text-2xl mb-1 ${resultat.success ? '' : ''}`}>{resultat.success ? '✅' : '❌'}</p>
+          <div className={`absolute inset-0 flex items-center justify-center backdrop-blur-sm ${resultat.success ? 'bg-success/20' : 'bg-destructive/20'}`}>
+            <div className="rounded-xl border border-border bg-background p-4 text-center shadow-lg">
+              <p className="mb-1 text-2xl">{resultat.success ? '✅' : '❌'}</p>
               <p className={`text-sm font-semibold ${resultat.success ? 'text-success' : 'text-destructive'}`}>
                 {resultat.message || (resultat.success ? 'Pointage réussi !' : 'Échec')}
               </p>
