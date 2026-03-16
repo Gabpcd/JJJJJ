@@ -80,7 +80,7 @@ export default function BlogArticle() {
   return (
     <>
       <SEOHead
-        title={`${article.titre} | Blog Soin Direct`}
+        title={`${article.titre} | Blog Jolene`}
         description={article.extrait}
         url={url}
       />
