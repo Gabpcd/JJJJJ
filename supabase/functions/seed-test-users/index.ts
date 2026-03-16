@@ -15,13 +15,25 @@ serve(async (req) => {
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    db: { schema: 'public' },
   });
 
   const results: Record<string, unknown> = {};
 
-  // IDs from existing auth.users
   const SOIGNANTE_ID = '57d814fb-c09b-4528-b4e0-ed8369328bd3';
   const ETAB_ID = '8500dba5-2c73-4035-8383-b854d59a9864';
+  const OLD_SOIGNANTE_ID = 'ec814d29-3c4d-43fd-a8ae-914e0cb8d42c';
+
+  // ─── 0. Cleanup orphan soignant with same RPPS ───
+  try {
+    // Delete old orphan profile
+    await admin.from('soignants').delete().eq('id', OLD_SOIGNANTE_ID);
+    // Delete old auth user if exists
+    await admin.auth.admin.deleteUser(OLD_SOIGNANTE_ID);
+    results.cleanup = 'old orphan deleted';
+  } catch (err: any) {
+    results.cleanup = err?.message || 'no cleanup needed';
+  }
 
   // ─── 1. Soignante profile ───
   try {
@@ -68,7 +80,7 @@ serve(async (req) => {
     results.etablissement = { status: 'ERROR', detail: err?.message || JSON.stringify(err) };
   }
 
-  results.admin = { id: '09e82688-e524-42bb-9268-1384c757f33d', email: 'admin@joleneapp.com', status: 'OK (auth only)' };
+  results.admin = { id: '09e82688-e524-42bb-9268-1384c757f33d', email: 'admin@joleneapp.com', status: 'OK' };
 
   return new Response(JSON.stringify(results, null, 2), {
     status: 200,
