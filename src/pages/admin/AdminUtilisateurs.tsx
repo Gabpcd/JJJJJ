@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Eye, Ban, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
@@ -13,6 +14,7 @@ import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 export default function AdminUtilisateurs() {
+  const navigate = useNavigate();
   usePageTitle('Utilisateurs');
   const [soignants, setSoignants] = useState<any[]>([]);
   const [etabs, setEtabs] = useState<any[]>([]);
@@ -106,6 +108,7 @@ export default function AdminUtilisateurs() {
                         ) : (
                           <Button size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)}><Ban className="h-3.5 w-3.5 mr-1" />Suspendre</Button>
                         )}
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}><Eye className="h-3.5 w-3.5" /></Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -139,6 +142,7 @@ export default function AdminUtilisateurs() {
                         ) : (
                           <Button size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)}><Ban className="h-3.5 w-3.5 mr-1" />Suspendre</Button>
                         )}
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}><Eye className="h-3.5 w-3.5" /></Button>
                       </TableCell>
                     </TableRow>
                   ))}
