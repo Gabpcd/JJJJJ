@@ -3010,13 +3010,29 @@ export type Database = {
           ville_etablissement: string
         }[]
       }
-      fn_missions_publiques_recherche: {
-        Args: {
-          p_profession?: Database["public"]["Enums"]["type_profession"]
-          p_ville?: string
-        }
-        Returns: Json
-      }
+      fn_missions_publiques_recherche:
+        | {
+            Args: { p_profession?: string; p_ville?: string }
+            Returns: {
+              code_postal: string
+              debut_le: string
+              est_urgente: boolean
+              fin_le: string
+              id: string
+              intitule: string
+              profession_requise: string
+              taux_horaire_base: number
+              total_count: number
+              ville: string
+            }[]
+          }
+        | {
+            Args: {
+              p_profession?: Database["public"]["Enums"]["type_profession"]
+              p_ville?: string
+            }
+            Returns: Json
+          }
       fn_modifier_mission_etablissement: {
         Args: {
           p_description?: string

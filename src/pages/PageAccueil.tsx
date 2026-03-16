@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
-import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, HeartPulse, ArrowRight } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, HeartPulse, ArrowRight, Search, Loader2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-
+import { PROFESSIONS } from '@/lib/constantes';
+import { supabase } from '@/integrations/supabase/client';
+import { useDebounce } from '@/hooks/useDebounce';
 /* ─── Animated counter ─── */
 function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: string; prefix?: string }) {
   const [valeur, setValeur] = useState(0);
@@ -79,6 +81,115 @@ const faqData = [
   { q: 'Puis-je passer en libéral via Jolene ?', a: 'Oui. Notre parcours 3 200 heures vous accompagne vers l\'installation en libéral avec un suivi personnalisé, des partenaires (comptabilité, assurance, banque) et une prise en charge partielle des frais.' },
 ];
 
+/* ─── Public mission search section ─── */
+function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof useNavigate> }) {
+  const [profession, setProfession] = useState('');
+  const [ville, setVille] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<any[] | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [searched, setSearched] = useState(false);
+
+  const handleSearch = async () => {
+    setLoading(true);
+    setSearched(true);
+    const { data } = await supabase.rpc('fn_missions_publiques_recherche', {
+      p_profession: profession || null,
+      p_ville: ville.trim() || null,
+    });
+    setResults(data || []);
+    setTotalCount(data?.[0]?.total_count ?? 0);
+    setLoading(false);
+  };
+
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+  return (
+    <section className="py-16 md:py-20 bg-card border-b border-border">
+      <div className="max-w-4xl mx-auto px-4">
+        <RevealOnScroll>
+          <div className="text-center mb-8">
+            <h2 className="text-2xl md:text-3xl font-bold mb-2">Découvrez les missions disponibles</h2>
+            <p className="text-muted-foreground">Cherchez par profession et localisation — sans inscription.</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto mb-8">
+            <select
+              value={profession}
+              onChange={(e) => setProfession(e.target.value)}
+              className="flex-1 h-12 rounded-xl border border-input bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Toutes les professions</option>
+              {PROFESSIONS.map((p) => (
+                <option key={p.valeur} value={p.valeur}>{p.label}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="Ville ou code postal"
+              value={ville}
+              onChange={(e) => setVille(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="flex-1 h-12 rounded-xl border border-input bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={loading}
+              className="h-12 px-6 rounded-xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              Voir les missions
+            </button>
+          </div>
+
+          {/* Results */}
+          {searched && !loading && results && (
+            <div className="space-y-3">
+              {results.length > 0 ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {results.slice(0, 5).map((m) => (
+                      <div key={m.id} className="rounded-xl border border-border bg-background p-4 hover:shadow-md transition-shadow">
+                        <p className="font-semibold text-foreground text-sm mb-1 line-clamp-1">{m.intitule}</p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Établissement à {m.ville} {m.code_postal ? `(${m.code_postal})` : ''}
+                        </p>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">
+                            {formatDate(m.debut_le)} → {formatDate(m.fin_le)}
+                          </span>
+                          <span className="font-bold text-primary">{Number(m.taux_horaire_base).toFixed(0)}€/h</span>
+                        </div>
+                        {m.est_urgente && (
+                          <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-wider text-destructive bg-destructive/10 rounded-full px-2 py-0.5">Urgent</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-center text-sm text-muted-foreground mt-4">
+                    <span className="font-semibold text-foreground">{totalCount} mission{totalCount > 1 ? 's' : ''} disponible{totalCount > 1 ? 's' : ''}</span>
+                    {' — '}
+                    <button onClick={() => navigate('/inscription/soignant')} className="text-primary font-semibold hover:underline underline-offset-4">
+                      Créez votre compte pour postuler →
+                    </button>
+                  </p>
+                </>
+              ) : (
+                <div className="text-center py-8 rounded-xl border border-dashed border-border bg-muted/30">
+                  <p className="text-muted-foreground mb-2">Pas de mission pour le moment dans votre zone.</p>
+                  <button onClick={() => navigate('/inscription/soignant')} className="text-primary font-semibold text-sm hover:underline underline-offset-4">
+                    Inscrivez-vous pour être alerté →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </RevealOnScroll>
+      </div>
+    </section>
+  );
+}
+
 export default function PageAccueil() {
   const navigate = useNavigate();
   const [heroVisible, setHeroVisible] = useState(false);
@@ -146,6 +257,9 @@ export default function PageAccueil() {
           </div>
         </div>
       </section>
+
+      {/* ═══ Section 1b — Recherche missions publique ═══ */}
+      <RechercheMissionsPublique navigate={navigate} />
 
       {/* ═══ Section 2 — Comment ça marche ═══ */}
       <section className="py-20 md:py-28 bg-card">
