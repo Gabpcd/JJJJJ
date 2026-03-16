@@ -122,7 +122,7 @@ La loi Rist est complexe, mais Jolene simplifie sa mise en application au quotid
   {
     slug: 'remplacement-pharmacie-guide',
     titre: 'Remplacement en pharmacie : guide pratique pour les titulaires',
-    extrait: 'Quand faire appel à un remplaçant, obligations légales et comment Soin Direct simplifie le processus pour les pharmacies d\'officine.',
+    extrait: 'Quand faire appel à un remplaçant, obligations légales et comment Jolene simplifie le processus pour les pharmacies d\'officine.',
     date: '2026-01-10',
     tempsLecture: 6,
     tag: 'Pharmacie',
