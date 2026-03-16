@@ -18,7 +18,7 @@ export default function PageCGV() {
       {/* Article 1 */}
       <section id="art1">
         <h2 className="text-xl font-bold text-primary mb-4">Article 1 — Objet</h2>
-        <p className="mb-3">Les présentes Conditions Générales de Vente (ci-après « CGV ») définissent les conditions financières applicables à l'utilisation de la Plateforme Soin Direct par les Établissements de santé.</p>
+        <p className="mb-3">Les présentes Conditions Générales de Vente (ci-après « CGV ») définissent les conditions financières applicables à l'utilisation de la Plateforme Jolene par les Établissements de santé.</p>
         <p className="mb-3">Elles complètent les Conditions Générales d'Utilisation (CGU) et s'appliquent à toute mission réalisée via la Plateforme.</p>
         <p>L'inscription et l'utilisation de la Plateforme par un Établissement impliquent l'acceptation sans réserve des présentes CGV.</p>
       </section>
