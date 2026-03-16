@@ -44,9 +44,9 @@ export default function PageMentionsLegales() {
       <section id="domaine">
         <h2 className="text-xl font-bold text-primary mb-4">3. Nom de domaine</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Nom de domaine :</strong> soindirect.com</p>
+          <p><strong className="text-foreground">Nom de domaine :</strong> joleneapp.com</p>
           <p><strong className="text-foreground">Registrar :</strong> Squarespace Domains LLC</p>
-          <p><strong className="text-foreground">Titulaire :</strong> Soin Direct SAS</p>
+          <p><strong className="text-foreground">Titulaire :</strong> Jolene SAS</p>
         </div>
       </section>
 
