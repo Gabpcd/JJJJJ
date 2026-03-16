@@ -111,7 +111,7 @@ export default function DetailFacture() {
             )}
           </div>
           <div className="text-right">
-            <p className="text-sm font-bold text-foreground">Soin Direct SAS</p>
+            <p className="text-sm font-bold text-foreground">Jolene SAS</p>
             <p className="text-xs text-muted-foreground">Plateforme de mise en relation</p>
             <p className="text-xs text-muted-foreground mt-2">Facturé à :</p>
             <p className="text-sm font-semibold text-foreground">{etab?.nom}</p>
