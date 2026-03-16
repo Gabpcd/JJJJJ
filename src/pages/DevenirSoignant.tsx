@@ -28,12 +28,12 @@ export default function DevenirSoignant() {
   return (
     <>
       <SEOHead
-        title="Devenir soignant remplaçant | Soin Direct"
-        description="Rejoignez Soin Direct et accédez à des missions de remplacement en santé près de chez vous. Inscription gratuite, rémunération transparente, parcours vers le libéral."
-        url="https://app.soindirect.com/devenir-soignant"
+        title="Devenir soignant remplaçant | Jolene"
+        description="Rejoignez Jolene et accédez à des missions de remplacement en santé près de chez vous. Inscription gratuite, rémunération transparente, parcours vers le libéral."
+        url="https://app.joleneapp.com/devenir-soignant"
       />
       <SEOPageLayout
-        heroTitle="Devenir soignant sur Soin Direct"
+        heroTitle="Devenir soignant sur Jolene"
         heroSubtitle="Accédez à des centaines de missions de remplacement en santé, choisissez vos horaires et construisez votre parcours professionnel."
         ctaText="Créer mon compte gratuitement"
         ctaHref="/inscription/soignant"
