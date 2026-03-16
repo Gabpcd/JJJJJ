@@ -37,7 +37,7 @@ export default function WidgetRecrutement() {
         <HeartPulse className="h-5 w-5" />
         <div>
           <p className="font-semibold text-sm">{etabNom || 'Établissement'}</p>
-          <p className="text-[11px] opacity-80">Missions disponibles sur Soin Direct</p>
+          <p className="text-[11px] opacity-80">Missions disponibles sur Jolene</p>
         </div>
       </div>
 
