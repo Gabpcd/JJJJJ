@@ -138,7 +138,7 @@ export default function PageCGV() {
       <section id="art6">
         <h2 className="text-xl font-bold text-primary mb-4">Article 6 — Programme Free Transition</h2>
         <p className="mb-3">Le programme Free Transition permet aux Soignants ayant atteint 3 200 heures cumulées de bénéficier d'un accompagnement vers l'exercice libéral.</p>
-        <p className="mb-3">La prise en charge par Soin Direct comprend :</p>
+        <p className="mb-3">La prise en charge par Jolene comprend :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li>Génération automatique d'un guide personnalisé (démarches URSSAF, ARS, Ordre professionnel)</li>
           <li>Accès aux outils partenaires à tarif préférentiel (comptabilité Indy, banque Qonto, assurance MACSF)</li>
