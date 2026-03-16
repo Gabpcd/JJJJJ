@@ -103,7 +103,11 @@ export default function AdminCalendrier() {
       const fin = new Date(m.fin_le);
       const jourDebut = new Date(d.getFullYear(), d.getMonth(), d.getDate());
       const jourFin = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
-      return debut <= jourFin && fin >= jourDebut;
+      const dansJour = debut <= jourFin && fin >= jourDebut;
+      if (!dansJour) return false;
+      if (!filtreStatut) return true;
+      if (filtreStatut === 'NON_POURVUE') return m.statut === 'OUVERTE' && !m.soignant_assigne_id;
+      return m.statut === filtreStatut;
     });
   }
 
