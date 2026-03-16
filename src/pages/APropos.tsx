@@ -51,7 +51,7 @@ export default function APropos() {
                 <h3 className="font-bold text-foreground text-xl mb-1">Gabrielle Picard</h3>
                 <p className="text-sm text-muted-foreground mb-4">Fondatrice & CEO</p>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Passionnée par l'innovation dans la santé, Gabrielle a fondé Soin Direct pour répondre à la pénurie de soignants qui touche des milliers d'établissements en France. Son ambition : devenir la référence du staffing médical digital.
+                  Passionnée par l'innovation dans la santé, Gabrielle a fondé Jolene pour répondre à la pénurie de soignants qui touche des milliers d'établissements en France. Son ambition : devenir la référence du staffing médical digital.
                 </p>
                 <a
                   href="https://linkedin.com"
