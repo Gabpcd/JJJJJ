@@ -109,18 +109,18 @@ export default function AdminModeration() {
           : Promise.resolve({ data: [], error: null } as any),
       ]);
 
-      const soignantsMap = new Map((resSoignants.data ?? []).map((item: any) => [item.id, item]));
-      const etablissementsMap = new Map((resEtablissements.data ?? []).map((item: any) => [item.id, item]));
-      const missionsMap = new Map((resMissions.data ?? []).map((item: any) => [item.id, item]));
+      const soignantsMap = new Map<string, LitigeEnrichi['soignant']>((resSoignants.data ?? []).map((item: any) => [item.id, item]));
+      const etablissementsMap = new Map<string, LitigeEnrichi['etablissement']>((resEtablissements.data ?? []).map((item: any) => [item.id, item]));
+      const missionsMap = new Map<string, LitigeEnrichi['mission']>((resMissions.data ?? []).map((item: any) => [item.id, item]));
 
-      setLitiges(
-        litigesBruts.map((litige) => ({
-          ...litige,
-          soignant: soignantsMap.get(litige.soignant_id) ?? null,
-          etablissement: etablissementsMap.get(litige.etablissement_id) ?? null,
-          mission: missionsMap.get(litige.mission_id) ?? null,
-        }))
-      );
+      const litigesEnrichis: LitigeEnrichi[] = litigesBruts.map((litige) => ({
+        ...litige,
+        soignant: soignantsMap.get(litige.soignant_id) ?? null,
+        etablissement: etablissementsMap.get(litige.etablissement_id) ?? null,
+        mission: missionsMap.get(litige.mission_id) ?? null,
+      }));
+
+      setLitiges(litigesEnrichis);
     } else {
       setLitiges([]);
     }
