@@ -18,14 +18,14 @@ export default function APropos() {
   return (
     <>
       <SEOHead
-        title="À propos de Soin Direct | Staffing médical digital"
-        description="Découvrez la mission de Soin Direct : simplifier le staffing médical en connectant établissements de santé et soignants qualifiés, en toute conformité."
-        url="https://app.soindirect.com/a-propos"
+        title="À propos de Jolene | Staffing médical digital"
+        description="Découvrez la mission de Jolene : simplifier le staffing médical en connectant établissements de santé et soignants qualifiés, en toute conformité."
+        url="https://app.joleneapp.com/a-propos"
       />
       <SEOPageLayout
         heroTitle="Simplifier le staffing médical. Pour de bon."
-        heroSubtitle="Soin Direct est née d'un constat simple : trouver un soignant remplaçant ne devrait pas prendre des heures d'appels téléphoniques."
-        ctaText="Rejoindre Soin Direct"
+        heroSubtitle="Jolene est née d'un constat simple : trouver un soignant remplaçant ne devrait pas prendre des heures d'appels téléphoniques."
+        ctaText="Rejoindre Jolene"
         ctaHref="/inscription/soignant"
       >
         {/* Mission */}
