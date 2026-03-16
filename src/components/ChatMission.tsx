@@ -19,9 +19,10 @@ interface ChatMissionProps {
   missionId: string;
   role: 'SOIGNANT' | 'ETABLISSEMENT';
   prenomUtilisateur: string;
+  isAdmin?: boolean;
 }
 
-export function ChatMission({ missionId, role, prenomUtilisateur }: ChatMissionProps) {
+export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = false }: ChatMissionProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [texte, setTexte] = useState('');
@@ -89,7 +90,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur }: ChatMissionP
     setEnvoi(true);
     setTexte('');
 
-    const typeAuteur = role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT';
+    const typeAuteur = isAdmin ? 'ADMIN' : role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT';
 
     const { error } = await supabase.from('messages_mission').insert({
       mission_id: missionId,
@@ -144,7 +145,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur }: ChatMissionP
               >
                 {!mine && (
                   <p className={`text-[10px] font-semibold mb-0.5 ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                    {msg.type_auteur === 'SOIGNANT' ? '👤 Soignant' : '🏥 Établissement'}
+                    {msg.type_auteur === 'SOIGNANT' ? '👤 Soignant' : msg.type_auteur === 'ADMIN' ? '🛡️ Admin' : '🏥 Établissement'}
                   </p>
                 )}
                 <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
