@@ -109,7 +109,7 @@ Sur Jolene, tous les taux horaires sont affichés avant la candidature. La plate
 
 Les établissements privés (cliniques, EHPAD privés, pharmacies d'officine) ne sont **pas soumis aux plafonds Rist**. Ils sont libres de fixer les rémunérations selon l'offre et la demande. Cependant, la tendance du marché tend à s'aligner progressivement sur les grilles publiques.
 
-## Ce que Soin Direct fait pour vous
+## Ce que Jolene fait pour vous
 
 Notre plateforme intègre nativement les règles de la loi Rist :
 - **Vérification automatique** des plafonds pour les établissements publics
@@ -117,7 +117,7 @@ Notre plateforme intègre nativement les règles de la loi Rist :
 - **Transparence totale** sur la décomposition de la rémunération (brut, IFM, ICP, majorations)
 - **Conformité garantie** avec les textes en vigueur
 
-La loi Rist est complexe, mais Soin Direct simplifie sa mise en application au quotidien.`,
+La loi Rist est complexe, mais Jolene simplifie sa mise en application au quotidien.`,
   },
   {
     slug: 'remplacement-pharmacie-guide',
