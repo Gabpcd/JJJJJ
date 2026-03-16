@@ -61,7 +61,7 @@ export default function PageConfidentialite() {
           <p className="text-muted-foreground">Sécurité : Chiffrement AES-256 au repos, TLS 1.3 en transit, SOC 2 Type II, ISO 27001</p>
         </div>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
-          <p><strong>Soin Direct ne stocke aucune donnée de santé à caractère personnel</strong> au sens de l'article L.1111-8 du Code de la santé publique. Les vaccinations et aptitudes médicales sont déclarées sur l'honneur par le Soignant et vérifiées en présentiel par l'Établissement lors de la première mission.</p>
+          <p><strong>Jolene ne stocke aucune donnée de santé à caractère personnel</strong> au sens de l'article L.1111-8 du Code de la santé publique. Les vaccinations et aptitudes médicales sont déclarées sur l'honneur par le Soignant et vérifiées en présentiel par l'Établissement lors de la première mission.</p>
         </div>
         <p className="mb-3">L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne (France). Les sauvegardes sont chiffrées (AES-256) et répliquées sur un site secondaire au sein de l'UE.</p>
         <p>Les transferts de données hors UE, s'ils devaient avoir lieu dans le cadre de prestations techniques de sous-traitants, sont encadrés par des clauses contractuelles types approuvées par la Commission européenne (décision 2021/914).</p>
