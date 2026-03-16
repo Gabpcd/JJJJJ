@@ -7,14 +7,13 @@ import { AvatarDisplay } from '@/components/AvatarUpload';
 import { JaugeScoreFiabilite } from '@/components/JaugeScoreFiabilite';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EtatVide } from '@/components/EtatVide';
-import { SkeletonCard } from '@/components/SkeletonCard';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, Star, MapPin, Clock } from 'lucide-react';
+import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -76,7 +75,7 @@ export default function PoolUrgenceEtablissement() {
       supabase.rpc('fn_pool_urgence_etablissement' as any, { p_etablissement_id: etablissementId }),
       supabase
         .from('missions')
-        .select('id, intitule, debut_le, statut, cree_le, soignant_assigne_id, soignants!missions_soignant_assigne_id_fkey(prenom, nom)' as any)
+        .select('id, intitule, debut_le, statut, cree_le, soignant_assigne_id, soignants(prenom, nom)')
         .eq('etablissement_id', etablissementId)
         .eq('est_urgente', true)
         .order('debut_le', { ascending: false })
@@ -133,7 +132,7 @@ export default function PoolUrgenceEtablissement() {
   }, [soignants]);
 
   const professionLabel = (code: string) => {
-    const found = PROFESSIONS.find((p) => p.value === code);
+    const found = PROFESSIONS.find((p) => p.valeur === code);
     return found ? found.label : code;
   };
 
@@ -141,7 +140,12 @@ export default function PoolUrgenceEtablissement() {
     return (
       <LayoutApp role="ADMIN_ETABLISSEMENT">
         <div className="max-w-6xl mx-auto space-y-6">
-          <SkeletonCard count={3} />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="card-base animate-pulse h-24" />
+            ))}
+          </div>
+          <div className="card-base animate-pulse h-64" />
         </div>
       </LayoutApp>
     );
@@ -229,9 +233,9 @@ export default function PoolUrgenceEtablissement() {
         {/* Table */}
         {filtered.length === 0 ? (
           <EtatVide
-            icone="🚨"
+            icone={Flame}
             titre="Aucun soignant dans le pool"
-            description="Aucun soignant n'a activé le pool d'urgence correspondant à vos critères."
+            sousTitre="Aucun soignant n'a activé le pool d'urgence correspondant à vos critères."
           />
         ) : (
           <div className="card-base p-0 overflow-hidden">
@@ -263,7 +267,7 @@ export default function PoolUrgenceEtablissement() {
                       <Badge variant="secondary" className="text-xs">{professionLabel(s.profession)}</Badge>
                     </TableCell>
                     <TableCell>
-                      <JaugeScoreFiabilite score={s.score_fiabilite} compact />
+                      <JaugeScoreFiabilite score={s.score_fiabilite} />
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">{s.pool_urgence_rayon_km} km</span>
@@ -393,9 +397,9 @@ export default function PoolUrgenceEtablissement() {
         titre="Alerter tout le pool d'urgence"
         message={`Envoyer l'alerte à ${filtered.filter(s => !s.en_mission_maintenant).length} soignants disponibles dans le pool ?`}
         labelConfirmer="Envoyer l'alerte 🚨"
-        variante="destructive"
+        variante="danger"
         onConfirmer={alerterTous}
-        onAnnuler={() => setAlerterTousOpen(false)}
+        onFermer={() => setAlerterTousOpen(false)}
       />
     </LayoutApp>
   );

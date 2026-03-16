@@ -38,6 +38,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
   { icone: PlusCircle, label: 'Publier', route: '/etablissement/missions/creer' },
   { icone: List, label: 'Missions', route: '/etablissement/missions' },
+  { icone: Flame, label: 'Pool urgence 🚨', route: '/etablissement/pool-urgence' },
   { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
   { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
