@@ -240,7 +240,7 @@ C'est pourquoi nous avons créé **Free Transition**, un programme unique qui pr
 
 ## Les 4 paliers de prise en charge
 
-Free Transition fonctionne sur un système de paliers basé sur vos heures cumulées sur Soin Direct :
+Free Transition fonctionne sur un système de paliers basé sur vos heures cumulées sur Jolene :
 
 ### Palier 1 — 800 heures : 25% pris en charge
 Dès 800 heures cumulées, Soin Direct prend en charge **25% de vos frais d'installation**. Cela couvre typiquement une partie de votre assurance RCP et de votre premier bilan comptable.
