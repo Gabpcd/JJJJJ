@@ -96,24 +96,24 @@ export default function AdminGroupes() {
                     <label className="block text-sm font-medium text-foreground mb-1">Domaine custom</label>
                     <input value={form.domaine_custom} onChange={e => setForm({ ...form, domaine_custom: e.target.value })} className="input-base w-full" placeholder="staffing.leadersante.fr" />
                   </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">URL du logo</label>
                     <input value={form.logo_url} onChange={e => setForm({ ...form, logo_url: e.target.value })} className="input-base w-full" placeholder="https://..." />
                   </div>
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-foreground mb-1">Couleur primaire</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={form.couleur_primaire} onChange={e => setForm({ ...form, couleur_primaire: e.target.value })} className="w-10 h-10 rounded border border-border cursor-pointer" />
-                        <input value={form.couleur_primaire} onChange={e => setForm({ ...form, couleur_primaire: e.target.value })} className="input-base flex-1" />
-                      </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Couleur primaire</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={form.couleur_primaire} onChange={e => setForm({ ...form, couleur_primaire: e.target.value })} className="w-10 h-10 rounded border border-border cursor-pointer" />
+                      <input value={form.couleur_primaire} onChange={e => setForm({ ...form, couleur_primaire: e.target.value })} className="input-base flex-1" />
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-foreground mb-1">Couleur secondaire</label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={form.couleur_secondaire} onChange={e => setForm({ ...form, couleur_secondaire: e.target.value })} className="w-10 h-10 rounded border border-border cursor-pointer" />
-                        <input value={form.couleur_secondaire} onChange={e => setForm({ ...form, couleur_secondaire: e.target.value })} className="input-base flex-1" />
-                      </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Couleur secondaire</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={form.couleur_secondaire} onChange={e => setForm({ ...form, couleur_secondaire: e.target.value })} className="w-10 h-10 rounded border border-border cursor-pointer" />
+                      <input value={form.couleur_secondaire} onChange={e => setForm({ ...form, couleur_secondaire: e.target.value })} className="input-base flex-1" />
                     </div>
                   </div>
                 </div>

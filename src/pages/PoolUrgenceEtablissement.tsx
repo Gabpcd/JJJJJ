@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPI } from '@/components/CarteKPI';
 import { BoutonFavori } from '@/components/BoutonFavori';
 import { AvatarDisplay } from '@/components/AvatarUpload';
@@ -48,8 +49,11 @@ interface HistoriqueUrgence {
   soignant_assigne_id: string | null;
 }
 
-export default function PoolUrgenceEtablissement() {
+export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?: boolean }) {
   const { user } = useAuth();
+  const Layout = isAdmin 
+    ? ({ children }: { children: React.ReactNode }) => <LayoutAdmin>{children}</LayoutAdmin>
+    : ({ children }: { children: React.ReactNode }) => <LayoutApp role="ADMIN_ETABLISSEMENT">{children}</LayoutApp>;
   const navigate = useNavigate();
   const [soignants, setSoignants] = useState<SoignantPool[]>([]);
   const [historique, setHistorique] = useState<HistoriqueUrgence[]>([]);
@@ -138,7 +142,7 @@ export default function PoolUrgenceEtablissement() {
 
   if (loading) {
     return (
-      <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <Layout>
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[1, 2, 3].map(i => (
@@ -147,12 +151,12 @@ export default function PoolUrgenceEtablissement() {
           </div>
           <div className="card-base animate-pulse h-64" />
         </div>
-      </LayoutApp>
+      </Layout>
     );
   }
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
+    <Layout>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -401,6 +405,6 @@ export default function PoolUrgenceEtablissement() {
         onConfirmer={alerterTous}
         onFermer={() => setAlerterTousOpen(false)}
       />
-    </LayoutApp>
+    </Layout>
   );
 }

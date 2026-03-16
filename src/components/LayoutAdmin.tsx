@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays } from 'lucide-react';
+import { BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -15,6 +15,7 @@ const NAV_ADMIN = [
   { icone: Code2, label: 'API', route: '/admin/api' },
   { icone: Building2, label: 'Groupes', route: '/admin/groupes' },
   { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
+  { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
 ];
 
 export function LayoutAdmin({ children }: { children: React.ReactNode }) {
