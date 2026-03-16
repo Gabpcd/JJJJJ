@@ -31,7 +31,7 @@ export default function PageCGV() {
           <p className="font-semibold text-foreground">Mention obligatoire :</p>
           <p>Il ne s'agit en aucun cas d'un prélèvement sur le salaire du Soignant. Les frais de service sont exclusivement à la charge de l'Établissement et facturés en sus de la rémunération du Soignant.</p>
         </div>
-        <p>Le Soignant perçoit l'intégralité de sa rémunération brute telle que définie dans le contrat de mission, sans aucune déduction par Soin Direct.</p>
+        <p>Le Soignant perçoit l'intégralité de sa rémunération brute telle que définie dans le contrat de mission, sans aucune déduction par Jolene.</p>
       </section>
 
       {/* Article 3 */}
