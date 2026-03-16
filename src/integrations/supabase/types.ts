@@ -2584,6 +2584,8 @@ export type Database = {
       fn_accepter_mission: { Args: { p_mission_id: string }; Returns: Json }
       fn_activer_liberal: { Args: never; Returns: Json }
       fn_admin_conformite: { Args: never; Returns: Json }
+      fn_admin_graphiques: { Args: never; Returns: Json }
+      fn_admin_kpi: { Args: never; Returns: Json }
       fn_alerte_cddu_repetitif: {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: Json
