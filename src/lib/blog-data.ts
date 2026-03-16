@@ -214,7 +214,7 @@ Même dans le cadre d'un CDDU, l'établissement reste soumis à des obligations 
 - **Respect des durées maximales de travail** : 10h/jour, 48h/semaine, repos de 11h entre deux journées.
 - **Rémunération au moins égale** à celle d'un salarié en CDI occupant le même poste.
 
-## Comment Soin Direct gère les CDDU
+## Comment Jolene gère les CDDU
 
 Notre plateforme automatise l'intégralité du processus :
 - Génération automatique du contrat CDDU conforme
@@ -223,7 +223,7 @@ Notre plateforme automatise l'intégralité du processus :
 - Vérification des durées légales de travail et des repos obligatoires
 - Signature électronique sécurisée
 
-Le CDDU est l'outil contractuel idéal pour le staffing médical. Soin Direct le rend accessible et conforme, sans paperasse.`,
+Le CDDU est l'outil contractuel idéal pour le staffing médical. Jolene le rend accessible et conforme, sans paperasse.`,
   },
   {
     slug: 'free-transition-liberal',
