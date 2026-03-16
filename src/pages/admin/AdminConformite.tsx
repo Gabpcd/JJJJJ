@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -7,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, UserX, FileX, ChevronDown, Loader2 } from 'lucide-react';
+import { ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, UserX, FileX, ChevronDown, Loader2, ExternalLink } from 'lucide-react';
 
 interface Indicateur {
   cle: string;
@@ -20,6 +21,35 @@ interface Indicateur {
 
 const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+/** Lien cliquable vers une fiche admin */
+function LienAdmin({ to, children }: { to: string; children: React.ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="text-primary hover:underline inline-flex items-center gap-1 group"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {children}
+      <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+    </Link>
+  );
+}
+
+function LienSoignant({ id, nom }: { id?: string; nom?: string }) {
+  if (!id || !nom) return <span>{nom ?? '—'}</span>;
+  return <LienAdmin to={`/admin/utilisateurs/${id}`}>{nom}</LienAdmin>;
+}
+
+function LienMission({ id, intitule }: { id?: string; intitule?: string }) {
+  if (!id || !intitule) return <span>{intitule ?? '—'}</span>;
+  return <LienAdmin to={`/admin/missions/${id}`}>{intitule}</LienAdmin>;
+}
+
+function LienEtablissement({ id, nom }: { id?: string; nom?: string }) {
+  if (!id || !nom) return <span>{nom ?? '—'}</span>;
+  return <LienAdmin to={`/admin/utilisateurs/${id}`}>{nom}</LienAdmin>;
+}
+
 const INDICATEURS: Indicateur[] = [
   {
     cle: 'violations_repos_11h',
@@ -29,9 +59,9 @@ const INDICATEURS: Indicateur[] = [
     colonnes: ['Soignant', 'Mission', 'Établissement', 'Résultat', 'Date'],
     renderRow: (item: any) => (
       <>
-        <TableCell className="font-medium">{item.soignant_nom}</TableCell>
-        <TableCell>{item.mission_intitule}</TableCell>
-        <TableCell>{item.etablissement_nom}</TableCell>
+        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
+        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
+        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
         <TableCell><Badge variant="destructive" className="text-[10px]">{item.resultat}</Badge></TableCell>
         <TableCell className="text-muted-foreground">{formatDate(item.controle_le)}</TableCell>
       </>
@@ -45,7 +75,7 @@ const INDICATEURS: Indicateur[] = [
     colonnes: ['Soignant', 'Profession', 'Heures cette semaine'],
     renderRow: (item: any) => (
       <>
-        <TableCell className="font-medium">{item.soignant_nom}</TableCell>
+        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
         <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
         <TableCell className="font-semibold text-destructive">{item.heures_semaine}h</TableCell>
       </>
@@ -59,7 +89,7 @@ const INDICATEURS: Indicateur[] = [
     colonnes: ['Soignant', 'Profession', 'Document', 'Expiré le'],
     renderRow: (item: any) => (
       <>
-        <TableCell className="font-medium">{item.soignant_nom}</TableCell>
+        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
         <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
         <TableCell>{item.type_document}</TableCell>
         <TableCell className="text-destructive">{formatDate(item.valide_jusqua)}</TableCell>
@@ -74,7 +104,7 @@ const INDICATEURS: Indicateur[] = [
     colonnes: ['Soignant', 'Profession', 'Document', 'Téléversé le'],
     renderRow: (item: any) => (
       <>
-        <TableCell className="font-medium">{item.soignant_nom}</TableCell>
+        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
         <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
         <TableCell>{item.type_document}</TableCell>
         <TableCell className="text-muted-foreground">{formatDate(item.televerse_le)}</TableCell>
@@ -89,8 +119,8 @@ const INDICATEURS: Indicateur[] = [
     colonnes: ['Soignant', 'Établissement', 'Nb missions', 'Première', 'Dernière'],
     renderRow: (item: any) => (
       <>
-        <TableCell className="font-medium">{item.soignant_nom}</TableCell>
-        <TableCell>{item.etablissement_nom}</TableCell>
+        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
+        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
         <TableCell className="font-semibold">{item.nb_missions}</TableCell>
         <TableCell className="text-muted-foreground">{formatDate(item.premiere_mission)}</TableCell>
         <TableCell className="text-muted-foreground">{formatDate(item.derniere_mission)}</TableCell>
@@ -105,9 +135,15 @@ const INDICATEURS: Indicateur[] = [
     colonnes: ['Soignant', 'Profession', 'Email', 'Inscrit le'],
     renderRow: (item: any) => (
       <>
-        <TableCell className="font-medium">{item.soignant_nom}</TableCell>
+        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
         <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
-        <TableCell className="text-muted-foreground">{item.email}</TableCell>
+        <TableCell className="text-muted-foreground">
+          {item.email ? (
+            <a href={`mailto:${item.email}`} className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+              {item.email}
+            </a>
+          ) : '—'}
+        </TableCell>
         <TableCell className="text-muted-foreground">{formatDate(item.cree_le)}</TableCell>
       </>
     ),
@@ -120,9 +156,9 @@ const INDICATEURS: Indicateur[] = [
     colonnes: ['Mission', 'Établissement', 'Soignant', 'Statut', 'Début'],
     renderRow: (item: any) => (
       <>
-        <TableCell className="font-medium">{item.intitule}</TableCell>
-        <TableCell>{item.etablissement_nom}</TableCell>
-        <TableCell>{item.soignant_nom ?? '—'}</TableCell>
+        <TableCell className="font-medium"><LienMission id={item.mission_id ?? item.id} intitule={item.intitule} /></TableCell>
+        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
+        <TableCell><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
         <TableCell><Badge variant="secondary" className="text-[10px]">{item.statut}</Badge></TableCell>
         <TableCell className="text-muted-foreground">{formatDate(item.debut_le)}</TableCell>
       </>
@@ -174,7 +210,6 @@ export default function AdminConformite() {
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
-  // Map RPC keys to frontend keys
   const mappedData: Record<string, number> = {};
   if (data) {
     INDICATEURS.forEach(ind => {
@@ -214,7 +249,6 @@ export default function AdminConformite() {
           })}
         </div>
 
-        {/* Detail panel */}
         {selected && selectedInd && (
           <Card className="animate-in fade-in-0 slide-in-from-top-2 duration-200">
             <CardContent className="pt-5">
