@@ -152,7 +152,7 @@ La pharmacie d'officine connaît une **pénurie croissante de professionnels**. 
 
 Les conséquences sont directes : **délais de remplacement allongés** (parfois plusieurs semaines pour trouver un remplaçant), **coûts en hausse** et **risque de fermeture temporaire** pour les officines rurales.
 
-## Comment Soin Direct simplifie le remplacement
+## Comment Jolene simplifie le remplacement
 
 Notre plateforme a été conçue pour répondre aux besoins spécifiques des pharmacies :
 
