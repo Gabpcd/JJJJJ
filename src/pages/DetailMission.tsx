@@ -366,8 +366,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         )}
       </Tabs>
 
-      <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border p-3 flex gap-3 md:static md:mt-6 md:border-0 md:p-0 md:justify-end z-30">
-        {m.statut === 'OUVERTE' && (
+      <div className="fixed bottom-16 left-0 right-0 z-30 flex gap-3 border-t border-border bg-card p-3 md:static md:mt-6 md:justify-end md:border-0 md:p-0">
+        {!isAdmin && m.statut === 'OUVERTE' && (
           <button onClick={() => navigate(`/etablissement/missions/${m.id}/modifier`)} className="btn-secondary text-sm flex-1 md:flex-none">
             Modifier
           </button>
