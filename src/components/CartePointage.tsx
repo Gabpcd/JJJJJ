@@ -109,6 +109,19 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
               return { success: true, message: 'Arrivée pointée par code ✅' };
             }}
           />
+          <ScannerQRPointage
+            type="arrivee"
+            onCodeScanne={async (code) => {
+              const { data, error } = await supabase.rpc('fn_pointer_arrivee_code' as any, {
+                p_mission_id: mission.id,
+                p_code: code,
+              });
+              if (error) return { success: false, message: extraireMessageErreur(error) };
+              if (data?.success === false) return { success: false, message: data.error };
+              onRecharger?.();
+              return { success: true, message: 'Arrivée pointée par QR ✅' };
+            }}
+          />
         </div>
       )}
 
