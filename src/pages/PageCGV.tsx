@@ -150,7 +150,7 @@ export default function PageCGV() {
       {/* Article 7 */}
       <section id="art7">
         <h2 className="text-xl font-bold text-primary mb-4">Article 7 — Secteur public et affacturage</h2>
-        <p className="mb-3">Pour les établissements publics de santé (hôpitaux, CHU, CH, ESPIC), Soin Direct propose des conditions adaptées :</p>
+        <p className="mb-3">Pour les établissements publics de santé (hôpitaux, CHU, CH, ESPIC), Jolene propose des conditions adaptées :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Facturation Chorus Pro</strong> : dépôt automatique des factures conformément aux obligations réglementaires.</li>
           <li><strong>Délais de paiement étendus</strong> : 50 jours conformément au Code de la commande publique.</li>
