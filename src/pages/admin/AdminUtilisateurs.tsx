@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 export default function AdminUtilisateurs() {
+  const navigate = useNavigate();
   usePageTitle('Utilisateurs');
   const [soignants, setSoignants] = useState<any[]>([]);
   const [etabs, setEtabs] = useState<any[]>([]);
