@@ -89,6 +89,7 @@ const AdminEmails = lazy(() => import("./pages/admin/AdminEmails"));
 const AdminAPI = lazy(() => import("./pages/admin/AdminAPI"));
 const AdminGroupes = lazy(() => import("./pages/admin/AdminGroupes"));
 const AdminDetailUtilisateur = lazy(() => import("./pages/admin/AdminDetailUtilisateur"));
+const AdminCalendrier = lazy(() => import("./pages/admin/AdminCalendrier"));
 
 const queryClient = new QueryClient();
 
@@ -180,6 +181,7 @@ function AppRoutes() {
           <Route path="/admin/emails" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEmails /></RouteProtegee>} />
           <Route path="/admin/api" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAPI /></RouteProtegee>} />
           <Route path="/admin/groupes" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminGroupes /></RouteProtegee>} />
+          <Route path="/admin/calendrier" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCalendrier /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
