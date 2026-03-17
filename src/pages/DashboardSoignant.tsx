@@ -3,7 +3,8 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin } from 'lucide-react';
+import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell } from 'lucide-react';
+import { CarteProposition } from '@/components/CarteProposition';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
 import { RappelsFiscaux } from '@/components/RappelsFiscaux';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
@@ -239,6 +240,24 @@ export default function DashboardSoignant() {
       </div>
 
       <BandeauAlerte48h heuresSemaine={heuresSemaine} />
+
+      {/* Missions proposées depuis le pool */}
+      {propositions.length > 0 && (
+        <div className="mb-6 rounded-xl border-2 border-orange-400 bg-orange-50/50 dark:bg-orange-950/10 dark:border-orange-600 p-4">
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2 mb-3">
+            <Bell className="h-5 w-5 text-orange-500" /> 🚨 Missions proposées
+          </h2>
+          <div className="space-y-3">
+            {propositions.map((p: any) => (
+              <CarteProposition
+                key={p.id}
+                proposition={p}
+                onTraitee={(id) => setPropositions(prev => prev.filter(x => x.id !== id))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {missionsOubliDepart.map(m => (
         <BandeauOubliDepart key={m.id} mission={m} onPointer={() => navigate('/soignant/presences')} />
