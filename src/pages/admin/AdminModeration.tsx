@@ -342,7 +342,7 @@ export default function AdminModeration() {
                                 </a>
                               )}
                               <button
-                                onClick={() => contacterDepuisLitige(litige.etablissement_id, navigate)}
+                                onClick={() => contacterDepuisLitige(litige.etablissement_id, navigate, true)}
                                 className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
                               >
                                 <MessageCircle className="h-3.5 w-3.5" /> Contacter
