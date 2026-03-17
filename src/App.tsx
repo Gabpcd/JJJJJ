@@ -55,6 +55,7 @@ const ExclusionsSoignant = lazy(() => import("./pages/ExclusionsSoignant"));
 const PremiumSoignant = lazy(() => import("./pages/PremiumSoignant"));
 const ChargesSociales = lazy(() => import("./pages/ChargesSociales"));
 const PageParrainage = lazy(() => import("./pages/PageParrainage"));
+const PageMessagerie = lazy(() => import("./pages/PageMessagerie"));
 
 /* ─── Établissement pages ─── */
 const DashboardEtablissement = lazy(() => import("./pages/DashboardEtablissement"));
