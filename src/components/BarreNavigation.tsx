@@ -142,7 +142,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] bg-sidebar flex-col z-40" role="navigation" aria-label="Sidebar">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HeartPulse className="h-7 w-7 text-sidebar-primary" />
+            <img src={logoIcon} alt="Jolene" className="h-7 w-7" />
             <span className="text-xl font-bold text-sidebar-foreground">Jolene</span>
           </div>
           <BadgeNotification />

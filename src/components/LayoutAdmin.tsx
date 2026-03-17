@@ -37,7 +37,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[240px] bg-sidebar flex-col z-40">
         <div className="p-5 flex items-center justify-between border-b border-sidebar-border">
           <div className="flex items-center gap-2">
-            <HeartPulse className="h-6 w-6 text-sidebar-primary" />
+            <img src={logoIcon} alt="Jolene" className="h-6 w-6" />
             <span className="text-lg font-bold text-sidebar-foreground">Admin</span>
           </div>
           <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
