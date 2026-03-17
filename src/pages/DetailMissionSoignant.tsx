@@ -337,11 +337,14 @@ export default function DetailMissionSoignant() {
                     <button
                       type="button"
                       onClick={async () => {
-                        console.log('obtenir conversation params:', { autre_id: mission.etablissement_id, mission_id: mission.id });
-                        const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: mission.etablissement_id, p_mission_id: mission.id });
-                        console.log('obtenir conversation result:', { data, error });
+                        // Resolve etablissement_id to the actual user_id
+                        const { data: userId, error: resolveError } = await supabase.rpc('fn_user_id_pour_etablissement' as any, { p_etablissement_id: mission.etablissement_id });
+                        if (resolveError || !userId) {
+                          toast.error("Impossible de trouver l'interlocuteur de l'établissement.");
+                          return;
+                        }
+                        const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: userId, p_mission_id: mission.id });
                         if (error) {
-                          console.error('fn_obtenir_conversation error:', error);
                           toast.error(`Impossible d'ouvrir la conversation : ${error.message}`);
                         } else if (data) {
                           navigate(`/soignant/messagerie?conv=${data}`);
