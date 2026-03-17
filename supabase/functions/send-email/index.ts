@@ -79,6 +79,7 @@ const ALLOWED_TYPES = new Set([
   'FACTURE_EMISE', 'FACTURE_PAYEE',
   'DOCUMENT_EXPIRANT', 'RAPPEL_FACTURE',
   'ELIGIBLE_LIBERAL', 'RECAP_HEBDO',
+  'RAPPEL_DOCUMENTS',
 ]);
 
 interface TemplateResult { subject: string; html: string }
