@@ -371,7 +371,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                           size="sm"
                           variant="outline"
                           className="text-xs h-7 px-2"
-                          onClick={() => navigate('/etablissement/missions/creer?urgence=true')}
+                          onClick={() => navigate(isAdmin ? `/admin/missions` : `/etablissement/missions/creer?urgence=true&soignant=${s.soignant_id}`)}
                           title="Proposer une mission urgente"
                         >
                           <Send className="h-3 w-3" />
