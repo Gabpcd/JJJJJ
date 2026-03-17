@@ -176,7 +176,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
           </div>
 
           {/* Results */}
-          {searched && !loading && results && (
+          {!loading && results && (
             <div className="space-y-3">
               {results.length > 0 ? (
                 <>
