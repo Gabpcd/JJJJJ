@@ -506,6 +506,13 @@ export default function DetailMissionSoignant() {
                 <div className="bg-success/5 border border-success/20 rounded-xl p-3 mb-4 text-center">
                   <p className="text-sm font-semibold text-success">✅ Vous êtes assigné(e) à cette mission</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('chat-mission')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  className="btn-secondary w-full text-sm py-2.5 mb-3"
+                >
+                  💬 Envoyer un message
+                </button>
                 <button onClick={() => setModalAnnuler(true)} className="w-full border-2 border-destructive text-destructive rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-destructive/5 transition-colors">
                   Annuler ma participation
                 </button>

@@ -4,8 +4,8 @@ import { SEOHead } from '@/components/SEOHead';
 import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, HeartPulse, ArrowRight, Search, Loader2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { PROFESSIONS } from '@/lib/constantes';
-import { supabase } from '@/integrations/supabase/client';
 import { useDebounce } from '@/hooks/useDebounce';
+import { publicSupabase } from '@/integrations/supabase/public-client';
 /* ─── Animated counter ─── */
 function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: string; prefix?: string }) {
   const [valeur, setValeur] = useState(0);
