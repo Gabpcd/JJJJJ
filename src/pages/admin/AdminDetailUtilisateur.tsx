@@ -317,12 +317,6 @@ export default function AdminDetailUtilisateur() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="chat">
-          <AdminMissionChatPanel
-            missions={missions}
-            emptyLabel="Aucune mission commune ne permet d’ouvrir une messagerie pour ce profil."
-          />
-        </TabsContent>
 
         {/* ── 4. Score & Badges ── */}
         {type === 'soignant' && (
