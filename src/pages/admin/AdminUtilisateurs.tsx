@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Eye, Ban, RefreshCw } from 'lucide-react';
+import { Search, Eye, Ban, RefreshCw, Mail, Phone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -24,38 +24,59 @@ export default function AdminUtilisateurs() {
   const charger = async () => {
     setLoading(true);
     const [resSoignants, resEtabs] = await Promise.all([
-      supabase.from('soignants').select('id, prenom, nom, profession, numero_rpps, rpps_verifie, score_fiabilite, total_missions_terminees, supprime_le').order('cree_le', { ascending: false }).limit(500),
-      supabase.from('etablissements').select('id, nom, type, siret, supprime_le').order('cree_le', { ascending: false }).limit(500),
+      supabase
+        .from('soignants')
+        .select('id, prenom, nom, profession, numero_rpps, rpps_verifie, score_fiabilite, total_missions_terminees, email, telephone, supprime_le')
+        .order('cree_le', { ascending: false })
+        .limit(500),
+      supabase
+        .from('etablissements')
+        .select('id, nom, type, siret, email_contact, telephone_contact, supprime_le')
+        .order('cree_le', { ascending: false })
+        .limit(500),
     ]);
+
     if (resSoignants.data) setSoignants(resSoignants.data);
     if (resEtabs.data) setEtabs(resEtabs.data);
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, []);
+  useEffect(() => {
+    charger();
+  }, []);
 
   const filteredSoignants = useMemo(() => {
     const q = recherche.toLowerCase();
     if (!q) return soignants;
-    return soignants.filter(s => `${s.prenom} ${s.nom} ${s.profession}`.toLowerCase().includes(q));
+    return soignants.filter((s) =>
+      `${s.prenom} ${s.nom} ${s.profession} ${s.email || ''} ${s.telephone || ''}`.toLowerCase().includes(q)
+    );
   }, [soignants, recherche]);
 
   const filteredEtabs = useMemo(() => {
     const q = recherche.toLowerCase();
     if (!q) return etabs;
-    return etabs.filter(e => `${e.nom} ${e.siret} ${e.type}`.toLowerCase().includes(q));
+    return etabs.filter((e) =>
+      `${e.nom} ${e.siret} ${e.type} ${e.email_contact || ''} ${e.telephone_contact || ''}`.toLowerCase().includes(q)
+    );
   }, [etabs, recherche]);
 
   const suspendre = async (table: string, id: string) => {
     const { error } = await supabase.from(table as any).update({ supprime_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success('Utilisateur suspendu');
     charger();
   };
 
   const reactiver = async (table: string, id: string) => {
     const { error } = await supabase.from(table as any).update({ supprime_le: null } as any).eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success('Utilisateur réactivé');
     charger();
   };
@@ -102,13 +123,33 @@ export default function AdminUtilisateurs() {
                       <TableCell>{s.score_fiabilite}/100</TableCell>
                       <TableCell>{s.total_missions_terminees}</TableCell>
                       <TableCell>{s.supprime_le ? <Badge variant="destructive" className="text-[10px]">Suspendu</Badge> : <Badge className="bg-success text-success-foreground text-[10px]">Actif</Badge>}</TableCell>
-                      <TableCell className="text-right space-x-1">
-                        {s.supprime_le ? (
-                          <Button size="sm" variant="outline" onClick={() => reactiver('soignants', s.id)}><RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver</Button>
-                        ) : (
-                          <Button size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)}><Ban className="h-3.5 w-3.5 mr-1" />Suspendre</Button>
+                      <TableCell className="text-right space-x-1 whitespace-nowrap">
+                        {s.email && (
+                          <Button asChild size="sm" variant="outline">
+                            <a href={`mailto:${s.email}`}>
+                              <Mail className="h-3.5 w-3.5 mr-1" />Email
+                            </a>
+                          </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}><Eye className="h-3.5 w-3.5" /></Button>
+                        {s.telephone && (
+                          <Button asChild size="sm" variant="outline">
+                            <a href={`tel:${s.telephone}`}>
+                              <Phone className="h-3.5 w-3.5 mr-1" />Appeler
+                            </a>
+                          </Button>
+                        )}
+                        {s.supprime_le ? (
+                          <Button size="sm" variant="outline" onClick={() => reactiver('soignants', s.id)}>
+                            <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)}>
+                            <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
+                          </Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -136,13 +177,33 @@ export default function AdminUtilisateurs() {
                       <TableCell>{e.type}</TableCell>
                       <TableCell className="font-mono text-xs">{e.siret}</TableCell>
                       <TableCell>{e.supprime_le ? <Badge variant="destructive" className="text-[10px]">Suspendu</Badge> : <Badge className="bg-success text-success-foreground text-[10px]">Actif</Badge>}</TableCell>
-                      <TableCell className="text-right space-x-1">
-                        {e.supprime_le ? (
-                          <Button size="sm" variant="outline" onClick={() => reactiver('etablissements', e.id)}><RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver</Button>
-                        ) : (
-                          <Button size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)}><Ban className="h-3.5 w-3.5 mr-1" />Suspendre</Button>
+                      <TableCell className="text-right space-x-1 whitespace-nowrap">
+                        {e.email_contact && (
+                          <Button asChild size="sm" variant="outline">
+                            <a href={`mailto:${e.email_contact}`}>
+                              <Mail className="h-3.5 w-3.5 mr-1" />Email
+                            </a>
+                          </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}><Eye className="h-3.5 w-3.5" /></Button>
+                        {e.telephone_contact && (
+                          <Button asChild size="sm" variant="outline">
+                            <a href={`tel:${e.telephone_contact}`}>
+                              <Phone className="h-3.5 w-3.5 mr-1" />Appeler
+                            </a>
+                          </Button>
+                        )}
+                        {e.supprime_le ? (
+                          <Button size="sm" variant="outline" onClick={() => reactiver('etablissements', e.id)}>
+                            <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)}>
+                            <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
+                          </Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
