@@ -88,6 +88,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const { deconnexion, user } = useAuth();
   const [showLiberal, setShowLiberal] = useState(false);
   const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
+  const { count: messagesNonLus } = useMessagesNonLus();
 
   useEffect(() => {
     if (!user) return;
