@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send, CreditCard } from 'lucide-react';
+import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send, CreditCard, MessageCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
@@ -13,6 +13,7 @@ import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
+import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 import { BoutonFavori } from '@/components/BoutonFavori';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
@@ -49,6 +50,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const navigate = useNavigate();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
+  const isAdmin = role === 'ADMIN_PLATEFORME';
+  const baseMsg = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
+  const ouvrirConv = useOuvrirConversation(baseMsg);
   const [mission, setMission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [modalAnnuler, setModalAnnuler] = useState(false);
@@ -138,7 +142,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     }
   };
 
-  const isAdmin = role === 'ADMIN_PLATEFORME';
   const backUrl = isAdmin ? '/admin/calendrier' : '/etablissement/missions';
   const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour aux missions';
 
@@ -221,13 +224,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     </p>
                     {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
                     <div className="mt-2 pt-2 border-t border-border space-y-2">
-                      {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
+                      {(isAdmin || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
                         <button
                           type="button"
-                          onClick={() => document.getElementById('chat-mission')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                          className="text-sm font-medium text-primary hover:underline underline-offset-4"
+                          onClick={() => ouvrirConv(m.soignant_assigne_id, m.id)}
+                          className="text-sm font-medium text-primary hover:underline underline-offset-4 flex items-center gap-1"
                         >
-                          💬 Envoyer un message
+                          <MessageCircle className="h-4 w-4" /> Contacter le soignant
                         </button>
                       )}
                       <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
@@ -291,9 +294,18 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <CodesPointageMission missionId={m.id} />
               )}
-              {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => ouvrirConv(m.etablissement_id, m.id)}
+                  className="text-sm font-medium text-primary hover:underline underline-offset-4 flex items-center gap-1 mb-3"
+                >
+                  <MessageCircle className="h-4 w-4" /> Contacter l'établissement
+                </button>
+              )}
+              {(isAdmin || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
                 <div id="chat-mission">
-                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={role === 'ADMIN_PLATEFORME' ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={role === 'ADMIN_PLATEFORME'} />
+                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={isAdmin ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={isAdmin} />
                 </div>
               )}
             </div>

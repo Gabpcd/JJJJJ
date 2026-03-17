@@ -9,9 +9,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { FileCheck, MessageSquare, Check, X, Eye, Mail, Phone, Building2, User } from 'lucide-react';
+import { FileCheck, MessageSquare, Check, X, Eye, Mail, Phone, Building2, User, MessageCircle } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
+import { useNavigate } from 'react-router-dom';
 
 type LitigeEnrichi = {
   id: string;
@@ -282,6 +283,15 @@ export default function AdminModeration() {
                                   <Phone className="h-3.5 w-3.5" /> Appeler
                                 </a>
                               )}
+                              <button
+                                onClick={async () => {
+                                  const { data } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: litige.soignant_id, p_mission_id: litige.mission_id });
+                                  if (data) window.location.href = `/admin/messagerie?conv=${data}`;
+                                }}
+                                className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
+                              >
+                                <MessageCircle className="h-3.5 w-3.5" /> Contacter
+                              </button>
                             </div>
                           </div>
 
@@ -307,6 +317,15 @@ export default function AdminModeration() {
                                   <Phone className="h-3.5 w-3.5" /> Appeler
                                 </a>
                               )}
+                              <button
+                                onClick={async () => {
+                                  const { data } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: litige.etablissement_id, p_mission_id: litige.mission_id });
+                                  if (data) window.location.href = `/admin/messagerie?conv=${data}`;
+                                }}
+                                className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
+                              >
+                                <MessageCircle className="h-3.5 w-3.5" /> Contacter
+                              </button>
                             </div>
                           </div>
                         </div>

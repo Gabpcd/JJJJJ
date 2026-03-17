@@ -14,7 +14,7 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock } from 'lucide-react';
+import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock, MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -375,6 +375,19 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                           title="Proposer une mission urgente"
                         >
                           <Send className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 px-2"
+                          onClick={async () => {
+                            const base = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
+                            const { data } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: s.soignant_id, p_mission_id: null });
+                            if (data) navigate(`${base}?conv=${data}`);
+                          }}
+                          title="Contacter"
+                        >
+                          <MessageCircle className="h-3 w-3" />
                         </Button>
                         <BoutonFavori soignantId={s.soignant_id} etablissementId={etablissementId} />
                       </div>
