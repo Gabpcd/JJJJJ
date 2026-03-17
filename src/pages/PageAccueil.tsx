@@ -135,7 +135,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
             </select>
             <input
               type="text"
-              placeholder="Ville ou code postal"
+              placeholder="Ville ou code postal (optionnel)"
               value={ville}
               onChange={(e) => setVille(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
