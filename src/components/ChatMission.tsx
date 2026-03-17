@@ -93,6 +93,8 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = fals
 
     const typeAuteur = isAdmin ? 'ADMIN' : role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT';
 
+    console.log('ChatMission envoi:', { missionId, auteur_id: user.id, type_auteur: typeAuteur, contenu_length: contenu.length });
+
     const { data, error } = await supabase
       .from('messages_mission')
       .insert({
@@ -104,10 +106,12 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = fals
       .select('id, auteur_id, type_auteur, contenu, cree_le')
       .single();
 
+    console.log('ChatMission envoi result:', { data, error });
+
     if (error) {
       console.error('Erreur envoi message mission:', error);
       setTexte(contenuBrut);
-      toast.error("Impossible d'envoyer le message pour le moment.");
+      toast.error(`Impossible d'envoyer le message : ${error.message}`);
     } else if (data) {
       setMessages((prev) => (prev.some((msg) => msg.id === data.id) ? prev : [...prev, data as Message]));
     }
