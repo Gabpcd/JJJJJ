@@ -26,6 +26,8 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 function scoreColor(score: number): string {
   if (score >= 70) return 'text-success';
