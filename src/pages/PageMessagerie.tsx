@@ -369,7 +369,13 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   onClick={() => selectConv(c.id)}
                   className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent/50 transition-colors border-b border-border/50 ${c.id === selectedConvId ? 'bg-accent' : ''}`}
                 >
-                  <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
+                  {c.is_jolene ? (
+                    <div className="shrink-0 h-10 w-10 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
+                      <img src={joleneLogo} alt="Jolene" className="h-6 w-6 object-contain" />
+                    </div>
+                  ) : (
+                    <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
