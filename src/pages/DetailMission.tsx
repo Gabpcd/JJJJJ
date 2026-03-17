@@ -213,13 +213,34 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const proposerMission = async (soignantId: string) => {
     setProposing(soignantId);
     try {
-      // Insert notification server-side would be ideal, but we use a simple approach
-      // The RPC should handle notification creation
-      const { error } = await supabase.rpc('fn_proposer_mission_soignant' as any, {
-        p_mission_id: id,
-        p_soignant_id: soignantId,
-      });
-      if (error) throw error;
+      const { data: existingCandidature, error: checkError } = await supabase
+        .from('candidatures')
+        .select('id, statut')
+        .eq('mission_id', id)
+        .eq('soignant_id', soignantId)
+        .maybeSingle();
+
+      if (checkError) throw checkError;
+
+      if (existingCandidature && !['REFUSEE', 'EXPIREE'].includes(existingCandidature.statut || '')) {
+        afficherNotification({ type: 'erreur', message: 'Ce soignant a déjà une candidature en cours pour cette mission.' });
+        return;
+      }
+
+      if (existingCandidature) {
+        const { error: updateError } = await supabase
+          .from('candidatures')
+          .update({ statut: 'PROPOSEE', traite_le: null, motif_refus: null } as any)
+          .eq('id', existingCandidature.id);
+        if (updateError) throw updateError;
+      } else {
+        const { error } = await supabase.rpc('fn_proposer_mission_soignant' as any, {
+          p_mission_id: id,
+          p_soignant_id: soignantId,
+        });
+        if (error) throw error;
+      }
+
       afficherNotification({ type: 'succes', message: 'Mission proposée au soignant !' });
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });

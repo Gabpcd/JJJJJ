@@ -110,40 +110,54 @@ export default function AdminDetailUtilisateur() {
   const envoyerRappelDocuments = async () => {
     if (!soignant || !id) return;
     setEnvoiRappel(true);
-    
+
     const allMissing = [...documentsMissing, ...documentsExpires];
+    const payload = {
+      type: 'RAPPEL_DOCUMENTS',
+      destinataire_id: id,
+      data: {
+        prenom: soignant.prenom,
+        documents_manquants: allMissing,
+      },
+    };
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        toast.error("Session expirée. Veuillez vous reconnecter.");
+        toast.error('Session expirée. Veuillez vous reconnecter.');
         setEnvoiRappel(false);
         return;
       }
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'RAPPEL_DOCUMENTS',
-          destinataire_id: id,
-          data: {
-            prenom: soignant.prenom,
-            documents_manquants: allMissing,
-          },
-        }),
-      });
 
-      if (!res.ok) {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            apikey: publishableKey,
+          },
+          body: JSON.stringify(payload),
+        });
+
         const data = await res.json().catch(() => null);
-        toast.error(`Impossible d'envoyer le rappel : ${data?.error || `HTTP ${res.status}`}`);
-      } else {
-        toast.success(`Rappel envoyé à ${soignant.prenom}`);
-        setDernierRappel(new Date().toISOString());
+        if (!res.ok) {
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+      } catch (fetchError: any) {
+        const { error } = await supabase.functions.invoke('send-email', {
+          body: payload,
+        });
+        if (error) throw error;
+        if (fetchError?.message && fetchError.message !== 'Failed to fetch') {
+          console.warn('send-email fetch fallback used:', fetchError.message);
+        }
       }
+
+      toast.success(`Rappel envoyé à ${soignant.prenom}`);
+      setDernierRappel(new Date().toISOString());
     } catch (err: any) {
       console.error('send-email exception:', err);
       toast.error(`Erreur lors de l'envoi du rappel : ${err?.message || 'réseau indisponible'}`);

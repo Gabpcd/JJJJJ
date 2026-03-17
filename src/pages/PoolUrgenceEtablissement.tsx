@@ -198,13 +198,42 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     setAssigningMissionId(mission.id);
     console.log('pool: proposing mission to soignant', { mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
 
-    // Insert candidature PROPOSEE instead of direct assignment
-    const { error: candError } = await supabase.from('candidatures').insert({
-      mission_id: mission.id,
-      soignant_id: proposerSoignant.soignant_id,
-      statut: 'PROPOSEE',
-      message: `Mission proposée depuis le pool d'urgence`,
-    } as any);
+    const { data: existingCandidature, error: checkError } = await supabase
+      .from('candidatures')
+      .select('id, statut')
+      .eq('mission_id', mission.id)
+      .eq('soignant_id', proposerSoignant.soignant_id)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('assignation pool check error:', checkError);
+      toast.error(`Impossible de proposer : ${checkError.message}`);
+      setAssigningMissionId(null);
+      return;
+    }
+
+    if (existingCandidature && !['REFUSEE', 'EXPIREE'].includes(existingCandidature.statut || '')) {
+      toast.error('Ce soignant a déjà une candidature en cours pour cette mission.');
+      setAssigningMissionId(null);
+      return;
+    }
+
+    const { error: candError } = existingCandidature
+      ? await supabase
+          .from('candidatures')
+          .update({
+            statut: 'PROPOSEE',
+            message: `Mission proposée depuis le pool d'urgence`,
+            traite_le: null,
+            motif_refus: null,
+          } as any)
+          .eq('id', existingCandidature.id)
+      : await supabase.from('candidatures').insert({
+          mission_id: mission.id,
+          soignant_id: proposerSoignant.soignant_id,
+          statut: 'PROPOSEE',
+          message: `Mission proposée depuis le pool d'urgence`,
+        } as any);
 
     if (candError) {
       console.error('assignation pool error:', candError);
