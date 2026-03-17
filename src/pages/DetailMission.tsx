@@ -47,7 +47,101 @@ function scoreBadgeClasses(score: number): string {
   return 'bg-destructive/10 text-destructive';
 }
 
-export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?: 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME' }) {
+function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: { missionId: string; mission: any; user: any; afficherNotification: (n: any) => void }) {
+  const [alerting, setAlerting] = useState(false);
+  const [alerted, setAlerted] = useState(false);
+
+  const alerterPool = async () => {
+    setAlerting(true);
+    try {
+      const { data: soignants, error } = await supabase.rpc('fn_soignants_urgence' as any, { p_mission_id: missionId });
+      console.log('fn_soignants_urgence result:', { count: soignants?.length, error });
+
+      if (error || !soignants?.length) {
+        toast.error(error?.message || 'Aucun soignant éligible dans le pool');
+        setAlerting(false);
+        return;
+      }
+
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      const debut = new Date(mission.debut_le);
+      const fin = new Date(mission.fin_le);
+
+      // Send notification + email to each soignant
+      let sent = 0;
+      for (const s of soignants as any[]) {
+        try {
+          await supabase.rpc('fn_creer_notification', {
+            p_destinataire_id: s.soignant_id,
+            p_type_destinataire: 'SOIGNANT',
+            p_type: 'MISSION_URGENTE',
+            p_titre: `🚨 Mission urgente : ${mission.intitule}`,
+            p_corps: `${mission.intitule} — ${format(debut, 'dd/MM à HH:mm', { locale: fr })}. Premier arrivé, premier servi !`,
+            p_lien: `/soignant/missions/${missionId}`,
+            p_type_ressource: 'MISSION',
+            p_id_ressource: missionId,
+          });
+
+          if (token) {
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            fetch(`${supabaseUrl}/functions/v1/send-email`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'MISSION_URGENTE',
+                destinataire_id: s.soignant_id,
+                data: {
+                  prenom: s.prenom,
+                  mission: mission.intitule,
+                  etablissement: mission.etablissements?.nom || '',
+                  date: format(debut, 'dd/MM/yyyy', { locale: fr }),
+                  heure_debut: format(debut, 'HH:mm'),
+                  heure_fin: format(fin, 'HH:mm'),
+                  taux_horaire: String(mission.taux_horaire_base),
+                  mission_id: missionId,
+                },
+              }),
+            }).catch(() => {});
+          }
+          sent++;
+        } catch {
+          // Non-blocking per soignant
+        }
+      }
+
+      toast.success(`🚨 ${sent} soignant${sent > 1 ? 's' : ''} alerté${sent > 1 ? 's' : ''}`);
+      setAlerted(true);
+    } catch (err: any) {
+      toast.error(`Erreur : ${err.message}`);
+    }
+    setAlerting(false);
+  };
+
+  return (
+    <div className="card-base border-destructive/30 bg-destructive/5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-destructive flex items-center gap-2">
+            <BellRing className="h-4 w-4" /> Mission urgente
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">Alerter les soignants du pool d'urgence pour cette mission</p>
+        </div>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={alerterPool}
+          disabled={alerting || alerted}
+        >
+          {alerting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <BellRing className="h-4 w-4 mr-1" />}
+          {alerted ? 'Pool alerté ✅' : '🚨 Alerter le pool'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+
   usePageTitle('Détail mission');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
