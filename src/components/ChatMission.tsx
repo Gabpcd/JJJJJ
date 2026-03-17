@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/hooks/useRole';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { sanitizeText } from '@/lib/sanitize';
@@ -23,8 +24,10 @@ interface ChatMissionProps {
   isAdmin?: boolean;
 }
 
-export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = false }: ChatMissionProps) {
+export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdminProp = false }: ChatMissionProps) {
   const { user } = useAuth();
+  const { role: detectedRole } = useRole();
+  const isAdmin = isAdminProp || detectedRole === 'ADMIN_PLATEFORME';
   const [messages, setMessages] = useState<Message[]>([]);
   const [texte, setTexte] = useState('');
   const [envoi, setEnvoi] = useState(false);
@@ -158,7 +161,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = fals
               >
                 {!mine && (
                   <p className={`text-[10px] font-semibold mb-0.5 ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                    {msg.type_auteur === 'SOIGNANT' ? '👤 Soignant' : msg.type_auteur === 'ADMIN' ? '🛡️ Admin' : '🏥 Établissement'}
+                    {msg.type_auteur === 'ADMIN' ? '🛡️ Admin Jolene' : msg.type_auteur === 'SOIGNANT' ? '👤 Soignant' : '🏥 Établissement'}
                   </p>
                 )}
                 <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>

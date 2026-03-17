@@ -186,9 +186,8 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   };
 
   const assignerMission = async (mission: MissionOuverte) => {
-    if (!proposerSoignant) return;
+    if (!proposerSoignant || !user) return;
 
-    // Validate soignant_id is a valid UUID
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!UUID_REGEX.test(proposerSoignant.soignant_id)) {
       console.error('assignation pool error: soignant_id invalide', proposerSoignant.soignant_id);
@@ -197,28 +196,66 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     }
 
     setAssigningMissionId(mission.id);
+    console.log('pool: proposing mission to soignant', { mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
 
-    console.log('assignation pool: calling fn_assigner_mission_admin', { mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
+    // Insert candidature PROPOSEE instead of direct assignment
+    const { error: candError } = await supabase.from('candidatures').insert({
+      mission_id: mission.id,
+      soignant_id: proposerSoignant.soignant_id,
+      statut: 'PROPOSEE',
+      message: `Mission proposée depuis le pool d'urgence`,
+    } as any);
 
-    const { data, error } = await supabase.rpc('fn_assigner_mission_admin' as any, {
-      p_mission_id: mission.id,
-      p_soignant_id: proposerSoignant.soignant_id,
-    });
-
-    console.log('fn_assigner_mission_admin result:', { data, error, mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
-
-    if (error) {
-      console.error('assignation pool error:', error);
-      toast.error(`Impossible d'assigner : ${error.message}`);
-    } else if (data && typeof data === 'object' && (data as any).error) {
-      const errMsg = (data as any).error;
-      console.error('assignation pool error (rpc):', errMsg);
-      toast.error(`Impossible d'assigner : ${errMsg}`);
-    } else {
-      toast.success(`Mission assignée à ${proposerSoignant.prenom} ✅`);
-      setProposerModalOpen(false);
-      loadData();
+    if (candError) {
+      console.error('assignation pool error:', candError);
+      toast.error(`Impossible de proposer : ${candError.message}`);
+      setAssigningMissionId(null);
+      return;
     }
+
+    // Send notification + email (non-blocking)
+    try {
+      await supabase.rpc('fn_creer_notification', {
+        p_destinataire_id: proposerSoignant.soignant_id,
+        p_type_destinataire: 'SOIGNANT',
+        p_type: 'MISSION_PROPOSEE',
+        p_titre: `📩 Mission proposée : ${mission.intitule}`,
+        p_corps: `${mission.intitule} — le ${format(new Date(mission.debut_le), 'dd/MM/yyyy à HH:mm', { locale: fr })}. Acceptez ou refusez dans les 2h.`,
+        p_lien: '/soignant/dashboard',
+        p_type_ressource: 'MISSION',
+        p_id_ressource: mission.id,
+      });
+
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (token) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'MISSION_PROPOSEE',
+            destinataire_id: proposerSoignant.soignant_id,
+            data: {
+              prenom: proposerSoignant.prenom,
+              mission: mission.intitule,
+              etablissement: 'Pool d\'urgence',
+              date: format(new Date(mission.debut_le), 'dd/MM/yyyy', { locale: fr }),
+              heure_debut: format(new Date(mission.debut_le), 'HH:mm'),
+              heure_fin: '—',
+              taux_horaire: '—',
+              mission_id: mission.id,
+            },
+          }),
+        }).catch(err => console.warn('email send error:', err));
+      }
+    } catch (notifErr) {
+      console.warn('notification error (non-bloquant):', notifErr);
+    }
+
+    toast.success(`Mission proposée à ${proposerSoignant.prenom} 📩 — en attente de réponse`);
+    setProposerModalOpen(false);
+    loadData();
     setAssigningMissionId(null);
   };
 

@@ -79,7 +79,7 @@ const ALLOWED_TYPES = new Set([
   'FACTURE_EMISE', 'FACTURE_PAYEE',
   'DOCUMENT_EXPIRANT', 'RAPPEL_FACTURE',
   'ELIGIBLE_LIBERAL', 'RECAP_HEBDO',
-  'RAPPEL_DOCUMENTS',
+  'RAPPEL_DOCUMENTS', 'MISSION_URGENTE', 'MISSION_PROPOSEE',
 ]);
 
 interface TemplateResult { subject: string; html: string }
@@ -327,6 +327,45 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         `),
       };
     }
+
+    case 'MISSION_URGENTE':
+      return {
+        subject: `🚨 Mission urgente : ${data.mission}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">🚨 Mission urgente disponible</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom},</p>
+          <p style="color:#334155;">Une mission urgente correspondant à votre profil vient d'être publiée :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">${data.mission}</strong><br/>
+            <span style="color:#334155;">📍 ${data.etablissement}</span><br/>
+            <span style="color:#334155;">📅 ${data.date}</span><br/>
+            <span style="color:#334155;">🕐 ${data.heure_debut} → ${data.heure_fin}</span><br/>
+            <span style="color:#334155;">💰 ${data.taux_horaire} €/h</span>
+          `)}
+          ${INFO_BOX('<strong style="color:#0F172A;">⏰ Place limitée</strong> — le premier soignant qui accepte remporte la mission.')}
+          ${BUTTON('Voir la mission →', `${APP_URL}/soignant/missions/${data.mission_id || ''}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'MISSION_PROPOSEE':
+      return {
+        subject: `Mission proposée : ${data.mission}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📩 Mission proposée</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom},</p>
+          <p style="color:#334155;">L'établissement <strong>${data.etablissement}</strong> vous propose une mission :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">${data.mission}</strong><br/>
+            <span style="color:#334155;">📅 ${data.date}</span><br/>
+            <span style="color:#334155;">🕐 ${data.heure_debut} → ${data.heure_fin}</span><br/>
+            <span style="color:#334155;">💰 ${data.taux_horaire} €/h</span>
+          `)}
+          ${INFO_BOX('Vous avez <strong>2 heures</strong> pour accepter ou refuser cette proposition.')}
+          ${BUTTON('Accepter ou refuser →', `${APP_URL}/soignant/dashboard`)}
+          ${SECURITY_NOTE}
+        `),
+      };
 
     default:
       return null;

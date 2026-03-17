@@ -64,6 +64,7 @@ export default function DashboardSoignant() {
   const [missions, setMissions] = useState<any[]>([]);
   const [mesMissions, setMesMissions] = useState<any[]>([]);
   const [docsExpirant, setDocsExpirant] = useState<any[]>([]);
+  const [propositions, setPropositions] = useState<any[]>([]);
   const [heuresSemaine, setHeuresSemaine] = useState(0);
   const [loading, setLoading] = useState(true);
   const [missionProchaine, setMissionProchaine] = useState<any>(null);
@@ -98,17 +99,17 @@ export default function DashboardSoignant() {
       let missionsQuery = supabase.from('missions').select('id, intitule, service, debut_le, fin_le, taux_horaire_base, est_urgente, etablissement_id').eq('statut', 'OUVERTE').order('debut_le', { ascending: true }).limit(3);
       if (profession) missionsQuery = missionsQuery.eq('profession_requise', profession);
 
-      const [{ data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }, { data: gainsMois }, { data: gains6m }, { data: msSemaineCal }] = await Promise.all([
+      const [{ data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }, { data: gainsMois }, { data: gains6m }, { data: msSemaineCal }, { data: props }] = await Promise.all([
         missionsQuery,
         supabase.from('missions').select('id, intitule, debut_le, fin_le, statut, etablissement_id').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true }).limit(3),
         supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
         supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
         supabase.from('missions').select('id, intitule, fin_le, presences(id, pointage_arrivee_le, pointage_depart_le)').eq('soignant_assigne_id', user.id).eq('statut', 'EN_COURS').lt('fin_le', new Date(Date.now() - 30 * 60000).toISOString()),
         supabase.from('missions').select('net_a_payer, net_estime').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', debutMois.toISOString()).lte('debut_le', finMois.toISOString()),
-        // 6-month gains
         supabase.from('missions').select('debut_le, net_a_payer').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', sixMoisAgo.toISOString()).order('debut_le', { ascending: true }),
-        // Week calendar missions
         supabase.from('missions').select('debut_le, statut').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
+        // Propositions from pool
+        supabase.from('candidatures').select('id, mission_id, cree_le, missions(id, intitule, debut_le, fin_le, taux_horaire_base, etablissement_id, est_urgente)').eq('soignant_id', user.id).eq('statut', 'PROPOSEE').order('cree_le', { ascending: false }).limit(5),
       ]);
 
       // Enrich missions with safe establishment data
@@ -153,6 +154,7 @@ export default function DashboardSoignant() {
       }
       if (gains6m) setGains6Mois(gains6m as any);
       if (msSemaineCal) setMissionsSemaine(msSemaineCal as any);
+      if (props) setPropositions(props as any);
 
       // Badge stats (simple computation from soignant data)
       if (sg) {
