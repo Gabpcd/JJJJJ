@@ -146,7 +146,7 @@ export default function DocumentsSoignant() {
     const [{ data: sg }, { data: dr }, { data: md }] = await Promise.all([
       supabase.from('soignants').select('profession').eq('id', user.id).single(),
       supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique'),
-      supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
+      supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
     ]);
     if (sg) {
       setSoignant(sg);
@@ -236,7 +236,14 @@ export default function DocumentsSoignant() {
 
     supabase.functions.invoke('verify-document', {
       body: { document_id: docId },
-    }).then(({ data: verifyData }) => {
+    }).then(({ data: verifyData, error: verifyError }) => {
+      if (verifyError) {
+        handleErrorSilent(verifyError, 'Vérification automatique document');
+        toast.info('Document téléversé. Vérification manuelle en attente.');
+        charger();
+        return;
+      }
+
       if (verifyData?.verdict === 'VERIFIE') {
         toast.success('✅ Document vérifié automatiquement !');
       } else if (verifyData?.verdict === 'REJETE') {
@@ -245,7 +252,10 @@ export default function DocumentsSoignant() {
         toast.info('🔄 Document en cours de vérification...');
       }
       charger();
-    }).catch(() => {});
+    }).catch((err) => {
+      handleErrorSilent(err, 'Vérification automatique document');
+      toast.info('Document téléversé. Vérification manuelle en attente.');
+    });
 
     toast.success('Document téléversé avec succès !');
     setTeleversementType(null);
@@ -253,15 +263,34 @@ export default function DocumentsSoignant() {
   };
 
   const voirDocument = async (doc: any) => {
-    const { data } = await supabase.storage.from('jolene-documents').createSignedUrl(doc.s3_cle, 300);
-    if (!data?.signedUrl) { toast.error('Impossible de générer le lien'); return; }
+    const previewWindow = window.open('', '_blank');
 
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_CONSULTATION',
-      p_type_ressource: 'document', p_id_ressource: doc.id, p_cle_s3: doc.s3_cle,
-      p_details: { type_document: doc.type_document }, p_ip: null, p_navigateur: navigator.userAgent,
-    });
-    window.open(data.signedUrl, '_blank');
+    try {
+      const { data, error } = await supabase.storage
+        .from(doc.s3_bucket || 'jolene-documents')
+        .createSignedUrl(doc.s3_cle, 3600);
+
+      if (error || !data?.signedUrl) {
+        throw error || new Error('Signed URL absente');
+      }
+
+      await supabase.rpc('fn_ecrire_audit_safe', {
+        p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_CONSULTATION',
+        p_type_ressource: 'document', p_id_ressource: doc.id, p_cle_s3: doc.s3_cle,
+        p_details: { type_document: doc.type_document }, p_ip: null, p_navigateur: navigator.userAgent,
+      });
+
+      if (previewWindow) {
+        previewWindow.location.href = data.signedUrl;
+        return;
+      }
+
+      window.open(data.signedUrl, '_blank');
+    } catch (error) {
+      if (previewWindow) previewWindow.close();
+      toast.error('Impossible d’ouvrir le document');
+      handleErrorSilent(error, 'Consultation document');
+    }
   };
 
   const supprimerDocument = async () => {
@@ -359,6 +388,9 @@ export default function DocumentsSoignant() {
                   <div className="mt-2">
                     <p className="text-xs text-muted-foreground">📎 {doc.nom_fichier} (téléversé le {format(new Date(doc.televerse_le), 'd MMM yyyy', { locale: fr })})</p>
                     {statut && <span className={`badge-base ${statut.couleur} text-[10px] mt-1`}>{statut.label}</span>}
+                    {doc.valide_depuis && (
+                      <p className="text-[10px] text-muted-foreground mt-1">Délivré le {format(new Date(doc.valide_depuis), 'd MMM yyyy', { locale: fr })}</p>
+                    )}
                     {doc.valide_jusqua && (
                       <p className="text-[10px] text-muted-foreground mt-1">Valide jusqu'au {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}</p>
                     )}

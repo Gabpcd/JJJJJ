@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getDocument } from "npm:pdfjs-dist/legacy/build/pdf.mjs";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -20,6 +21,56 @@ function corsHeaders(req: Request) {
   };
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function loadDocumentWithRetry(supabase: any, documentId: string, attempts = 4) {
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const { data, error } = await supabase
+      .from("documents_soignants")
+      .select("id, soignant_id, type_document, nom_fichier, s3_cle, s3_bucket, type_mime")
+      .eq("id", documentId)
+      .maybeSingle();
+
+    if (data) return data;
+    lastError = error;
+
+    if (attempt < attempts - 1) {
+      await wait(350 * (attempt + 1));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Document introuvable");
+}
+
+async function extractPdfText(bytes: Uint8Array): Promise<string> {
+  const pdf = await getDocument({
+    data: bytes,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+  }).promise;
+
+  const pages: string[] = [];
+  const maxPages = Math.min(pdf.numPages, 3);
+
+  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const textContent = await page.getTextContent();
+    const text = textContent.items
+      .map((item: any) => (typeof item?.str === "string" ? item.str : ""))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (text) pages.push(text);
+  }
+
+  return pages.join("\n\n").trim();
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
 
@@ -35,14 +86,8 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // 1. Get document info
-    const { data: doc, error: docErr } = await supabase
-      .from("documents_soignants")
-      .select("id, soignant_id, type_document, nom_fichier, s3_cle, s3_bucket, type_mime")
-      .eq("id", document_id)
-      .single();
-
-    if (docErr || !doc) throw new Error("Document introuvable");
+    // 1. Get document info (retry to avoid race condition just after insert)
+    const doc = await loadDocumentWithRetry(supabase, document_id);
 
     // 2. Get soignant info for name matching
     const { data: soignant } = await supabase
@@ -73,6 +118,7 @@ serve(async (req) => {
 
     const isImage = doc.type_mime?.startsWith("image/");
     const isPdf = doc.type_mime === "application/pdf";
+    const extractedPdfText = isPdf ? await extractPdfText(bytes).catch(() => "") : "";
 
     // Type document labels
     const typeLabels: Record<string, string> = {
@@ -119,6 +165,7 @@ Règles:
     const userMessage = `Document déclaré comme: "${typeLabel}"
 Nom du soignant: "${nomComplet}"
 Fichier: ${doc.nom_fichier}
+${isPdf ? `\nTexte extrait du PDF (si lisible):\n${extractedPdfText || "[aucun texte exploitable extrait]"}` : ""}
 
 Analyse ce document et vérifie sa conformité.`;
 
@@ -138,10 +185,9 @@ Analyse ce document et vérifie sa conformité.`;
         ],
       });
     } else if (isPdf) {
-      // For PDFs, send as description since not all models support PDF natively
       messages.push({
         role: "user",
-        content: `${userMessage}\n\n[Document PDF joint - nom: ${doc.nom_fichier}, taille: ${arrayBuffer.byteLength} octets]\n\nNote: Si tu ne peux pas lire le PDF directement, réponds avec verdict "EN_ATTENTE" et motif "Format PDF nécessite vérification manuelle".`,
+        content: `${userMessage}\n\nBase ta décision sur le texte extrait ci-dessus. Si le contenu mentionne clairement une carte d'identité, un passeport, une attestation de droits, un KBIS ou tout autre document qui ne correspond pas au type déclaré, réponds REJETE. Si le texte extrait est insuffisant, réponds EN_ATTENTE avec un motif expliquant l'absence de contenu exploitable.`,
       });
     } else {
       messages.push({ role: "user", content: userMessage });
@@ -172,9 +218,9 @@ Analyse ce document et vérifie sa conformité.`;
         })
         .eq("id", document_id);
 
-      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
     }
 
     const aiData = await aiResponse.json();
@@ -195,9 +241,9 @@ Analyse ce document et vérifie sa conformité.`;
         .update({ statut_verification: "EN_ATTENTE" })
         .eq("id", document_id);
 
-      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
     }
 
     // 6. Update document with results
