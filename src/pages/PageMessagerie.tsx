@@ -170,7 +170,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         autre_id: autreId,
         autre_prenom: displayPrenom,
         autre_nom: displayNom,
-        autre_avatar: isJolene ? joleneIcon : (info?.avatar || null),
+        autre_avatar: isJolene ? null : (info?.avatar || null),
         dernier_contenu: lastMsgMap.get(c.id) || null,
         non_lus: unreadMap.get(c.id) || 0,
         is_jolene: isJolene,
