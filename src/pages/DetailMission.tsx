@@ -142,7 +142,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     }
   };
 
-  const isAdmin = role === 'ADMIN_PLATEFORME';
   const backUrl = isAdmin ? '/admin/calendrier' : '/etablissement/missions';
   const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour aux missions';
 
