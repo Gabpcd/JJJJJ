@@ -144,20 +144,21 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       unreadMap.set(m.conversation_id, (unreadMap.get(m.conversation_id) || 0) + 1);
     });
 
+    const resolveUserName = (uid: string) => {
+      const info = userMap.get(uid);
+      if (info) return `${info.prenom} ${info.nom}`.trim();
+      return 'Jolene';
+    };
+
     const enriched: Conversation[] = convs.map(c => {
       const autreId = c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id;
-      // For admin, show both participants
-      const displayId = isAdmin ? c.participant_1_id : autreId;
-      const info = userMap.get(displayId) || userMap.get(c.participant_2_id);
+      const info = userMap.get(autreId) || userMap.get(c.participant_1_id) || userMap.get(c.participant_2_id);
       
-      // For admin view, show both names
-      let displayPrenom = info?.prenom || 'Utilisateur';
+      let displayPrenom = info?.prenom || 'Jolene';
       let displayNom = info?.nom || '';
       if (isAdmin) {
-        const p1 = userMap.get(c.participant_1_id);
-        const p2 = userMap.get(c.participant_2_id);
-        displayPrenom = `${p1?.prenom || '?'} ${p1?.nom || ''}`.trim();
-        displayNom = `↔ ${p2?.prenom || '?'} ${p2?.nom || ''}`.trim();
+        displayPrenom = resolveUserName(c.participant_1_id);
+        displayNom = `↔ ${resolveUserName(c.participant_2_id)}`;
       }
 
       return {
@@ -408,8 +409,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                     return (
                       <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md'}`}>
-                          {msg.est_admin && !mine && (
-                            <p className="text-[10px] font-bold mb-0.5 flex items-center gap-1 text-primary">
+                          {msg.est_admin && (
+                            <p className={`text-[10px] font-bold mb-0.5 flex items-center gap-1 ${mine ? 'text-primary-foreground/80' : 'text-primary'}`}>
                               <Shield className="h-3 w-3" /> Admin Jolene
                             </p>
                           )}

@@ -57,12 +57,16 @@ const formatDateTime = (d?: string | null) => d ? new Date(d).toLocaleString('fr
 const formatStatutLitige = (statut: string) => statut.replace(/_/g, ' ');
 
 const contacterDepuisLitige = async (userId: string, navigate: ReturnType<typeof useNavigate>) => {
+  console.log('contacterDepuisLitige params:', { userId });
   const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: userId, p_mission_id: null });
-  console.log('fn_obtenir_conversation (moderation):', { data, error, userId });
-  if (error || !data) {
-    const errMsg = error?.message || 'Erreur inconnue';
+  console.log('contacterDepuisLitige result:', { data, error, userId });
+  if (error) {
     console.error('fn_obtenir_conversation error:', error);
-    toast.error(`Impossible d'ouvrir la conversation : ${errMsg}`);
+    toast.error(`Impossible d'ouvrir la conversation : ${error.message}`);
+    return;
+  }
+  if (!data) {
+    toast.error("La conversation n'a pas pu être créée. Vérifiez que l'utilisateur existe.");
     return;
   }
   navigate(`/admin/messagerie?conv=${data}`);

@@ -79,6 +79,7 @@ const ALLOWED_TYPES = new Set([
   'FACTURE_EMISE', 'FACTURE_PAYEE',
   'DOCUMENT_EXPIRANT', 'RAPPEL_FACTURE',
   'ELIGIBLE_LIBERAL', 'RECAP_HEBDO',
+  'RAPPEL_DOCUMENTS',
 ]);
 
 interface TemplateResult { subject: string; html: string }
@@ -308,6 +309,24 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           ${SECURITY_NOTE}
         `),
       };
+
+    case 'RAPPEL_DOCUMENTS': {
+      const docsList = Array.isArray(rawData.documents_manquants)
+        ? (rawData.documents_manquants as unknown as string[]).map(d => escapeHtml(d)).join(', ')
+        : data.documents_manquants || 'certains documents';
+      return {
+        subject: 'Complétez votre dossier sur Jolene',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📋 Documents à compléter</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom},</p>
+          <p style="color:#334155;">Il manque des documents à votre profil pour pouvoir accepter des missions :</p>
+          ${INFO_BOX(`<strong style="color:#0F172A;">Documents concernés :</strong> ${docsList}`)}
+          <p style="color:#334155;">Complétez-les dès maintenant pour rester éligible aux missions.</p>
+          ${BUTTON('Compléter mes documents →', `${APP_URL}/soignant/documents`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+    }
 
     default:
       return null;

@@ -337,10 +337,17 @@ export default function DetailMissionSoignant() {
                     <button
                       type="button"
                       onClick={async () => {
+                        console.log('obtenir conversation params:', { autre_id: mission.etablissement_id, mission_id: mission.id });
                         const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: mission.etablissement_id, p_mission_id: mission.id });
-                        console.log('fn_obtenir_conversation result:', { data, error });
-                        if (data) navigate(`/soignant/messagerie?conv=${data}`);
-                        else toast.error("Impossible d'ouvrir la conversation.");
+                        console.log('obtenir conversation result:', { data, error });
+                        if (error) {
+                          console.error('fn_obtenir_conversation error:', error);
+                          toast.error(`Impossible d'ouvrir la conversation : ${error.message}`);
+                        } else if (data) {
+                          navigate(`/soignant/messagerie?conv=${data}`);
+                        } else {
+                          toast.error("Impossible d'ouvrir la conversation.");
+                        }
                       }}
                       className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
                       title="Contacter l'établissement"
