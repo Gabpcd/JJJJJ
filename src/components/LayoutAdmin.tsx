@@ -17,6 +17,7 @@ const NAV_ADMIN = [
   { icone: Building2, label: 'Groupes', route: '/admin/groupes' },
   { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
   { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
+  { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie' },
 ];
 
 export function LayoutAdmin({ children }: { children: React.ReactNode }) {
