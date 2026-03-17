@@ -71,6 +71,7 @@ export default function MissionsSoignant() {
     if (!user || !soignant) return;
     setLoading(true);
     const fetchMissions = async () => {
+      const maintenantIso = new Date().toISOString();
       let query = supabase.from('missions').select(`
         id, intitule, description, service, profession_requise,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
@@ -79,18 +80,17 @@ export default function MissionsSoignant() {
       `);
 
       if (onglet === 'disponibles') {
-        query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any);
+        query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any).gte('debut_le', maintenantIso);
         if (soignant.type_contrat === 'LIBERAL') {
           query = query.eq('type_paiement_soignant', 'NOTE_HONORAIRES');
         }
-        // Urgent missions first, then by date
         query = query.order('est_urgente', { ascending: false }).order('niveau_urgence', { ascending: false }).order('debut_le', { ascending: true });
         if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);
         if (filtres?.dateFin) query = query.lte('debut_le', filtres.dateFin);
         if (filtres?.tauxMin && filtres.tauxMin > 0) query = query.gte('taux_horaire_base', filtres.tauxMin);
       } else if (onglet === 'mes_missions') {
         query = query.eq('soignant_assigne_id', user.id)
-          .in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true });
+          .in('statut', ['ASSIGNEE', 'EN_COURS']).gte('fin_le', maintenantIso).order('debut_le', { ascending: true });
       } else {
         query = query.eq('soignant_assigne_id', user.id)
           .in('statut', ['TERMINEE', 'ANNULEE_PAR_SOIGNANT', 'ANNULEE_PAR_ETABLISSEMENT', 'ABSENCE'])
