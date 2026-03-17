@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { HeartPulse, ArrowUp } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
+import logoIcon from '@/assets/icon-jolene.png';
 import { FooterLegal } from '@/components/FooterLegal';
 
 interface TocItem {
