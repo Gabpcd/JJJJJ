@@ -3504,6 +3504,17 @@ export type Database = {
         Args: { p_candidature_id: string; p_decision: string; p_motif?: string }
         Returns: Json
       }
+      fn_update_document_verification: {
+        Args: {
+          p_document_id: string
+          p_motif_rejet?: string
+          p_statut_verification: string
+          p_valide_depuis?: string
+          p_valide_jusqua?: string
+          p_verifie_le?: string
+        }
+        Returns: undefined
+      }
       fn_upsert_token_push: {
         Args: { p_plateforme: string; p_token: string }
         Returns: undefined
