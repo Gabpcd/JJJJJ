@@ -112,23 +112,32 @@ export default function AdminDetailUtilisateur() {
     setEnvoiRappel(true);
     
     const allMissing = [...documentsMissing, ...documentsExpires];
-    const { error } = await supabase.functions.invoke('send-email', {
-      body: {
-        type: 'RAPPEL_DOCUMENTS',
-        destinataire_id: id,
-        data: {
-          prenom: soignant.prenom,
-          documents_manquants: allMissing,
-        },
-      },
-    });
+    console.log('send-email RAPPEL_DOCUMENTS avant appel:', { destinataire_id: id, prenom: soignant.prenom, documents_manquants: allMissing });
 
-    if (error) {
-      console.error('send-email error:', error);
-      toast.error("Impossible d'envoyer le rappel.");
-    } else {
-      toast.success(`Rappel envoyé à ${soignant.prenom}`);
-      setDernierRappel(new Date().toISOString());
+    try {
+      const { data, error } = await supabase.functions.invoke('send-email', {
+        body: {
+          type: 'RAPPEL_DOCUMENTS',
+          destinataire_id: id,
+          data: {
+            prenom: soignant.prenom,
+            documents_manquants: allMissing,
+          },
+        },
+      });
+
+      console.log('send-email RAPPEL_DOCUMENTS résultat:', { data, error });
+
+      if (error) {
+        console.error('send-email error:', error);
+        toast.error(`Impossible d'envoyer le rappel : ${error.message || 'Erreur inconnue'}`);
+      } else {
+        toast.success(`Rappel envoyé à ${soignant.prenom}`);
+        setDernierRappel(new Date().toISOString());
+      }
+    } catch (err) {
+      console.error('send-email exception:', err);
+      toast.error("Erreur inattendue lors de l'envoi du rappel.");
     }
     setEnvoiRappel(false);
   };
