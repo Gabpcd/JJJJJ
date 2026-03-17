@@ -293,6 +293,7 @@ export default function AdminModeration() {
                                 <MessageCircle className="h-3.5 w-3.5" /> Contacter
                               </button>
                             </div>
+                          </div>
 
                           <div className="rounded-md bg-muted/40 p-3">
                             <div className="flex items-center gap-2">
