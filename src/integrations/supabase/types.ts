@@ -2679,6 +2679,10 @@ export type Database = {
       }
       fn_anonymiser_gps_anciennes: { Args: never; Returns: undefined }
       fn_appliquer_parrainage: { Args: { p_code: string }; Returns: Json }
+      fn_assigner_mission_admin: {
+        Args: { p_mission_id: string; p_soignant_id: string }
+        Returns: Json
+      }
       fn_auto_facturation_mensuelle: { Args: never; Returns: Json }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_calculer_bfa: {
