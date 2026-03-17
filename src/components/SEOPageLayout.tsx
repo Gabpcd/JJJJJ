@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import logoIcon from '@/assets/icon-jolene.png';
 import { FooterLegal } from '@/components/FooterLegal';
 
 interface SEOPageLayoutProps {
