@@ -227,19 +227,26 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         return;
       }
 
-      if (existingCandidature) {
-        const { error: updateError } = await supabase
-          .from('candidatures')
-          .update({ statut: 'PROPOSEE', traite_le: null, motif_refus: null } as any)
-          .eq('id', existingCandidature.id);
-        if (updateError) throw updateError;
-      } else {
-        const { error } = await supabase.rpc('fn_proposer_mission_soignant' as any, {
-          p_mission_id: id,
-          p_soignant_id: soignantId,
-        });
-        if (error) throw error;
-      }
+      const { error: propositionError } = existingCandidature
+        ? await supabase
+            .from('candidatures')
+            .update({
+              statut: 'PROPOSEE',
+              message: 'Mission proposée depuis les recommandations IA',
+              traite_le: null,
+              motif_refus: null,
+            } as any)
+            .eq('id', existingCandidature.id)
+        : await supabase
+            .from('candidatures')
+            .insert({
+              mission_id: id,
+              soignant_id: soignantId,
+              statut: 'PROPOSEE',
+              message: 'Mission proposée depuis les recommandations IA',
+            } as any);
+
+      if (propositionError) throw propositionError;
 
       afficherNotification({ type: 'succes', message: 'Mission proposée au soignant !' });
     } catch (err: any) {
