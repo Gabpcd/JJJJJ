@@ -293,8 +293,17 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     return () => clearTimeout(timer);
   }, [searchQuery, searchUsers]);
 
-  const startConversationWith = async (userId: string) => {
-    const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: userId, p_mission_id: null });
+  const startConversationWith = async (userId: string, type: 'soignant' | 'etablissement') => {
+    let resolvedId = userId;
+    if (type === 'etablissement') {
+      const resolved = await resoudreUserIdEtablissement(userId);
+      if (!resolved) {
+        toast.error("Impossible de trouver l'interlocuteur de l'établissement.");
+        return;
+      }
+      resolvedId = resolved;
+    }
+    const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: resolvedId, p_mission_id: null });
     console.log('fn_obtenir_conversation (new conv):', { data, error });
     if (error || !data) {
       console.error('fn_obtenir_conversation error:', error);
