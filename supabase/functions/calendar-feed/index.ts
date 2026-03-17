@@ -83,10 +83,10 @@ Deno.serve(async (req) => {
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Soin Direct//Missions//FR",
+    "PRODID:-//Jolene//Missions//FR",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "X-WR-CALNAME:Soin Direct - Missions",
+    "X-WR-CALNAME:Jolene - Missions",
     "X-WR-TIMEZONE:Europe/Paris",
   ];
 
