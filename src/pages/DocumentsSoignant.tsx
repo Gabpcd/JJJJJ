@@ -253,15 +253,34 @@ export default function DocumentsSoignant() {
   };
 
   const voirDocument = async (doc: any) => {
-    const { data } = await supabase.storage.from('jolene-documents').createSignedUrl(doc.s3_cle, 300);
-    if (!data?.signedUrl) { toast.error('Impossible de générer le lien'); return; }
+    const previewWindow = window.open('', '_blank');
 
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_CONSULTATION',
-      p_type_ressource: 'document', p_id_ressource: doc.id, p_cle_s3: doc.s3_cle,
-      p_details: { type_document: doc.type_document }, p_ip: null, p_navigateur: navigator.userAgent,
-    });
-    window.open(data.signedUrl, '_blank');
+    try {
+      const { data, error } = await supabase.storage
+        .from(doc.s3_bucket || 'jolene-documents')
+        .createSignedUrl(doc.s3_cle, 3600);
+
+      if (error || !data?.signedUrl) {
+        throw error || new Error('Signed URL absente');
+      }
+
+      await supabase.rpc('fn_ecrire_audit_safe', {
+        p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_CONSULTATION',
+        p_type_ressource: 'document', p_id_ressource: doc.id, p_cle_s3: doc.s3_cle,
+        p_details: { type_document: doc.type_document }, p_ip: null, p_navigateur: navigator.userAgent,
+      });
+
+      if (previewWindow) {
+        previewWindow.location.href = data.signedUrl;
+        return;
+      }
+
+      window.open(data.signedUrl, '_blank');
+    } catch (error) {
+      if (previewWindow) previewWindow.close();
+      toast.error('Impossible d’ouvrir le document');
+      handleErrorSilent(error, 'Consultation document');
+    }
   };
 
   const supprimerDocument = async () => {
