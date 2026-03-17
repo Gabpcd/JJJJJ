@@ -28,6 +28,7 @@ interface Conversation {
   autre_avatar: string | null;
   dernier_contenu: string | null;
   non_lus: number;
+  is_jolene?: boolean;
 }
 
 interface Message {
