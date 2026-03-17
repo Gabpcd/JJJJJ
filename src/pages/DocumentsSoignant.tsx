@@ -388,6 +388,9 @@ export default function DocumentsSoignant() {
                   <div className="mt-2">
                     <p className="text-xs text-muted-foreground">📎 {doc.nom_fichier} (téléversé le {format(new Date(doc.televerse_le), 'd MMM yyyy', { locale: fr })})</p>
                     {statut && <span className={`badge-base ${statut.couleur} text-[10px] mt-1`}>{statut.label}</span>}
+                    {doc.valide_depuis && (
+                      <p className="text-[10px] text-muted-foreground mt-1">Délivré le {format(new Date(doc.valide_depuis), 'd MMM yyyy', { locale: fr })}</p>
+                    )}
                     {doc.valide_jusqua && (
                       <p className="text-[10px] text-muted-foreground mt-1">Valide jusqu'au {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}</p>
                     )}
