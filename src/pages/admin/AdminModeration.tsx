@@ -3,6 +3,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
+import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
