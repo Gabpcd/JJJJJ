@@ -466,7 +466,7 @@ export default function DetailMissionSoignant() {
           <div className="card-base">
             {estOuverte && (
               <>
-                <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} premiereMissionLe={premiereMissionLe} />
+                <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} premiereMissionLe={premiereMissionLe} missionDebutLe={mission.debut_le} />
                 {chevauchement && (
                   <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-3 text-center">
                     <p className="text-sm font-semibold text-warning">⚠️ Vous avez déjà une mission sur ce créneau</p>
