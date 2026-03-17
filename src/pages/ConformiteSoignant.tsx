@@ -74,7 +74,7 @@ export default function ConformiteSoignant() {
       const mission = c.missions?.intitule || '—';
       return `${date} | ${c.type_controle} | ${c.resultat} | ${mission}`;
     });
-    const texte = `Historique de conformité — Soin Direct\n${'='.repeat(50)}\n\n${lignes.join('\n')}`;
+    const texte = `Historique de conformité — Jolene\n${'='.repeat(50)}\n\n${lignes.join('\n')}`;
     navigator.clipboard.writeText(texte);
     toast.success('Historique copié dans le presse-papier');
   };
