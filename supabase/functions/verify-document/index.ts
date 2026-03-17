@@ -197,36 +197,24 @@ Analyse ce document et vérifie sa conformité.`;
     }
 
     if (!analysis) {
-      await supabase
-        .from("documents_soignants")
-        .update({ statut_verification: "EN_ATTENTE" })
-        .eq("id", document_id);
+      await supabase.rpc("fn_update_document_verification", {
+        p_document_id: document_id, p_statut_verification: "EN_ATTENTE",
+      });
 
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
-    // 6. Update document with results
-    const updateData: any = {
-      statut_verification: analysis.verdict || "EN_ATTENTE",
-      motif_rejet: analysis.motif_rejet || null,
-    };
-
-    if (analysis.date_expiration) {
-      updateData.valide_jusqua = analysis.date_expiration;
-    }
-    if (analysis.date_emission) {
-      updateData.valide_depuis = analysis.date_emission;
-    }
-    if (analysis.verdict === "VERIFIE") {
-      updateData.verifie_le = new Date().toISOString();
-    }
-
-    await supabase
-      .from("documents_soignants")
-      .update(updateData)
-      .eq("id", document_id);
+    // 6. Update document with results via RPC (bypasses protective triggers)
+    await supabase.rpc("fn_update_document_verification", {
+      p_document_id: document_id,
+      p_statut_verification: analysis.verdict || "EN_ATTENTE",
+      p_motif_rejet: analysis.motif_rejet || null,
+      p_valide_depuis: analysis.date_emission || null,
+      p_valide_jusqua: analysis.date_expiration || null,
+      p_verifie_le: analysis.verdict === "VERIFIE" ? new Date().toISOString() : null,
+    });
 
     // 7. Audit
     await supabase.rpc("fn_ecrire_audit_safe" as any, {
