@@ -19,6 +19,9 @@ export function BandeauAlerte48h({ heuresSemaine }: BandeauAlerte48hProps) {
           🛑 Plafond de 48h atteint cette semaine. Vous ne pouvez plus accepter de missions
           avant la semaine prochaine (lundi {format(lundiProchain, 'd MMMM', { locale: fr })}).
         </p>
+        <p className="text-xs text-destructive/80 mt-1">
+          Vous pouvez toutefois candidater dès maintenant pour les missions débutant à partir du {format(lundiProchain, 'd MMMM', { locale: fr })}.
+        </p>
       </div>
     );
   }
