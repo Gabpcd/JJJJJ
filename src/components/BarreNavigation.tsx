@@ -20,7 +20,7 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 
-const NAV_SOIGNANT: NavItem[] = [
+const NAV_SOIGNANT_BASE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
   { icone: MapPinned, label: 'Recherche', route: '/soignant/recherche-missions' },
@@ -28,7 +28,6 @@ const NAV_SOIGNANT: NavItem[] = [
   { icone: FileText, label: 'Mes contrats', route: '/soignant/contrats' },
   { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
   { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
-  { icone: Calculator, label: 'Mes charges', route: '/soignant/charges' },
   { icone: FileText, label: 'Documents', route: '/soignant/documents' },
   { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
   { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
