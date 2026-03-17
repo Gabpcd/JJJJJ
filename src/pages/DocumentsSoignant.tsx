@@ -146,7 +146,7 @@ export default function DocumentsSoignant() {
     const [{ data: sg }, { data: dr }, { data: md }] = await Promise.all([
       supabase.from('soignants').select('profession').eq('id', user.id).single(),
       supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique'),
-      supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
+      supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
     ]);
     if (sg) {
       setSoignant(sg);
