@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { FileCheck, MessageSquare, Check, X, Eye, Mail, Phone, Building2, User } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
 
 type LitigeEnrichi = {
   id: string;

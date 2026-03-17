@@ -89,27 +89,27 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
   const [results, setResults] = useState<any[] | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [searched, setSearched] = useState(false);
+  const professionDebounced = useDebounce(profession, 250);
+  const villeDebounced = useDebounce(ville, 250);
 
-  const handleSearch = async () => {
+  const handleSearch = async (nextProfession = professionDebounced, nextVille = villeDebounced) => {
     setLoading(true);
     setSearched(true);
     const { data, error } = await supabase.rpc('fn_missions_publiques_recherche', {
-      p_profession: profession || null,
-      p_ville: ville.trim() || null,
+      p_profession: nextProfession || null,
+      p_ville: nextVille.trim() || null,
     });
     if (error) {
       console.error('Erreur recherche missions publiques:', error);
     }
     setResults(data || []);
-    setTotalCount(data?.[0]?.total_count ?? 0);
+    setTotalCount(data?.[0]?.total_count ?? data?.length ?? 0);
     setLoading(false);
   };
 
-  // Auto-load missions on mount (all professions, no city filter)
   useEffect(() => {
-    handleSearch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    handleSearch(professionDebounced, villeDebounced);
+  }, [professionDebounced, villeDebounced]);
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 

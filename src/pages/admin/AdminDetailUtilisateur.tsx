@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
 
 export default function AdminDetailUtilisateur() {
   const { id } = useParams<{ id: string }>();

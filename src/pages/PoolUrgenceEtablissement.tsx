@@ -59,6 +59,8 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   const [historique, setHistorique] = useState<HistoriqueUrgence[]>([]);
   const [loading, setLoading] = useState(true);
   const [alerterTousOpen, setAlerterTousOpen] = useState(false);
+  const [etablissementsAdmin, setEtablissementsAdmin] = useState<Array<{ id: string; nom: string }>>([]);
+  const [selectedEtablissementId, setSelectedEtablissementId] = useState('');
 
   // Filters
   const [filtreProfession, setFiltreProfession] = useState<string>('TOUTES');
@@ -66,7 +68,30 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   const [filtreRayonMax, setFiltreRayonMax] = useState(50);
   const [filtreScoreMin, setFiltreScoreMin] = useState(0);
 
-  const etablissementId = user?.id || '';
+  const etablissementId = isAdmin ? selectedEtablissementId : user?.id || '';
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const loadEtablissements = async () => {
+      const { data, error } = await supabase
+        .from('etablissements')
+        .select('id, nom')
+        .is('supprime_le', null)
+        .order('nom', { ascending: true });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      const etablissements = (data ?? []) as Array<{ id: string; nom: string }>;
+      setEtablissementsAdmin(etablissements);
+      setSelectedEtablissementId((current) => current || etablissements[0]?.id || '');
+    };
+
+    loadEtablissements();
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!etablissementId) return;
