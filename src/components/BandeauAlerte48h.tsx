@@ -26,12 +26,15 @@ export function BandeauAlerte48h({ heuresSemaine }: BandeauAlerte48hProps) {
     );
   }
 
-  return (
-    <div className="bg-warning/5 border-l-4 border-warning p-4 rounded-r-xl mb-4">
-      <p className="text-sm text-warning font-medium">
-        🚨 Attention : vous approchez du plafond de 48h cette semaine ({heuresSemaine.toFixed(0)}h planifiées).
-        Vous ne pourrez plus accepter que {restant.toFixed(0)}h de missions.
-      </p>
-    </div>
+    return (
+      <div className="bg-warning/5 border-l-4 border-warning p-4 rounded-r-xl mb-4">
+        <p className="text-sm text-warning font-medium">
+          🚨 Attention : vous approchez du plafond de 48h cette semaine ({heuresSemaine.toFixed(0)}h planifiées).
+          Vous ne pourrez plus accepter que {restant.toFixed(0)}h de missions.
+        </p>
+        <p className="text-xs text-warning/80 mt-1">
+          Vous pouvez candidater librement pour les missions de la semaine prochaine.
+        </p>
+      </div>
   );
 }
