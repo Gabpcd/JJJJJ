@@ -86,14 +86,8 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // 1. Get document info
-    const { data: doc, error: docErr } = await supabase
-      .from("documents_soignants")
-      .select("id, soignant_id, type_document, nom_fichier, s3_cle, s3_bucket, type_mime")
-      .eq("id", document_id)
-      .single();
-
-    if (docErr || !doc) throw new Error("Document introuvable");
+    // 1. Get document info (retry to avoid race condition just after insert)
+    const doc = await loadDocumentWithRetry(supabase, document_id);
 
     // 2. Get soignant info for name matching
     const { data: soignant } = await supabase
