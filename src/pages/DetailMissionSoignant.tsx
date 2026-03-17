@@ -508,10 +508,13 @@ export default function DetailMissionSoignant() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => document.getElementById('chat-mission')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  onClick={async () => {
+                    const { data } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: mission.etablissement_id, p_mission_id: mission.id });
+                    if (data) navigate(`/soignant/messagerie?conv=${data}`);
+                  }}
                   className="btn-secondary w-full text-sm py-2.5 mb-3"
                 >
-                  💬 Envoyer un message
+                  💬 Contacter l'établissement
                 </button>
                 <button onClick={() => setModalAnnuler(true)} className="w-full border-2 border-destructive text-destructive rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-destructive/5 transition-colors">
                   Annuler ma participation

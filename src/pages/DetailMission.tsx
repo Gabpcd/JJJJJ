@@ -294,9 +294,18 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <CodesPointageMission missionId={m.id} />
               )}
-              {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => ouvrirConv(m.etablissement_id, m.id)}
+                  className="text-sm font-medium text-primary hover:underline underline-offset-4 flex items-center gap-1 mb-3"
+                >
+                  <MessageCircle className="h-4 w-4" /> Contacter l'établissement
+                </button>
+              )}
+              {(isAdmin || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
                 <div id="chat-mission">
-                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={role === 'ADMIN_PLATEFORME' ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={role === 'ADMIN_PLATEFORME'} />
+                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={isAdmin ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={isAdmin} />
                 </div>
               )}
             </div>
