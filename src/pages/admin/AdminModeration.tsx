@@ -3,6 +3,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
+import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -56,10 +57,19 @@ const formatDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('fr
 const formatDateTime = (d?: string | null) => d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const formatStatutLitige = (statut: string) => statut.replace(/_/g, ' ');
 
-const contacterDepuisLitige = async (userId: string, navigate: ReturnType<typeof useNavigate>) => {
-  console.log('contacterDepuisLitige params:', { userId });
-  const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: userId, p_mission_id: null });
-  console.log('contacterDepuisLitige result:', { data, error, userId });
+const contacterDepuisLitige = async (userId: string, navigate: ReturnType<typeof useNavigate>, isEtablissement?: boolean) => {
+  let resolvedId = userId;
+  if (isEtablissement) {
+    const resolved = await resoudreUserIdEtablissement(userId);
+    if (!resolved) {
+      toast.error("Impossible de trouver l'interlocuteur de l'établissement.");
+      return;
+    }
+    resolvedId = resolved;
+  }
+  console.log('contacterDepuisLitige params:', { userId, resolvedId, isEtablissement });
+  const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: resolvedId, p_mission_id: null });
+  console.log('contacterDepuisLitige result:', { data, error });
   if (error) {
     console.error('fn_obtenir_conversation error:', error);
     toast.error(`Impossible d'ouvrir la conversation : ${error.message}`);
@@ -332,7 +342,7 @@ export default function AdminModeration() {
                                 </a>
                               )}
                               <button
-                                onClick={() => contacterDepuisLitige(litige.etablissement_id, navigate)}
+                                onClick={() => contacterDepuisLitige(litige.etablissement_id, navigate, true)}
                                 className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
                               >
                                 <MessageCircle className="h-3.5 w-3.5" /> Contacter

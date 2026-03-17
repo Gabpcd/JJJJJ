@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { MessageCircle, Send, ArrowLeft, Shield, Plus, Search, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
@@ -292,8 +293,17 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     return () => clearTimeout(timer);
   }, [searchQuery, searchUsers]);
 
-  const startConversationWith = async (userId: string) => {
-    const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: userId, p_mission_id: null });
+  const startConversationWith = async (userId: string, type: 'soignant' | 'etablissement') => {
+    let resolvedId = userId;
+    if (type === 'etablissement') {
+      const resolved = await resoudreUserIdEtablissement(userId);
+      if (!resolved) {
+        toast.error("Impossible de trouver l'interlocuteur de l'établissement.");
+        return;
+      }
+      resolvedId = resolved;
+    }
+    const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: resolvedId, p_mission_id: null });
     console.log('fn_obtenir_conversation (new conv):', { data, error });
     if (error || !data) {
       console.error('fn_obtenir_conversation error:', error);
@@ -489,7 +499,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
               {searchResults.map(r => (
                 <button
                   key={r.id}
-                  onClick={() => startConversationWith(r.id)}
+                  onClick={() => startConversationWith(r.id, r.type)}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors text-left"
                 >
                   <AvatarDisplay src={r.avatar} prenom={r.label} nom="" size={32} rounded="full" />
