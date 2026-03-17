@@ -156,6 +156,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       const autreId = c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id;
       const info = userMap.get(autreId) || userMap.get(c.participant_1_id) || userMap.get(c.participant_2_id);
       
+      const isJolene = !info; // Not found in soignants or etablissements = admin Jolene
       let displayPrenom = info?.prenom || 'Jolene';
       let displayNom = info?.nom || '';
       if (isAdmin) {
@@ -168,9 +169,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         autre_id: autreId,
         autre_prenom: displayPrenom,
         autre_nom: displayNom,
-        autre_avatar: info?.avatar || null,
+        autre_avatar: isJolene ? joleneIcon : (info?.avatar || null),
         dernier_contenu: lastMsgMap.get(c.id) || null,
         non_lus: unreadMap.get(c.id) || 0,
+        is_jolene: isJolene,
       };
     });
 
