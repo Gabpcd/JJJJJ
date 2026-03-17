@@ -398,6 +398,7 @@ serve(async (req) => {
 
   let userId: string | null = null;
   let userEmail: string | null = null;
+  let isPlatformAdmin = false;
 
   if (!isServiceRole) {
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
@@ -410,6 +411,7 @@ serve(async (req) => {
     }
     userId = user.id;
     userEmail = user.email || null;
+    isPlatformAdmin = user.app_metadata?.role === 'ADMIN_PLATEFORME';
   }
 
   try {
@@ -464,10 +466,9 @@ serve(async (req) => {
       });
     }
 
-    // Authorization: non-service-role users can only send to themselves
-    // or to someone linked via a shared mission
-    if (!isServiceRole && destinataire_id !== userId) {
-      // Check if caller and destinataire share at least one mission
+    // Authorization: les admins plateforme sont autorisés, sinon l'utilisateur
+    // doit s'envoyer l'email à lui-même, partager une mission, ou administrer le même groupe.
+    if (!isServiceRole && !isPlatformAdmin && destinataire_id !== userId) {
       const { count } = await supabaseService
         .from('missions')
         .select('id', { count: 'exact', head: true })
@@ -476,7 +477,6 @@ serve(async (req) => {
           `and(etablissement_id.eq.${destinataire_id},soignant_assigne_id.eq.${userId})`
         );
 
-      // Also check if caller is an admin of the same groupe as the destinataire etablissement
       let isGroupeAdmin = false;
       if (!count) {
         const { data: adminData } = await supabaseService
