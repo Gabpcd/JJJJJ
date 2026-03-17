@@ -3508,6 +3508,10 @@ export type Database = {
         Args: { p_plateforme: string; p_token: string }
         Returns: undefined
       }
+      fn_user_id_pour_etablissement: {
+        Args: { p_etablissement_id: string }
+        Returns: string
+      }
       fn_valider_presence: { Args: { p_presence_id: string }; Returns: Json }
       fn_valider_presences_lot: { Args: { p_ids: string[] }; Returns: Json }
       mon_etablissement_id: { Args: never; Returns: string }

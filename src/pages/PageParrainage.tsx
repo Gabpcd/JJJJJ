@@ -32,7 +32,7 @@ export default function PageParrainage() {
   const [classement, setClassement] = useState<ClassementParrain[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const lienRef = `https://app.jolene.app?ref=${codeParrainage}`;
+  const lienRef = `https://jolene-app.lovable.app?ref=${codeParrainage}`;
 
   useEffect(() => {
     if (!user) return;

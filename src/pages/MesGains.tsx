@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Banknote, Gift, Palmtree, Clock, Copy, FileDown } from 'lucide-react';
+import { Banknote, Gift, Palmtree, Clock, Copy, FileDown, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -20,6 +21,103 @@ import { fr } from 'date-fns/locale';
 
 function fmt(v: number): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
+}
+
+function genererPDFBulletin(m: any, soignant: any) {
+  const doc = new jsPDF();
+  const duree = m.duree_heures ?? 0;
+  const tauxEffectif = m.taux_rist_plafonne || m.taux_horaire_base;
+  const brutBase = tauxEffectif * duree;
+  const totalMajorations = (m.montant_majoration_nuit || 0) + (m.montant_majoration_dimanche || 0) + (m.montant_majoration_ferie || 0);
+  const totalBrut = m.total_brut || (brutBase + totalMajorations);
+  const ifm = m.montant_ifm || 0;
+  const icp = m.montant_icp || 0;
+  const superBrut = totalBrut + ifm + icp;
+  const netEstime = m.net_estime || (superBrut * 0.78);
+  const etab = m.etablissements;
+
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text('BULLETIN DE PAIE — ESTIMATION', 105, 20, { align: 'center' });
+  doc.setFontSize(12);
+  doc.setTextColor(23, 162, 184);
+  doc.text(`Mission du ${format(new Date(m.debut_le), 'd MMMM yyyy', { locale: fr })}`, 105, 28, { align: 'center' });
+  doc.setDrawColor(200);
+  doc.line(14, 32, 196, 32);
+
+  doc.setFontSize(9);
+  doc.setTextColor(0);
+  let y = 40;
+  doc.setFont('helvetica', 'bold');
+  doc.text('SALARIÉ :', 14, y);
+  doc.setFont('helvetica', 'normal');
+  y += 5;
+  doc.text(`${soignant?.prenom || ''} ${soignant?.nom || ''}`, 14, y);
+  if (soignant?.profession) { y += 4; doc.text(`Profession : ${soignant.profession}`, 14, y); }
+
+  let yE = 40;
+  doc.setFont('helvetica', 'bold');
+  doc.text('ÉTABLISSEMENT :', 110, yE);
+  doc.setFont('helvetica', 'normal');
+  yE += 5;
+  doc.text(etab?.nom || '', 110, yE);
+  if (etab?.adresse_ville) { yE += 4; doc.text(`${etab.adresse_code_postal} ${etab.adresse_ville}`, 110, yE); }
+
+  let pY = Math.max(y, yE) + 12;
+  doc.line(14, pY - 2, 196, pY - 2);
+  doc.setFont('helvetica', 'bold');
+  doc.text('MISSION', 14, pY + 4);
+  doc.setFont('helvetica', 'normal');
+  pY += 10;
+  doc.text(`${m.intitule}${m.service ? ` — ${m.service}` : ''}`, 14, pY);
+  pY += 5;
+  doc.text(`${format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → ${format(new Date(m.fin_le), "HH'h'mm", { locale: fr })} (${duree}h)`, 14, pY);
+
+  pY += 10;
+  doc.line(14, pY - 2, 196, pY - 2);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DÉCOMPTE', 14, pY + 4);
+  doc.setFont('helvetica', 'normal');
+  pY += 10;
+
+  const addLine = (label: string, amount: string) => {
+    doc.text(label, 14, pY);
+    doc.text(amount, 180, pY, { align: 'right' });
+    pY += 5;
+  };
+
+  addLine(`Salaire de base (${duree}h × ${tauxEffectif?.toFixed(2)} €)`, `${brutBase.toFixed(2)} €`);
+  if ((m.montant_majoration_nuit || 0) > 0) addLine('Majoration nuit', `+${m.montant_majoration_nuit.toFixed(2)} €`);
+  if ((m.montant_majoration_dimanche || 0) > 0) addLine('Majoration dimanche', `+${m.montant_majoration_dimanche.toFixed(2)} €`);
+  if ((m.montant_majoration_ferie || 0) > 0) addLine('Majoration jour férié', `+${m.montant_majoration_ferie.toFixed(2)} €`);
+  pY += 2;
+  doc.setFont('helvetica', 'bold');
+  addLine('Total brut', `${totalBrut.toFixed(2)} €`);
+  doc.setFont('helvetica', 'normal');
+  if (ifm > 0) addLine('IFM (10%)', `+${ifm.toFixed(2)} €`);
+  if (icp > 0) addLine('ICP (10%)', `+${icp.toFixed(2)} €`);
+  pY += 2;
+  addLine('Cotisations salariales estimées (~22%)', `-${(superBrut * 0.22).toFixed(2)} €`);
+  pY += 3;
+  doc.line(14, pY, 196, pY);
+  pY += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  addLine('NET ESTIMÉ', `${netEstime.toFixed(2)} €`);
+  doc.setFontSize(9);
+
+  pY += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(120);
+  doc.text('Estimation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.', 14, pY);
+
+  const pageH = doc.internal.pageSize.height;
+  doc.setFontSize(7);
+  doc.setTextColor(150);
+  doc.text('Document généré par Jolene — Valeur indicative', 105, pageH - 10, { align: 'center' });
+
+  doc.save(`bulletin_paie_${format(new Date(m.debut_le), 'yyyy-MM-dd')}_${m.id.slice(0, 8)}.pdf`);
 }
 
 export default function MesGains() {
@@ -189,7 +287,17 @@ export default function MesGains() {
                     {estLiberal ? (
                       <NoteHonoraires mission={m} soignant={soignant} etablissement={m.etablissements} />
                     ) : (
-                      <DecompositionFinanciere mission={m} etablissement={m.etablissements} />
+                      <>
+                        <DecompositionFinanciere mission={m} etablissement={m.etablissements} />
+                        <div className="mt-3 flex justify-center">
+                          <button
+                            onClick={() => genererPDFBulletin(m, soignant)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors"
+                          >
+                            <Download className="h-4 w-4" /> Télécharger le bulletin PDF
+                          </button>
+                        </div>
+                      </>
                     )}
                   </AccordionContent>
                 </AccordionItem>
