@@ -218,9 +218,9 @@ Analyse ce document et vérifie sa conformité.`;
         })
         .eq("id", document_id);
 
-      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
     }
 
     const aiData = await aiResponse.json();
