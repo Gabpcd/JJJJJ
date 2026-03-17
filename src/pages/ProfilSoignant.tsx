@@ -244,7 +244,13 @@ export default function ProfilSoignant() {
           mode="soignant"
           onUploaded={(url) => setForm(prev => ({ ...prev, avatarUrl: url } as any))}
         />
-        <h1 className="text-xl font-bold text-foreground">Mon profil</h1>
+        <div>
+          <h1 className="text-xl font-bold text-foreground">{form.prenom} {form.nom}</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-sm text-muted-foreground">{getLabelProfession(profession)}</span>
+            <BadgeRPPS rppsVerifie={rppsVerifie} rpps={form.rpps} profession={profession} />
+          </div>
+        </div>
       </div>
 
       {noteMoyenne && noteMoyenne.total > 0 && (
