@@ -37,6 +37,7 @@ export default function ProfilSoignant() {
     typeContrat: '', rpps: '', adeli: '',
     lat: '', lng: '', rayon: 30,
     bio: '', anneesExperience: 0,
+    avatarUrl: '',
   });
   const [specialites, setSpecialites] = useState<string[]>([]);
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
@@ -61,7 +62,13 @@ export default function ProfilSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, pool_urgence_actif, pool_urgence_rayon_km, bio, annees_experience, specialites').eq('id', user.id).single().then(({ data }: any) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, disponible_urgence, urgence_rayon_km, bio, annees_experience, specialites').eq('id', user.id).single().then(({ data, error }: any) => {
+      if (error) {
+        afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+        setLoading(false);
+        return;
+      }
+
       if (data) {
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
@@ -74,21 +81,26 @@ export default function ProfilSoignant() {
         setProfession(data.profession);
         setRppsVerifie(!!data.rpps_verifie);
         setCodeParrainage(data.code_parrainage || '');
-        (setForm as any)(prev => ({ ...prev, avatarUrl: data.avatar_url || '' }));
         setForm({
-          prenom: data.prenom, nom: data.nom,
-          telephone: data.telephone || '', dateNaissance: data.date_naissance || '',
-          typeContrat: data.type_contrat || '', rpps: data.numero_rpps || '',
+          prenom: data.prenom || '',
+          nom: data.nom || '',
+          telephone: data.telephone || '',
+          dateNaissance: data.date_naissance || '',
+          typeContrat: data.type_contrat || '',
+          rpps: data.numero_rpps || '',
           adeli: data.numero_adeli || '',
-          lat: data.adresse_lat?.toString() || '', lng: data.adresse_lng?.toString() || '',
+          lat: data.adresse_lat?.toString() || '',
+          lng: data.adresse_lng?.toString() || '',
           rayon: data.rayon_deplacement_km ?? 30,
-          bio: data.bio || '', anneesExperience: data.annees_experience || 0,
+          bio: data.bio || '',
+          anneesExperience: data.annees_experience || 0,
+          avatarUrl: data.avatar_url || '',
         });
         setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
         setTypesContrat(getTypesContratSoignant(data as any));
-        setConsentementGPS((data as any).consentement_gps !== false);
-        setPoolUrgenceActif(data.pool_urgence_actif || false);
-        setPoolUrgenceRayon(data.pool_urgence_rayon_km || 15);
+        setConsentementGPS(data.consentement_gps !== false);
+        setPoolUrgenceActif(data.disponible_urgence || false);
+        setPoolUrgenceRayon(data.urgence_rayon_km || 15);
       }
       setLoading(false);
     });

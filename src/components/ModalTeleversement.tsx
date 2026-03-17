@@ -47,8 +47,13 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
   const placeholder = PLACEHOLDERS_LIBELLE[typeDocument] || 'Ex : Description du document';
 
   const handleFile = (f: File) => {
-    if (f.size > 10 * 1024 * 1024) {
-      alert('Le fichier ne doit pas dépasser 10 Mo.');
+    const estSupporte = f.type === 'application/pdf' || f.type.startsWith('image/') || /\.(pdf|png|jpe?g|webp|heic|heif)$/i.test(f.name);
+    if (!estSupporte) {
+      alert('Format non pris en charge. Utilisez un PDF ou une image.');
+      return;
+    }
+    if (f.size > 20 * 1024 * 1024) {
+      alert('Le fichier ne doit pas dépasser 20 Mo.');
       return;
     }
     setFichier(f);
@@ -91,7 +96,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
             ${dragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}
             ${fichier ? 'bg-success/5 border-success/30' : ''}`}
         >
-          <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+          <input ref={inputRef} type="file" accept="application/pdf,image/*,.heic,.heif" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
           {fichier ? (
             <div>
               <p className="text-sm font-medium text-foreground">📎 {fichier.name}</p>
@@ -101,7 +106,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
             <>
               <Upload className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">Glissez votre fichier ici ou cliquez</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">PDF, JPG, PNG · 10 Mo max</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">PDF ou image · 20 Mo max</p>
             </>
           )}
         </div>
@@ -109,7 +114,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
         {/* Camera scanner - mobile only */}
         {isMobile && (
           <div className="mt-3">
-            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+            <input ref={cameraRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
             <button
               onClick={() => cameraRef.current?.click()}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition"

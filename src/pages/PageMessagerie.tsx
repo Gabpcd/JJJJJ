@@ -6,7 +6,7 @@ import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
-import joleneIcon from '@/assets/icon-jolene.png';
+import joleneLogo from '@/assets/logo-jolene.png';
 import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -170,7 +170,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         autre_id: autreId,
         autre_prenom: displayPrenom,
         autre_nom: displayNom,
-        autre_avatar: isJolene ? joleneIcon : (info?.avatar || null),
+        autre_avatar: isJolene ? null : (info?.avatar || null),
         dernier_contenu: lastMsgMap.get(c.id) || null,
         non_lus: unreadMap.get(c.id) || 0,
         is_jolene: isJolene,
@@ -369,7 +369,13 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   onClick={() => selectConv(c.id)}
                   className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent/50 transition-colors border-b border-border/50 ${c.id === selectedConvId ? 'bg-accent' : ''}`}
                 >
-                  <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
+                  {c.is_jolene ? (
+                    <div className="shrink-0 h-10 w-10 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
+                      <img src={joleneLogo} alt="Jolene" className="h-6 w-6 object-contain" />
+                    </div>
+                  ) : (
+                    <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
@@ -406,9 +412,15 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                 <button onClick={() => { setSelectedConvId(null); setSearchParams({}); }} className="md:hidden text-muted-foreground hover:text-foreground">
                   <ArrowLeft className="h-5 w-5" />
                 </button>
-                <AvatarDisplay src={selectedConv.autre_avatar} prenom={selectedConv.autre_prenom} nom={selectedConv.autre_nom} size={36} rounded="full" />
+                {selectedConv.is_jolene ? (
+                  <div className="shrink-0 h-9 w-9 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
+                    <img src={joleneLogo} alt="Jolene" className="h-5 w-5 object-contain" />
+                  </div>
+                ) : (
+                  <AvatarDisplay src={selectedConv.autre_avatar} prenom={selectedConv.autre_prenom} nom={selectedConv.autre_nom} size={36} rounded="full" />
+                )}
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{selectedConv.autre_prenom} {selectedConv.autre_nom}</p>
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">{selectedConv.autre_prenom} {selectedConv.autre_nom}{selectedConv.is_jolene && <Shield className="h-3.5 w-3.5 text-primary" />}</p>
                 </div>
               </div>
 
