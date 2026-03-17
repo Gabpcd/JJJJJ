@@ -114,6 +114,8 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
       p_ville: villeValue,
     });
 
+    console.log('missions recherche raw:', { data, error, professionValue, villeValue });
+
     if (error) {
       console.error('Erreur recherche missions publiques:', error);
       setResults([]);
@@ -123,6 +125,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
     }
 
     const parsedResults = normaliserResultatsMissionsPubliques(data);
+    console.log('missions recherche parsed:', parsedResults);
     setResults(parsedResults);
     setTotalCount(parsedResults[0]?.total_count ?? parsedResults.length ?? 0);
     setLoading(false);
