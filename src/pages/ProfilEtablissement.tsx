@@ -85,7 +85,7 @@ function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
         {submitting ? 'Validation…' : '🏦 Valider le mandat SEPA'}
       </button>
       <p className="text-[10px] text-muted-foreground">
-        En fournissant votre IBAN, vous autorisez Soin Direct à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA.
+        En fournissant votre IBAN, vous autorisez Jolene à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA.
       </p>
     </div>
   );
