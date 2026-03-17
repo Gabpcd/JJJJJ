@@ -199,7 +199,7 @@ export default function DashboardRH() {
       const pageHeight = doc.internal.pageSize.height;
       doc.setFontSize(8);
       doc.setTextColor(150);
-      doc.text('Soin Direct — Rapport généré automatiquement. Données à titre indicatif.', 14, pageHeight - 10);
+      doc.text('Jolene — Rapport généré automatiquement. Données à titre indicatif.', 14, pageHeight - 10);
 
       doc.save(`rapport_rh_${format(now, 'yyyy-MM')}.pdf`);
       afficherNotification({ type: 'succes', message: '✅ Rapport PDF généré et téléchargé' });

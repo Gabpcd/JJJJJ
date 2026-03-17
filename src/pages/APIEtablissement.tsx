@@ -77,7 +77,7 @@ export default function APIEtablissement() {
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <h1 className="text-xl font-bold text-foreground flex items-center gap-2 mb-1">
-        <Code2 className="h-5 w-5 text-primary" /> API REST Soin Direct
+        <Code2 className="h-5 w-5 text-primary" /> API REST Jolene
       </h1>
       <p className="text-sm text-muted-foreground mb-6">Intégrez vos outils RH avec notre API</p>
 

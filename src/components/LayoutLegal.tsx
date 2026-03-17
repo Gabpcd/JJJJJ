@@ -38,7 +38,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children }: LayoutLeg
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-2">
           <Link to="/" className="flex items-center gap-2">
             <HeartPulse className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold text-foreground">Soin Direct</span>
+            <span className="text-lg font-bold text-foreground">Jolene</span>
           </Link>
         </div>
       </header>

@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     ].filter(Boolean).join("\\n");
 
     lines.push("BEGIN:VEVENT");
-    lines.push(`UID:${m.id}@soindirect`);
+    lines.push(`UID:${m.id}@jolene`);
     lines.push(`DTSTART:${formatIcalDate(new Date(m.debut_le))}`);
     lines.push(`DTEND:${formatIcalDate(new Date(m.fin_le))}`);
     lines.push(`SUMMARY:${escapeIcal(m.intitule)}`);

@@ -91,7 +91,7 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
   const response = await fetchWithTimeout(url, {
     headers: {
       'Accept': 'application/fhir+json',
-      'User-Agent': 'SoinDirect/1.0',
+      'User-Agent': 'Jolene/1.0',
     },
   }, 8000);
 

@@ -198,7 +198,7 @@ export default function MesGains() {
       texte += `• ${new Date(m.debut_le).toLocaleDateString('fr-FR')} — ${m.intitule} — ${m.duree_heures}h — ${netM.toFixed(2)} €\n`;
     }
     texte += `\n⚠️ Estimation après cotisations salariales (~22%). Les montants exacts dépendent de votre situation personnelle.\n`;
-    texte += `Généré par Soin Direct le ${new Date().toLocaleDateString('fr-FR')}`;
+    texte += `Généré par Jolene le ${new Date().toLocaleDateString('fr-FR')}`;
     await navigator.clipboard.writeText(texte);
     // L6: Audit clipboard copy
     supabase.rpc('fn_ecrire_audit_safe', {

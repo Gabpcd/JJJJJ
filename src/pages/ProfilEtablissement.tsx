@@ -511,7 +511,7 @@ export default function ProfilEtablissement() {
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `mes-donnees-soin-direct-${new Date().toISOString().slice(0, 10)}.json`;
+              a.download = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
               // C3: Audit RGPD export for establishments

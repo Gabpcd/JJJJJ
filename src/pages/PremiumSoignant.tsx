@@ -51,7 +51,7 @@ export default function PremiumSoignant() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-warning/10 mx-auto">
             <Crown className="h-8 w-8 text-warning" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Soin Direct Premium</h1>
+          <h1 className="text-2xl font-bold text-foreground">Jolene Premium</h1>
           <p className="text-muted-foreground text-sm max-w-lg mx-auto">
             Boostez votre carrière avec des outils exclusifs pour décrocher plus de missions et gérer votre activité.
           </p>
