@@ -138,11 +138,11 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
               placeholder="Ville ou code postal (optionnel)"
               value={ville}
               onChange={(e) => setVille(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch(profession, ville)}
               className="flex-1 h-12 rounded-xl border border-input bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <button
-              onClick={handleSearch}
+              onClick={() => handleSearch(profession, ville)}
               disabled={loading}
               className="h-12 px-6 rounded-xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
             >
