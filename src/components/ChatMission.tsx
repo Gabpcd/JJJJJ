@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/hooks/useRole';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { sanitizeText } from '@/lib/sanitize';
@@ -23,7 +24,7 @@ interface ChatMissionProps {
   isAdmin?: boolean;
 }
 
-export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = false }: ChatMissionProps) {
+export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdminProp = false }: ChatMissionProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [texte, setTexte] = useState('');
