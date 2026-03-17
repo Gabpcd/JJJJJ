@@ -472,7 +472,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     </thead>
                     <tbody className="divide-y divide-border">
                       {recommandations.map((r: any) => (
-                        <tr key={r.soignant_id} className="hover:bg-muted/50">
+                        <tr key={r.id} className="hover:bg-muted/50">
                           <td className="py-3 font-medium text-foreground">
                             <div className="flex items-center gap-1">
                               {r.est_favori && <Star className="h-3.5 w-3.5 text-warning fill-warning" />}
