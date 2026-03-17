@@ -80,7 +80,7 @@ export function OnboardingGuide({ role, userId }: OnboardingGuideProps) {
   const isLast = etapeCourante === etapes.length - 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 p-4 pt-6 md:items-center md:pt-4">
       <div className="bg-card rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300">
         {/* Header */}
         <div className="px-6 pt-6 pb-3">

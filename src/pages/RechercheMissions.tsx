@@ -106,6 +106,7 @@ export default function RechercheMissions() {
         soignant_assigne_id, cree_le, etablissement_id
       `)
         .eq('statut', 'OUVERTE')
+        .gte('debut_le', new Date().toISOString())
         .eq('profession_requise', (profession || soignant.profession) as any)
         .order('est_urgente', { ascending: false })
         .order('debut_le', { ascending: true })

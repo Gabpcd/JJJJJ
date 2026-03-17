@@ -183,9 +183,13 @@ export default function DocumentsSoignant() {
 
   const televerser = async (fichier: File, libelle: string, valideDepuis: string, valideJusqua: string) => {
     if (!user || !televersementType) return;
+
     const chemin = `${user.id}/${televersementType}/${Date.now()}_${fichier.name}`;
     const { error: uploadError } = await supabase.storage.from('soin-direct-documents').upload(chemin, fichier, { contentType: fichier.type, upsert: false });
-    if (uploadError) { toast.error('Erreur lors du téléversement. Veuillez réessayer.'); return; }
+    if (uploadError) {
+      toast.error(extraireMessageErreur(uploadError));
+      return;
+    }
 
     const docReqData = documentsRequis.find(d => d.type_document === televersementType);
     const insertData: any = {
@@ -200,10 +204,19 @@ export default function DocumentsSoignant() {
       valide_depuis: valideDepuis || null,
       valide_jusqua: valideJusqua || null,
       est_critique: docReqData?.est_critique || false,
+      statut_verification: 'EN_ATTENTE',
+      verifie_par: null,
+      verifie_le: null,
+      motif_rejet: null,
     };
+
     const { data, error } = await supabase.from('documents_soignants').insert(insertData).select().single();
 
-    if (error) { toast.error(extraireMessageErreur(error)); return; }
+    if (error) {
+      await supabase.storage.from('soin-direct-documents').remove([chemin]);
+      toast.error(extraireMessageErreur(error));
+      return;
+    }
 
     const docId = (data as any).id;
 
@@ -215,7 +228,6 @@ export default function DocumentsSoignant() {
     });
     if (auditError) handleErrorSilent(auditError, 'Audit téléversement document');
 
-    // Trigger OCR verification
     supabase.functions.invoke('verify-document', {
       body: { document_id: docId },
     }).then(({ data: verifyData }) => {
@@ -227,9 +239,7 @@ export default function DocumentsSoignant() {
         toast.info('🔄 Document en cours de vérification...');
       }
       charger();
-    }).catch(() => {
-      // Verification failed silently, manual review will happen
-    });
+    }).catch(() => {});
 
     toast.success('Document téléversé avec succès !');
     setTeleversementType(null);

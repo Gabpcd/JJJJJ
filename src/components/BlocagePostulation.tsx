@@ -5,19 +5,17 @@ interface BlocagePostulationProps {
   completionProfil: number;
   documentsValides: boolean;
   premiereMissionLe?: string | null;
+  missionDebutLe?: string | null;
 }
 
-export function BlocagePostulation({ completionProfil, documentsValides, premiereMissionLe }: BlocagePostulationProps) {
+const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function BlocagePostulation({ completionProfil, documentsValides, premiereMissionLe, missionDebutLe }: BlocagePostulationProps) {
   const navigate = useNavigate();
 
-  // Grace 7 jours: Le soignant peut ACCEPTER une mission dans les 7 premiers jours
-  // après sa première acceptation, sans avoir tous ses documents.
-  // premiere_mission_le = NULL signifie qu'il n'a jamais accepté → pas de blocage docs.
-  // premiere_mission_le + 7j > now() → encore en période de grâce → pas de blocage docs.
-  // Après 7 jours → blocage si docs incomplets.
-  const enPeriodeGrace = !premiereMissionLe || 
-    (new Date(premiereMissionLe).getTime() + 7 * 24 * 60 * 60 * 1000 > Date.now());
-  const docsOk = documentsValides || enPeriodeGrace;
+  const enPeriodeGrace = !premiereMissionLe || (new Date(premiereMissionLe).getTime() + SEPT_JOURS_MS > Date.now());
+  const missionLaisseLeTempsDeCompleter = !!missionDebutLe && (new Date(missionDebutLe).getTime() - Date.now() > SEPT_JOURS_MS);
+  const docsOk = documentsValides || enPeriodeGrace || missionLaisseLeTempsDeCompleter;
 
   if (completionProfil >= 100 && docsOk) {
     return (
@@ -31,7 +29,7 @@ export function BlocagePostulation({ completionProfil, documentsValides, premier
           </div>
         ) : (
           <div className="flex items-center gap-2 text-sm text-warning">
-            <Clock className="h-4 w-4" /> Documents à compléter sous 7 jours
+            <Clock className="h-4 w-4" /> Documents à compléter avant le début de mission
           </div>
         )}
       </div>
@@ -47,7 +45,7 @@ export function BlocagePostulation({ completionProfil, documentsValides, premier
             <div>
               <p className="text-sm font-semibold text-foreground">Profil incomplet ({completionProfil}%)</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Vous devez compléter votre profil à 100% avant de pouvoir postuler à une mission.
+                Vous devez compléter vos informations essentielles avant de pouvoir postuler à une mission.
               </p>
               <button onClick={() => navigate('/soignant/profil')} className="text-xs text-primary font-medium mt-2 hover:underline">
                 Compléter mon profil →
@@ -63,7 +61,7 @@ export function BlocagePostulation({ completionProfil, documentsValides, premier
             <div>
               <p className="text-sm font-semibold text-foreground">Documents manquants ou expirés</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Votre période de grâce de 7 jours est expirée. Vos documents doivent être à jour pour postuler.
+                Vos documents doivent être à jour, sauf pendant les 7 jours de grâce ou si la mission débute dans plus de 7 jours.
               </p>
               <button onClick={() => navigate('/soignant/documents')} className="text-xs text-primary font-medium mt-2 hover:underline">
                 Gérer mes documents →
