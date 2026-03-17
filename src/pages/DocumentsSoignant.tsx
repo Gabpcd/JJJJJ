@@ -196,7 +196,7 @@ export default function DocumentsSoignant() {
       soignant_id: user.id,
       type_document: televersementType as any,
       libelle: libelle || null,
-      s3_bucket: 'soin-direct-documents',
+      s3_bucket: 'jolene-documents',
       s3_cle: chemin,
       nom_fichier: fichier.name,
       type_mime: fichier.type,
