@@ -1,7 +1,7 @@
 /* eslint-disable no-undef */
 
 // ─── Cache Configuration ───
-const CACHE_VERSION = 'soin-direct-v1';
+const CACHE_VERSION = 'jolene-v1';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 
@@ -20,12 +20,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: "AIzaSyCsj-tfliVxZl3F9ncrtnHR-5xJu3B16vQ",
-  authDomain: "soin-direct.firebaseapp.com",
-  projectId: "soin-direct",
-  storageBucket: "soin-direct.firebasestorage.app",
-  messagingSenderId: "983137696907",
-  appId: "1:983137696907:web:08decd33bbd6d51e8fe88e"
+  apiKey: "AIzaSyBWhTy5scThcxUMtFq8spPdg2ViD0E-x6s",
+  authDomain: "jolene-app-d91fd.firebaseapp.com",
+  projectId: "jolene-app-d91fd",
+  storageBucket: "jolene-app-d91fd.firebasestorage.app",
+  messagingSenderId: "54202049729",
+  appId: "1:54202049729:web:d29deb3c77a916e3b5a040"
 });
 
 const messaging = firebase.messaging();
