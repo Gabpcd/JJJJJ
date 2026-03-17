@@ -246,7 +246,7 @@ export default function PageAccueil() {
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HeartPulse className="h-7 w-7 text-primary" />
+            <img src={logoIcon} alt="Jolene" className="h-7 w-7" />
             <span className="text-xl font-bold text-foreground">Jolene</span>
           </div>
           <div className="flex items-center gap-4">
