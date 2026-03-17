@@ -33,7 +33,7 @@ serve(async (req) => {
 
     if (!lovableApiKey) throw new Error("LOVABLE_API_KEY non configurée");
 
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
     // 1. Get document info
     const { data: doc, error: docErr } = await supabase
