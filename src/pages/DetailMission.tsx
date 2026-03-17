@@ -50,6 +50,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const navigate = useNavigate();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
+  const isAdmin = role === 'ADMIN_PLATEFORME';
+  const baseMsg = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
+  const ouvrirConv = useOuvrirConversation(baseMsg);
   const [mission, setMission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [modalAnnuler, setModalAnnuler] = useState(false);
