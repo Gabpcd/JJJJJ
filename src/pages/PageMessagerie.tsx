@@ -409,8 +409,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                     return (
                       <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md'}`}>
-                          {msg.est_admin && !mine && (
-                            <p className="text-[10px] font-bold mb-0.5 flex items-center gap-1 text-primary">
+                          {msg.est_admin && (
+                            <p className={`text-[10px] font-bold mb-0.5 flex items-center gap-1 ${mine ? 'text-primary-foreground/80' : 'text-primary'}`}>
                               <Shield className="h-3 w-3" /> Admin Jolene
                             </p>
                           )}
