@@ -161,7 +161,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdm
               >
                 {!mine && (
                   <p className={`text-[10px] font-semibold mb-0.5 ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                    {msg.type_auteur === 'SOIGNANT' ? '👤 Soignant' : msg.type_auteur === 'ADMIN' ? '🛡️ Admin' : '🏥 Établissement'}
+                    {msg.type_auteur === 'ADMIN' ? '🛡️ Admin Jolene' : msg.type_auteur === 'SOIGNANT' ? '👤 Soignant' : '🏥 Établissement'}
                   </p>
                 )}
                 <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
