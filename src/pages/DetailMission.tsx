@@ -13,6 +13,7 @@ import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
+import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 import { BoutonFavori } from '@/components/BoutonFavori';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
