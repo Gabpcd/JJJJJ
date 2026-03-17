@@ -1,11 +1,25 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+function getCorsOrigin(req: Request): string {
+  const origin = req.headers.get("origin") || "";
+  if (
+    origin === "https://app.jolene.app" ||
+    origin === "http://localhost:5173" ||
+    origin.endsWith(".lovable.app")
+  ) {
+    return origin;
+  }
+  return "https://app.jolene.app";
+}
+
+function corsHeaders(req: Request) {
+  return {
+    'Access-Control-Allow-Origin': getCorsOrigin(req),
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  };
+}
 
 const APP_URL = Deno.env.get('APP_URL') || 'https://app.jolene.app';
 
@@ -363,7 +377,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   // Vérification stricte du JWT
@@ -371,7 +385,7 @@ serve(async (req) => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: 'Non autorisé' }), {
       status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -393,7 +407,7 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Token invalide' }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
     userId = user.id;
@@ -409,7 +423,7 @@ serve(async (req) => {
     if (!type || !destinataire_id) {
       return new Response(JSON.stringify({ error: 'Paramètres requis : type, destinataire_id, data' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -418,14 +432,14 @@ serve(async (req) => {
     if (!UUID_REGEX.test(destinataire_id)) {
       return new Response(JSON.stringify({ error: 'destinataire_id invalide' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
     if (!ALLOWED_TYPES.has(type)) {
       return new Response(JSON.stringify({ error: 'Type inconnu' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -449,7 +463,7 @@ serve(async (req) => {
     if (!resolvedEmail) {
       return new Response(JSON.stringify({ error: 'Destinataire introuvable' }), {
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -485,7 +499,7 @@ serve(async (req) => {
       if (!count && !isGroupeAdmin) {
         return new Response(JSON.stringify({ error: 'Non autorisé à envoyer un email à ce destinataire' }), {
           status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
         });
       }
     }
@@ -494,7 +508,7 @@ serve(async (req) => {
     if (!rendered) {
       return new Response(JSON.stringify({ error: 'Type inconnu' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -504,7 +518,7 @@ serve(async (req) => {
     if (!RESEND_API_KEY) {
       console.log('RESEND_API_KEY not configured — email skipped');
       return new Response(JSON.stringify({ success: true, skipped: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -536,13 +550,13 @@ serve(async (req) => {
     });
 
     return new Response(JSON.stringify({ success: response.ok }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('send-email error:', error);
     return new Response(JSON.stringify({ success: false, error: 'Erreur interne' }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
 });
