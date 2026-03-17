@@ -154,6 +154,7 @@ export default function DashboardSoignant() {
       }
       if (gains6m) setGains6Mois(gains6m as any);
       if (msSemaineCal) setMissionsSemaine(msSemaineCal as any);
+      if (props) setPropositions(props as any);
 
       // Badge stats (simple computation from soignant data)
       if (sg) {
