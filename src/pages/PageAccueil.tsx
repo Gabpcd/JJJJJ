@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
-import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, HeartPulse, ArrowRight, Search, Loader2 } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, ArrowRight, Search, Loader2 } from 'lucide-react';
+import logoIcon from '@/assets/icon-jolene.png';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { PROFESSIONS } from '@/lib/constantes';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -245,7 +246,7 @@ export default function PageAccueil() {
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HeartPulse className="h-7 w-7 text-primary" />
+            <img src={logoIcon} alt="Jolene" className="h-7 w-7" />
             <span className="text-xl font-bold text-foreground">Jolene</span>
           </div>
           <div className="flex items-center gap-4">
@@ -512,7 +513,7 @@ export default function PageAccueil() {
             {/* Col 1 */}
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-3">
-                <HeartPulse className="h-5 w-5 text-primary" />
+                <img src={logoIcon} alt="Jolene" className="h-5 w-5" />
                 <span className="font-bold text-foreground">Jolene</span>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">La plateforme de confiance pour le remplacement et le staffing en santé.</p>

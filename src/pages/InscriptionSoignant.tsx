@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
+import logoJolene from '@/assets/logo-jolene.png';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -162,9 +163,8 @@ export default function InscriptionSoignant() {
   return (
     <div className="min-h-screen gradient-hero flex items-center justify-center px-4 py-8">
       <div className="card-base max-w-lg w-full">
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <HeartPulse className="h-7 w-7 text-primary" />
-          <span className="text-xl font-bold text-primary-dark">Jolene</span>
+        <div className="flex items-center justify-center mb-6">
+          <img src={logoJolene} alt="Jolene" className="h-16 w-auto" />
         </div>
         <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Soignant</h1>
 

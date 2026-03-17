@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Clock, HeartPulse } from 'lucide-react';
+import { Clock } from 'lucide-react';
+import logoIcon from '@/assets/icon-jolene.png';
 import { Badge } from '@/components/ui/badge';
 
 export default function WidgetRecrutement() {
@@ -34,7 +35,7 @@ export default function WidgetRecrutement() {
     <div className="max-w-lg mx-auto font-sans">
       {/* Header */}
       <div className="bg-primary text-primary-foreground px-4 py-3 rounded-t-xl flex items-center gap-2">
-        <HeartPulse className="h-5 w-5" />
+        <img src={logoIcon} alt="Jolene" className="h-5 w-5" />
         <div>
           <p className="font-semibold text-sm">{etabNom || 'Établissement'}</p>
           <p className="text-[11px] opacity-80">Missions disponibles sur Jolene</p>
