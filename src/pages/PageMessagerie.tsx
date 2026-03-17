@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
+import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -159,7 +160,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       setLoadingMessages(false);
 
       // Mark as read
-      supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId }).then(() => {
+      supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId }).then(({ error }) => {
+        if (error) console.error('fn_marquer_messages_lus error:', error);
         setConversations(prev => prev.map(c => c.id === selectedConvId ? { ...c, non_lus: 0 } : c));
       });
     };
@@ -207,7 +209,14 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       p_contenu: contenu,
     });
 
-    if (error || (data as any)?.error) {
+    console.log('fn_envoyer_message result:', { data, error, p_conversation_id: selectedConvId, p_contenu: contenu });
+
+    if (error) {
+      console.error('fn_envoyer_message error:', error);
+      toast.error("Impossible d'envoyer le message.");
+      setTexte(contenuBrut);
+    } else if (data && typeof data === 'object' && (data as any).error) {
+      console.error('fn_envoyer_message returned error:', data);
       toast.error("Impossible d'envoyer le message.");
       setTexte(contenuBrut);
     }
@@ -242,7 +251,11 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
           {loading ? (
             <div className="p-8 text-center text-sm text-muted-foreground">Chargement…</div>
           ) : conversations.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">Aucune conversation</div>
+            <EtatVide
+              illustration={<IllustrationBoussole />}
+              titre="Aucune conversation"
+              sousTitre="Les conversations s'ouvrent automatiquement quand vous êtes assigné à une mission."
+            />
           ) : (
             conversations.map(c => (
               <button

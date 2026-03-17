@@ -392,19 +392,8 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                         >
                           <Send className="h-3 w-3" />
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 px-2"
-                          onClick={async () => {
-                            const base = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
-                            const { data } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: s.soignant_id, p_mission_id: null });
-                            if (data) navigate(`${base}?conv=${data}`);
-                          }}
-                          title="Contacter"
-                        >
-                          <MessageCircle className="h-3 w-3" />
-                        </Button>
+
+
                         <BoutonFavori soignantId={s.soignant_id} etablissementId={etablissementId} />
                       </div>
                     </TableCell>
