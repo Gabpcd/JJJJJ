@@ -291,7 +291,24 @@ export function getTagClasses(tag: string): string {
   return tagColors[tag] ?? 'bg-muted text-muted-foreground';
 }
 
-const gradients = [
+// Slug-based gradients with distinct colors per article
+const articleGradients: Record<string, string> = {
+  'comment-devenir-idel': 'from-teal-500 to-cyan-400',
+  'loi-rist-2025-expliquee': 'from-[hsl(222,47%,11%)] to-indigo-700',
+  'remplacement-pharmacie-guide': 'from-emerald-600 to-teal-400',
+  'cddu-contrat-usage-sante': 'from-violet-600 to-purple-500',
+  'free-transition-liberal': 'from-amber-500 to-orange-400',
+};
+
+const articleIcons: Record<string, string> = {
+  'comment-devenir-idel': 'Stethoscope',
+  'loi-rist-2025-expliquee': 'Scale',
+  'remplacement-pharmacie-guide': 'Pill',
+  'cddu-contrat-usage-sante': 'FileText',
+  'free-transition-liberal': 'Rocket',
+};
+
+const fallbackGradients = [
   'from-primary/80 to-primary-dark',
   'from-primary/60 via-primary/80 to-accent-navy/80',
   'from-accent-navy/70 to-primary/70',
@@ -299,6 +316,11 @@ const gradients = [
   'from-accent-navy/80 via-primary/50 to-primary/80',
 ];
 
-export function getArticleGradient(index: number): string {
-  return gradients[index % gradients.length];
+export function getArticleGradient(index: number, slug?: string): string {
+  if (slug && articleGradients[slug]) return articleGradients[slug];
+  return fallbackGradients[index % fallbackGradients.length];
+}
+
+export function getArticleIconName(slug: string): string | null {
+  return articleIcons[slug] || null;
 }

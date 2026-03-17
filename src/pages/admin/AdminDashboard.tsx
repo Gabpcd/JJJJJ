@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus } from 'lucide-react';
+import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -55,6 +55,9 @@ export default function AdminDashboard() {
   const [litiges, setLitiges] = useState<any[]>([]);
   const [facturesImpayees, setFacturesImpayees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stripeMoisNb, setStripeMoisNb] = useState(0);
+  const [stripeMoisCapture, setStripeMoisCapture] = useState(0);
+  const [stripeMoisAttente, setStripeMoisAttente] = useState(0);
 
   const [caCommissionsHT, setCaCommissionsHT] = useState(0);
   const [caEncaisse, setCaEncaisse] = useState(0);
@@ -115,6 +118,20 @@ export default function AdminDashboard() {
         setCaEncaisse(resEncaisse.data.reduce((s: number, m: any) => s + (Number(m.montant_commission_ht) || 0), 0));
       }
       if (resTransactions.count != null) setNbTransactions(resTransactions.count);
+
+      // Stripe paiements ce mois
+      const debutMois = new Date();
+      debutMois.setDate(1);
+      debutMois.setHours(0, 0, 0, 0);
+      const { data: paiements } = await supabase
+        .from('paiements_mission')
+        .select('montant_ttc, statut')
+        .gte('cree_le', debutMois.toISOString());
+      if (paiements) {
+        setStripeMoisNb(paiements.length);
+        setStripeMoisCapture(paiements.filter((p: any) => p.statut === 'CAPTURE').reduce((s: number, p: any) => s + (Number(p.montant_ttc) || 0), 0));
+        setStripeMoisAttente(paiements.filter((p: any) => p.statut === 'AUTORISE').reduce((s: number, p: any) => s + (Number(p.montant_ttc) || 0), 0));
+      }
 
       setLoading(false);
     }
@@ -338,6 +355,45 @@ export default function AdminDashboard() {
             <p className="text-xs text-muted-foreground">
               *Estimation indicative SASU. Ne tient pas compte de la CFE, CVAE, ni des spécificités fiscales. Consultez votre expert-comptable.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* 💳 Stripe paiements */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-primary" /> 💳 Paiements Stripe
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stripeMoisNb > 0 ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Paiements ce mois</p>
+                    <p className="text-xl font-bold text-foreground">{stripeMoisNb}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Encaissé</p>
+                    <p className="text-xl font-bold text-success">{formatEur(stripeMoisCapture)}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-xs text-muted-foreground">En attente</p>
+                    <p className="text-xl font-bold text-warning">{formatEur(stripeMoisAttente)}</p>
+                  </div>
+                </div>
+                <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-primary font-medium hover:underline">
+                  Ouvrir Stripe Dashboard → <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">Aucun paiement pour le moment — les paiements apparaîtront quand des missions seront terminées.</p>
+                <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:underline mt-2">
+                  Ouvrir Stripe Dashboard → <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            )}
           </CardContent>
         </Card>
 
