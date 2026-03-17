@@ -14,7 +14,8 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock, MessageCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock, MessageCircle, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -49,6 +50,14 @@ interface HistoriqueUrgence {
   soignant_assigne_id: string | null;
 }
 
+interface MissionOuverte {
+  id: string;
+  intitule: string;
+  debut_le: string;
+  profession_requise: string;
+  mode_attribution: string | null;
+}
+
 export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?: boolean }) {
   const { user } = useAuth();
   const Layout = isAdmin 
@@ -61,6 +70,13 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   const [alerterTousOpen, setAlerterTousOpen] = useState(false);
   const [etablissementsAdmin, setEtablissementsAdmin] = useState<Array<{ id: string; nom: string }>>([]);
   const [selectedEtablissementId, setSelectedEtablissementId] = useState('');
+
+  // Mission proposal modal
+  const [proposerModalOpen, setProposerModalOpen] = useState(false);
+  const [proposerSoignant, setProposerSoignant] = useState<SoignantPool | null>(null);
+  const [missionsOuvertes, setMissionsOuvertes] = useState<MissionOuverte[]>([]);
+  const [loadingMissions, setLoadingMissions] = useState(false);
+  const [assigningMissionId, setAssigningMissionId] = useState<string | null>(null);
 
   // Filters
   const [filtreProfession, setFiltreProfession] = useState<string>('TOUTES');
@@ -80,11 +96,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         .is('supprime_le', null)
         .order('nom', { ascending: true });
 
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-
+      if (error) { toast.error(error.message); return; }
       const etablissements = (data ?? []) as Array<{ id: string; nom: string }>;
       setEtablissementsAdmin(etablissements);
       setSelectedEtablissementId((current) => current || etablissements[0]?.id || '');
@@ -155,6 +167,46 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     toast.success(`🚨 Alerte envoyée à ${filtered.filter(s => !s.en_mission_maintenant).length} soignants du pool`);
   };
 
+  const ouvrirProposerMission = async (s: SoignantPool) => {
+    setProposerSoignant(s);
+    setProposerModalOpen(true);
+    setLoadingMissions(true);
+
+    const { data } = await supabase
+      .from('missions')
+      .select('id, intitule, debut_le, profession_requise, mode_attribution')
+      .eq('etablissement_id', etablissementId)
+      .eq('statut', 'OUVERTE')
+      .is('soignant_assigne_id', null)
+      .order('debut_le', { ascending: true })
+      .limit(20);
+
+    setMissionsOuvertes((data as MissionOuverte[]) || []);
+    setLoadingMissions(false);
+  };
+
+  const assignerMission = async (mission: MissionOuverte) => {
+    if (!proposerSoignant) return;
+    setAssigningMissionId(mission.id);
+
+    const { data, error } = await supabase.rpc('fn_accepter_mission' as any, {
+      p_mission_id: mission.id,
+    });
+
+    console.log('fn_accepter_mission result:', { data, error, mission_id: mission.id });
+
+    if (error || (data && typeof data === 'object' && (data as any).error)) {
+      const errMsg = error?.message || (data as any)?.error || 'Erreur inconnue';
+      console.error('fn_accepter_mission error:', errMsg);
+      toast.error(`Impossible d'assigner : ${errMsg}`);
+    } else {
+      toast.success(`Mission proposée à ${proposerSoignant.prenom} ✅`);
+      setProposerModalOpen(false);
+      loadData();
+    }
+    setAssigningMissionId(null);
+  };
+
   const professions = useMemo(() => {
     const set = new Set(soignants.map((s) => s.profession));
     return Array.from(set);
@@ -219,27 +271,9 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
         {/* KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <CarteKPI
-            icone={Users}
-            valeur={kpiTotal}
-            label="Soignants dans le pool"
-            couleurIcone="text-destructive"
-            couleurFond="bg-destructive/10"
-          />
-          <CarteKPI
-            icone={UserCheck}
-            valeur={kpiDisponibles}
-            label="Disponibles maintenant"
-            couleurIcone="text-success"
-            couleurFond="bg-success/10"
-          />
-          <CarteKPI
-            icone={Trophy}
-            valeur={kpiUrgencesMois}
-            label="Urgences pourvues ce mois"
-            couleurIcone="text-warning"
-            couleurFond="bg-warning/10"
-          />
+          <CarteKPI icone={Users} valeur={kpiTotal} label="Soignants dans le pool" couleurIcone="text-destructive" couleurFond="bg-destructive/10" />
+          <CarteKPI icone={UserCheck} valeur={kpiDisponibles} label="Disponibles maintenant" couleurIcone="text-success" couleurFond="bg-success/10" />
+          <CarteKPI icone={Trophy} valeur={kpiUrgencesMois} label="Urgences pourvues ce mois" couleurIcone="text-warning" couleurFond="bg-warning/10" />
         </div>
 
         {/* Filters */}
@@ -387,13 +421,11 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                           size="sm"
                           variant="outline"
                           className="text-xs h-7 px-2"
-                          onClick={() => navigate(isAdmin ? `/admin/missions` : `/etablissement/missions/creer?soignant_id=${s.soignant_id}&profession=${s.profession}`)}
-                          title="Proposer une mission urgente"
+                          onClick={() => ouvrirProposerMission(s)}
+                          title="Proposer une mission"
                         >
                           <Send className="h-3 w-3" />
                         </Button>
-
-
                         <BoutonFavori soignantId={s.soignant_id} etablissementId={etablissementId} />
                       </div>
                     </TableCell>
@@ -469,6 +501,71 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         onConfirmer={alerterTous}
         onFermer={() => setAlerterTousOpen(false)}
       />
+
+      {/* Modal proposer mission */}
+      <Dialog open={proposerModalOpen} onOpenChange={setProposerModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Proposer une mission à {proposerSoignant?.prenom} {proposerSoignant?.nom}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {loadingMissions ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Chargement des missions…</p>
+            ) : missionsOuvertes.length === 0 ? (
+              <div className="text-center py-4 space-y-3">
+                <p className="text-sm text-muted-foreground">Aucune mission ouverte disponible.</p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setProposerModalOpen(false);
+                    navigate(isAdmin ? '/admin/missions' : `/etablissement/missions/creer?soignant_id=${proposerSoignant?.soignant_id}&profession=${proposerSoignant?.profession}`);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Créer une nouvelle mission
+                </Button>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">Sélectionnez une mission ouverte :</p>
+                <div className="max-h-[300px] overflow-y-auto space-y-2">
+                  {missionsOuvertes.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => assignerMission(m)}
+                      disabled={assigningMissionId === m.id}
+                      className="w-full text-left rounded-lg border p-3 hover:bg-accent/50 transition-colors disabled:opacity-50"
+                    >
+                      <p className="text-sm font-medium text-foreground">{m.intitule}</p>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <span>{format(new Date(m.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })}</span>
+                        <Badge variant="outline" className="text-[10px]">{professionLabel(m.profession_requise)}</Badge>
+                        {m.mode_attribution === 'CANDIDATURE' && <Badge variant="secondary" className="text-[10px]">Candidature</Badge>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="border-t pt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      setProposerModalOpen(false);
+                      navigate(isAdmin ? '/admin/missions' : `/etablissement/missions/creer?soignant_id=${proposerSoignant?.soignant_id}&profession=${proposerSoignant?.profession}`);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Créer une nouvelle mission
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

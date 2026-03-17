@@ -56,8 +56,21 @@ const formatDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('fr
 const formatDateTime = (d?: string | null) => d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const formatStatutLitige = (statut: string) => statut.replace(/_/g, ' ');
 
+const contacterDepuisLitige = async (userId: string, navigate: ReturnType<typeof useNavigate>) => {
+  const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: userId, p_mission_id: null });
+  console.log('fn_obtenir_conversation (moderation):', { data, error, userId });
+  if (error || !data) {
+    const errMsg = error?.message || 'Erreur inconnue';
+    console.error('fn_obtenir_conversation error:', error);
+    toast.error(`Impossible d'ouvrir la conversation : ${errMsg}`);
+    return;
+  }
+  navigate(`/admin/messagerie?conv=${data}`);
+};
+
 export default function AdminModeration() {
   usePageTitle('Modération');
+  const navigate = useNavigate();
   const [litiges, setLitiges] = useState<LitigeEnrichi[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
@@ -207,8 +220,8 @@ export default function AdminModeration() {
             {litiges.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Aucun litige ouvert 🎉</p>}
 
             {litiges.map((litige) => {
-              const demandeLabel = litige.initie_par === 'SOIGNANT' ? 'Demande du soignant' : 'Demande de l’établissement';
-              const reponseLabel = litige.initie_par === 'SOIGNANT' ? 'Réponse de l’établissement' : 'Réponse du soignant';
+              const demandeLabel = litige.initie_par === 'SOIGNANT' ? 'Demande du soignant' : 'Demande de l\'établissement';
+              const reponseLabel = litige.initie_par === 'SOIGNANT' ? 'Réponse de l\'établissement' : 'Réponse du soignant';
 
               return (
                 <Card key={litige.id}>
@@ -219,7 +232,7 @@ export default function AdminModeration() {
                         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                           <span>{formatDateTime(litige.cree_le)}</span>
                           <span>•</span>
-                          <span>Litige initié par {litige.initie_par === 'SOIGNANT' ? 'le soignant' : 'l’établissement'}</span>
+                          <span>Litige initié par {litige.initie_par === 'SOIGNANT' ? 'le soignant' : 'l\'établissement'}</span>
                         </div>
                       </div>
                       <Badge variant={litige.statut === 'OUVERT' ? 'destructive' : 'secondary'}>{formatStatutLitige(litige.statut)}</Badge>
@@ -284,10 +297,7 @@ export default function AdminModeration() {
                                 </a>
                               )}
                               <button
-                                onClick={async () => {
-                                  const { data } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: litige.soignant_id, p_mission_id: litige.mission_id });
-                                  if (data) window.location.href = `/admin/messagerie?conv=${data}`;
-                                }}
+                                onClick={() => contacterDepuisLitige(litige.soignant_id, navigate)}
                                 className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
                               >
                                 <MessageCircle className="h-3.5 w-3.5" /> Contacter
@@ -318,10 +328,7 @@ export default function AdminModeration() {
                                 </a>
                               )}
                               <button
-                                onClick={async () => {
-                                  const { data } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: litige.etablissement_id, p_mission_id: litige.mission_id });
-                                  if (data) window.location.href = `/admin/messagerie?conv=${data}`;
-                                }}
+                                onClick={() => contacterDepuisLitige(litige.etablissement_id, navigate)}
                                 className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
                               >
                                 <MessageCircle className="h-3.5 w-3.5" /> Contacter

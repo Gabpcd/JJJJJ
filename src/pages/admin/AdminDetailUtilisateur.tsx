@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronRight, ArrowLeft, Mail, Phone, MapPin, Calendar, Shield, Star, Award, FileText, Clock, Ban, RefreshCw, Trash2, KeyRound, UserCog, AlertTriangle, MessageCircle } from 'lucide-react';
+import { ChevronRight, ArrowLeft, Mail, Phone, MapPin, Calendar, Shield, Star, Award, FileText, Clock, Ban, RefreshCw, Trash2, KeyRound, UserCog, AlertTriangle, MessageCircle, Send } from 'lucide-react';
 import { supabase as supabaseClient } from '@/integrations/supabase/client';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -28,6 +28,10 @@ export default function AdminDetailUtilisateur() {
   const [loading, setLoading] = useState(true);
   const [modalSuspendre, setModalSuspendre] = useState(false);
   const [modalSupprimer, setModalSupprimer] = useState(false);
+  const [documentsMissing, setDocumentsMissing] = useState<string[]>([]);
+  const [documentsExpires, setDocumentsExpires] = useState<string[]>([]);
+  const [dernierRappel, setDernierRappel] = useState<string | null>(null);
+  const [envoiRappel, setEnvoiRappel] = useState(false);
 
   usePageTitle('Détail utilisateur');
 
@@ -39,7 +43,6 @@ export default function AdminDetailUtilisateur() {
   const charger = async () => {
     setLoading(true);
 
-    // Try soignant first
     const { data: s } = await supabase
       .from('soignants')
       .select('*')
@@ -50,15 +53,37 @@ export default function AdminDetailUtilisateur() {
       setSoignant(s);
       setType('soignant');
 
-      // Load documents & missions in parallel
-      const [docRes, missRes] = await Promise.all([
+      const [docRes, missRes, reqRes] = await Promise.all([
         supabase.from('documents_soignants').select('*').eq('soignant_id', id!).is('supprime_le', null).order('televerse_le', { ascending: false }),
         supabase.from('missions').select('id, intitule, statut, debut_le, fin_le, taux_horaire_base, duree_heures, net_a_payer, etablissement_id, etablissements(nom)').eq('soignant_assigne_id', id!).order('debut_le', { ascending: false }).limit(100),
+        supabase.from('documents_requis_par_profession').select('type_document, est_critique').eq('profession', s.profession),
       ]);
       if (docRes.data) setDocuments(docRes.data);
       if (missRes.data) setMissions(missRes.data);
+
+      // Determine missing/expired documents
+      if (reqRes.data && docRes.data) {
+        const existingTypes = new Set(docRes.data.filter(d => d.statut_verification !== 'REJETE').map(d => d.type_document));
+        const missing = reqRes.data.filter(r => !existingTypes.has(r.type_document)).map(r => TYPES_DOCUMENTS[r.type_document] || r.type_document);
+        setDocumentsMissing(missing);
+        
+        const now = new Date();
+        const expired = docRes.data.filter(d => d.valide_jusqua && new Date(d.valide_jusqua) < now).map(d => TYPES_DOCUMENTS[d.type_document] || d.type_document);
+        setDocumentsExpires(expired);
+      }
+
+      // Check last reminder sent
+      const { data: lastEmail } = await supabase
+        .from('emails_envoyes')
+        .select('cree_le')
+        .eq('destinataire_id', id!)
+        .eq('type', 'RAPPEL_DOCUMENTS')
+        .order('cree_le', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      setDernierRappel(lastEmail?.cree_le || null);
     } else {
-      // Try etablissement
       const { data: e } = await supabase
         .from('etablissements')
         .select('*')
@@ -80,6 +105,32 @@ export default function AdminDetailUtilisateur() {
     }
 
     setLoading(false);
+  };
+
+  const envoyerRappelDocuments = async () => {
+    if (!soignant || !id) return;
+    setEnvoiRappel(true);
+    
+    const allMissing = [...documentsMissing, ...documentsExpires];
+    const { error } = await supabase.functions.invoke('send-email', {
+      body: {
+        type: 'RAPPEL_DOCUMENTS',
+        destinataire_id: id,
+        data: {
+          prenom: soignant.prenom,
+          documents_manquants: allMissing,
+        },
+      },
+    });
+
+    if (error) {
+      console.error('send-email error:', error);
+      toast.error("Impossible d'envoyer le rappel.");
+    } else {
+      toast.success(`Rappel envoyé à ${soignant.prenom}`);
+      setDernierRappel(new Date().toISOString());
+    }
+    setEnvoiRappel(false);
   };
 
   const suspendre = async () => {
@@ -131,6 +182,7 @@ export default function AdminDetailUtilisateur() {
   const entity = soignant || etablissement;
   const isSuspended = !!entity?.supprime_le;
   const nom = type === 'soignant' ? `${soignant.prenom} ${soignant.nom}` : etablissement.nom;
+  const hasDocIssues = type === 'soignant' && (documentsMissing.length > 0 || documentsExpires.length > 0);
 
   return (
     <LayoutAdmin>
@@ -158,7 +210,7 @@ export default function AdminDetailUtilisateur() {
                 if (data) navigate(`/admin/messagerie?conv=${data}`);
                 else {
                   console.error('fn_obtenir_conversation error:', error);
-                  import('sonner').then(m => m.toast.error("Impossible d'ouvrir la conversation."));
+                  toast.error("Impossible d'ouvrir la conversation.");
                 }
               }}
               className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
@@ -177,6 +229,29 @@ export default function AdminDetailUtilisateur() {
           </div>
         </div>
       </div>
+
+      {/* Documents alert banner */}
+      {hasDocIssues && (
+        <div className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">
+              {documentsMissing.length > 0 && `Documents manquants : ${documentsMissing.join(', ')}`}
+              {documentsMissing.length > 0 && documentsExpires.length > 0 && ' · '}
+              {documentsExpires.length > 0 && `Documents expirés : ${documentsExpires.join(', ')}`}
+            </p>
+            {dernierRappel && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Dernier rappel envoyé le {new Date(dernierRappel).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
+          </div>
+          <Button size="sm" variant="outline" onClick={envoyerRappelDocuments} disabled={envoiRappel}>
+            <Send className="h-3.5 w-3.5 mr-1" />
+            {envoiRappel ? 'Envoi…' : 'Envoyer un rappel'}
+          </Button>
+        </div>
+      )}
 
       <Tabs defaultValue="infos" className="space-y-4">
         <TabsList className="flex-wrap">
@@ -316,7 +391,6 @@ export default function AdminDetailUtilisateur() {
             </CardContent>
           </Card>
         </TabsContent>
-
 
         {/* ── 4. Score & Badges ── */}
         {type === 'soignant' && (
@@ -482,7 +556,6 @@ export default function AdminDetailUtilisateur() {
             <CardHeader><CardTitle className="text-lg">Actions administrateur</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Suspendre / Réactiver */}
                 <ActionCard
                   icon={isSuspended ? RefreshCw : Ban}
                   label={isSuspended ? 'Réactiver le compte' : 'Suspendre le compte'}
@@ -490,8 +563,6 @@ export default function AdminDetailUtilisateur() {
                   variant={isSuspended ? 'outline' : 'destructive'}
                   onClick={() => setModalSuspendre(true)}
                 />
-
-                {/* Réinitialiser MDP */}
                 <ActionCard
                   icon={KeyRound}
                   label="Réinitialiser le mot de passe"
@@ -499,8 +570,6 @@ export default function AdminDetailUtilisateur() {
                   variant="outline"
                   onClick={reinitialiserMdp}
                 />
-
-                {/* Promouvoir admin */}
                 {type === 'soignant' && (
                   <ActionCard
                     icon={UserCog}
@@ -510,8 +579,6 @@ export default function AdminDetailUtilisateur() {
                     onClick={promouvoirAdmin}
                   />
                 )}
-
-                {/* Supprimer */}
                 <ActionCard
                   icon={Trash2}
                   label="Supprimer le compte"
@@ -525,7 +592,6 @@ export default function AdminDetailUtilisateur() {
         </TabsContent>
       </Tabs>
 
-      {/* Modal Suspendre/Réactiver */}
       <ModalConfirmation
         ouvert={modalSuspendre}
         onFermer={() => setModalSuspendre(false)}
@@ -539,7 +605,6 @@ export default function AdminDetailUtilisateur() {
         variante={isSuspended ? 'primaire' : 'danger'}
       />
 
-      {/* Modal Supprimer */}
       <ModalConfirmation
         ouvert={modalSupprimer}
         onFermer={() => setModalSupprimer(false)}
