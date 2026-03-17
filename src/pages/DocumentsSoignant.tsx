@@ -236,7 +236,14 @@ export default function DocumentsSoignant() {
 
     supabase.functions.invoke('verify-document', {
       body: { document_id: docId },
-    }).then(({ data: verifyData }) => {
+    }).then(({ data: verifyData, error: verifyError }) => {
+      if (verifyError) {
+        handleErrorSilent(verifyError, 'Vérification automatique document');
+        toast.info('Document téléversé. Vérification manuelle en attente.');
+        charger();
+        return;
+      }
+
       if (verifyData?.verdict === 'VERIFIE') {
         toast.success('✅ Document vérifié automatiquement !');
       } else if (verifyData?.verdict === 'REJETE') {
@@ -245,7 +252,10 @@ export default function DocumentsSoignant() {
         toast.info('🔄 Document en cours de vérification...');
       }
       charger();
-    }).catch(() => {});
+    }).catch((err) => {
+      handleErrorSilent(err, 'Vérification automatique document');
+      toast.info('Document téléversé. Vérification manuelle en attente.');
+    });
 
     toast.success('Document téléversé avec succès !');
     setTeleversementType(null);

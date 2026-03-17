@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getDocument } from "npm:pdfjs-dist/legacy/build/pdf.mjs";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -18,6 +19,56 @@ function corsHeaders(req: Request) {
     "Access-Control-Allow-Origin": getCorsOrigin(req),
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   };
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function loadDocumentWithRetry(supabase: any, documentId: string, attempts = 4) {
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const { data, error } = await supabase
+      .from("documents_soignants")
+      .select("id, soignant_id, type_document, nom_fichier, s3_cle, s3_bucket, type_mime")
+      .eq("id", documentId)
+      .maybeSingle();
+
+    if (data) return data;
+    lastError = error;
+
+    if (attempt < attempts - 1) {
+      await wait(350 * (attempt + 1));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Document introuvable");
+}
+
+async function extractPdfText(bytes: Uint8Array): Promise<string> {
+  const pdf = await getDocument({
+    data: bytes,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+  }).promise;
+
+  const pages: string[] = [];
+  const maxPages = Math.min(pdf.numPages, 3);
+
+  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const textContent = await page.getTextContent();
+    const text = textContent.items
+      .map((item: any) => (typeof item?.str === "string" ? item.str : ""))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (text) pages.push(text);
+  }
+
+  return pages.join("\n\n").trim();
 }
 
 serve(async (req) => {
