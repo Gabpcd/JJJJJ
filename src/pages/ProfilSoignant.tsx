@@ -30,6 +30,7 @@ export default function ProfilSoignant() {
   const [saving, setSaving] = useState(false);
   const [email, setEmail] = useState('');
   const [profession, setProfession] = useState('');
+  const [rppsVerifie, setRppsVerifie] = useState(false);
   const [form, setForm] = useState({
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     typeContrat: '', rpps: '', adeli: '',
