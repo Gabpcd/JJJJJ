@@ -3420,6 +3420,7 @@ export type Database = {
         Returns: Json
       }
       fn_recalculer_tous_paliers: { Args: never; Returns: number }
+      fn_rechercher_utilisateurs: { Args: { p_query: string }; Returns: Json }
       fn_recommander_soignants: {
         Args: { p_limit?: number; p_mission_id: string }
         Returns: {
