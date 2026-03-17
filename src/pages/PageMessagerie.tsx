@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { MessageCircle, Send, ArrowLeft, Shield } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { MessageCircle, Send, ArrowLeft, Shield, Plus, Search, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
@@ -9,6 +9,9 @@ import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 interface Conversation {
   id: string;
@@ -35,12 +38,21 @@ interface Message {
   cree_le: string;
 }
 
+interface SearchResult {
+  id: string;
+  type: 'soignant' | 'etablissement';
+  label: string;
+  sub: string;
+  avatar: string | null;
+}
+
 interface PageMessagerieProps {
   role: 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME';
 }
 
 export default function PageMessagerie({ role }: PageMessagerieProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const convParam = searchParams.get('conv');
 
@@ -54,7 +66,15 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // New conversation modal (admin only)
+  const [showNewConvModal, setShowNewConvModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+
   const isAdmin = role === 'ADMIN_PLATEFORME';
+
+  const dashboardRoute = isAdmin ? '/admin' : role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : '/etablissement/tableau-de-bord';
 
   // ── Load conversations ──
   const chargerConversations = useCallback(async () => {
@@ -79,10 +99,11 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     // Collect unique other user IDs
     const otherIds = new Set<string>();
     convs.forEach(c => {
-      otherIds.add(c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id);
       if (isAdmin) {
         otherIds.add(c.participant_1_id);
         otherIds.add(c.participant_2_id);
+      } else {
+        otherIds.add(c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id);
       }
     });
 
@@ -125,12 +146,25 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
     const enriched: Conversation[] = convs.map(c => {
       const autreId = c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id;
-      const info = userMap.get(autreId);
+      // For admin, show both participants
+      const displayId = isAdmin ? c.participant_1_id : autreId;
+      const info = userMap.get(displayId) || userMap.get(c.participant_2_id);
+      
+      // For admin view, show both names
+      let displayPrenom = info?.prenom || 'Utilisateur';
+      let displayNom = info?.nom || '';
+      if (isAdmin) {
+        const p1 = userMap.get(c.participant_1_id);
+        const p2 = userMap.get(c.participant_2_id);
+        displayPrenom = `${p1?.prenom || '?'} ${p1?.nom || ''}`.trim();
+        displayNom = `↔ ${p2?.prenom || '?'} ${p2?.nom || ''}`.trim();
+      }
+
       return {
         ...c,
         autre_id: autreId,
-        autre_prenom: info?.prenom || 'Utilisateur',
-        autre_nom: info?.nom || '',
+        autre_prenom: displayPrenom,
+        autre_nom: displayNom,
         autre_avatar: info?.avatar || null,
         dernier_contenu: lastMsgMap.get(c.id) || null,
         non_lus: unreadMap.get(c.id) || 0,
@@ -178,7 +212,6 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       }, (payload) => {
         const msg = payload.new as Message;
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
-        // Mark as read immediately if it's the active conversation
         if (msg.auteur_id !== user?.id) {
           supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId });
         }
@@ -234,137 +267,241 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     setSearchParams({ conv: convId });
   };
 
+  // ── Admin: search users for new conversation ──
+  const searchUsers = useCallback(async (q: string) => {
+    if (q.length < 2) { setSearchResults([]); return; }
+    setSearching(true);
+
+    const term = `%${q}%`;
+    const [{ data: sData }, { data: eData }] = await Promise.all([
+      supabase.from('soignants').select('id, prenom, nom, email, avatar_url').or(`prenom.ilike.${term},nom.ilike.${term},email.ilike.${term}`).limit(10),
+      supabase.from('etablissements').select('id, nom, email_contact, logo_url').or(`nom.ilike.${term},email_contact.ilike.${term}`).limit(10),
+    ]);
+
+    const results: SearchResult[] = [];
+    sData?.forEach(s => results.push({ id: s.id, type: 'soignant', label: `${s.prenom} ${s.nom}`, sub: s.email || '', avatar: (s as any).avatar_url }));
+    eData?.forEach(e => results.push({ id: e.id, type: 'etablissement', label: e.nom, sub: e.email_contact || '', avatar: (e as any).logo_url }));
+    
+    setSearchResults(results);
+    setSearching(false);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => searchUsers(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, searchUsers]);
+
+  const startConversationWith = async (userId: string) => {
+    const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: userId, p_mission_id: null });
+    console.log('fn_obtenir_conversation (new conv):', { data, error });
+    if (error || !data) {
+      console.error('fn_obtenir_conversation error:', error);
+      toast.error("Impossible de créer la conversation : " + (error?.message || 'Erreur inconnue'));
+      return;
+    }
+    setShowNewConvModal(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    await chargerConversations();
+    selectConv(data as string);
+  };
+
   const selectedConv = conversations.find(c => c.id === selectedConvId);
   const showMobileChat = !!selectedConvId;
 
+  const emptyMessage = isAdmin
+    ? "Aucune conversation sur la plateforme pour le moment."
+    : "Aucune conversation pour le moment. Les conversations s'ouvrent automatiquement quand vous êtes assigné à une mission.";
+
   return (
-    <div className="flex h-[calc(100vh-8rem)] md:h-[calc(100vh-6rem)] rounded-xl border border-border overflow-hidden bg-card">
-      {/* ── Conversation list ── */}
-      <div className={`w-full md:w-[340px] md:border-r border-border flex flex-col ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
-        <div className="p-4 border-b border-border">
-          <h2 className="font-bold text-foreground flex items-center gap-2">
-            <MessageCircle className="h-5 w-5 text-primary" />
-            Messagerie
-          </h2>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">Chargement…</div>
-          ) : conversations.length === 0 ? (
-            <EtatVide
-              illustration={<IllustrationBoussole />}
-              titre="Aucune conversation"
-              sousTitre="Les conversations s'ouvrent automatiquement quand vous êtes assigné à une mission."
-            />
-          ) : (
-            conversations.map(c => (
-              <button
-                key={c.id}
-                onClick={() => selectConv(c.id)}
-                className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent/50 transition-colors border-b border-border/50 ${c.id === selectedConvId ? 'bg-accent' : ''}`}
-              >
-                <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-foreground truncate">
-                      {c.autre_prenom} {c.autre_nom}
-                    </span>
-                    {c.dernier_message_le && (
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                        {formatDistanceToNow(new Date(c.dernier_message_le), { addSuffix: false, locale: fr })}
+    <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-6rem)]">
+      {/* Back button */}
+      <div className="flex items-center gap-2 mb-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate(dashboardRoute)}>
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Retour au tableau de bord
+        </Button>
+      </div>
+
+      <div className="flex flex-1 rounded-xl border border-border overflow-hidden bg-card min-h-0">
+        {/* ── Conversation list ── */}
+        <div className={`w-full md:w-[340px] md:border-r border-border flex flex-col ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h2 className="font-bold text-foreground flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-primary" />
+              Messagerie
+            </h2>
+            {isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => setShowNewConvModal(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Nouvelle
+              </Button>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">Chargement…</div>
+            ) : conversations.length === 0 ? (
+              <EtatVide
+                illustration={<IllustrationBoussole />}
+                titre="Aucune conversation"
+                sousTitre={emptyMessage}
+              />
+            ) : (
+              conversations.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => selectConv(c.id)}
+                  className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent/50 transition-colors border-b border-border/50 ${c.id === selectedConvId ? 'bg-accent' : ''}`}
+                >
+                  <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-foreground truncate">
+                        {c.autre_prenom} {c.autre_nom}
                       </span>
-                    )}
+                      {c.dernier_message_le && (
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {formatDistanceToNow(new Date(c.dernier_message_le), { addSuffix: false, locale: fr })}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {c.dernier_contenu ? c.dernier_contenu.slice(0, 50) : 'Aucun message'}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {c.dernier_contenu ? c.dernier_contenu.slice(0, 50) : 'Aucun message'}
-                  </p>
+                  {c.non_lus > 0 && (
+                    <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1">
+                      {c.non_lus}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* ── Chat area ── */}
+        <div className={`flex-1 flex flex-col ${!showMobileChat ? 'hidden md:flex' : 'flex'}`}>
+          {selectedConv ? (
+            <>
+              {/* Header */}
+              <div className="flex items-center gap-3 p-4 border-b border-border">
+                <button onClick={() => { setSelectedConvId(null); setSearchParams({}); }} className="md:hidden text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <AvatarDisplay src={selectedConv.autre_avatar} prenom={selectedConv.autre_prenom} nom={selectedConv.autre_nom} size={36} rounded="full" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{selectedConv.autre_prenom} {selectedConv.autre_nom}</p>
                 </div>
-                {c.non_lus > 0 && (
-                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1">
-                    {c.non_lus}
-                  </span>
+              </div>
+
+              {/* Messages */}
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+                {loadingMessages ? (
+                  <div className="text-center text-sm text-muted-foreground py-8">Chargement…</div>
+                ) : messages.length === 0 ? (
+                  <div className="text-center text-sm text-muted-foreground py-8">Aucun message. Envoyez le premier !</div>
+                ) : (
+                  messages.map(msg => {
+                    const mine = msg.auteur_id === user?.id;
+                    return (
+                      <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md'}`}>
+                          {msg.est_admin && !mine && (
+                            <p className="text-[10px] font-bold mb-0.5 flex items-center gap-1 text-primary">
+                              <Shield className="h-3 w-3" /> Admin Jolene
+                            </p>
+                          )}
+                          <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
+                          <p className={`text-[9px] mt-1 text-right ${mine ? 'text-primary-foreground/60' : 'text-muted-foreground/60'}`}>
+                            {format(new Date(msg.cree_le), "HH'h'mm", { locale: fr })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
-              </button>
-            ))
+              </div>
+
+              {/* Input */}
+              <div className="flex items-center gap-2 p-4 border-t border-border">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={texte}
+                  onChange={e => setTexte(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Votre message…"
+                  className="input-base flex-1 text-sm py-2"
+                  maxLength={1000}
+                  disabled={envoi}
+                />
+                <button
+                  onClick={envoyer}
+                  disabled={envoi || !texte.trim()}
+                  className="rounded-xl p-2.5 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
+                  aria-label="Envoyer"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-muted-foreground">
+                <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Sélectionnez une conversation</p>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── Chat area ── */}
-      <div className={`flex-1 flex flex-col ${!showMobileChat ? 'hidden md:flex' : 'flex'}`}>
-        {selectedConv ? (
-          <>
-            {/* Header */}
-            <div className="flex items-center gap-3 p-4 border-b border-border">
-              <button onClick={() => { setSelectedConvId(null); setSearchParams({}); }} className="md:hidden text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <AvatarDisplay src={selectedConv.autre_avatar} prenom={selectedConv.autre_prenom} nom={selectedConv.autre_nom} size={36} rounded="full" />
-              <div>
-                <p className="text-sm font-semibold text-foreground">{selectedConv.autre_prenom} {selectedConv.autre_nom}</p>
-              </div>
-            </div>
-
-            {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-              {loadingMessages ? (
-                <div className="text-center text-sm text-muted-foreground py-8">Chargement…</div>
-              ) : messages.length === 0 ? (
-                <div className="text-center text-sm text-muted-foreground py-8">Aucun message. Envoyez le premier !</div>
-              ) : (
-                messages.map(msg => {
-                  const mine = msg.auteur_id === user?.id;
-                  return (
-                    <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md'}`}>
-                        {msg.est_admin && !mine && (
-                          <p className="text-[10px] font-bold mb-0.5 flex items-center gap-1 text-primary">
-                            <Shield className="h-3 w-3" /> Admin Jolene
-                          </p>
-                        )}
-                        <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
-                        <p className={`text-[9px] mt-1 text-right ${mine ? 'text-primary-foreground/60' : 'text-muted-foreground/60'}`}>
-                          {format(new Date(msg.cree_le), "HH'h'mm", { locale: fr })}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
+      {/* ── New conversation modal (admin) ── */}
+      <Dialog open={showNewConvModal} onOpenChange={setShowNewConvModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nouvelle conversation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher un soignant ou établissement…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
+              {searchQuery && (
+                <button onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
               )}
             </div>
-
-            {/* Input */}
-            <div className="flex items-center gap-2 p-4 border-t border-border">
-              <input
-                ref={inputRef}
-                type="text"
-                value={texte}
-                onChange={e => setTexte(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Votre message…"
-                className="input-base flex-1 text-sm py-2"
-                maxLength={1000}
-                disabled={envoi}
-              />
-              <button
-                onClick={envoyer}
-                disabled={envoi || !texte.trim()}
-                className="rounded-xl p-2.5 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
-                aria-label="Envoyer"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Sélectionnez une conversation</p>
+            <div className="max-h-[300px] overflow-y-auto space-y-1">
+              {searching && <p className="text-sm text-muted-foreground text-center py-4">Recherche…</p>}
+              {!searching && searchQuery.length >= 2 && searchResults.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Aucun résultat</p>
+              )}
+              {searchResults.map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => startConversationWith(r.id)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors text-left"
+                >
+                  <AvatarDisplay src={r.avatar} prenom={r.label} nom="" size={32} rounded="full" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{r.label}</p>
+                    <p className="text-xs text-muted-foreground truncate">{r.type === 'soignant' ? 'Soignant' : 'Établissement'} · {r.sub}</p>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
