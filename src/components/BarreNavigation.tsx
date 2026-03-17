@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BadgeNotification } from '@/components/PanneauNotifications';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { useMessagesNonLus } from '@/hooks/useMessagesNonLus';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
 
