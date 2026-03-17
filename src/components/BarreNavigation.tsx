@@ -94,6 +94,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const navigate = useNavigate();
   const { deconnexion, user } = useAuth();
   const [showLiberal, setShowLiberal] = useState(false);
+  const [isLiberal, setIsLiberal] = useState(false);
   const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
   const { count: messagesNonLus } = useMessagesNonLus();
 
@@ -104,6 +105,9 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         .then(({ data }) => {
           if (!data) return;
           setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
+          if (data.statut_liberal === 'ACTIF') {
+            setIsLiberal(true);
+          }
           if (!PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
             setShowLiberal(true);
           }
@@ -116,7 +120,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
     }
   }, [role, user]);
 
-  const baseItems = getNavItems(role);
+  const baseItems = getNavItems(role, isLiberal);
   // Insert "Passer en libéral" before Notifications for soignant
   let items = baseItems;
   if (role === 'SOIGNANT' && showLiberal) {
