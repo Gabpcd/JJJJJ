@@ -79,8 +79,15 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     });
   }, [user]);
 
-  // Load duplication source
+  // Load from query params (soignant_id from pool, or duplication)
   useEffect(() => {
+    const soignantIdParam = searchParams.get('soignant_id');
+    const professionParam = searchParams.get('profession');
+    if (soignantIdParam && !missionSource) {
+      // Pre-fill from pool
+      if (professionParam) setProfession(professionParam);
+    }
+
     const dupId = searchParams.get('dupliquer');
     if (dupId && !missionSource) {
       supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence').eq('id', dupId).single().then(({ data }) => {
