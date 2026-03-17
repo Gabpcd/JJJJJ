@@ -118,6 +118,7 @@ serve(async (req) => {
 
     const isImage = doc.type_mime?.startsWith("image/");
     const isPdf = doc.type_mime === "application/pdf";
+    const extractedPdfText = isPdf ? await extractPdfText(bytes).catch(() => "") : "";
 
     // Type document labels
     const typeLabels: Record<string, string> = {
