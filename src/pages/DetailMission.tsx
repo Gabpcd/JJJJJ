@@ -3,7 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send, CreditCard, MessageCircle } from 'lucide-react';
+import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send, CreditCard, MessageCircle, BellRing, Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
