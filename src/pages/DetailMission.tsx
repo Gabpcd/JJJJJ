@@ -501,13 +501,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                           </td>
                           <td className="py-3">
                             <button
-                              onClick={() => proposerMission(r.soignant_id)}
-                              disabled={proposing === r.soignant_id}
-                              className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50"
-                            >
-                              <Send className="h-3.5 w-3.5" />
-                              {proposing === r.soignant_id ? '…' : 'Proposer'}
-                            </button>
+                               onClick={() => proposerMission(r.id)}
+                               disabled={proposing === r.id}
+                               className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50"
+                             >
+                               <Send className="h-3.5 w-3.5" />
+                               {proposing === r.id ? '…' : 'Proposer'}
+                             </button>
                           </td>
                         </tr>
                       ))}
