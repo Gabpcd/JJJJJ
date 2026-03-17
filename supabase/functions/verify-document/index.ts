@@ -175,10 +175,9 @@ Analyse ce document et vérifie sa conformité.`;
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI gateway error:", aiResponse.status, errText);
-      await supabase
-        .from("documents_soignants")
-        .update({ statut_verification: "EN_ATTENTE", motif_rejet: null })
-        .eq("id", document_id);
+      await supabase.rpc("fn_update_document_verification", {
+        p_document_id: document_id, p_statut_verification: "EN_ATTENTE", p_motif_rejet: null,
+      });
 
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
