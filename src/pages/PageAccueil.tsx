@@ -93,14 +93,23 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
   const handleSearch = async () => {
     setLoading(true);
     setSearched(true);
-    const { data } = await supabase.rpc('fn_missions_publiques_recherche', {
+    const { data, error } = await supabase.rpc('fn_missions_publiques_recherche', {
       p_profession: profession || null,
       p_ville: ville.trim() || null,
     });
+    if (error) {
+      console.error('Erreur recherche missions publiques:', error);
+    }
     setResults(data || []);
     setTotalCount(data?.[0]?.total_count ?? 0);
     setLoading(false);
   };
+
+  // Auto-load missions on mount (all professions, no city filter)
+  useEffect(() => {
+    handleSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
