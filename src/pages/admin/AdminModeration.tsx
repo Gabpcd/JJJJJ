@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { FileCheck, MessageSquare, Check, X, Eye, Mail, Phone, Building2, User } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
 
 type LitigeEnrichi = {
   id: string;
@@ -311,6 +312,19 @@ export default function AdminModeration() {
                         </div>
                       </div>
                     </div>
+
+                    <AdminMissionChatPanel
+                      missions={[
+                        {
+                          id: litige.mission_id,
+                          intitule: litige.mission?.intitule || 'Mission liée au litige',
+                          statut: litige.mission?.statut || 'LITIGE',
+                          soignants: litige.soignant ? { prenom: litige.soignant.prenom, nom: litige.soignant.nom } : null,
+                          etablissements: litige.etablissement ? { nom: litige.etablissement.nom } : null,
+                        },
+                      ]}
+                      emptyLabel="Messagerie indisponible pour ce conflit."
+                    />
 
                     <div className="flex flex-wrap gap-2">
                       <Button

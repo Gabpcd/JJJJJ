@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
 
 export default function AdminDetailUtilisateur() {
   const { id } = useParams<{ id: string }>();
@@ -163,6 +164,7 @@ export default function AdminDetailUtilisateur() {
           <TabsTrigger value="infos">Informations</TabsTrigger>
           {type === 'soignant' && <TabsTrigger value="documents">Documents</TabsTrigger>}
           <TabsTrigger value="missions">Missions</TabsTrigger>
+          <TabsTrigger value="chat">Chat</TabsTrigger>
           {type === 'soignant' && <TabsTrigger value="score">Score & Badges</TabsTrigger>}
           <TabsTrigger value="profil">Profil complet</TabsTrigger>
           <TabsTrigger value="actions">Actions admin</TabsTrigger>
@@ -295,6 +297,13 @@ export default function AdminDetailUtilisateur() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="chat">
+          <AdminMissionChatPanel
+            missions={missions}
+            emptyLabel="Aucune mission commune ne permet d’ouvrir une messagerie pour ce profil."
+          />
         </TabsContent>
 
         {/* ── 4. Score & Badges ── */}

@@ -59,6 +59,8 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   const [historique, setHistorique] = useState<HistoriqueUrgence[]>([]);
   const [loading, setLoading] = useState(true);
   const [alerterTousOpen, setAlerterTousOpen] = useState(false);
+  const [etablissementsAdmin, setEtablissementsAdmin] = useState<Array<{ id: string; nom: string }>>([]);
+  const [selectedEtablissementId, setSelectedEtablissementId] = useState('');
 
   // Filters
   const [filtreProfession, setFiltreProfession] = useState<string>('TOUTES');
@@ -66,7 +68,30 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   const [filtreRayonMax, setFiltreRayonMax] = useState(50);
   const [filtreScoreMin, setFiltreScoreMin] = useState(0);
 
-  const etablissementId = user?.id || '';
+  const etablissementId = isAdmin ? selectedEtablissementId : user?.id || '';
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const loadEtablissements = async () => {
+      const { data, error } = await supabase
+        .from('etablissements')
+        .select('id, nom')
+        .is('supprime_le', null)
+        .order('nom', { ascending: true });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      const etablissements = (data ?? []) as Array<{ id: string; nom: string }>;
+      setEtablissementsAdmin(etablissements);
+      setSelectedEtablissementId((current) => current || etablissements[0]?.id || '');
+    };
+
+    loadEtablissements();
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!etablissementId) return;
@@ -159,19 +184,37 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     <Layout>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             <Flame className="h-6 w-6 text-destructive" />
             Pool d'urgence
           </h1>
-          <Button
-            variant="destructive"
-            onClick={() => setAlerterTousOpen(true)}
-            disabled={filtered.filter(s => !s.en_mission_maintenant).length === 0}
-          >
-            <BellRing className="h-4 w-4 mr-1" />
-            Alerter tout le pool 🚨
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {isAdmin && (
+              <div className="min-w-[240px]">
+                <Select value={selectedEtablissementId} onValueChange={setSelectedEtablissementId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choisir un établissement" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {etablissementsAdmin.map((etablissement) => (
+                      <SelectItem key={etablissement.id} value={etablissement.id}>
+                        {etablissement.nom}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <Button
+              variant="destructive"
+              onClick={() => setAlerterTousOpen(true)}
+              disabled={filtered.filter(s => !s.en_mission_maintenant).length === 0}
+            >
+              <BellRing className="h-4 w-4 mr-1" />
+              Alerter tout le pool 🚨
+            </Button>
+          </div>
         </div>
 
         {/* KPIs */}

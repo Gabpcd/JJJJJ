@@ -89,27 +89,27 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
   const [results, setResults] = useState<any[] | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [searched, setSearched] = useState(false);
+  const professionDebounced = useDebounce(profession, 250);
+  const villeDebounced = useDebounce(ville, 250);
 
-  const handleSearch = async () => {
+  const handleSearch = async (nextProfession = professionDebounced, nextVille = villeDebounced) => {
     setLoading(true);
     setSearched(true);
     const { data, error } = await supabase.rpc('fn_missions_publiques_recherche', {
-      p_profession: profession || null,
-      p_ville: ville.trim() || null,
+      p_profession: nextProfession || null,
+      p_ville: nextVille.trim() || null,
     });
     if (error) {
       console.error('Erreur recherche missions publiques:', error);
     }
     setResults(data || []);
-    setTotalCount(data?.[0]?.total_count ?? 0);
+    setTotalCount(data?.[0]?.total_count ?? data?.length ?? 0);
     setLoading(false);
   };
 
-  // Auto-load missions on mount (all professions, no city filter)
   useEffect(() => {
-    handleSearch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    handleSearch(professionDebounced, villeDebounced);
+  }, [professionDebounced, villeDebounced]);
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
@@ -138,11 +138,11 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
               placeholder="Ville ou code postal (optionnel)"
               value={ville}
               onChange={(e) => setVille(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch(profession, ville)}
               className="flex-1 h-12 rounded-xl border border-input bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <button
-              onClick={handleSearch}
+              onClick={() => handleSearch(profession, ville)}
               disabled={loading}
               className="h-12 px-6 rounded-xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
             >
@@ -157,7 +157,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
               {results.length > 0 ? (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {results.slice(0, 5).map((m) => (
+                    {results.map((m) => (
                       <div key={m.id} className="rounded-xl border border-border bg-background p-4 hover:shadow-md transition-shadow">
                         <p className="font-semibold text-foreground text-sm mb-1 line-clamp-1">{m.intitule}</p>
                         <p className="text-xs text-muted-foreground mb-2">
@@ -185,7 +185,9 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
                 </>
               ) : (
                 <div className="text-center py-8 rounded-xl border border-dashed border-border bg-muted/30">
-                  <p className="text-muted-foreground mb-2">Pas de mission pour le moment dans votre zone.</p>
+                  <p className="text-muted-foreground mb-2">
+                    {ville.trim() ? 'Pas de mission pour le moment dans cette zone.' : 'Pas de mission pour le moment pour cette profession.'}
+                  </p>
                   <button onClick={() => navigate('/inscription/soignant')} className="text-primary font-semibold text-sm hover:underline underline-offset-4">
                     Inscrivez-vous pour être alerté →
                   </button>

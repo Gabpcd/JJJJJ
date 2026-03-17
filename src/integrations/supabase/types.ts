@@ -3010,29 +3010,21 @@ export type Database = {
           ville_etablissement: string
         }[]
       }
-      fn_missions_publiques_recherche:
-        | {
-            Args: { p_profession?: string; p_ville?: string }
-            Returns: {
-              code_postal: string
-              debut_le: string
-              est_urgente: boolean
-              fin_le: string
-              id: string
-              intitule: string
-              profession_requise: string
-              taux_horaire_base: number
-              total_count: number
-              ville: string
-            }[]
-          }
-        | {
-            Args: {
-              p_profession?: Database["public"]["Enums"]["type_profession"]
-              p_ville?: string
-            }
-            Returns: Json
-          }
+      fn_missions_publiques_recherche: {
+        Args: { p_profession?: string; p_ville?: string }
+        Returns: {
+          code_postal: string
+          debut_le: string
+          est_urgente: boolean
+          fin_le: string
+          id: string
+          intitule: string
+          profession_requise: string
+          taux_horaire_base: number
+          total_count: number
+          ville: string
+        }[]
+      }
       fn_modifier_mission_etablissement: {
         Args: {
           p_description?: string
@@ -3312,43 +3304,24 @@ export type Database = {
         Args: { p_code: string; p_presence_id: string }
         Returns: Json
       }
-      fn_pool_urgence_etablissement:
-        | {
-            Args: never
-            Returns: {
-              annees_experience: number
-              avatar_url: string
-              bio: string
-              distance_km: number
-              en_mission_actuellement: boolean
-              nom: string
-              prenom: string
-              profession: Database["public"]["Enums"]["type_profession"]
-              score_fiabilite: number
-              soignant_id: string
-              specialites: string[]
-              total_missions_urgence: number
-              urgence_rayon_km: number
-            }[]
-          }
-        | {
-            Args: { p_etablissement_id: string }
-            Returns: {
-              avatar_url: string
-              bio: string
-              derniere_mission_chez_nous: string
-              distance_km: number
-              en_mission_maintenant: boolean
-              est_favori: boolean
-              missions_urgence_terminees: number
-              nom: string
-              pool_urgence_rayon_km: number
-              prenom: string
-              profession: string
-              score_fiabilite: number
-              soignant_id: string
-            }[]
-          }
+      fn_pool_urgence_etablissement: {
+        Args: { p_etablissement_id: string }
+        Returns: {
+          avatar_url: string
+          bio: string
+          derniere_mission_chez_nous: string
+          distance_km: number
+          en_mission_maintenant: boolean
+          est_favori: boolean
+          missions_urgence_terminees: number
+          nom: string
+          pool_urgence_rayon_km: number
+          prenom: string
+          profession: string
+          score_fiabilite: number
+          soignant_id: string
+        }[]
+      }
       fn_postuler_mission: {
         Args: { p_message?: string; p_mission_id: string }
         Returns: Json

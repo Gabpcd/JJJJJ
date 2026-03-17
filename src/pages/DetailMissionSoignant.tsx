@@ -535,8 +535,8 @@ export default function DetailMissionSoignant() {
             )}
           </div>
 
-          {/* Chat — visible si ASSIGNEE, EN_COURS ou TERMINEE */}
-          {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS' || mission.statut === 'TERMINEE') && estAssigne && (
+          {/* Chat — visible si ASSIGNEE, EN_COURS, TERMINEE, ABSENCE ou LITIGE */}
+          {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS' || mission.statut === 'TERMINEE' || mission.statut === 'ABSENCE' || mission.statut === 'LITIGE') && estAssigne && (
             <ChatMission
               missionId={mission.id}
               role="SOIGNANT"
