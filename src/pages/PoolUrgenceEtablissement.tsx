@@ -305,9 +305,12 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                 {filtered.map((s) => (
                   <TableRow key={s.soignant_id} className="group">
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <div
+                        className="flex items-center gap-2 cursor-pointer hover:opacity-80"
+                        onClick={() => navigate(isAdmin ? `/admin/utilisateurs/${s.soignant_id}` : `/etablissement/soignants/${s.soignant_id}`)}
+                      >
                         <AvatarDisplay src={s.avatar_url} prenom={s.prenom} nom={s.nom} size={32} rounded="full" />
-                        <span className="font-medium text-foreground text-sm">{s.prenom} {s.nom}</span>
+                        <span className="font-medium text-foreground text-sm underline-offset-2 hover:underline">{s.prenom} {s.nom}</span>
                       </div>
                     </TableCell>
                     <TableCell>
