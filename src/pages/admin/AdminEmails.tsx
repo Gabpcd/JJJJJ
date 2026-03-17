@@ -84,9 +84,17 @@ export default function AdminEmails() {
   const envoyerTest = async (type: string) => {
     if (!user) return;
     setSending(type);
-    const { error } = await supabase.functions.invoke('send-email', {
-      body: { type, destinataire_id: user.id, data: DONNEES_FICTIVES[type] },
+    const { data: { session } } = await supabase.auth.getSession();
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session?.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ type, destinataire_id: user.id, data: DONNEES_FICTIVES[type] }),
     });
+    const error = res.ok ? null : { message: `HTTP ${res.status}` };
     setSending(null);
     if (error) {
       toast.error(error.message);
