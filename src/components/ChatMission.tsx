@@ -26,6 +26,8 @@ interface ChatMissionProps {
 
 export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdminProp = false }: ChatMissionProps) {
   const { user } = useAuth();
+  const { role: detectedRole } = useRole();
+  const isAdmin = isAdminProp || detectedRole === 'ADMIN_PLATEFORME';
   const [messages, setMessages] = useState<Message[]>([]);
   const [texte, setTexte] = useState('');
   const [envoi, setEnvoi] = useState(false);
