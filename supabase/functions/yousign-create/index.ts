@@ -1,14 +1,28 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+function getCorsOrigin(req: Request): string {
+  const origin = req.headers.get("origin") || "";
+  if (
+    origin === "https://app.jolene.app" ||
+    origin === "http://localhost:5173" ||
+    origin.endsWith(".lovable.app")
+  ) {
+    return origin;
+  }
+  return "https://app.jolene.app";
+}
+
+function corsHeaders(req: Request) {
+  return {
+    "Access-Control-Allow-Origin": getCorsOrigin(req),
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  };
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   try {
@@ -16,7 +30,7 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -34,7 +48,7 @@ Deno.serve(async (req) => {
     if (claimsError || !claimsData?.claims) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
     const userId = claimsData.claims.sub;
@@ -43,7 +57,7 @@ Deno.serve(async (req) => {
     if (!contrat_id) {
       return new Response(JSON.stringify({ error: "contrat_id requis" }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -57,14 +71,14 @@ Deno.serve(async (req) => {
     if (contratErr || !contrat) {
       return new Response(JSON.stringify({ error: "Contrat introuvable" }), {
         status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     // Verify caller is party to the contract
     if (contrat.soignant_id !== userId && contrat.etablissement_id !== userId) {
       // Check if user is admin of the establishment
-      const adminClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const adminClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
       const { data: etab } = await adminClient
         .from("etablissements")
         .select("id")
@@ -75,7 +89,7 @@ Deno.serve(async (req) => {
       if (!etab) {
         return new Response(JSON.stringify({ error: "Non autorisé" }), {
           status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         });
       }
     }
@@ -87,12 +101,12 @@ Deno.serve(async (req) => {
           fallback: true,
           message: "La signature Yousign n'est pas encore configurée. Utilisez la signature manuscrite.",
         }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 503, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
     // Fetch soignant & etablissement info for Yousign signers
-    const adminClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const adminClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
     const [soignantRes, etabRes] = await Promise.all([
       adminClient.from("soignants").select("id, prenom, nom, email, telephone").eq("id", contrat.soignant_id).single(),
@@ -105,7 +119,7 @@ Deno.serve(async (req) => {
     if (!soignant || !etablissement) {
       return new Response(JSON.stringify({ error: "Données soignant/établissement introuvables" }), {
         status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -131,7 +145,7 @@ Deno.serve(async (req) => {
       console.error("Yousign create signature request error:", errText);
       return new Response(
         JSON.stringify({ error: "Erreur Yousign", fallback: true, details: errText }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -160,7 +174,7 @@ Deno.serve(async (req) => {
       console.error("Yousign upload document error:", errText);
       return new Response(
         JSON.stringify({ error: "Erreur upload document Yousign", fallback: true }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -217,7 +231,7 @@ Deno.serve(async (req) => {
     if (!soignantSigner || !etabSigner) {
       return new Response(
         JSON.stringify({ error: "Erreur ajout signataires Yousign", fallback: true }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -235,7 +249,7 @@ Deno.serve(async (req) => {
       console.error("Yousign activate error:", errText);
       return new Response(
         JSON.stringify({ error: "Erreur activation Yousign", fallback: true }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -257,13 +271,13 @@ Deno.serve(async (req) => {
         soignant_signing_url: soignantSigner.signature_link,
         etablissement_signing_url: etabSigner.signature_link,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("yousign-create error:", err);
     return new Response(
       JSON.stringify({ error: "Erreur interne", fallback: true }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

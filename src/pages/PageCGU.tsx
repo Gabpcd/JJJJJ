@@ -98,7 +98,7 @@ export default function PageCGU() {
         <h2 className="text-xl font-bold text-primary mb-4">Article 5 — Exclusion de responsabilité</h2>
         <div className="bg-muted/50 border-l-4 border-destructive p-4 rounded-r-xl my-4">
           <p className="font-semibold text-foreground mb-2">Clause limitative de responsabilité :</p>
-          <p>Soin Direct agit exclusivement en qualité d'intermédiaire technique de mise en relation. L'Éditeur n'est pas responsable :</p>
+          <p>Jolene agit exclusivement en qualité d'intermédiaire technique de mise en relation. L'Éditeur n'est pas responsable :</p>
         </div>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li>De la qualité, de la sécurité ou de l'adéquation des soins prodigués par les Soignants au sein des Établissements.</li>

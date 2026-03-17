@@ -4,13 +4,13 @@ import { createClient } from "npm:@supabase/supabase-js@2"
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
-    origin === "https://app.soindirect.com" ||
+    origin === "https://app.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin.endsWith(".lovable.app")
   ) {
     return origin;
   }
-  return "https://app.soindirect.com";
+  return "https://app.jolene.app";
 }
 
 function corsHeaders(req: Request) {
@@ -55,7 +55,7 @@ serve(async (req) => {
       });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
     const appMetadata: Record<string, unknown> = { role };
     if (etablissement_id) appMetadata.etablissement_id = etablissement_id;

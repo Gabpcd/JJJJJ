@@ -1,24 +1,39 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+function getCorsOrigin(req: Request): string {
+  const origin = req.headers.get("origin") || "";
+  if (
+    origin === "https://app.jolene.app" ||
+    origin === "http://localhost:5173" ||
+    origin.endsWith(".lovable.app")
+  ) {
+    return origin;
+  }
+  return "https://app.jolene.app";
+}
+
+function corsHeaders(req: Request) {
+  return {
+    'Access-Control-Allow-Origin': getCorsOrigin(req),
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  };
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders(req) })
   }
 
   try {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Non autorisé' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'Non autorisé' }), { status: 401, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
     }
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      { auth: { persistSession: false } },
     )
 
     const supabaseUser = createClient(
@@ -30,14 +45,14 @@ Deno.serve(async (req) => {
     const token = authHeader.replace('Bearer ', '')
     const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token)
     if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: 'Token invalide' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'Token invalide' }), { status: 401, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
     }
 
     const userId = claimsData.claims.sub as string
     const { facture_id, action } = await req.json()
 
     if (!facture_id || !action) {
-      return new Response(JSON.stringify({ error: 'facture_id et action requis' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'facture_id et action requis' }), { status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
     }
 
     // Verify facture belongs to user's etablissement
@@ -48,11 +63,11 @@ Deno.serve(async (req) => {
       .single()
 
     if (factError || !facture) {
-      return new Response(JSON.stringify({ error: 'Facture introuvable' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'Facture introuvable' }), { status: 404, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
     }
 
     if (facture.etablissement_id !== userId) {
-      return new Response(JSON.stringify({ error: 'Accès interdit' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'Accès interdit' }), { status: 403, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
     }
 
     // Check if Chorus config exists
@@ -68,7 +83,7 @@ Deno.serve(async (req) => {
 
     if (action === 'deposer') {
       if (!['A_DEPOSER', 'REJETEE'].includes(facture.chorus_pro_statut ?? 'A_DEPOSER')) {
-        return new Response(JSON.stringify({ error: `Impossible de déposer : statut actuel ${facture.chorus_pro_statut}` }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        return new Response(JSON.stringify({ error: `Impossible de déposer : statut actuel ${facture.chorus_pro_statut}` }), { status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
       }
 
       if (isSimulation) {
@@ -90,7 +105,7 @@ Deno.serve(async (req) => {
           message: '🧪 Mode simulation : facture marquée comme déposée. Connectez une clé API Chorus Pro pour le mode réel.',
           statut: 'DEPOSEE',
           numero_flux: `SIM-${Date.now()}`,
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }), { headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
       } else {
         // Real mode — call Chorus Pro API
         // This is where a real API call would go
@@ -110,7 +125,7 @@ Deno.serve(async (req) => {
           simulation: false,
           message: '✅ Facture déposée sur Chorus Pro',
           statut: 'DEPOSEE',
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }), { headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
       }
     }
 
@@ -123,7 +138,7 @@ Deno.serve(async (req) => {
           message: '🧪 Mode simulation : statut lu depuis la base de données.',
           statut: facture.chorus_pro_statut ?? 'A_DEPOSER',
           numero_facture: facture.numero_facture,
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }), { headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
       } else {
         // Real mode — query Chorus Pro API for actual status
         return new Response(JSON.stringify({
@@ -131,13 +146,13 @@ Deno.serve(async (req) => {
           simulation: false,
           statut: facture.chorus_pro_statut ?? 'A_DEPOSER',
           numero_facture: facture.numero_facture,
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }), { headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
       }
     }
 
-    return new Response(JSON.stringify({ error: `Action inconnue: ${action}` }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify({ error: `Action inconnue: ${action}` }), { status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
   } catch (err) {
     console.error('chorus-pro-deposit error:', err)
-    return new Response(JSON.stringify({ error: 'Erreur interne' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify({ error: 'Erreur interne' }), { status: 500, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
   }
 })

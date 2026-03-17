@@ -16,7 +16,7 @@ export function ConsentementGPS({ onAccepter, onRefuser }: ConsentementGPSProps)
         <h1 className="text-2xl font-bold text-foreground">📍 Autorisation de géolocalisation</h1>
         <div className="card-base text-left space-y-4">
           <p className="text-sm text-foreground leading-relaxed">
-            Soin Direct utilise votre position GPS <strong>uniquement au moment du pointage d'arrivée et de départ</strong> pour vérifier votre présence sur site.
+            Jolene utilise votre position GPS <strong>uniquement au moment du pointage d'arrivée et de départ</strong> pour vérifier votre présence sur site.
           </p>
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-2">
             <p className="text-sm font-semibold text-foreground">✅ Ce que nous faisons :</p>

@@ -422,10 +422,10 @@ export default function PasserEnLiberal() {
       <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-primary/5 dark:from-purple-950/20 dark:to-primary/5 border border-purple-200 dark:border-purple-800 p-5 mt-8">
         <h2 className="text-base font-bold text-foreground mb-3">🎁 Votre Free Transition</h2>
         <div className="space-y-2 text-sm">
-          <p className="text-muted-foreground">Heures sur Soin Direct : <span className="font-bold text-foreground">{heuresPlat}h</span></p>
+          <p className="text-muted-foreground">Heures sur Jolene : <span className="font-bold text-foreground">{heuresPlat}h</span></p>
           <p className="text-muted-foreground">Taux de prise en charge : <span className="font-bold text-primary">{tauxPC}%</span></p>
           <p className="text-muted-foreground">
-            Soin Direct prend en charge <span className="font-bold text-primary">{fmt(montantPC)}</span> de vos frais d'installation :
+            Jolene prend en charge <span className="font-bold text-primary">{fmt(montantPC)}</span> de vos frais d'installation :
           </p>
           <div className="space-y-1 mt-2">
             <p className="text-xs">{tauxPC >= 75 ? '✅' : '⚠️'} Comptabilité Indy {tauxPC >= 75 ? '(6 mois offerts)' : `(non couvert à ${tauxPC}%)`}</p>

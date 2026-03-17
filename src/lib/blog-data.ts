@@ -243,7 +243,7 @@ C'est pourquoi nous avons créé **Free Transition**, un programme unique qui pr
 Free Transition fonctionne sur un système de paliers basé sur vos heures cumulées sur Jolene :
 
 ### Palier 1 — 800 heures : 25% pris en charge
-Dès 800 heures cumulées, Soin Direct prend en charge **25% de vos frais d'installation**. Cela couvre typiquement une partie de votre assurance RCP et de votre premier bilan comptable.
+Dès 800 heures cumulées, Jolene prend en charge **25% de vos frais d'installation**. Cela couvre typiquement une partie de votre assurance RCP et de votre premier bilan comptable.
 
 ### Palier 2 — 1 600 heures : 50% pris en charge
 À mi-parcours, la prise en charge monte à **50%**. Vous bénéficiez en plus des frais bancaires professionnels offerts pendant 6 mois grâce à notre partenariat avec Qonto.
@@ -252,7 +252,7 @@ Dès 800 heures cumulées, Soin Direct prend en charge **25% de vos frais d'inst
 Les trois quarts de vos frais sont couverts. Vous accédez également à un **accompagnement personnalisé** avec un conseiller dédié qui vous guide dans vos démarches administratives (CPAM, Ordre, URSSAF).
 
 ### Palier 4 — 3 200 heures : 100% pris en charge
-**Transition gratuite.** L'intégralité de vos frais d'installation est prise en charge par Soin Direct. Vous n'avez plus qu'à exercer.
+**Transition gratuite.** L'intégralité de vos frais d'installation est prise en charge par Jolene. Vous n'avez plus qu'à exercer.
 
 ## Quels frais sont couverts ?
 
@@ -266,15 +266,15 @@ Le programme Free Transition couvre les postes de dépenses suivants :
 
 ## Témoignage : Sophie, IDE passée en libéral
 
-*« J'ai découvert Soin Direct en cherchant des remplacements pour valider mes 3 200 heures. En 20 mois de missions régulières, j'ai atteint le palier 4. Le programme Free Transition a couvert tous mes frais d'installation : RCP, comptabilité, compte bancaire. Mon conseiller Soin Direct m'a même aidée à remplir mon dossier CPAM. Aujourd'hui, je suis installée en libéral dans le Val-de-Marne et je n'ai pas déboursé un centime pour ma transition. »*
+*« J'ai découvert Jolene en cherchant des remplacements pour valider mes 3 200 heures. En 20 mois de missions régulières, j'ai atteint le palier 4. Le programme Free Transition a couvert tous mes frais d'installation : RCP, comptabilité, compte bancaire. Mon conseiller Jolene m'a même aidée à remplir mon dossier CPAM. Aujourd'hui, je suis installée en libéral dans le Val-de-Marne et je n'ai pas déboursé un centime pour ma transition. »*
 
 **— Sophie M., IDEL, Val-de-Marne**
 
 ## Comment en bénéficier ?
 
-C'est simple : il suffit de **créer votre compte soignant sur Soin Direct** et de commencer à effectuer des missions. Votre compteur d'heures se met à jour automatiquement. Dès que vous atteignez un palier, vous êtes notifié et la prise en charge s'active.
+C'est simple : il suffit de **créer votre compte soignant sur Jolene** et de commencer à effectuer des missions. Votre compteur d'heures se met à jour automatiquement. Dès que vous atteignez un palier, vous êtes notifié et la prise en charge s'active.
 
-Vous pouvez suivre votre progression en temps réel dans la section **Parcours 3 200h** de votre tableau de bord. Et si vous avez déjà effectué des heures en dehors de Soin Direct, vous pouvez les déclarer et les faire valider.
+Vous pouvez suivre votre progression en temps réel dans la section **Parcours 3 200h** de votre tableau de bord. Et si vous avez déjà effectué des heures en dehors de Jolene, vous pouvez les déclarer et les faire valider.
 
 Le libéral n'a jamais été aussi accessible. Lancez-vous.`,
   },

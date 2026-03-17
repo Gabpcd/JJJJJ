@@ -85,7 +85,7 @@ function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
         {submitting ? 'Validation…' : '🏦 Valider le mandat SEPA'}
       </button>
       <p className="text-[10px] text-muted-foreground">
-        En fournissant votre IBAN, vous autorisez Soin Direct à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA.
+        En fournissant votre IBAN, vous autorisez Jolene à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA.
       </p>
     </div>
   );
@@ -511,7 +511,7 @@ export default function ProfilEtablissement() {
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `mes-donnees-soin-direct-${new Date().toISOString().slice(0, 10)}.json`;
+              a.download = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
               // C3: Audit RGPD export for establishments

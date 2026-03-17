@@ -139,7 +139,7 @@ export default function DashboardRH() {
       // Header
       doc.setFontSize(20);
       doc.setTextColor(23, 162, 184);
-      doc.text('Soin Direct', 14, 20);
+      doc.text('Jolene', 14, 20);
       doc.setFontSize(10);
       doc.setTextColor(100);
       doc.text(`Rapport RH mensuel — ${moisLabel}`, 14, 28);
@@ -199,7 +199,7 @@ export default function DashboardRH() {
       const pageHeight = doc.internal.pageSize.height;
       doc.setFontSize(8);
       doc.setTextColor(150);
-      doc.text('Soin Direct — Rapport généré automatiquement. Données à titre indicatif.', 14, pageHeight - 10);
+      doc.text('Jolene — Rapport généré automatiquement. Données à titre indicatif.', 14, pageHeight - 10);
 
       doc.save(`rapport_rh_${format(now, 'yyyy-MM')}.pdf`);
       afficherNotification({ type: 'succes', message: '✅ Rapport PDF généré et téléchargé' });

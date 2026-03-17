@@ -31,7 +31,7 @@ export function SyncCalendrier() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'missions-soin-direct.ics';
+      a.download = 'missions-jolene.ics';
       a.click();
       URL.revokeObjectURL(url);
     } catch {

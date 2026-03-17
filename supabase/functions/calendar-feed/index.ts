@@ -3,13 +3,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
-    origin === "https://app.soindirect.com" ||
+    origin === "https://app.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin.endsWith(".lovable.app")
   ) {
     return origin;
   }
-  return "https://app.soindirect.com";
+  return "https://app.jolene.app";
 }
 
 function corsHeaders(req: Request) {
@@ -83,10 +83,10 @@ Deno.serve(async (req) => {
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Soin Direct//Missions//FR",
+    "PRODID:-//Jolene//Missions//FR",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "X-WR-CALNAME:Soin Direct - Missions",
+    "X-WR-CALNAME:Jolene - Missions",
     "X-WR-TIMEZONE:Europe/Paris",
   ];
 
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     ].filter(Boolean).join("\\n");
 
     lines.push("BEGIN:VEVENT");
-    lines.push(`UID:${m.id}@soindirect`);
+    lines.push(`UID:${m.id}@jolene`);
     lines.push(`DTSTART:${formatIcalDate(new Date(m.debut_le))}`);
     lines.push(`DTEND:${formatIcalDate(new Date(m.fin_le))}`);
     lines.push(`SUMMARY:${escapeIcal(m.intitule)}`);
