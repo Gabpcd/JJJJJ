@@ -38,12 +38,12 @@ interface SoignantData {
 }
 
 function calculerCompletionProfil(s: SoignantData) {
+  // Only count fields the user can actually fill in — not verification statuses
   const checks: boolean[] = [
     !!s.prenom, !!s.nom, !!s.telephone, !!s.date_naissance,
     !!s.profession, !!s.type_contrat,
     !!(s.numero_rpps || s.numero_adeli),
     !!(s.adresse_lat && s.adresse_lng),
-    !!s.tous_documents_valides, !!s.identite_verifiee,
   ];
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
