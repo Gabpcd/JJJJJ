@@ -63,11 +63,14 @@ export function SectionBio({ bio, onBioChange, anneesExperience, onAnneesChange,
 
         {/* Années d'expérience */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Années d'expérience</label>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            Années d'expérience <span className="text-destructive">*</span>
+          </label>
           <input
             type="number"
             min={0}
             max={50}
+            required
             value={anneesExperience || ''}
             onChange={e => onAnneesChange(Math.min(50, Math.max(0, parseInt(e.target.value) || 0)))}
             placeholder="Ex: 5"

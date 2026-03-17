@@ -11,6 +11,7 @@ import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle } from 'lucide-react';
+import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { SectionBio } from '@/components/SectionBio';
 import { EncartInvitation } from '@/components/EncartInvitation';
 import { BadgesGamification, BadgeStats } from '@/components/BadgesGamification';
@@ -30,6 +31,7 @@ export default function ProfilSoignant() {
   const [saving, setSaving] = useState(false);
   const [email, setEmail] = useState('');
   const [profession, setProfession] = useState('');
+  const [rppsVerifie, setRppsVerifie] = useState(false);
   const [form, setForm] = useState({
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     typeContrat: '', rpps: '', adeli: '',
@@ -70,6 +72,7 @@ export default function ProfilSoignant() {
         });
         setEmail(data.email);
         setProfession(data.profession);
+        setRppsVerifie(!!data.rpps_verifie);
         setCodeParrainage(data.code_parrainage || '');
         (setForm as any)(prev => ({ ...prev, avatarUrl: data.avatar_url || '' }));
         setForm({
@@ -132,6 +135,10 @@ export default function ProfilSoignant() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (!form.anneesExperience && form.anneesExperience !== 0) {
+      afficherNotification({ type: 'erreur', message: 'Le nombre d\'années d\'expérience est obligatoire.' });
+      return;
+    }
     setSaving(true);
     const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
       p_telephone: form.telephone || null,
@@ -139,14 +146,13 @@ export default function ProfilSoignant() {
       p_rayon_deplacement_km: form.rayon,
       p_prenom: form.prenom || null, p_nom: form.nom || null,
       p_date_naissance: form.dateNaissance || null,
-      p_type_contrat: typesContrat[0] || null,
-      p_types_contrat_acceptes: JSON.stringify(typesContrat),
+      p_types_contrat: typesContrat,
       p_numero_rpps: form.rpps || null, p_numero_adeli: form.adeli || null,
       p_adresse_lat: form.lat ? parseFloat(form.lat) : null,
       p_adresse_lng: form.lng ? parseFloat(form.lng) : null,
       p_bio: form.bio || null,
-      p_annees_experience: form.anneesExperience || null,
-      p_specialites: JSON.stringify(specialites),
+      p_annees_experience: form.anneesExperience,
+      p_specialites: specialites,
     });
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
@@ -241,7 +247,13 @@ export default function ProfilSoignant() {
           mode="soignant"
           onUploaded={(url) => setForm(prev => ({ ...prev, avatarUrl: url } as any))}
         />
-        <h1 className="text-xl font-bold text-foreground">Mon profil</h1>
+        <div>
+          <h1 className="text-xl font-bold text-foreground">{form.prenom} {form.nom}</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-sm text-muted-foreground">{getLabelProfession(profession)}</span>
+            <BadgeRPPS rppsVerifie={rppsVerifie} rpps={form.rpps} profession={profession} />
+          </div>
+        </div>
       </div>
 
       {noteMoyenne && noteMoyenne.total > 0 && (
@@ -310,7 +322,11 @@ export default function ProfilSoignant() {
               {typesContrat.length === 0 && <p className="text-xs text-destructive mt-1">Sélectionnez au moins un type de contrat</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">RPPS</label><input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} className="input-base" /></div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">RPPS</label>
+                <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} disabled={rppsVerifie} className={`input-base ${rppsVerifie ? 'bg-muted cursor-not-allowed' : ''}`} />
+                {rppsVerifie && <p className="text-[10px] text-success mt-1">✓ Vérifié via l'Annuaire Santé</p>}
+              </div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">ADELI</label><input value={form.adeli} onChange={e => maj('adeli', e.target.value)} className="input-base" /></div>
             </div>
           </div>
