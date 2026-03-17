@@ -180,7 +180,7 @@ export default function AdminGroupes() {
                           {form.logo_url ? (
                             <img src={form.logo_url} alt="Logo" className="h-8 w-8 rounded-lg object-contain bg-white/10 p-1" />
                           ) : (
-                            <HeartPulse className="h-7 w-7" style={{ color: form.couleur_primaire }} />
+                            <img src={logoIcon} alt="Logo" className="h-7 w-7" style={{ filter: `hue-rotate(0deg)` }} />
                           )}
                           <span className="text-lg font-bold" style={{ color: '#fff' }}>
                             {form.nom_marque || 'Jolene'}
