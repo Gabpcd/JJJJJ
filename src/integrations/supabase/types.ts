@@ -3430,13 +3430,13 @@ export type Database = {
         Returns: {
           distance_km: number
           est_favori: boolean
+          id: string
           missions_etab: number
           nom: string
           prenom: string
           profession: Database["public"]["Enums"]["type_profession"]
           score_fiabilite: number
           score_matching: number
-          soignant_id: string
         }[]
       }
       fn_relancer_signatures_contrats: { Args: never; Returns: number }
