@@ -55,6 +55,9 @@ export default function AdminDashboard() {
   const [litiges, setLitiges] = useState<any[]>([]);
   const [facturesImpayees, setFacturesImpayees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stripeMoisNb, setStripeMoisNb] = useState(0);
+  const [stripeMoisCapture, setStripeMoisCapture] = useState(0);
+  const [stripeMoisAttente, setStripeMoisAttente] = useState(0);
 
   const [caCommissionsHT, setCaCommissionsHT] = useState(0);
   const [caEncaisse, setCaEncaisse] = useState(0);
