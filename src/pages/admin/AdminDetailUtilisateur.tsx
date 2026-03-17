@@ -164,6 +164,7 @@ export default function AdminDetailUtilisateur() {
           <TabsTrigger value="infos">Informations</TabsTrigger>
           {type === 'soignant' && <TabsTrigger value="documents">Documents</TabsTrigger>}
           <TabsTrigger value="missions">Missions</TabsTrigger>
+          <TabsTrigger value="chat">Chat</TabsTrigger>
           {type === 'soignant' && <TabsTrigger value="score">Score & Badges</TabsTrigger>}
           <TabsTrigger value="profil">Profil complet</TabsTrigger>
           <TabsTrigger value="actions">Actions admin</TabsTrigger>
