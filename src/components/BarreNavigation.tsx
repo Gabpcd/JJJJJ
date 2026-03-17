@@ -20,7 +20,7 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 
-const NAV_SOIGNANT: NavItem[] = [
+const NAV_SOIGNANT_BASE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
   { icone: MapPinned, label: 'Recherche', route: '/soignant/recherche-missions' },
@@ -28,7 +28,6 @@ const NAV_SOIGNANT: NavItem[] = [
   { icone: FileText, label: 'Mes contrats', route: '/soignant/contrats' },
   { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
   { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
-  { icone: Calculator, label: 'Mes charges', route: '/soignant/charges' },
   { icone: FileText, label: 'Documents', route: '/soignant/documents' },
   { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
   { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
@@ -62,9 +61,17 @@ const NAV_GROUPE: NavItem[] = [
   { icone: Settings, label: 'Paramètres', route: '/groupe/parametres' },
 ];
 
-function getNavItems(role: UserRole): NavItem[] {
+function getNavItems(role: UserRole, isLiberal?: boolean): NavItem[] {
   switch (role) {
-    case 'SOIGNANT': return NAV_SOIGNANT;
+    case 'SOIGNANT': {
+      const items = [...NAV_SOIGNANT_BASE];
+      if (isLiberal) {
+        // Insert "Mes charges" after "Gains"
+        const gainsIdx = items.findIndex(i => i.label === 'Gains');
+        items.splice(gainsIdx + 1, 0, { icone: Calculator, label: 'Mes charges', route: '/soignant/charges' });
+      }
+      return items;
+    }
     case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT;
     case 'ADMIN_GROUPE': return NAV_GROUPE;
     case 'ADMIN_PLATEFORME': return []; // Admin uses LayoutAdmin
@@ -87,6 +94,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const navigate = useNavigate();
   const { deconnexion, user } = useAuth();
   const [showLiberal, setShowLiberal] = useState(false);
+  const [isLiberal, setIsLiberal] = useState(false);
   const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
   const { count: messagesNonLus } = useMessagesNonLus();
 
@@ -97,6 +105,9 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         .then(({ data }) => {
           if (!data) return;
           setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
+          if (data.statut_liberal === 'ACTIF') {
+            setIsLiberal(true);
+          }
           if (!PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
             setShowLiberal(true);
           }
@@ -109,7 +120,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
     }
   }, [role, user]);
 
-  const baseItems = getNavItems(role);
+  const baseItems = getNavItems(role, isLiberal);
   // Insert "Passer en libéral" before Notifications for soignant
   let items = baseItems;
   if (role === 'SOIGNANT' && showLiberal) {

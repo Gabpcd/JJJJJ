@@ -6,6 +6,7 @@ import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
+import joleneIcon from '@/assets/icon-jolene.png';
 import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -27,6 +28,7 @@ interface Conversation {
   autre_avatar: string | null;
   dernier_contenu: string | null;
   non_lus: number;
+  is_jolene?: boolean;
 }
 
 interface Message {
@@ -155,6 +157,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       const autreId = c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id;
       const info = userMap.get(autreId) || userMap.get(c.participant_1_id) || userMap.get(c.participant_2_id);
       
+      const isJolene = !info; // Not found in soignants or etablissements = admin Jolene
       let displayPrenom = info?.prenom || 'Jolene';
       let displayNom = info?.nom || '';
       if (isAdmin) {
@@ -167,9 +170,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         autre_id: autreId,
         autre_prenom: displayPrenom,
         autre_nom: displayNom,
-        autre_avatar: info?.avatar || null,
+        autre_avatar: isJolene ? joleneIcon : (info?.avatar || null),
         dernier_contenu: lastMsgMap.get(c.id) || null,
         non_lus: unreadMap.get(c.id) || 0,
+        is_jolene: isJolene,
       };
     });
 
@@ -368,8 +372,9 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-foreground truncate">
+                      <span className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
                         {c.autre_prenom} {c.autre_nom}
+                        {c.is_jolene && <Shield className="h-3.5 w-3.5 text-primary shrink-0" />}
                       </span>
                       {c.dernier_message_le && (
                         <span className="text-[10px] text-muted-foreground whitespace-nowrap">
