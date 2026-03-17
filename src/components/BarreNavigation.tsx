@@ -30,6 +30,7 @@ const NAV_SOIGNANT: NavItem[] = [
   { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
   { icone: Calculator, label: 'Mes charges', route: '/soignant/charges' },
   { icone: FileText, label: 'Documents', route: '/soignant/documents' },
+  { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
   { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
   { icone: Crown, label: 'Premium', route: '/soignant/premium' },
   { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
