@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUp } from 'lucide-react';
-import logoIcon from '@/assets/icon-jolene.png';
+import { HeartPulse, ArrowUp } from 'lucide-react';
 import { FooterLegal } from '@/components/FooterLegal';
 
 interface TocItem {
@@ -38,7 +37,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children }: LayoutLeg
       <header className="border-b border-border bg-card sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-2">
           <Link to="/" className="flex items-center gap-2">
-            <img src={logoIcon} alt="Jolene" className="h-6 w-6" />
+            <HeartPulse className="h-6 w-6 text-primary" />
             <span className="text-lg font-bold text-foreground">Jolene</span>
           </Link>
         </div>

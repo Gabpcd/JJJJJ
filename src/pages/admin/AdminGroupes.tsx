@@ -9,8 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Palette, Globe, Save, Loader2, X } from 'lucide-react';
-import logoIcon from '@/assets/icon-jolene.png';
+import { Building2, Palette, Globe, Save, Loader2, HeartPulse, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminGroupes() {
@@ -180,7 +179,7 @@ export default function AdminGroupes() {
                           {form.logo_url ? (
                             <img src={form.logo_url} alt="Logo" className="h-8 w-8 rounded-lg object-contain bg-white/10 p-1" />
                           ) : (
-                            <img src={logoIcon} alt="Logo" className="h-7 w-7" style={{ filter: `hue-rotate(0deg)` }} />
+                            <HeartPulse className="h-7 w-7" style={{ color: form.couleur_primaire }} />
                           )}
                           <span className="text-lg font-bold" style={{ color: '#fff' }}>
                             {form.nom_marque || 'Jolene'}

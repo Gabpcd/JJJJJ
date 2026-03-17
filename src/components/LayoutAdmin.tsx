@@ -1,7 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Shield, CreditCard, LogOut, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle } from 'lucide-react';
-import logoIcon from '@/assets/icon-jolene.png';
+import { BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -37,7 +36,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[240px] bg-sidebar flex-col z-40">
         <div className="p-5 flex items-center justify-between border-b border-sidebar-border">
           <div className="flex items-center gap-2">
-            <img src={logoIcon} alt="Jolene" className="h-6 w-6" />
+            <HeartPulse className="h-6 w-6 text-sidebar-primary" />
             <span className="text-lg font-bold text-sidebar-foreground">Admin</span>
           </div>
           <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />

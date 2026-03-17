@@ -1,10 +1,10 @@
-import logoIcon from '@/assets/icon-jolene.png';
+import { HeartPulse } from 'lucide-react';
 
 export function ChargementPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-3 animate-pulse">
-        <img src={logoIcon} alt="Jolene" className="h-10 w-10" />
+        <HeartPulse className="h-10 w-10 text-primary" />
         <span className="text-lg font-bold text-primary">Jolene</span>
       </div>
     </div>

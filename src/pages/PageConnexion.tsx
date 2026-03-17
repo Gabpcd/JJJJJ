@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import logoJolene from '@/assets/logo-jolene.png';
+import { HeartPulse, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -51,8 +50,9 @@ export default function PageConnexion() {
   return (
     <div className="min-h-screen gradient-hero flex items-center justify-center px-4">
       <div className="card-base max-w-md w-full">
-        <div className="flex items-center justify-center mb-8">
-          <img src={logoJolene} alt="Jolene" className="h-20 w-auto" />
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <HeartPulse className="h-8 w-8 text-primary" />
+          <span className="text-2xl font-bold text-primary-dark">Jolene</span>
         </div>
 
         <h1 className="text-xl font-bold text-foreground text-center mb-6">Connexion</h1>
