@@ -316,8 +316,16 @@ export default function AdminModeration() {
                                   <Phone className="h-3.5 w-3.5" /> Appeler
                                 </a>
                               )}
+                              <button
+                                onClick={async () => {
+                                  const { data } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: litige.etablissement_id, p_mission_id: litige.mission_id });
+                                  if (data) window.location.href = `/admin/messagerie?conv=${data}`;
+                                }}
+                                className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
+                              >
+                                <MessageCircle className="h-3.5 w-3.5" /> Contacter
+                              </button>
                             </div>
-                          </div>
                         </div>
                       </div>
                     </div>
