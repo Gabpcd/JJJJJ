@@ -139,7 +139,7 @@ export default function DashboardRH() {
       // Header
       doc.setFontSize(20);
       doc.setTextColor(23, 162, 184);
-      doc.text('Soin Direct', 14, 20);
+      doc.text('Jolene', 14, 20);
       doc.setFontSize(10);
       doc.setTextColor(100);
       doc.text(`Rapport RH mensuel — ${moisLabel}`, 14, 28);
