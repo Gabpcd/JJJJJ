@@ -426,7 +426,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {isAdmin && (
                 <button
                   type="button"
-                  onClick={() => ouvrirConv(m.etablissement_id, m.id)}
+                  onClick={() => ouvrirConv(m.etablissement_id, m.id, true)}
                   className="text-sm font-medium text-primary hover:underline underline-offset-4 flex items-center gap-1 mb-3"
                 >
                   <MessageCircle className="h-4 w-4" /> Contacter l'établissement
