@@ -149,9 +149,12 @@ export default function DetailMissionSoignant() {
   );
   const completionProfil = calculerCompletionProfil(soignant);
   const premiereMissionLe = (soignant as any).premiere_mission_le;
+  const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
   const enPeriodeGrace = !premiereMissionLe || 
-    (new Date(premiereMissionLe).getTime() + 7 * 24 * 60 * 60 * 1000 > Date.now());
-  const docsOk = soignant.tous_documents_valides || enPeriodeGrace;
+    (new Date(premiereMissionLe).getTime() + SEPT_JOURS_MS > Date.now());
+  const missionLaisseLeTemps = mission.debut_le &&
+    (new Date(mission.debut_le).getTime() - Date.now() > SEPT_JOURS_MS);
+  const docsOk = soignant.tous_documents_valides || enPeriodeGrace || missionLaisseLeTemps;
   const peutPostuler = completionProfil >= 100 && docsOk;
   const estAssigne = mission.soignant_assigne_id === user!.id;
   const estOuverte = mission.statut === 'OUVERTE';
