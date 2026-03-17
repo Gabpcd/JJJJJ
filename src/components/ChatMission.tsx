@@ -101,8 +101,9 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin = fals
     });
 
     if (error) {
+      console.error('Erreur envoi message mission:', error);
       setTexte(contenuBrut);
-      toast.error("Impossible d'envoyer le message.");
+      toast.error("Impossible d'envoyer le message pour le moment.");
     }
 
     setEnvoi(false);
