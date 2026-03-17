@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { getDocument } from "npm:pdfjs-dist/legacy/build/pdf.mjs";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -27,48 +26,20 @@ function wait(ms: number) {
 
 async function loadDocumentWithRetry(supabase: any, documentId: string, attempts = 4) {
   let lastError: unknown = null;
-
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const { data, error } = await supabase
+    const { data, error, status, statusText } = await supabase
       .from("documents_soignants")
       .select("id, soignant_id, type_document, nom_fichier, s3_cle, s3_bucket, type_mime")
       .eq("id", documentId)
       .maybeSingle();
-
+    
+    console.log(`[verify-document] attempt ${attempt + 1}: data=${!!data}, error=${error?.message || 'none'}, status=${status}, statusText=${statusText}`);
+    
     if (data) return data;
     lastError = error;
-
-    if (attempt < attempts - 1) {
-      await wait(350 * (attempt + 1));
-    }
+    if (attempt < attempts - 1) await wait(350 * (attempt + 1));
   }
-
-  throw lastError instanceof Error ? lastError : new Error("Document introuvable");
-}
-
-async function extractPdfText(bytes: Uint8Array): Promise<string> {
-  const pdf = await getDocument({
-    data: bytes,
-    useWorkerFetch: false,
-    isEvalSupported: false,
-  }).promise;
-
-  const pages: string[] = [];
-  const maxPages = Math.min(pdf.numPages, 3);
-
-  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
-    const page = await pdf.getPage(pageNumber);
-    const textContent = await page.getTextContent();
-    const text = textContent.items
-      .map((item: any) => (typeof item?.str === "string" ? item.str : ""))
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (text) pages.push(text);
-  }
-
-  return pages.join("\n\n").trim();
+  throw lastError instanceof Error ? lastError : new Error("Document introuvable après " + attempts + " tentatives pour id=" + documentId);
 }
 
 serve(async (req) => {
@@ -81,12 +52,11 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-
     if (!lovableApiKey) throw new Error("LOVABLE_API_KEY non configurée");
 
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // 1. Get document info (retry to avoid race condition just after insert)
+    // 1. Get document info (retry to handle race condition after insert)
     const doc = await loadDocumentWithRetry(supabase, document_id);
 
     // 2. Get soignant info for name matching
@@ -100,10 +70,9 @@ serve(async (req) => {
     const { data: fileData, error: fileErr } = await supabase.storage
       .from(doc.s3_bucket)
       .download(doc.s3_cle);
-
     if (fileErr || !fileData) throw new Error("Impossible de télécharger le fichier");
 
-    // 4. Convert to base64 for AI analysis (chunked to avoid stack overflow)
+    // 4. Convert to base64 (chunked to avoid stack overflow)
     const arrayBuffer = await fileData.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     const chunkSize = 8192;
@@ -118,7 +87,6 @@ serve(async (req) => {
 
     const isImage = doc.type_mime?.startsWith("image/");
     const isPdf = doc.type_mime === "application/pdf";
-    const extractedPdfText = isPdf ? await extractPdfText(bytes).catch(() => "") : "";
 
     // Type document labels
     const typeLabels: Record<string, string> = {
@@ -160,12 +128,12 @@ Règles:
 - verdict = "REJETE" si clairement pas le bon type, document illisible/tronqué, ou confiance FAIBLE
 - Pour un RIB: pas de date d'expiration, vérifie juste que c'est bien un RIB
 - Pour une CNI/Passeport: extrais la date d'expiration si visible
-- Pour une assurance RCP: extrais la date de fin de validité`;
+- Pour une assurance RCP: extrais la date de fin de validité
+- IMPORTANT: Si le document déclaré est un "Diplôme d'État" mais que le fichier est clairement une carte d'identité, passeport ou tout autre document non-diplôme, verdict = "REJETE" avec motif "Le document fourni n'est pas un diplôme"`;
 
     const userMessage = `Document déclaré comme: "${typeLabel}"
 Nom du soignant: "${nomComplet}"
 Fichier: ${doc.nom_fichier}
-${isPdf ? `\nTexte extrait du PDF (si lisible):\n${extractedPdfText || "[aucun texte exploitable extrait]"}` : ""}
 
 Analyse ce document et vérifie sa conformité.`;
 
@@ -173,21 +141,19 @@ Analyse ce document et vérifie sa conformité.`;
       { role: "system", content: systemPrompt },
     ];
 
-    if (isImage) {
+    // Gemini supports PDF and images natively via data URL
+    const mimeType = isPdf ? "application/pdf" : (doc.type_mime || "application/octet-stream");
+
+    if (isImage || isPdf) {
       messages.push({
         role: "user",
         content: [
           { type: "text", text: userMessage },
           {
             type: "image_url",
-            image_url: { url: `data:${doc.type_mime};base64,${base64}` },
+            image_url: { url: `data:${mimeType};base64,${base64}` },
           },
         ],
-      });
-    } else if (isPdf) {
-      messages.push({
-        role: "user",
-        content: `${userMessage}\n\nBase ta décision sur le texte extrait ci-dessus. Si le contenu mentionne clairement une carte d'identité, un passeport, une attestation de droits, un KBIS ou tout autre document qui ne correspond pas au type déclaré, réponds REJETE. Si le texte extrait est insuffisant, réponds EN_ATTENTE avec un motif expliquant l'absence de contenu exploitable.`,
       });
     } else {
       messages.push({ role: "user", content: userMessage });
@@ -209,18 +175,13 @@ Analyse ce document et vérifie sa conformité.`;
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI gateway error:", aiResponse.status, errText);
-      // Don't fail - just mark as manual review
-      await supabase
-        .from("documents_soignants")
-        .update({
-          statut_verification: "EN_ATTENTE",
-          motif_rejet: null,
-        })
-        .eq("id", document_id);
+      await supabase.rpc("fn_update_document_verification", {
+        p_document_id: document_id, p_statut_verification: "EN_ATTENTE", p_motif_rejet: null,
+      });
 
-        return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
-          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-        });
+      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
     const aiData = await aiResponse.json();
@@ -236,36 +197,24 @@ Analyse ce document et vérifie sa conformité.`;
     }
 
     if (!analysis) {
-      await supabase
-        .from("documents_soignants")
-        .update({ statut_verification: "EN_ATTENTE" })
-        .eq("id", document_id);
+      await supabase.rpc("fn_update_document_verification", {
+        p_document_id: document_id, p_statut_verification: "EN_ATTENTE",
+      });
 
-        return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
-          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-        });
+      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
-    // 6. Update document with results
-    const updateData: any = {
-      statut_verification: analysis.verdict || "EN_ATTENTE",
-      motif_rejet: analysis.motif_rejet || null,
-    };
-
-    if (analysis.date_expiration) {
-      updateData.valide_jusqua = analysis.date_expiration;
-    }
-    if (analysis.date_emission) {
-      updateData.valide_depuis = analysis.date_emission;
-    }
-    if (analysis.verdict === "VERIFIE") {
-      updateData.verifie_le = new Date().toISOString();
-    }
-
-    await supabase
-      .from("documents_soignants")
-      .update(updateData)
-      .eq("id", document_id);
+    // 6. Update document with results via RPC (bypasses protective triggers)
+    await supabase.rpc("fn_update_document_verification", {
+      p_document_id: document_id,
+      p_statut_verification: analysis.verdict || "EN_ATTENTE",
+      p_motif_rejet: analysis.motif_rejet || null,
+      p_valide_depuis: analysis.date_emission || null,
+      p_valide_jusqua: analysis.date_expiration || null,
+      p_verifie_le: analysis.verdict === "VERIFIE" ? new Date().toISOString() : null,
+    });
 
     // 7. Audit
     await supabase.rpc("fn_ecrire_audit_safe" as any, {
@@ -288,13 +237,13 @@ Analyse ce document et vérifie sa conformité.`;
 
     return new Response(
       JSON.stringify({ success: true, verdict: analysis.verdict, analysis }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("verify-document error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });
