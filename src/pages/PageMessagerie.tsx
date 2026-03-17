@@ -372,8 +372,9 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-foreground truncate">
+                      <span className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
                         {c.autre_prenom} {c.autre_nom}
+                        {c.is_jolene && <Shield className="h-3.5 w-3.5 text-primary shrink-0" />}
                       </span>
                       {c.dernier_message_le && (
                         <span className="text-[10px] text-muted-foreground whitespace-nowrap">
