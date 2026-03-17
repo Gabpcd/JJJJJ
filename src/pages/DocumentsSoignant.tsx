@@ -213,7 +213,7 @@ export default function DocumentsSoignant() {
     const { data, error } = await supabase.from('documents_soignants').insert(insertData).select().single();
 
     if (error) {
-      await supabase.storage.from('soin-direct-documents').remove([chemin]);
+      await supabase.storage.from('jolene-documents').remove([chemin]);
       toast.error(extraireMessageErreur(error));
       return;
     }
