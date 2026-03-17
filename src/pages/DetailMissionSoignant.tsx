@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Building2 } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Building2, MessageCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
@@ -331,7 +331,24 @@ export default function DetailMissionSoignant() {
             <div className="flex items-start gap-3">
               <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-sm text-foreground">{etablissement?.nom}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-sm text-foreground">{etablissement?.nom}</h3>
+                  {estAssigne && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: mission.etablissement_id, p_mission_id: mission.id });
+                        console.log('fn_obtenir_conversation result:', { data, error });
+                        if (data) navigate(`/soignant/messagerie?conv=${data}`);
+                        else toast.error("Impossible d'ouvrir la conversation.");
+                      }}
+                      className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
+                      title="Contacter l'établissement"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">{getLabelTypeEtablissement(etablissement?.type)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {etablissement?.adresse_rue}, {etablissement?.adresse_code_postal} {etablissement?.adresse_ville}

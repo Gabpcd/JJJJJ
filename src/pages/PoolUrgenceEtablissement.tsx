@@ -305,12 +305,28 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                 {filtered.map((s) => (
                   <TableRow key={s.soignant_id} className="group">
                     <TableCell>
-                      <div
-                        className="flex items-center gap-2 cursor-pointer hover:opacity-80"
-                        onClick={() => navigate(isAdmin ? `/admin/utilisateurs/${s.soignant_id}` : `/etablissement/soignants/${s.soignant_id}`)}
-                      >
-                        <AvatarDisplay src={s.avatar_url} prenom={s.prenom} nom={s.nom} size={32} rounded="full" />
-                        <span className="font-medium text-foreground text-sm underline-offset-2 hover:underline">{s.prenom} {s.nom}</span>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="flex items-center gap-2 cursor-pointer hover:opacity-80"
+                          onClick={() => navigate(isAdmin ? `/admin/utilisateurs/${s.soignant_id}` : `/etablissement/soignants/${s.soignant_id}`)}
+                        >
+                          <AvatarDisplay src={s.avatar_url} prenom={s.prenom} nom={s.nom} size={32} rounded="full" />
+                          <span className="font-medium text-foreground text-sm underline-offset-2 hover:underline">{s.prenom} {s.nom}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const base = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
+                            const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: s.soignant_id, p_mission_id: null });
+                            console.log('fn_obtenir_conversation pool:', { data, error });
+                            if (data) navigate(`${base}?conv=${data}`);
+                          }}
+                          className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
+                          title="Contacter"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -371,24 +387,13 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                           size="sm"
                           variant="outline"
                           className="text-xs h-7 px-2"
-                          onClick={() => navigate(isAdmin ? `/admin/missions` : `/etablissement/missions/creer?urgence=true&soignant=${s.soignant_id}`)}
+                          onClick={() => navigate(isAdmin ? `/admin/missions` : `/etablissement/missions/creer?soignant_id=${s.soignant_id}&profession=${s.profession}`)}
                           title="Proposer une mission urgente"
                         >
                           <Send className="h-3 w-3" />
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 px-2"
-                          onClick={async () => {
-                            const base = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
-                            const { data } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: s.soignant_id, p_mission_id: null });
-                            if (data) navigate(`${base}?conv=${data}`);
-                          }}
-                          title="Contacter"
-                        >
-                          <MessageCircle className="h-3 w-3" />
-                        </Button>
+
+
                         <BoutonFavori soignantId={s.soignant_id} etablissementId={etablissementId} />
                       </div>
                     </TableCell>
