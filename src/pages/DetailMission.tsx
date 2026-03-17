@@ -209,6 +209,14 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       <Link to={`/etablissement/soignants/${m.soignant_assigne_id}`} className="font-semibold text-foreground hover:text-primary hover:underline">
                         👤 {m.soignants.prenom} {m.soignants.nom}
                       </Link>
+                      <button
+                        type="button"
+                        onClick={() => ouvrirConv(m.soignant_assigne_id, m.id)}
+                        className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
+                        title="Contacter le soignant"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </button>
                       {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
                         <BoutonFavori soignantId={m.soignant_assigne_id} etablissementId={m.etablissement_id} />
                       )}
