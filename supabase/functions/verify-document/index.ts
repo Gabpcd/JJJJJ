@@ -165,6 +165,7 @@ Règles:
     const userMessage = `Document déclaré comme: "${typeLabel}"
 Nom du soignant: "${nomComplet}"
 Fichier: ${doc.nom_fichier}
+${isPdf ? `\nTexte extrait du PDF (si lisible):\n${extractedPdfText || "[aucun texte exploitable extrait]"}` : ""}
 
 Analyse ce document et vérifie sa conformité.`;
 
