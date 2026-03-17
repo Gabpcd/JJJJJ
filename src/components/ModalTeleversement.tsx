@@ -47,8 +47,13 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
   const placeholder = PLACEHOLDERS_LIBELLE[typeDocument] || 'Ex : Description du document';
 
   const handleFile = (f: File) => {
-    if (f.size > 10 * 1024 * 1024) {
-      alert('Le fichier ne doit pas dépasser 10 Mo.');
+    const estSupporte = f.type === 'application/pdf' || f.type.startsWith('image/') || /\.(pdf|png|jpe?g|webp|heic|heif)$/i.test(f.name);
+    if (!estSupporte) {
+      alert('Format non pris en charge. Utilisez un PDF ou une image.');
+      return;
+    }
+    if (f.size > 20 * 1024 * 1024) {
+      alert('Le fichier ne doit pas dépasser 20 Mo.');
       return;
     }
     setFichier(f);
