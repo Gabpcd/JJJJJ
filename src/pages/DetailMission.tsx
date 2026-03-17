@@ -245,6 +245,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 )}
               </div>
 
+              {/* Alert pool urgence button */}
+              {m.statut === 'OUVERTE' && m.est_urgente && (
+                <AlerterPoolUrgence missionId={m.id} mission={m} user={user} afficherNotification={afficherNotification} />
+              )}
+
               <div className="card-base flex items-center gap-2 text-sm text-muted-foreground">
                 <Eye className="h-4 w-4" />
                 <span>0 soignants ont vu cette mission</span>
