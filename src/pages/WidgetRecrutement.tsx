@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Clock, HeartPulse } from 'lucide-react';
+import { Clock } from 'lucide-react';
+import logoIcon from '@/assets/icon-jolene.png';
 import { Badge } from '@/components/ui/badge';
 
 export default function WidgetRecrutement() {
