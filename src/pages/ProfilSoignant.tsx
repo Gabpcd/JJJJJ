@@ -135,6 +135,10 @@ export default function ProfilSoignant() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (!form.anneesExperience && form.anneesExperience !== 0) {
+      afficherNotification({ type: 'erreur', message: 'Le nombre d\'années d\'expérience est obligatoire.' });
+      return;
+    }
     setSaving(true);
     const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
       p_telephone: form.telephone || null,
@@ -142,14 +146,13 @@ export default function ProfilSoignant() {
       p_rayon_deplacement_km: form.rayon,
       p_prenom: form.prenom || null, p_nom: form.nom || null,
       p_date_naissance: form.dateNaissance || null,
-      p_type_contrat: typesContrat[0] || null,
-      p_types_contrat_acceptes: JSON.stringify(typesContrat),
+      p_types_contrat: typesContrat,
       p_numero_rpps: form.rpps || null, p_numero_adeli: form.adeli || null,
       p_adresse_lat: form.lat ? parseFloat(form.lat) : null,
       p_adresse_lng: form.lng ? parseFloat(form.lng) : null,
       p_bio: form.bio || null,
-      p_annees_experience: form.anneesExperience || null,
-      p_specialites: JSON.stringify(specialites),
+      p_annees_experience: form.anneesExperience,
+      p_specialites: specialites,
     });
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
