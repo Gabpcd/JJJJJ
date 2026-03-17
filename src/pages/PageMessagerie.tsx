@@ -499,7 +499,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
               {searchResults.map(r => (
                 <button
                   key={r.id}
-                  onClick={() => startConversationWith(r.id)}
+                  onClick={() => startConversationWith(r.id, r.type)}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors text-left"
                 >
                   <AvatarDisplay src={r.avatar} prenom={r.label} nom="" size={32} rounded="full" />
