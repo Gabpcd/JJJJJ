@@ -141,7 +141,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
   );
 }
 
-
+export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?: 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME' }) {
   usePageTitle('Détail mission');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
