@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus } from 'lucide-react';
+import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
