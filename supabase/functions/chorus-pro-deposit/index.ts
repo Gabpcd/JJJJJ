@@ -19,10 +19,15 @@ function corsHeaders(req: Request) {
   };
 }
 
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders(req) })
+  }
+
   try {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Non autorisé' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'Non autorisé' }), { status: 401, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
     }
 
     const supabaseAdmin = createClient(

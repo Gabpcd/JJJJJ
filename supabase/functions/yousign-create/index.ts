@@ -20,6 +20,11 @@ function corsHeaders(req: Request) {
   };
 }
 
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders(req) });
+  }
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
