@@ -117,11 +117,12 @@ export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: 
     setUploading(true);
     try {
       const compressed = await compressImage(file);
-      const path = `${user.id}/avatar.webp`;
+      const assetPrefix = mode === 'soignant' ? 'avatar' : 'logo';
+      const path = `${user.id}/${assetPrefix}-${Date.now()}.webp`;
 
       const { error: uploadErr } = await supabase.storage
         .from('jolene-documents')
-        .upload(path, compressed, { contentType: 'image/webp', upsert: true });
+        .upload(path, compressed, { contentType: 'image/webp', upsert: false });
       if (uploadErr) throw uploadErr;
 
       const { data: urlData } = await supabase.storage

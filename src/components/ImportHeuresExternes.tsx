@@ -32,9 +32,11 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
 
     try {
       // 1. Upload document
-      const ext = fichier.name.split('.').pop();
-      const s3Cle = `heures_externes/${user.id}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('jolene-documents').upload(s3Cle, fichier);
+      const sanitizedName = fichier.name.replace(/[^\w.-]+/g, '-');
+      const s3Cle = `${user.id}/heures_externes/${Date.now()}-${sanitizedName}`;
+      const { error: upErr } = await supabase.storage
+        .from('jolene-documents')
+        .upload(s3Cle, fichier, { contentType: fichier.type, upsert: false });
       if (upErr) throw upErr;
 
       // 2. Create document entry
