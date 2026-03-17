@@ -93,14 +93,23 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
   const handleSearch = async () => {
     setLoading(true);
     setSearched(true);
-    const { data } = await supabase.rpc('fn_missions_publiques_recherche', {
+    const { data, error } = await supabase.rpc('fn_missions_publiques_recherche', {
       p_profession: profession || null,
       p_ville: ville.trim() || null,
     });
+    if (error) {
+      console.error('Erreur recherche missions publiques:', error);
+    }
     setResults(data || []);
     setTotalCount(data?.[0]?.total_count ?? 0);
     setLoading(false);
   };
+
+  // Auto-load missions on mount (all professions, no city filter)
+  useEffect(() => {
+    handleSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
@@ -110,7 +119,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
         <RevealOnScroll>
           <div className="text-center mb-8">
             <h2 className="text-2xl md:text-3xl font-bold mb-2">Découvrez les missions disponibles</h2>
-            <p className="text-muted-foreground">Cherchez par profession et localisation — sans inscription.</p>
+            <p className="text-muted-foreground">Cherchez par profession et localisation — sans inscription. Laissez la ville vide pour tout voir.</p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto mb-8">
@@ -126,7 +135,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
             </select>
             <input
               type="text"
-              placeholder="Ville ou code postal"
+              placeholder="Ville ou code postal (optionnel)"
               value={ville}
               onChange={(e) => setVille(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
