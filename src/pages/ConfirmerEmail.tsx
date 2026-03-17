@@ -1,6 +1,7 @@
 import React from 'react';
-import { HeartPulse, Mail } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import logoJolene from '@/assets/logo-jolene.png';
 
 export default function ConfirmerEmail() {
   const { deconnexion } = useAuth();
@@ -8,9 +9,8 @@ export default function ConfirmerEmail() {
   return (
     <div className="min-h-screen gradient-hero flex items-center justify-center px-4">
       <div className="card-base max-w-md w-full text-center">
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <HeartPulse className="h-8 w-8 text-primary" />
-          <span className="text-2xl font-bold text-primary-dark">Jolene</span>
+        <div className="flex items-center justify-center mb-6">
+          <img src={logoJolene} alt="Jolene" className="h-16 w-auto" />
         </div>
 
         <Mail className="h-16 w-16 text-primary mx-auto mb-4" />
