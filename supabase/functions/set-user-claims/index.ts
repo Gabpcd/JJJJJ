@@ -55,7 +55,7 @@ serve(async (req) => {
       });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
     const appMetadata: Record<string, unknown> = { role };
     if (etablissement_id) appMetadata.etablissement_id = etablissement_id;

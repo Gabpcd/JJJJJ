@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     }
 
     // Fetch soignant & etablissement info for Yousign signers
-    const adminClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const adminClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
     const [soignantRes, etabRes] = await Promise.all([
       adminClient.from("soignants").select("id, prenom, nom, email, telephone").eq("id", contrat.soignant_id).single(),
