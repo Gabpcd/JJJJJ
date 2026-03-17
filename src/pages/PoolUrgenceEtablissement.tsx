@@ -218,7 +218,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
       await supabase.rpc('fn_creer_notification', {
         p_destinataire_id: proposerSoignant.soignant_id,
         p_type_destinataire: 'SOIGNANT',
-        p_type: 'MISSION_PROPOSEE',
+        p_type: 'CANDIDATURE_PROPOSEE',
         p_titre: `📩 Mission proposée : ${mission.intitule}`,
         p_corps: `${mission.intitule} — le ${format(new Date(mission.debut_le), 'dd/MM/yyyy à HH:mm', { locale: fr })}. Acceptez ou refusez dans les 2h.`,
         p_lien: '/soignant/dashboard',

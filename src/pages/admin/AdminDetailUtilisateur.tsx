@@ -115,16 +115,25 @@ export default function AdminDetailUtilisateur() {
     console.log('send-email RAPPEL_DOCUMENTS avant appel:', { destinataire_id: id, prenom: soignant.prenom, documents_manquants: allMissing });
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-email', {
-        body: {
+      const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           type: 'RAPPEL_DOCUMENTS',
           destinataire_id: id,
           data: {
             prenom: soignant.prenom,
             documents_manquants: allMissing,
           },
-        },
+        }),
       });
+      const data = await res.json().catch(() => null);
+      const error = res.ok ? null : { message: data?.error || `HTTP ${res.status}` };
 
       console.log('send-email RAPPEL_DOCUMENTS résultat:', { data, error });
 
