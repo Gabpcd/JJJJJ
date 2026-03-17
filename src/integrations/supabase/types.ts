@@ -418,6 +418,41 @@ export type Database = {
           },
         ]
       }
+      conversations: {
+        Row: {
+          cree_le: string | null
+          dernier_message_le: string | null
+          id: string
+          mission_id: string | null
+          participant_1_id: string
+          participant_2_id: string
+        }
+        Insert: {
+          cree_le?: string | null
+          dernier_message_le?: string | null
+          id?: string
+          mission_id?: string | null
+          participant_1_id: string
+          participant_2_id: string
+        }
+        Update: {
+          cree_le?: string | null
+          dernier_message_le?: string | null
+          id?: string
+          mission_id?: string | null
+          participant_1_id?: string
+          participant_2_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversions_liberal: {
         Row: {
           complete_le: string | null
@@ -1417,6 +1452,44 @@ export type Database = {
             columns: ["presence_id"]
             isOneToOne: false
             referencedRelation: "presences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages_chat: {
+        Row: {
+          auteur_id: string
+          contenu: string
+          conversation_id: string
+          cree_le: string | null
+          est_admin: boolean | null
+          id: string
+          lu: boolean | null
+        }
+        Insert: {
+          auteur_id: string
+          contenu: string
+          conversation_id: string
+          cree_le?: string | null
+          est_admin?: boolean | null
+          id?: string
+          lu?: boolean | null
+        }
+        Update: {
+          auteur_id?: string
+          contenu?: string
+          conversation_id?: string
+          cree_le?: string | null
+          est_admin?: boolean | null
+          id?: string
+          lu?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_chat_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
         ]
@@ -2822,6 +2895,10 @@ export type Database = {
         }[]
       }
       fn_enregistrer_siret_liberal: { Args: { p_siret: string }; Returns: Json }
+      fn_envoyer_message: {
+        Args: { p_contenu: string; p_conversation_id: string }
+        Returns: Json
+      }
       fn_est_exclu: {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: boolean
@@ -2913,6 +2990,10 @@ export type Database = {
       fn_health_check: { Args: never; Returns: Json }
       fn_is_valid_uuid: { Args: { p_text: string }; Returns: boolean }
       fn_maj_activite_soignant: { Args: never; Returns: Json }
+      fn_marquer_messages_lus: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
       fn_matcher_soignants_mission: {
         Args: { p_mission_id: string }
         Returns: {
@@ -2996,6 +3077,7 @@ export type Database = {
           tous_documents_valides: boolean
         }[]
       }
+      fn_messages_non_lus: { Args: never; Returns: number }
       fn_missions_publiques_etablissement: {
         Args: { p_etablissement_id: string }
         Returns: {
@@ -3248,6 +3330,10 @@ export type Database = {
       fn_nettoyer_tokens_push: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
+      fn_obtenir_conversation: {
+        Args: { p_autre_id: string; p_mission_id?: string }
+        Returns: string
+      }
       fn_pointer_arrivee:
         | {
             Args: {
