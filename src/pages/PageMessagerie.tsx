@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { MessageCircle, Send, ArrowLeft, Shield, Plus, Search, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
