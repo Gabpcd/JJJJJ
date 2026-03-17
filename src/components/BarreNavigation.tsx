@@ -150,9 +150,16 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto" aria-label="Menu principal">
           {items.map((item) => {
             const actif = location.pathname === item.route;
+            const isMsgRoute = item.label === 'Messagerie';
             return (
               <button key={item.route} onClick={() => navigate(item.route)} aria-label={item.label} aria-current={actif ? 'page' : undefined} className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}>
-                <item.icone className="h-5 w-5" /><span>{item.label}</span>
+                <item.icone className="h-5 w-5" />
+                <span className="flex-1">{item.label}</span>
+                {isMsgRoute && messagesNonLus > 0 && (
+                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-destructive text-white text-[10px] font-bold px-1">
+                    {messagesNonLus > 9 ? '9+' : messagesNonLus}
+                  </span>
+                )}
               </button>
             );
           })}
