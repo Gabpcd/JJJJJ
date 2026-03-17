@@ -43,7 +43,7 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
         type_document: form.typePreuve as any,
         nom_fichier: fichier.name,
         s3_cle: s3Cle,
-        s3_bucket: 'soin-direct-documents',
+        s3_bucket: 'jolene-documents',
         taille_octets: fichier.size,
         type_mime: fichier.type,
         statut_verification: 'EN_ATTENTE',

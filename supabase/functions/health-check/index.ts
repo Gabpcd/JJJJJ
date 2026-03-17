@@ -64,7 +64,7 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
     const { data, error } = await supabase.rpc('fn_health_check');
     if (error) throw error;
 

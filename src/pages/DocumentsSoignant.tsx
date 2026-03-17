@@ -247,7 +247,7 @@ export default function DocumentsSoignant() {
   };
 
   const voirDocument = async (doc: any) => {
-    const { data } = await supabase.storage.from('soin-direct-documents').createSignedUrl(doc.s3_cle, 300);
+    const { data } = await supabase.storage.from('jolene-documents').createSignedUrl(doc.s3_cle, 300);
     if (!data?.signedUrl) { toast.error('Impossible de générer le lien'); return; }
 
     await supabase.rpc('fn_ecrire_audit_safe', {

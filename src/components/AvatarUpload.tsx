@@ -120,12 +120,12 @@ export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: 
       const path = `${user.id}/avatar.webp`;
 
       const { error: uploadErr } = await supabase.storage
-        .from('soin-direct-documents')
+        .from('jolene-documents')
         .upload(path, compressed, { contentType: 'image/webp', upsert: true });
       if (uploadErr) throw uploadErr;
 
       const { data: urlData } = await supabase.storage
-        .from('soin-direct-documents')
+        .from('jolene-documents')
         .createSignedUrl(path, 60 * 60 * 24 * 365); // 1 year
 
       const signedUrl = urlData?.signedUrl;
