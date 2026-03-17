@@ -157,7 +157,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
               {results.length > 0 ? (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {results.slice(0, 5).map((m) => (
+                    {results.map((m) => (
                       <div key={m.id} className="rounded-xl border border-border bg-background p-4 hover:shadow-md transition-shadow">
                         <p className="font-semibold text-foreground text-sm mb-1 line-clamp-1">{m.intitule}</p>
                         <p className="text-xs text-muted-foreground mb-2">
