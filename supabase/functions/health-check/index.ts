@@ -42,7 +42,7 @@ serve(async (req) => {
 
   if (!isServiceRole) {
     // Verify JWT and check admin role
-    const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!);
+    const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, { auth: { persistSession: false } });
     const { data: { user }, error } = await supabaseAuth.auth.getUser(bearerToken);
     if (error || !user) {
       return new Response(JSON.stringify({ error: 'Non autorisé' }), {
