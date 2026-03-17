@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Palette, Globe, Save, Loader2, HeartPulse, X } from 'lucide-react';
+import { Building2, Palette, Globe, Save, Loader2, X } from 'lucide-react';
+import logoIcon from '@/assets/icon-jolene.png';
 import { toast } from 'sonner';
 
 export default function AdminGroupes() {
