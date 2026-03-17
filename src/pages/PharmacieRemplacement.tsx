@@ -16,7 +16,7 @@ export default function PharmacieRemplacement() {
       <SEOHead
         title="Remplacement pharmacie | Jolene"
         description="Trouvez un pharmacien remplaçant ou un préparateur en pharmacie rapidement. Jolene, partenaire du Groupe Leader Santé, simplifie le remplacement en officine."
-        url="https://app.joleneapp.com/pharmacie-remplacement"
+        url="https://app.jolene.app/pharmacie-remplacement"
       />
       <SEOPageLayout
         heroTitle="Trouvez un pharmacien remplaçant rapidement"

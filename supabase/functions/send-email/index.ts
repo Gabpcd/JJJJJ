@@ -4,13 +4,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
-    origin === "https://app.joleneapp.com" ||
+    origin === "https://app.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin.endsWith(".lovable.app")
   ) {
     return origin;
   }
-  return "https://app.joleneapp.com";
+  return "https://app.jolene.app";
 }
 
 function corsHeaders(req: Request) {
@@ -20,7 +20,7 @@ function corsHeaders(req: Request) {
   };
 }
 
-const APP_URL = Deno.env.get('APP_URL') || 'https://app.joleneapp.com';
+const APP_URL = Deno.env.get('APP_URL') || 'https://app.jolene.app';
 
 // ─── XSS prevention ─────────────────────────────────────
 
@@ -49,7 +49,7 @@ const WRAPPER = (content: string) => `
       ${content}
     </div>
     <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;">
-      <p style="margin:0 0 6px;">Jolene SAS — <a href="${APP_URL}" style="color:#17A2B8;text-decoration:none;">joleneapp.com</a></p>
+      <p style="margin:0 0 6px;">Jolene SAS — <a href="${APP_URL}" style="color:#17A2B8;text-decoration:none;">jolene.app</a></p>
       <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> · 
          <a href="${APP_URL}/confidentialite" style="color:#94A3B8;text-decoration:none;">Confidentialité</a></p>
       <p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>
@@ -489,7 +489,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Jolene <noreply@joleneapp.com>',
+        from: 'Jolene <noreply@jolene.app>',
         to: [resolvedEmail],
         subject,
         html,

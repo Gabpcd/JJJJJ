@@ -1,13 +1,13 @@
 const firebaseConfig = {
-  apiKey: "AIzaSyCsj-tfliVxZl3F9ncrtnHR-5xJu3B16vQ",
-  authDomain: "soin-direct.firebaseapp.com",
-  projectId: "soin-direct",
-  storageBucket: "soin-direct.firebasestorage.app",
-  messagingSenderId: "983137696907",
-  appId: "1:983137696907:web:08decd33bbd6d51e8fe88e"
+  apiKey: "AIzaSyBWhTy5scThcxUMtFq8spPdg2ViD0E-x6s",
+  authDomain: "jolene-app-d91fd.firebaseapp.com",
+  projectId: "jolene-app-d91fd",
+  storageBucket: "jolene-app-d91fd.firebasestorage.app",
+  messagingSenderId: "54202049729",
+  appId: "1:54202049729:web:d29deb3c77a916e3b5a040"
 };
 
-const VAPID_KEY = 'BGFrObLlznxsrpnyW8fmPSC9zE29tAw0Tvu_qss8JhpTjrDBC3FCJVjRWC1zwVctLBYcXgzKLDC6OUIp5EVHHqs';
+const VAPID_KEY = 'BDl-EwfUGGfkzuCjofDyXp6_5WoQ18aY_wnfTZYF2VZZxQo260gDikQGw1tSdfzUOLX0Y2IWfLLdvyYKyQ2xN1g';
 
 // No Firebase SDK import — use native Web Push API to avoid React dual-instance conflicts
 

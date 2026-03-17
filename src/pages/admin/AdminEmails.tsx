@@ -11,8 +11,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
-  BIENVENUE_SOIGNANT: { prenom: 'Marie', lien_profil: 'https://app.joleneapp.com/soignant/profil' },
-  BIENVENUE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', lien_profil: 'https://app.joleneapp.com/etablissement/profil' },
+  BIENVENUE_SOIGNANT: { prenom: 'Marie', lien_profil: 'https://app.jolene.app/soignant/profil' },
+  BIENVENUE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', lien_profil: 'https://app.jolene.app/etablissement/profil' },
   MISSION_ACCEPTEE_SOIGNANT: { prenom: 'Marie', mission: 'Remplacement IDE — Jour', etablissement: 'EHPAD Les Oliviers', date: '15 mars 2026', heure: '07h00 – 19h00' },
   MISSION_ACCEPTEE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', mission: 'Remplacement IDE — Jour', soignant: 'Marie Dupont', date: '15 mars 2026' },
   MISSION_ANNULEE_SOIGNANT: { prenom: 'Marie', mission: 'Remplacement AS — Nuit', motif: 'Annulation par l\'établissement' },
@@ -53,7 +53,7 @@ function genererHtmlPreview(type: string, data: Record<string, string>): string 
         <table class="vars">${vars}</table>
         <p style="color:#94a3b8;font-size:12px;margin-top:24px">Ceci est un aperçu de développement. L'email réel utilise le template serveur complet.</p>
       </div>
-      <div class="footer">© 2026 Jolene — contact@joleneapp.com</div>
+      <div class="footer">© 2026 Jolene — contact@jolene.app</div>
     </div>
   </body></html>`;
 }
