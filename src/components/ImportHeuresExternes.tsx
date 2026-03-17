@@ -34,7 +34,7 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
       // 1. Upload document
       const ext = fichier.name.split('.').pop();
       const s3Cle = `heures_externes/${user.id}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('soin-direct-documents').upload(s3Cle, fichier);
+      const { error: upErr } = await supabase.storage.from('jolene-documents').upload(s3Cle, fichier);
       if (upErr) throw upErr;
 
       // 2. Create document entry
@@ -43,7 +43,7 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
         type_document: form.typePreuve as any,
         nom_fichier: fichier.name,
         s3_cle: s3Cle,
-        s3_bucket: 'soin-direct-documents',
+        s3_bucket: 'jolene-documents',
         taille_octets: fichier.size,
         type_mime: fichier.type,
         statut_verification: 'EN_ATTENTE',

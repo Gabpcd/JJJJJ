@@ -185,7 +185,7 @@ export default function DocumentsSoignant() {
     if (!user || !televersementType) return;
 
     const chemin = `${user.id}/${televersementType}/${Date.now()}_${fichier.name}`;
-    const { error: uploadError } = await supabase.storage.from('soin-direct-documents').upload(chemin, fichier, { contentType: fichier.type, upsert: false });
+    const { error: uploadError } = await supabase.storage.from('jolene-documents').upload(chemin, fichier, { contentType: fichier.type, upsert: false });
     if (uploadError) {
       toast.error(extraireMessageErreur(uploadError));
       return;
@@ -196,7 +196,7 @@ export default function DocumentsSoignant() {
       soignant_id: user.id,
       type_document: televersementType as any,
       libelle: libelle || null,
-      s3_bucket: 'soin-direct-documents',
+      s3_bucket: 'jolene-documents',
       s3_cle: chemin,
       nom_fichier: fichier.name,
       type_mime: fichier.type,
@@ -213,7 +213,7 @@ export default function DocumentsSoignant() {
     const { data, error } = await supabase.from('documents_soignants').insert(insertData).select().single();
 
     if (error) {
-      await supabase.storage.from('soin-direct-documents').remove([chemin]);
+      await supabase.storage.from('jolene-documents').remove([chemin]);
       toast.error(extraireMessageErreur(error));
       return;
     }
@@ -247,7 +247,7 @@ export default function DocumentsSoignant() {
   };
 
   const voirDocument = async (doc: any) => {
-    const { data } = await supabase.storage.from('soin-direct-documents').createSignedUrl(doc.s3_cle, 300);
+    const { data } = await supabase.storage.from('jolene-documents').createSignedUrl(doc.s3_cle, 300);
     if (!data?.signedUrl) { toast.error('Impossible de générer le lien'); return; }
 
     await supabase.rpc('fn_ecrire_audit_safe', {

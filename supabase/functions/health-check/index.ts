@@ -4,13 +4,13 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
-    origin === "https://app.soindirect.com" ||
+    origin === "https://app.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin.endsWith(".lovable.app")
   ) {
     return origin;
   }
-  return "https://app.soindirect.com";
+  return "https://app.jolene.app";
 }
 
 function corsHeaders(req: Request) {
@@ -42,7 +42,7 @@ serve(async (req) => {
 
   if (!isServiceRole) {
     // Verify JWT and check admin role
-    const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!);
+    const supabaseAuth = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, { auth: { persistSession: false } });
     const { data: { user }, error } = await supabaseAuth.auth.getUser(bearerToken);
     if (error || !user) {
       return new Response(JSON.stringify({ error: 'Non autorisé' }), {
@@ -51,7 +51,7 @@ serve(async (req) => {
       });
     }
     // Only ADMIN can call health-check via JWT
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
     const { data: roleData } = await adminClient.rpc('fn_get_my_role_for_user', { p_user_id: user.id }).maybeSingle();
     // Fallback: check app_metadata
     const { data: { user: fullUser } } = await adminClient.auth.admin.getUserById(user.id);
@@ -64,7 +64,7 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
     const { data, error } = await supabase.rpc('fn_health_check');
     if (error) throw error;
 
