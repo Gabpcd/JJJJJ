@@ -51,7 +51,7 @@ serve(async (req) => {
       });
     }
     // Only ADMIN can call health-check via JWT
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
     const { data: roleData } = await adminClient.rpc('fn_get_my_role_for_user', { p_user_id: user.id }).maybeSingle();
     // Fallback: check app_metadata
     const { data: { user: fullUser } } = await adminClient.auth.admin.getUserById(user.id);
