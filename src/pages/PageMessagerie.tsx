@@ -412,9 +412,15 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                 <button onClick={() => { setSelectedConvId(null); setSearchParams({}); }} className="md:hidden text-muted-foreground hover:text-foreground">
                   <ArrowLeft className="h-5 w-5" />
                 </button>
-                <AvatarDisplay src={selectedConv.autre_avatar} prenom={selectedConv.autre_prenom} nom={selectedConv.autre_nom} size={36} rounded="full" />
+                {selectedConv.is_jolene ? (
+                  <div className="shrink-0 h-9 w-9 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
+                    <img src={joleneLogo} alt="Jolene" className="h-5 w-5 object-contain" />
+                  </div>
+                ) : (
+                  <AvatarDisplay src={selectedConv.autre_avatar} prenom={selectedConv.autre_prenom} nom={selectedConv.autre_nom} size={36} rounded="full" />
+                )}
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{selectedConv.autre_prenom} {selectedConv.autre_nom}</p>
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">{selectedConv.autre_prenom} {selectedConv.autre_nom}{selectedConv.is_jolene && <Shield className="h-3.5 w-3.5 text-primary" />}</p>
                 </div>
               </div>
 

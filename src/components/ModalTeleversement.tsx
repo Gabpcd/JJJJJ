@@ -114,7 +114,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
         {/* Camera scanner - mobile only */}
         {isMobile && (
           <div className="mt-3">
-            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+            <input ref={cameraRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
             <button
               onClick={() => cameraRef.current?.click()}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition"

@@ -184,10 +184,16 @@ export default function DocumentsSoignant() {
   const televerser = async (fichier: File, libelle: string, valideDepuis: string, valideJusqua: string) => {
     if (!user || !televersementType) return;
 
-    const chemin = `${user.id}/${televersementType}/${Date.now()}_${fichier.name}`;
-    const { error: uploadError } = await supabase.storage.from('jolene-documents').upload(chemin, fichier, { contentType: fichier.type, upsert: false });
+    const nomSanitise = fichier.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w.-]+/g, '-');
+    const chemin = `${user.id}/documents/${televersementType}/${Date.now()}-${nomSanitise}`;
+    const { error: uploadError } = await supabase.storage
+      .from('jolene-documents')
+      .upload(chemin, fichier, { contentType: fichier.type || undefined, upsert: false });
     if (uploadError) {
-      toast.error(extraireMessageErreur(uploadError));
+      toast.error(`Téléversement impossible : ${extraireMessageErreur(uploadError)}`);
       return;
     }
 
