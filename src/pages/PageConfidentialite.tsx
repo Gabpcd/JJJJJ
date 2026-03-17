@@ -23,7 +23,7 @@ export default function PageConfidentialite() {
           <p className="text-muted-foreground">SIRET : {ENTREPRISE.siret}</p>
           <p className="text-muted-foreground">Siège social : {ENTREPRISE.adresse}</p>
           <p className="text-muted-foreground">E-mail : {ENTREPRISE.email}</p>
-          <p className="text-muted-foreground mt-2">Délégué à la protection des données (DPO) : <a href="mailto:dpo@joleneapp.com" className="text-primary hover:underline">dpo@joleneapp.com</a></p>
+          <p className="text-muted-foreground mt-2">Délégué à la protection des données (DPO) : <a href="mailto:dpo@jolene.app" className="text-primary hover:underline">dpo@jolene.app</a></p>
         </div>
         <p>Le traitement des données est réalisé conformément au Règlement (UE) 2016/679 du 27 avril 2016 (RGPD) et à la loi n° 78-17 du 6 janvier 1978 modifiée (loi Informatique et Libertés).</p>
       </section>
@@ -152,7 +152,7 @@ export default function PageConfidentialite() {
           <li><strong>Droit à la portabilité</strong> (article 20) : recevoir vos données dans un format structuré, couramment utilisé et lisible par machine (JSON ou CSV).</li>
           <li><strong>Droit d'opposition</strong> (article 21) : vous opposer au traitement de vos données pour des motifs légitimes.</li>
         </ul>
-        <p className="mb-3">Pour exercer vos droits, adressez votre demande à : <a href="mailto:dpo@joleneapp.com" className="text-primary hover:underline font-medium">dpo@joleneapp.com</a></p>
+        <p className="mb-3">Pour exercer vos droits, adressez votre demande à : <a href="mailto:dpo@jolene.app" className="text-primary hover:underline font-medium">dpo@jolene.app</a></p>
         <p className="mb-3">L'Éditeur s'engage à répondre dans un délai d'un mois. Ce délai peut être prolongé de deux mois en cas de complexité ou de nombre élevé de demandes.</p>
         <p>En cas de difficulté dans l'exercice de vos droits, vous pouvez introduire une réclamation auprès de la Commission Nationale de l'Informatique et des Libertés (CNIL) : <a href="https://www.cnil.fr" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">www.cnil.fr</a></p>
       </section>

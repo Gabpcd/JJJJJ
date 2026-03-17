@@ -106,7 +106,7 @@ export default function AdminAPI() {
       {/* Documentation */}
       <div className="card-base mb-6">
         <h2 className="font-bold text-foreground mb-4">📖 Endpoints disponibles</h2>
-        <p className="text-xs text-muted-foreground mb-4">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">https://api.joleneapp.com/v1</code></p>
+        <p className="text-xs text-muted-foreground mb-4">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">https://api.jolene.app/v1</code></p>
         <div className="space-y-4">
           {ENDPOINTS.map((ep, i) => (
             <div key={i} className="border border-border rounded-lg p-4">

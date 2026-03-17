@@ -20,7 +20,7 @@ export default function APropos() {
       <SEOHead
         title="À propos de Jolene | Staffing médical digital"
         description="Découvrez la mission de Jolene : simplifier le staffing médical en connectant établissements de santé et soignants qualifiés, en toute conformité."
-        url="https://app.joleneapp.com/a-propos"
+        url="https://app.jolene.app/a-propos"
       />
       <SEOPageLayout
         heroTitle="Simplifier le staffing médical. Pour de bon."
@@ -123,7 +123,7 @@ export default function APropos() {
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Presse & Contact</h2>
             <p className="text-muted-foreground mb-8">
               Vous êtes journaliste ou partenaire potentiel ? Contactez-nous à{' '}
-              <a href="mailto:contact@joleneapp.com" className="text-primary hover:underline font-medium">contact@joleneapp.com</a>.
+              <a href="mailto:contact@jolene.app" className="text-primary hover:underline font-medium">contact@jolene.app</a>.
             </p>
             <Button variant="outline" disabled className="gap-2">
               <Download className="h-4 w-4" /> Télécharger le dossier de presse
@@ -137,7 +137,7 @@ export default function APropos() {
           <div className="max-w-2xl mx-auto px-4 text-center">
             <p className="text-sm text-muted-foreground">
               Jolene prépare sa levée de fonds seed. Si vous êtes investisseur, contactez-nous à{' '}
-              <a href="mailto:contact@joleneapp.com" className="text-primary hover:underline font-medium">contact@joleneapp.com</a>.
+              <a href="mailto:contact@jolene.app" className="text-primary hover:underline font-medium">contact@jolene.app</a>.
             </p>
           </div>
         </section>

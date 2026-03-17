@@ -44,7 +44,7 @@ export default function PageMentionsLegales() {
       <section id="domaine">
         <h2 className="text-xl font-bold text-primary mb-4">3. Nom de domaine</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Nom de domaine :</strong> joleneapp.com</p>
+          <p><strong className="text-foreground">Nom de domaine :</strong> jolene.app</p>
           <p><strong className="text-foreground">Registrar :</strong> Squarespace Domains LLC</p>
           <p><strong className="text-foreground">Titulaire :</strong> Jolene SAS</p>
         </div>
@@ -53,7 +53,7 @@ export default function PageMentionsLegales() {
       {/* Propriété intellectuelle */}
       <section id="pi">
         <h2 className="text-xl font-bold text-primary mb-4">4. Propriété intellectuelle</h2>
-        <p className="mb-3">L'ensemble des contenus présents sur le site joleneapp.com (textes, graphismes, images, logos, icônes, logiciels, bases de données) est protégé par le droit d'auteur et le droit des marques.</p>
+        <p className="mb-3">L'ensemble des contenus présents sur le site jolene.app (textes, graphismes, images, logos, icônes, logiciels, bases de données) est protégé par le droit d'auteur et le droit des marques.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p>La marque « <strong>Jolene</strong> » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le <strong>numéro 5186614</strong>.</p>
         </div>
@@ -64,8 +64,8 @@ export default function PageMentionsLegales() {
       <section id="contact">
         <h2 className="text-xl font-bold text-primary mb-4">5. Contact</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Contact général :</strong> <a href="mailto:contact@joleneapp.com" className="text-primary hover:underline">contact@joleneapp.com</a></p>
-          <p><strong className="text-foreground">Délégué à la protection des données (DPO) :</strong> <a href="mailto:dpo@joleneapp.com" className="text-primary hover:underline">dpo@joleneapp.com</a></p>
+          <p><strong className="text-foreground">Contact général :</strong> <a href="mailto:contact@jolene.app" className="text-primary hover:underline">contact@jolene.app</a></p>
+          <p><strong className="text-foreground">Délégué à la protection des données (DPO) :</strong> <a href="mailto:dpo@jolene.app" className="text-primary hover:underline">dpo@jolene.app</a></p>
         </div>
         <p className="mt-4 text-muted-foreground">Pour toute question relative au fonctionnement de la Plateforme, à la protection de vos données personnelles ou à l'exercice de vos droits, n'hésitez pas à nous contacter aux adresses ci-dessus.</p>
       </section>

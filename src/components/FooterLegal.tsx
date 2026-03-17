@@ -14,7 +14,7 @@ export function FooterLegal() {
           <span>|</span>
           <Link to="/mentions-legales" className="hover:text-primary hover:underline">Mentions légales</Link>
           <span>|</span>
-          <a href="mailto:contact@joleneapp.com" className="hover:text-primary hover:underline">Contact</a>
+          <a href="mailto:contact@jolene.app" className="hover:text-primary hover:underline">Contact</a>
         </div>
         <p className="text-[10px] text-muted-foreground/60 mt-2">© {new Date().getFullYear()} Jolene SAS — Tous droits réservés</p>
       </div>

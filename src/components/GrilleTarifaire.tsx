@@ -66,7 +66,7 @@ export function GrilleTarifaire({ paliers }: GrilleTarifaireProps) {
               <button
                 onClick={() => {
                   if (p.nom === 'Partenaire') {
-                    window.location.href = 'mailto:contact@joleneapp.com?subject=Partenariat';
+                    window.location.href = 'mailto:contact@jolene.app?subject=Partenariat';
                   } else {
                     navigate('/inscription/etablissement');
                   }

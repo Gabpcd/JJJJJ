@@ -8,7 +8,7 @@ interface EncartInvitationProps {
 
 export function EncartInvitation({ codeParrainage }: EncartInvitationProps) {
   const [copied, setCopied] = useState(false);
-  const lienRef = `https://app.joleneapp.com?ref=${codeParrainage}`;
+  const lienRef = `https://app.jolene.app?ref=${codeParrainage}`;
   const messageWhatsApp = encodeURIComponent(
     `Rejoignez Jolene, la plateforme de staffing médical ! Inscrivez-vous avec mon lien et obtenez +50h bonus : ${lienRef}`
   );

@@ -3,7 +3,7 @@ export const ENTREPRISE = {
   siret: 'XXX XXX XXX XXXXX',
   adresse: 'XX rue XXXX, 75006 Paris',
   hebergeur: 'Supabase Inc. — Serveurs UE, chiffrement AES-256, TLS 1.3',
-  email: 'contact@joleneapp.com',
+  email: 'contact@jolene.app',
   iban: 'FR76 XXXX XXXX XXXX XXXX XXXX XXX',
   bic: 'XXXXXXXX',
 } as const;
