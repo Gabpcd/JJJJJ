@@ -185,7 +185,7 @@ export default function DocumentsSoignant() {
     if (!user || !televersementType) return;
 
     const chemin = `${user.id}/${televersementType}/${Date.now()}_${fichier.name}`;
-    const { error: uploadError } = await supabase.storage.from('soin-direct-documents').upload(chemin, fichier, { contentType: fichier.type, upsert: false });
+    const { error: uploadError } = await supabase.storage.from('jolene-documents').upload(chemin, fichier, { contentType: fichier.type, upsert: false });
     if (uploadError) {
       toast.error(extraireMessageErreur(uploadError));
       return;
