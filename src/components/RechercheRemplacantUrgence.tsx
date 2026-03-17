@@ -31,11 +31,34 @@ export function RechercheRemplacantUrgence({ missionId, onPropose, onError, onSu
   const proposer = async (soignantId: string) => {
     setProposing(soignantId);
     try {
-      const { error } = await supabase.rpc('fn_proposer_mission_soignant' as any, {
-        p_mission_id: missionId,
-        p_soignant_id: soignantId,
-      });
-      if (error) throw error;
+      // Check for existing candidature to avoid duplicate key error
+      const { data: existing } = await supabase
+        .from('candidatures')
+        .select('id, statut')
+        .eq('mission_id', missionId)
+        .eq('soignant_id', soignantId)
+        .maybeSingle();
+
+      if (existing) {
+        if (existing.statut === 'REFUSEE' || existing.statut === 'EXPIREE') {
+          // Update existing rejected/expired candidature to PROPOSEE
+          const { error: updateErr } = await supabase
+            .from('candidatures')
+            .update({ statut: 'PROPOSEE', traite_le: null, motif_refus: null })
+            .eq('id', existing.id);
+          if (updateErr) throw updateErr;
+        } else {
+          onError('Ce soignant a déjà une candidature en cours pour cette mission.');
+          setProposing(null);
+          return;
+        }
+      } else {
+        const { error } = await supabase.rpc('fn_proposer_mission_soignant' as any, {
+          p_mission_id: missionId,
+          p_soignant_id: soignantId,
+        });
+        if (error) throw error;
+      }
       onSuccess('Mission proposée au soignant !');
       onPropose();
     } catch (err: any) {
