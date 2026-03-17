@@ -358,6 +358,45 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
+        {/* 💳 Stripe paiements */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-primary" /> 💳 Paiements Stripe
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stripeMoisNb > 0 ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Paiements ce mois</p>
+                    <p className="text-xl font-bold text-foreground">{stripeMoisNb}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Encaissé</p>
+                    <p className="text-xl font-bold text-success">{formatEur(stripeMoisCapture)}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-xs text-muted-foreground">En attente</p>
+                    <p className="text-xl font-bold text-warning">{formatEur(stripeMoisAttente)}</p>
+                  </div>
+                </div>
+                <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-primary font-medium hover:underline">
+                  Ouvrir Stripe Dashboard → <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">Aucun paiement pour le moment — les paiements apparaîtront quand des missions seront terminées.</p>
+                <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:underline mt-2">
+                  Ouvrir Stripe Dashboard → <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Lists */}
         <div className="grid md:grid-cols-3 gap-6">
           <Card>
