@@ -220,7 +220,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       {m.soignants.telephone ? `📱 ${m.soignants.telephone}` : '📞 Numéro disponible le jour de la mission'}
                     </p>
                     {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
-                    <div className="mt-2 pt-2 border-t border-border">
+                    <div className="mt-2 pt-2 border-t border-border space-y-2">
+                      {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('chat-mission')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                          className="text-sm font-medium text-primary hover:underline underline-offset-4"
+                        >
+                          💬 Envoyer un message
+                        </button>
+                      )}
                       <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
                     </div>
                   </div>
@@ -283,7 +292,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <CodesPointageMission missionId={m.id} />
               )}
               {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
-                <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={role === 'ADMIN_PLATEFORME' ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={role === 'ADMIN_PLATEFORME'} />
+                <div id="chat-mission">
+                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={role === 'ADMIN_PLATEFORME' ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={role === 'ADMIN_PLATEFORME'} />
+                </div>
               )}
             </div>
           </div>

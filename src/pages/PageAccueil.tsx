@@ -4,8 +4,8 @@ import { SEOHead } from '@/components/SEOHead';
 import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, HeartPulse, ArrowRight, Search, Loader2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { PROFESSIONS } from '@/lib/constantes';
-import { supabase } from '@/integrations/supabase/client';
 import { useDebounce } from '@/hooks/useDebounce';
+import { publicSupabase } from '@/integrations/supabase/public-client';
 /* ─── Animated counter ─── */
 function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: string; prefix?: string }) {
   const [valeur, setValeur] = useState(0);
@@ -82,6 +82,16 @@ const faqData = [
 ];
 
 /* ─── Public mission search section ─── */
+function normaliserResultatsMissionsPubliques(data: unknown): any[] {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    const maybeObject = data as { missions?: unknown; data?: unknown };
+    if (Array.isArray(maybeObject.missions)) return maybeObject.missions;
+    if (Array.isArray(maybeObject.data)) return maybeObject.data;
+  }
+  return [];
+}
+
 function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof useNavigate> }) {
   const [profession, setProfession] = useState('');
   const [ville, setVille] = useState('');
@@ -95,15 +105,26 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
   const handleSearch = async (nextProfession = professionDebounced, nextVille = villeDebounced) => {
     setLoading(true);
     setSearched(true);
-    const { data, error } = await supabase.rpc('fn_missions_publiques_recherche', {
-      p_profession: nextProfession || null,
-      p_ville: nextVille.trim() || null,
+
+    const professionValue = nextProfession?.trim() || null;
+    const villeValue = nextVille?.trim() || null;
+
+    const { data, error } = await publicSupabase.rpc('fn_missions_publiques_recherche', {
+      p_profession: professionValue,
+      p_ville: villeValue,
     });
+
     if (error) {
       console.error('Erreur recherche missions publiques:', error);
+      setResults([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
     }
-    setResults(data || []);
-    setTotalCount(data?.[0]?.total_count ?? data?.length ?? 0);
+
+    const parsedResults = normaliserResultatsMissionsPubliques(data);
+    setResults(parsedResults);
+    setTotalCount(parsedResults[0]?.total_count ?? parsedResults.length ?? 0);
     setLoading(false);
   };
 

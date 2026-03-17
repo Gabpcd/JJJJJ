@@ -188,6 +188,16 @@ export function BadgeNotification() {
         }
         const n = payload.new as any;
         toast.info(n.titre, { description: n.corps?.substring(0, 80) });
+        if (document.visibilityState !== 'visible' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          const notification = new Notification(n.titre || 'Nouveau message', {
+            body: n.corps || '',
+          });
+          notification.onclick = () => {
+            window.focus();
+            if (n.lien) window.location.href = n.lien;
+            notification.close();
+          };
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
