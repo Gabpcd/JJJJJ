@@ -27,16 +27,19 @@ function wait(ms: number) {
 async function loadDocumentWithRetry(supabase: any, documentId: string, attempts = 4) {
   let lastError: unknown = null;
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const { data, error } = await supabase
+    const { data, error, status, statusText } = await supabase
       .from("documents_soignants")
       .select("id, soignant_id, type_document, nom_fichier, s3_cle, s3_bucket, type_mime")
       .eq("id", documentId)
       .maybeSingle();
+    
+    console.log(`[verify-document] attempt ${attempt + 1}: data=${!!data}, error=${error?.message || 'none'}, status=${status}, statusText=${statusText}`);
+    
     if (data) return data;
     lastError = error;
     if (attempt < attempts - 1) await wait(350 * (attempt + 1));
   }
-  throw lastError instanceof Error ? lastError : new Error("Document introuvable");
+  throw lastError instanceof Error ? lastError : new Error("Document introuvable après " + attempts + " tentatives pour id=" + documentId);
 }
 
 serve(async (req) => {
