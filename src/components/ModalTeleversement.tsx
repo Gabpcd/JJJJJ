@@ -96,7 +96,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
             ${dragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}
             ${fichier ? 'bg-success/5 border-success/30' : ''}`}
         >
-          <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+          <input ref={inputRef} type="file" accept="application/pdf,image/*,.heic,.heif" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
           {fichier ? (
             <div>
               <p className="text-sm font-medium text-foreground">📎 {fichier.name}</p>
@@ -106,7 +106,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
             <>
               <Upload className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">Glissez votre fichier ici ou cliquez</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">PDF, JPG, PNG · 10 Mo max</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">PDF ou image · 20 Mo max</p>
             </>
           )}
         </div>
