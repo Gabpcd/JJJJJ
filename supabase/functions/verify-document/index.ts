@@ -185,10 +185,9 @@ Analyse ce document et vérifie sa conformité.`;
         ],
       });
     } else if (isPdf) {
-      // For PDFs, send as description since not all models support PDF natively
       messages.push({
         role: "user",
-        content: `${userMessage}\n\n[Document PDF joint - nom: ${doc.nom_fichier}, taille: ${arrayBuffer.byteLength} octets]\n\nNote: Si tu ne peux pas lire le PDF directement, réponds avec verdict "EN_ATTENTE" et motif "Format PDF nécessite vérification manuelle".`,
+        content: `${userMessage}\n\nBase ta décision sur le texte extrait ci-dessus. Si le contenu mentionne clairement une carte d'identité, un passeport, une attestation de droits, un KBIS ou tout autre document qui ne correspond pas au type déclaré, réponds REJETE. Si le texte extrait est insuffisant, réponds EN_ATTENTE avec un motif expliquant l'absence de contenu exploitable.`,
       });
     } else {
       messages.push({ role: "user", content: userMessage });
