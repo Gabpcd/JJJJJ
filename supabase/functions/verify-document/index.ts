@@ -241,9 +241,9 @@ Analyse ce document et vérifie sa conformité.`;
         .update({ statut_verification: "EN_ATTENTE" })
         .eq("id", document_id);
 
-      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "Parse error" }), {
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
     }
 
     // 6. Update document with results
