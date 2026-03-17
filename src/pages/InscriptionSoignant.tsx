@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
+import logoJolene from '@/assets/logo-jolene.png';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
