@@ -71,6 +71,7 @@ export default function ProfilSoignant() {
         });
         setEmail(data.email);
         setProfession(data.profession);
+        setRppsVerifie(!!data.rpps_verifie);
         setCodeParrainage(data.code_parrainage || '');
         (setForm as any)(prev => ({ ...prev, avatarUrl: data.avatar_url || '' }));
         setForm({
