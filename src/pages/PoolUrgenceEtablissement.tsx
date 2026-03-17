@@ -187,20 +187,35 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
   const assignerMission = async (mission: MissionOuverte) => {
     if (!proposerSoignant) return;
+
+    // Validate soignant_id is a valid UUID
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(proposerSoignant.soignant_id)) {
+      console.error('assignation pool error: soignant_id invalide', proposerSoignant.soignant_id);
+      toast.error(`ID soignant invalide : ${proposerSoignant.soignant_id}`);
+      return;
+    }
+
     setAssigningMissionId(mission.id);
 
-    const { data, error } = await supabase.rpc('fn_accepter_mission' as any, {
+    console.log('assignation pool: calling fn_assigner_mission_admin', { mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
+
+    const { data, error } = await supabase.rpc('fn_assigner_mission_admin' as any, {
       p_mission_id: mission.id,
+      p_soignant_id: proposerSoignant.soignant_id,
     });
 
-    console.log('fn_accepter_mission result:', { data, error, mission_id: mission.id });
+    console.log('fn_assigner_mission_admin result:', { data, error, mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
 
-    if (error || (data && typeof data === 'object' && (data as any).error)) {
-      const errMsg = error?.message || (data as any)?.error || 'Erreur inconnue';
-      console.error('fn_accepter_mission error:', errMsg);
+    if (error) {
+      console.error('assignation pool error:', error);
+      toast.error(`Impossible d'assigner : ${error.message}`);
+    } else if (data && typeof data === 'object' && (data as any).error) {
+      const errMsg = (data as any).error;
+      console.error('assignation pool error (rpc):', errMsg);
       toast.error(`Impossible d'assigner : ${errMsg}`);
     } else {
-      toast.success(`Mission proposée à ${proposerSoignant.prenom} ✅`);
+      toast.success(`Mission assignée à ${proposerSoignant.prenom} ✅`);
       setProposerModalOpen(false);
       loadData();
     }
