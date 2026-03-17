@@ -148,7 +148,25 @@ export default function AdminDetailUtilisateur() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground">{nom}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{nom}</h1>
+            <button
+              type="button"
+              onClick={async () => {
+                const { data, error } = await supabaseClient.rpc('fn_obtenir_conversation', { p_autre_id: id!, p_mission_id: null });
+                console.log('fn_obtenir_conversation (admin):', { data, error });
+                if (data) navigate(`/admin/messagerie?conv=${data}`);
+                else {
+                  console.error('fn_obtenir_conversation error:', error);
+                  import('sonner').then(m => m.toast.error("Impossible d'ouvrir la conversation."));
+                }
+              }}
+              className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"
+              title="Contacter"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </button>
+          </div>
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="outline" className="text-xs">{type === 'soignant' ? 'Soignant' : 'Établissement'}</Badge>
             {isSuspended ? (
