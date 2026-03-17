@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Check, AlertCircle, CheckCircle2 } from 'lucide-react';
+import logoJolene from '@/assets/logo-jolene.png';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleError } from '@/lib/handleError';
