@@ -224,13 +224,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     </p>
                     {m.soignants.numero_rpps && <p className="text-xs text-muted-foreground">RPPS : {m.soignants.numero_rpps}</p>}
                     <div className="mt-2 pt-2 border-t border-border space-y-2">
-                      {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
+                      {(isAdmin || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
                         <button
                           type="button"
-                          onClick={() => document.getElementById('chat-mission')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                          className="text-sm font-medium text-primary hover:underline underline-offset-4"
+                          onClick={() => ouvrirConv(m.soignant_assigne_id, m.id)}
+                          className="text-sm font-medium text-primary hover:underline underline-offset-4 flex items-center gap-1"
                         >
-                          💬 Envoyer un message
+                          <MessageCircle className="h-4 w-4" /> Contacter le soignant
                         </button>
                       )}
                       <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
