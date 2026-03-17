@@ -313,6 +313,19 @@ export default function AdminModeration() {
                       </div>
                     </div>
 
+                    <AdminMissionChatPanel
+                      missions={[
+                        {
+                          id: litige.mission_id,
+                          intitule: litige.mission?.intitule || 'Mission liée au litige',
+                          statut: litige.mission?.statut || 'LITIGE',
+                          soignants: litige.soignant ? { prenom: litige.soignant.prenom, nom: litige.soignant.nom } : null,
+                          etablissements: litige.etablissement ? { nom: litige.etablissement.nom } : null,
+                        },
+                      ]}
+                      emptyLabel="Messagerie indisponible pour ce conflit."
+                    />
+
                     <div className="flex flex-wrap gap-2">
                       <Button
                         size="sm"

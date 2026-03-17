@@ -184,19 +184,37 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     <Layout>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             <Flame className="h-6 w-6 text-destructive" />
             Pool d'urgence
           </h1>
-          <Button
-            variant="destructive"
-            onClick={() => setAlerterTousOpen(true)}
-            disabled={filtered.filter(s => !s.en_mission_maintenant).length === 0}
-          >
-            <BellRing className="h-4 w-4 mr-1" />
-            Alerter tout le pool 🚨
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {isAdmin && (
+              <div className="min-w-[240px]">
+                <Select value={selectedEtablissementId} onValueChange={setSelectedEtablissementId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choisir un établissement" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {etablissementsAdmin.map((etablissement) => (
+                      <SelectItem key={etablissement.id} value={etablissement.id}>
+                        {etablissement.nom}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <Button
+              variant="destructive"
+              onClick={() => setAlerterTousOpen(true)}
+              disabled={filtered.filter(s => !s.en_mission_maintenant).length === 0}
+            >
+              <BellRing className="h-4 w-4 mr-1" />
+              Alerter tout le pool 🚨
+            </Button>
+          </div>
         </div>
 
         {/* KPIs */}

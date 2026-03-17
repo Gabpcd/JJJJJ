@@ -282,7 +282,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <CodesPointageMission missionId={m.id} />
               )}
-              {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE') && (
+              {(role === 'ADMIN_PLATEFORME' || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
                 <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={role === 'ADMIN_PLATEFORME' ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={role === 'ADMIN_PLATEFORME'} />
               )}
             </div>

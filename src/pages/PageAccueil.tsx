@@ -185,7 +185,9 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
                 </>
               ) : (
                 <div className="text-center py-8 rounded-xl border border-dashed border-border bg-muted/30">
-                  <p className="text-muted-foreground mb-2">Pas de mission pour le moment dans votre zone.</p>
+                  <p className="text-muted-foreground mb-2">
+                    {ville.trim() ? 'Pas de mission pour le moment dans cette zone.' : 'Pas de mission pour le moment pour cette profession.'}
+                  </p>
                   <button onClick={() => navigate('/inscription/soignant')} className="text-primary font-semibold text-sm hover:underline underline-offset-4">
                     Inscrivez-vous pour être alerté →
                   </button>
