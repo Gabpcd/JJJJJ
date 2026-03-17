@@ -119,6 +119,20 @@ export default function AdminDashboard() {
       }
       if (resTransactions.count != null) setNbTransactions(resTransactions.count);
 
+      // Stripe paiements ce mois
+      const debutMois = new Date();
+      debutMois.setDate(1);
+      debutMois.setHours(0, 0, 0, 0);
+      const { data: paiements } = await supabase
+        .from('paiements_mission')
+        .select('montant_ttc, statut')
+        .gte('cree_le', debutMois.toISOString());
+      if (paiements) {
+        setStripeMoisNb(paiements.length);
+        setStripeMoisCapture(paiements.filter((p: any) => p.statut === 'CAPTURE').reduce((s: number, p: any) => s + (Number(p.montant_ttc) || 0), 0));
+        setStripeMoisAttente(paiements.filter((p: any) => p.statut === 'AUTORISE').reduce((s: number, p: any) => s + (Number(p.montant_ttc) || 0), 0));
+      }
+
       setLoading(false);
     }
     charger();
