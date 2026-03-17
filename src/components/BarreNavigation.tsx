@@ -61,9 +61,17 @@ const NAV_GROUPE: NavItem[] = [
   { icone: Settings, label: 'Paramètres', route: '/groupe/parametres' },
 ];
 
-function getNavItems(role: UserRole): NavItem[] {
+function getNavItems(role: UserRole, isLiberal?: boolean): NavItem[] {
   switch (role) {
-    case 'SOIGNANT': return NAV_SOIGNANT;
+    case 'SOIGNANT': {
+      const items = [...NAV_SOIGNANT_BASE];
+      if (isLiberal) {
+        // Insert "Mes charges" after "Gains"
+        const gainsIdx = items.findIndex(i => i.label === 'Gains');
+        items.splice(gainsIdx + 1, 0, { icone: Calculator, label: 'Mes charges', route: '/soignant/charges' });
+      }
+      return items;
+    }
     case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT;
     case 'ADMIN_GROUPE': return NAV_GROUPE;
     case 'ADMIN_PLATEFORME': return []; // Admin uses LayoutAdmin
