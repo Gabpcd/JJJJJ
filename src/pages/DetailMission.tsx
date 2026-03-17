@@ -344,6 +344,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         <th className="pb-2 font-medium text-muted-foreground">Distance</th>
                         <th className="pb-2 font-medium text-muted-foreground">Missions ici</th>
                         <th className="pb-2 font-medium text-muted-foreground">Score matching</th>
+                        <th className="pb-2 font-medium text-muted-foreground">Alertes</th>
                         <th className="pb-2 font-medium text-muted-foreground"></th>
                       </tr>
                     </thead>
@@ -367,6 +368,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                             <span className="font-bold text-primary">{r.score_matching?.toFixed(0) ?? '—'}</span>
                           </td>
                           <td className="py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {r.tous_documents_valides === false && (
+                                <span className="badge-base bg-warning/10 text-warning text-[9px]">⚠️ Docs incomplets</span>
+                              )}
+                              {r.distance_km != null && r.distance_km > 50 && (
+                                <span className="badge-base bg-muted text-muted-foreground text-[9px]">📍 Hors zone</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3">
                             <button
                               onClick={() => proposerMission(r.soignant_id)}
                               disabled={proposing === r.soignant_id}
@@ -382,7 +393,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   </table>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground py-8 text-center">Aucun soignant recommandé pour cette mission.</p>
+                <div className="text-center py-8 space-y-2">
+                  <p className="text-sm text-muted-foreground">Aucun soignant disponible pour cette profession.</p>
+                  <p className="text-xs text-muted-foreground">Invitez des soignants via votre lien de parrainage.</p>
+                </div>
               )}
             </div>
           </TabsContent>
