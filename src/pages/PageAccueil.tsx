@@ -119,7 +119,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
         <RevealOnScroll>
           <div className="text-center mb-8">
             <h2 className="text-2xl md:text-3xl font-bold mb-2">Découvrez les missions disponibles</h2>
-            <p className="text-muted-foreground">Cherchez par profession et localisation — sans inscription.</p>
+            <p className="text-muted-foreground">Cherchez par profession et localisation — sans inscription. Laissez la ville vide pour tout voir.</p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto mb-8">
