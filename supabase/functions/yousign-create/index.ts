@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
     // Verify caller is party to the contract
     if (contrat.soignant_id !== userId && contrat.etablissement_id !== userId) {
       // Check if user is admin of the establishment
-      const adminClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const adminClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
       const { data: etab } = await adminClient
         .from("etablissements")
         .select("id")
