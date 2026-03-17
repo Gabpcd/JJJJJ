@@ -64,6 +64,7 @@ export default function DashboardSoignant() {
   const [missions, setMissions] = useState<any[]>([]);
   const [mesMissions, setMesMissions] = useState<any[]>([]);
   const [docsExpirant, setDocsExpirant] = useState<any[]>([]);
+  const [propositions, setPropositions] = useState<any[]>([]);
   const [heuresSemaine, setHeuresSemaine] = useState(0);
   const [loading, setLoading] = useState(true);
   const [missionProchaine, setMissionProchaine] = useState<any>(null);
