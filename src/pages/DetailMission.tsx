@@ -197,6 +197,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       } else {
         setMission(m ? { ...m, soignants: null } : null);
       }
+
+      // Count candidatures for tab badge
+      if (m && (m as any).mode_attribution === 'CANDIDATURE' && (m as any).statut === 'OUVERTE') {
+        const { count } = await supabase.from('candidatures')
+          .select('id', { count: 'exact', head: true })
+          .eq('mission_id', id!)
+          .eq('statut', 'EN_ATTENTE');
+        setNbCandidatures(count || 0);
+      }
+
       setLoading(false);
     };
     load();
