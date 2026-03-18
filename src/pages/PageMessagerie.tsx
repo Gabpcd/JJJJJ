@@ -370,8 +370,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent/50 transition-colors border-b border-border/50 ${c.id === selectedConvId ? 'bg-accent' : ''}`}
                 >
                   {c.is_jolene ? (
-                    <div className="shrink-0 h-10 w-10 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
-                      <img src={joleneLogo} alt="Jolene" className="h-6 w-6 object-contain" />
+                    <div className="shrink-0 h-10 w-10 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                      <Shield className="h-5 w-5 text-primary" />
                     </div>
                   ) : (
                     <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
