@@ -417,12 +417,99 @@
 }
 
 @media print {
-  body * { visibility: hidden; }
-  .attestation, .attestation * { visibility: visible; }
-  .attestation { position: absolute; left: 0; top: 0; width: 100%; font-family: 'Times New Roman', serif; font-size: 11pt; color: #000; }
-  .attestation h1 { font-size: 16pt; text-align: center; }
-  .attestation table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-  .attestation th, .attestation td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
-  .attestation th { background: #f0f0f0; font-weight: bold; }
-  .no-print { display: none !important; }
+  /* ── Global print reset ── */
+  @page {
+    size: A4;
+    margin: 2cm;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide non-printable elements */
+  .no-print,
+  .bottom-nav,
+  .skip-to-main,
+  [role="navigation"] {
+    display: none !important;
+  }
+
+  /* Show print-only elements */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Reset sidebar layout offset */
+  .page-container {
+    margin-left: 0 !important;
+    padding-bottom: 0 !important;
+    min-height: auto !important;
+  }
+
+  main, #main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .min-h-screen {
+    min-height: auto !important;
+  }
+
+  .max-w-6xl, .max-w-2xl {
+    max-width: 100% !important;
+  }
+
+  /* Card styles for print */
+  .card-base {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  /* ── Invoice-specific print styles ── */
+  .print-invoice {
+    visibility: visible !important;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: #000;
+  }
+
+  .print-invoice table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .print-invoice th,
+  .print-invoice td {
+    border-bottom: 1px solid #ddd;
+    padding: 8px 4px;
+    text-align: left;
+  }
+
+  .print-invoice th {
+    border-bottom: 2px solid #333;
+    font-weight: 600;
+  }
+
+  /* ── Attestation-specific print styles ── */
+  .attestation-print-mode body * { visibility: hidden; }
+  .attestation-print-mode .attestation,
+  .attestation-print-mode .attestation * { visibility: visible; }
+  .attestation-print-mode .attestation {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    font-family: 'Times New Roman', serif;
+    font-size: 11pt;
+    color: #000;
+  }
+  .attestation-print-mode .attestation h1 { font-size: 16pt; text-align: center; }
+  .attestation-print-mode .attestation table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+  .attestation-print-mode .attestation th,
+  .attestation-print-mode .attestation td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
+  .attestation-print-mode .attestation th { background: #f0f0f0; font-weight: bold; }
 }
