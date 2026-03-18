@@ -16,7 +16,7 @@ export default function Parcours3200h() {
     if (!user) return;
     Promise.all([
       supabase.from('soignants').select('heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single(),
-      supabase.from('suivi_conversion_3200h').select('id, soignant_id, heures_cumulees, palier_atteint, statut, cree_le').eq('soignant_id', user.id).maybeSingle(),
+      supabase.from('suivi_conversion_3200h').select('id, soignant_id, heures_actuelles, jalon_800h_atteint, jalon_1600h_atteint, jalon_2400h_atteint, jalon_3200h_atteint').eq('soignant_id', user.id).maybeSingle(),
       supabase.from('missions').select('debut_le, duree_heures').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').order('debut_le', { ascending: true }),
     ]).then(([{ data: sg }, { data: sv }, { data: ms }]) => {
       setSoignant(sg);
@@ -37,7 +37,9 @@ export default function Parcours3200h() {
 
   if (loading || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
-  const heures = suivi?.heures_actuelles || soignant.heures_cumulees || 0;
+  // Calcul réel des heures depuis les missions terminées (fallback si heures_cumulees pas à jour)
+  const heuresDepuisMissions = missions.reduce((acc, m) => acc + (m.duree_heures || 0), 0);
+  const heures = Math.max(suivi?.heures_actuelles || 0, soignant.heures_cumulees || 0, heuresDepuisMissions);
 
   return (
     <LayoutApp role="SOIGNANT">
