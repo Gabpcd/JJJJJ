@@ -138,7 +138,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
 
   return (
     <>
-      <nav className="bottom-nav md:hidden" role="navigation" aria-label="Navigation mobile">
+      <nav className="bottom-nav md:hidden no-print" role="navigation" aria-label="Navigation mobile">
         {mobileItems.map((item) => {
           const actif = location.pathname === item.route;
           return (
