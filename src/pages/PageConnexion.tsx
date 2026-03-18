@@ -26,16 +26,19 @@ export default function PageConnexion() {
       afficherNotification({ type: 'succes', message: 'Connexion réussie !' });
       // Récupérer le rôle sécurisé via RPC serveur
       const { supabase } = await import('@/integrations/supabase/client');
-      const { data: roleData } = await supabase.rpc('fn_get_my_role');
-      const role = (roleData as any)?.role;
-      if (role === 'ADMIN_PLATEFORME') navigate('/admin');
+      const { data: roleData, error: roleError } = await supabase.rpc('fn_get_my_role');
+      console.log('[CONNEXION] fn_get_my_role result:', JSON.stringify(roleData), 'error:', roleError);
+      // The RPC may return { role: 'X' } or just 'X' depending on function signature
+      const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
+      console.log('[CONNEXION] Resolved role:', role);
+      if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') navigate('/admin');
       else if (role === 'ADMIN_ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
       else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
       else if (role === 'SOIGNANT') navigate('/soignant/tableau-de-bord');
       else {
         // Pas de rôle trouvé — l'inscription n'a pas été complétée
+        console.warn('[CONNEXION] Rôle non reconnu, roleData brut:', roleData);
         afficherNotification({ type: 'erreur', message: 'Votre inscription n\'est pas complète. Veuillez vous réinscrire.' });
-        // Déconnecter pour permettre une réinscription propre
         const { supabase: sb } = await import('@/integrations/supabase/client');
         await sb.auth.signOut();
         navigate('/inscription/soignant');
