@@ -70,9 +70,14 @@ export default function DetailFacture() {
         @media print {
           .no-print { display: none !important; }
           .print-full { max-width: 100% !important; padding: 0 !important; }
-          aside, nav, footer, .bottom-nav { display: none !important; }
-          main { margin: 0 !important; padding: 0 !important; }
-          .page-container { margin-left: 0 !important; }
+          aside, nav, footer, .bottom-nav, header, [role="navigation"] { display: none !important; }
+          body, html { margin: 0 !important; padding: 0 !important; }
+          main, .page-container { margin: 0 !important; margin-left: 0 !important; padding: 0 !important; }
+          .page-container { padding-bottom: 0 !important; min-height: auto !important; }
+          .min-h-screen { min-height: auto !important; }
+          .max-w-6xl { max-width: 100% !important; }
+          #main-content { margin: 0 !important; padding: 0 !important; }
+          .skip-to-main { display: none !important; }
         }
       `}</style>
 
