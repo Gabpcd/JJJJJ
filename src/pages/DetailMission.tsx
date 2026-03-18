@@ -161,6 +161,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [recommandations, setRecommandations] = useState<any[]>([]);
   const [loadingReco, setLoadingReco] = useState(false);
   const [proposing, setProposing] = useState<string | null>(null);
+  const [nbCandidatures, setNbCandidatures] = useState(0);
 
   useEffect(() => {
     if (!id) return;
