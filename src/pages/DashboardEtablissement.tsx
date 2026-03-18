@@ -83,7 +83,8 @@ export default function DashboardEtablissement() {
         for (const s of resSoignants.data) sgMap[s.id] = s;
       }
 
-      if (resMissions.error) { handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
+      if (resMissions.error) { console.error('[DashboardEtab] Erreur missions:', resMissions.error); handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
+      if (resSoignants.error) { console.error('[DashboardEtab] Erreur soignants RPC:', resSoignants.error); }
       else if (resMissions.data) setMissions(resMissions.data.map((m: any) => ({
         ...m,
         soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
