@@ -138,7 +138,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
 
   return (
     <>
-      <nav className="bottom-nav md:hidden" role="navigation" aria-label="Navigation mobile">
+      <nav className="bottom-nav md:hidden no-print" role="navigation" aria-label="Navigation mobile">
         {mobileItems.map((item) => {
           const actif = location.pathname === item.route;
           return (
@@ -150,7 +150,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         })}
       </nav>
 
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] bg-sidebar flex-col z-40" role="navigation" aria-label="Sidebar">
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] bg-sidebar flex-col z-40 no-print" role="navigation" aria-label="Sidebar">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <HeartPulse className="h-7 w-7 text-sidebar-primary" />

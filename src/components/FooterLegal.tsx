@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 export function FooterLegal() {
   return (
-    <footer className="bg-muted/50 border-t border-border py-4 text-center">
+    <footer className="bg-muted/50 border-t border-border py-4 text-center no-print">
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
           <Link to="/cgu" className="hover:text-primary hover:underline">CGU</Link>

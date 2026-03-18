@@ -66,21 +66,6 @@ export default function DetailFacture() {
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* Print styles */}
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          .print-full { max-width: 100% !important; padding: 0 !important; }
-          aside, nav, footer, .bottom-nav, header, [role="navigation"] { display: none !important; }
-          body, html { margin: 0 !important; padding: 0 !important; }
-          main, .page-container { margin: 0 !important; margin-left: 0 !important; padding: 0 !important; }
-          .page-container { padding-bottom: 0 !important; min-height: auto !important; }
-          .min-h-screen { min-height: auto !important; }
-          .max-w-6xl { max-width: 100% !important; }
-          #main-content { margin: 0 !important; padding: 0 !important; }
-          .skip-to-main { display: none !important; }
-        }
-      `}</style>
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6 no-print">
         <button onClick={() => navigate('/etablissement/facturation')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -100,7 +85,7 @@ export default function DetailFacture() {
       </div>
 
       {/* Invoice */}
-      <div className="card-base print-full">
+      <div className="card-base print-invoice print-full">
         {/* Header facture */}
         <div className="flex flex-col sm:flex-row justify-between gap-4 mb-8 pb-6 border-b border-border">
           <div>
