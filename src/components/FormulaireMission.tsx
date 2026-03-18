@@ -282,6 +282,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           p_taux_horaire_base: payload.taux_horaire_base,
           p_est_urgente: payload.est_urgente,
           p_niveau_urgence: payload.niveau_urgence,
+          p_mode_attribution: modeAttribution,
         });
 
         if (error) {
