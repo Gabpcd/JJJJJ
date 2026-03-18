@@ -74,7 +74,8 @@ export default function DashboardEtablissement() {
         supabase.rpc('fn_mes_soignants_etablissement'),
       ]);
 
-      if (resEtab.error) { handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
+      if (resEtab.error) { console.error('[DashboardEtab] Erreur établissement:', resEtab.error); handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
+      else if (!resEtab.data) { console.warn('[DashboardEtab] Aucun établissement trouvé pour user.id:', user.id); partialError = true; }
       else if (resEtab.data) setEtab(resEtab.data);
 
       const sgMap: Record<string, any> = {};
