@@ -85,7 +85,7 @@ export default function DetailFacture() {
       </div>
 
       {/* Invoice */}
-      <div className="card-base print-full">
+      <div className="card-base print-invoice print-full">
         {/* Header facture */}
         <div className="flex flex-col sm:flex-row justify-between gap-4 mb-8 pb-6 border-b border-border">
           <div>
