@@ -160,6 +160,16 @@ export default function DashboardSoignant() {
       if (msSemaineCal) setMissionsSemaine(msSemaineCal as any);
       if (props) setPropositions(props as any);
 
+      // Compute real counts from mission data
+      const realMissionsTerminees = missionsTermineesData?.length || 0;
+      const realHeuresCumulees = missionsTermineesData?.reduce((t: number, m: any) => t + (m.duree_heures || 0), 0) || 0;
+
+      // Override soignant data with real counts if higher
+      if (sg) {
+        sg.total_missions_terminees = Math.max(sg.total_missions_terminees || 0, realMissionsTerminees);
+        sg.heures_cumulees = Math.max(sg.heures_cumulees || 0, realHeuresCumulees);
+      }
+
       // Badge stats (simple computation from soignant data)
       if (sg) {
         setBadgeStats({
