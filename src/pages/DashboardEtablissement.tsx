@@ -309,7 +309,7 @@ export default function DashboardEtablissement() {
       </div>
 
       {/* KPI row 2 — HR indicators */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <FadeInView delay={400}>
           <KPICoutMoyenHeure totalBrut={coutMoyen.totalBrut} totalHeures={coutMoyen.totalHeures} />
         </FadeInView>

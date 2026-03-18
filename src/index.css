@@ -148,14 +148,17 @@
 @layer components {
   .btn-primary {
     @apply bg-primary hover:bg-primary/90 active:scale-[0.97] active:bg-primary/80 text-primary-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150 shadow-sm;
+    min-height: 44px;
   }
 
   .btn-secondary {
     @apply bg-card border-2 border-primary text-primary hover:bg-primary/5 active:scale-[0.97] rounded-xl px-6 py-3 font-semibold transition-all duration-150;
+    min-height: 44px;
   }
 
   .btn-danger {
     @apply bg-destructive hover:bg-destructive/90 active:scale-[0.97] text-destructive-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150;
+    min-height: 44px;
   }
 
   .card-base {
