@@ -2760,6 +2760,21 @@ export type Database = {
               p_est_urgente?: boolean
               p_fin_le?: string
               p_intitule: string
+              p_mode_attribution?: string
+              p_niveau_urgence?: number
+              p_profession_requise?: Database["public"]["Enums"]["type_profession"]
+              p_service?: string
+              p_taux_horaire_base?: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_debut_le?: string
+              p_description?: string
+              p_est_urgente?: boolean
+              p_fin_le?: string
+              p_intitule: string
               p_niveau_urgence?: string
               p_profession_requise?: Database["public"]["Enums"]["type_profession"]
               p_serie_id?: string
