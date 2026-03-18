@@ -101,7 +101,7 @@ export default function DashboardSoignant() {
       let missionsQuery = supabase.from('missions').select('id, intitule, service, debut_le, fin_le, taux_horaire_base, est_urgente, etablissement_id').eq('statut', 'OUVERTE').order('debut_le', { ascending: true }).limit(3);
       if (profession) missionsQuery = missionsQuery.eq('profession_requise', profession);
 
-      const [{ data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }, { data: gainsMois }, { data: gains6m }, { data: msSemaineCal }, { data: props }] = await Promise.all([
+      const [{ data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }, { data: gainsMois }, { data: gains6m }, { data: msSemaineCal }, { data: props }, { data: missionsTermineesData }] = await Promise.all([
         missionsQuery,
         supabase.from('missions').select('id, intitule, debut_le, fin_le, statut, etablissement_id').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true }).limit(3),
         supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
@@ -112,6 +112,8 @@ export default function DashboardSoignant() {
         supabase.from('missions').select('debut_le, statut').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
         // Propositions from pool
         supabase.from('candidatures').select('id, mission_id, cree_le, missions(id, intitule, debut_le, fin_le, taux_horaire_base, etablissement_id, est_urgente)').eq('soignant_id', user.id).eq('statut', 'PROPOSEE').order('cree_le', { ascending: false }).limit(5),
+        // Missions terminées réelles (pour compteur fiable)
+        supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE'),
       ]);
 
       // Enrich missions with safe establishment data
@@ -157,6 +159,16 @@ export default function DashboardSoignant() {
       if (gains6m) setGains6Mois(gains6m as any);
       if (msSemaineCal) setMissionsSemaine(msSemaineCal as any);
       if (props) setPropositions(props as any);
+
+      // Compute real counts from mission data
+      const realMissionsTerminees = missionsTermineesData?.length || 0;
+      const realHeuresCumulees = missionsTermineesData?.reduce((t: number, m: any) => t + (m.duree_heures || 0), 0) || 0;
+
+      // Override soignant data with real counts if higher
+      if (sg) {
+        sg.total_missions_terminees = Math.max(sg.total_missions_terminees || 0, realMissionsTerminees);
+        sg.heures_cumulees = Math.max(sg.heures_cumulees || 0, realHeuresCumulees);
+      }
 
       // Badge stats (simple computation from soignant data)
       if (sg) {
