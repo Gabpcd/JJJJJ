@@ -175,11 +175,15 @@
   }
 
   .bottom-nav {
-    @apply fixed bottom-0 left-0 right-0 h-16 bg-card border-t shadow-lg z-50 flex items-center justify-around px-2;
+    @apply fixed bottom-0 left-0 right-0 bg-card border-t shadow-lg z-50 flex items-center justify-around px-2;
+    height: calc(4rem + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .bottom-nav-item {
     @apply flex flex-col items-center justify-center gap-0.5 text-muted-foreground transition-colors duration-200;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .bottom-nav-item-active {
