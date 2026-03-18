@@ -32,7 +32,7 @@ export default function PageConnexion() {
       const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
       console.log('[CONNEXION] Resolved role:', role);
       if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') navigate('/admin');
-      else if (role === 'ADMIN_ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
+      else if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
       else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
       else if (role === 'SOIGNANT') navigate('/soignant/tableau-de-bord');
       else {
