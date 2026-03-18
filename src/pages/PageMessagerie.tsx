@@ -6,7 +6,7 @@ import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
-import joleneLogo from '@/assets/logo-jolene.png';
+
 import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -370,8 +370,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent/50 transition-colors border-b border-border/50 ${c.id === selectedConvId ? 'bg-accent' : ''}`}
                 >
                   {c.is_jolene ? (
-                    <div className="shrink-0 h-10 w-10 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
-                      <img src={joleneLogo} alt="Jolene" className="h-6 w-6 object-contain" />
+                    <div className="shrink-0 h-10 w-10 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                      <Shield className="h-5 w-5 text-primary" />
                     </div>
                   ) : (
                     <AvatarDisplay src={c.autre_avatar} prenom={c.autre_prenom} nom={c.autre_nom} size={40} rounded="full" />
@@ -413,8 +413,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   <ArrowLeft className="h-5 w-5" />
                 </button>
                 {selectedConv.is_jolene ? (
-                  <div className="shrink-0 h-9 w-9 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
-                    <img src={joleneLogo} alt="Jolene" className="h-5 w-5 object-contain" />
+                  <div className="shrink-0 h-9 w-9 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                    <Shield className="h-4.5 w-4.5 text-primary" />
                   </div>
                 ) : (
                   <AvatarDisplay src={selectedConv.autre_avatar} prenom={selectedConv.autre_prenom} nom={selectedConv.autre_nom} size={36} rounded="full" />
