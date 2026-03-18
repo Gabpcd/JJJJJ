@@ -63,7 +63,7 @@ export default function DashboardEtablissement() {
 
     try {
       const [resEtab, resMissions, resPaliers, resMissionsCeMois, resSoignants] = await Promise.all([
-        supabase.from('etablissements').select('id, nom, type, email_contact, groupe_sante_id, taux_commission_negocie, palier_commission_id, groupes_sante(nom), paliers_commission(nom)').eq('id', user.id).single(),
+        supabase.from('etablissements').select('id, nom, type, email_contact, groupe_sante_id, taux_commission_negocie, palier_commission_id, groupes_sante(nom), paliers_commission(nom)').eq('id', user.id).maybeSingle(),
         supabase.from('missions')
           .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
           .eq('etablissement_id', user.id)
@@ -74,7 +74,8 @@ export default function DashboardEtablissement() {
         supabase.rpc('fn_mes_soignants_etablissement'),
       ]);
 
-      if (resEtab.error) { handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
+      if (resEtab.error) { console.error('[DashboardEtab] Erreur établissement:', resEtab.error); handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
+      else if (!resEtab.data) { console.warn('[DashboardEtab] Aucun établissement trouvé pour user.id:', user.id); partialError = true; }
       else if (resEtab.data) setEtab(resEtab.data);
 
       const sgMap: Record<string, any> = {};
@@ -82,7 +83,8 @@ export default function DashboardEtablissement() {
         for (const s of resSoignants.data) sgMap[s.id] = s;
       }
 
-      if (resMissions.error) { handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
+      if (resMissions.error) { console.error('[DashboardEtab] Erreur missions:', resMissions.error); handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
+      if (resSoignants.error) { console.error('[DashboardEtab] Erreur soignants RPC:', resSoignants.error); }
       else if (resMissions.data) setMissions(resMissions.data.map((m: any) => ({
         ...m,
         soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
