@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -15,9 +15,17 @@ interface NavItem { icone: LucideIcon; label: string; route: string; }
 const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
-  { icone: MapPin, label: 'Pointer', route: '/soignant/presences' },
-  { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
+  { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
+  { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
   { icone: User, label: 'Profil', route: '/soignant/profil' },
+];
+
+const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
+  { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
+  { icone: ClipboardList, label: 'Missions', route: '/etablissement/missions' },
+  { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
+  { icone: Users, label: 'Pool', route: '/etablissement/pool-urgence' },
+  { icone: Building2, label: 'Profil', route: '/etablissement/profil' },
 ];
 
 const NAV_SOIGNANT_BASE: NavItem[] = [
@@ -67,7 +75,6 @@ function getNavItems(role: UserRole, isLiberal?: boolean): NavItem[] {
     case 'SOIGNANT': {
       const items = [...NAV_SOIGNANT_BASE];
       if (isLiberal) {
-        // Insert "Mes charges" after "Gains"
         const gainsIdx = items.findIndex(i => i.label === 'Gains');
         items.splice(gainsIdx + 1, 0, { icone: Calculator, label: 'Mes charges', route: '/soignant/charges' });
       }
@@ -75,7 +82,7 @@ function getNavItems(role: UserRole, isLiberal?: boolean): NavItem[] {
     }
     case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT;
     case 'ADMIN_GROUPE': return NAV_GROUPE;
-    case 'ADMIN_PLATEFORME': return []; // Admin uses LayoutAdmin
+    case 'ADMIN_PLATEFORME': return [];
     default: return [];
   }
 }
@@ -83,7 +90,7 @@ function getNavItems(role: UserRole, isLiberal?: boolean): NavItem[] {
 function getMobileNavItems(role: UserRole): NavItem[] {
   switch (role) {
     case 'SOIGNANT': return NAV_SOIGNANT_MOBILE;
-    case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT;
+    case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT_MOBILE;
     case 'ADMIN_GROUPE': return NAV_GROUPE;
     case 'ADMIN_PLATEFORME': return [];
     default: return [];
@@ -122,7 +129,6 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   }, [role, user]);
 
   const baseItems = getNavItems(role, isLiberal);
-  // Insert "Passer en libéral" before Notifications for soignant
   let items = baseItems;
   if (role === 'SOIGNANT' && showLiberal) {
     const notifIdx = items.findIndex(i => i.label === 'Notifications');
@@ -138,18 +144,33 @@ export function BarreNavigation({ role }: { role: UserRole }) {
 
   return (
     <>
-      <nav className="bottom-nav md:hidden no-print" role="navigation" aria-label="Navigation mobile">
+      {/* ── Mobile bottom tab bar ── */}
+      <nav className="fixed bottom-0 left-0 right-0 flex md:hidden z-50 bg-card dark:bg-accent-foreground/5 border-t border-border shadow-lg no-print" style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }} role="navigation" aria-label="Navigation mobile">
         {mobileItems.map((item) => {
           const actif = location.pathname === item.route;
+          const isMsg = item.label === 'Messagerie';
           return (
-            <button key={item.route} onClick={() => navigate(item.route)} aria-label={item.label} aria-current={actif ? 'page' : undefined} className={`bottom-nav-item ${actif ? 'bottom-nav-item-active' : ''}`}>
-              <item.icone className="h-5 w-5" />
-              <span className="bottom-nav-label">{item.label}</span>
+            <button
+              key={item.route}
+              onClick={() => navigate(item.route)}
+              aria-label={item.label}
+              aria-current={actif ? 'page' : undefined}
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 relative ${actif ? 'text-primary' : 'text-muted-foreground'}`}
+              style={{ minWidth: 44, minHeight: 44 }}
+            >
+              <item.icone className="h-6 w-6" />
+              {isMsg && messagesNonLus > 0 && (
+                <span className="absolute top-1 right-1/2 translate-x-4 h-4 min-w-[16px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold px-1">
+                  {messagesNonLus > 9 ? '9+' : messagesNonLus}
+                </span>
+              )}
+              <span className="text-[10px] leading-tight">{item.label}</span>
             </button>
           );
         })}
       </nav>
 
+      {/* ── Desktop sidebar ── */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] bg-sidebar flex-col z-40 no-print" role="navigation" aria-label="Sidebar">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
