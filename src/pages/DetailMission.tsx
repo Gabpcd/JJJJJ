@@ -307,7 +307,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         <TabsList className="mb-4">
           <TabsTrigger value="details">Détails</TabsTrigger>
           {m.statut === 'OUVERTE' && m.mode_attribution === 'CANDIDATURE' && (
-            <TabsTrigger value="candidatures">Candidatures</TabsTrigger>
+            <TabsTrigger value="candidatures">Candidatures{nbCandidatures > 0 ? ` (${nbCandidatures})` : ''}</TabsTrigger>
           )}
           {m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
         </TabsList>
