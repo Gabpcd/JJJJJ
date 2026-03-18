@@ -124,6 +124,10 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 
   /* WCAG: Focus visible on all interactive elements */
@@ -144,14 +148,17 @@
 @layer components {
   .btn-primary {
     @apply bg-primary hover:bg-primary/90 active:scale-[0.97] active:bg-primary/80 text-primary-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150 shadow-sm;
+    min-height: 44px;
   }
 
   .btn-secondary {
     @apply bg-card border-2 border-primary text-primary hover:bg-primary/5 active:scale-[0.97] rounded-xl px-6 py-3 font-semibold transition-all duration-150;
+    min-height: 44px;
   }
 
   .btn-danger {
     @apply bg-destructive hover:bg-destructive/90 active:scale-[0.97] text-destructive-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150;
+    min-height: 44px;
   }
 
   .card-base {
@@ -171,11 +178,15 @@
   }
 
   .bottom-nav {
-    @apply fixed bottom-0 left-0 right-0 h-16 bg-card border-t shadow-lg z-50 flex items-center justify-around px-2;
+    @apply fixed bottom-0 left-0 right-0 bg-card border-t shadow-lg z-50 flex items-center justify-around px-2;
+    height: calc(4rem + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .bottom-nav-item {
     @apply flex flex-col items-center justify-center gap-0.5 text-muted-foreground transition-colors duration-200;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .bottom-nav-item-active {
@@ -188,6 +199,7 @@
 
   .sidebar-item {
     @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-colors duration-200 text-sm;
+    min-height: 44px;
   }
 
   .page-container {

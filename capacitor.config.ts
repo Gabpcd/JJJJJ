@@ -7,6 +7,12 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
   },
+  plugins: {
+    StatusBar: {
+      style: 'dark',
+      backgroundColor: '#0F172A',
+    },
+  },
 };
 
 export default config;

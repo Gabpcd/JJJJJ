@@ -321,7 +321,7 @@ export default function DashboardSoignant() {
         {/* ─── ONGLET ACCUEIL ─── */}
         <TabsContent value="accueil">
           {/* KPI */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <FadeInView delay={0}>
               <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
             </FadeInView>
