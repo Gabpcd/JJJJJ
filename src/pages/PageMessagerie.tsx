@@ -413,8 +413,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   <ArrowLeft className="h-5 w-5" />
                 </button>
                 {selectedConv.is_jolene ? (
-                  <div className="shrink-0 h-9 w-9 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
-                    <img src={joleneLogo} alt="Jolene" className="h-5 w-5 object-contain" />
+                  <div className="shrink-0 h-9 w-9 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                    <Shield className="h-4.5 w-4.5 text-primary" />
                   </div>
                 ) : (
                   <AvatarDisplay src={selectedConv.autre_avatar} prenom={selectedConv.autre_prenom} nom={selectedConv.autre_nom} size={36} rounded="full" />
