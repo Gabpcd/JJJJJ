@@ -34,7 +34,7 @@ export function ModalReclamationScore({ onClose, onSuccess }: Props) {
     supabase.from('missions')
       .select('id, intitule, debut_le')
       .eq('soignant_assigne_id', user.id)
-      .in('statut', ['TERMINEE', 'ANNULEE'])
+      .in('statut', ['TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT', 'ABSENCE'])
       .order('debut_le', { ascending: false })
       .limit(20)
       .then(({ data }) => {
