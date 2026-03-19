@@ -322,7 +322,15 @@ export default function ProfilSoignant() {
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Professionnel</h2>
           <div className="space-y-3">
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Profession</label><input value={getLabelProfession(profession)} disabled className="input-base bg-muted cursor-not-allowed" /></div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Profession</label>
+              <input value={getLabelProfession(profession)} disabled className="input-base bg-muted cursor-not-allowed" />
+              {statutLiberal !== 'ACTIF' && heuresCumulees < 3200 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  🔒 Passage en libéral disponible à 3 200h — actuellement <span className="font-semibold text-primary">{heuresCumulees}h</span>/3 200h
+                </p>
+              )}
+            </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés</label>
               <p className="text-xs text-muted-foreground mb-2">Cochez tous les types de contrat que vous acceptez</p>
