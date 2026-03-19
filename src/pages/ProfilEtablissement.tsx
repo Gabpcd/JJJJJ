@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2 } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
