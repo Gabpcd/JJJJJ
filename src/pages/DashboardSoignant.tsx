@@ -43,6 +43,7 @@ interface SoignantData {
   tous_documents_valides: boolean | null; identite_verifiee: boolean | null;
   score_fiabilite: number | null; total_missions_terminees: number | null;
   heures_cumulees: number | null; eligible_conversion_3200h: boolean | null;
+  type_exercice: string | null;
 }
 
 function calculerCompletionProfil(s: SoignantData) {
