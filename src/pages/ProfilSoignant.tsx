@@ -81,6 +81,8 @@ export default function ProfilSoignant() {
         setEmail(data.email);
         setProfession(data.profession);
         setRppsVerifie(!!data.rpps_verifie);
+        setHeuresCumulees(data.heures_cumulees || 0);
+        setStatutLiberal(data.statut_liberal || '');
         setCodeParrainage(data.code_parrainage || '');
         setForm({
           prenom: data.prenom || '',
