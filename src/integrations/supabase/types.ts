@@ -2309,6 +2309,7 @@ export type Database = {
           attestation_vaccinations: boolean | null
           attestation_vaccinations_le: string | null
           avatar_url: string | null
+          badge_ambassadeur: boolean
           bic: string | null
           bio: string | null
           code_ape: string | null
@@ -2343,6 +2344,7 @@ export type Database = {
           prevoyance_fournisseur: string | null
           prevoyance_inscrit: boolean | null
           prevoyance_numero_contrat: string | null
+          priorite_missions_urgentes: boolean
           profession: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km: number | null
           rpps_nom_api: string | null
@@ -2387,6 +2389,7 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
+          badge_ambassadeur?: boolean
           bic?: string | null
           bio?: string | null
           code_ape?: string | null
@@ -2421,6 +2424,7 @@ export type Database = {
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
           prevoyance_numero_contrat?: string | null
+          priorite_missions_urgentes?: boolean
           profession: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km?: number | null
           rpps_nom_api?: string | null
@@ -2465,6 +2469,7 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
+          badge_ambassadeur?: boolean
           bic?: string | null
           bio?: string | null
           code_ape?: string | null
@@ -2499,6 +2504,7 @@ export type Database = {
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
           prevoyance_numero_contrat?: string | null
+          priorite_missions_urgentes?: boolean
           profession?: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km?: number | null
           rpps_nom_api?: string | null
