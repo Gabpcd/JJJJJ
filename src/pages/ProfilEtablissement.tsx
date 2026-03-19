@@ -497,6 +497,86 @@ export default function ProfilEtablissement() {
           </div>
         </div>
 
+        {/* Contrat de service Jolene */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+            <FileCheck className="h-5 w-5 text-primary" /> Contrat de service Jolene
+          </h2>
+
+          {contratValide ? (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-success/10 border border-success/20">
+              <FileCheck className="h-4 w-4 text-success" />
+              <span className="text-sm font-medium text-success">✅ Contrat validé par Jolene</span>
+            </div>
+          ) : contratUrl ? (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-warning/10 border border-warning/20">
+              <Clock className="h-4 w-4 text-warning" />
+              <div>
+                <span className="text-sm font-medium text-foreground">⏳ En attente de validation</span>
+                {contratUploadeLe && <p className="text-xs text-muted-foreground mt-0.5">Téléversé le {new Date(contratUploadeLe).toLocaleDateString('fr-FR')}</p>}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-muted border border-border">
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">Non fourni</span>
+            </div>
+          )}
+
+          <div className="mt-4">
+            <input
+              ref={contratInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file || !user) return;
+                if (file.type !== 'application/pdf') {
+                  afficherNotification({ type: 'erreur', message: 'Seuls les fichiers PDF sont acceptés.' });
+                  return;
+                }
+                if (file.size > 20 * 1024 * 1024) {
+                  afficherNotification({ type: 'erreur', message: 'Le fichier ne doit pas dépasser 20 Mo.' });
+                  return;
+                }
+                setUploadingContrat(true);
+                const fileName = `${user.id}/contrat-service-${Date.now()}.pdf`;
+                const { error: uploadErr } = await supabase.storage.from('jolene-documents').upload(fileName, file, { upsert: true });
+                if (uploadErr) {
+                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(uploadErr) });
+                  setUploadingContrat(false);
+                  return;
+                }
+                const { data: urlData } = supabase.storage.from('jolene-documents').getPublicUrl(fileName);
+                const { error: updateErr } = await supabase.from('etablissements').update({
+                  contrat_url: urlData.publicUrl,
+                  contrat_uploade_le: new Date().toISOString(),
+                  contrat_valide: false,
+                } as any).eq('id', user.id);
+                if (updateErr) {
+                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(updateErr) });
+                } else {
+                  setContratUrl(urlData.publicUrl);
+                  setContratUploadeLe(new Date().toISOString());
+                  setContratValide(false);
+                  afficherNotification({ type: 'succes', message: 'Contrat téléversé. En attente de validation par Jolene.' });
+                }
+                setUploadingContrat(false);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => contratInputRef.current?.click()}
+              disabled={uploadingContrat}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50"
+            >
+              {uploadingContrat ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {uploadingContrat ? 'Envoi en cours…' : contratUrl ? 'Remplacer le contrat' : 'Téléverser votre contrat signé (PDF)'}
+            </button>
+          </div>
+        </div>
+
         <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50">
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>
