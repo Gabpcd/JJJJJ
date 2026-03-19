@@ -161,6 +161,11 @@ export default function ProfilSoignant() {
       afficherNotification({ type: 'erreur', message: 'Le nombre d\'années d\'expérience est obligatoire.' });
       return;
     }
+    // Validate attestation for MIXTE/LIBERAL
+    if ((typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && !attestationCumul) {
+      afficherNotification({ type: 'erreur', message: 'Vous devez attester la conformité de votre cumul d\'activités (article L1222-5).' });
+      return;
+    }
     setSaving(true);
     const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
       p_telephone: form.telephone || null,
@@ -176,8 +181,15 @@ export default function ProfilSoignant() {
       p_annees_experience: form.anneesExperience,
       p_specialites: specialites,
     });
-    if (error) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+
+    // Also update type_exercice directly
+    const { error: exError } = await supabase.from('soignants').update({
+      type_exercice: typeExercice,
+      attestation_cumul_activite: attestationCumul,
+    } as any).eq('id', user.id);
+
+    if (error || exError) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error || exError) });
     } else if (rpcResult?.error) {
       afficherNotification({ type: 'erreur', message: rpcResult.error });
     } else {
