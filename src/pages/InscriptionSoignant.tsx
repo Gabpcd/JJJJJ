@@ -58,6 +58,7 @@ export default function InscriptionSoignant() {
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     profession: '', typesContrat: [] as string[], rpps: '', rayon: 30,
     lat: null as number | null, lng: null as number | null,
+    estSalarieEtablissement: null as boolean | null,
   });
 
   // RPPS verification state
