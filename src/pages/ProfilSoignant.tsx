@@ -450,6 +450,10 @@ export default function ProfilSoignant() {
             <div className="flex justify-between text-[10px] text-muted-foreground"><span>10 €/h</span><span>100 €/h</span></div>
           </div>
         </div>
+
+        {/* Géolocalisation */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">📍 Géolocalisation</h2>
           <div className="space-y-3">
             <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
@@ -555,7 +559,7 @@ export default function ProfilSoignant() {
                   {codeCopied ? <><CheckCircle className="h-3.5 w-3.5" /> Copié !</> : <><Copy className="h-3.5 w-3.5" /> Copier</>}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Partagez ce code pour obtenir +50h bonus chacun !</p>
+              <p className="text-xs text-muted-foreground mt-2">Parrainez 3 collègues pour obtenir le badge Ambassadeur et un accès prioritaire aux missions urgentes.</p>
             </div>
           )}
 
@@ -580,7 +584,7 @@ export default function ProfilSoignant() {
                     afficherNotification({ type: 'erreur', message: data.error });
                   } else {
                     setParrainageSucces(true);
-                    afficherNotification({ type: 'succes', message: '+50h bonus appliquées ! 🎉' });
+                    afficherNotification({ type: 'succes', message: 'Parrainage enregistré ! 🎉' });
                   }
                   setParrainageLoading(false);
                 }}
@@ -591,7 +595,7 @@ export default function ProfilSoignant() {
               </button>
             </div>
             {parrainageSucces && (
-              <p className="text-sm text-success font-semibold mt-2">🎉 +50h bonus ajoutées à votre compteur !</p>
+              <p className="text-sm text-success font-semibold mt-2">🎉 Parrainage enregistré avec succès !</p>
             )}
           </div>
 

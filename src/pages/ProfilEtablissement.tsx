@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2 } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -182,6 +182,11 @@ export default function ProfilEtablissement() {
   const [type, setType] = useState('');
   const [conventionCollective, setConventionCollective] = useState('');
   const [modePaiement, setModePaiement] = useState('FACTURE_MENSUELLE');
+  const [contratValide, setContratValide] = useState(false);
+  const [contratUrl, setContratUrl] = useState<string | null>(null);
+  const [contratUploadeLe, setContratUploadeLe] = useState<string | null>(null);
+  const [uploadingContrat, setUploadingContrat] = useState(false);
+  const contratInputRef = React.useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     nom: '', finess: '', rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
@@ -190,12 +195,15 @@ export default function ProfilEtablissement() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent, logo_url, mode_paiement_commission').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent, logo_url, mode_paiement_commission, contrat_valide, contrat_url, contrat_uploade_le').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         setSiret(data.siret);
         setType(data.type);
         setConventionCollective(data.convention_collective || '');
         setModePaiement((data as any).mode_paiement_commission || 'FACTURE_MENSUELLE');
+        setContratValide(!!data.contrat_valide);
+        setContratUrl(data.contrat_url || null);
+        setContratUploadeLe(data.contrat_uploade_le || null);
         (setForm as any)(prev => ({ ...prev, logoUrl: (data as any).logo_url || '' }));
         setForm({
           nom: data.nom, finess: data.finess || '',
@@ -337,6 +345,22 @@ export default function ProfilEtablissement() {
           <p className="text-lg font-bold text-foreground">⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}</p>
         </div>
       )}
+
+      {/* Bandeau contrat non validé */}
+      {!contratValide && (
+        <div className="max-w-2xl mb-6 rounded-xl border border-warning/30 bg-warning/10 p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-warning mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Contrat de service non validé</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {contratUrl
+                ? 'Votre contrat a été téléversé et est en attente de validation par Jolene. Vous ne pouvez pas publier de missions tant qu\'il n\'est pas validé.'
+                : 'Téléversez votre contrat de service signé pour pouvoir publier des missions.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Informations générales</h2>
@@ -470,6 +494,86 @@ export default function ProfilEtablissement() {
                 <div className="p-3 text-xs text-muted-foreground">Aperçu de la bande colorée</div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Contrat de service Jolene */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+            <FileCheck className="h-5 w-5 text-primary" /> Contrat de service Jolene
+          </h2>
+
+          {contratValide ? (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-success/10 border border-success/20">
+              <FileCheck className="h-4 w-4 text-success" />
+              <span className="text-sm font-medium text-success">✅ Contrat validé par Jolene</span>
+            </div>
+          ) : contratUrl ? (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-warning/10 border border-warning/20">
+              <Clock className="h-4 w-4 text-warning" />
+              <div>
+                <span className="text-sm font-medium text-foreground">⏳ En attente de validation</span>
+                {contratUploadeLe && <p className="text-xs text-muted-foreground mt-0.5">Téléversé le {new Date(contratUploadeLe).toLocaleDateString('fr-FR')}</p>}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-muted border border-border">
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">Non fourni</span>
+            </div>
+          )}
+
+          <div className="mt-4">
+            <input
+              ref={contratInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file || !user) return;
+                if (file.type !== 'application/pdf') {
+                  afficherNotification({ type: 'erreur', message: 'Seuls les fichiers PDF sont acceptés.' });
+                  return;
+                }
+                if (file.size > 20 * 1024 * 1024) {
+                  afficherNotification({ type: 'erreur', message: 'Le fichier ne doit pas dépasser 20 Mo.' });
+                  return;
+                }
+                setUploadingContrat(true);
+                const fileName = `${user.id}/contrat-service-${Date.now()}.pdf`;
+                const { error: uploadErr } = await supabase.storage.from('jolene-documents').upload(fileName, file, { upsert: true });
+                if (uploadErr) {
+                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(uploadErr) });
+                  setUploadingContrat(false);
+                  return;
+                }
+                const { data: urlData } = supabase.storage.from('jolene-documents').getPublicUrl(fileName);
+                const { error: updateErr } = await supabase.from('etablissements').update({
+                  contrat_url: urlData.publicUrl,
+                  contrat_uploade_le: new Date().toISOString(),
+                  contrat_valide: false,
+                } as any).eq('id', user.id);
+                if (updateErr) {
+                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(updateErr) });
+                } else {
+                  setContratUrl(urlData.publicUrl);
+                  setContratUploadeLe(new Date().toISOString());
+                  setContratValide(false);
+                  afficherNotification({ type: 'succes', message: 'Contrat téléversé. En attente de validation par Jolene.' });
+                }
+                setUploadingContrat(false);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => contratInputRef.current?.click()}
+              disabled={uploadingContrat}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50"
+            >
+              {uploadingContrat ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {uploadingContrat ? 'Envoi en cours…' : contratUrl ? 'Remplacer le contrat' : 'Téléverser votre contrat signé (PDF)'}
+            </button>
           </div>
         </div>
 

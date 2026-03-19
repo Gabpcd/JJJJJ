@@ -58,11 +58,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
   const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
   const [siretInvalide, setSiretInvalide] = useState(false);
+  const [contratNonValide, setContratNonValide] = useState(false);
 
   // Load rist_plafond_actif + commission info + type + siret validation
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom), siret').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom), siret, contrat_valide').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
         setRistPlafondActif(data.rist_plafond_actif === true || typesPublics.includes(data.type));
@@ -75,6 +76,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         let sum = 0;
         for (let i = 0; i < 14; i++) { let d = parseInt(s[i], 10); if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
         if (sum % 10 !== 0) setSiretInvalide(true);
+        // Check contrat validation
+        if (!data.contrat_valide) setContratNonValide(true);
       }
     });
   }, [user]);
@@ -317,9 +320,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     }
   };
 
-  const canSubmit = modeRecurrent
+  const canSubmit = !contratNonValide && !siretInvalide && !erreurFactureImpayee && (modeRecurrent
     ? (!!intitule && !!profession && !!tauxHoraire && recurrenceValide && !publicationEnCours)
-    : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading);
+    : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading));
 
   return (
     <>
@@ -327,6 +330,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
           <span>Complétez votre SIRET pour publier des missions. <Link to="/etablissement/profil" className="text-primary hover:underline font-medium">Aller au profil →</Link></span>
+        </div>
+      )}
+
+      {contratNonValide && (
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
+          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          <span>Votre contrat de service n'est pas encore validé. <Link to="/etablissement/profil" className="text-primary hover:underline font-medium">Téléverser le contrat →</Link></span>
         </div>
       )}
 
