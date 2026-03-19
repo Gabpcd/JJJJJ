@@ -3285,6 +3285,20 @@ export type Database = {
               p_adresse_code_postal?: string
               p_adresse_rue?: string
               p_adresse_ville?: string
+              p_bio?: string
+              p_nom?: string
+              p_prenom?: string
+              p_profession?: Database["public"]["Enums"]["type_profession"]
+              p_specialites?: string[]
+              p_telephone?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_adresse_code_postal?: string
+              p_adresse_rue?: string
+              p_adresse_ville?: string
               p_rayon_deplacement_km?: number
               p_telephone?: string
             }
