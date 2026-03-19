@@ -345,6 +345,22 @@ export default function ProfilEtablissement() {
           <p className="text-lg font-bold text-foreground">⭐ {noteMoyenne.moyenne.toFixed(1)}/5 — {noteMoyenne.total} évaluation{noteMoyenne.total > 1 ? 's' : ''}</p>
         </div>
       )}
+
+      {/* Bandeau contrat non validé */}
+      {!contratValide && (
+        <div className="max-w-2xl mb-6 rounded-xl border border-warning/30 bg-warning/10 p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-warning mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Contrat de service non validé</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {contratUrl
+                ? 'Votre contrat a été téléversé et est en attente de validation par Jolene. Vous ne pouvez pas publier de missions tant qu\'il n\'est pas validé.'
+                : 'Téléversez votre contrat de service signé pour pouvoir publier des missions.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Informations générales</h2>
