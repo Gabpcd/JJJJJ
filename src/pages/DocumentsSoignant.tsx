@@ -441,7 +441,27 @@ export default function DocumentsSoignant() {
                 {doc && !estExpire && !estRejete ? (
                   <div className="mt-2">
                     <p className="text-xs text-muted-foreground">📎 {doc.nom_fichier} (téléversé le {format(new Date(doc.televerse_le), 'd MMM yyyy', { locale: fr })})</p>
-                    {statut && <span className={`badge-base ${statut.couleur} text-[10px] mt-1`}>{statut.label}</span>}
+                    {/* Enhanced status badge */}
+                    {doc.statut_verification === 'VERIFIE' && (
+                      <span className="inline-flex items-center gap-1 badge-base bg-emerald-100 text-emerald-700 text-[10px] mt-1">
+                        <CheckCircle2 className="h-3 w-3" /> Vérifié ✅
+                      </span>
+                    )}
+                    {doc.statut_verification === 'EN_ATTENTE' && (
+                      <span className="inline-flex items-center gap-1 badge-base bg-amber-100 text-amber-700 text-[10px] mt-1">
+                        <Loader2 className="h-3 w-3 animate-spin" /> En attente de vérification ⏳
+                      </span>
+                    )}
+                    {doc.statut_verification === 'REVUE_MANUELLE_REQUISE' && (
+                      <span className="inline-flex items-center gap-1 badge-base bg-blue-100 text-blue-700 text-[10px] mt-1">
+                        <Clock className="h-3 w-3" /> En cours de vérification
+                      </span>
+                    )}
+                    {doc.statut_verification === 'API_INDISPONIBLE' && (
+                      <span className="inline-flex items-center gap-1 badge-base bg-muted text-muted-foreground text-[10px] mt-1">
+                        Vérification temporairement indisponible
+                      </span>
+                    )}
                     {doc.valide_depuis && (
                       <p className="text-[10px] text-muted-foreground mt-1">Délivré le {format(new Date(doc.valide_depuis), 'd MMM yyyy', { locale: fr })}</p>
                     )}
@@ -450,6 +470,16 @@ export default function DocumentsSoignant() {
                     )}
                     <div className="flex gap-2 mt-2">
                       <button onClick={() => voirDocument(doc)} className="text-xs text-primary font-medium hover:underline">Voir</button>
+                      {doc.statut_verification !== 'VERIFIE' && (
+                        <button
+                          onClick={() => reverifier(doc.id)}
+                          disabled={reverifyingId === doc.id}
+                          className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
+                        >
+                          {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                          Revérifier
+                        </button>
+                      )}
                       <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Remplacer</button>
                       <button onClick={() => setSuppDocId(doc.id)} className="text-xs text-destructive font-medium hover:underline">Supprimer</button>
                     </div>
@@ -464,9 +494,17 @@ export default function DocumentsSoignant() {
                   </div>
                 ) : estRejete ? (
                   <div className="mt-2">
-                    <p className="text-xs text-destructive">✗ Rejeté {doc.motif_rejet && `— Motif : "${doc.motif_rejet}"`}</p>
-                    <span className="badge-base bg-destructive/10 text-destructive text-[10px] mt-1">Rejeté ✗</span>
+                    <p className="text-xs text-destructive">❌ Rejeté {doc.motif_rejet && `— Motif : "${doc.motif_rejet}"`}</p>
+                    <span className="inline-flex items-center gap-1 badge-base bg-destructive/10 text-destructive text-[10px] mt-1">Rejeté ❌</span>
                     <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => reverifier(doc.id)}
+                        disabled={reverifyingId === doc.id}
+                        className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
+                      >
+                        {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        Revérifier
+                      </button>
                       <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Téléverser un nouveau document</button>
                     </div>
                   </div>
