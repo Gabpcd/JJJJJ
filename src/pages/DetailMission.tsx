@@ -551,6 +551,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             Modifier
           </button>
         )}
+        {m.statut === 'EN_COURS' && (
+          <button onClick={() => setModalTerminer(true)} className="text-sm font-semibold flex items-center gap-1 px-4 py-2 rounded-xl bg-success text-success-foreground hover:bg-success/90 transition flex-1 md:flex-none justify-center">
+            ✅ Terminer la mission
+          </button>
+        )}
         <button onClick={() => setModalDupliquer(true)} className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-1 px-3">
           <Copy className="h-4 w-4" /> Dupliquer
         </button>
