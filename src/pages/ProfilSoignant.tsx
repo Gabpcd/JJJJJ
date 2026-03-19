@@ -450,6 +450,10 @@ export default function ProfilSoignant() {
             <div className="flex justify-between text-[10px] text-muted-foreground"><span>10 €/h</span><span>100 €/h</span></div>
           </div>
         </div>
+
+        {/* Géolocalisation */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">📍 Géolocalisation</h2>
           <div className="space-y-3">
             <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
