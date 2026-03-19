@@ -394,6 +394,16 @@ export default function DocumentsSoignant() {
         </div>
       )}
 
+      {/* Cross-validation banner */}
+      {incoherenceMessage && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 mb-4 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700">
+            ⚠️ Incohérence détectée entre vos documents : {incoherenceMessage} Veuillez vérifier que tous vos documents sont à jour et au même nom.
+          </p>
+        </div>
+      )}
+
       {/* Liste des documents */}
       <div className="space-y-3">
         {typesOrdonnes.map((requis, idx) => {
