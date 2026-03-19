@@ -95,6 +95,7 @@ const AdminGroupes = lazy(() => import("./pages/admin/AdminGroupes"));
 const AdminDetailUtilisateur = lazy(() => import("./pages/admin/AdminDetailUtilisateur"));
 const AdminCalendrier = lazy(() => import("./pages/admin/AdminCalendrier"));
 const AdminMissions = lazy(() => import("./pages/admin/AdminMissions"));
+const AdminReclamations = lazy(() => import("./pages/admin/AdminReclamations"));
 
 const queryClient = new QueryClient();
 
