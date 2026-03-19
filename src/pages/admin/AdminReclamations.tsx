@@ -125,7 +125,7 @@ export default function AdminReclamations() {
                     type="number"
                     min={1}
                     max={30}
-                    value={pointsInput[r.id] || 5}
+                    value={pointsInput[r.id] || 10}
                     onChange={e => setPointsInput(prev => ({ ...prev, [r.id]: Number(e.target.value) }))}
                     className="input-base w-20 text-sm"
                   />
