@@ -59,10 +59,11 @@ export default function ProfilSoignant() {
   const [codeCopied, setCodeCopied] = useState(false);
   const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
   const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
-
+  const [heuresCumulees, setHeuresCumulees] = useState(0);
+  const [statutLiberal, setStatutLiberal] = useState('');
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, disponible_urgence, urgence_rayon_km, bio, annees_experience, specialites').eq('id', user.id).single().then(({ data, error }: any) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, disponible_urgence, urgence_rayon_km, bio, annees_experience, specialites, heures_cumulees, statut_liberal').eq('id', user.id).single().then(({ data, error }: any) => {
       if (error) {
         afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
         setLoading(false);
@@ -80,6 +81,8 @@ export default function ProfilSoignant() {
         setEmail(data.email);
         setProfession(data.profession);
         setRppsVerifie(!!data.rpps_verifie);
+        setHeuresCumulees(data.heures_cumulees || 0);
+        setStatutLiberal(data.statut_liberal || '');
         setCodeParrainage(data.code_parrainage || '');
         setForm({
           prenom: data.prenom || '',
@@ -319,7 +322,15 @@ export default function ProfilSoignant() {
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Professionnel</h2>
           <div className="space-y-3">
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Profession</label><input value={getLabelProfession(profession)} disabled className="input-base bg-muted cursor-not-allowed" /></div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Profession</label>
+              <input value={getLabelProfession(profession)} disabled className="input-base bg-muted cursor-not-allowed" />
+              {statutLiberal !== 'ACTIF' && heuresCumulees < 3200 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  🔒 Passage en libéral disponible à 3 200h — actuellement <span className="font-semibold text-primary">{heuresCumulees}h</span>/3 200h
+                </p>
+              )}
+            </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés</label>
               <p className="text-xs text-muted-foreground mb-2">Cochez tous les types de contrat que vous acceptez</p>

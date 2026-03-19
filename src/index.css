@@ -121,6 +121,11 @@
     @apply border-border;
   }
 
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -128,22 +133,25 @@
     padding-right: env(safe-area-inset-right);
   }
 
-  /* Safe area spacer: navy background extends under the status bar */
+  /* Safe area spacer: navy background extends under the status bar / Dynamic Island */
   #root::before {
     content: '';
     display: block;
     height: env(safe-area-inset-top);
-    background-color: hsl(222 47% 11%);
+    background-color: hsl(var(--sidebar-bg));
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     z-index: 100;
+    pointer-events: none;
   }
 
   #root {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
   }
 
   /* WCAG: Focus visible on all interactive elements */
