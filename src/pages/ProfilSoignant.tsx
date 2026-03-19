@@ -425,7 +425,31 @@ export default function ProfilSoignant() {
           )}
         </div>
 
+        {/* Taux horaire minimum */}
         <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">💰 Taux horaire minimum accepté</h2>
+          <p className="text-xs text-muted-foreground mb-3">Les missions en dessous de ce taux seront grisées dans vos résultats.</p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-foreground font-medium">
+                {form.tauxHoraireMinimum ? `${form.tauxHoraireMinimum} €/h` : 'Non défini'}
+              </span>
+              {form.tauxHoraireMinimum && (
+                <button type="button" onClick={() => maj('tauxHoraireMinimum', null)} className="text-xs text-destructive hover:underline">Supprimer</button>
+              )}
+            </div>
+            <input
+              type="range"
+              min={10}
+              max={100}
+              step={1}
+              value={form.tauxHoraireMinimum ?? 10}
+              onChange={e => maj('tauxHoraireMinimum', Number(e.target.value))}
+              className="w-full accent-primary"
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground"><span>10 €/h</span><span>100 €/h</span></div>
+          </div>
+        </div>
           <div className="space-y-3">
             <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
