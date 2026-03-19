@@ -55,6 +55,7 @@ interface PageMessagerieProps {
 }
 
 export default function PageMessagerie({ role }: PageMessagerieProps) {
+  usePageTitle('Messagerie');
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
