@@ -1004,6 +1004,7 @@ export type Database = {
           est_secteur_public: boolean | null
           etablissement_id: string
           id: string
+          mission_id: string | null
           mode_paiement: string | null
           modifie_le: string | null
           montant_ht: number
@@ -1036,6 +1037,7 @@ export type Database = {
           est_secteur_public?: boolean | null
           etablissement_id: string
           id?: string
+          mission_id?: string | null
           mode_paiement?: string | null
           modifie_le?: string | null
           montant_ht: number
@@ -1068,6 +1070,7 @@ export type Database = {
           est_secteur_public?: boolean | null
           etablissement_id?: string
           id?: string
+          mission_id?: string | null
           mode_paiement?: string | null
           modifie_le?: string | null
           montant_ht?: number
@@ -1092,6 +1095,13 @@ export type Database = {
             columns: ["etablissement_id"]
             isOneToOne: false
             referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factures_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
             referencedColumns: ["id"]
           },
         ]
@@ -2870,53 +2880,22 @@ export type Database = {
         Args: { p_motif: string; p_presence_id: string }
         Returns: Json
       }
-      fn_creer_mission:
-        | {
-            Args: {
-              p_debut_le?: string
-              p_description?: string
-              p_est_urgente?: boolean
-              p_fin_le?: string
-              p_intitule: string
-              p_mode_attribution?: string
-              p_niveau_urgence?: number
-              p_profession_requise?: Database["public"]["Enums"]["type_profession"]
-              p_service?: string
-              p_taux_horaire_base?: number
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_debut_le?: string
-              p_description?: string
-              p_est_urgente?: boolean
-              p_fin_le?: string
-              p_intitule: string
-              p_mode_attribution?: string
-              p_niveau_urgence?: number
-              p_profession_requise?: Database["public"]["Enums"]["type_profession"]
-              p_serie_id?: string
-              p_service?: string
-              p_taux_horaire_base?: number
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_debut_le?: string
-              p_description?: string
-              p_est_urgente?: boolean
-              p_fin_le?: string
-              p_intitule: string
-              p_niveau_urgence?: string
-              p_profession_requise?: Database["public"]["Enums"]["type_profession"]
-              p_serie_id?: string
-              p_service?: string
-              p_taux_horaire_base?: number
-            }
-            Returns: Json
-          }
+      fn_creer_mission: {
+        Args: {
+          p_debut_le?: string
+          p_description?: string
+          p_est_urgente?: boolean
+          p_fin_le?: string
+          p_intitule: string
+          p_mode_attribution?: string
+          p_niveau_urgence?: number
+          p_profession_requise?: Database["public"]["Enums"]["type_profession"]
+          p_serie_id?: string
+          p_service?: string
+          p_taux_horaire_base?: number
+        }
+        Returns: Json
+      }
       fn_creer_notification: {
         Args: {
           p_corps: string
@@ -2930,21 +2909,19 @@ export type Database = {
         }
         Returns: string
       }
-      fn_creer_serie:
-        | {
-            Args: {
-              p_description?: string
-              p_est_urgente?: boolean
-              p_intitule: string
-              p_missions?: Json
-              p_niveau_urgence?: number
-              p_profession_requise?: Database["public"]["Enums"]["type_profession"]
-              p_service?: string
-              p_taux_horaire_base?: number
-            }
-            Returns: Json
-          }
-        | { Args: { p_missions: Json }; Returns: Json }
+      fn_creer_serie: {
+        Args: {
+          p_description?: string
+          p_est_urgente?: boolean
+          p_intitule: string
+          p_missions?: Json
+          p_niveau_urgence?: number
+          p_profession_requise?: Database["public"]["Enums"]["type_profession"]
+          p_service?: string
+          p_taux_horaire_base?: number
+        }
+        Returns: Json
+      }
       fn_declarer_virement: {
         Args: { p_facture_id: string; p_reference: string }
         Returns: Json
@@ -3129,9 +3106,10 @@ export type Database = {
       fn_exporter_mes_donnees: { Args: never; Returns: Json }
       fn_generer_code_parrainage: { Args: never; Returns: string }
       fn_generer_facture: { Args: { p_mission_id: string }; Returns: Json }
-      fn_generer_facture_mensuelle:
-        | { Args: never; Returns: Json }
-        | { Args: { p_etablissement_id: string }; Returns: Json }
+      fn_generer_facture_mensuelle: {
+        Args: { p_etablissement_id: string }
+        Returns: Json
+      }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
       fn_generer_numero_contrat_safe: {
@@ -3270,225 +3248,53 @@ export type Database = {
         }
         Returns: Json
       }
-      fn_modifier_mon_etablissement:
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_nom?: string
-              p_telephone?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_convention_collective?: string
-              p_nom?: string
-              p_telephone?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_convention_collective?: string
-              p_couleur_theme?: string
-              p_nom?: string
-              p_telephone?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_convention_collective?: string
-              p_couleur_theme?: string
-              p_logo_url?: string
-              p_nom?: string
-              p_telephone?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_convention_collective?: string
-              p_couleur_theme?: string
-              p_logo_url?: string
-              p_mode_paiement_commission?: string
-              p_nom?: string
-              p_telephone?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_departement?: string
-              p_adresse_lat?: number
-              p_adresse_lng?: number
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_convention_collective?: string
-              p_couleur_theme?: string
-              p_email_contact?: string
-              p_finess?: string
-              p_mode_paiement_commission?: string
-              p_nom: string
-              p_taux_majoration_dimanche?: number
-              p_taux_majoration_ferie?: number
-              p_taux_majoration_nuit?: number
-              p_telephone_contact?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_departement?: string
-              p_adresse_lat?: number
-              p_adresse_lng?: number
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_convention_collective?: string
-              p_email_contact?: string
-              p_finess?: string
-              p_nom: string
-              p_taux_majoration_dimanche?: number
-              p_taux_majoration_ferie?: number
-              p_taux_majoration_nuit?: number
-              p_telephone_contact?: string
-            }
-            Returns: Json
-          }
-      fn_modifier_mon_profil:
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_lat?: number
-              p_adresse_lng?: number
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_avatar_url?: string
-              p_date_naissance?: string
-              p_nom?: string
-              p_numero_adeli?: string
-              p_numero_rpps?: string
-              p_prenom?: string
-              p_rayon_deplacement_km?: number
-              p_telephone?: string
-              p_types_contrat?: string[]
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_lat?: number
-              p_adresse_lng?: number
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_annees_experience?: number
-              p_avatar_url?: string
-              p_bio?: string
-              p_date_naissance?: string
-              p_nom?: string
-              p_numero_adeli?: string
-              p_numero_rpps?: string
-              p_prenom?: string
-              p_rayon_deplacement_km?: number
-              p_specialites?: string[]
-              p_telephone?: string
-              p_types_contrat?: string[]
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_bio?: string
-              p_nom?: string
-              p_prenom?: string
-              p_profession?: Database["public"]["Enums"]["type_profession"]
-              p_specialites?: string[]
-              p_telephone?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_rayon_deplacement_km?: number
-              p_telephone?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_avatar_url?: string
-              p_rayon_deplacement_km?: number
-              p_telephone?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_lat?: number
-              p_adresse_lng?: number
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_annees_experience?: number
-              p_bio?: string
-              p_date_naissance?: string
-              p_nom?: string
-              p_numero_adeli?: string
-              p_numero_rpps?: string
-              p_prenom?: string
-              p_rayon_deplacement_km?: number
-              p_specialites?: string
-              p_telephone?: string
-              p_type_contrat?: string
-              p_types_contrat_acceptes?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_adresse_code_postal?: string
-              p_adresse_lat?: number
-              p_adresse_lng?: number
-              p_adresse_rue?: string
-              p_adresse_ville?: string
-              p_date_naissance?: string
-              p_nom?: string
-              p_numero_adeli?: string
-              p_numero_rpps?: string
-              p_prenom?: string
-              p_rayon_deplacement_km?: number
-              p_telephone?: string
-              p_type_contrat?: string
-              p_types_contrat_acceptes?: string
-            }
-            Returns: Json
-          }
+      fn_modifier_mon_etablissement: {
+        Args: {
+          p_adresse_code_postal?: string
+          p_adresse_departement?: string
+          p_adresse_lat?: number
+          p_adresse_lng?: number
+          p_adresse_rue?: string
+          p_adresse_ville?: string
+          p_contrat_url?: string
+          p_convention_collective?: string
+          p_couleur_theme?: string
+          p_email_contact?: string
+          p_finess?: string
+          p_logo_url?: string
+          p_mode_paiement_commission?: string
+          p_nom?: string
+          p_taux_majoration_dimanche?: number
+          p_taux_majoration_ferie?: number
+          p_taux_majoration_nuit?: number
+          p_telephone?: string
+        }
+        Returns: Json
+      }
+      fn_modifier_mon_profil: {
+        Args: {
+          p_adresse_code_postal?: string
+          p_adresse_lat?: number
+          p_adresse_lng?: number
+          p_adresse_rue?: string
+          p_adresse_ville?: string
+          p_annees_experience?: number
+          p_avatar_url?: string
+          p_bio?: string
+          p_date_naissance?: string
+          p_nom?: string
+          p_numero_adeli?: string
+          p_numero_rpps?: string
+          p_prenom?: string
+          p_rayon_deplacement_km?: number
+          p_specialites?: string[]
+          p_taux_horaire_minimum?: number
+          p_telephone?: string
+          p_type_exercice?: string
+          p_types_contrat?: string[]
+        }
+        Returns: Json
+      }
       fn_modifier_tva_liberal: {
         Args: { p_assujetti_tva: boolean; p_numero_tva?: string }
         Returns: Json
@@ -3502,58 +3308,34 @@ export type Database = {
         Args: { p_autre_id: string; p_mission_id?: string }
         Returns: string
       }
-      fn_pointer_arrivee:
-        | {
-            Args: {
-              p_code_arrivee?: string
-              p_lat?: number
-              p_lng?: number
-              p_mission_id: string
-              p_modele?: string
-              p_precision?: number
-              p_terminal_id?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_lat: number
-              p_lng: number
-              p_mission_id: string
-              p_modele: string
-              p_precision: number
-              p_terminal_id: string
-            }
-            Returns: Json
-          }
+      fn_pointer_arrivee: {
+        Args: {
+          p_code_arrivee?: string
+          p_lat?: number
+          p_lng?: number
+          p_mission_id: string
+          p_modele?: string
+          p_precision?: number
+          p_terminal_id?: string
+        }
+        Returns: Json
+      }
       fn_pointer_arrivee_code: {
         Args: { p_code: string; p_mission_id: string }
         Returns: Json
       }
-      fn_pointer_depart:
-        | {
-            Args: {
-              p_code_depart?: string
-              p_lat?: number
-              p_lng?: number
-              p_modele?: string
-              p_precision?: number
-              p_presence_id: string
-              p_terminal_id?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_lat: number
-              p_lng: number
-              p_modele: string
-              p_precision: number
-              p_presence_id: string
-              p_terminal_id: string
-            }
-            Returns: Json
-          }
+      fn_pointer_depart: {
+        Args: {
+          p_code_depart?: string
+          p_lat?: number
+          p_lng?: number
+          p_modele?: string
+          p_precision?: number
+          p_presence_id: string
+          p_terminal_id?: string
+        }
+        Returns: Json
+      }
       fn_pointer_depart_code: {
         Args: { p_code: string; p_presence_id: string }
         Returns: Json
