@@ -267,6 +267,19 @@ export default function InscriptionSoignant() {
                   </div>
                 )}
               </div>
+              {/* Question salarié établissement */}
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Êtes-vous actuellement salarié(e) d'un établissement de santé ?</label>
+                <div className="flex gap-3 mt-1">
+                  <button type="button" onClick={() => maj('estSalarieEtablissement', true)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${form.estSalarieEtablissement === true ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Oui</button>
+                  <button type="button" onClick={() => maj('estSalarieEtablissement', false)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${form.estSalarieEtablissement === false ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Non</button>
+                </div>
+                {form.estSalarieEtablissement === true && (
+                  <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                    <p className="text-xs text-foreground">ℹ️ Vous pourrez effectuer des missions sur Jolene en complément de votre activité salariée. Vérifiez que votre contrat de travail n'inclut pas de clause d'exclusivité.</p>
+                  </div>
+                )}
+              </div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon de déplacement : <span className="text-primary font-bold">{form.rayon} km</span></label>
                 <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full h-2 bg-primary/20 rounded-full appearance-none cursor-pointer accent-primary" />
