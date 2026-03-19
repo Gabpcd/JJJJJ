@@ -76,6 +76,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         let sum = 0;
         for (let i = 0; i < 14; i++) { let d = parseInt(s[i], 10); if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
         if (sum % 10 !== 0) setSiretInvalide(true);
+        // Check contrat validation
+        if (!data.contrat_valide) setContratNonValide(true);
       }
     });
   }, [user]);
