@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
-import { FolderOpen, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
+import { FolderOpen, AlertCircle, Clock, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
@@ -135,6 +135,7 @@ export default function DocumentsSoignant() {
   const [documentsRequis, setDocumentsRequis] = useState<any[]>([]);
   const [mesDocuments, setMesDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reverifyingId, setReverifyingId] = useState<string | null>(null);
 
   // Modal state
   const [televersementType, setTeleversementType] = useState<string | null>(null);
@@ -144,13 +145,12 @@ export default function DocumentsSoignant() {
   const charger = async () => {
     if (!user) return;
     const [{ data: sg }, { data: dr }, { data: md }] = await Promise.all([
-      supabase.from('soignants').select('profession').eq('id', user.id).single(),
+      supabase.from('soignants').select('profession, prenom, nom').eq('id', user.id).single(),
       supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique'),
       supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
     ]);
     if (sg) {
       setSoignant(sg);
-      // Exclure les types gérés par attestation sur l'honneur
       setDocumentsRequis(
         (dr || []).filter((d: any) =>
           d.profession === (sg as any).profession &&
@@ -180,6 +180,50 @@ export default function DocumentsSoignant() {
     new Date(d.valide_jusqua) > new Date() &&
     differenceInDays(new Date(d.valide_jusqua), new Date()) < 30
   ), [mesDocuments]);
+
+  // Cross-validation: check coherence when all critical docs are present
+  const incoherenceMessage = useMemo(() => {
+    const criticalTypes = ['CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RPPS_ADELI'];
+    const criticalDocs = criticalTypes.map(t => mesDocuments.find(d => d.type_document === t && d.statut_verification === 'VERIFIE'));
+    const allPresent = criticalDocs.every(Boolean);
+    if (!allPresent) return null;
+
+    const issues: string[] = [];
+    const rcpDoc = criticalDocs[2];
+    if (rcpDoc?.valide_jusqua && new Date(rcpDoc.valide_jusqua) < new Date()) {
+      issues.push('Votre assurance RCP est expirée');
+    }
+    const diplomeDoc = criticalDocs[1];
+    if (diplomeDoc?.valide_jusqua && new Date(diplomeDoc.valide_jusqua) < new Date()) {
+      issues.push('Votre diplôme est expiré');
+    }
+    return issues.length > 0 ? issues.join('. ') + '.' : null;
+  }, [mesDocuments]);
+
+  const reverifier = async (docId: string) => {
+    setReverifyingId(docId);
+    try {
+      const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-document', {
+        body: { document_id: docId },
+      });
+      if (verifyError) {
+        toast.error('Erreur lors de la revérification.');
+        handleErrorSilent(verifyError, 'Revérification document');
+      } else if (verifyData?.verdict === 'VERIFIE') {
+        toast.success('✅ Document vérifié automatiquement !');
+      } else if (verifyData?.verdict === 'REJETE') {
+        toast.error(`❌ Document rejeté : ${verifyData?.analysis?.motif_rejet || 'Non conforme'}`);
+      } else {
+        toast.info('⏳ Vérification en cours de traitement...');
+      }
+      await charger();
+    } catch (err) {
+      handleErrorSilent(err, 'Revérification document');
+      toast.error('Erreur lors de la revérification.');
+    } finally {
+      setReverifyingId(null);
+    }
+  };
 
   const televerser = async (fichier: File, libelle: string, valideDepuis: string, valideJusqua: string) => {
     if (!user || !televersementType) return;
@@ -350,6 +394,16 @@ export default function DocumentsSoignant() {
         </div>
       )}
 
+      {/* Cross-validation banner */}
+      {incoherenceMessage && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 mb-4 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700">
+            ⚠️ Incohérence détectée entre vos documents : {incoherenceMessage} Veuillez vérifier que tous vos documents sont à jour et au même nom.
+          </p>
+        </div>
+      )}
+
       {/* Liste des documents */}
       <div className="space-y-3">
         {typesOrdonnes.map((requis, idx) => {
@@ -387,7 +441,27 @@ export default function DocumentsSoignant() {
                 {doc && !estExpire && !estRejete ? (
                   <div className="mt-2">
                     <p className="text-xs text-muted-foreground">📎 {doc.nom_fichier} (téléversé le {format(new Date(doc.televerse_le), 'd MMM yyyy', { locale: fr })})</p>
-                    {statut && <span className={`badge-base ${statut.couleur} text-[10px] mt-1`}>{statut.label}</span>}
+                    {/* Enhanced status badge */}
+                    {doc.statut_verification === 'VERIFIE' && (
+                      <span className="inline-flex items-center gap-1 badge-base bg-emerald-100 text-emerald-700 text-[10px] mt-1">
+                        <CheckCircle2 className="h-3 w-3" /> Vérifié ✅
+                      </span>
+                    )}
+                    {doc.statut_verification === 'EN_ATTENTE' && (
+                      <span className="inline-flex items-center gap-1 badge-base bg-amber-100 text-amber-700 text-[10px] mt-1">
+                        <Loader2 className="h-3 w-3 animate-spin" /> En attente de vérification ⏳
+                      </span>
+                    )}
+                    {doc.statut_verification === 'REVUE_MANUELLE_REQUISE' && (
+                      <span className="inline-flex items-center gap-1 badge-base bg-blue-100 text-blue-700 text-[10px] mt-1">
+                        <Clock className="h-3 w-3" /> En cours de vérification
+                      </span>
+                    )}
+                    {doc.statut_verification === 'API_INDISPONIBLE' && (
+                      <span className="inline-flex items-center gap-1 badge-base bg-muted text-muted-foreground text-[10px] mt-1">
+                        Vérification temporairement indisponible
+                      </span>
+                    )}
                     {doc.valide_depuis && (
                       <p className="text-[10px] text-muted-foreground mt-1">Délivré le {format(new Date(doc.valide_depuis), 'd MMM yyyy', { locale: fr })}</p>
                     )}
@@ -396,6 +470,16 @@ export default function DocumentsSoignant() {
                     )}
                     <div className="flex gap-2 mt-2">
                       <button onClick={() => voirDocument(doc)} className="text-xs text-primary font-medium hover:underline">Voir</button>
+                      {doc.statut_verification !== 'VERIFIE' && (
+                        <button
+                          onClick={() => reverifier(doc.id)}
+                          disabled={reverifyingId === doc.id}
+                          className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
+                        >
+                          {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                          Revérifier
+                        </button>
+                      )}
                       <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Remplacer</button>
                       <button onClick={() => setSuppDocId(doc.id)} className="text-xs text-destructive font-medium hover:underline">Supprimer</button>
                     </div>
@@ -410,9 +494,17 @@ export default function DocumentsSoignant() {
                   </div>
                 ) : estRejete ? (
                   <div className="mt-2">
-                    <p className="text-xs text-destructive">✗ Rejeté {doc.motif_rejet && `— Motif : "${doc.motif_rejet}"`}</p>
-                    <span className="badge-base bg-destructive/10 text-destructive text-[10px] mt-1">Rejeté ✗</span>
+                    <p className="text-xs text-destructive">❌ Rejeté {doc.motif_rejet && `— Motif : "${doc.motif_rejet}"`}</p>
+                    <span className="inline-flex items-center gap-1 badge-base bg-destructive/10 text-destructive text-[10px] mt-1">Rejeté ❌</span>
                     <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => reverifier(doc.id)}
+                        disabled={reverifyingId === doc.id}
+                        className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
+                      >
+                        {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        Revérifier
+                      </button>
                       <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Téléverser un nouveau document</button>
                     </div>
                   </div>

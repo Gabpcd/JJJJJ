@@ -1591,6 +1591,8 @@ export type Database = {
       }
       missions: {
         Row: {
+          annulee_le: string | null
+          annulee_par: string | null
           code_arrivee: string | null
           code_depart: string | null
           commission_facturee: boolean | null
@@ -1617,12 +1619,14 @@ export type Database = {
           montant_majoration_dimanche: number | null
           montant_majoration_ferie: number | null
           montant_majoration_nuit: number | null
+          motif_annulation: string | null
           net_a_payer: number | null
           net_estime: number | null
           niveau_urgence: number | null
           numero_note_honoraires: string | null
           profession_requise: Database["public"]["Enums"]["type_profession"]
           rist_plafond_applique: boolean | null
+          serie_id: string | null
           service: string | null
           soignant_assigne_id: string | null
           statut: Database["public"]["Enums"]["statut_mission"] | null
@@ -1631,12 +1635,15 @@ export type Database = {
           taux_icp: number | null
           taux_ifm: number | null
           taux_rist_plafonne: number | null
+          terminee_le: string | null
           total_brut: number | null
           type_paiement_soignant: string | null
           yousign_id_procedure: string | null
           yousign_statut: string | null
         }
         Insert: {
+          annulee_le?: string | null
+          annulee_par?: string | null
           code_arrivee?: string | null
           code_depart?: string | null
           commission_facturee?: boolean | null
@@ -1663,12 +1670,14 @@ export type Database = {
           montant_majoration_dimanche?: number | null
           montant_majoration_ferie?: number | null
           montant_majoration_nuit?: number | null
+          motif_annulation?: string | null
           net_a_payer?: number | null
           net_estime?: number | null
           niveau_urgence?: number | null
           numero_note_honoraires?: string | null
           profession_requise: Database["public"]["Enums"]["type_profession"]
           rist_plafond_applique?: boolean | null
+          serie_id?: string | null
           service?: string | null
           soignant_assigne_id?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
@@ -1677,12 +1686,15 @@ export type Database = {
           taux_icp?: number | null
           taux_ifm?: number | null
           taux_rist_plafonne?: number | null
+          terminee_le?: string | null
           total_brut?: number | null
           type_paiement_soignant?: string | null
           yousign_id_procedure?: string | null
           yousign_statut?: string | null
         }
         Update: {
+          annulee_le?: string | null
+          annulee_par?: string | null
           code_arrivee?: string | null
           code_depart?: string | null
           commission_facturee?: boolean | null
@@ -1709,12 +1721,14 @@ export type Database = {
           montant_majoration_dimanche?: number | null
           montant_majoration_ferie?: number | null
           montant_majoration_nuit?: number | null
+          motif_annulation?: string | null
           net_a_payer?: number | null
           net_estime?: number | null
           niveau_urgence?: number | null
           numero_note_honoraires?: string | null
           profession_requise?: Database["public"]["Enums"]["type_profession"]
           rist_plafond_applique?: boolean | null
+          serie_id?: string | null
           service?: string | null
           soignant_assigne_id?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
@@ -1723,6 +1737,7 @@ export type Database = {
           taux_icp?: number | null
           taux_ifm?: number | null
           taux_rist_plafonne?: number | null
+          terminee_le?: string | null
           total_brut?: number | null
           type_paiement_soignant?: string | null
           yousign_id_procedure?: string | null
