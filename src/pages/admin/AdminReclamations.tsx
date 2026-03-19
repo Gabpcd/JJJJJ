@@ -137,7 +137,7 @@ export default function AdminReclamations() {
                   className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50"
                 >
                   {traitement === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-                  Accepter (+{pointsInput[r.id] || 5} pts)
+                  Accepter (+{pointsInput[r.id] || 10} pts)
                 </button>
                 <button
                   onClick={() => traiter(r.id, 'REFUSEE')}

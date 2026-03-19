@@ -590,6 +590,27 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         labelConfirmer="Dupliquer"
       />
 
+      <ModalConfirmation
+        ouvert={modalTerminer}
+        onFermer={() => setModalTerminer(false)}
+        onConfirmer={async () => {
+          setTerminating(true);
+          const { data, error } = await supabase.rpc('fn_terminer_mission' as any, { p_mission_id: id! });
+          if (error) {
+            afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+          } else if (data && typeof data === 'object' && (data as any).success === false) {
+            afficherNotification({ type: 'erreur', message: (data as any).error || 'Erreur lors de la terminaison.' });
+          } else {
+            afficherNotification({ type: 'succes', message: 'Mission terminée ✅' });
+            window.location.reload();
+          }
+          setTerminating(false);
+        }}
+        titre="Terminer cette mission ?"
+        message="Êtes-vous sûr de vouloir terminer cette mission ? Le soignant sera notifié et la facture sera générée."
+        labelConfirmer="Terminer la mission"
+      />
+
       {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && showEvaluation && (
         <EvaluationPostMission
           missionId={m.id}
