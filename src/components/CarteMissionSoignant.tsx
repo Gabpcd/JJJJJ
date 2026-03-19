@@ -38,6 +38,10 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
   const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
   const contratPref = extraireContratPreference(m.description);
   const contratBadge = getContratBadge(contratPref);
+  const tauxMin = soignant?.taux_horaire_minimum;
+  const sousMinimum = tauxMin && m.taux_horaire_base && m.taux_horaire_base < tauxMin;
+  const contratPref = extraireContratPreference(m.description);
+  const contratBadge = getContratBadge(contratPref);
 
   const couleurTheme = m.etablissements?.couleur_theme;
 
