@@ -52,7 +52,7 @@ export function BoutonExclusion({ excluId, typeExcluPar, label, onDone }: Bouton
       </button>
 
       {showModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
           <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setShowModal(false)} />
           <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full">
             <h3 className="text-lg font-bold text-foreground mb-2">🚫 Confirmer l'exclusion</h3>

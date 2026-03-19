@@ -529,7 +529,7 @@ export default function ProfilSoignant() {
 
       {/* B3: Modal suppression */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
           <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
           <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full">
             <h3 className="text-lg font-bold text-destructive mb-2">🗑️ Supprimer mon compte</h3>
