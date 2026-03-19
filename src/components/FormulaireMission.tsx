@@ -320,9 +320,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     }
   };
 
-  const canSubmit = modeRecurrent
+  const canSubmit = !contratNonValide && !siretInvalide && !erreurFactureImpayee && (modeRecurrent
     ? (!!intitule && !!profession && !!tauxHoraire && recurrenceValide && !publicationEnCours)
-    : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading);
+    : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading));
 
   return (
     <>
