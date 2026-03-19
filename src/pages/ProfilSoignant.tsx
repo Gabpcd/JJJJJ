@@ -60,8 +60,10 @@ export default function ProfilSoignant() {
   const [parrainageSucces, setParrainageSucces] = useState(false);
   const [filleuls, setFilleuls] = useState<any[]>([]);
   const [codeCopied, setCodeCopied] = useState(false);
-  const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
-  const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
+   const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
+   const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
+   const [typeExercice, setTypeExercice] = useState('SALARIE');
+   const [attestationCumul, setAttestationCumul] = useState(false);
   const [heuresCumulees, setHeuresCumulees] = useState(0);
   const [statutLiberal, setStatutLiberal] = useState('');
   useEffect(() => {
