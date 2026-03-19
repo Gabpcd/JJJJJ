@@ -219,8 +219,7 @@
   }
 
   .page-container {
-    @apply md:pb-6 md:ml-[260px] min-h-screen;
-    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    @apply md:pb-6 md:ml-[260px];
   }
 
   .gradient-hero {
