@@ -103,6 +103,44 @@ export type Database = {
           },
         ]
       }
+      attestations_heures_externes: {
+        Row: {
+          attestation_honneur: boolean | null
+          cree_le: string | null
+          employeur_principal: string | null
+          heures_salarie: number | null
+          id: string
+          semaine_du: string
+          soignant_id: string
+        }
+        Insert: {
+          attestation_honneur?: boolean | null
+          cree_le?: string | null
+          employeur_principal?: string | null
+          heures_salarie?: number | null
+          id?: string
+          semaine_du: string
+          soignant_id: string
+        }
+        Update: {
+          attestation_honneur?: boolean | null
+          cree_le?: string | null
+          employeur_principal?: string | null
+          heures_salarie?: number | null
+          id?: string
+          semaine_du?: string
+          soignant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attestations_heures_externes_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bfa_suivi: {
         Row: {
           annee: number
@@ -749,6 +787,9 @@ export type Database = {
           adresse_ville: string
           chorus_pro_actif: boolean | null
           chorus_pro_identifiant: string | null
+          contrat_uploade_le: string | null
+          contrat_url: string | null
+          contrat_valide: boolean | null
           convention_collective: string | null
           couleur_theme: string | null
           cree_le: string | null
@@ -787,6 +828,9 @@ export type Database = {
           adresse_ville: string
           chorus_pro_actif?: boolean | null
           chorus_pro_identifiant?: string | null
+          contrat_uploade_le?: string | null
+          contrat_url?: string | null
+          contrat_valide?: boolean | null
           convention_collective?: string | null
           couleur_theme?: string | null
           cree_le?: string | null
@@ -825,6 +869,9 @@ export type Database = {
           adresse_ville?: string
           chorus_pro_actif?: boolean | null
           chorus_pro_identifiant?: string | null
+          contrat_uploade_le?: string | null
+          contrat_url?: string | null
+          contrat_valide?: boolean | null
           convention_collective?: string | null
           couleur_theme?: string | null
           cree_le?: string | null
@@ -2084,6 +2131,63 @@ export type Database = {
         }
         Relationships: []
       }
+      reclamations_scoring: {
+        Row: {
+          cree_le: string | null
+          details: string | null
+          id: string
+          justificatif_url: string | null
+          mission_id: string
+          motif: string
+          points_restaures: number | null
+          soignant_id: string
+          statut: string | null
+          traite_le: string | null
+          traite_par: string | null
+        }
+        Insert: {
+          cree_le?: string | null
+          details?: string | null
+          id?: string
+          justificatif_url?: string | null
+          mission_id: string
+          motif: string
+          points_restaures?: number | null
+          soignant_id: string
+          statut?: string | null
+          traite_le?: string | null
+          traite_par?: string | null
+        }
+        Update: {
+          cree_le?: string | null
+          details?: string | null
+          id?: string
+          justificatif_url?: string | null
+          mission_id?: string
+          motif?: string
+          points_restaures?: number | null
+          soignant_id?: string
+          statut?: string | null
+          traite_le?: string | null
+          traite_par?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reclamations_scoring_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reclamations_scoring_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rist_plafonds: {
         Row: {
           coefficient_plafond: number | null
@@ -2205,6 +2309,7 @@ export type Database = {
           attestation_vaccinations: boolean | null
           attestation_vaccinations_le: string | null
           avatar_url: string | null
+          badge_ambassadeur: boolean
           bic: string | null
           bio: string | null
           code_ape: string | null
@@ -2239,6 +2344,7 @@ export type Database = {
           prevoyance_fournisseur: string | null
           prevoyance_inscrit: boolean | null
           prevoyance_numero_contrat: string | null
+          priorite_missions_urgentes: boolean
           profession: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km: number | null
           rpps_nom_api: string | null
@@ -2253,6 +2359,7 @@ export type Database = {
             | Database["public"]["Enums"]["statut_verification"]
             | null
           supprime_le: string | null
+          taux_horaire_minimum: number | null
           telephone: string | null
           total_absences: number | null
           total_missions_annulees: number | null
@@ -2282,6 +2389,7 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
+          badge_ambassadeur?: boolean
           bic?: string | null
           bio?: string | null
           code_ape?: string | null
@@ -2316,6 +2424,7 @@ export type Database = {
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
           prevoyance_numero_contrat?: string | null
+          priorite_missions_urgentes?: boolean
           profession: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km?: number | null
           rpps_nom_api?: string | null
@@ -2330,6 +2439,7 @@ export type Database = {
             | Database["public"]["Enums"]["statut_verification"]
             | null
           supprime_le?: string | null
+          taux_horaire_minimum?: number | null
           telephone?: string | null
           total_absences?: number | null
           total_missions_annulees?: number | null
@@ -2359,6 +2469,7 @@ export type Database = {
           attestation_vaccinations?: boolean | null
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
+          badge_ambassadeur?: boolean
           bic?: string | null
           bio?: string | null
           code_ape?: string | null
@@ -2393,6 +2504,7 @@ export type Database = {
           prevoyance_fournisseur?: string | null
           prevoyance_inscrit?: boolean | null
           prevoyance_numero_contrat?: string | null
+          priorite_missions_urgentes?: boolean
           profession?: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km?: number | null
           rpps_nom_api?: string | null
@@ -2407,6 +2519,7 @@ export type Database = {
             | Database["public"]["Enums"]["statut_verification"]
             | null
           supprime_le?: string | null
+          taux_horaire_minimum?: number | null
           telephone?: string | null
           total_absences?: number | null
           total_missions_annulees?: number | null
@@ -3548,6 +3661,14 @@ export type Database = {
       }
       fn_traiter_candidature: {
         Args: { p_candidature_id: string; p_decision: string; p_motif?: string }
+        Returns: Json
+      }
+      fn_traiter_reclamation: {
+        Args: {
+          p_points_restaures?: number
+          p_reclamation_id: string
+          p_statut: string
+        }
         Returns: Json
       }
       fn_update_document_verification: {

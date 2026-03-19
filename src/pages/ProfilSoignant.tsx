@@ -41,6 +41,7 @@ export default function ProfilSoignant() {
     lat: '', lng: '', rayon: 30,
     bio: '', anneesExperience: 0,
     avatarUrl: '',
+    tauxHoraireMinimum: null as number | null,
   });
   const [specialites, setSpecialites] = useState<string[]>([]);
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
@@ -68,7 +69,7 @@ export default function ProfilSoignant() {
   const [statutLiberal, setStatutLiberal] = useState('');
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, disponible_urgence, urgence_rayon_km, bio, annees_experience, specialites, heures_cumulees, statut_liberal, type_exercice, attestation_cumul_activite').eq('id', user.id).single().then(({ data, error }: any) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, disponible_urgence, urgence_rayon_km, bio, annees_experience, specialites, heures_cumulees, statut_liberal, type_exercice, attestation_cumul_activite, taux_horaire_minimum').eq('id', user.id).single().then(({ data, error }: any) => {
       if (error) {
         afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
         setLoading(false);
@@ -105,6 +106,7 @@ export default function ProfilSoignant() {
           bio: data.bio || '',
           anneesExperience: data.annees_experience || 0,
           avatarUrl: data.avatar_url || '',
+          tauxHoraireMinimum: data.taux_horaire_minimum ?? null,
         });
         setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
         setTypesContrat(getTypesContratSoignant(data as any));
@@ -186,6 +188,7 @@ export default function ProfilSoignant() {
     const { error: exError } = await supabase.from('soignants').update({
       type_exercice: typeExercice,
       attestation_cumul_activite: attestationCumul,
+      taux_horaire_minimum: form.tauxHoraireMinimum,
     } as any).eq('id', user.id);
 
     if (error || exError) {
@@ -422,7 +425,31 @@ export default function ProfilSoignant() {
           )}
         </div>
 
+        {/* Taux horaire minimum */}
         <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">💰 Taux horaire minimum accepté</h2>
+          <p className="text-xs text-muted-foreground mb-3">Les missions en dessous de ce taux seront grisées dans vos résultats.</p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-foreground font-medium">
+                {form.tauxHoraireMinimum ? `${form.tauxHoraireMinimum} €/h` : 'Non défini'}
+              </span>
+              {form.tauxHoraireMinimum && (
+                <button type="button" onClick={() => maj('tauxHoraireMinimum', null)} className="text-xs text-destructive hover:underline">Supprimer</button>
+              )}
+            </div>
+            <input
+              type="range"
+              min={10}
+              max={100}
+              step={1}
+              value={form.tauxHoraireMinimum ?? 10}
+              onChange={e => maj('tauxHoraireMinimum', Number(e.target.value))}
+              className="w-full accent-primary"
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground"><span>10 €/h</span><span>100 €/h</span></div>
+          </div>
+        </div>
           <div className="space-y-3">
             <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}

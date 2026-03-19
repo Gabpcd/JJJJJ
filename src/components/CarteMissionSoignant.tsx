@@ -38,11 +38,20 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
   const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
   const contratPref = extraireContratPreference(m.description);
   const contratBadge = getContratBadge(contratPref);
+  const tauxMin = soignant?.taux_horaire_minimum;
+  const sousMinimum = tauxMin && m.taux_horaire_base && m.taux_horaire_base < tauxMin;
+  const contratPref = extraireContratPreference(m.description);
+  const contratBadge = getContratBadge(contratPref);
 
   const couleurTheme = m.etablissements?.couleur_theme;
 
   return (
-    <div onClick={onClick} className={`card-base hover:shadow-md transition-all cursor-pointer active:scale-[0.99] overflow-hidden ${m.est_urgente ? 'ring-2 ring-destructive/50' : ''}`}>
+    <div onClick={onClick} className={`card-base hover:shadow-md transition-all cursor-pointer active:scale-[0.99] overflow-hidden ${m.est_urgente ? 'ring-2 ring-destructive/50' : ''} ${sousMinimum ? 'opacity-50 grayscale-[30%]' : ''}`}>
+      {sousMinimum && (
+        <div className="mb-2">
+          <span className="badge-base bg-muted text-muted-foreground text-[10px]">💸 Sous votre minimum ({tauxMin} €/h)</span>
+        </div>
+      )}
       {m.est_urgente && (
         <div className="h-1.5 -mt-4 md:-mt-6 -mx-4 md:-mx-6 mb-3 bg-destructive animate-pulse" />
       )}
