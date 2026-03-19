@@ -330,15 +330,11 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     ? "Aucune conversation sur la plateforme pour le moment."
     : "Aucune conversation pour le moment. Les conversations s'ouvrent automatiquement quand vous êtes assigné à une mission.";
 
+  const layoutRole = role === 'ADMIN_PLATEFORME' ? 'ADMIN_PLATEFORME' : role === 'ADMIN_ETABLISSEMENT' ? 'ADMIN_ETABLISSEMENT' : 'SOIGNANT';
+
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-6rem)]">
-      {/* Back button */}
-      <div className="flex items-center gap-2 mb-2">
-        <Button variant="ghost" size="sm" onClick={() => navigate(dashboardRoute)}>
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Retour au tableau de bord
-        </Button>
-      </div>
+    <LayoutApp role={layoutRole}>
+    <div className="flex flex-col h-[calc(100vh-12rem)] md:h-[calc(100vh-8rem)]">
 
       <div className="flex flex-1 rounded-xl border border-border overflow-hidden bg-card min-h-0">
         {/* ── Conversation list ── */}
