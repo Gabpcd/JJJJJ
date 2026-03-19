@@ -188,6 +188,7 @@ export default function ProfilSoignant() {
     const { error: exError } = await supabase.from('soignants').update({
       type_exercice: typeExercice,
       attestation_cumul_activite: attestationCumul,
+      taux_horaire_minimum: form.tauxHoraireMinimum,
     } as any).eq('id', user.id);
 
     if (error || exError) {
