@@ -2792,6 +2792,10 @@ export type Database = {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: Json
       }
+      fn_annuler_mission: {
+        Args: { p_mission_id: string; p_motif?: string }
+        Returns: Json
+      }
       fn_annuler_mission_etablissement: {
         Args: { p_mission_id: string }
         Returns: Json
@@ -3124,6 +3128,7 @@ export type Database = {
       }
       fn_exporter_mes_donnees: { Args: never; Returns: Json }
       fn_generer_code_parrainage: { Args: never; Returns: string }
+      fn_generer_facture: { Args: { p_mission_id: string }; Returns: Json }
       fn_generer_facture_mensuelle:
         | { Args: never; Returns: Json }
         | { Args: { p_etablissement_id: string }; Returns: Json }
@@ -3655,6 +3660,7 @@ export type Database = {
         Returns: Json
       }
       fn_supprimer_mon_compte: { Args: never; Returns: Json }
+      fn_terminer_mission: { Args: { p_mission_id: string }; Returns: Json }
       fn_toggle_pool_urgence: {
         Args: { p_actif: boolean; p_creneaux?: Json; p_rayon_km?: number }
         Returns: Json
