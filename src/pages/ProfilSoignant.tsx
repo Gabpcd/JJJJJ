@@ -41,6 +41,7 @@ export default function ProfilSoignant() {
     lat: '', lng: '', rayon: 30,
     bio: '', anneesExperience: 0,
     avatarUrl: '',
+    tauxHoraireMinimum: null as number | null,
   });
   const [specialites, setSpecialites] = useState<string[]>([]);
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
