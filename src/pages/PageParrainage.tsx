@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Trophy, Users } from 'lucide-react';
+import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Trophy, Users, Shield, Zap } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { LayoutApp } from '@/components/LayoutApp';
 import { SEOHead } from '@/components/SEOHead';
-import { getLabelProfession } from '@/lib/constantes';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface Filleul {
@@ -16,21 +15,14 @@ interface Filleul {
   statut: string;
 }
 
-interface ClassementParrain {
-  rang: number;
-  label: string;
-  count: number;
-  isMoi: boolean;
-}
-
 export default function PageParrainage() {
   const { user } = useAuth();
   const [codeParrainage, setCodeParrainage] = useState('');
   const [filleuls, setFilleuls] = useState<Filleul[]>([]);
-  const [bonusTotal, setBonusTotal] = useState(0);
   const [copied, setCopied] = useState<'lien' | 'code' | null>(null);
-  const [classement, setClassement] = useState<ClassementParrain[]>([]);
   const [loading, setLoading] = useState(true);
+  const [badgeAmbassadeur, setBadgeAmbassadeur] = useState(false);
+  const [prioriteMissionsUrgentes, setPrioriteMissionsUrgentes] = useState(false);
 
   const lienRef = `https://jolene-app.lovable.app?ref=${codeParrainage}`;
 
@@ -43,21 +35,21 @@ export default function PageParrainage() {
     if (!user) return;
     setLoading(true);
 
-    // Get code parrainage
     const { data: soignant } = await supabase
       .from('soignants')
-      .select('code_parrainage')
+      .select('code_parrainage, badge_ambassadeur, priorite_missions_urgentes')
       .eq('id', user.id)
       .single();
 
-    if (soignant?.code_parrainage) {
-      setCodeParrainage(soignant.code_parrainage);
+    if (soignant) {
+      setCodeParrainage(soignant.code_parrainage || '');
+      setBadgeAmbassadeur(!!(soignant as any).badge_ambassadeur);
+      setPrioriteMissionsUrgentes(!!(soignant as any).priorite_missions_urgentes);
     }
 
-    // Get filleuls
     const { data: parrainages } = await supabase
       .from('parrainages')
-      .select('filleul_id, cree_le, statut, bonus_heures_parrain')
+      .select('filleul_id, cree_le, statut')
       .eq('parrain_id', user.id)
       .order('cree_le', { ascending: false });
 
@@ -79,27 +71,6 @@ export default function PageParrainage() {
         };
       });
       setFilleuls(filleulsList);
-
-      const totalBonus = parrainages.reduce((acc, p) => acc + (p.bonus_heures_parrain || 0), 0);
-      setBonusTotal(totalBonus);
-    }
-
-    // Build leaderboard (top 5 parrains)
-    const { data: topParrains } = await supabase
-      .from('parrainages')
-      .select('parrain_id')
-      .order('cree_le', { ascending: false });
-
-    if (topParrains) {
-      const counts: Record<string, number> = {};
-      topParrains.forEach(p => { counts[p.parrain_id] = (counts[p.parrain_id] || 0) + 1; });
-      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-      setClassement(sorted.map(([id, count], i) => ({
-        rang: i + 1,
-        label: id === user?.id ? 'Vous' : `Parrain #${i + 1}`,
-        count,
-        isMoi: id === user?.id,
-      })));
     }
 
     setLoading(false);
@@ -112,26 +83,60 @@ export default function PageParrainage() {
   };
 
   const messagePartage = encodeURIComponent(
-    `Rejoignez Jolene, la plateforme de staffing médical ! Inscrivez-vous avec mon lien et obtenez +50h bonus : ${lienRef}`
+    `Rejoignez Jolene, la plateforme de staffing médical ! Inscrivez-vous avec mon lien : ${lienRef}`
   );
 
   const filleulsInscrits = filleuls.length;
-  const filleulsMission = filleuls.filter(f => f.statut === 'VALIDE' || f.premiere_mission_le).length;
+  const filleulsValides = filleuls.filter(f => f.statut === 'VALIDE' || f.premiere_mission_le).length;
+  const progressAmbassadeur = Math.min(filleulsValides, 3);
 
   return (
     <LayoutApp role="SOIGNANT">
-      <SEOHead title="Parrainage — Jolene" description="Invitez vos collègues soignants et gagnez des bonus ensemble sur Jolene." />
+      <SEOHead title="Parrainage — Jolene" description="Invitez vos collègues soignants et obtenez le badge Ambassadeur sur Jolene." />
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Gift className="h-6 w-6 text-primary" /> Parrainage
           </h1>
-          <p className="text-muted-foreground mt-1">Invitez vos collègues et gagnez des bonus ensemble.</p>
+          <p className="text-muted-foreground mt-1">Recommandez Jolene à vos collègues et débloquez des avantages exclusifs.</p>
+        </div>
+
+        {/* Badge Ambassadeur */}
+        <div className={`rounded-2xl border-2 p-6 ${badgeAmbassadeur ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className={`h-12 w-12 rounded-full flex items-center justify-center ${badgeAmbassadeur ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+              <Shield className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-foreground">Badge Ambassadeur</h2>
+              {badgeAmbassadeur ? (
+                <p className="text-sm text-primary font-semibold">✅ Débloqué !</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">{progressAmbassadeur}/3 filleuls validés</p>
+              )}
+            </div>
+          </div>
+
+          {!badgeAmbassadeur && (
+            <div className="mb-4">
+              <div className="h-3 bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${(progressAmbassadeur / 3) * 100}%` }} />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Parrainez 3 collègues qui terminent leur 1ère mission pour obtenir le badge.</p>
+            </div>
+          )}
+
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
+            <Zap className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-foreground">
+              <p className="font-semibold">Avantage : Accès prioritaire aux missions urgentes</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Les missions urgentes vous sont visibles <strong>15 minutes avant</strong> les autres soignants.</p>
+            </div>
+          </div>
         </div>
 
         {/* Code & Lien */}
         <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 p-6 space-y-5">
-          {/* Code en gros */}
           <div className="text-center">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Votre code parrainage</p>
             <div className="flex items-center justify-center gap-3">
@@ -145,7 +150,6 @@ export default function PageParrainage() {
             </div>
           </div>
 
-          {/* Lien + QR */}
           <div className="flex flex-col sm:flex-row gap-5 items-center">
             <div className="shrink-0 bg-background p-3 rounded-xl">
               <QRCodeSVG value={lienRef} size={140} level="M" bgColor="transparent" fgColor="currentColor" className="text-foreground" />
@@ -163,7 +167,6 @@ export default function PageParrainage() {
             </div>
           </div>
 
-          {/* Boutons partage */}
           <div className="flex flex-wrap gap-2 justify-center">
             <a href={`https://wa.me/?text=${messagePartage}`} target="_blank" rel="noopener noreferrer"
                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-colors">
@@ -191,8 +194,8 @@ export default function PageParrainage() {
             <p className="text-xs text-muted-foreground mt-1">filleul{filleulsInscrits > 1 ? 's' : ''} inscrit{filleulsInscrits > 1 ? 's' : ''}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-5 text-center">
-            <p className="text-3xl font-extrabold text-primary">{bonusTotal}h</p>
-            <p className="text-xs text-muted-foreground mt-1">de bonus accumulé</p>
+            <p className="text-3xl font-extrabold text-primary">{filleulsValides}</p>
+            <p className="text-xs text-muted-foreground mt-1">mission{filleulsValides > 1 ? 's' : ''} terminée{filleulsValides > 1 ? 's' : ''}</p>
           </div>
         </div>
 
@@ -201,9 +204,15 @@ export default function PageParrainage() {
           <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
             <Gift className="h-4 w-4 text-primary" /> Comment ça marche ?
           </h3>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Pour chaque soignant qui s'inscrit avec votre code et termine sa 1ère mission : <span className="font-semibold text-foreground">vous gagnez 50h bonus</span> et votre filleul aussi. Les bonus sont automatiquement crédités sur vos compteurs respectifs.
-          </p>
+          <ol className="text-sm text-muted-foreground leading-relaxed space-y-2 list-decimal list-inside">
+            <li>Partagez votre code ou lien avec vos collègues soignants</li>
+            <li>Ils s'inscrivent et terminent leur première mission sur Jolene</li>
+            <li>Après <strong>3 filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
+            <li>Le badge vous donne accès aux missions urgentes <strong>15 min avant tout le monde</strong></li>
+          </ol>
+          <div className="mt-3 p-2 rounded-lg bg-muted text-xs text-muted-foreground">
+            ℹ️ Le parrainage Jolene est un système de recommandation sans rétribution financière, conforme à la réglementation.
+          </div>
         </div>
 
         {/* Tableau filleuls */}
@@ -248,37 +257,6 @@ export default function PageParrainage() {
             </div>
           )}
         </div>
-
-        {/* Classement */}
-        {classement.length > 0 && (
-          <div>
-            <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-primary" /> Classement parrains
-            </h3>
-            <div className="rounded-xl border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead>Parrain</TableHead>
-                    <TableHead className="text-right">Filleuls</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {classement.map((c) => (
-                    <TableRow key={c.rang} className={c.isMoi ? 'bg-primary/5' : ''}>
-                      <TableCell className="font-bold text-primary">
-                        {c.rang === 1 ? '🥇' : c.rang === 2 ? '🥈' : c.rang === 3 ? '🥉' : c.rang}
-                      </TableCell>
-                      <TableCell className={c.isMoi ? 'font-bold text-primary' : ''}>{c.label}</TableCell>
-                      <TableCell className="text-right font-semibold">{c.count}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        )}
       </div>
     </LayoutApp>
   );
