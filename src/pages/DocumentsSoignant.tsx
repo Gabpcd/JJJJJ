@@ -135,6 +135,7 @@ export default function DocumentsSoignant() {
   const [documentsRequis, setDocumentsRequis] = useState<any[]>([]);
   const [mesDocuments, setMesDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reverifyingId, setReverifyingId] = useState<string | null>(null);
 
   // Modal state
   const [televersementType, setTeleversementType] = useState<string | null>(null);
@@ -144,13 +145,12 @@ export default function DocumentsSoignant() {
   const charger = async () => {
     if (!user) return;
     const [{ data: sg }, { data: dr }, { data: md }] = await Promise.all([
-      supabase.from('soignants').select('profession').eq('id', user.id).single(),
+      supabase.from('soignants').select('profession, prenom, nom').eq('id', user.id).single(),
       supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique'),
       supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
     ]);
     if (sg) {
       setSoignant(sg);
-      // Exclure les types gérés par attestation sur l'honneur
       setDocumentsRequis(
         (dr || []).filter((d: any) =>
           d.profession === (sg as any).profession &&
@@ -180,6 +180,50 @@ export default function DocumentsSoignant() {
     new Date(d.valide_jusqua) > new Date() &&
     differenceInDays(new Date(d.valide_jusqua), new Date()) < 30
   ), [mesDocuments]);
+
+  // Cross-validation: check coherence when all critical docs are present
+  const incoherenceMessage = useMemo(() => {
+    const criticalTypes = ['CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RPPS_ADELI'];
+    const criticalDocs = criticalTypes.map(t => mesDocuments.find(d => d.type_document === t && d.statut_verification === 'VERIFIE'));
+    const allPresent = criticalDocs.every(Boolean);
+    if (!allPresent) return null;
+
+    const issues: string[] = [];
+    const rcpDoc = criticalDocs[2];
+    if (rcpDoc?.valide_jusqua && new Date(rcpDoc.valide_jusqua) < new Date()) {
+      issues.push('Votre assurance RCP est expirée');
+    }
+    const diplomeDoc = criticalDocs[1];
+    if (diplomeDoc?.valide_jusqua && new Date(diplomeDoc.valide_jusqua) < new Date()) {
+      issues.push('Votre diplôme est expiré');
+    }
+    return issues.length > 0 ? issues.join('. ') + '.' : null;
+  }, [mesDocuments]);
+
+  const reverifier = async (docId: string) => {
+    setReverifyingId(docId);
+    try {
+      const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-document', {
+        body: { document_id: docId },
+      });
+      if (verifyError) {
+        toast.error('Erreur lors de la revérification.');
+        handleErrorSilent(verifyError, 'Revérification document');
+      } else if (verifyData?.verdict === 'VERIFIE') {
+        toast.success('✅ Document vérifié automatiquement !');
+      } else if (verifyData?.verdict === 'REJETE') {
+        toast.error(`❌ Document rejeté : ${verifyData?.analysis?.motif_rejet || 'Non conforme'}`);
+      } else {
+        toast.info('⏳ Vérification en cours de traitement...');
+      }
+      await charger();
+    } catch (err) {
+      handleErrorSilent(err, 'Revérification document');
+      toast.error('Erreur lors de la revérification.');
+    } finally {
+      setReverifyingId(null);
+    }
+  };
 
   const televerser = async (fichier: File, libelle: string, valideDepuis: string, valideJusqua: string) => {
     if (!user || !televersementType) return;
