@@ -6,6 +6,8 @@ import { resoudreUserIdEtablissement } from '@/hooks/useOuvrirConversation';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
+import { LayoutApp } from '@/components/LayoutApp';
+import { usePageTitle } from '@/hooks/usePageTitle';
 
 import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -14,7 +16,6 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-
 interface Conversation {
   id: string;
   participant_1_id: string;
