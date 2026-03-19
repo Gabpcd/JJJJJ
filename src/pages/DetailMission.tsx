@@ -154,6 +154,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [loading, setLoading] = useState(true);
   const [modalAnnuler, setModalAnnuler] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState(false);
+  const [modalTerminer, setModalTerminer] = useState(false);
+  const [terminating, setTerminating] = useState(false);
   const [showEvaluation, setShowEvaluation] = useState(true);
   const [alerteCDDU, setAlerteCDDU] = useState<any>(null);
 
