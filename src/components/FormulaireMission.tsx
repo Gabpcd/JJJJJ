@@ -58,6 +58,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
   const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
   const [siretInvalide, setSiretInvalide] = useState(false);
+  const [contratNonValide, setContratNonValide] = useState(false);
 
   // Load rist_plafond_actif + commission info + type + siret validation
   useEffect(() => {
