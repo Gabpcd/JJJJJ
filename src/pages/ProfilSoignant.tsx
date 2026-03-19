@@ -106,6 +106,7 @@ export default function ProfilSoignant() {
           bio: data.bio || '',
           anneesExperience: data.annees_experience || 0,
           avatarUrl: data.avatar_url || '',
+          tauxHoraireMinimum: data.taux_horaire_minimum ?? null,
         });
         setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
         setTypesContrat(getTypesContratSoignant(data as any));
