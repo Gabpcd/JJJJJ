@@ -63,7 +63,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   // Load rist_plafond_actif + commission info + type + siret validation
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom), siret').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom), siret, contrat_valide').eq('id', user.id).single().then(({ data }) => {
       if (data) {
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
         setRistPlafondActif(data.rist_plafond_actif === true || typesPublics.includes(data.type));
