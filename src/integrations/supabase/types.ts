@@ -2827,6 +2827,7 @@ export type Database = {
       }
       fn_auto_facturation_mensuelle: { Args: never; Returns: Json }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
+      fn_badge_stats: { Args: never; Returns: Json }
       fn_calculer_bfa: {
         Args: {
           p_annee?: number
@@ -3169,6 +3170,8 @@ export type Database = {
           type_evaluateur: string
         }[]
       }
+      fn_mes_exclusions_recues: { Args: never; Returns: Json }
+      fn_mes_filleuls: { Args: never; Returns: Json }
       fn_mes_missions_soignant: {
         Args: never
         Returns: {
@@ -3360,6 +3363,10 @@ export type Database = {
       }
       fn_postuler_mission: {
         Args: { p_message?: string; p_mission_id: string }
+        Returns: Json
+      }
+      fn_proposer_mission_soignant: {
+        Args: { p_mission_id: string; p_soignant_id: string }
         Returns: Json
       }
       fn_purger_audit_ancien: { Args: never; Returns: number }
