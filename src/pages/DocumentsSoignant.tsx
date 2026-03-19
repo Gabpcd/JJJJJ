@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useNavigate } from 'react-router-dom';
-import { FolderOpen, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
+import { FolderOpen, AlertCircle, Clock, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
