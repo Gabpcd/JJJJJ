@@ -201,6 +201,9 @@ export default function ProfilEtablissement() {
         setType(data.type);
         setConventionCollective(data.convention_collective || '');
         setModePaiement((data as any).mode_paiement_commission || 'FACTURE_MENSUELLE');
+        setContratValide(!!data.contrat_valide);
+        setContratUrl(data.contrat_url || null);
+        setContratUploadeLe(data.contrat_uploade_le || null);
         (setForm as any)(prev => ({ ...prev, logoUrl: (data as any).logo_url || '' }));
         setForm({
           nom: data.nom, finess: data.finess || '',
