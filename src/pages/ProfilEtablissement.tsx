@@ -549,11 +549,9 @@ export default function ProfilEtablissement() {
                   return;
                 }
                 const { data: urlData } = supabase.storage.from('jolene-documents').getPublicUrl(fileName);
-                const { error: updateErr } = await supabase.from('etablissements').update({
-                  contrat_url: urlData.publicUrl,
-                  contrat_uploade_le: new Date().toISOString(),
-                  contrat_valide: false,
-                } as any).eq('id', user.id);
+                const { error: updateErr } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
+                  p_contrat_url: urlData.publicUrl,
+                });
                 if (updateErr) {
                   afficherNotification({ type: 'erreur', message: extraireMessageErreur(updateErr) });
                 } else {

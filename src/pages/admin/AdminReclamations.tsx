@@ -46,29 +46,20 @@ export default function AdminReclamations() {
 
   const traiter = async (id: string, decision: 'ACCEPTEE' | 'REFUSEE') => {
     setTraitement(id);
-    const points = decision === 'ACCEPTEE' ? (pointsInput[id] || 5) : 0;
+    const points = decision === 'ACCEPTEE' ? (pointsInput[id] || 10) : 0;
 
-    const { error } = await supabase
-      .from('reclamations_scoring')
-      .update({
-        statut: decision,
-        points_accordes: points,
-        traite_le: new Date().toISOString(),
-      } as any)
-      .eq('id', id);
+    const { data, error } = await supabase.rpc('fn_traiter_reclamation' as any, {
+      p_reclamation_id: id,
+      p_statut: decision,
+      p_points_restaures: points,
+    });
 
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+    } else if (data && typeof data === 'object' && (data as any).success === false) {
+      afficherNotification({ type: 'erreur', message: (data as any).error || 'Erreur lors du traitement.' });
     } else {
-      // If accepted, update soignant score
-      if (decision === 'ACCEPTEE' && points > 0) {
-        const recl = reclamations.find(r => r.id === id);
-        if (recl?.soignant_id) {
-          const newScore = Math.min(100, (recl.soignant?.score_fiabilite || 50) + points);
-          await supabase.from('soignants').update({ score_fiabilite: newScore } as any).eq('id', recl.soignant_id);
-        }
-      }
-      afficherNotification({ type: 'succes', message: decision === 'ACCEPTEE' ? `Réclamation acceptée (+${points} pts)` : 'Réclamation refusée.' });
+      afficherNotification({ type: 'succes', message: decision === 'ACCEPTEE' ? `Réclamation acceptée, +${points} points restaurés` : 'Réclamation refusée.' });
       await charger();
     }
     setTraitement(null);
@@ -134,7 +125,7 @@ export default function AdminReclamations() {
                     type="number"
                     min={1}
                     max={30}
-                    value={pointsInput[r.id] || 5}
+                    value={pointsInput[r.id] || 10}
                     onChange={e => setPointsInput(prev => ({ ...prev, [r.id]: Number(e.target.value) }))}
                     className="input-base w-20 text-sm"
                   />
@@ -146,7 +137,7 @@ export default function AdminReclamations() {
                   className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50"
                 >
                   {traitement === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-                  Accepter (+{pointsInput[r.id] || 5} pts)
+                  Accepter (+{pointsInput[r.id] || 10} pts)
                 </button>
                 <button
                   onClick={() => traiter(r.id, 'REFUSEE')}

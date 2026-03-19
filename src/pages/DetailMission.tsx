@@ -154,6 +154,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [loading, setLoading] = useState(true);
   const [modalAnnuler, setModalAnnuler] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState(false);
+  const [modalTerminer, setModalTerminer] = useState(false);
+  const [terminating, setTerminating] = useState(false);
   const [showEvaluation, setShowEvaluation] = useState(true);
   const [alerteCDDU, setAlerteCDDU] = useState<any>(null);
 
@@ -549,6 +551,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             Modifier
           </button>
         )}
+        {m.statut === 'EN_COURS' && (
+          <button onClick={() => setModalTerminer(true)} className="text-sm font-semibold flex items-center gap-1 px-4 py-2 rounded-xl bg-success text-success-foreground hover:bg-success/90 transition flex-1 md:flex-none justify-center">
+            ✅ Terminer la mission
+          </button>
+        )}
         <button onClick={() => setModalDupliquer(true)} className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-1 px-3">
           <Copy className="h-4 w-4" /> Dupliquer
         </button>
@@ -581,6 +588,27 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         titre="Dupliquer cette mission ?"
         message={`Une copie de « ${m.intitule} » sera créée avec le statut OUVERTE.`}
         labelConfirmer="Dupliquer"
+      />
+
+      <ModalConfirmation
+        ouvert={modalTerminer}
+        onFermer={() => setModalTerminer(false)}
+        onConfirmer={async () => {
+          setTerminating(true);
+          const { data, error } = await supabase.rpc('fn_terminer_mission' as any, { p_mission_id: id! });
+          if (error) {
+            afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+          } else if (data && typeof data === 'object' && (data as any).success === false) {
+            afficherNotification({ type: 'erreur', message: (data as any).error || 'Erreur lors de la terminaison.' });
+          } else {
+            afficherNotification({ type: 'succes', message: 'Mission terminée ✅' });
+            window.location.reload();
+          }
+          setTerminating(false);
+        }}
+        titre="Terminer cette mission ?"
+        message="Êtes-vous sûr de vouloir terminer cette mission ? Le soignant sera notifié et la facture sera générée."
+        labelConfirmer="Terminer la mission"
       />
 
       {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && showEvaluation && (
