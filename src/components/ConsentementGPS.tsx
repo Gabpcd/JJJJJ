@@ -8,7 +8,7 @@ interface ConsentementGPSProps {
 
 export function ConsentementGPS({ onAccepter, onRefuser }: ConsentementGPSProps) {
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-background">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background overflow-y-auto">
       <div className="max-w-lg mx-4 text-center space-y-6">
         <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
           <MapPin className="h-8 w-8 text-primary" />

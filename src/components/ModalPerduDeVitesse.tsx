@@ -7,7 +7,7 @@ interface ModalPerduDeVitesseProps {
 
 export function ModalPerduDeVitesse({ onFermer, onVoirAutres }: ModalPerduDeVitesseProps) {
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onFermer} />
       <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-sm w-full text-center">
         <button onClick={onFermer} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">

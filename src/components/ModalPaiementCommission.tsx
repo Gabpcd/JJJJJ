@@ -85,7 +85,7 @@ function FormPaiement({ montant, onSuccess, onCancel }: { montant: number; onSuc
 export function ModalPaiementCommission({ clientSecret, montant, onSuccess, onCancel }: ModalPaiementCommissionProps) {
   if (!stripePromise) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
         <div className="bg-background rounded-2xl p-6 max-w-md w-full shadow-xl">
           <p className="text-sm text-destructive">Stripe non configuré. Contactez le support.</p>
           <button onClick={onCancel} className="btn-secondary mt-4 w-full">Fermer</button>
@@ -95,7 +95,7 @@ export function ModalPaiementCommission({ clientSecret, montant, onSuccess, onCa
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
       <div className="bg-background rounded-2xl p-6 max-w-md w-full shadow-xl">
         <Elements
           stripe={stripePromise}

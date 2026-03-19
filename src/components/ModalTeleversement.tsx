@@ -76,9 +76,9 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[10vh] p-4" style={{ position: 'fixed' }}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onFermer} />
-      <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full max-h-[80vh] overflow-y-auto z-[201]">
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card rounded-2xl shadow-xl p-6 max-w-md w-[calc(100%-2rem)] max-h-[80vh] overflow-y-auto">
         <button onClick={onFermer} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
           <X className="h-5 w-5" />
         </button>

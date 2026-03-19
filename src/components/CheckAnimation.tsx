@@ -19,7 +19,7 @@ export function CheckAnimation({ active, duration = 2000 }: CheckAnimationProps)
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none" aria-hidden="true">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none" aria-hidden="true">
       <div className="check-animation-circle">
         <svg className="check-animation-svg" viewBox="0 0 52 52" fill="none">
           <circle className="check-animation-ring" cx="26" cy="26" r="24" stroke="hsl(var(--success))" strokeWidth="2" />

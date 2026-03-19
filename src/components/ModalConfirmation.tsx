@@ -25,9 +25,9 @@ export function ModalConfirmation({
   if (!ouvert) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center">
-      <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onFermer} />
-      <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      <div className="fixed inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onFermer} />
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-[calc(100%-2rem)]">
         <button onClick={onFermer} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
           <X className="h-5 w-5" />
         </button>
