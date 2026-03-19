@@ -253,7 +253,17 @@ export default function DashboardSoignant() {
         )}
       </div>
 
-      <BandeauAlerte48h heuresSemaine={heuresSemaine} />
+      {/* 48h banner: hidden for LIBERAL, shown for SALARIE & MIXTE */}
+      {soignant.type_exercice !== 'LIBERAL' && <BandeauAlerte48h heuresSemaine={heuresSemaine} />}
+
+      {/* Cumul d'activité warning for MIXTE */}
+      {soignant.type_exercice === 'MIXTE' && (
+        <div className="bg-warning/5 border-l-4 border-warning p-4 rounded-r-xl mb-4">
+          <p className="text-sm text-warning font-medium">
+            ⚠️ Cumul d'activité : pensez à vérifier que vos heures sur Jolene sont compatibles avec votre contrat salarié.
+          </p>
+        </div>
+      )}
 
       {/* Missions proposées depuis le pool */}
       {propositions.length > 0 && (
