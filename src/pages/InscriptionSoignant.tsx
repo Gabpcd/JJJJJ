@@ -58,6 +58,7 @@ export default function InscriptionSoignant() {
     prenom: '', nom: '', telephone: '', dateNaissance: '',
     profession: '', typesContrat: [] as string[], rpps: '', rayon: 30,
     lat: null as number | null, lng: null as number | null,
+    estSalarieEtablissement: null as boolean | null,
   });
 
   // RPPS verification state
@@ -263,6 +264,19 @@ export default function InscriptionSoignant() {
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
                     <ShieldAlert className="h-3.5 w-3.5" />
                     ❌ RPPS non trouvé dans l'annuaire
+                  </div>
+                )}
+              </div>
+              {/* Question salarié établissement */}
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Êtes-vous actuellement salarié(e) d'un établissement de santé ?</label>
+                <div className="flex gap-3 mt-1">
+                  <button type="button" onClick={() => maj('estSalarieEtablissement', true)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${form.estSalarieEtablissement === true ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Oui</button>
+                  <button type="button" onClick={() => maj('estSalarieEtablissement', false)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${form.estSalarieEtablissement === false ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Non</button>
+                </div>
+                {form.estSalarieEtablissement === true && (
+                  <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                    <p className="text-xs text-foreground">ℹ️ Vous pourrez effectuer des missions sur Jolene en complément de votre activité salariée. Vérifiez que votre contrat de travail n'inclut pas de clause d'exclusivité.</p>
                   </div>
                 )}
               </div>

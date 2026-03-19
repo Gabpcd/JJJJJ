@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { handleErrorSilent } from '@/lib/handleError';
@@ -57,13 +60,15 @@ export default function ProfilSoignant() {
   const [parrainageSucces, setParrainageSucces] = useState(false);
   const [filleuls, setFilleuls] = useState<any[]>([]);
   const [codeCopied, setCodeCopied] = useState(false);
-  const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
-  const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
+   const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
+   const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
+   const [typeExercice, setTypeExercice] = useState('SALARIE');
+   const [attestationCumul, setAttestationCumul] = useState(false);
   const [heuresCumulees, setHeuresCumulees] = useState(0);
   const [statutLiberal, setStatutLiberal] = useState('');
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, disponible_urgence, urgence_rayon_km, bio, annees_experience, specialites, heures_cumulees, statut_liberal').eq('id', user.id).single().then(({ data, error }: any) => {
+    supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, disponible_urgence, urgence_rayon_km, bio, annees_experience, specialites, heures_cumulees, statut_liberal, type_exercice, attestation_cumul_activite').eq('id', user.id).single().then(({ data, error }: any) => {
       if (error) {
         afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
         setLoading(false);
@@ -83,6 +88,8 @@ export default function ProfilSoignant() {
         setRppsVerifie(!!data.rpps_verifie);
         setHeuresCumulees(data.heures_cumulees || 0);
         setStatutLiberal(data.statut_liberal || '');
+        setTypeExercice(data.type_exercice || 'SALARIE');
+        setAttestationCumul(data.attestation_cumul_activite || false);
         setCodeParrainage(data.code_parrainage || '');
         setForm({
           prenom: data.prenom || '',
@@ -154,6 +161,11 @@ export default function ProfilSoignant() {
       afficherNotification({ type: 'erreur', message: 'Le nombre d\'années d\'expérience est obligatoire.' });
       return;
     }
+    // Validate attestation for MIXTE/LIBERAL
+    if ((typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && !attestationCumul) {
+      afficherNotification({ type: 'erreur', message: 'Vous devez attester la conformité de votre cumul d\'activités (article L1222-5).' });
+      return;
+    }
     setSaving(true);
     const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
       p_telephone: form.telephone || null,
@@ -169,8 +181,15 @@ export default function ProfilSoignant() {
       p_annees_experience: form.anneesExperience,
       p_specialites: specialites,
     });
-    if (error) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+
+    // Also update type_exercice directly
+    const { error: exError } = await supabase.from('soignants').update({
+      type_exercice: typeExercice,
+      attestation_cumul_activite: attestationCumul,
+    } as any).eq('id', user.id);
+
+    if (error || exError) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error || exError) });
     } else if (rpcResult?.error) {
       afficherNotification({ type: 'erreur', message: rpcResult.error });
     } else {
@@ -354,8 +373,56 @@ export default function ProfilSoignant() {
             </div>
           </div>
         </div>
+
+        {/* Type d'exercice */}
         <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">Localisation</h2>
+          <h2 className="text-base font-semibold text-foreground mb-4">Type d'exercice</h2>
+          <RadioGroup value={typeExercice} onValueChange={(v) => {
+            setTypeExercice(v);
+            if (v === 'SALARIE') setAttestationCumul(false);
+          }} className="space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-input px-4 py-3 hover:bg-accent/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+              <RadioGroupItem value="SALARIE" id="ex-salarie" className="mt-0.5" />
+              <div>
+                <Label htmlFor="ex-salarie" className="font-medium cursor-pointer">Salarié(e)</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Je suis salarié(e) dans un établissement</p>
+              </div>
+            </label>
+            <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${heuresCumulees >= 3200 ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
+              <RadioGroupItem value="LIBERAL" id="ex-liberal" className="mt-0.5" disabled={heuresCumulees < 3200} />
+              <div>
+                <Label htmlFor="ex-liberal" className={`font-medium ${heuresCumulees < 3200 ? 'cursor-not-allowed' : 'cursor-pointer'}`}>Libéral</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">J'exerce en libéral</p>
+                {heuresCumulees < 3200 && <p className="text-xs text-destructive mt-1">🔒 Disponible à 3 200h — actuellement {heuresCumulees}h/3 200h</p>}
+              </div>
+            </label>
+            <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${heuresCumulees >= 3200 ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
+              <RadioGroupItem value="MIXTE" id="ex-mixte" className="mt-0.5" disabled={heuresCumulees < 3200} />
+              <div>
+                <Label htmlFor="ex-mixte" className={`font-medium ${heuresCumulees < 3200 ? 'cursor-not-allowed' : 'cursor-pointer'}`}>Mixte</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Je cumule salarié et libéral</p>
+                {heuresCumulees < 3200 && <p className="text-xs text-destructive mt-1">🔒 Disponible à 3 200h — actuellement {heuresCumulees}h/3 200h</p>}
+              </div>
+            </label>
+          </RadioGroup>
+
+          {(typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && (
+            <div className="mt-4 p-3 bg-warning/5 border border-warning/20 rounded-xl">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={attestationCumul}
+                  onCheckedChange={(v) => setAttestationCumul(!!v)}
+                  className="mt-0.5"
+                />
+                <span className="text-sm text-foreground">
+                  ✅ J'atteste avoir vérifié que mon contrat de travail actuel autorise le cumul d'activités conformément à l'article L1222-5 du Code du travail.
+                </span>
+              </label>
+            </div>
+          )}
+        </div>
+
+        <div className="card-base">
           <div className="space-y-3">
             <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}

@@ -43,6 +43,7 @@ interface SoignantData {
   tous_documents_valides: boolean | null; identite_verifiee: boolean | null;
   score_fiabilite: number | null; total_missions_terminees: number | null;
   heures_cumulees: number | null; eligible_conversion_3200h: boolean | null;
+  type_exercice: string | null;
 }
 
 function calculerCompletionProfil(s: SoignantData) {
@@ -94,7 +95,7 @@ export default function DashboardSoignant() {
       // 6 months ago for gains chart
       const sixMoisAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
-      const { data: sg } = await supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h').eq('id', user.id).single();
+      const { data: sg } = await supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h, type_exercice').eq('id', user.id).single();
 
       const profession = sg?.profession;
 
@@ -252,7 +253,17 @@ export default function DashboardSoignant() {
         )}
       </div>
 
-      <BandeauAlerte48h heuresSemaine={heuresSemaine} />
+      {/* 48h banner: hidden for LIBERAL, shown for SALARIE & MIXTE */}
+      {soignant.type_exercice !== 'LIBERAL' && <BandeauAlerte48h heuresSemaine={heuresSemaine} />}
+
+      {/* Cumul d'activité warning for MIXTE */}
+      {soignant.type_exercice === 'MIXTE' && (
+        <div className="bg-warning/5 border-l-4 border-warning p-4 rounded-r-xl mb-4">
+          <p className="text-sm text-warning font-medium">
+            ⚠️ Cumul d'activité : pensez à vérifier que vos heures sur Jolene sont compatibles avec votre contrat salarié.
+          </p>
+        </div>
+      )}
 
       {/* Missions proposées depuis le pool */}
       {propositions.length > 0 && (

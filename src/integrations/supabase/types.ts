@@ -2197,6 +2197,8 @@ export type Database = {
           adresse_ville: string | null
           annees_experience: number | null
           assujetti_tva: boolean | null
+          attestation_cumul_activite: boolean
+          attestation_cumul_le: string | null
           attestation_medecine_travail: boolean | null
           attestation_medecine_travail_le: string | null
           attestation_sante_signee_le: string | null
@@ -2218,6 +2220,8 @@ export type Database = {
           disponible_urgence: boolean | null
           eligible_conversion_3200h: boolean | null
           email: string
+          est_cumul_activite: boolean | null
+          est_salarie_etablissement: boolean | null
           heures_cumulees: number | null
           heures_plateforme: number | null
           iban: string | null
@@ -2257,6 +2261,7 @@ export type Database = {
           total_retards_pointage: number | null
           tous_documents_valides: boolean | null
           type_contrat: Database["public"]["Enums"]["type_contrat"] | null
+          type_exercice: string | null
           types_contrat_acceptes: string | null
           urgence_creneaux: Json | null
           urgence_rayon_km: number | null
@@ -2269,6 +2274,8 @@ export type Database = {
           adresse_ville?: string | null
           annees_experience?: number | null
           assujetti_tva?: boolean | null
+          attestation_cumul_activite?: boolean
+          attestation_cumul_le?: string | null
           attestation_medecine_travail?: boolean | null
           attestation_medecine_travail_le?: string | null
           attestation_sante_signee_le?: string | null
@@ -2290,6 +2297,8 @@ export type Database = {
           disponible_urgence?: boolean | null
           eligible_conversion_3200h?: boolean | null
           email: string
+          est_cumul_activite?: boolean | null
+          est_salarie_etablissement?: boolean | null
           heures_cumulees?: number | null
           heures_plateforme?: number | null
           iban?: string | null
@@ -2329,6 +2338,7 @@ export type Database = {
           total_retards_pointage?: number | null
           tous_documents_valides?: boolean | null
           type_contrat?: Database["public"]["Enums"]["type_contrat"] | null
+          type_exercice?: string | null
           types_contrat_acceptes?: string | null
           urgence_creneaux?: Json | null
           urgence_rayon_km?: number | null
@@ -2341,6 +2351,8 @@ export type Database = {
           adresse_ville?: string | null
           annees_experience?: number | null
           assujetti_tva?: boolean | null
+          attestation_cumul_activite?: boolean
+          attestation_cumul_le?: string | null
           attestation_medecine_travail?: boolean | null
           attestation_medecine_travail_le?: string | null
           attestation_sante_signee_le?: string | null
@@ -2362,6 +2374,8 @@ export type Database = {
           disponible_urgence?: boolean | null
           eligible_conversion_3200h?: boolean | null
           email?: string
+          est_cumul_activite?: boolean | null
+          est_salarie_etablissement?: boolean | null
           heures_cumulees?: number | null
           heures_plateforme?: number | null
           iban?: string | null
@@ -2401,6 +2415,7 @@ export type Database = {
           total_retards_pointage?: number | null
           tous_documents_valides?: boolean | null
           type_contrat?: Database["public"]["Enums"]["type_contrat"] | null
+          type_exercice?: string | null
           types_contrat_acceptes?: string | null
           urgence_creneaux?: Json | null
           urgence_rayon_km?: number | null
