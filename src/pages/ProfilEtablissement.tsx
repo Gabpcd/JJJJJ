@@ -182,6 +182,11 @@ export default function ProfilEtablissement() {
   const [type, setType] = useState('');
   const [conventionCollective, setConventionCollective] = useState('');
   const [modePaiement, setModePaiement] = useState('FACTURE_MENSUELLE');
+  const [contratValide, setContratValide] = useState(false);
+  const [contratUrl, setContratUrl] = useState<string | null>(null);
+  const [contratUploadeLe, setContratUploadeLe] = useState<string | null>(null);
+  const [uploadingContrat, setUploadingContrat] = useState(false);
+  const contratInputRef = React.useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     nom: '', finess: '', rue: '', ville: '', codePostal: '', departement: '',
     emailContact: '', telephoneContact: '',
