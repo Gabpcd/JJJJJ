@@ -529,5 +529,6 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         </DialogContent>
       </Dialog>
     </div>
+    </LayoutApp>
   );
 }

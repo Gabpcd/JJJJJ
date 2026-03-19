@@ -28,13 +28,18 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
   }, []);
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden bg-background">
       <a href="#main-content" className="skip-to-main">Aller au contenu principal</a>
       <BandeauHorsLigne />
       <SyncHorsLigne />
       <BarreNavigation role={role} />
-      <main id="main-content" role="main" className="flex-1 overflow-y-auto md:ml-[260px]">
-        <div className="max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-6">
+      <main
+        id="main-content"
+        role="main"
+        className="flex-1 overflow-y-auto md:ml-[260px]"
+        style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
+      >
+        <div className="max-w-6xl mx-auto px-4 py-6 md:pb-6">
           {children}
         </div>
         <FooterLegal />
