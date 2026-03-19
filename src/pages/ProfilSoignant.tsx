@@ -559,7 +559,7 @@ export default function ProfilSoignant() {
                   {codeCopied ? <><CheckCircle className="h-3.5 w-3.5" /> Copié !</> : <><Copy className="h-3.5 w-3.5" /> Copier</>}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Partagez ce code pour obtenir +50h bonus chacun !</p>
+              <p className="text-xs text-muted-foreground mt-2">Parrainez 3 collègues pour obtenir le badge Ambassadeur et un accès prioritaire aux missions urgentes.</p>
             </div>
           )}
 
@@ -584,7 +584,7 @@ export default function ProfilSoignant() {
                     afficherNotification({ type: 'erreur', message: data.error });
                   } else {
                     setParrainageSucces(true);
-                    afficherNotification({ type: 'succes', message: '+50h bonus appliquées ! 🎉' });
+                    afficherNotification({ type: 'succes', message: 'Parrainage enregistré ! 🎉' });
                   }
                   setParrainageLoading(false);
                 }}
@@ -595,7 +595,7 @@ export default function ProfilSoignant() {
               </button>
             </div>
             {parrainageSucces && (
-              <p className="text-sm text-success font-semibold mt-2">🎉 +50h bonus ajoutées à votre compteur !</p>
+              <p className="text-sm text-success font-semibold mt-2">🎉 Parrainage enregistré avec succès !</p>
             )}
           </div>
 
