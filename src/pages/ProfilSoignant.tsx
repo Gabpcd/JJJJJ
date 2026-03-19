@@ -59,7 +59,8 @@ export default function ProfilSoignant() {
   const [codeCopied, setCodeCopied] = useState(false);
   const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
   const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
-
+  const [heuresCumulees, setHeuresCumulees] = useState(0);
+  const [statutLiberal, setStatutLiberal] = useState('');
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants').select('prenom, nom, email, telephone, date_naissance, profession, type_contrat, types_contrat_acceptes, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, rayon_deplacement_km, consentement_gps, code_parrainage, avatar_url, disponible_urgence, urgence_rayon_km, bio, annees_experience, specialites, heures_cumulees, statut_liberal').eq('id', user.id).single().then(({ data, error }: any) => {
