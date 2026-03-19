@@ -19,7 +19,7 @@ interface LayoutAppProps {
 }
 
 export function LayoutApp({ role, children }: LayoutAppProps) {
-  const isNative = useMemo(() => Capacitor.isNativePlatform(), []);
+  const isNative = useMemo(() => isNativePlatform(), []);
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
