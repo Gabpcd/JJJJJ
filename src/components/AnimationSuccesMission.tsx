@@ -14,7 +14,7 @@ export function AnimationSuccesMission({ mission, onTermine }: AnimationSuccesMi
   }, [onTermine]);
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-card/95">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-card/95">
       {/* Confetti CSS */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {Array.from({ length: 24 }).map((_, i) => (
