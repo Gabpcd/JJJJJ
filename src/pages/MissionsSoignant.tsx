@@ -119,8 +119,10 @@ export default function MissionsSoignant() {
     // Filter by contract type compatibility (only for available missions)
     if (onglet === 'disponibles') {
       result = result.filter(m => {
-        const pref = extraireContratPreference(m.description);
-        return missionCompatibleContrat(pref, typesContrat);
+        const type = m.type_contrat_recherche || extraireContratPreference(m.description);
+        if (type === 'TOUS') return true;
+        // Use soignant's contract types to check compatibility
+        return missionCompatibleContrat(type, typesContrat);
       });
     }
 

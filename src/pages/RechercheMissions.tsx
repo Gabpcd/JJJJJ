@@ -136,13 +136,12 @@ export default function RechercheMissions() {
         // Distance
         if (m.distance_km !== null && m.distance_km > rayonKm) return false;
         // Contract type
+        const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
         if (typeContrat !== 'TOUS') {
-          const pref = extraireContratPreference(m.description);
-          if (typeContrat === 'CDDU' && pref === 'LIBERAL') return false;
-          if (typeContrat === 'LIBERAL' && pref === 'SALARIE') return false;
+          if (typeContrat === 'CDDU' && mType === 'LIBERAL') return false;
+          if (typeContrat === 'LIBERAL' && mType === 'SALARIE') return false;
         } else {
-          const pref = extraireContratPreference(m.description);
-          if (!missionCompatibleContrat(pref, typesContrat)) return false;
+          if (!missionCompatibleContrat(mType, typesContrat)) return false;
         }
         // Horaire
         if (horaire === 'NUIT' && !isNuit(m.debut_le)) return false;

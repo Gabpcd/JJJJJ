@@ -87,9 +87,17 @@ export function injecterContratTag(description: string, pref: ContratPreference)
 
 export function getContratBadge(pref: ContratPreference): { label: string; classes: string } {
   switch (pref) {
-    case 'LIBERAL': return { label: 'Libéraux', classes: 'bg-purple-100 text-purple-700' };
-    case 'SALARIE': return { label: 'Salariés / CDD', classes: 'bg-primary/10 text-primary' };
-    default: return { label: 'Tous contrats', classes: 'bg-muted text-muted-foreground' };
+    case 'LIBERAL': return { label: '🏥 Libéral', classes: 'bg-purple-100 text-purple-700' };
+    case 'SALARIE': return { label: '💼 Salarié', classes: 'bg-primary/10 text-primary' };
+    default: return { label: '👥 Tous profils', classes: 'bg-muted text-muted-foreground' };
+  }
+}
+
+export function getTypeContratRechercheBadge(type: string): { label: string; classes: string } {
+  switch (type) {
+    case 'LIBERAL': return { label: '🏥 Libéral', classes: 'bg-purple-100 text-purple-700' };
+    case 'SALARIE': return { label: '💼 Salarié', classes: 'bg-primary/10 text-primary' };
+    default: return { label: '👥 Tous profils', classes: 'bg-muted text-muted-foreground' };
   }
 }
 
