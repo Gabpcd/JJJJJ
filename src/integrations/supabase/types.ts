@@ -3502,6 +3502,7 @@ export type Database = {
       }
       fn_valider_presence: { Args: { p_presence_id: string }; Returns: Json }
       fn_valider_presences_lot: { Args: { p_ids: string[] }; Returns: Json }
+      fn_verifier_documents_expirants: { Args: never; Returns: number }
       mon_etablissement_id: { Args: never; Returns: string }
       mon_role: { Args: never; Returns: string }
     }
