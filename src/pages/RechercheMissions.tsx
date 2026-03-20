@@ -103,7 +103,7 @@ export default function RechercheMissions() {
         id, intitule, description, service, profession_requise,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
-        soignant_assigne_id, cree_le, etablissement_id
+        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche
       `)
         .eq('statut', 'OUVERTE')
         .gte('debut_le', new Date().toISOString())
@@ -136,13 +136,12 @@ export default function RechercheMissions() {
         // Distance
         if (m.distance_km !== null && m.distance_km > rayonKm) return false;
         // Contract type
+        const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
         if (typeContrat !== 'TOUS') {
-          const pref = extraireContratPreference(m.description);
-          if (typeContrat === 'CDDU' && pref === 'LIBERAL') return false;
-          if (typeContrat === 'LIBERAL' && pref === 'SALARIE') return false;
+          if (typeContrat === 'CDDU' && mType === 'LIBERAL') return false;
+          if (typeContrat === 'LIBERAL' && mType === 'SALARIE') return false;
         } else {
-          const pref = extraireContratPreference(m.description);
-          if (!missionCompatibleContrat(pref, typesContrat)) return false;
+          if (!missionCompatibleContrat(mType, typesContrat)) return false;
         }
         // Horaire
         if (horaire === 'NUIT' && !isNuit(m.debut_le)) return false;

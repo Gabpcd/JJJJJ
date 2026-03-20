@@ -1637,6 +1637,7 @@ export type Database = {
           taux_rist_plafonne: number | null
           terminee_le: string | null
           total_brut: number | null
+          type_contrat_recherche: string
           type_paiement_soignant: string | null
           yousign_id_procedure: string | null
           yousign_statut: string | null
@@ -1688,6 +1689,7 @@ export type Database = {
           taux_rist_plafonne?: number | null
           terminee_le?: string | null
           total_brut?: number | null
+          type_contrat_recherche?: string
           type_paiement_soignant?: string | null
           yousign_id_procedure?: string | null
           yousign_statut?: string | null
@@ -1739,6 +1741,7 @@ export type Database = {
           taux_rist_plafonne?: number | null
           terminee_le?: string | null
           total_brut?: number | null
+          type_contrat_recherche?: string
           type_paiement_soignant?: string | null
           yousign_id_procedure?: string | null
           yousign_statut?: string | null

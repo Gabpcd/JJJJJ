@@ -93,11 +93,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     const dupId = searchParams.get('dupliquer');
     if (dupId && !missionSource) {
-      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence').eq('id', dupId).single().then(({ data }) => {
+      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche').eq('id', dupId).single().then(({ data }) => {
         if (data) {
           setIntitule(data.intitule);
           setDescription(data.description || '');
-          setContratPreference(extraireContratPreference(data.description));
+          setContratPreference(((data as any).type_contrat_recherche as any) || extraireContratPreference(data.description));
           setProfession(data.profession_requise);
           setService(data.service || '');
           setTauxHoraire(String(data.taux_horaire_base));
@@ -305,6 +305,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
         const missionId = (rpcResult as any)?.mission_id;
 
+        // Set type_contrat_recherche column
+        if (missionId && contratPreference !== 'TOUS') {
+          await supabase.from('missions').update({ type_contrat_recherche: contratPreference } as any).eq('id', missionId);
+        }
         await supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: role, p_action: 'MISSION_CREATION',
           p_type_ressource: 'mission', p_id_ressource: missionId || user.id, p_cle_s3: null,
@@ -392,14 +396,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             placeholder="Ex: Urgences, Gériatrie, Réa, Bloc, EHPAD" className="input-base" />
         </div>
 
-        {/* Ouvert aux contrats */}
+        {/* Type de profil recherché */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-2 block">Ouvert aux contrats :</label>
+          <label className="text-sm font-medium text-foreground mb-2 block">Type de profil recherché</label>
           <div className="space-y-2">
             {([
-              { value: 'TOUS' as const, label: 'Tous types de contrats', desc: 'CDDU, Vacation, Libéral, Salarié' },
-              { value: 'SALARIE' as const, label: 'Salariés et CDD uniquement', desc: 'CDDU, Vacation, Salarié' },
-              { value: 'LIBERAL' as const, label: 'Libéraux uniquement', desc: 'Libéral' },
+              { value: 'TOUS' as const, label: 'Tous les profils', desc: 'Salariés et libéraux peuvent postuler' },
+              { value: 'SALARIE' as const, label: 'Salarié uniquement', desc: 'Contrat CDDU — soumis au plafond 48h/semaine' },
+              { value: 'LIBERAL' as const, label: 'Libéral uniquement', desc: 'Remplacement libéral — pas de plafond horaire' },
             ]).map(opt => (
               <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
                 <input

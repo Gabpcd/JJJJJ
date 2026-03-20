@@ -76,7 +76,7 @@ export default function MissionsSoignant() {
         id, intitule, description, service, profession_requise,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
-        soignant_assigne_id, cree_le, etablissement_id
+        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche
       `);
 
       if (onglet === 'disponibles') {
@@ -119,8 +119,10 @@ export default function MissionsSoignant() {
     // Filter by contract type compatibility (only for available missions)
     if (onglet === 'disponibles') {
       result = result.filter(m => {
-        const pref = extraireContratPreference(m.description);
-        return missionCompatibleContrat(pref, typesContrat);
+        const type = m.type_contrat_recherche || extraireContratPreference(m.description);
+        if (type === 'TOUS') return true;
+        // Use soignant's contract types to check compatibility
+        return missionCompatibleContrat(type, typesContrat);
       });
     }
 
