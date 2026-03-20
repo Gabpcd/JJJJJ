@@ -93,11 +93,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     const dupId = searchParams.get('dupliquer');
     if (dupId && !missionSource) {
-      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence').eq('id', dupId).single().then(({ data }) => {
+      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche').eq('id', dupId).single().then(({ data }) => {
         if (data) {
           setIntitule(data.intitule);
           setDescription(data.description || '');
-          setContratPreference(extraireContratPreference(data.description));
+          setContratPreference(((data as any).type_contrat_recherche as any) || extraireContratPreference(data.description));
           setProfession(data.profession_requise);
           setService(data.service || '');
           setTauxHoraire(String(data.taux_horaire_base));
