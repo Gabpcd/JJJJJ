@@ -392,14 +392,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             placeholder="Ex: Urgences, Gériatrie, Réa, Bloc, EHPAD" className="input-base" />
         </div>
 
-        {/* Ouvert aux contrats */}
+        {/* Type de profil recherché */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-2 block">Ouvert aux contrats :</label>
+          <label className="text-sm font-medium text-foreground mb-2 block">Type de profil recherché</label>
           <div className="space-y-2">
             {([
-              { value: 'TOUS' as const, label: 'Tous types de contrats', desc: 'CDDU, Vacation, Libéral, Salarié' },
-              { value: 'SALARIE' as const, label: 'Salariés et CDD uniquement', desc: 'CDDU, Vacation, Salarié' },
-              { value: 'LIBERAL' as const, label: 'Libéraux uniquement', desc: 'Libéral' },
+              { value: 'TOUS' as const, label: 'Tous les profils', desc: 'Salariés et libéraux peuvent postuler' },
+              { value: 'SALARIE' as const, label: 'Salarié uniquement', desc: 'Contrat CDDU — soumis au plafond 48h/semaine' },
+              { value: 'LIBERAL' as const, label: 'Libéral uniquement', desc: 'Remplacement libéral — pas de plafond horaire' },
             ]).map(opt => (
               <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
                 <input
