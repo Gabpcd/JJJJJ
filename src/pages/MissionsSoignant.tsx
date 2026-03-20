@@ -76,7 +76,7 @@ export default function MissionsSoignant() {
         id, intitule, description, service, profession_requise,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
-        soignant_assigne_id, cree_le, etablissement_id
+        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche
       `);
 
       if (onglet === 'disponibles') {
