@@ -3,7 +3,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { BadgeStatut } from '@/components/BadgeStatut';
-import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge } from '@/lib/constantes';
+import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge, getTypeContratRechercheBadge } from '@/lib/constantes';
 
 interface CarteMissionSoignantProps {
   mission: any;
