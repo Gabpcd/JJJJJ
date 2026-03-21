@@ -65,6 +65,35 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onEr
 
       {localActif && (
         <>
+          {/* Zone choice */}
+          <div className="mb-4">
+            <p className="text-xs font-medium text-foreground mb-2">Zone d'alerte :</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setModeZone('position')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${modeZone === 'position' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}
+              >
+                📍 Autour de ma position
+              </button>
+              <button
+                type="button"
+                onClick={() => setModeZone('ville')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${modeZone === 'ville' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}
+              >
+                🏙️ Ville spécifique
+              </button>
+            </div>
+            {modeZone === 'ville' && (
+              <input
+                value={localVille}
+                onChange={(e) => setLocalVille(e.target.value)}
+                placeholder="Ex : Lyon, Marseille..."
+                className="input-base mt-2"
+              />
+            )}
+          </div>
+
           <div className="mb-4">
             <label className="text-sm font-medium text-foreground mb-2 block">
               Rayon maximum : <span className="text-primary font-bold">{localRayon} km</span>
