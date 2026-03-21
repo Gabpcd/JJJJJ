@@ -337,6 +337,14 @@ export default function PresencesSoignant() {
     return <ConsentementGPS onAccepter={handleAccepterGPS} onRefuser={handleRefuserGPS} />;
   }
 
+  const getMethodeLabel = (m: string | null) => {
+    if (!m) return '—';
+    if (m === 'GPS') return '📍 GPS';
+    if (m === 'CODE') return '🔢 Code';
+    if (m === 'QR') return '📱 QR Code';
+    return m;
+  };
+
   return (
     <LayoutApp role="SOIGNANT">
       <BandeauHorsLigne />
@@ -350,95 +358,169 @@ export default function PresencesSoignant() {
         <p className="text-sm text-muted-foreground mt-1">Pointez vos arrivées et départs pour chaque mission</p>
       </div>
 
-      {missions.length > 0 ? (
-        <div className="space-y-4">
-          {missions.map((m: any) => {
-            const presence = m.presences?.[0] || null;
-            const contrat = contrats[m.id];
-            const contratBloque = contrat && contrat.statut !== 'SIGNE_COMPLET';
-            const pasDeContrat = !contrat;
+      <Tabs defaultValue="aujourdhui">
+        <TabsList className="w-full max-w-xs mb-4">
+          <TabsTrigger value="aujourdhui" className="flex-1 gap-1.5"><Clock className="h-4 w-4" />Aujourd'hui</TabsTrigger>
+          <TabsTrigger value="historique" className="flex-1 gap-1.5"><History className="h-4 w-4" />Historique</TabsTrigger>
+        </TabsList>
 
-            if ((contratBloque || pasDeContrat) && !presence?.pointage_arrivee_le) {
-              return (
-                <div key={m.id} className="card-base">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-semibold text-foreground">{m.intitule}</p>
-                      <p className="text-xs text-muted-foreground">{(m as any).etablissements?.nom}</p>
+        <TabsContent value="aujourdhui">
+          {missions.length > 0 ? (
+            <div className="space-y-4">
+              {missions.map((m: any) => {
+                const presence = m.presences?.[0] || null;
+                const contrat = contrats[m.id];
+                const contratBloque = contrat && contrat.statut !== 'SIGNE_COMPLET';
+                const pasDeContrat = !contrat;
+
+                if ((contratBloque || pasDeContrat) && !presence?.pointage_arrivee_le) {
+                  return (
+                    <div key={m.id} className="card-base">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="font-semibold text-foreground">{m.intitule}</p>
+                          <p className="text-xs text-muted-foreground">{(m as any).etablissements?.nom}</p>
+                        </div>
+                      </div>
+                      <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 text-center">
+                        <p className="text-warning font-bold text-sm">⚠️ Contrat non signé</p>
+                        <p className="text-warning/80 text-xs mt-1">
+                          Le contrat de mission doit être signé par les deux parties avant de pouvoir pointer.
+                        </p>
+                        {contrat && (
+                          <button onClick={() => navigate(`/contrat/${contrat.id}`)} className="btn-primary text-xs mt-3">
+                            Signer le contrat →
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 text-center">
-                    <p className="text-warning font-bold text-sm">⚠️ Contrat non signé</p>
-                    <p className="text-warning/80 text-xs mt-1">
-                      Le contrat de mission doit être signé par les deux parties avant de pouvoir pointer.
-                    </p>
-                    {contrat && (
-                      <button onClick={() => navigate(`/contrat/${contrat.id}`)} className="btn-primary text-xs mt-3">
-                        Signer le contrat →
-                      </button>
+                  );
+                }
+
+                return (
+                  <CartePointage
+                    key={m.id}
+                    mission={m}
+                    presence={presence}
+                    onPointerArrivee={() => pointerArrivee(m.id)}
+                    onPointerDepart={() => presence ? pointerDepart(presence.id, m.id) : Promise.resolve()}
+                    onRecharger={charger}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <EtatVide
+              icone={CalendarDays}
+              titre="Aucune mission aujourd'hui"
+              sousTitre="Vos missions assignées apparaîtront ici le jour J pour le pointage."
+            />
+          )}
+
+          {presencesValidees.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-base font-bold text-foreground flex items-center gap-2 mb-4">
+                <CheckCircle className="h-4 w-4 text-success" /> Présences validées récemment
+              </h2>
+              <div className="space-y-3">
+                {presencesValidees.map((p: any) => {
+                  const m = p.missions;
+                  return (
+                    <div key={p.id} className="rounded-2xl border border-border p-4">
+                      <div className="flex items-start justify-between mb-1">
+                        <div>
+                          <p className="font-semibold text-sm text-foreground">{m?.intitule}</p>
+                          <p className="text-xs text-muted-foreground">{m?.etablissements?.nom}</p>
+                        </div>
+                        <span className="text-[11px] bg-success/10 text-success px-2 py-0.5 rounded-full font-medium">
+                          Validée
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        {p.valide_le && format(new Date(p.valide_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                      </p>
+                      <PanneauContestation
+                        presenceId={p.id}
+                        missionId={p.mission_id}
+                        etablissementId={m?.etablissement_id}
+                        soignantId={p.soignant_id}
+                        presenceValideeLe={p.valide_le}
+                        role="SOIGNANT"
+                        onUpdate={charger}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="historique">
+          {historiquePresences.length > 0 ? (
+            <div className="space-y-3">
+              {historiquePresences.map((p: any) => {
+                const m = p.missions;
+                const arrivee = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
+                const depart = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
+
+                return (
+                  <div key={p.id} className="card-base">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">{m?.intitule}</p>
+                        <p className="text-xs text-muted-foreground">🏥 {m?.etablissements?.nom}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          📅 {m?.debut_le && format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}
+                        </p>
+                      </div>
+                      {p.valide_par_etablissement ? (
+                        <Badge variant="outline" className="bg-success/10 text-success border-success/30 text-[10px]">✅ Validée</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30 text-[10px]">⏳ Non validée</Badge>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
+                      <div>
+                        <span className="font-medium text-foreground">Arrivée :</span>{' '}
+                        {arrivee ? format(arrivee, "HH'h'mm", { locale: fr }) : '—'}
+                        <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_arrivee)}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-foreground">Départ :</span>{' '}
+                        {depart ? format(depart, "HH'h'mm", { locale: fr }) : '—'}
+                        <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_depart)}</span>
+                      </div>
+                      {(p.code_arrivee || p.code_depart) && (
+                        <div className="col-span-2">
+                          <Hash className="h-3 w-3 inline" /> Code : {p.code_arrivee || p.code_depart || '—'}
+                        </div>
+                      )}
+                    </div>
+
+                    {!p.valide_par_etablissement && (
+                      <div className="mt-2">
+                        <PanneauContestation
+                          presenceId={p.id}
+                          missionId={p.mission_id}
+                          etablissementId={m?.etablissement_id}
+                          soignantId={p.soignant_id}
+                          presenceValideeLe={p.valide_le}
+                          role="SOIGNANT"
+                          onUpdate={charger}
+                        />
+                      </div>
                     )}
                   </div>
-                </div>
-              );
-            }
-
-            return (
-              <CartePointage
-                key={m.id}
-                mission={m}
-                presence={presence}
-                onPointerArrivee={() => pointerArrivee(m.id)}
-                onPointerDepart={() => presence ? pointerDepart(presence.id, m.id) : Promise.resolve()}
-                onRecharger={charger}
-              />
-            );
-          })}
-        </div>
-      ) : (
-        <EtatVide
-          icone={CalendarDays}
-          titre="Aucune mission aujourd'hui"
-          sousTitre="Vos missions assignées apparaîtront ici le jour J pour le pointage."
-        />
-      )}
-
-      {presencesValidees.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-base font-bold text-foreground flex items-center gap-2 mb-4">
-            <CheckCircle className="h-4 w-4 text-success" /> Présences validées récemment
-          </h2>
-          <div className="space-y-3">
-            {presencesValidees.map((p: any) => {
-              const m = p.missions;
-              return (
-                <div key={p.id} className="rounded-2xl border border-border p-4">
-                  <div className="flex items-start justify-between mb-1">
-                    <div>
-                      <p className="font-semibold text-sm text-foreground">{m?.intitule}</p>
-                      <p className="text-xs text-muted-foreground">{m?.etablissements?.nom}</p>
-                    </div>
-                    <span className="text-[11px] bg-success/10 text-success px-2 py-0.5 rounded-full font-medium">
-                      Validée
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    {p.valide_le && format(new Date(p.valide_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}
-                  </p>
-                  <PanneauContestation
-                    presenceId={p.id}
-                    missionId={p.mission_id}
-                    etablissementId={m?.etablissement_id}
-                    soignantId={p.soignant_id}
-                    presenceValideeLe={p.valide_le}
-                    role="SOIGNANT"
-                    onUpdate={charger}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+                );
+              })}
+            </div>
+          ) : (
+            <EtatVide icone={History} titre="Aucune présence enregistrée" sousTitre="Votre historique de pointages apparaîtra ici." />
+          )}
+        </TabsContent>
+      </Tabs>
     </LayoutApp>
   );
 }
