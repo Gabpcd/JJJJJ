@@ -8,7 +8,8 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 interface PoolUrgenceToggleProps {
   actif: boolean;
   rayonKm: number;
-  onUpdate: (actif: boolean, rayonKm: number) => void;
+  villeUrgence?: string;
+  onUpdate: (actif: boolean, rayonKm: number, villeUrgence?: string) => void;
   onError: (msg: string) => void;
   onSuccess: (msg: string) => void;
 }
