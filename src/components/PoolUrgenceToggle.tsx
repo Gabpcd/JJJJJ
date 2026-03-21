@@ -14,10 +14,12 @@ interface PoolUrgenceToggleProps {
   onSuccess: (msg: string) => void;
 }
 
-export function PoolUrgenceToggle({ actif, rayonKm, onUpdate, onError, onSuccess }: PoolUrgenceToggleProps) {
+export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onError, onSuccess }: PoolUrgenceToggleProps) {
   const [loading, setLoading] = useState(false);
   const [localActif, setLocalActif] = useState(actif);
   const [localRayon, setLocalRayon] = useState(rayonKm);
+  const [modeZone, setModeZone] = useState<'position' | 'ville'>(villeUrgence ? 'ville' : 'position');
+  const [localVille, setLocalVille] = useState(villeUrgence || '');
 
   const save = async (newActif: boolean, newRayon: number) => {
     setLoading(true);
@@ -31,7 +33,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, onUpdate, onError, onSuccess
     } else if (data?.error) {
       onError(data.error);
     } else {
-      onUpdate(newActif, newRayon);
+      onUpdate(newActif, newRayon, modeZone === 'ville' ? localVille : undefined);
       onSuccess(newActif ? 'Pool urgence activé !' : 'Pool urgence désactivé.');
     }
     setLoading(false);
