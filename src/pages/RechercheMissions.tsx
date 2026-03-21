@@ -74,6 +74,7 @@ export default function RechercheMissions() {
   const [urgentesOnly, setUrgentesOnly] = useState(false);
   const [horaire, setHoraire] = useState<Horaire>('TOUS');
   const [showFilters, setShowFilters] = useState(true);
+  const [villeRecherche, setVilleRecherche] = useState('');
 
   // Map
   const mapRef = useRef<HTMLDivElement>(null);
@@ -126,6 +127,7 @@ export default function RechercheMissions() {
   const filtered = useMemo(() => {
     if (!soignant) return [];
     const typesContrat = getTypesContratSoignant(soignant);
+    const villeSearch = villeRecherche.trim().toLowerCase();
 
     return missions
       .map(m => ({
@@ -133,8 +135,15 @@ export default function RechercheMissions() {
         distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
       }))
       .filter(m => {
-        // Distance
-        if (m.distance_km !== null && m.distance_km > rayonKm) return false;
+        // Ville filter
+        if (villeSearch) {
+          const ville = (m.etablissements?.adresse_ville || '').toLowerCase();
+          const cp = (m.etablissements?.adresse_code_postal || '').toLowerCase();
+          if (!ville.includes(villeSearch) && !cp.startsWith(villeSearch)) return false;
+        }
+        // Distance (only if no ville search or combined)
+        if (!villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
+        if (villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
         // Contract type
         const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
         if (typeContrat !== 'TOUS') {
@@ -150,7 +159,7 @@ export default function RechercheMissions() {
         return true;
       })
       .sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
-  }, [missions, soignant, rayonKm, typeContrat, horaire]);
+  }, [missions, soignant, rayonKm, typeContrat, horaire, villeRecherche]);
 
   // Initialize / update map
   const initMap = (tab: string) => {
@@ -225,6 +234,16 @@ export default function RechercheMissions() {
         {/* Filters */}
         <div className={`${showFilters ? 'block' : 'hidden md:block'} card-base space-y-4`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Ville / Code postal */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">📍 Ville ou code postal</Label>
+              <Input
+                value={villeRecherche}
+                onChange={(e) => setVilleRecherche(e.target.value)}
+                placeholder="Ex : Paris, 75001..."
+              />
+              <p className="text-[10px] text-muted-foreground">Laissez vide pour utiliser votre position</p>
+            </div>
             {/* Profession */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Profession</Label>

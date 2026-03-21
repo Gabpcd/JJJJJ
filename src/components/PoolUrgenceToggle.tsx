@@ -8,15 +8,18 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 interface PoolUrgenceToggleProps {
   actif: boolean;
   rayonKm: number;
-  onUpdate: (actif: boolean, rayonKm: number) => void;
+  villeUrgence?: string;
+  onUpdate: (actif: boolean, rayonKm: number, villeUrgence?: string) => void;
   onError: (msg: string) => void;
   onSuccess: (msg: string) => void;
 }
 
-export function PoolUrgenceToggle({ actif, rayonKm, onUpdate, onError, onSuccess }: PoolUrgenceToggleProps) {
+export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onError, onSuccess }: PoolUrgenceToggleProps) {
   const [loading, setLoading] = useState(false);
   const [localActif, setLocalActif] = useState(actif);
   const [localRayon, setLocalRayon] = useState(rayonKm);
+  const [modeZone, setModeZone] = useState<'position' | 'ville'>(villeUrgence ? 'ville' : 'position');
+  const [localVille, setLocalVille] = useState(villeUrgence || '');
 
   const save = async (newActif: boolean, newRayon: number) => {
     setLoading(true);
@@ -30,7 +33,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, onUpdate, onError, onSuccess
     } else if (data?.error) {
       onError(data.error);
     } else {
-      onUpdate(newActif, newRayon);
+      onUpdate(newActif, newRayon, modeZone === 'ville' ? localVille : undefined);
       onSuccess(newActif ? 'Pool urgence activé !' : 'Pool urgence désactivé.');
     }
     setLoading(false);
@@ -62,6 +65,35 @@ export function PoolUrgenceToggle({ actif, rayonKm, onUpdate, onError, onSuccess
 
       {localActif && (
         <>
+          {/* Zone choice */}
+          <div className="mb-4">
+            <p className="text-xs font-medium text-foreground mb-2">Zone d'alerte :</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setModeZone('position')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${modeZone === 'position' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}
+              >
+                📍 Autour de ma position
+              </button>
+              <button
+                type="button"
+                onClick={() => setModeZone('ville')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${modeZone === 'ville' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}
+              >
+                🏙️ Ville spécifique
+              </button>
+            </div>
+            {modeZone === 'ville' && (
+              <input
+                value={localVille}
+                onChange={(e) => setLocalVille(e.target.value)}
+                placeholder="Ex : Lyon, Marseille..."
+                className="input-base mt-2"
+              />
+            )}
+          </div>
+
           <div className="mb-4">
             <label className="text-sm font-medium text-foreground mb-2 block">
               Rayon maximum : <span className="text-primary font-bold">{localRayon} km</span>

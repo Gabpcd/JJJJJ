@@ -468,6 +468,12 @@ export default function ProfilSoignant() {
               <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full accent-primary" />
               <div className="flex justify-between text-[10px] text-muted-foreground"><span>5 km</span><span>100 km</span></div>
             </div>
+            {/* Ville de recherche fallback */}
+            <div className="pt-2 border-t border-border">
+              <label className="text-sm font-medium text-foreground mb-1.5 block">🏙️ Ville de recherche</label>
+              <p className="text-xs text-muted-foreground mb-2">Indiquez la ville où vous cherchez des missions. Utile si vous êtes en déplacement ou en vacances.</p>
+              <input value={(form as any).villeRecherche || ''} onChange={e => maj('villeRecherche', e.target.value)} placeholder="Ex : Lyon, Paris..." className="input-base" />
+            </div>
           </div>
         </div>
 

@@ -2400,6 +2400,8 @@ export type Database = {
           types_contrat_acceptes: string | null
           urgence_creneaux: Json | null
           urgence_rayon_km: number | null
+          ville_recherche: string | null
+          ville_urgence: string | null
         }
         Insert: {
           adresse_code_postal?: string | null
@@ -2480,6 +2482,8 @@ export type Database = {
           types_contrat_acceptes?: string | null
           urgence_creneaux?: Json | null
           urgence_rayon_km?: number | null
+          ville_recherche?: string | null
+          ville_urgence?: string | null
         }
         Update: {
           adresse_code_postal?: string | null
@@ -2560,6 +2564,8 @@ export type Database = {
           types_contrat_acceptes?: string | null
           urgence_creneaux?: Json | null
           urgence_rayon_km?: number | null
+          ville_recherche?: string | null
+          ville_urgence?: string | null
         }
         Relationships: []
       }
@@ -2754,18 +2760,21 @@ export type Database = {
       tokens_calendrier: {
         Row: {
           cree_le: string | null
+          expire_le: string | null
           id: string
           soignant_id: string
           token: string
         }
         Insert: {
           cree_le?: string | null
+          expire_le?: string | null
           id?: string
           soignant_id: string
           token?: string
         }
         Update: {
           cree_le?: string | null
+          expire_le?: string | null
           id?: string
           soignant_id?: string
           token?: string
@@ -3139,6 +3148,7 @@ export type Database = {
       fn_generer_numero_note_honoraires: { Args: never; Returns: string }
       fn_get_my_role: { Args: never; Returns: Json }
       fn_health_check: { Args: never; Returns: Json }
+      fn_html_escape: { Args: { p_text: string }; Returns: string }
       fn_is_valid_uuid: { Args: { p_text: string }; Returns: boolean }
       fn_maj_activite_soignant: { Args: never; Returns: Json }
       fn_marquer_messages_lus: {
@@ -3313,6 +3323,8 @@ export type Database = {
           p_telephone?: string
           p_type_exercice?: string
           p_types_contrat?: string[]
+          p_ville_recherche?: string
+          p_ville_urgence?: string
         }
         Returns: Json
       }
@@ -3546,6 +3558,7 @@ export type Database = {
         | "CARTE_ORDRE"
         | "ATTESTATION_CPAM"
         | "NOTE_HONORAIRES"
+        | "ATTESTATION_3200H"
       type_etablissement:
         | "HOPITAL_PUBLIC"
         | "CLINIQUE_PRIVEE"
@@ -3740,6 +3753,7 @@ export const Constants = {
         "CARTE_ORDRE",
         "ATTESTATION_CPAM",
         "NOTE_HONORAIRES",
+        "ATTESTATION_3200H",
       ],
       type_etablissement: [
         "HOPITAL_PUBLIC",

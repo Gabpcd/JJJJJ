@@ -334,7 +334,9 @@ export default function DashboardSoignant() {
           {/* KPI */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <FadeInView delay={0}>
-              <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
+              <div className="cursor-pointer" onClick={() => navigate('/soignant/historique-missions')}>
+                <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
+              </div>
             </FadeInView>
             <FadeInView delay={100}>
               {hasEvaluations ? (
@@ -348,7 +350,9 @@ export default function DashboardSoignant() {
               )}
             </FadeInView>
             <FadeInView delay={200}>
-              <CarteKPI icone={Clock} valeur={`${heures}h`} label="Heures cumulées" sousLabel="sur 3 200h objectif" couleurIcone="text-purple-600" couleurFond="bg-purple-100" />
+              <div className="cursor-pointer" onClick={() => navigate('/soignant/historique-missions')}>
+                <CarteKPI icone={Clock} valeur={`${heures}h`} label="Heures cumulées" sousLabel="sur 3 200h objectif" couleurIcone="text-purple-600" couleurFond="bg-purple-100" />
+              </div>
             </FadeInView>
             <FadeInView delay={300}>
               <div className="card-kpi">
