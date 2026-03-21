@@ -74,6 +74,7 @@ export default function RechercheMissions() {
   const [urgentesOnly, setUrgentesOnly] = useState(false);
   const [horaire, setHoraire] = useState<Horaire>('TOUS');
   const [showFilters, setShowFilters] = useState(true);
+  const [villeRecherche, setVilleRecherche] = useState('');
 
   // Map
   const mapRef = useRef<HTMLDivElement>(null);
