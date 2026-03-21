@@ -350,7 +350,9 @@ export default function DashboardSoignant() {
               )}
             </FadeInView>
             <FadeInView delay={200}>
-              <CarteKPI icone={Clock} valeur={`${heures}h`} label="Heures cumulées" sousLabel="sur 3 200h objectif" couleurIcone="text-purple-600" couleurFond="bg-purple-100" />
+              <div className="cursor-pointer" onClick={() => navigate('/soignant/historique-missions')}>
+                <CarteKPI icone={Clock} valeur={`${heures}h`} label="Heures cumulées" sousLabel="sur 3 200h objectif" couleurIcone="text-purple-600" couleurFond="bg-purple-100" />
+              </div>
             </FadeInView>
             <FadeInView delay={300}>
               <div className="card-kpi">
