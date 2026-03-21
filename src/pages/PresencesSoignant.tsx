@@ -31,6 +31,7 @@ export default function PresencesSoignant() {
   const navigate = useNavigate();
   const [missions, setMissions] = useState<any[]>([]);
   const [presencesValidees, setPresencesValidees] = useState<any[]>([]);
+  const [historiquePresences, setHistoriquePresences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [contrats, setContrats] = useState<Record<string, any>>({});
 
