@@ -46,6 +46,7 @@ const PlanningSoignant = lazy(() => import("./pages/PlanningSoignant"));
 const ConformiteSoignant = lazy(() => import("./pages/ConformiteSoignant"));
 const PresencesSoignant = lazy(() => import("./pages/PresencesSoignant"));
 const MesGains = lazy(() => import("./pages/MesGains"));
+const HistoriqueMissions = lazy(() => import("./pages/HistoriqueMissions"));
 const FiabiliteSoignant = lazy(() => import("./pages/FiabiliteSoignant"));
 const Parcours3200h = lazy(() => import("./pages/Parcours3200h"));
 const PrevoyanceSoignant = lazy(() => import("./pages/PrevoyanceSoignant"));
