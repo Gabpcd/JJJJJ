@@ -234,6 +234,16 @@ export default function RechercheMissions() {
         {/* Filters */}
         <div className={`${showFilters ? 'block' : 'hidden md:block'} card-base space-y-4`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Ville / Code postal */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">📍 Ville ou code postal</Label>
+              <Input
+                value={villeRecherche}
+                onChange={(e) => setVilleRecherche(e.target.value)}
+                placeholder="Ex : Paris, 75001..."
+              />
+              <p className="text-[10px] text-muted-foreground">Laissez vide pour utiliser votre position</p>
+            </div>
             {/* Profession */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Profession</Label>
