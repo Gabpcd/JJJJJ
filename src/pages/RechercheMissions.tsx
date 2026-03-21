@@ -127,6 +127,7 @@ export default function RechercheMissions() {
   const filtered = useMemo(() => {
     if (!soignant) return [];
     const typesContrat = getTypesContratSoignant(soignant);
+    const villeSearch = villeRecherche.trim().toLowerCase();
 
     return missions
       .map(m => ({
@@ -134,8 +135,15 @@ export default function RechercheMissions() {
         distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
       }))
       .filter(m => {
-        // Distance
-        if (m.distance_km !== null && m.distance_km > rayonKm) return false;
+        // Ville filter
+        if (villeSearch) {
+          const ville = (m.etablissements?.adresse_ville || '').toLowerCase();
+          const cp = (m.etablissements?.adresse_code_postal || '').toLowerCase();
+          if (!ville.includes(villeSearch) && !cp.startsWith(villeSearch)) return false;
+        }
+        // Distance (only if no ville search or combined)
+        if (!villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
+        if (villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
         // Contract type
         const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
         if (typeContrat !== 'TOUS') {
@@ -151,7 +159,7 @@ export default function RechercheMissions() {
         return true;
       })
       .sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
-  }, [missions, soignant, rayonKm, typeContrat, horaire]);
+  }, [missions, soignant, rayonKm, typeContrat, horaire, villeRecherche]);
 
   // Initialize / update map
   const initMap = (tab: string) => {
