@@ -136,6 +136,8 @@ export default function PresencesSoignant() {
       .select(`
         id, mission_id, soignant_id, pointage_arrivee_le, pointage_depart_le,
         valide_par_etablissement, valide_le,
+        methode_pointage_arrivee, methode_pointage_depart,
+        code_arrivee, code_depart,
         missions!inner(id, intitule, etablissement_id, debut_le, fin_le)
       `)
       .eq('soignant_id', user!.id)
@@ -153,6 +155,32 @@ export default function PresencesSoignant() {
       }));
     }
     setPresencesValidees(presencesList);
+
+    // Load full historique
+    const { data: allPresences } = await supabase
+      .from('presences')
+      .select(`
+        id, mission_id, soignant_id, pointage_arrivee_le, pointage_depart_le,
+        valide_par_etablissement, valide_le,
+        methode_pointage_arrivee, methode_pointage_depart,
+        code_arrivee, code_depart,
+        missions!inner(id, intitule, etablissement_id, debut_le, fin_le)
+      `)
+      .eq('soignant_id', user!.id)
+      .not('pointage_arrivee_le', 'is', null)
+      .order('pointage_arrivee_le', { ascending: false })
+      .limit(100);
+
+    let allList = allPresences || [];
+    if (allList.length > 0) {
+      const etabIds2 = allList.map((p: any) => p.missions?.etablissement_id).filter(Boolean);
+      const etabMap2 = await fetchEtablissementsSafe(etabIds2);
+      allList = allList.map((p: any) => ({
+        ...p,
+        missions: { ...p.missions, etablissements: etabMap2[p.missions?.etablissement_id] || null },
+      }));
+    }
+    setHistoriquePresences(allList);
     setLoading(false);
   }, [user]);
 
