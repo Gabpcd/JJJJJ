@@ -312,10 +312,10 @@ export default function DashboardEtablissement() {
 
       {/* KPI row 1 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <FadeInView delay={0}><CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" /></FadeInView>
-        <FadeInView delay={100}><CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" /></FadeInView>
-        <FadeInView delay={200}><CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" /></FadeInView>
-        <FadeInView delay={300}><CarteKPI icone={TrendingUp} valeur={`${kpi.taux}%`} label="Taux d'occupation" couleurIcone={kpi.taux > 70 ? 'text-success' : 'text-warning'} couleurFond={kpi.taux > 70 ? 'bg-success/10' : 'bg-warning/10'} /></FadeInView>
+        <FadeInView delay={0}><div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?statut=OUVERTE')}><CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" /></div></FadeInView>
+        <FadeInView delay={100}><div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?statut=EN_COURS')}><CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" /></div></FadeInView>
+        <FadeInView delay={200}><div className="cursor-pointer" onClick={() => navigate('/etablissement/contrats')}><CarteKPI icone={FileText} valeur={contratsCount} label="Contrats" couleurIcone="text-info" couleurFond="bg-info/10" /></div></FadeInView>
+        <FadeInView delay={300}><div className="cursor-pointer" onClick={() => navigate('/etablissement/presences')}><CarteKPI icone={ClipboardCheck} valeur={presencesCount} label="Présences" couleurIcone="text-success" couleurFond="bg-success/10" /></div></FadeInView>
       </div>
 
       {/* KPI row 2 — HR indicators */}
