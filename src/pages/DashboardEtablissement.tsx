@@ -302,11 +302,12 @@ export default function DashboardEtablissement() {
         )}
       </div>
 
-      {/* Compteur soignants disponibles */}
-      <div className="mb-6">
+      {/* Compteur soignants disponibles — clickable */}
+      <div className="mb-6 cursor-pointer" onClick={() => navigate('/etablissement/pool-urgence')}>
         <FadeInView delay={50}>
           <CompteurSoignantsDisponibles etablissementId={user!.id} />
         </FadeInView>
+      </div>
       </div>
 
       {/* KPI row 1 */}
