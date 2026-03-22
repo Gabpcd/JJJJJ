@@ -127,7 +127,7 @@ export default function HistoriqueMissions() {
                     )}
                   </div>
                   <div className="text-right shrink-0 ml-3">
-                    <p className="font-bold text-primary text-sm">{fmt(net)}</p>
+                    <p className="font-bold text-primary text-sm cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}>{fmt(net)}</p>
                     <p className="text-[10px] text-muted-foreground">{m.duree_heures}h</p>
                   </div>
                 </div>
