@@ -574,6 +574,123 @@ export type Database = {
           },
         ]
       }
+      cotisations_sociales: {
+        Row: {
+          assurance_chomage: number
+          calcule_le: string | null
+          contribution_equilibre_general: number
+          cout_total_employeur: number
+          crds: number
+          cree_le: string | null
+          csg_deductible: number
+          csg_non_deductible: number
+          icp: number
+          id: string
+          ifm: number
+          mission_id: string
+          net_avant_impot: number
+          patronal_accident_travail: number
+          patronal_allocations_familiales: number
+          patronal_chomage: number
+          patronal_fnal: number
+          patronal_formation: number
+          patronal_retraite_complementaire: number
+          patronal_securite_sociale: number
+          patronal_transport: number
+          retraite_complementaire_t1: number
+          retraite_complementaire_t2: number
+          salaire_brut: number
+          securite_sociale_maladie: number
+          securite_sociale_vieillesse_deplafonnee: number
+          securite_sociale_vieillesse_plafonnee: number
+          soignant_id: string
+          total_cotisations_patronales: number
+          total_cotisations_salariales: number
+          type_contrat: string
+        }
+        Insert: {
+          assurance_chomage?: number
+          calcule_le?: string | null
+          contribution_equilibre_general?: number
+          cout_total_employeur?: number
+          crds?: number
+          cree_le?: string | null
+          csg_deductible?: number
+          csg_non_deductible?: number
+          icp?: number
+          id?: string
+          ifm?: number
+          mission_id: string
+          net_avant_impot?: number
+          patronal_accident_travail?: number
+          patronal_allocations_familiales?: number
+          patronal_chomage?: number
+          patronal_fnal?: number
+          patronal_formation?: number
+          patronal_retraite_complementaire?: number
+          patronal_securite_sociale?: number
+          patronal_transport?: number
+          retraite_complementaire_t1?: number
+          retraite_complementaire_t2?: number
+          salaire_brut: number
+          securite_sociale_maladie?: number
+          securite_sociale_vieillesse_deplafonnee?: number
+          securite_sociale_vieillesse_plafonnee?: number
+          soignant_id: string
+          total_cotisations_patronales?: number
+          total_cotisations_salariales?: number
+          type_contrat: string
+        }
+        Update: {
+          assurance_chomage?: number
+          calcule_le?: string | null
+          contribution_equilibre_general?: number
+          cout_total_employeur?: number
+          crds?: number
+          cree_le?: string | null
+          csg_deductible?: number
+          csg_non_deductible?: number
+          icp?: number
+          id?: string
+          ifm?: number
+          mission_id?: string
+          net_avant_impot?: number
+          patronal_accident_travail?: number
+          patronal_allocations_familiales?: number
+          patronal_chomage?: number
+          patronal_fnal?: number
+          patronal_formation?: number
+          patronal_retraite_complementaire?: number
+          patronal_securite_sociale?: number
+          patronal_transport?: number
+          retraite_complementaire_t1?: number
+          retraite_complementaire_t2?: number
+          salaire_brut?: number
+          securite_sociale_maladie?: number
+          securite_sociale_vieillesse_deplafonnee?: number
+          securite_sociale_vieillesse_plafonnee?: number
+          soignant_id?: string
+          total_cotisations_patronales?: number
+          total_cotisations_salariales?: number
+          type_contrat?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotisations_sociales_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotisations_sociales_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       demandes_rgpd: {
         Row: {
           cle_s3_export: string | null
@@ -810,6 +927,7 @@ export type Database = {
           rist_plafond_actif: boolean | null
           rist_taux_base_horaire: number | null
           siret: string
+          stripe_account_id: string | null
           stripe_customer_id: string | null
           supprime_le: string | null
           taux_commission_negocie: number | null
@@ -851,6 +969,7 @@ export type Database = {
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
           siret: string
+          stripe_account_id?: string | null
           stripe_customer_id?: string | null
           supprime_le?: string | null
           taux_commission_negocie?: number | null
@@ -892,6 +1011,7 @@ export type Database = {
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
           siret?: string
+          stripe_account_id?: string | null
           stripe_customer_id?: string | null
           supprime_le?: string | null
           taux_commission_negocie?: number | null
@@ -1630,6 +1750,8 @@ export type Database = {
           service: string | null
           soignant_assigne_id: string | null
           statut: Database["public"]["Enums"]["statut_mission"] | null
+          stripe_payment_intent_id: string | null
+          stripe_transfer_id: string | null
           taux_commission: number | null
           taux_horaire_base: number
           taux_icp: number | null
@@ -1682,6 +1804,8 @@ export type Database = {
           service?: string | null
           soignant_assigne_id?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
           taux_commission?: number | null
           taux_horaire_base: number
           taux_icp?: number | null
@@ -1734,6 +1858,8 @@ export type Database = {
           service?: string | null
           soignant_assigne_id?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
           taux_commission?: number | null
           taux_horaire_base?: number
           taux_icp?: number | null
@@ -2386,6 +2512,7 @@ export type Database = {
           statut_verification_aria:
             | Database["public"]["Enums"]["statut_verification"]
             | null
+          stripe_account_id: string | null
           supprime_le: string | null
           taux_horaire_minimum: number | null
           telephone: string | null
@@ -2400,6 +2527,9 @@ export type Database = {
           types_contrat_acceptes: string | null
           urgence_creneaux: Json | null
           urgence_rayon_km: number | null
+          validation_3200h_le: string | null
+          validation_3200h_par: string | null
+          validation_3200h_statut: string | null
           ville_recherche: string | null
           ville_urgence: string | null
         }
@@ -2468,6 +2598,7 @@ export type Database = {
           statut_verification_aria?:
             | Database["public"]["Enums"]["statut_verification"]
             | null
+          stripe_account_id?: string | null
           supprime_le?: string | null
           taux_horaire_minimum?: number | null
           telephone?: string | null
@@ -2482,6 +2613,9 @@ export type Database = {
           types_contrat_acceptes?: string | null
           urgence_creneaux?: Json | null
           urgence_rayon_km?: number | null
+          validation_3200h_le?: string | null
+          validation_3200h_par?: string | null
+          validation_3200h_statut?: string | null
           ville_recherche?: string | null
           ville_urgence?: string | null
         }
@@ -2550,6 +2684,7 @@ export type Database = {
           statut_verification_aria?:
             | Database["public"]["Enums"]["statut_verification"]
             | null
+          stripe_account_id?: string | null
           supprime_le?: string | null
           taux_horaire_minimum?: number | null
           telephone?: string | null
@@ -2564,6 +2699,9 @@ export type Database = {
           types_contrat_acceptes?: string | null
           urgence_creneaux?: Json | null
           urgence_rayon_km?: number | null
+          validation_3200h_le?: string | null
+          validation_3200h_par?: string | null
+          validation_3200h_statut?: string | null
           ville_recherche?: string | null
           ville_urgence?: string | null
         }
@@ -2871,6 +3009,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_calculer_cotisations: { Args: { p_mission_id: string }; Returns: Json }
       fn_calculer_heures_totales: {
         Args: { p_soignant_id: string }
         Returns: Json
