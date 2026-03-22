@@ -57,6 +57,8 @@ const PremiumSoignant = lazy(() => import("./pages/PremiumSoignant"));
 const ChargesSociales = lazy(() => import("./pages/ChargesSociales"));
 const PageParrainage = lazy(() => import("./pages/PageParrainage"));
 const PageMessagerie = lazy(() => import("./pages/PageMessagerie"));
+const LitigesSoignant = lazy(() => import("./pages/LitigesSoignant"));
+const LitigesEtablissement = lazy(() => import("./pages/LitigesEtablissement"));
 
 /* ─── Établissement pages ─── */
 const DashboardEtablissement = lazy(() => import("./pages/DashboardEtablissement"));
