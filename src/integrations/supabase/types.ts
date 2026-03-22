@@ -2961,6 +2961,8 @@ export type Database = {
       fn_activer_liberal: { Args: never; Returns: Json }
       fn_admin_conformite: { Args: never; Returns: Json }
       fn_admin_conformite_detail: { Args: { p_type: string }; Returns: Json }
+      fn_admin_finances: { Args: never; Returns: Json }
+      fn_admin_finances_par_etablissement: { Args: never; Returns: Json }
       fn_admin_graphiques: { Args: never; Returns: Json }
       fn_admin_kpi: { Args: never; Returns: Json }
       fn_alerte_cddu_repetitif: {
