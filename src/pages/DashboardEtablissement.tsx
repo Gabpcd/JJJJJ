@@ -4,7 +4,7 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
