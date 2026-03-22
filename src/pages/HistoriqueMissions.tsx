@@ -26,6 +26,7 @@ export default function HistoriqueMissions() {
   const [litiges, setLitiges] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [moisFiltre, setMoisFiltre] = useState('TOUS');
+  const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
