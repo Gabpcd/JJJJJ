@@ -39,6 +39,7 @@ const NAV_SOIGNANT_BASE: NavItem[] = [
   { icone: FileText, label: 'Documents', route: '/soignant/documents' },
   { icone: GraduationCap, label: 'Parcours libéral', route: '/soignant/parcours-3200h' },
   { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
+  { icone: Scale, label: 'Litiges', route: '/soignant/litiges' },
   { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
   { icone: Crown, label: 'Premium', route: '/soignant/premium' },
   { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
