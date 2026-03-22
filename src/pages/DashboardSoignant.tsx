@@ -361,6 +361,16 @@ export default function DashboardSoignant() {
             </FadeInView>
           </div>
 
+          {/* Quick actions */}
+          <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
+            <button onClick={() => navigate('/soignant/planning')} className="btn-secondary text-sm whitespace-nowrap flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" /> 📅 Voir mon planning
+            </button>
+            <button onClick={() => navigate('/soignant/missions')} className="btn-secondary text-sm whitespace-nowrap flex items-center gap-2">
+              <Search className="h-4 w-4" /> Chercher des missions
+            </button>
+          </div>
+
           {/* Missions disponibles */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
