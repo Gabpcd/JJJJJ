@@ -207,12 +207,15 @@ export default function DashboardEtablissement() {
 
     // KPI
     try {
-      const [resO, resEC, resT, resTotal, resAssigned] = await Promise.all([
+      const [resO, resEC, resT, resTotal, resAssigned, resContrats, resPresences, resFactures] = await Promise.all([
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', debutMois),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
+        supabase.from('contrats_mission').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id),
+        supabase.from('presences' as any).select('id', { count: 'exact', head: true }),
+        supabase.from('factures').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EMISE'),
       ]);
       if (resO.error || resEC.error || resT.error || resTotal.error || resAssigned.error) partialError = true;
       const totalN = resTotal.count ?? 0;
@@ -222,6 +225,9 @@ export default function DashboardEtablissement() {
         terminees: resT.count ?? 0,
         taux: totalN > 0 ? Math.round(((resAssigned.count ?? 0) / totalN) * 100) : 0,
       });
+      setContratsCount(resContrats.count ?? 0);
+      setPresencesCount(resPresences.count ?? 0);
+      setFacturesImpayees(resFactures.count ?? 0);
     } catch (err) {
       handleErrorSilent(err, '[DashboardEtab] Erreur KPI');
       partialError = true;
