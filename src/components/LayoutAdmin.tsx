@@ -16,6 +16,7 @@ const NAV_ADMIN = [
   { icone: Code2, label: 'API', route: '/admin/api' },
   { icone: Building2, label: 'Groupes', route: '/admin/groupes' },
   { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
+  { icone: Coins, label: 'Finances', route: '/admin/finances' },
   { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
   { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie' },
 ];
