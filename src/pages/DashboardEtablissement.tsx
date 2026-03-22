@@ -36,6 +36,9 @@ export default function DashboardEtablissement() {
   const [etab, setEtab] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [kpi, setKpi] = useState({ ouvertes: 0, enCours: 0, terminees: 0, taux: 0 });
+  const [contratsCount, setContratsCount] = useState(0);
+  const [presencesCount, setPresencesCount] = useState(0);
+  const [facturesImpayees, setFacturesImpayees] = useState(0);
   const [loading, setLoading] = useState(true);
   const [erreurPartielle, setErreurPartielle] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState<any>(null);
