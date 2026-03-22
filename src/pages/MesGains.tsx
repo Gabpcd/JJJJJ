@@ -7,6 +7,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
 import { GraphiqueGains6Mois } from '@/components/GraphiqueGains6Mois';
 import { ModalAttestation } from '@/components/ModalAttestation';
+import { ModalCotisations } from '@/components/ModalCotisations';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
