@@ -355,20 +355,8 @@ export default function DashboardSoignant() {
               </div>
             </FadeInView>
             <FadeInView delay={300}>
-              <div className="card-kpi">
-                <div className="flex items-start gap-3">
-                  <div className={`rounded-xl p-2.5 ${soignant.tous_documents_valides ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                    {soignant.tous_documents_valides ? <ShieldCheck className="h-5 w-5 text-success" /> : <ShieldAlert className="h-5 w-5 text-destructive" />}
-                  </div>
-                  <div>
-                    {soignant.tous_documents_valides ? (
-                      <span className="badge-base bg-success/10 text-success">✓ Complet</span>
-                    ) : (
-                      <><span className="badge-base bg-destructive/10 text-destructive">✗ Incomplet</span><button onClick={() => navigate('/soignant/documents')} className="block text-[10px] text-primary mt-1 hover:underline">Ajouter →</button></>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-1">Documents</p>
-                  </div>
-                </div>
+              <div className="cursor-pointer" onClick={() => navigate('/soignant/planning')}>
+                <CarteKPI icone={CalendarDays} valeur={mesMissions.length} label="Planning" sousLabel="missions à venir" couleurIcone="text-info" couleurFond="bg-info/10" />
               </div>
             </FadeInView>
           </div>
