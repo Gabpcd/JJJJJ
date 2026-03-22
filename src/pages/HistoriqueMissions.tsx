@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
+import { ModalCotisations } from '@/components/ModalCotisations';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
@@ -25,6 +26,7 @@ export default function HistoriqueMissions() {
   const [litiges, setLitiges] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [moisFiltre, setMoisFiltre] = useState('TOUS');
+  const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -125,7 +127,7 @@ export default function HistoriqueMissions() {
                     )}
                   </div>
                   <div className="text-right shrink-0 ml-3">
-                    <p className="font-bold text-primary text-sm">{fmt(net)}</p>
+                    <p className="font-bold text-primary text-sm cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}>{fmt(net)}</p>
                     <p className="text-[10px] text-muted-foreground">{m.duree_heures}h</p>
                   </div>
                 </div>
@@ -149,6 +151,8 @@ export default function HistoriqueMissions() {
       ) : (
         <EtatVide icone={ClipboardList} titre="Aucune mission terminée" sousTitre="Vos missions terminées apparaîtront ici." />
       )}
+
+      <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
     </LayoutApp>
   );
 }

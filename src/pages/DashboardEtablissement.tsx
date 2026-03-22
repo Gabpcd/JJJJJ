@@ -4,7 +4,7 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
@@ -36,6 +36,9 @@ export default function DashboardEtablissement() {
   const [etab, setEtab] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [kpi, setKpi] = useState({ ouvertes: 0, enCours: 0, terminees: 0, taux: 0 });
+  const [contratsCount, setContratsCount] = useState(0);
+  const [presencesCount, setPresencesCount] = useState(0);
+  const [facturesImpayees, setFacturesImpayees] = useState(0);
   const [loading, setLoading] = useState(true);
   const [erreurPartielle, setErreurPartielle] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState<any>(null);
@@ -204,12 +207,15 @@ export default function DashboardEtablissement() {
 
     // KPI
     try {
-      const [resO, resEC, resT, resTotal, resAssigned] = await Promise.all([
+      const [resO, resEC, resT, resTotal, resAssigned, resContrats, resPresences, resFactures] = await Promise.all([
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'OUVERTE'),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EN_COURS'),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'TERMINEE').gte('modifie_le', debutMois),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id),
         supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).not('soignant_assigne_id', 'is', null),
+        supabase.from('contrats_mission').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id),
+        supabase.from('presences' as any).select('id', { count: 'exact', head: true }),
+        supabase.from('factures').select('id', { count: 'exact', head: true }).eq('etablissement_id', user.id).eq('statut', 'EMISE'),
       ]);
       if (resO.error || resEC.error || resT.error || resTotal.error || resAssigned.error) partialError = true;
       const totalN = resTotal.count ?? 0;
@@ -219,6 +225,9 @@ export default function DashboardEtablissement() {
         terminees: resT.count ?? 0,
         taux: totalN > 0 ? Math.round(((resAssigned.count ?? 0) / totalN) * 100) : 0,
       });
+      setContratsCount(resContrats.count ?? 0);
+      setPresencesCount(resPresences.count ?? 0);
+      setFacturesImpayees(resFactures.count ?? 0);
     } catch (err) {
       handleErrorSilent(err, '[DashboardEtab] Erreur KPI');
       partialError = true;
@@ -293,19 +302,20 @@ export default function DashboardEtablissement() {
         )}
       </div>
 
-      {/* Compteur soignants disponibles */}
-      <div className="mb-6">
+      {/* Compteur soignants disponibles — clickable */}
+      <div className="mb-6 cursor-pointer" onClick={() => navigate('/etablissement/pool-urgence')}>
         <FadeInView delay={50}>
           <CompteurSoignantsDisponibles etablissementId={user!.id} />
         </FadeInView>
       </div>
 
+
       {/* KPI row 1 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <FadeInView delay={0}><CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" /></FadeInView>
-        <FadeInView delay={100}><CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" /></FadeInView>
-        <FadeInView delay={200}><CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" /></FadeInView>
-        <FadeInView delay={300}><CarteKPI icone={TrendingUp} valeur={`${kpi.taux}%`} label="Taux d'occupation" couleurIcone={kpi.taux > 70 ? 'text-success' : 'text-warning'} couleurFond={kpi.taux > 70 ? 'bg-success/10' : 'bg-warning/10'} /></FadeInView>
+        <FadeInView delay={0}><div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?statut=OUVERTE')}><CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" /></div></FadeInView>
+        <FadeInView delay={100}><div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?statut=EN_COURS')}><CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" /></div></FadeInView>
+        <FadeInView delay={200}><div className="cursor-pointer" onClick={() => navigate('/etablissement/contrats')}><CarteKPI icone={FileText} valeur={contratsCount} label="Contrats" couleurIcone="text-info" couleurFond="bg-info/10" /></div></FadeInView>
+        <FadeInView delay={300}><div className="cursor-pointer" onClick={() => navigate('/etablissement/presences')}><CarteKPI icone={ClipboardCheck} valeur={presencesCount} label="Présences" couleurIcone="text-success" couleurFond="bg-success/10" /></div></FadeInView>
       </div>
 
       {/* KPI row 2 — HR indicators */}

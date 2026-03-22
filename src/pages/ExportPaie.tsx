@@ -6,82 +6,76 @@ import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-type FormatExport = 'Silae' | 'Sage' | 'ADP';
-
-function generateSilaeCSV(missions: any[], soignantMap: Record<string, any>): string {
-  const BOM = '\uFEFF';
-  const headers = ['matricule', 'nom', 'prenom', 'date_debut', 'date_fin', 'heures', 'taux_horaire', 'brut', 'ifm', 'icp', 'total_brut'];
-  const rows = missions.map((m: any) => {
-    const sg = soignantMap[m.soignant_assigne_id];
-    return [
-      sg?.id?.substring(0, 8) || '',
-      sg?.nom || '',
-      sg?.prenom || '',
-      format(new Date(m.debut_le), 'dd/MM/yyyy'),
-      format(new Date(m.fin_le), 'dd/MM/yyyy'),
-      m.duree_heures || 0,
-      m.taux_horaire_base || 0,
-      ((m.duree_heures || 0) * (m.taux_horaire_base || 0)).toFixed(2),
-      (m.montant_ifm || 0).toFixed(2),
-      (m.montant_icp || 0).toFixed(2),
-      (m.total_brut || 0).toFixed(2),
-    ].join(';');
-  });
-  return BOM + [headers.join(';'), ...rows].join('\n');
-}
-
-function generateSageCSV(missions: any[], soignantMap: Record<string, any>): string {
-  const BOM = '\uFEFF';
-  const headers = ['code_societe', 'matricule', 'rubrique', 'base', 'taux', 'montant'];
-  const rows: string[] = [];
-  for (const m of missions) {
-    const sg = soignantMap[m.soignant_assigne_id];
-    const matricule = sg?.id?.substring(0, 8) || '';
-    const codeSociete = 'SD001';
-    // Base hours
-    rows.push([codeSociete, matricule, '100', m.duree_heures || 0, m.taux_horaire_base || 0, ((m.duree_heures || 0) * (m.taux_horaire_base || 0)).toFixed(2)].join(';'));
-    // IFM
-    if (m.montant_ifm > 0) rows.push([codeSociete, matricule, '200', 1, (m.montant_ifm || 0).toFixed(2), (m.montant_ifm || 0).toFixed(2)].join(';'));
-    // ICP
-    if (m.montant_icp > 0) rows.push([codeSociete, matricule, '210', 1, (m.montant_icp || 0).toFixed(2), (m.montant_icp || 0).toFixed(2)].join(';'));
-    // Night surcharge
-    if (m.montant_majoration_nuit > 0) rows.push([codeSociete, matricule, '300', m.heures_nuit || 0, '', (m.montant_majoration_nuit || 0).toFixed(2)].join(';'));
-    // Sunday surcharge
-    if (m.montant_majoration_dimanche > 0) rows.push([codeSociete, matricule, '310', m.heures_dimanche || 0, '', (m.montant_majoration_dimanche || 0).toFixed(2)].join(';'));
-    // Holiday surcharge
-    if (m.montant_majoration_ferie > 0) rows.push([codeSociete, matricule, '320', m.heures_ferie || 0, '', (m.montant_majoration_ferie || 0).toFixed(2)].join(';'));
-  }
-  return BOM + [headers.join(';'), ...rows].join('\n');
-}
-
-function generateADPCSV(missions: any[], soignantMap: Record<string, any>): string {
-  const BOM = '\uFEFF';
-  const headers = ['employee_id', 'pay_period_start', 'pay_period_end', 'hours_worked', 'hourly_rate', 'gross_pay'];
-  const rows = missions.map((m: any) => {
-    const sg = soignantMap[m.soignant_assigne_id];
-    return [
-      sg?.id?.substring(0, 8) || '',
-      format(new Date(m.debut_le), 'yyyy-MM-dd'),
-      format(new Date(m.fin_le), 'yyyy-MM-dd'),
-      m.duree_heures || 0,
-      m.taux_horaire_base || 0,
-      (m.total_brut || 0).toFixed(2),
-    ].join(',');
-  });
-  return BOM + [headers.join(','), ...rows].join('\n');
-}
+type FormatExport = 'Standard' | 'Silae' | 'Sage';
 
 function downloadCSV(content: string, filename: string) {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
+  a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+const BOM = '\uFEFF';
+
+function generateStandardCSV(missions: any[], sgMap: Record<string, any>): string {
+  const headers = ['Nom', 'Prenom', 'Matricule_RPPS', 'Mission', 'Date_debut', 'Date_fin', 'Heures_travaillees', 'Taux_horaire', 'Maj_nuit', 'Maj_dimanche', 'Maj_ferie', 'IFM', 'ICP', 'Brut', 'Cotisations_salariales', 'Net'];
+  const rows = missions.map((m: any) => {
+    const sg = sgMap[m.soignant_assigne_id];
+    const brut = m.total_brut || 0;
+    const cotis = brut * 0.22;
+    const net = brut - cotis;
+    return [
+      sg?.nom || '', sg?.prenom || '', sg?.numero_rpps || sg?.id?.substring(0, 8) || '',
+      m.intitule || '', format(new Date(m.debut_le), 'dd/MM/yyyy'), format(new Date(m.fin_le), 'dd/MM/yyyy'),
+      m.duree_heures || 0, m.taux_horaire_base || 0,
+      (m.montant_majoration_nuit || 0).toFixed(2), (m.montant_majoration_dimanche || 0).toFixed(2), (m.montant_majoration_ferie || 0).toFixed(2),
+      (m.montant_ifm || 0).toFixed(2), (m.montant_icp || 0).toFixed(2),
+      brut.toFixed(2), cotis.toFixed(2), net.toFixed(2),
+    ].join(';');
+  });
+  return BOM + [headers.join(';'), ...rows].join('\n');
+}
+
+function generateSilaeCSV(missions: any[], sgMap: Record<string, any>): string {
+  const headers = ['matricule', 'nom', 'prenom', 'date_debut', 'date_fin', 'heures', 'taux_horaire', 'brut', 'ifm', 'icp', 'total_brut'];
+  const rows = missions.map((m: any) => {
+    const sg = sgMap[m.soignant_assigne_id];
+    return [
+      sg?.numero_rpps || sg?.id?.substring(0, 8) || '', sg?.nom || '', sg?.prenom || '',
+      format(new Date(m.debut_le), 'dd/MM/yyyy'), format(new Date(m.fin_le), 'dd/MM/yyyy'),
+      m.duree_heures || 0, m.taux_horaire_base || 0,
+      ((m.duree_heures || 0) * (m.taux_horaire_base || 0)).toFixed(2),
+      (m.montant_ifm || 0).toFixed(2), (m.montant_icp || 0).toFixed(2), (m.total_brut || 0).toFixed(2),
+    ].join(';');
+  });
+  return BOM + [headers.join(';'), ...rows].join('\n');
+}
+
+function generateSageCSV(missions: any[], sgMap: Record<string, any>): string {
+  const headers = ['code_societe', 'matricule', 'rubrique', 'base', 'taux', 'montant'];
+  const rows: string[] = [];
+  for (const m of missions) {
+    const sg = sgMap[m.soignant_assigne_id];
+    const matricule = sg?.numero_rpps || sg?.id?.substring(0, 8) || '';
+    const code = 'SD001';
+    rows.push([code, matricule, '100', m.duree_heures || 0, m.taux_horaire_base || 0, ((m.duree_heures || 0) * (m.taux_horaire_base || 0)).toFixed(2)].join(';'));
+    if (m.montant_ifm > 0) rows.push([code, matricule, '200', 1, (m.montant_ifm || 0).toFixed(2), (m.montant_ifm || 0).toFixed(2)].join(';'));
+    if (m.montant_icp > 0) rows.push([code, matricule, '210', 1, (m.montant_icp || 0).toFixed(2), (m.montant_icp || 0).toFixed(2)].join(';'));
+    if (m.montant_majoration_nuit > 0) rows.push([code, matricule, '300', m.heures_nuit || 0, '', (m.montant_majoration_nuit || 0).toFixed(2)].join(';'));
+    if (m.montant_majoration_dimanche > 0) rows.push([code, matricule, '310', m.heures_dimanche || 0, '', (m.montant_majoration_dimanche || 0).toFixed(2)].join(';'));
+    if (m.montant_majoration_ferie > 0) rows.push([code, matricule, '320', m.heures_ferie || 0, '', (m.montant_majoration_ferie || 0).toFixed(2)].join(';'));
+  }
+  return BOM + [headers.join(';'), ...rows].join('\n');
+}
+
+function fmt(v: number) {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
 export default function ExportPaie() {
@@ -89,22 +83,24 @@ export default function ExportPaie() {
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<FormatExport | null>(null);
-  const [mois, setMois] = useState(new Date().getMonth() + 1);
-  const [annee, setAnnee] = useState(new Date().getFullYear());
+  const [mois, setMois] = useState(String(new Date().getMonth() + 1));
+  const [annee, setAnnee] = useState(String(new Date().getFullYear()));
   const [missions, setMissions] = useState<any[]>([]);
   const [soignantMap, setSoignantMap] = useState<Record<string, any>>({});
-
-  const debutMois = new Date(annee, mois - 1, 1).toISOString();
-  const finMois = new Date(annee, mois, 0, 23, 59, 59).toISOString();
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
       setLoading(true);
+      const m = Number(mois);
+      const a = Number(annee);
+      const debutMois = new Date(a, m - 1, 1).toISOString();
+      const finMois = new Date(a, m, 0, 23, 59, 59).toISOString();
+
       const [{ data: missionsData }, { data: soignantsData }] = await Promise.all([
         supabase
           .from('missions')
-          .select('id, intitule, debut_le, fin_le, duree_heures, heures_nuit, heures_dimanche, heures_ferie, taux_horaire_base, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, soignant_assigne_id, type_paiement_soignant, contrats_mission(type_contrat)')
+          .select('id, intitule, debut_le, fin_le, duree_heures, heures_nuit, heures_dimanche, heures_ferie, taux_horaire_base, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, soignant_assigne_id, type_paiement_soignant')
           .eq('etablissement_id', user.id)
           .eq('statut', 'TERMINEE')
           .eq('type_paiement_soignant', 'BULLETIN_PAIE')
@@ -128,12 +124,14 @@ export default function ExportPaie() {
   const handleExport = async (fmt: FormatExport) => {
     if (!user || missions.length === 0) return;
     setExporting(fmt);
-
-    const moisStr = String(mois).padStart(2, '0');
+    const moisStr = mois.padStart(2, '0');
     let content: string;
     let filename: string;
-
     switch (fmt) {
+      case 'Standard':
+        content = generateStandardCSV(missions, soignantMap);
+        filename = `export_paie_${moisStr}_${annee}.csv`;
+        break;
       case 'Silae':
         content = generateSilaeCSV(missions, soignantMap);
         filename = `export_silae_${moisStr}_${annee}.csv`;
@@ -142,24 +140,14 @@ export default function ExportPaie() {
         content = generateSageCSV(missions, soignantMap);
         filename = `export_sage_${moisStr}_${annee}.csv`;
         break;
-      case 'ADP':
-        content = generateADPCSV(missions, soignantMap);
-        filename = `export_adp_${moisStr}_${annee}.csv`;
-        break;
     }
-
     downloadCSV(content, filename);
 
     await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user.id,
-      p_type_acteur: 'ADMIN_ETABLISSEMENT',
-      p_action: 'EXPORT_RH_PAIE',
-      p_type_ressource: 'etablissement',
-      p_id_ressource: user.id,
-      p_cle_s3: null,
-      p_details: { logiciel: fmt, mois, annee, nb_missions: missions.length },
-      p_ip: null,
-      p_navigateur: navigator.userAgent,
+      p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'EXPORT_RH_PAIE',
+      p_type_ressource: 'etablissement', p_id_ressource: user.id, p_cle_s3: null,
+      p_details: { logiciel: fmt, mois: Number(mois), annee: Number(annee), nb_missions: missions.length },
+      p_ip: null, p_navigateur: navigator.userAgent,
     });
 
     setExporting(null);
@@ -168,12 +156,12 @@ export default function ExportPaie() {
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
-  const moisLabel = format(new Date(annee, mois - 1), 'MMMM yyyy', { locale: fr });
+  const moisLabel = format(new Date(Number(annee), Number(mois) - 1), 'MMMM yyyy', { locale: fr });
 
-  const FORMATS: { id: FormatExport; label: string; desc: string; icon: string }[] = [
-    { id: 'Silae', label: 'Silae', desc: 'CSV point-virgule — matricule, nom, heures, brut, IFM, ICP', icon: '📊' },
-    { id: 'Sage', label: 'Sage Paie', desc: 'CSV multi-rubriques — code société, rubriques paie ventilées', icon: '📋' },
-    { id: 'ADP', label: 'ADP', desc: 'CSV international — employee_id, hours, gross_pay', icon: '🌐' },
+  const FORMATS: { id: FormatExport; label: string; desc: string }[] = [
+    { id: 'Standard', label: 'Standard (CSV)', desc: 'Nom, Prénom, RPPS, Heures, Majorations, IFM/ICP, Brut, Cotisations, Net' },
+    { id: 'Silae', label: 'Silae', desc: 'Format Silae — point-virgule, UTF-8 BOM' },
+    { id: 'Sage', label: 'Sage Paie', desc: 'Format Sage — multi-rubriques ventilées' },
   ];
 
   return (
@@ -187,92 +175,90 @@ export default function ExportPaie() {
 
       {/* Period selector */}
       <div className="card-base mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Mois</label>
-            <select value={mois} onChange={e => setMois(Number(e.target.value))} className="input-base">
-              {Array.from({ length: 12 }, (_, i) => (
-                <option key={i + 1} value={i + 1}>{format(new Date(2026, i), 'MMMM', { locale: fr })}</option>
-              ))}
-            </select>
+            <Select value={mois} onValueChange={setMois}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 12 }, (_, i) => (
+                  <SelectItem key={i + 1} value={String(i + 1)}>{format(new Date(2026, i), 'MMMM', { locale: fr })}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Année</label>
-            <select value={annee} onChange={e => setAnnee(Number(e.target.value))} className="input-base">
-              {[2024, 2025, 2026].map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
+            <Select value={annee} onValueChange={setAnnee}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[2024, 2025, 2026].map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
 
-      {/* Export format cards */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-foreground mb-3">Formats d'export</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {FORMATS.map(fmt => (
-            <div key={fmt.id} className="card-base flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">{fmt.icon}</span>
-                  <h3 className="font-semibold text-foreground">{fmt.label}</h3>
-                </div>
-                <p className="text-xs text-muted-foreground mb-4">{fmt.desc}</p>
-              </div>
-              <button
-                onClick={() => handleExport(fmt.id)}
-                disabled={missions.length === 0 || exporting !== null}
-                className="btn-primary flex items-center justify-center gap-2 text-sm w-full disabled:opacity-50"
-              >
-                {exporting === fmt.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                {exporting === fmt.id ? 'Export…' : 'Télécharger'}
-              </button>
+      {/* Export format buttons */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {FORMATS.map(f => (
+          <div key={f.id} className="card-base flex flex-col justify-between">
+            <div className="mb-3">
+              <h3 className="font-semibold text-foreground text-sm">{f.label}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{f.desc}</p>
             </div>
-          ))}
-        </div>
+            <Button
+              onClick={() => handleExport(f.id)}
+              disabled={missions.length === 0 || exporting !== null}
+              className="gap-2 w-full"
+            >
+              {exporting === f.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {exporting === f.id ? 'Export…' : 'Télécharger'}
+            </Button>
+          </div>
+        ))}
       </div>
 
       {/* Preview table */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-foreground mb-3">Aperçu — {moisLabel}</h2>
-        {missions.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 px-2 text-xs text-muted-foreground font-medium">Date</th>
-                  <th className="text-left py-2 px-2 text-xs text-muted-foreground font-medium">Soignant</th>
-                  <th className="text-right py-2 px-2 text-xs text-muted-foreground font-medium">Heures</th>
-                  <th className="text-right py-2 px-2 text-xs text-muted-foreground font-medium">Taux</th>
-                  <th className="text-right py-2 px-2 text-xs text-muted-foreground font-medium">IFM</th>
-                  <th className="text-right py-2 px-2 text-xs text-muted-foreground font-medium">ICP</th>
-                  <th className="text-right py-2 px-2 text-xs text-muted-foreground font-medium">Brut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {missions.map((m: any) => {
-                  const sg = soignantMap[m.soignant_assigne_id];
-                  return (
-                    <tr key={m.id} className="border-b border-border/50">
-                      <td className="py-2 px-2 text-xs">{format(new Date(m.debut_le), 'dd/MM', { locale: fr })}</td>
-                      <td className="py-2 px-2 text-xs font-medium">{sg?.prenom} {sg?.nom}</td>
-                      <td className="py-2 px-2 text-xs text-right">{m.duree_heures}h</td>
-                      <td className="py-2 px-2 text-xs text-right">{m.taux_horaire_base}€</td>
-                      <td className="py-2 px-2 text-xs text-right">{(m.montant_ifm || 0).toFixed(0)}€</td>
-                      <td className="py-2 px-2 text-xs text-right">{(m.montant_icp || 0).toFixed(0)}€</td>
-                      <td className="py-2 px-2 text-xs text-right font-semibold">{(m.total_brut || 0).toFixed(0)}€</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <p className="text-sm text-muted-foreground mt-3">{missions.length} missions salariées ce mois</p>
-          </div>
-        ) : (
-          <EtatVide icone={FileSpreadsheet} titre="Aucune mission salariée terminée" sousTitre={`Aucune mission avec bulletin de paie en ${moisLabel}.`} />
-        )}
-      </div>
+      <h2 className="text-base font-bold text-foreground mb-3">Aperçu — {moisLabel}</h2>
+      {missions.length > 0 ? (
+        <div className="overflow-x-auto border border-border rounded-xl">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/30">
+                <th className="text-left py-2.5 px-3 text-xs text-muted-foreground font-medium">Soignant</th>
+                <th className="text-left py-2.5 px-3 text-xs text-muted-foreground font-medium">Mission</th>
+                <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Heures</th>
+                <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Taux</th>
+                <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Brut</th>
+                <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Net est.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {missions.map((m: any) => {
+                const sg = soignantMap[m.soignant_assigne_id];
+                const brut = m.total_brut || 0;
+                const net = brut * 0.78;
+                return (
+                  <tr key={m.id} className="border-b border-border/50">
+                    <td className="py-2 px-3 text-xs font-medium">{sg?.prenom} {sg?.nom}</td>
+                    <td className="py-2 px-3 text-xs text-muted-foreground">{m.intitule}</td>
+                    <td className="py-2 px-3 text-xs text-right">{m.duree_heures}h</td>
+                    <td className="py-2 px-3 text-xs text-right">{fmt(m.taux_horaire_base || 0)}</td>
+                    <td className="py-2 px-3 text-xs text-right">{fmt(brut)}</td>
+                    <td className="py-2 px-3 text-xs text-right font-semibold text-success">{fmt(net)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="text-xs text-muted-foreground px-3 py-2">{missions.length} missions salariées</p>
+        </div>
+      ) : (
+        <EtatVide icone={FileSpreadsheet} titre="Aucune mission salariée terminée" sousTitre={`Aucune mission avec bulletin de paie en ${moisLabel}.`} />
+      )}
 
-      <p className="text-xs text-muted-foreground italic">
+      <p className="text-xs text-muted-foreground italic mt-4">
         ⚠️ Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
       </p>
     </LayoutApp>

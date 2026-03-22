@@ -7,6 +7,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
 import { GraphiqueGains6Mois } from '@/components/GraphiqueGains6Mois';
 import { ModalAttestation } from '@/components/ModalAttestation';
+import { ModalCotisations } from '@/components/ModalCotisations';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
@@ -26,6 +27,7 @@ export default function MesGains() {
   const [loading, setLoading] = useState(true);
   const [moisFiltre, setMoisFiltre] = useState('CE_MOIS');
   const [modalAttestation, setModalAttestation] = useState(false);
+  const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -148,7 +150,7 @@ export default function MesGains() {
                     {format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })} · {m.etablissements?.nom || '—'} · {m.duree_heures}h
                   </p>
                 </div>
-                <span className="font-bold text-primary text-sm shrink-0 ml-3">{fmt(net)}</span>
+                <span className="font-bold text-primary text-sm shrink-0 ml-3 cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}>{fmt(net)}</span>
               </div>
             );
           })}
@@ -158,6 +160,7 @@ export default function MesGains() {
       )}
 
       <ModalAttestation open={modalAttestation} onClose={() => setModalAttestation(false)} />
+      <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
     </LayoutApp>
   );
 }

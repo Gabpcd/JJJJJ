@@ -379,6 +379,35 @@ export default function DocumentsSoignant() {
         </div>
       ))}
 
+      {/* RCP obligatoire tous profils */}
+      {(() => {
+        const rcpDoc = mesDocuments.find(d => d.type_document === 'RCP_ASSURANCE');
+        const rcpExpired = rcpDoc?.valide_jusqua && new Date(rcpDoc.valide_jusqua) < new Date();
+        const rcpMissing = !rcpDoc || rcpDoc.statut_verification !== 'VERIFIE';
+        if (rcpExpired) {
+          return (
+            <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-4 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs text-destructive font-medium">Votre assurance RCP est expirée. Veuillez la renouveler.</p>
+                <p className="text-xs text-destructive mt-0.5">⚠️ Vous ne pouvez pas postuler aux missions tant que votre RCP n'est pas à jour.</p>
+              </div>
+            </div>
+          );
+        }
+        if (rcpMissing) {
+          return (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700">
+                L'assurance RCP est obligatoire pour tous les soignants, salariés comme libéraux. Veuillez téléverser votre attestation RCP.
+              </p>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {/* Jauge globale */}
       {completionDocs >= 100 ? (
         <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4 text-center">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -39,6 +39,7 @@ const NAV_SOIGNANT_BASE: NavItem[] = [
   { icone: FileText, label: 'Documents', route: '/soignant/documents' },
   { icone: GraduationCap, label: 'Parcours libéral', route: '/soignant/parcours-3200h' },
   { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
+  { icone: Scale, label: 'Litiges', route: '/soignant/litiges' },
   { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
   { icone: Crown, label: 'Premium', route: '/soignant/premium' },
   { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
@@ -58,6 +59,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
   { icone: Code2, label: 'API', route: '/etablissement/api' },
   { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
+  { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
   { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
   { icone: Crown, label: 'Premium', route: '/etablissement/premium' },
   { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
