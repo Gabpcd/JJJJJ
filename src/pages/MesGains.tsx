@@ -27,6 +27,7 @@ export default function MesGains() {
   const [loading, setLoading] = useState(true);
   const [moisFiltre, setMoisFiltre] = useState('CE_MOIS');
   const [modalAttestation, setModalAttestation] = useState(false);
+  const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
