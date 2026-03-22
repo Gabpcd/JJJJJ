@@ -391,20 +391,30 @@ export default function ProfilSoignant() {
                 <p className="text-xs text-muted-foreground mt-0.5">Je suis salarié(e) dans un établissement</p>
               </div>
             </label>
-            <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${heuresCumulees >= 3200 ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
-              <RadioGroupItem value="LIBERAL" id="ex-liberal" className="mt-0.5" disabled={heuresCumulees < 3200} />
+            <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${statutLiberal === 'ACTIF' ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
+              <RadioGroupItem value="LIBERAL" id="ex-liberal" className="mt-0.5" disabled={statutLiberal !== 'ACTIF'} />
               <div>
-                <Label htmlFor="ex-liberal" className={`font-medium ${heuresCumulees < 3200 ? 'cursor-not-allowed' : 'cursor-pointer'}`}>Libéral</Label>
+                <Label htmlFor="ex-liberal" className={`font-medium ${statutLiberal !== 'ACTIF' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>Libéral</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">J'exerce en libéral</p>
-                {heuresCumulees < 3200 && <p className="text-xs text-destructive mt-1">🔒 Disponible à 3 200h — actuellement {heuresCumulees}h/3 200h</p>}
+                {statutLiberal !== 'ACTIF' && (
+                  <p className="text-xs text-destructive mt-1">
+                    ⚠️ Vous devez d'abord faire valider vos 3200h via la page Parcours.{' '}
+                    <button type="button" onClick={() => navigate('/soignant/parcours-3200h')} className="text-primary underline">Accéder au Parcours →</button>
+                  </p>
+                )}
               </div>
             </label>
-            <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${heuresCumulees >= 3200 ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
-              <RadioGroupItem value="MIXTE" id="ex-mixte" className="mt-0.5" disabled={heuresCumulees < 3200} />
+            <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${statutLiberal === 'ACTIF' ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
+              <RadioGroupItem value="MIXTE" id="ex-mixte" className="mt-0.5" disabled={statutLiberal !== 'ACTIF'} />
               <div>
-                <Label htmlFor="ex-mixte" className={`font-medium ${heuresCumulees < 3200 ? 'cursor-not-allowed' : 'cursor-pointer'}`}>Mixte</Label>
+                <Label htmlFor="ex-mixte" className={`font-medium ${statutLiberal !== 'ACTIF' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>Mixte</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">Je cumule salarié et libéral</p>
-                {heuresCumulees < 3200 && <p className="text-xs text-destructive mt-1">🔒 Disponible à 3 200h — actuellement {heuresCumulees}h/3 200h</p>}
+                {statutLiberal !== 'ACTIF' && (
+                  <p className="text-xs text-destructive mt-1">
+                    ⚠️ Validation 3200h requise.{' '}
+                    <button type="button" onClick={() => navigate('/soignant/parcours-3200h')} className="text-primary underline">Parcours →</button>
+                  </p>
+                )}
               </div>
             </label>
           </RadioGroup>
