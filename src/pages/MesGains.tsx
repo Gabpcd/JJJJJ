@@ -150,7 +150,7 @@ export default function MesGains() {
                     {format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })} · {m.etablissements?.nom || '—'} · {m.duree_heures}h
                   </p>
                 </div>
-                <span className="font-bold text-primary text-sm shrink-0 ml-3">{fmt(net)}</span>
+                <span className="font-bold text-primary text-sm shrink-0 ml-3 cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}>{fmt(net)}</span>
               </div>
             );
           })}
