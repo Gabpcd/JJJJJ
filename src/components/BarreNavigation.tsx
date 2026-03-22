@@ -59,6 +59,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
   { icone: Code2, label: 'API', route: '/etablissement/api' },
   { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
+  { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
   { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
   { icone: Crown, label: 'Premium', route: '/etablissement/premium' },
   { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
