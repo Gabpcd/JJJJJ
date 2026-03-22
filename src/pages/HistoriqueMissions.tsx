@@ -151,6 +151,8 @@ export default function HistoriqueMissions() {
       ) : (
         <EtatVide icone={ClipboardList} titre="Aucune mission terminée" sousTitre="Vos missions terminées apparaîtront ici." />
       )}
+
+      <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
     </LayoutApp>
   );
 }

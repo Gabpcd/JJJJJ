@@ -160,6 +160,7 @@ export default function MesGains() {
       )}
 
       <ModalAttestation open={modalAttestation} onClose={() => setModalAttestation(false)} />
+      <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
     </LayoutApp>
   );
 }
