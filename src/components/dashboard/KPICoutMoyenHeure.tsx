@@ -16,7 +16,7 @@ export function KPICoutMoyenHeure({ totalBrut, totalHeures }: Props) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-2xl font-bold text-foreground">
-            {moyenne > 0 ? `${moyenne.toFixed(2).replace('.', ',')}€` : '—'}
+            {moyenne > 0 ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(moyenne) : '—'}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">/h en moyenne ce mois</p>
         </div>
