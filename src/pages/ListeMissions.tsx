@@ -3,6 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { FadeInView } from '@/components/FadeInView';
 import { Search, X } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
