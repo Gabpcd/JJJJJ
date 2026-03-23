@@ -12,7 +12,7 @@ import { CodesPointageMission } from '@/components/CodesPointageMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
-import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
+import { BandeauRappelDPAE } from '@/components/BandeauRappelDPAE';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 import { BoutonFavori } from '@/components/BoutonFavori';
