@@ -3,6 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { FadeInView } from '@/components/FadeInView';
 import { Search, X } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -34,6 +35,7 @@ export default function ListeMissions() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  const { etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   const [missions, setMissions] = useState<any[]>([]);
   const statutParam = searchParams.get('statut') ?? '';
@@ -53,10 +55,11 @@ export default function ListeMissions() {
     const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
     const finMois = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString();
 
+    const etabId = etablissementId || user.id;
     let query = supabase
       .from('missions')
       .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
-      .eq('etablissement_id', user.id)
+      .eq('etablissement_id', etabId)
       .order('debut_le', { ascending: false });
 
     if (filtreStatut) query = query.eq('statut', filtreStatut as any);
@@ -80,7 +83,7 @@ export default function ListeMissions() {
     })));
 
     // M2: Single count query with status grouping instead of 7 parallel queries
-    const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', user.id);
+    const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', etabId);
     const c: Record<string, number> = { '': allData?.length ?? 0 };
     const statuts = ['OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
     for (const s of statuts) {
@@ -98,7 +101,7 @@ export default function ListeMissions() {
     if (periodeParam !== filtrePeriode) setFiltrePeriode(periodeParam);
   }, [statutParam, periodeParam]);
 
-  useEffect(() => { charger(); }, [user, filtreStatut, debouncedRecherche]);
+  useEffect(() => { charger(); }, [user, etablissementId, filtreStatut, filtrePeriode, debouncedRecherche]);
 
   const appliquerFiltres = (statut: string, periode: string) => {
     const params = new URLSearchParams();
