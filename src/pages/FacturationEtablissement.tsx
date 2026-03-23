@@ -139,45 +139,8 @@ export default function FacturationEtablissement() {
     }
   };
 
-  const payerParCarte = async (facture: any) => {
-    const paymentWindow = window.open('', '_blank');
-
-    if (paymentWindow) {
-      paymentWindow.document.write('<p style="font-family: sans-serif; padding: 24px;">Redirection vers le paiement sécurisé…</p>');
-      paymentWindow.document.close();
-    }
-
-    setPayingId(facture.id);
-    try {
-      const { data, error } = await supabase.functions.invoke('create-invoice-payment', {
-        body: { facture_id: facture.id },
-      });
-
-      if (error) {
-        console.error('[Facturation] create-invoice-payment error:', error);
-        throw new Error(typeof error === 'object' && error.message ? error.message : 'Erreur lors du paiement');
-      }
-
-      if (data?.error) {
-        console.error('[Facturation] create-invoice-payment payload error:', data.error);
-        throw new Error(data.error);
-      }
-
-      if (!data?.url) {
-        throw new Error('URL de paiement non reçue');
-      }
-
-      if (paymentWindow) {
-        paymentWindow.location.href = data.url;
-      } else {
-        window.location.href = data.url;
-      }
-    } catch (err: any) {
-      if (paymentWindow && !paymentWindow.closed) paymentWindow.close();
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-    } finally {
-      setPayingId(null);
-    }
+  const payerParCarte = (facture: any) => {
+    setCheckoutFactureId(facture.id);
   };
 
   const rafraichirStatut = async (factureId: string) => {
