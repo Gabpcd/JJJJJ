@@ -18,6 +18,7 @@ const COUT_MOYEN_SECTEUR = 28;
 export default function DashboardRH() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [missions, setMissions] = useState<any[]>([]);
