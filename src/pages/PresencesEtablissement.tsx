@@ -51,6 +51,19 @@ export default function PresencesEtablissement() {
       for (const s of soignantsData) sgMap[s.id] = s;
     }
 
+    if (Object.keys(sgMap).length === 0 && Array.isArray(presData)) {
+      const soignantIds = [...new Set(presData.map((p: any) => p.soignant_id).filter(Boolean))];
+      if (soignantIds.length > 0) {
+        const { data: soignantsDirect } = await supabase
+          .from('soignants')
+          .select('id, prenom, nom, profession, telephone')
+          .in('id', soignantIds);
+        if (Array.isArray(soignantsDirect)) {
+          for (const s of soignantsDirect) sgMap[s.id] = s;
+        }
+      }
+    }
+
     setPresences((presData || []).map((p: any) => ({
       ...p,
       soignants: sgMap[p.soignant_id] || null,
