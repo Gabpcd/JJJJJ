@@ -219,7 +219,7 @@ Même dans le cadre d'un CDDU, l'établissement reste soumis à des obligations 
 Notre plateforme automatise l'intégralité du processus :
 - Génération automatique du contrat CDDU conforme
 - Calcul transparent de la rémunération (brut + IFM + ICP + majorations)
-- Rappel DUE à l'établissement
+- Rappel DPAE à l'établissement
 - Vérification des durées légales de travail et des repos obligatoires
 - Signature électronique sécurisée
 

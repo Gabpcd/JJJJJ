@@ -6,28 +6,32 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-interface BandeauRappelDUEProps {
+interface BandeauRappelDPAEProps {
   contratId?: string;
-  dueEffectuee?: boolean;
-  dueEffectueeLe?: string | null;
+  dpaeEffectuee?: boolean;
+  dpaeEffectueeLe?: string | null;
+  typeContrat?: string;
 }
 
-export function BandeauRappelDUE({ contratId, dueEffectuee, dueEffectueeLe }: BandeauRappelDUEProps) {
+export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, typeContrat }: BandeauRappelDPAEProps) {
   const { afficherNotification } = useNotification();
   const [confirming, setConfirming] = useState(false);
-  const [confirmed, setConfirmed] = useState(dueEffectuee ?? false);
-  const [confirmedDate, setConfirmedDate] = useState(dueEffectueeLe ?? null);
+  const [confirmed, setConfirmed] = useState(dpaeEffectuee ?? false);
+  const [confirmedDate, setConfirmedDate] = useState(dpaeEffectueeLe ?? null);
+
+  // Masquer le bandeau pour les remplacements libéraux
+  if (typeContrat === 'REMPLACEMENT_LIBERAL') return null;
 
   const handleConfirmer = async () => {
     if (!contratId) return;
     setConfirming(true);
     try {
-      const { data, error } = await supabase.rpc('fn_confirmer_due' as any, { p_contrat_id: contratId });
+      const { data, error } = await supabase.rpc('fn_confirmer_dpae' as any, { p_contrat_id: contratId });
       if (error) throw error;
       if ((data as any)?.success === false) throw new Error((data as any).error);
       setConfirmed(true);
       setConfirmedDate(new Date().toISOString());
-      afficherNotification({ type: 'succes', message: 'DUE confirmée.' });
+      afficherNotification({ type: 'succes', message: 'DPAE confirmée.' });
     } catch (err) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
@@ -41,7 +45,7 @@ export function BandeauRappelDUE({ contratId, dueEffectuee, dueEffectueeLe }: Ba
         <CheckCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold text-success">
-            ✅ DUE effectuée{confirmedDate ? ` le ${format(new Date(confirmedDate), 'd MMMM yyyy', { locale: fr })}` : ''}
+            ✅ DPAE effectuée{confirmedDate ? ` le ${format(new Date(confirmedDate), 'd MMMM yyyy', { locale: fr })}` : ''}
           </p>
         </div>
       </div>
@@ -53,7 +57,10 @@ export function BandeauRappelDUE({ contratId, dueEffectuee, dueEffectueeLe }: Ba
       <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
       <div className="flex-1">
         <p className="text-sm font-semibold text-warning">
-          ⚠️ Rappel légal : effectuez la Déclaration Unique d'Embauche (DUE) sur net-entreprises.fr avant le début de la mission.
+          ⚠️ Rappel légal : effectuez la Déclaration Préalable à l'Embauche (DPAE) sur net-entreprises.fr avant le début de la mission.
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          La DPAE est obligatoire pour les contrats CDDU. Pour les remplacements libéraux, elle n'est pas requise.
         </p>
         <div className="flex flex-wrap items-center gap-3 mt-2">
           <a
@@ -71,7 +78,7 @@ export function BandeauRappelDUE({ contratId, dueEffectuee, dueEffectueeLe }: Ba
               className="inline-flex items-center gap-1 text-xs font-medium text-success bg-success/10 hover:bg-success/20 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
             >
               {confirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
-              J'ai effectué la DUE
+              J'ai effectué la DPAE
             </button>
           )}
         </div>
