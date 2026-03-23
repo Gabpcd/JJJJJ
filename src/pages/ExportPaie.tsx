@@ -117,6 +117,15 @@ export default function ExportPaie() {
       if (Array.isArray(soignantsData)) {
         for (const s of soignantsData) sgMap[s.id] = s;
       }
+
+      // Fallback: fetch soignant names directly if RPC returned empty
+      if (Object.keys(sgMap).length === 0 && missionsData) {
+        const sgIds = [...new Set((missionsData as any[]).map((m: any) => m.soignant_assigne_id).filter(Boolean))];
+        if (sgIds.length > 0) {
+          const { data: sgDirect } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite, numero_rpps').in('id', sgIds);
+          if (sgDirect) for (const s of sgDirect) sgMap[s.id] = s;
+        }
+      }
       setSoignantMap(sgMap);
       setMissions((missionsData as any[]) || []);
       setLoading(false);
