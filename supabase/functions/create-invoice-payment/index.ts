@@ -134,9 +134,11 @@ serve(async (req) => {
     }
 
     const appUrl = getCorsOrigin(req);
-    console.log(`create-invoice-payment: creating checkout, amount=${facture.montant_ttc}, customer=${customerId}`);
+    const { embedded } = await req.clone().json().catch(() => ({ embedded: false }));
+    
+    console.log(`create-invoice-payment: creating checkout, amount=${facture.montant_ttc}, customer=${customerId}, embedded=${!!embedded}`);
 
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams: any = {
       customer: customerId,
       line_items: [
         {
@@ -152,9 +154,17 @@ serve(async (req) => {
         },
       ],
       mode: "payment",
-      success_url: `${appUrl}/etablissement/facturation?paiement=succes`,
-      cancel_url: `${appUrl}/etablissement/facturation`,
-    });
+    };
+
+    if (embedded) {
+      sessionParams.ui_mode = "embedded";
+      sessionParams.return_url = `${appUrl}/etablissement/facturation?paiement=succes&session_id={CHECKOUT_SESSION_ID}`;
+    } else {
+      sessionParams.success_url = `${appUrl}/etablissement/facturation?paiement=succes`;
+      sessionParams.cancel_url = `${appUrl}/etablissement/facturation`;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     await supabaseAdmin
       .from("factures")
@@ -165,9 +175,12 @@ serve(async (req) => {
       })
       .eq("id", facture_id);
 
-    console.log(`create-invoice-payment: session created url=${session.url}`);
+    console.log(`create-invoice-payment: session created, client_secret=${!!session.client_secret}, url=${session.url}`);
 
-    return new Response(JSON.stringify({ url: session.url }), {
+    return new Response(JSON.stringify({ 
+      url: session.url, 
+      client_secret: session.client_secret || null,
+    }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       status: 200,
     });
