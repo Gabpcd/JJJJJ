@@ -9,7 +9,7 @@ import { useRole } from '@/hooks/useRole';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { FileText, Printer, CheckCircle, Clock, Shield, ExternalLink } from 'lucide-react';
-import { BandeauRappelDUE } from '@/components/BandeauRappelDUE';
+import { BandeauRappelDPAE } from '@/components/BandeauRappelDPAE';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,7 +45,7 @@ export default function ContratMission() {
     const load = async () => {
       const { data } = await supabase
         .from('contrats_mission')
-        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le, mode_signature')
+        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, dpae_effectuee, dpae_effectuee_le, mode_signature')
         .eq('id', id)
         .single();
       setContrat(data);
@@ -91,7 +91,7 @@ export default function ContratMission() {
       // Reload contract to get updated mode_signature
       const { data: updated } = await supabase
         .from('contrats_mission')
-        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le, mode_signature')
+        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, dpae_effectuee, dpae_effectuee_le, mode_signature')
         .eq('id', contrat.id)
         .single();
       if (updated) setContrat(updated);
@@ -400,7 +400,7 @@ export default function ContratMission() {
             </div>
             {/* A1: Rappel DUE — after establishment signature */}
             {!isSoignant && (contrat.statut === 'SIGNE_ETABLISSEMENT' || contrat.statut === 'SIGNE_COMPLET') && (
-              <BandeauRappelDUE contratId={contrat.id} dueEffectuee={contrat.due_effectuee} dueEffectueeLe={contrat.due_effectuee_le} />
+              <BandeauRappelDPAE contratId={contrat.id} dpaeEffectuee={contrat.dpae_effectuee} dpaeEffectueeLe={contrat.dpae_effectuee_le} typeContrat={contrat.type_contrat} />
             )}
           </div>
         )}
