@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle } from 'lucide-react';
+import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle, Scale } from 'lucide-react';
 import { BadgeCertification } from './BadgeCertification';
 import { PanneauContestation } from './PanneauContestation';
 
@@ -9,12 +9,15 @@ interface CarteValidationProps {
   presence: any;
   onValider: (id: string) => Promise<void>;
   onContester: (id: string, motif: string) => Promise<void>;
+  onOuvrirLitige?: (presenceId: string, missionId: string, soignantId: string, motif: string) => Promise<void>;
 }
 
-export function CarteValidation({ presence, onValider, onContester }: CarteValidationProps) {
+export function CarteValidation({ presence, onValider, onContester, onOuvrirLitige }: CarteValidationProps) {
   const [motifLitige, setMotifLitige] = useState('');
   const [showContester, setShowContester] = useState(false);
   const [showContact, setShowContact] = useState(false);
+  const [showLitige, setShowLitige] = useState(false);
+  const [motifLitigeFormel, setMotifLitigeFormel] = useState('');
 
   const mission = presence.missions;
   const soignant = presence.soignants;
@@ -175,6 +178,49 @@ export function CarteValidation({ presence, onValider, onContester }: CarteValid
             <a href={`mailto:${soignant.email}`} className="flex items-center gap-1 text-xs text-primary hover:underline">
               <Mail className="h-3.5 w-3.5" /> Email
             </a>
+          )}
+        </div>
+      )}
+
+      {/* Ouvrir un litige formel */}
+      {onOuvrirLitige && presence.pointage_depart_le && (
+        <div className="border-t border-border pt-2">
+          {showLitige ? (
+            <div className="space-y-2">
+              <textarea
+                value={motifLitigeFormel}
+                onChange={e => setMotifLitigeFormel(e.target.value)}
+                placeholder="Décrivez le motif du litige..."
+                className="input-base w-full text-sm"
+                rows={3}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    onOuvrirLitige(presence.id, presence.mission_id, presence.soignant_id, motifLitigeFormel);
+                    setShowLitige(false);
+                    setMotifLitigeFormel('');
+                  }}
+                  disabled={!motifLitigeFormel.trim()}
+                  className="flex items-center gap-1.5 bg-warning/10 text-warning text-xs font-semibold px-3 py-2 rounded-xl hover:bg-warning/20 transition-colors disabled:opacity-50"
+                >
+                  <Scale className="h-3.5 w-3.5" /> Confirmer le litige
+                </button>
+                <button
+                  onClick={() => setShowLitige(false)}
+                  className="text-xs text-muted-foreground hover:text-foreground px-3 py-2"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowLitige(true)}
+              className="flex items-center gap-1.5 text-xs text-warning hover:text-warning/80 font-medium transition-colors"
+            >
+              <Scale className="h-3.5 w-3.5" /> Ouvrir un litige
+            </button>
           )}
         </div>
       )}

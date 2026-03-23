@@ -10,6 +10,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { ClipboardCheck, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useSearchParams } from 'react-router-dom';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
@@ -153,6 +154,25 @@ export default function PresencesEtablissement() {
     }
   };
 
+  const ouvrirLitige = async (presenceId: string, missionId: string, soignantId: string, motif: string) => {
+    if (!etablissementId || !motif.trim()) return;
+    const { error } = await supabase.from('litiges').insert({
+      mission_id: missionId,
+      presence_id: presenceId,
+      soignant_id: soignantId,
+      etablissement_id: etablissementId,
+      motif: motif.trim(),
+      initie_par: 'ETABLISSEMENT',
+    });
+    if (error) {
+      toast.error('Erreur lors de la création du litige.');
+      console.error(error);
+      return;
+    }
+    toast.success('Litige ouvert avec succès.');
+    charger();
+  };
+
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
   return (
@@ -206,7 +226,7 @@ export default function PresencesEtablissement() {
           {aValider.length > 0 ? (
             <div className="space-y-4">
               {aValider.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} />
+                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
               ))}
             </div>
           ) : (
@@ -218,7 +238,7 @@ export default function PresencesEtablissement() {
           {enCours.length > 0 ? (
             <div className="space-y-4">
               {enCours.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} />
+                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
               ))}
             </div>
           ) : (
@@ -230,7 +250,7 @@ export default function PresencesEtablissement() {
           {validees.length > 0 ? (
             <div className="space-y-4">
               {validees.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} />
+                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
               ))}
             </div>
           ) : (
@@ -242,7 +262,7 @@ export default function PresencesEtablissement() {
           {alertes.length > 0 ? (
             <div className="space-y-4">
               {alertes.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} />
+                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
               ))}
             </div>
           ) : (
