@@ -223,13 +223,25 @@ export default function FacturationEtablissement() {
 
       {/* KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <FadeInView delay={0}><CarteKPI icone={Clock} valeur={`${kpi.enAttente.toFixed(0)} €`} label="Commissions en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" /></FadeInView>
-        <FadeInView delay={100}><CarteKPI icone={FileText} valeur={`${kpi.enCours.toFixed(0)} €`} label="Factures en cours" couleurIcone="text-primary" couleurFond="bg-primary/10" /></FadeInView>
-        <FadeInView delay={200}><CarteKPI icone={CheckCircle} valeur={`${kpi.totalPaye.toFixed(0)} €`} label="Total payé" couleurIcone="text-success" couleurFond="bg-success/10" /></FadeInView>
+        <FadeInView delay={0}>
+          <div className="cursor-pointer" onClick={() => { const el = document.getElementById('missions-non-facturees'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+            <CarteKPI icone={Clock} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(kpi.enAttente)} label="Commissions en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+          </div>
+        </FadeInView>
+        <FadeInView delay={100}>
+          <div className="cursor-pointer" onClick={() => { const el = document.getElementById('liste-factures'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+            <CarteKPI icone={FileText} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(kpi.enCours)} label="Factures en cours" couleurIcone="text-primary" couleurFond="bg-primary/10" />
+          </div>
+        </FadeInView>
+        <FadeInView delay={200}>
+          <div className="cursor-pointer" onClick={() => { const el = document.getElementById('liste-factures'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+            <CarteKPI icone={CheckCircle} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(kpi.totalPaye)} label="Total payé" couleurIcone="text-success" couleurFond="bg-success/10" />
+          </div>
+        </FadeInView>
       </div>
 
       {/* Missions non facturées */}
-      <div className="card-base mb-6">
+      <div id="missions-non-facturees" className="card-base mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-foreground">Missions terminées non facturées</h2>
           <span className="badge-base bg-warning/10 text-warning">{missionsNonFacturees.length} mission{missionsNonFacturees.length > 1 ? 's' : ''}</span>
@@ -283,7 +295,7 @@ export default function FacturationEtablissement() {
       </div>
 
       {/* Liste des factures */}
-      <div>
+      <div id="liste-factures">
         <h2 className="font-bold text-foreground mb-3">Factures</h2>
 
         {factures.length > 0 ? (

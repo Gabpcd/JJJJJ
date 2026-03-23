@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart3, Users, TrendingUp, Download, Loader2, Target, DollarSign } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -17,6 +18,7 @@ const COUT_MOYEN_SECTEUR = 28;
 export default function DashboardRH() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [missions, setMissions] = useState<any[]>([]);
@@ -234,12 +236,12 @@ export default function DashboardRH() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="card-base text-center">
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}>
           <DollarSign className="h-5 w-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{currentMonth.brut.toFixed(0)} €</p>
+          <p className="text-2xl font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(currentMonth.brut)}</p>
           <p className="text-xs text-muted-foreground">Coût total ce mois</p>
         </div>
-        <div className="card-base text-center">
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/pool-urgence')}>
           <Users className="h-5 w-5 text-primary mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{new Set(missions.filter(m => {
             const fin = new Date(m.fin_le);
@@ -247,14 +249,14 @@ export default function DashboardRH() {
           }).map(m => m.soignant_assigne_id)).size}</p>
           <p className="text-xs text-muted-foreground">Soignants ce mois</p>
         </div>
-        <div className="card-base text-center">
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions')}>
           <Target className="h-5 w-5 text-primary mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{tauxRemplissage}%</p>
           <p className="text-xs text-muted-foreground">Taux de remplissage</p>
         </div>
-        <div className="card-base text-center">
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/gestion-rh')}>
           <TrendingUp className="h-5 w-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{currentMonth.coutMoyenHeure.toFixed(1)} €</p>
+          <p className="text-2xl font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 1 }).format(currentMonth.coutMoyenHeure)}</p>
           <p className="text-xs text-muted-foreground">Coût moyen / heure</p>
         </div>
       </div>
@@ -264,13 +266,13 @@ export default function DashboardRH() {
         <div className="card-base">
           <h3 className="font-semibold text-foreground mb-1">📈 Prévision</h3>
           <p className="text-sm text-muted-foreground">
-            À ce rythme, votre budget staffing ce mois sera de <span className="font-bold text-foreground">{previsionMois.toFixed(0)} €</span>
+            À ce rythme, votre budget staffing ce mois sera de <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(previsionMois)}</span>
           </p>
         </div>
         <div className="card-base">
           <h3 className="font-semibold text-foreground mb-1">📊 Comparaison secteur</h3>
           <p className="text-sm text-muted-foreground">
-            Votre coût moyen/heure : <span className="font-bold text-foreground">{currentMonth.coutMoyenHeure.toFixed(1)} €</span> — Moyenne du secteur : <span className="font-bold text-foreground">{COUT_MOYEN_SECTEUR} €</span>
+            Votre coût moyen/heure : <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(currentMonth.coutMoyenHeure)}</span> — Moyenne du secteur : <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(COUT_MOYEN_SECTEUR)}</span>
             {currentMonth.coutMoyenHeure > 0 && currentMonth.coutMoyenHeure < COUT_MOYEN_SECTEUR && (
               <span className="text-xs text-primary ml-1">✅ En dessous de la moyenne</span>
             )}
@@ -293,7 +295,7 @@ export default function DashboardRH() {
               <Tooltip
                 contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
                 labelStyle={{ color: 'hsl(var(--foreground))' }}
-                formatter={(value: number) => [`${value} €`, 'Coût']}
+                formatter={(value: number) => [new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value), 'Coût']}
               />
               <Bar dataKey="cout" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
             </BarChart>
@@ -350,7 +352,7 @@ export default function DashboardRH() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-foreground">{s.count} missions</p>
-                  <p className="text-xs text-muted-foreground">{s.heures.toFixed(0)}h — {s.brut.toFixed(0)} €</p>
+                  <p className="text-xs text-muted-foreground">{s.heures.toFixed(0)}h — {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(s.brut)}</p>
                 </div>
               </div>
             ))}

@@ -353,7 +353,9 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         {/* KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <CarteKPI icone={Users} valeur={kpiTotal} label="Soignants dans le pool" couleurIcone="text-destructive" couleurFond="bg-destructive/10" />
-          <CarteKPI icone={UserCheck} valeur={kpiDisponibles} label="Disponibles maintenant" couleurIcone="text-success" couleurFond="bg-success/10" />
+          <div className="cursor-pointer" onClick={() => { setFiltreDispo(true); }}>
+            <CarteKPI icone={UserCheck} valeur={kpiDisponibles} label="Disponibles maintenant" couleurIcone="text-success" couleurFond="bg-success/10" />
+          </div>
           <CarteKPI icone={Trophy} valeur={kpiUrgencesMois} label="Urgences pourvues ce mois" couleurIcone="text-warning" couleurFond="bg-warning/10" />
         </div>
 
