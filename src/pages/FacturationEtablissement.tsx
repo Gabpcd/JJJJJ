@@ -54,6 +54,7 @@ export default function FacturationEtablissement() {
   const [kpi, setKpi] = useState({ enAttente: 0, enCours: 0, totalPaye: 0 });
   const [prelevements, setPrelevements] = useState<any[]>([]);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [filtreStatut, setFiltreStatut] = useState<string | null>(searchParams.get('filtre'));
 
   // Detect payment success from URL
   useEffect(() => {
@@ -142,8 +143,19 @@ export default function FacturationEtablissement() {
       const { data, error } = await supabase.functions.invoke('create-invoice-payment', {
         body: { facture_id: facture.id },
       });
-      if (error) throw error;
-      if (data?.url) window.open(data.url, '_blank');
+      if (error) {
+        // Try to extract the message from the error body
+        const msg = typeof error === 'object' && error.message ? error.message : 'Erreur lors du paiement';
+        throw new Error(msg);
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      } else {
+        throw new Error('URL de paiement non reçue');
+      }
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
@@ -224,17 +236,17 @@ export default function FacturationEtablissement() {
       {/* KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <FadeInView delay={0}>
-          <div className="cursor-pointer" onClick={() => { const el = document.getElementById('missions-non-facturees'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+          <div className="cursor-pointer" onClick={() => { setFiltreStatut(null); const el = document.getElementById('missions-non-facturees'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
             <CarteKPI icone={Clock} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(kpi.enAttente)} label="Commissions en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" />
           </div>
         </FadeInView>
         <FadeInView delay={100}>
-          <div className="cursor-pointer" onClick={() => { const el = document.getElementById('liste-factures'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+          <div className="cursor-pointer" onClick={() => { setFiltreStatut('EN_COURS'); const el = document.getElementById('liste-factures'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
             <CarteKPI icone={FileText} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(kpi.enCours)} label="Factures en cours" couleurIcone="text-primary" couleurFond="bg-primary/10" />
           </div>
         </FadeInView>
         <FadeInView delay={200}>
-          <div className="cursor-pointer" onClick={() => { const el = document.getElementById('liste-factures'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+          <div className="cursor-pointer" onClick={() => { setFiltreStatut('PAYEE'); const el = document.getElementById('liste-factures'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
             <CarteKPI icone={CheckCircle} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(kpi.totalPaye)} label="Total payé" couleurIcone="text-success" couleurFond="bg-success/10" />
           </div>
         </FadeInView>
@@ -296,11 +308,26 @@ export default function FacturationEtablissement() {
 
       {/* Liste des factures */}
       <div id="liste-factures">
-        <h2 className="font-bold text-foreground mb-3">Factures</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-foreground">
+            {filtreStatut === 'EN_COURS' ? 'Factures en cours' : filtreStatut === 'PAYEE' ? 'Factures payées' : 'Factures'}
+          </h2>
+          {filtreStatut && (
+            <button onClick={() => setFiltreStatut(null)} className="text-xs text-primary hover:underline">
+              Voir toutes les factures
+            </button>
+          )}
+        </div>
 
-        {factures.length > 0 ? (
+        {(() => {
+          const facturesFiltrees = filtreStatut === 'EN_COURS'
+            ? factures.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD')
+            : filtreStatut === 'PAYEE'
+            ? factures.filter(f => f.statut === 'PAYEE')
+            : factures;
+          return facturesFiltrees.length > 0 ? (
           <div className="space-y-3">
-            {factures.map(f => (
+            {facturesFiltrees.map(f => (
               <div key={f.id} className="card-base flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -378,8 +405,9 @@ export default function FacturationEtablissement() {
             ))}
           </div>
         ) : (
-          <EtatVide illustration={<IllustrationCalculatrice />} titre="Aucune facture" sousTitre="Les factures seront générées automatiquement après vos premières missions." />
-        )}
+          <EtatVide illustration={<IllustrationCalculatrice />} titre={filtreStatut ? 'Aucune facture dans cette catégorie' : 'Aucune facture'} sousTitre="Les factures seront générées automatiquement après vos premières missions." />
+        );
+        })()}
       </div>
 
       {/* Historique des prélèvements SEPA */}
