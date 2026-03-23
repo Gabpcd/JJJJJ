@@ -210,7 +210,7 @@ Le secteur de la santé fait partie des secteurs autorisés, ce qui permet aux �
 Même dans le cadre d'un CDDU, l'établissement reste soumis à des obligations :
 
 - **Contrat écrit** obligatoire, remis au salarié dans les 48 heures suivant l'embauche.
-- **Déclaration Unique d'Embauche (DUE)** auprès de l'URSSAF avant la prise de poste.
+- **Déclaration Préalable à l'Embauche (DPAE)** auprès de l'URSSAF avant la prise de poste.
 - **Respect des durées maximales de travail** : 10h/jour, 48h/semaine, repos de 11h entre deux journées.
 - **Rémunération au moins égale** à celle d'un salarié en CDI occupant le même poste.
 
