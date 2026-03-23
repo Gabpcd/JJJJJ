@@ -12,10 +12,12 @@ interface CarteValidationProps {
   onOuvrirLitige?: (presenceId: string, missionId: string, soignantId: string, motif: string) => Promise<void>;
 }
 
-export function CarteValidation({ presence, onValider, onContester }: CarteValidationProps) {
+export function CarteValidation({ presence, onValider, onContester, onOuvrirLitige }: CarteValidationProps) {
   const [motifLitige, setMotifLitige] = useState('');
   const [showContester, setShowContester] = useState(false);
   const [showContact, setShowContact] = useState(false);
+  const [showLitige, setShowLitige] = useState(false);
+  const [motifLitigeFormel, setMotifLitigeFormel] = useState('');
 
   const mission = presence.missions;
   const soignant = presence.soignants;
