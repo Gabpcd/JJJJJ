@@ -5,7 +5,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-const stripePromise = loadStripe('pk_test_51RTaSyGMdfWqpb6VaBVx0V1QTbS4ygYvmlVjdJfPZB3xkN4PcDEdFCJWYyL91lSMxHSflDIwz4PSTy43KjLfv7Ac00C03NRp96');
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
 interface Props {
   factureId: string;
