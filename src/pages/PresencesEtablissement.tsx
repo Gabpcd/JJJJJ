@@ -250,7 +250,7 @@ export default function PresencesEtablissement() {
           {validees.length > 0 ? (
             <div className="space-y-4">
               {validees.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} />
+                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
               ))}
             </div>
           ) : (
