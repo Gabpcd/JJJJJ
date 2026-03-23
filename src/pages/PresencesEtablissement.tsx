@@ -238,7 +238,7 @@ export default function PresencesEtablissement() {
           {enCours.length > 0 ? (
             <div className="space-y-4">
               {enCours.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} />
+                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
               ))}
             </div>
           ) : (
