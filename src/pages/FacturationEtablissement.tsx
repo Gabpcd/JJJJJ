@@ -12,6 +12,7 @@ import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
 import { BadgePalier } from '@/components/BadgePalier';
 import { FactureChorus, ChorusStatutBadge } from '@/components/FactureChorus';
 import { PaiementVirement } from '@/components/PaiementVirement';
+import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
