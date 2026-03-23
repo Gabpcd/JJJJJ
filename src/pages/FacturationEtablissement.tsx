@@ -405,8 +405,9 @@ export default function FacturationEtablissement() {
             ))}
           </div>
         ) : (
-          <EtatVide illustration={<IllustrationCalculatrice />} titre="Aucune facture" sousTitre="Les factures seront générées automatiquement après vos premières missions." />
-        )}
+          <EtatVide illustration={<IllustrationCalculatrice />} titre={filtreStatut ? 'Aucune facture dans cette catégorie' : 'Aucune facture'} sousTitre="Les factures seront générées automatiquement après vos premières missions." />
+        );
+        })()}
       </div>
 
       {/* Historique des prélèvements SEPA */}
