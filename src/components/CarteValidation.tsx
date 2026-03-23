@@ -9,6 +9,7 @@ interface CarteValidationProps {
   presence: any;
   onValider: (id: string) => Promise<void>;
   onContester: (id: string, motif: string) => Promise<void>;
+  onOuvrirLitige?: (presenceId: string, missionId: string, soignantId: string, motif: string) => Promise<void>;
 }
 
 export function CarteValidation({ presence, onValider, onContester }: CarteValidationProps) {
