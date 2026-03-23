@@ -23,7 +23,7 @@ const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
   PAIEMENT_RECU: { nom_etablissement: 'EHPAD Les Oliviers', numero_facture: 'FA-2026-0018', montant: '1 250,00 €' },
   DOCUMENT_EXPIRE: { prenom: 'Marie', type_document: 'Attestation vaccinale', date_expiration: '20 avril 2026' },
   EVALUATION_RECUE: { prenom: 'Marie', note: '5/5', commentaire: 'Excellente professionnelle, ponctuelle et compétente.', mission: 'Remplacement IDE — Jour' },
-  RAPPEL_DUE: { nom_etablissement: 'EHPAD Les Oliviers', soignant: 'Marie Dupont', numero_contrat: 'CTR-2026-0042' },
+  RAPPEL_DPAE: { nom_etablissement: 'EHPAD Les Oliviers', soignant: 'Marie Dupont', numero_contrat: 'CTR-2026-0042' },
   LITIGE_OUVERT: { prenom: 'Marie', mission: 'Remplacement IDE — Jour', motif: 'Heures contestées', reference: 'LIT-2026-007' },
 };
 
