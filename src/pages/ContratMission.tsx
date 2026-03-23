@@ -91,7 +91,7 @@ export default function ContratMission() {
       // Reload contract to get updated mode_signature
       const { data: updated } = await supabase
         .from('contrats_mission')
-        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le, mode_signature')
+        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, dpae_effectuee, dpae_effectuee_le, mode_signature')
         .eq('id', contrat.id)
         .single();
       if (updated) setContrat(updated);
