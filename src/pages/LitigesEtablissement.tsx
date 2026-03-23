@@ -5,13 +5,16 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Scale, MessageCircle, Send } from 'lucide-react';
+import { Scale, MessageCircle, Send, PlusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 const STATUT_COLORS: Record<string, string> = {
   OUVERT: 'bg-warning/10 text-warning',
@@ -22,25 +25,93 @@ const STATUT_COLORS: Record<string, string> = {
 
 export default function LitigesEtablissement() {
   usePageTitle('Litiges');
-  const { user } = useAuth();
+  const { user, etablissementId } = useEtablissementScope();
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [replyId, setReplyId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
 
+  // New dispute modal
+  const [showNew, setShowNew] = useState(false);
+  const [missionsTerminees, setMissionsTerminees] = useState<any[]>([]);
+  const [selectedMissionId, setSelectedMissionId] = useState('');
+  const [newMotif, setNewMotif] = useState('');
+  const [creating, setCreating] = useState(false);
+
   const charger = async () => {
-    if (!user) return;
+    if (!user || !etablissementId) return;
     const { data } = await supabase
       .from('litiges')
       .select('*, missions(intitule, debut_le)')
-      .eq('etablissement_id', user.id)
+      .eq('etablissement_id', etablissementId)
       .order('cree_le', { ascending: false });
     setLitiges(data || []);
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, [user]);
+  useEffect(() => { charger(); }, [user, etablissementId]);
+
+  const openNewLitige = async () => {
+    if (!user || !etablissementId) return;
+    const [{ data: missions }, { data: existingLitiges }] = await Promise.all([
+      supabase.from('missions')
+        .select('id, intitule, debut_le, fin_le, soignant_assigne_id')
+        .eq('etablissement_id', etablissementId)
+        .not('soignant_assigne_id', 'is', null)
+        .in('statut', ['TERMINEE', 'EN_COURS'])
+        .order('fin_le', { ascending: false })
+        .limit(50),
+      supabase.from('litiges')
+        .select('mission_id')
+        .eq('etablissement_id', etablissementId),
+    ]);
+    const litigesMissionIds = new Set((existingLitiges || []).map((l: any) => l.mission_id));
+    setMissionsTerminees((missions || []).filter((m: any) => !litigesMissionIds.has(m.id)));
+    setSelectedMissionId('');
+    setNewMotif('');
+    setShowNew(true);
+  };
+
+  const creerLitige = async () => {
+    if (!selectedMissionId || !newMotif.trim() || !etablissementId) {
+      toast.error('Veuillez sélectionner une mission et saisir un motif.');
+      return;
+    }
+    setCreating(true);
+    const mission = missionsTerminees.find(m => m.id === selectedMissionId);
+    if (!mission || !mission.soignant_assigne_id) { setCreating(false); return; }
+
+    // Get presence for this mission
+    const { data: presenceData } = await supabase
+      .from('presences')
+      .select('id')
+      .eq('mission_id', selectedMissionId)
+      .eq('soignant_id', mission.soignant_assigne_id)
+      .limit(1)
+      .maybeSingle();
+
+    const presenceId = presenceData?.id;
+    if (!presenceId) {
+      toast.error('Aucune présence trouvée pour cette mission.');
+      setCreating(false);
+      return;
+    }
+
+    const { error } = await supabase.from('litiges').insert({
+      mission_id: selectedMissionId,
+      presence_id: presenceId,
+      soignant_id: mission.soignant_assigne_id,
+      etablissement_id: etablissementId,
+      motif: newMotif.trim(),
+      initie_par: 'ETABLISSEMENT',
+    });
+    setCreating(false);
+    if (error) { toast.error('Erreur lors de la création du litige.'); console.error(error); return; }
+    toast.success('Litige ouvert avec succès.');
+    setShowNew(false);
+    charger();
+  };
 
   const repondre = async () => {
     if (!replyId || !replyText.trim()) return;
@@ -61,15 +132,20 @@ export default function LitigesEtablissement() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <Scale className="h-6 w-6 text-primary" /> Litiges
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Gérez les contestations de vos missions</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <Scale className="h-6 w-6 text-primary" /> Litiges
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Gérez les contestations de vos missions</p>
+        </div>
+        <Button onClick={openNewLitige} className="gap-1.5">
+          <PlusCircle className="h-4 w-4" /> Ouvrir un litige
+        </Button>
       </div>
 
       {litiges.length === 0 ? (
-        <EtatVide icone={Scale} titre="Aucun litige" sousTitre="Aucun litige sur vos missions." />
+        <EtatVide icone={Scale} titre="Aucun litige" sousTitre="Aucun litige sur vos missions. Cliquez sur « Ouvrir un litige » pour contester une mission." />
       ) : (
         <div className="space-y-4">
           {litiges.map(l => (
@@ -113,6 +189,44 @@ export default function LitigesEtablissement() {
           ))}
         </div>
       )}
+
+      {/* Modal nouveau litige */}
+      <Dialog open={showNew} onOpenChange={setShowNew}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ouvrir un nouveau litige</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Mission concernée</label>
+              {missionsTerminees.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aucune mission éligible (missions sans litige existant)</p>
+              ) : (
+                <Select value={selectedMissionId} onValueChange={setSelectedMissionId}>
+                  <SelectTrigger><SelectValue placeholder="Sélectionner une mission" /></SelectTrigger>
+                  <SelectContent>
+                    {missionsTerminees.map(m => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.intitule} — {m.debut_le ? format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr }) : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Motif du litige</label>
+              <Textarea value={newMotif} onChange={e => setNewMotif(e.target.value)} placeholder="Décrivez le problème rencontré..." rows={4} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShowNew(false)}>Annuler</Button>
+              <Button onClick={creerLitige} disabled={creating || !selectedMissionId || !newMotif.trim()}>
+                {creating ? 'Création…' : '⚠️ Ouvrir le litige'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </LayoutApp>
   );
 }
