@@ -330,7 +330,7 @@ export default function DashboardRH() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-foreground">{s.sg?.prenom || 'Soignant'} {s.sg?.nom || ''}</p>
+                    <p className="font-semibold text-foreground">{s.sg?.prenom && s.sg?.nom ? `${s.sg.prenom} ${s.sg.nom}` : 'Soignant non identifié'}</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {s.missions.length} mission{s.missions.length > 1 ? 's' : ''} · {s.heures.toFixed(1)}h · {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(s.brut)}
                     </p>
