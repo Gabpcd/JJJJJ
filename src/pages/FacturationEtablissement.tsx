@@ -56,6 +56,7 @@ export default function FacturationEtablissement() {
   const [prelevements, setPrelevements] = useState<any[]>([]);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
   const [filtreStatut, setFiltreStatut] = useState<string | null>(searchParams.get('filtre'));
+  const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
 
   // Detect payment success from URL
   useEffect(() => {
