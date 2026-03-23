@@ -223,9 +223,21 @@ export default function FacturationEtablissement() {
 
       {/* KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <FadeInView delay={0}><CarteKPI icone={Clock} valeur={`${kpi.enAttente.toFixed(0)} €`} label="Commissions en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" /></FadeInView>
-        <FadeInView delay={100}><CarteKPI icone={FileText} valeur={`${kpi.enCours.toFixed(0)} €`} label="Factures en cours" couleurIcone="text-primary" couleurFond="bg-primary/10" /></FadeInView>
-        <FadeInView delay={200}><CarteKPI icone={CheckCircle} valeur={`${kpi.totalPaye.toFixed(0)} €`} label="Total payé" couleurIcone="text-success" couleurFond="bg-success/10" /></FadeInView>
+        <FadeInView delay={0}>
+          <div className="cursor-pointer" onClick={() => { const el = document.getElementById('missions-non-facturees'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+            <CarteKPI icone={Clock} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(kpi.enAttente)} label="Commissions en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+          </div>
+        </FadeInView>
+        <FadeInView delay={100}>
+          <div className="cursor-pointer" onClick={() => { const el = document.getElementById('liste-factures'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+            <CarteKPI icone={FileText} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(kpi.enCours)} label="Factures en cours" couleurIcone="text-primary" couleurFond="bg-primary/10" />
+          </div>
+        </FadeInView>
+        <FadeInView delay={200}>
+          <div className="cursor-pointer" onClick={() => { const el = document.getElementById('liste-factures'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+            <CarteKPI icone={CheckCircle} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(kpi.totalPaye)} label="Total payé" couleurIcone="text-success" couleurFond="bg-success/10" />
+          </div>
+        </FadeInView>
       </div>
 
       {/* Missions non facturées */}
