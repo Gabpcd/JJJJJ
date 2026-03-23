@@ -295,7 +295,7 @@ export default function DashboardRH() {
               <Tooltip
                 contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
                 labelStyle={{ color: 'hsl(var(--foreground))' }}
-                formatter={(value: number) => [`${value} €`, 'Coût']}
+                formatter={(value: number) => [new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value), 'Coût']}
               />
               <Bar dataKey="cout" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
             </BarChart>
