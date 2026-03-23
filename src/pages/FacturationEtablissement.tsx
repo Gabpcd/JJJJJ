@@ -416,6 +416,15 @@ export default function FacturationEtablissement() {
           </div>
         </div>
       )}
+
+      {checkoutFactureId && (
+        <StripeEmbeddedCheckout
+          factureId={checkoutFactureId}
+          open={!!checkoutFactureId}
+          onClose={() => setCheckoutFactureId(null)}
+          onComplete={() => { setCheckoutFactureId(null); charger(); }}
+        />
+      )}
     </LayoutApp>
   );
 }
