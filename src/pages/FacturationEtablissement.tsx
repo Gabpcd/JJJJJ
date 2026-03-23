@@ -241,7 +241,7 @@ export default function FacturationEtablissement() {
       </div>
 
       {/* Missions non facturées */}
-      <div className="card-base mb-6">
+      <div id="missions-non-facturees" className="card-base mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-foreground">Missions terminées non facturées</h2>
           <span className="badge-base bg-warning/10 text-warning">{missionsNonFacturees.length} mission{missionsNonFacturees.length > 1 ? 's' : ''}</span>
