@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
