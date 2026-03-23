@@ -272,7 +272,7 @@ export default function DashboardRH() {
         <div className="card-base">
           <h3 className="font-semibold text-foreground mb-1">📊 Comparaison secteur</h3>
           <p className="text-sm text-muted-foreground">
-            Votre coût moyen/heure : <span className="font-bold text-foreground">{currentMonth.coutMoyenHeure.toFixed(1)} €</span> — Moyenne du secteur : <span className="font-bold text-foreground">{COUT_MOYEN_SECTEUR} €</span>
+            Votre coût moyen/heure : <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(currentMonth.coutMoyenHeure)}</span> — Moyenne du secteur : <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(COUT_MOYEN_SECTEUR)}</span>
             {currentMonth.coutMoyenHeure > 0 && currentMonth.coutMoyenHeure < COUT_MOYEN_SECTEUR && (
               <span className="text-xs text-primary ml-1">✅ En dessous de la moyenne</span>
             )}
