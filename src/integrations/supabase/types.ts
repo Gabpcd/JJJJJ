@@ -3043,7 +3043,7 @@ export type Database = {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
-      fn_confirmer_due: { Args: { p_contrat_id: string }; Returns: Json }
+      fn_confirmer_dpae: { Args: { p_contrat_id: string }; Returns: Json }
       fn_consentir_gps: { Args: { p_accepte: boolean }; Returns: Json }
       fn_contester_presence: {
         Args: { p_motif: string; p_presence_id: string }
