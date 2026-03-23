@@ -27,6 +27,7 @@ export default function DetailFacture() {
   const [facture, setFacture] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [etab, setEtab] = useState<any>(null);
+  const [showCheckout, setShowCheckout] = useState(false);
 
   useEffect(() => {
     if (!user || !id) return;
