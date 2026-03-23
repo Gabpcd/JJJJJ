@@ -176,6 +176,15 @@ export default function DetailFacture() {
           <p>Facture générée automatiquement — Commission sur missions terminées</p>
         </div>
       </div>
+
+      {showCheckout && facture && (
+        <StripeEmbeddedCheckout
+          factureId={facture.id}
+          open={showCheckout}
+          onClose={() => setShowCheckout(false)}
+          onComplete={() => { setShowCheckout(false); window.location.reload(); }}
+        />
+      )}
     </LayoutApp>
   );
 }
