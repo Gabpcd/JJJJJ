@@ -35,6 +35,7 @@ export default function ListeMissions() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  const { etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   const [missions, setMissions] = useState<any[]>([]);
   const statutParam = searchParams.get('statut') ?? '';
