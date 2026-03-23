@@ -83,7 +83,7 @@ export default function ListeMissions() {
     })));
 
     // M2: Single count query with status grouping instead of 7 parallel queries
-    const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', user.id);
+    const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', etabId);
     const c: Record<string, number> = { '': allData?.length ?? 0 };
     const statuts = ['OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
     for (const s of statuts) {
