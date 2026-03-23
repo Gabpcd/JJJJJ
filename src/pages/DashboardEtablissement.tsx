@@ -87,6 +87,15 @@ export default function DashboardEtablissement() {
         for (const s of resSoignants.data) sgMap[s.id] = s;
       }
 
+      // Fallback: fetch soignant names directly if RPC returned empty
+      if (Object.keys(sgMap).length === 0 && resMissions.data) {
+        const sgIds = [...new Set((resMissions.data as any[]).map((m: any) => m.soignant_assigne_id).filter(Boolean))];
+        if (sgIds.length > 0) {
+          const { data: sgDirect } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite, numero_rpps').in('id', sgIds);
+          if (sgDirect) for (const s of sgDirect) sgMap[s.id] = s;
+        }
+      }
+
       if (resMissions.error) { console.error('[DashboardEtab] Erreur missions:', resMissions.error); handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
       if (resSoignants.error) { console.error('[DashboardEtab] Erreur soignants RPC:', resSoignants.error); }
       else if (resMissions.data) setMissions(resMissions.data.map((m: any) => ({
