@@ -11,17 +11,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { ClipboardCheck, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useSearchParams } from 'react-router-dom';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 export default function PresencesEtablissement() {
   usePageTitle('Présences');
-  const { user } = useAuth();
+  const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [presences, setPresences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalLot, setModalLot] = useState(false);
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(['a_valider', 'en_cours', 'validees', 'alertes'].includes(tabParam || '') ? tabParam! : 'a_valider');
 
   const charger = useCallback(async () => {
-    if (!user) return;
+    if (!user || !etablissementId) return;
     const [{ data: presData }, { data: soignantsData }] = await Promise.all([
       supabase
         .from('presences')
@@ -35,7 +40,7 @@ export default function PresencesEtablissement() {
           valide_par_etablissement, valide_le, motif_litige,
           missions!inner(intitule, service, debut_le, fin_le, duree_heures, etablissement_id)
         `)
-        .eq('missions.etablissement_id', user.id)
+        .eq('missions.etablissement_id', etablissementId)
         .not('pointage_arrivee_le', 'is', null)
         .order('pointage_arrivee_le', { ascending: false }),
       supabase.rpc('fn_mes_soignants_etablissement'),
@@ -51,9 +56,15 @@ export default function PresencesEtablissement() {
       soignants: sgMap[p.soignant_id] || null,
     })));
     setLoading(false);
-  }, [user]);
+  }, [user, etablissementId]);
 
   useEffect(() => { charger(); }, [charger]);
+
+  useEffect(() => {
+    if (tabParam && ['a_valider', 'en_cours', 'validees', 'alertes'].includes(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   const aValider = presences.filter(p => !p.valide_par_etablissement && p.pointage_depart_le);
   const validees = presences.filter(p => p.valide_par_etablissement);
@@ -140,7 +151,14 @@ export default function PresencesEtablissement() {
         <p className="text-sm text-muted-foreground mt-1">Vérifiez et validez les pointages de vos soignants</p>
       </div>
 
-      <Tabs defaultValue="a_valider">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          setActiveTab(value);
+          if (value === 'a_valider') setSearchParams({}, { replace: true });
+          else setSearchParams({ tab: value }, { replace: true });
+        }}
+      >
         <TabsList className="w-full grid grid-cols-4 mb-4">
           <TabsTrigger value="a_valider" className="text-xs">
             À valider ({aValider.length})

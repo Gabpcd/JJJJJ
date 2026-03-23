@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FileSpreadsheet, Download, Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 type FormatExport = 'Standard' | 'Silae' | 'Sage';
 
@@ -79,7 +81,8 @@ function fmt(v: number) {
 }
 
 export default function ExportPaie() {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<FormatExport | null>(null);
@@ -89,7 +92,7 @@ export default function ExportPaie() {
   const [soignantMap, setSoignantMap] = useState<Record<string, any>>({});
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !etablissementId) return;
     const load = async () => {
       setLoading(true);
       const m = Number(mois);
@@ -100,8 +103,8 @@ export default function ExportPaie() {
       const [{ data: missionsData }, { data: soignantsData }] = await Promise.all([
         supabase
           .from('missions')
-          .select('id, intitule, debut_le, fin_le, duree_heures, heures_nuit, heures_dimanche, heures_ferie, taux_horaire_base, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, soignant_assigne_id, type_paiement_soignant')
-          .eq('etablissement_id', user.id)
+          .select('id, intitule, debut_le, fin_le, duree_heures, heures_nuit, heures_dimanche, heures_ferie, taux_horaire_base, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, soignant_assigne_id, type_paiement_soignant, presences(pointage_arrivee_le, pointage_depart_le)')
+          .eq('etablissement_id', etablissementId)
           .eq('statut', 'TERMINEE')
           .eq('type_paiement_soignant', 'BULLETIN_PAIE')
           .gte('fin_le', debutMois)
@@ -119,7 +122,7 @@ export default function ExportPaie() {
       setLoading(false);
     };
     load();
-  }, [user, mois, annee]);
+  }, [user, etablissementId, mois, annee]);
 
   const handleExport = async (fmt: FormatExport) => {
     if (!user || missions.length === 0) return;
@@ -246,11 +249,16 @@ export default function ExportPaie() {
                 const brut = m.total_brut || 0;
                 const net = brut * 0.78;
                 return (
-                  <tr key={m.id} className="border-b border-border/50 hover:bg-muted/20">
+                  <tr key={m.id} className="border-b border-border/50 hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/etablissement/missions/${m.id}`)}>
                     <td className="py-2 px-3 text-xs font-medium">{sg?.prenom} {sg?.nom}</td>
                     <td className="py-2 px-3 text-xs text-muted-foreground">{m.intitule}</td>
                     <td className="py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">
-                      {format(new Date(m.debut_le), 'dd/MM')} → {format(new Date(m.fin_le), 'dd/MM')}
+                      <div>{format(new Date(m.debut_le), 'dd/MM/yyyy HH:mm')} → {format(new Date(m.fin_le), 'dd/MM/yyyy HH:mm')}</div>
+                      {m.presences?.[0]?.pointage_arrivee_le && m.presences?.[0]?.pointage_depart_le && (
+                        <div className="text-[10px] text-primary">
+                          Pointage : {format(new Date(m.presences[0].pointage_arrivee_le), 'HH:mm')} → {format(new Date(m.presences[0].pointage_depart_le), 'HH:mm')}
+                        </div>
+                      )}
                     </td>
                     <td className="py-2 px-3 text-xs text-right">{m.duree_heures}h</td>
                     <td className="py-2 px-3 text-xs text-right">{fmt(m.taux_horaire_base || 0)}</td>
@@ -266,7 +274,7 @@ export default function ExportPaie() {
               })}
             </tbody>
           </table>
-          <p className="text-xs text-muted-foreground px-3 py-2">{missions.length} missions salariées</p>
+          <p className="text-xs text-muted-foreground px-3 py-2">{missions.length} missions salariées · cliquez sur une ligne pour voir le détail complet</p>
         </div>
       ) : (
         <EtatVide icone={FileSpreadsheet} titre="Aucune mission salariée terminée" sousTitre={`Aucune mission avec bulletin de paie en ${moisLabel}.`} />
