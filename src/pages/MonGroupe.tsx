@@ -51,10 +51,13 @@ export default function MonGroupe() {
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Building2 className="h-16 w-16 text-primary/30 mb-4" />
           <h2 className="text-lg font-bold text-foreground mb-2">Établissement indépendant</h2>
-          <p className="text-sm text-muted-foreground max-w-md">
+          <p className="text-sm text-muted-foreground max-w-md mb-4">
             Votre établissement n'appartient à aucun groupe de santé.
             Contactez-nous pour rattacher votre établissement à un groupe existant.
           </p>
+          <Button className="gap-2" onClick={() => window.location.href = 'mailto:contact@jolene.fr?subject=Rejoindre un groupe de santé'}>
+            <Mail className="h-4 w-4" /> Contacter Jolene
+          </Button>
         </div>
       </LayoutApp>
     );

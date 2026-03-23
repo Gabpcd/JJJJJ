@@ -228,8 +228,14 @@ export default function ExportPaie() {
               <tr className="border-b border-border bg-muted/30">
                 <th className="text-left py-2.5 px-3 text-xs text-muted-foreground font-medium">Soignant</th>
                 <th className="text-left py-2.5 px-3 text-xs text-muted-foreground font-medium">Mission</th>
+                <th className="text-left py-2.5 px-3 text-xs text-muted-foreground font-medium">Dates</th>
                 <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Heures</th>
                 <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Taux</th>
+                <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Maj. nuit</th>
+                <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Maj. dim.</th>
+                <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Maj. férié</th>
+                <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">IFM</th>
+                <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">ICP</th>
                 <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Brut</th>
                 <th className="text-right py-2.5 px-3 text-xs text-muted-foreground font-medium">Net est.</th>
               </tr>
@@ -240,12 +246,20 @@ export default function ExportPaie() {
                 const brut = m.total_brut || 0;
                 const net = brut * 0.78;
                 return (
-                  <tr key={m.id} className="border-b border-border/50">
+                  <tr key={m.id} className="border-b border-border/50 hover:bg-muted/20">
                     <td className="py-2 px-3 text-xs font-medium">{sg?.prenom} {sg?.nom}</td>
                     <td className="py-2 px-3 text-xs text-muted-foreground">{m.intitule}</td>
+                    <td className="py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(m.debut_le), 'dd/MM')} → {format(new Date(m.fin_le), 'dd/MM')}
+                    </td>
                     <td className="py-2 px-3 text-xs text-right">{m.duree_heures}h</td>
                     <td className="py-2 px-3 text-xs text-right">{fmt(m.taux_horaire_base || 0)}</td>
-                    <td className="py-2 px-3 text-xs text-right">{fmt(brut)}</td>
+                    <td className="py-2 px-3 text-xs text-right">{fmt(m.montant_majoration_nuit || 0)}</td>
+                    <td className="py-2 px-3 text-xs text-right">{fmt(m.montant_majoration_dimanche || 0)}</td>
+                    <td className="py-2 px-3 text-xs text-right">{fmt(m.montant_majoration_ferie || 0)}</td>
+                    <td className="py-2 px-3 text-xs text-right">{fmt(m.montant_ifm || 0)}</td>
+                    <td className="py-2 px-3 text-xs text-right">{fmt(m.montant_icp || 0)}</td>
+                    <td className="py-2 px-3 text-xs text-right font-medium">{fmt(brut)}</td>
                     <td className="py-2 px-3 text-xs text-right font-semibold text-success">{fmt(net)}</td>
                   </tr>
                 );

@@ -295,7 +295,7 @@ export default function FacturationEtablissement() {
       </div>
 
       {/* Liste des factures */}
-      <div>
+      <div id="liste-factures">
         <h2 className="font-bold text-foreground mb-3">Factures</h2>
 
         {factures.length > 0 ? (

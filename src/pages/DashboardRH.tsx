@@ -352,7 +352,7 @@ export default function DashboardRH() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-foreground">{s.count} missions</p>
-                  <p className="text-xs text-muted-foreground">{s.heures.toFixed(0)}h — {s.brut.toFixed(0)} €</p>
+                  <p className="text-xs text-muted-foreground">{s.heures.toFixed(0)}h — {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(s.brut)}</p>
                 </div>
               </div>
             ))}

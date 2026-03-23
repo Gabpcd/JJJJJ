@@ -321,16 +321,24 @@ export default function DashboardEtablissement() {
       {/* KPI row 2 — HR indicators */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <FadeInView delay={400}>
-          <KPICoutMoyenHeure totalBrut={coutMoyen.totalBrut} totalHeures={coutMoyen.totalHeures} />
+          <div className="cursor-pointer" onClick={() => navigate('/etablissement/gestion-rh')}>
+            <KPICoutMoyenHeure totalBrut={coutMoyen.totalBrut} totalHeures={coutMoyen.totalHeures} />
+          </div>
         </FadeInView>
         <FadeInView delay={500}>
-          <JaugeTauxRemplissage pourvues={remplissage.pourvues} total={remplissage.total} />
+          <div className="cursor-pointer" onClick={() => navigate('/etablissement/missions')}>
+            <JaugeTauxRemplissage pourvues={remplissage.pourvues} total={remplissage.total} />
+          </div>
         </FadeInView>
         <FadeInView delay={600}>
-          <IndicateurTurnover soignantsCeMois={turnover.ceMois} soignantsMoisPrecedent={turnover.moisPrec} />
+          <div className="cursor-pointer" onClick={() => navigate('/etablissement/pool-urgence')}>
+            <IndicateurTurnover soignantsCeMois={turnover.ceMois} soignantsMoisPrecedent={turnover.moisPrec} />
+          </div>
         </FadeInView>
         <FadeInView delay={700}>
-          <CarteKPI icone={CheckCircle} valeur={missionsCeMois} label="Missions terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
+          <div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}>
+            <CarteKPI icone={CheckCircle} valeur={missionsCeMois} label="Missions terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
+          </div>
         </FadeInView>
       </div>
 
