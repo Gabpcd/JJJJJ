@@ -262,7 +262,7 @@ export default function PresencesEtablissement() {
           {alertes.length > 0 ? (
             <div className="space-y-4">
               {alertes.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} />
+                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
               ))}
             </div>
           ) : (
