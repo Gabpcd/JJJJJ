@@ -308,11 +308,26 @@ export default function FacturationEtablissement() {
 
       {/* Liste des factures */}
       <div id="liste-factures">
-        <h2 className="font-bold text-foreground mb-3">Factures</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-foreground">
+            {filtreStatut === 'EN_COURS' ? 'Factures en cours' : filtreStatut === 'PAYEE' ? 'Factures payées' : 'Factures'}
+          </h2>
+          {filtreStatut && (
+            <button onClick={() => setFiltreStatut(null)} className="text-xs text-primary hover:underline">
+              Voir toutes les factures
+            </button>
+          )}
+        </div>
 
-        {factures.length > 0 ? (
+        {(() => {
+          const facturesFiltrees = filtreStatut === 'EN_COURS'
+            ? factures.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD')
+            : filtreStatut === 'PAYEE'
+            ? factures.filter(f => f.statut === 'PAYEE')
+            : factures;
+          return facturesFiltrees.length > 0 ? (
           <div className="space-y-3">
-            {factures.map(f => (
+            {facturesFiltrees.map(f => (
               <div key={f.id} className="card-base flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
