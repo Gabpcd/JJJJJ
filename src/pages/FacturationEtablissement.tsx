@@ -142,8 +142,19 @@ export default function FacturationEtablissement() {
       const { data, error } = await supabase.functions.invoke('create-invoice-payment', {
         body: { facture_id: facture.id },
       });
-      if (error) throw error;
-      if (data?.url) window.open(data.url, '_blank');
+      if (error) {
+        // Try to extract the message from the error body
+        const msg = typeof error === 'object' && error.message ? error.message : 'Erreur lors du paiement';
+        throw new Error(msg);
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      } else {
+        throw new Error('URL de paiement non reçue');
+      }
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
