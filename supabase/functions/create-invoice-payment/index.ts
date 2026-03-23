@@ -53,7 +53,8 @@ serve(async (req) => {
       });
     }
 
-    const { facture_id } = await req.json();
+    const body = await req.json();
+    const { facture_id, embedded } = body;
     if (!facture_id) {
       return new Response(JSON.stringify({ error: "facture_id requis" }), {
         status: 400,
