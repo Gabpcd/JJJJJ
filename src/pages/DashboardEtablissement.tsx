@@ -146,6 +146,14 @@ export default function DashboardEtablissement() {
             if (m.soignant_assigne_id) counts[m.soignant_assigne_id] = (counts[m.soignant_assigne_id] || 0) + 1;
           }
           const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+          // Fetch missing soignant names if not in sgMap
+          const missingIds = sorted.map(([id]) => id).filter(id => !sgMap[id]);
+          if (missingIds.length > 0) {
+            const { data: sgExtra } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite').in('id', missingIds);
+            if (sgExtra) for (const s of sgExtra) sgMap[s.id] = s;
+          }
+
           const top = sorted.map(([id, count]) => {
             const sg = sgMap[id];
             return {
