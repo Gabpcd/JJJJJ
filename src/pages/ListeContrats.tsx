@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
@@ -11,30 +11,42 @@ import { IllustrationStylo } from '@/components/EtatVide';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { UserRole } from '@/lib/types';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 const FILTRES_STATUT = ['Tous', 'EN_ATTENTE_SIGNATURES', 'SIGNE_COMPLET', 'ANNULE'] as const;
 
 export default function ListeContrats({ role }: { role: UserRole }) {
-  const { user } = useAuth();
+  const { user, etablissementId } = useEtablissementScope();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [contrats, setContrats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtre, setFiltre] = useState('Tous');
+  const statutParam = searchParams.get('statut');
+  const [filtre, setFiltre] = useState(FILTRES_STATUT.includes((statutParam as any)) ? statutParam! : 'Tous');
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || (role === 'ADMIN_ETABLISSEMENT' && !etablissementId)) return;
     const load = async () => {
       const col = role === 'SOIGNANT' ? 'soignant_id' : 'etablissement_id';
+      const valeur = role === 'SOIGNANT' ? user.id : etablissementId;
       const { data } = await supabase
         .from('contrats_mission')
-        .select('id, mission_id, numero_contrat, type_contrat, statut, soignant_id, etablissement_id, signature_soignant, signature_etablissement, cree_le')
-        .eq(col, user.id)
+        .select('id, mission_id, numero_contrat, type_contrat, statut, soignant_id, etablissement_id, signature_soignant, signature_etablissement, cree_le, missions(intitule, debut_le, fin_le)')
+        .eq(col, valeur)
         .order('cree_le', { ascending: false });
       setContrats(data || []);
       setLoading(false);
     };
     load();
-  }, [user, role]);
+  }, [user, role, etablissementId]);
+
+  useEffect(() => {
+    if (statutParam && FILTRES_STATUT.includes(statutParam as any)) {
+      setFiltre(statutParam);
+      return;
+    }
+    setFiltre('Tous');
+  }, [statutParam]);
 
   const filtered = filtre === 'Tous' ? contrats : contrats.filter(c => c.statut === filtre);
 
@@ -46,7 +58,15 @@ export default function ListeContrats({ role }: { role: UserRole }) {
 
       <div className="flex gap-2 mb-4 flex-wrap">
         {FILTRES_STATUT.map(f => (
-          <button key={f} onClick={() => setFiltre(f)} className={`badge-base transition-colors ${filtre === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+          <button
+            key={f}
+            onClick={() => {
+              setFiltre(f);
+              if (f === 'Tous') setSearchParams({}, { replace: true });
+              else setSearchParams({ statut: f }, { replace: true });
+            }}
+            className={`badge-base transition-colors ${filtre === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
+          >
             {f === 'Tous' ? 'Tous' : f === 'EN_ATTENTE_SIGNATURES' ? 'En attente' : f === 'SIGNE_COMPLET' ? 'Signés' : 'Annulés'}
           </button>
         ))}
@@ -68,6 +88,7 @@ export default function ListeContrats({ role }: { role: UserRole }) {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">Type : {c.type_contrat}</p>
+              <p className="text-xs text-muted-foreground">Mission : {(c.missions as any)?.intitule || '—'}</p>
               <p className="text-xs text-muted-foreground">Créé le {format(new Date(c.cree_le), 'dd/MM/yyyy', { locale: fr })}</p>
               {!c.signature_soignant && role === 'SOIGNANT' && c.statut !== 'ANNULE' && (
                 <p className="text-xs text-primary font-medium mt-1">✍️ Signer →</p>

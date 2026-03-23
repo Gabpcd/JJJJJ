@@ -6,23 +6,33 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { getLabelProfession } from '@/lib/constantes';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 export default function ProfilSoignantEtablissement() {
   usePageTitle('Profil soignant');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { etablissementId } = useEtablissementScope();
   const [loading, setLoading] = useState(true);
   const [soignant, setSoignant] = useState<any>(null);
   const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
+  const [missions, setMissions] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !etablissementId) return;
 
     const charger = async () => {
       setLoading(true);
-      const [{ data: soignantData }, { data: noteData }] = await Promise.all([
+      const [{ data: soignantData }, { data: noteData }, { data: missionsData }] = await Promise.all([
         supabase.rpc('fn_soignant_pour_etablissement' as any, { p_soignant_id: id }),
         supabase.rpc('fn_note_moyenne' as any, { p_user_id: id }),
+        supabase
+          .from('missions')
+          .select('id, intitule, debut_le, fin_le, statut, service')
+          .eq('etablissement_id', etablissementId)
+          .eq('soignant_assigne_id', id)
+          .order('debut_le', { ascending: false })
+          .limit(20),
       ]);
 
       if (soignantData && !(soignantData as any).error) {
@@ -39,11 +49,13 @@ export default function ProfilSoignantEtablissement() {
         setNoteMoyenne(null);
       }
 
+      setMissions(missionsData || []);
+
       setLoading(false);
     };
 
     charger();
-  }, [id]);
+  }, [id, etablissementId]);
 
   const initiales = useMemo(() => {
     if (!soignant) return 'SD';
@@ -115,6 +127,34 @@ export default function ProfilSoignantEtablissement() {
                   <p className="font-medium text-foreground">{soignant.total_missions_terminees ?? 0}</p>
                 </div>
               </div>
+            </div>
+
+            <div className="card-base">
+              <h2 className="font-semibold text-foreground mb-3">Missions avec votre établissement</h2>
+              {missions.length > 0 ? (
+                <div className="space-y-2">
+                  {missions.map((mission) => (
+                    <button
+                      key={mission.id}
+                      type="button"
+                      onClick={() => navigate(`/etablissement/missions/${mission.id}`)}
+                      className="w-full rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted/30"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-foreground">{mission.intitule}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {mission.service || 'Service non renseigné'} · {new Date(mission.debut_le).toLocaleDateString('fr-FR')} 
+                          </p>
+                        </div>
+                        <span className="text-xs font-medium text-primary">Voir la mission →</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Aucune mission partagée avec votre établissement pour le moment.</p>
+              )}
             </div>
           </div>
 

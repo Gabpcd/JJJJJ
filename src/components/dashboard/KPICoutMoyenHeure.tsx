@@ -1,4 +1,4 @@
-import { DollarSign } from 'lucide-react';
+import { Coins } from 'lucide-react';
 
 interface Props {
   totalBrut: number;
@@ -12,7 +12,7 @@ export function KPICoutMoyenHeure({ totalBrut, totalHeures }: Props) {
     <div className="card-kpi">
       <div className="flex items-start gap-3">
         <div className="rounded-xl p-2.5 bg-info/10">
-          <DollarSign className="h-5 w-5 text-info" />
+          <Coins className="h-5 w-5 text-info" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-2xl font-bold text-foreground">

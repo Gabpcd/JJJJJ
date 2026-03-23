@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { CarteKPI } from '@/components/CarteKPI';
@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { PROFESSIONS } from '@/lib/constantes';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 interface SoignantPool {
   soignant_id: string;
@@ -59,11 +60,12 @@ interface MissionOuverte {
 }
 
 export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?: boolean }) {
-  const { user } = useAuth();
+  const { user, etablissementId: scopedEtablissementId } = useEtablissementScope();
   const Layout = isAdmin 
     ? ({ children }: { children: React.ReactNode }) => <LayoutAdmin>{children}</LayoutAdmin>
     : ({ children }: { children: React.ReactNode }) => <LayoutApp role="ADMIN_ETABLISSEMENT">{children}</LayoutApp>;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [soignants, setSoignants] = useState<SoignantPool[]>([]);
   const [historique, setHistorique] = useState<HistoriqueUrgence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,8 +85,9 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   const [filtreDispo, setFiltreDispo] = useState(false);
   const [filtreRayonMax, setFiltreRayonMax] = useState(50);
   const [filtreScoreMin, setFiltreScoreMin] = useState(0);
+  const [filtreHistorique, setFiltreHistorique] = useState<'TOUT' | 'POURVUES_MOIS'>('TOUT');
 
-  const etablissementId = isAdmin ? selectedEtablissementId : user?.id || '';
+  const etablissementId = isAdmin ? selectedEtablissementId : scopedEtablissementId || '';
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -109,6 +112,11 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     if (!etablissementId) return;
     loadData();
   }, [etablissementId]);
+
+  useEffect(() => {
+    if (searchParams.get('disponibles') === '1') setFiltreDispo(true);
+    if (searchParams.get('historique') === 'pourvues_mois') setFiltreHistorique('POURVUES_MOIS');
+  }, [searchParams]);
 
   const loadData = async () => {
     setLoading(true);
@@ -157,6 +165,15 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     const now = new Date();
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && h.statut === 'TERMINEE';
   }).length;
+
+  const historiqueAffiche = useMemo(() => {
+    if (filtreHistorique !== 'POURVUES_MOIS') return historique;
+    const now = new Date();
+    return historique.filter((h) => {
+      const d = new Date(h.debut_le);
+      return h.soignant_assigne_id && h.statut === 'TERMINEE' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+  }, [historique, filtreHistorique]);
 
   const alerterSoignant = async (s: SoignantPool) => {
     toast.success(`🚨 Alerte envoyée à ${s.prenom} ${s.nom}`);
@@ -356,7 +373,16 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
           <div className="cursor-pointer" onClick={() => { setFiltreDispo(true); }}>
             <CarteKPI icone={UserCheck} valeur={kpiDisponibles} label="Disponibles maintenant" couleurIcone="text-success" couleurFond="bg-success/10" />
           </div>
-          <CarteKPI icone={Trophy} valeur={kpiUrgencesMois} label="Urgences pourvues ce mois" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+          <div
+            className="cursor-pointer"
+            onClick={() => {
+              setFiltreHistorique('POURVUES_MOIS');
+              setSearchParams({ historique: 'pourvues_mois' }, { replace: true });
+              document.getElementById('historique-urgences')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          >
+            <CarteKPI icone={Trophy} valeur={kpiUrgencesMois} label="Urgences pourvues ce mois" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+          </div>
         </div>
 
         {/* Filters */}
@@ -521,11 +547,25 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
         {/* Historique urgences */}
         {historique.length > 0 && (
-          <div className="card-base">
-            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+          <div id="historique-urgences" className="card-base">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
               <Clock className="h-5 w-5 text-muted-foreground" />
               Historique des urgences
-            </h2>
+              </h2>
+              {filtreHistorique === 'POURVUES_MOIS' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFiltreHistorique('TOUT');
+                    setSearchParams({}, { replace: true });
+                  }}
+                >
+                  Voir tout l'historique
+                </Button>
+              )}
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -537,7 +577,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {historique.map((h) => {
+                {historiqueAffiche.map((h) => {
                   const delaiMin = h.soignant_assigne_id
                     ? Math.round((new Date(h.debut_le).getTime() - new Date(h.cree_le).getTime()) / 60000)
                     : null;

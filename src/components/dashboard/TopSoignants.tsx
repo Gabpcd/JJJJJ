@@ -14,11 +14,12 @@ interface TopSoignant {
 interface Props {
   soignants: TopSoignant[];
   etablissementId: string;
+  onSelectSoignant?: (soignantId: string) => void;
 }
 
-const medalColors = ['text-warning', 'text-muted-foreground', 'text-orange-600'];
+const medalColors = ['text-warning', 'text-muted-foreground', 'text-primary'];
 
-export function TopSoignants({ soignants, etablissementId }: Props) {
+export function TopSoignants({ soignants, etablissementId, onSelectSoignant }: Props) {
   if (soignants.length === 0) return null;
 
   return (
@@ -29,7 +30,11 @@ export function TopSoignants({ soignants, etablissementId }: Props) {
       </div>
       <div className="space-y-3">
         {soignants.map((s, i) => (
-          <div key={s.id} className="flex items-center gap-3">
+          <div
+            key={s.id}
+            className={`flex items-center gap-3 ${onSelectSoignant ? 'cursor-pointer rounded-lg px-1 py-1 hover:bg-muted/40 transition-colors' : ''}`}
+            onClick={onSelectSoignant ? () => onSelectSoignant(s.id) : undefined}
+          >
             <span className={`text-lg font-bold w-6 text-center ${medalColors[i] || 'text-muted-foreground'}`}>
               {i + 1}
             </span>
@@ -45,7 +50,9 @@ export function TopSoignants({ soignants, etablissementId }: Props) {
                 </span>
               </div>
             </div>
-            <BoutonFavori soignantId={s.id} etablissementId={etablissementId} />
+            <div onClick={(e) => e.stopPropagation()}>
+              <BoutonFavori soignantId={s.id} etablissementId={etablissementId} />
+            </div>
           </div>
         ))}
       </div>

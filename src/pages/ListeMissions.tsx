@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { Search, X } from 'lucide-react';
@@ -32,10 +32,14 @@ type GroupeMission = { type: 'single'; mission: any } | { type: 'serie'; serieId
 export default function ListeMissions() {
   usePageTitle('Mes missions');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [missions, setMissions] = useState<any[]>([]);
-  const [filtreStatut, setFiltreStatut] = useState('');
+  const statutParam = searchParams.get('statut') ?? '';
+  const periodeParam = searchParams.get('periode') === 'mois' ? 'mois' : '';
+  const [filtreStatut, setFiltreStatut] = useState(STATUTS_FILTRES.some((s) => s.valeur === statutParam) ? statutParam : '');
+  const [filtrePeriode, setFiltrePeriode] = useState(periodeParam);
   const [recherche, setRecherche] = useState('');
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -46,6 +50,8 @@ export default function ListeMissions() {
   const charger = async () => {
     if (!user) return;
     setLoading(true);
+    const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const finMois = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString();
 
     let query = supabase
       .from('missions')
@@ -54,6 +60,7 @@ export default function ListeMissions() {
       .order('debut_le', { ascending: false });
 
     if (filtreStatut) query = query.eq('statut', filtreStatut as any);
+    if (filtrePeriode === 'mois') query = query.gte('fin_le', debutMois).lt('fin_le', finMois);
     if (debouncedRecherche) query = query.ilike('intitule', `%${debouncedRecherche}%`);
 
     const [{ data }, { data: sgData }] = await Promise.all([
@@ -85,7 +92,20 @@ export default function ListeMissions() {
 
   const debouncedRecherche = useDebounce(recherche, 300);
 
+  useEffect(() => {
+    const nextStatut = STATUTS_FILTRES.some((s) => s.valeur === statutParam) ? statutParam : '';
+    if (nextStatut !== filtreStatut) setFiltreStatut(nextStatut);
+    if (periodeParam !== filtrePeriode) setFiltrePeriode(periodeParam);
+  }, [statutParam, periodeParam]);
+
   useEffect(() => { charger(); }, [user, filtreStatut, debouncedRecherche]);
+
+  const appliquerFiltres = (statut: string, periode: string) => {
+    const params = new URLSearchParams();
+    if (statut) params.set('statut', statut);
+    if (periode) params.set('periode', periode);
+    setSearchParams(params, { replace: true });
+  };
 
   // Group missions by serie
   const groupes = useMemo((): GroupeMission[] => {
@@ -154,7 +174,7 @@ export default function ListeMissions() {
       <div className="mb-4 overflow-x-auto">
         <div className="flex gap-2 pb-2">
           {STATUTS_FILTRES.map(s => (
-            <button key={s.valeur} onClick={() => setFiltreStatut(s.valeur)}
+            <button key={s.valeur} onClick={() => { setFiltreStatut(s.valeur); appliquerFiltres(s.valeur, filtrePeriode); }}
               className={`badge-base whitespace-nowrap transition-colors ${filtreStatut === s.valeur ? 'bg-primary text-primary-foreground font-semibold' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
               {s.label} ({counts[s.valeur] ?? 0})
             </button>

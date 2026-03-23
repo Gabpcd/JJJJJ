@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, TrendingUp, Download, Loader2, Target, DollarSign } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { BarChart3, Users, TrendingUp, Download, Loader2, Target, Coins } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
@@ -12,13 +12,15 @@ import { fr } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 const COUT_MOYEN_SECTEUR = 28;
 
 export default function DashboardRH() {
-  const { user } = useAuth();
+  const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [missions, setMissions] = useState<any[]>([]);
@@ -27,7 +29,7 @@ export default function DashboardRH() {
   const [etabNom, setEtabNom] = useState('');
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !etablissementId) return;
     const load = async () => {
       setLoading(true);
       const sixMonthsAgo = subMonths(new Date(), 6).toISOString();
@@ -35,8 +37,8 @@ export default function DashboardRH() {
       const [{ data: missionsData }, { data: soignantsData }, { data: allMissionsData }, { data: etabData }] = await Promise.all([
         supabase
           .from('missions')
-          .select('id, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_ifm, montant_icp, soignant_assigne_id, statut, montant_commission_ttc')
-          .eq('etablissement_id', user.id)
+          .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_ifm, montant_icp, soignant_assigne_id, statut, montant_commission_ttc')
+          .eq('etablissement_id', etablissementId)
           .eq('statut', 'TERMINEE')
           .gte('fin_le', sixMonthsAgo)
           .order('fin_le', { ascending: true }),
@@ -44,9 +46,9 @@ export default function DashboardRH() {
         supabase
           .from('missions')
           .select('id, statut, soignant_assigne_id, debut_le')
-          .eq('etablissement_id', user.id)
+          .eq('etablissement_id', etablissementId)
           .gte('cree_le', sixMonthsAgo),
-        supabase.from('etablissements').select('nom').eq('id', user.id).single(),
+        supabase.from('etablissements').select('nom').eq('id', etablissementId).single(),
       ]);
 
       const sgMap: Record<string, any> = {};
@@ -60,7 +62,14 @@ export default function DashboardRH() {
       setLoading(false);
     };
     load();
-  }, [user]);
+  }, [user, etablissementId]);
+
+  useEffect(() => {
+    if (loading) return;
+    const vue = searchParams.get('vue');
+    if (!vue) return;
+    document.getElementById(vue)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [loading, searchParams]);
 
   // Monthly cost data for chart
   const monthlyData = useMemo(() => {
@@ -121,6 +130,31 @@ export default function DashboardRH() {
     const coutMoyenHeure = totalHeures > 0 ? totalBrut / totalHeures : 0;
     return { missions: cm.length, heures: totalHeures, brut: totalBrut, coutMoyenHeure };
   }, [missions]);
+
+  const soignantsCeMois = useMemo(() => {
+    const start = startOfMonth(new Date());
+    const end = endOfMonth(new Date());
+    const map: Record<string, { id: string; heures: number; brut: number; missions: any[]; sg: any }> = {};
+
+    for (const mission of missions) {
+      const fin = new Date(mission.fin_le);
+      if (fin < start || fin > end || !mission.soignant_assigne_id) continue;
+      if (!map[mission.soignant_assigne_id]) {
+        map[mission.soignant_assigne_id] = {
+          id: mission.soignant_assigne_id,
+          heures: 0,
+          brut: 0,
+          missions: [],
+          sg: soignantMap[mission.soignant_assigne_id],
+        };
+      }
+      map[mission.soignant_assigne_id].heures += mission.duree_heures || 0;
+      map[mission.soignant_assigne_id].brut += mission.total_brut || 0;
+      map[mission.soignant_assigne_id].missions.push(mission);
+    }
+
+    return Object.values(map).sort((a, b) => b.missions.length - a.missions.length);
+  }, [missions, soignantMap]);
 
   // Forecast
   const previsionMois = useMemo(() => {
@@ -237,11 +271,11 @@ export default function DashboardRH() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}>
-          <DollarSign className="h-5 w-5 text-primary mx-auto mb-1" />
+          <Coins className="h-5 w-5 text-primary mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(currentMonth.brut)}</p>
           <p className="text-xs text-muted-foreground">Coût total ce mois</p>
         </div>
-        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/pool-urgence')}>
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/rh?vue=soignants-mois')}>
           <Users className="h-5 w-5 text-primary mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{new Set(missions.filter(m => {
             const fin = new Date(m.fin_le);
@@ -249,12 +283,12 @@ export default function DashboardRH() {
           }).map(m => m.soignant_assigne_id)).size}</p>
           <p className="text-xs text-muted-foreground">Soignants ce mois</p>
         </div>
-        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions')}>
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?periode=mois')}>
           <Target className="h-5 w-5 text-primary mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{tauxRemplissage}%</p>
           <p className="text-xs text-muted-foreground">Taux de remplissage</p>
         </div>
-        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/gestion-rh')}>
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/rh?vue=cout-moyen')}>
           <TrendingUp className="h-5 w-5 text-primary mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 1 }).format(currentMonth.coutMoyenHeure)}</p>
           <p className="text-xs text-muted-foreground">Coût moyen / heure</p>
@@ -269,7 +303,7 @@ export default function DashboardRH() {
             À ce rythme, votre budget staffing ce mois sera de <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(previsionMois)}</span>
           </p>
         </div>
-        <div className="card-base">
+        <div id="cout-moyen" className="card-base">
           <h3 className="font-semibold text-foreground mb-1">📊 Comparaison secteur</h3>
           <p className="text-sm text-muted-foreground">
             Votre coût moyen/heure : <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(currentMonth.coutMoyenHeure)}</span> — Moyenne du secteur : <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(COUT_MOYEN_SECTEUR)}</span>
@@ -281,6 +315,46 @@ export default function DashboardRH() {
             )}
           </p>
         </div>
+      </div>
+
+      <div id="soignants-mois" className="card-base mb-6">
+        <h2 className="text-lg font-bold text-foreground mb-4">Soignants différents ce mois</h2>
+        {soignantsCeMois.length > 0 ? (
+          <div className="space-y-3">
+            {soignantsCeMois.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => navigate(`/etablissement/soignants/${s.id}`)}
+                className="w-full rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/30"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-foreground">{s.sg?.prenom || 'Soignant'} {s.sg?.nom || ''}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {s.missions.length} mission{s.missions.length > 1 ? 's' : ''} · {s.heures.toFixed(1)}h · {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(s.brut)}
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium text-primary">Voir le profil →</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {s.missions.slice(0, 4).map((mission) => (
+                    <span key={mission.id} className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">
+                      {mission.intitule}
+                    </span>
+                  ))}
+                  {s.missions.length > 4 && (
+                    <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
+                      +{s.missions.length - 4} autres
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EtatVide icone={Users} titre="Aucun soignant ce mois" sousTitre="Les soignants affectés à vos missions apparaîtront ici." />
+        )}
       </div>
 
       {/* Chart */}
