@@ -135,7 +135,6 @@ serve(async (req) => {
     }
 
     const appUrl = getCorsOrigin(req);
-    const { embedded } = await req.clone().json().catch(() => ({ embedded: false }));
     
     console.log(`create-invoice-payment: creating checkout, amount=${facture.montant_ttc}, customer=${customerId}, embedded=${!!embedded}`);
 
