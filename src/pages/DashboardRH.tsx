@@ -266,7 +266,7 @@ export default function DashboardRH() {
         <div className="card-base">
           <h3 className="font-semibold text-foreground mb-1">📈 Prévision</h3>
           <p className="text-sm text-muted-foreground">
-            À ce rythme, votre budget staffing ce mois sera de <span className="font-bold text-foreground">{previsionMois.toFixed(0)} €</span>
+            À ce rythme, votre budget staffing ce mois sera de <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(previsionMois)}</span>
           </p>
         </div>
         <div className="card-base">
