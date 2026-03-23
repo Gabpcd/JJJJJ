@@ -152,7 +152,7 @@ export default function FacturationEtablissement() {
         throw new Error(data.error);
       }
       if (data?.url) {
-        window.open(data.url, '_blank');
+        window.location.assign(data.url);
       } else {
         throw new Error('URL de paiement non reçue');
       }
