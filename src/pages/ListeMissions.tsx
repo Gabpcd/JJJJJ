@@ -55,10 +55,11 @@ export default function ListeMissions() {
     const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
     const finMois = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString();
 
+    const etabId = etablissementId || user.id;
     let query = supabase
       .from('missions')
       .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
-      .eq('etablissement_id', user.id)
+      .eq('etablissement_id', etabId)
       .order('debut_le', { ascending: false });
 
     if (filtreStatut) query = query.eq('statut', filtreStatut as any);
