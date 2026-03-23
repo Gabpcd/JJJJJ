@@ -149,7 +149,7 @@ export default function ContratMission() {
 
       afficherNotification({ type: 'succes', message: 'Contrat signé avec succès !' });
       setShowCheckAnim(true);
-      const { data: updated } = await supabase.from('contrats_mission').select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, due_effectuee, due_effectuee_le').eq('id', contrat.id).single();
+      const { data: updated } = await supabase.from('contrats_mission').select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement').eq('id', contrat.id).single();
       setContrat(updated);
 
       // Check if both parties have now signed → send CONTRAT_SIGNE emails

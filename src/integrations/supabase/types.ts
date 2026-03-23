@@ -345,8 +345,8 @@ export type Database = {
         Row: {
           contenu_html: string | null
           cree_le: string | null
-          due_effectuee: boolean | null
-          due_effectuee_le: string | null
+          dpae_effectuee: boolean | null
+          dpae_effectuee_le: string | null
           etablissement_id: string
           id: string
           mission_id: string
@@ -354,8 +354,8 @@ export type Database = {
           modifie_le: string | null
           numero_contrat: string
           pdf_cle_s3: string | null
-          rappel_due_affiche: boolean | null
-          rappel_due_affiche_le: string | null
+          rappel_dpae_affiche: boolean | null
+          rappel_dpae_affiche_le: string | null
           signature_etablissement: boolean | null
           signature_etablissement_le: string | null
           signature_image_etablissement: string | null
@@ -375,8 +375,8 @@ export type Database = {
         Insert: {
           contenu_html?: string | null
           cree_le?: string | null
-          due_effectuee?: boolean | null
-          due_effectuee_le?: string | null
+          dpae_effectuee?: boolean | null
+          dpae_effectuee_le?: string | null
           etablissement_id: string
           id?: string
           mission_id: string
@@ -384,8 +384,8 @@ export type Database = {
           modifie_le?: string | null
           numero_contrat: string
           pdf_cle_s3?: string | null
-          rappel_due_affiche?: boolean | null
-          rappel_due_affiche_le?: string | null
+          rappel_dpae_affiche?: boolean | null
+          rappel_dpae_affiche_le?: string | null
           signature_etablissement?: boolean | null
           signature_etablissement_le?: string | null
           signature_image_etablissement?: string | null
@@ -405,8 +405,8 @@ export type Database = {
         Update: {
           contenu_html?: string | null
           cree_le?: string | null
-          due_effectuee?: boolean | null
-          due_effectuee_le?: string | null
+          dpae_effectuee?: boolean | null
+          dpae_effectuee_le?: string | null
           etablissement_id?: string
           id?: string
           mission_id?: string
@@ -414,8 +414,8 @@ export type Database = {
           modifie_le?: string | null
           numero_contrat?: string
           pdf_cle_s3?: string | null
-          rappel_due_affiche?: boolean | null
-          rappel_due_affiche_le?: string | null
+          rappel_dpae_affiche?: boolean | null
+          rappel_dpae_affiche_le?: string | null
           signature_etablissement?: boolean | null
           signature_etablissement_le?: string | null
           signature_image_etablissement?: string | null

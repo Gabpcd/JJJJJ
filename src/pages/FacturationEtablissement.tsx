@@ -12,6 +12,7 @@ import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
 import { BadgePalier } from '@/components/BadgePalier';
 import { FactureChorus, ChorusStatutBadge } from '@/components/FactureChorus';
 import { PaiementVirement } from '@/components/PaiementVirement';
+import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -55,6 +56,7 @@ export default function FacturationEtablissement() {
   const [prelevements, setPrelevements] = useState<any[]>([]);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
   const [filtreStatut, setFiltreStatut] = useState<string | null>(searchParams.get('filtre'));
+  const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
 
   // Detect payment success from URL
   useEffect(() => {
@@ -137,45 +139,8 @@ export default function FacturationEtablissement() {
     }
   };
 
-  const payerParCarte = async (facture: any) => {
-    const paymentWindow = window.open('', '_blank');
-
-    if (paymentWindow) {
-      paymentWindow.document.write('<p style="font-family: sans-serif; padding: 24px;">Redirection vers le paiement sécurisé…</p>');
-      paymentWindow.document.close();
-    }
-
-    setPayingId(facture.id);
-    try {
-      const { data, error } = await supabase.functions.invoke('create-invoice-payment', {
-        body: { facture_id: facture.id },
-      });
-
-      if (error) {
-        console.error('[Facturation] create-invoice-payment error:', error);
-        throw new Error(typeof error === 'object' && error.message ? error.message : 'Erreur lors du paiement');
-      }
-
-      if (data?.error) {
-        console.error('[Facturation] create-invoice-payment payload error:', data.error);
-        throw new Error(data.error);
-      }
-
-      if (!data?.url) {
-        throw new Error('URL de paiement non reçue');
-      }
-
-      if (paymentWindow) {
-        paymentWindow.location.href = data.url;
-      } else {
-        window.location.href = data.url;
-      }
-    } catch (err: any) {
-      if (paymentWindow && !paymentWindow.closed) paymentWindow.close();
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-    } finally {
-      setPayingId(null);
-    }
+  const payerParCarte = (facture: any) => {
+    setCheckoutFactureId(facture.id);
   };
 
   const rafraichirStatut = async (factureId: string) => {
@@ -450,6 +415,15 @@ export default function FacturationEtablissement() {
             ))}
           </div>
         </div>
+      )}
+
+      {checkoutFactureId && (
+        <StripeEmbeddedCheckout
+          factureId={checkoutFactureId}
+          open={!!checkoutFactureId}
+          onClose={() => setCheckoutFactureId(null)}
+          onComplete={() => { setCheckoutFactureId(null); charger(); }}
+        />
       )}
     </LayoutApp>
   );

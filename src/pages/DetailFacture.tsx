@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -26,6 +27,7 @@ export default function DetailFacture() {
   const [facture, setFacture] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [etab, setEtab] = useState<any>(null);
+  const [showCheckout, setShowCheckout] = useState(false);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -44,41 +46,9 @@ export default function DetailFacture() {
     });
   }, [user, id]);
 
-  const payerParCarte = async () => {
+  const payerParCarte = () => {
     if (!facture) return;
-
-    const paymentWindow = window.open('', '_blank');
-    if (paymentWindow) {
-      paymentWindow.document.write('<p style="font-family: sans-serif; padding: 24px;">Redirection vers le paiement sécurisé…</p>');
-      paymentWindow.document.close();
-    }
-
-    setPaying(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('create-invoice-payment', {
-        body: { facture_id: facture.id },
-      });
-      if (error) {
-        throw new Error(typeof error === 'object' && error.message ? error.message : 'Erreur lors du paiement');
-      }
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-      if (!data?.url) {
-        throw new Error('URL de paiement non reçue');
-      }
-
-      if (paymentWindow) {
-        paymentWindow.location.href = data.url;
-      } else {
-        window.location.href = data.url;
-      }
-    } catch (err: any) {
-      if (paymentWindow && !paymentWindow.closed) paymentWindow.close();
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-    } finally {
-      setPaying(false);
-    }
+    setShowCheckout(true);
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
@@ -206,6 +176,15 @@ export default function DetailFacture() {
           <p>Facture générée automatiquement — Commission sur missions terminées</p>
         </div>
       </div>
+
+      {showCheckout && facture && (
+        <StripeEmbeddedCheckout
+          factureId={facture.id}
+          open={showCheckout}
+          onClose={() => setShowCheckout(false)}
+          onComplete={() => { setShowCheckout(false); window.location.reload(); }}
+        />
+      )}
     </LayoutApp>
   );
 }
