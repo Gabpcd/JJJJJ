@@ -216,6 +216,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         setNbCandidatures(count || 0);
       }
 
+      // Check if soignant has Connect account
+      if (m && m.soignant_assigne_id && (m as any).statut === 'TERMINEE') {
+        const { data: connectData } = await supabase
+          .from('stripe_connect_onboarding')
+          .select('statut')
+          .eq('soignant_id', m.soignant_assigne_id)
+          .maybeSingle();
+        setSoignantHasConnect(connectData?.statut === 'COMPLET');
+      }
+
       setLoading(false);
     };
     load();
