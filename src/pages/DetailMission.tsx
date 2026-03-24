@@ -674,6 +674,19 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           onTermine={() => setShowEvaluation(false)}
         />
       )}
+
+      {showConnectCheckout && connectClientSecret && (
+        <StripeEmbeddedCheckout
+          factureId={m.id}
+          open={showConnectCheckout}
+          onClose={() => setShowConnectCheckout(false)}
+          onComplete={() => {
+            setShowConnectCheckout(false);
+            toast.success('Paiement effectué ! Le soignant recevra son salaire via Stripe.');
+            window.location.reload();
+          }}
+        />
+      )}
     </LayoutApp>
   );
 }
