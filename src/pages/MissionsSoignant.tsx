@@ -54,6 +54,23 @@ export default function MissionsSoignant() {
       .eq('id', user.id).single()
       .then(({ data }) => { if (data) setSoignant(data as any); });
 
+    // Vérifier si la RCP est expirée
+    supabase.from('documents_soignants')
+      .select('statut_verification, valide_jusqua')
+      .eq('soignant_id', user.id)
+      .eq('type_document', 'RCP_ASSURANCE')
+      .order('televerse_le', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (!data || data.length === 0) {
+          setRcpExpiree(true);
+        } else {
+          const doc = data[0];
+          const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
+          setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
+        }
+      });
+
     // M6: Compteur heures planifiées cette semaine
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
     const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
