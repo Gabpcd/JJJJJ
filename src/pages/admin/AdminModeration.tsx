@@ -88,6 +88,7 @@ export default function AdminModeration() {
   const [litiges, setLitiges] = useState<LitigeEnrichi[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [incoherences, setIncoherences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLitigeId, setActionLitigeId] = useState<string | null>(null);
 
