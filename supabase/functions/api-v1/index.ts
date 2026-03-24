@@ -29,7 +29,7 @@ serve(async (req) => {
       if (etabId) query = query.eq("etablissement_id", etabId);
       if (statut) query = query.eq("statut", statut);
       const { data, error } = await query.order("debut_le", { ascending: false }).limit(100);
-      if (error) return new Response(JSON.stringify({ error: "Erreur requête", detail: error.message }), { status: 500, headers: corsHeaders });
+      if (error) { console.error("api-v1 GET /missions error:", error.message); return new Response(JSON.stringify({ error: "Erreur requête" }), { status: 500, headers: corsHeaders }); }
       return new Response(JSON.stringify({ missions: data, count: data?.length }), { headers: corsHeaders });
     }
 
@@ -46,7 +46,7 @@ serve(async (req) => {
         fin_le: body.fin_le,
         taux_horaire_base: body.taux_horaire_base,
       }).select("id, intitule, statut").single();
-      if (error) return new Response(JSON.stringify({ error: "Erreur création", detail: error.message }), { status: 500, headers: corsHeaders });
+      if (error) { console.error("api-v1 POST /missions error:", error.message); return new Response(JSON.stringify({ error: "Erreur création" }), { status: 500, headers: corsHeaders }); }
       return new Response(JSON.stringify({ mission: data }), { status: 201, headers: corsHeaders });
     }
 
@@ -77,6 +77,6 @@ serve(async (req) => {
       documentation: "https://app.jolene.app/admin/api"
     }), { status: 404, headers: corsHeaders });
   } catch (e) {
-    return new Response(JSON.stringify({ error: "Erreur interne", detail: String(e) }), { status: 500, headers: corsHeaders });
+    console.error("api-v1 error:", e); return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: corsHeaders });
   }
 });

@@ -304,7 +304,7 @@ Analyse ce document et vérifie sa conformité.`;
   } catch (e) {
     console.error("verify-document error:", e);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      JSON.stringify({ error: "Une erreur interne est survenue." }),
       { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }

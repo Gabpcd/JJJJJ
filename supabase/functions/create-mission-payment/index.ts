@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "npm:stripe@18.5.0";
-import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -200,7 +200,7 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error("Erreur create-mission-payment:", error instanceof Error ? error.message : error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Erreur interne" }),
+      JSON.stringify({ error: "Une erreur interne est survenue." }),
       { headers: { ...corsHeaders(req), "Content-Type": "application/json" }, status: 500 }
     );
   }

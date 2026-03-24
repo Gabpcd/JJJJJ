@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "npm:stripe@18.5.0";
-import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 async function findMatchingPaymentIntent(
   stripe: Stripe,
@@ -249,9 +249,8 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error("Erreur create-invoice-payment:", msg);
-    return new Response(JSON.stringify({ error: msg }), {
+    console.error("Erreur create-invoice-payment:", error instanceof Error ? error.message : error);
+    return new Response(JSON.stringify({ error: "Une erreur interne est survenue." }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       status: 500,
     });
