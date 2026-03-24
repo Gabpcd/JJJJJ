@@ -209,7 +209,7 @@ export default function AdminFacturation() {
   const charger = async () => {
     setLoading(true);
     const { data } = await supabase.from('factures')
-      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, etablissements(nom)')
+      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
       .order('date_emission', { ascending: false })
       .limit(500);
     if (data) setFactures(data);
