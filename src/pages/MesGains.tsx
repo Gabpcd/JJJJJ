@@ -10,6 +10,7 @@ import { GraphiqueGains6Mois } from '@/components/GraphiqueGains6Mois';
 import { ModalAttestation } from '@/components/ModalAttestation';
 import { ModalCotisations } from '@/components/ModalCotisations';
 import { useAuth } from '@/contexts/AuthContext';
+import { BandeauPaiementDeclare } from '@/components/BandeauPaiementDeclare';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -105,6 +106,8 @@ export default function MesGains() {
         <h1 className="text-xl font-bold text-foreground">💰 Mes gains</h1>
         <p className="text-sm text-muted-foreground mt-1">Visualisez vos revenus en un coup d'œil</p>
       </div>
+
+      <BandeauPaiementDeclare />
 
       {/* KPIs en haut */}
       <div className="grid grid-cols-2 gap-3 mb-6">

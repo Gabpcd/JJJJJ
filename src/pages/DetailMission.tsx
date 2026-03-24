@@ -18,6 +18,7 @@ import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 import { BoutonFavori } from '@/components/BoutonFavori';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
+import { WorkflowPaiementMission } from '@/components/WorkflowPaiementMission';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -451,41 +452,29 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   )}
                 </div>
               )}
-              {/* Stripe Connect payment button */}
-              {!isAdmin && m.statut === 'TERMINEE' && soignantHasConnect && (
-                <div className="card-base border-primary/20 space-y-3">
-                  <p className="text-sm font-semibold text-foreground">💳 Payer via Stripe (commission + salaire)</p>
-                  {connectDecomposition && (
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      <p>Commission Jolene : {connectDecomposition.commission_ttc.toFixed(2)} €</p>
-                      <p>Salaire soignant : {connectDecomposition.salaire_brut.toFixed(2)} €</p>
-                      <p className="font-semibold text-foreground">Total : {connectDecomposition.total.toFixed(2)} €</p>
-                    </div>
-                  )}
-                  <Button
-                    size="sm"
-                    disabled={connectPayLoading}
-                    onClick={async () => {
-                      setConnectPayLoading(true);
-                      const { data, error: fnErr } = await supabase.functions.invoke('stripe-connect-pay-mission', {
-                        body: { mission_id: m.id },
-                      });
-                      if (fnErr || !data?.client_secret) {
-                        toast.error(data?.error || 'Erreur lors du paiement');
-                        setConnectPayLoading(false);
-                        return;
-                      }
-                      setConnectClientSecret(data.client_secret);
-                      setConnectDecomposition({ commission_ttc: data.commission_ttc, salaire_brut: data.salaire_brut, total: data.total });
-                      setShowConnectCheckout(true);
+              {/* Workflow paiement mission */}
+              {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && (
+                <WorkflowPaiementMission
+                  missionId={m.id}
+                  soignantAssigneId={m.soignant_assigne_id}
+                  etablissementId={m.etablissement_id}
+                  soignantHasConnect={soignantHasConnect}
+                  onStartConnectPay={async () => {
+                    setConnectPayLoading(true);
+                    const { data, error: fnErr } = await supabase.functions.invoke('stripe-connect-pay-mission', {
+                      body: { mission_id: m.id },
+                    });
+                    if (fnErr || !data?.client_secret) {
+                      toast.error(data?.error || 'Erreur lors du paiement');
                       setConnectPayLoading(false);
-                    }}
-                    className="gap-2"
-                  >
-                    {connectPayLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                    Payer commission + salaire
-                  </Button>
-                </div>
+                      return;
+                    }
+                    setConnectClientSecret(data.client_secret);
+                    setConnectDecomposition({ commission_ttc: data.commission_ttc, salaire_brut: data.salaire_brut, total: data.total });
+                    setShowConnectCheckout(true);
+                    setConnectPayLoading(false);
+                  }}
+                />
               )}
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <CodesPointageMission missionId={m.id} />
