@@ -156,7 +156,7 @@ serve(async (req) => {
   }
 
   try {
-    const { numero_rpps, rpps, prenom, nom } = await req.json();
+    const { numero_rpps, rpps, prenom, nom, soignant_id } = await req.json();
     const numeroRpps = String(numero_rpps || rpps || '').trim();
 
     if (!numeroRpps || !/^\d{11}$/.test(numeroRpps)) {
