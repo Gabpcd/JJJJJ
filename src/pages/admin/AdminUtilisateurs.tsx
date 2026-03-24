@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Eye, Ban, RefreshCw, Mail, Phone } from 'lucide-react';
+import { Search, Eye, Ban, RefreshCw, Mail, Phone, ShieldCheck, ShieldX, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -31,7 +31,7 @@ export default function AdminUtilisateurs() {
         .limit(500),
       supabase
         .from('etablissements')
-        .select('id, nom, type, siret, email_contact, telephone_contact, supprime_le')
+        .select('id, nom, type, siret, email_contact, telephone_contact, supprime_le, statut_verification, siret_verifie, siret_raison_sociale, siret_code_naf, peut_publier_missions, cree_le')
         .order('cree_le', { ascending: false })
         .limit(500),
     ]);
@@ -61,6 +61,10 @@ export default function AdminUtilisateurs() {
     );
   }, [etabs, recherche]);
 
+  const etabsEnAttente = useMemo(() =>
+    etabs.filter(e => e.statut_verification === 'EN_ATTENTE' && !e.supprime_le),
+  [etabs]);
+
   const suspendre = async (table: string, id: string) => {
     const { error } = await supabase.from(table as any).update({ supprime_le: new Date().toISOString() } as any).eq('id', id);
     if (error) {
@@ -81,6 +85,35 @@ export default function AdminUtilisateurs() {
     charger();
   };
 
+  const validerEtablissement = async (id: string) => {
+    const { error } = await supabase.from('etablissements').update({
+      statut_verification: 'VERIFIE',
+      peut_publier_missions: true,
+      verifie_le: new Date().toISOString(),
+    } as any).eq('id', id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success('Établissement validé — peut publier des missions');
+    charger();
+  };
+
+  const rejeterEtablissement = async (id: string) => {
+    const motif = prompt('Motif du rejet (optionnel) :');
+    const { error } = await supabase.from('etablissements').update({
+      statut_verification: 'REJETE',
+      peut_publier_missions: false,
+      motif_rejet: motif || 'Non conforme',
+    } as any).eq('id', id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success('Établissement rejeté');
+    charger();
+  };
+
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   return (
@@ -88,6 +121,41 @@ export default function AdminUtilisateurs() {
       <BreadcrumbAdmin pageName="Utilisateurs" />
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Gestion utilisateurs</h1>
+
+        {/* Bandeau établissements en attente */}
+        {etabsEnAttente.length > 0 && (
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="h-5 w-5 text-amber-600" />
+              <h2 className="font-bold text-amber-800 dark:text-amber-300">
+                {etabsEnAttente.length} établissement{etabsEnAttente.length > 1 ? 's' : ''} en attente de vérification
+              </h2>
+            </div>
+            <div className="space-y-2">
+              {etabsEnAttente.map(e => (
+                <div key={e.id} className="flex items-center justify-between bg-card rounded-lg p-3 border">
+                  <div>
+                    <p className="font-medium text-foreground">{e.nom}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{e.siret} · {e.type}</p>
+                    {e.siret_raison_sociale && <p className="text-xs text-muted-foreground">INSEE: {e.siret_raison_sociale}</p>}
+                    {e.siret_code_naf && <p className="text-xs text-muted-foreground">NAF: {e.siret_code_naf}</p>}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white">
+                      <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => rejeterEtablissement(e.id)}>
+                      <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}>
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -166,6 +234,7 @@ export default function AdminUtilisateurs() {
                     <TableHead>Nom</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>SIRET</TableHead>
+                    <TableHead>Vérification</TableHead>
                     <TableHead>Statut</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -176,8 +245,33 @@ export default function AdminUtilisateurs() {
                       <TableCell className="font-medium">{e.nom}</TableCell>
                       <TableCell>{e.type}</TableCell>
                       <TableCell className="font-mono text-xs">{e.siret}</TableCell>
+                      <TableCell>
+                        {e.statut_verification === 'VERIFIE' ? (
+                          <Badge className="bg-success text-success-foreground text-[10px]">
+                            <ShieldCheck className="h-3 w-3 mr-1" />Vérifié
+                          </Badge>
+                        ) : e.statut_verification === 'REJETE' ? (
+                          <Badge variant="destructive" className="text-[10px]">
+                            <ShieldX className="h-3 w-3 mr-1" />Rejeté
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-amber-600 border-amber-300 text-[10px]">
+                            <Clock className="h-3 w-3 mr-1" />En attente
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell>{e.supprime_le ? <Badge variant="destructive" className="text-[10px]">Suspendu</Badge> : <Badge className="bg-success text-success-foreground text-[10px]">Actif</Badge>}</TableCell>
                       <TableCell className="text-right space-x-1 whitespace-nowrap">
+                        {e.statut_verification === 'EN_ATTENTE' && (
+                          <>
+                            <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white">
+                              <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
+                            </Button>
+                            <Button size="sm" variant="destructive" onClick={() => rejeterEtablissement(e.id)}>
+                              <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
+                            </Button>
+                          </>
+                        )}
                         {e.email_contact && (
                           <Button asChild size="sm" variant="outline">
                             <a href={`mailto:${e.email_contact}`}>

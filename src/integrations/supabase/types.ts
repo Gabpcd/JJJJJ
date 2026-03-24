@@ -912,7 +912,10 @@ export type Database = {
           cree_le: string | null
           delai_paiement_jours: number | null
           email_contact: string
+          est_secteur_public: boolean | null
           finess: string | null
+          finess_verifie: boolean | null
+          finess_verifie_le: string | null
           formule_abonnement: string | null
           groupe_sante_id: string | null
           id: string
@@ -921,12 +924,21 @@ export type Database = {
           mode_facturation: string | null
           mode_paiement_commission: string | null
           modifie_le: string | null
+          motif_rejet: string | null
           nom: string
           palier_commission_id: string | null
           palier_recalcule_le: string | null
+          peut_publier_missions: boolean | null
           rist_plafond_actif: boolean | null
           rist_taux_base_horaire: number | null
           siret: string
+          siret_categorie_juridique: string | null
+          siret_code_naf: string | null
+          siret_est_actif: boolean | null
+          siret_raison_sociale: string | null
+          siret_verifie: boolean | null
+          siret_verifie_le: string | null
+          statut_verification: string | null
           stripe_account_id: string | null
           stripe_customer_id: string | null
           supprime_le: string | null
@@ -936,6 +948,8 @@ export type Database = {
           taux_majoration_nuit_pourcent: number | null
           telephone_contact: string | null
           type: Database["public"]["Enums"]["type_etablissement"]
+          verifie_le: string | null
+          verifie_par: string | null
         }
         Insert: {
           adresse_code_postal: string
@@ -954,7 +968,10 @@ export type Database = {
           cree_le?: string | null
           delai_paiement_jours?: number | null
           email_contact: string
+          est_secteur_public?: boolean | null
           finess?: string | null
+          finess_verifie?: boolean | null
+          finess_verifie_le?: string | null
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
           id?: string
@@ -963,12 +980,21 @@ export type Database = {
           mode_facturation?: string | null
           mode_paiement_commission?: string | null
           modifie_le?: string | null
+          motif_rejet?: string | null
           nom: string
           palier_commission_id?: string | null
           palier_recalcule_le?: string | null
+          peut_publier_missions?: boolean | null
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
           siret: string
+          siret_categorie_juridique?: string | null
+          siret_code_naf?: string | null
+          siret_est_actif?: boolean | null
+          siret_raison_sociale?: string | null
+          siret_verifie?: boolean | null
+          siret_verifie_le?: string | null
+          statut_verification?: string | null
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
           supprime_le?: string | null
@@ -978,6 +1004,8 @@ export type Database = {
           taux_majoration_nuit_pourcent?: number | null
           telephone_contact?: string | null
           type: Database["public"]["Enums"]["type_etablissement"]
+          verifie_le?: string | null
+          verifie_par?: string | null
         }
         Update: {
           adresse_code_postal?: string
@@ -996,7 +1024,10 @@ export type Database = {
           cree_le?: string | null
           delai_paiement_jours?: number | null
           email_contact?: string
+          est_secteur_public?: boolean | null
           finess?: string | null
+          finess_verifie?: boolean | null
+          finess_verifie_le?: string | null
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
           id?: string
@@ -1005,12 +1036,21 @@ export type Database = {
           mode_facturation?: string | null
           mode_paiement_commission?: string | null
           modifie_le?: string | null
+          motif_rejet?: string | null
           nom?: string
           palier_commission_id?: string | null
           palier_recalcule_le?: string | null
+          peut_publier_missions?: boolean | null
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
           siret?: string
+          siret_categorie_juridique?: string | null
+          siret_code_naf?: string | null
+          siret_est_actif?: boolean | null
+          siret_raison_sociale?: string | null
+          siret_verifie?: boolean | null
+          siret_verifie_le?: string | null
+          statut_verification?: string | null
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
           supprime_le?: string | null
@@ -1020,6 +1060,8 @@ export type Database = {
           taux_majoration_nuit_pourcent?: number | null
           telephone_contact?: string | null
           type?: Database["public"]["Enums"]["type_etablissement"]
+          verifie_le?: string | null
+          verifie_par?: string | null
         }
         Relationships: [
           {
@@ -3763,6 +3805,10 @@ export type Database = {
       fn_user_id_pour_etablissement: {
         Args: { p_etablissement_id: string }
         Returns: string
+      }
+      fn_valider_etablissement: {
+        Args: { p_etablissement_id: string; p_motif?: string; p_statut: string }
+        Returns: Json
       }
       fn_valider_presence: { Args: { p_presence_id: string }; Returns: Json }
       fn_valider_presences_lot: { Args: { p_ids: string[] }; Returns: Json }
