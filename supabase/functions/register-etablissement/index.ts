@@ -112,6 +112,52 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
+    // 2a. Verify SIRET against INSEE registry
+    let siretVerification: any = null;
+    try {
+      const rechercheUrl = `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&mtm_campaign=jolene`;
+      const verifyResp = await fetch(rechercheUrl, { headers: { 'Accept': 'application/json' } });
+      if (verifyResp.ok) {
+        const verifyData = await verifyResp.json();
+        const results = verifyData.results || [];
+        let matching: any = null;
+        let matchingEtab: any = null;
+        for (const r of results) {
+          if (r.matching_etablissements) {
+            for (const e of r.matching_etablissements) {
+              if (e.siret === siret) { matching = r; matchingEtab = e; break; }
+            }
+          }
+          if (matching) break;
+          if (r.siege?.siret === siret) { matching = r; matchingEtab = r.siege; break; }
+        }
+        if (matching) {
+          const NAF_SANTE = ['86.10Z','86.21Z','86.22A','86.22B','86.22C','86.23Z','86.90A','86.90B','86.90C','86.90D','86.90E','86.90F','87.10A','87.10B','87.10C','87.20A','87.20B','87.30A','87.30B','87.90A','87.90B','88.10A','88.10B','88.10C','47.73Z'];
+          const codeNaf = matchingEtab?.activite_principale || matching.activite_principale || '';
+          const nafNorm = codeNaf.length === 5 ? `${codeNaf.slice(0,2)}.${codeNaf.slice(2)}` : codeNaf;
+          const estActif = matchingEtab?.etat_administratif === 'A';
+          const estSante = NAF_SANTE.includes(nafNorm);
+          const catJuridique = matching.nature_juridique || '';
+          const estPublic = catJuridique.startsWith('7') || catJuridique.startsWith('4');
+
+          siretVerification = {
+            raison_sociale: matching.nom_raison_sociale || matching.nom_complet || null,
+            est_actif: estActif,
+            est_sante: estSante,
+            est_public: estPublic,
+            code_naf: codeNaf,
+            categorie_juridique: catJuridique,
+          };
+        }
+      }
+    } catch (verifyErr) {
+      console.warn('SIRET verification failed (non-blocking):', verifyErr);
+    }
+
+    // Determine auto-verification status
+    const autoVerifie = siretVerification?.est_actif && siretVerification?.est_sante;
+    const statutVerification = autoVerifie ? 'VERIFIE' : 'EN_ATTENTE';
+
     // 2. Insert into etablissements table
     const insertPayload = {
       id: user.id,
@@ -127,6 +173,15 @@ serve(async (req) => {
       telephone_contact: telephone_contact || null,
       adresse_lat: adresse_lat || null,
       adresse_lng: adresse_lng || null,
+      siret_verifie: autoVerifie || false,
+      siret_verifie_le: autoVerifie ? new Date().toISOString() : null,
+      siret_est_actif: siretVerification?.est_actif ?? null,
+      siret_code_naf: siretVerification?.code_naf ?? null,
+      siret_raison_sociale: siretVerification?.raison_sociale ?? null,
+      siret_categorie_juridique: siretVerification?.categorie_juridique ?? null,
+      est_secteur_public: siretVerification?.est_public ?? false,
+      statut_verification: statutVerification,
+      peut_publier_missions: autoVerifie || false,
     };
 
     const { error: insertError } = await supabaseAdmin

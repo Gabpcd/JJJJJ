@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleError } from '@/lib/handleError';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
+import { supabase } from '@/integrations/supabase/client';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
   const [asked, setAsked] = useState(false);
@@ -19,6 +20,18 @@ function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => voi
     );
   }, [asked, onResult]);
   return null;
+}
+
+interface SiretInseeResult {
+  statut: 'VERIFIE' | 'ALERTE' | 'INTROUVABLE';
+  raison_sociale: string | null;
+  est_actif: boolean;
+  est_sante: boolean;
+  est_public: boolean;
+  code_naf: string | null;
+  libelle_naf: string | null;
+  categorie_juridique: string | null;
+  message: string;
 }
 
 export default function InscriptionEtablissement() {
@@ -41,17 +54,59 @@ export default function InscriptionEtablissement() {
   });
 
   const [siretValidation, setSiretValidation] = useState<{ valide: boolean; message: string } | null>(null);
+  const [inseeCheck, setInseeCheck] = useState<SiretInseeResult | null>(null);
+  const [inseeLoading, setInseeLoading] = useState(false);
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
   const siretEstValide = siretValidation?.valide === true;
   const etape2Valide = form.nom && siretEstValide && form.type && form.ville;
 
+  const verifierSiretInsee = useCallback(async (siret: string) => {
+    if (siret.length !== 14) return;
+    const luhn = validerSiret(siret);
+    if (!luhn.valide) return;
+
+    setInseeLoading(true);
+    setInseeCheck(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-siret', {
+        body: { siret },
+      });
+      if (error) throw error;
+      setInseeCheck(data as SiretInseeResult);
+      // Auto-fill nom if empty and we got a raison sociale
+      if (data?.raison_sociale && !form.nom) {
+        maj('nom', data.raison_sociale);
+      }
+    } catch (err) {
+      console.warn('Vérification INSEE échouée:', err);
+      setInseeCheck({
+        statut: 'ALERTE',
+        raison_sociale: null,
+        est_actif: false,
+        est_sante: false,
+        est_public: false,
+        code_naf: null,
+        libelle_naf: null,
+        categorie_juridique: null,
+        message: 'Service de vérification temporairement indisponible',
+      });
+    } finally {
+      setInseeLoading(false);
+    }
+  }, [form.nom]);
+
   const handleSiretBlur = () => {
     if (form.siret.length > 0) {
-      setSiretValidation(validerSiret(form.siret));
+      const result = validerSiret(form.siret);
+      setSiretValidation(result);
+      if (result.valide) {
+        verifierSiretInsee(form.siret);
+      }
     } else {
       setSiretValidation(null);
+      setInseeCheck(null);
     }
   };
 
@@ -60,7 +115,12 @@ export default function InscriptionEtablissement() {
     setSubmitting(true);
     try {
       await inscriptionEtablissement(form);
-      afficherNotification({ type: 'succes', message: 'Établissement créé avec succès !' });
+      const autoVerifie = inseeCheck?.statut === 'VERIFIE';
+      if (autoVerifie) {
+        afficherNotification({ type: 'succes', message: 'Établissement créé et vérifié automatiquement ! Vous pouvez publier des missions.' });
+      } else {
+        afficherNotification({ type: 'info', message: 'Inscription réussie ! Votre compte est en attente de validation par Jolene (24-48h).', duree: 10000 });
+      }
       navigate('/etablissement/tableau-de-bord');
     } catch (err) {
       handleError(err, 'inscription établissement');
@@ -125,14 +185,45 @@ export default function InscriptionEtablissement() {
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">SIRET * (14 chiffres)</label>
                   <div className="relative">
-                    <input value={form.siret} onChange={e => { maj('siret', e.target.value.replace(/\D/g, '').slice(0, 14)); setSiretValidation(null); }} onBlur={handleSiretBlur} className={`input-base pr-10 ${siretValidation && !siretValidation.valide ? 'border-destructive' : ''} ${siretEstValide ? 'border-green-500' : ''}`} required />
-                    {siretEstValide && <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />}
-                    {siretValidation && !siretValidation.valide && <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />}
+                    <input value={form.siret} onChange={e => { maj('siret', e.target.value.replace(/\D/g, '').slice(0, 14)); setSiretValidation(null); setInseeCheck(null); }} onBlur={handleSiretBlur} className={`input-base pr-10 ${siretValidation && !siretValidation.valide ? 'border-destructive' : ''} ${siretEstValide ? 'border-green-500' : ''}`} required />
+                    {inseeLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />}
+                    {!inseeLoading && siretEstValide && <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />}
+                    {!inseeLoading && siretValidation && !siretValidation.valide && <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />}
                   </div>
                   {siretValidation && !siretValidation.valide && <p className="text-xs text-destructive mt-1">{siretValidation.message}</p>}
                 </div>
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">{form.type === 'PHARMACIE_OFFICINE' ? 'N° Licence' : 'FINESS (9 chiffres)'}</label><input value={form.type === 'PHARMACIE_OFFICINE' ? form.numeroLicence : form.finess} onChange={e => form.type === 'PHARMACIE_OFFICINE' ? maj('numeroLicence', e.target.value) : maj('finess', e.target.value.replace(/\D/g, '').slice(0, 9))} className="input-base" /></div>
               </div>
+
+              {/* Résultat vérification INSEE */}
+              {inseeCheck && (
+                <div className={`rounded-lg border p-3 flex items-start gap-3 ${
+                  inseeCheck.statut === 'VERIFIE' ? 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800' :
+                  inseeCheck.statut === 'ALERTE' ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800' :
+                  'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800'
+                }`}>
+                  {inseeCheck.statut === 'VERIFIE' && <ShieldCheck className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />}
+                  {inseeCheck.statut === 'ALERTE' && <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />}
+                  {inseeCheck.statut === 'INTROUVABLE' && <ShieldX className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />}
+                  <div>
+                    <p className={`text-sm font-medium ${
+                      inseeCheck.statut === 'VERIFIE' ? 'text-green-800 dark:text-green-300' :
+                      inseeCheck.statut === 'ALERTE' ? 'text-amber-800 dark:text-amber-300' :
+                      'text-red-800 dark:text-red-300'
+                    }`}>{inseeCheck.message}</p>
+                    {inseeCheck.statut === 'VERIFIE' && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">✅ Votre établissement pourra publier des missions immédiatement.</p>
+                    )}
+                    {inseeCheck.statut === 'ALERTE' && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">🟡 Votre inscription sera en attente de validation par Jolene (24-48h).</p>
+                    )}
+                    {inseeCheck.statut === 'INTROUVABLE' && (
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">❌ Veuillez vérifier votre numéro SIRET. Vous pouvez tout de même vous inscrire, une vérification manuelle sera effectuée.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Type d'établissement *</label><SelectTypeEtablissement value={form.type} onChange={v => maj('type', v)} /></div>
               {form.type !== 'PHARMACIE_OFFICINE' && (
                 <p className="text-xs text-muted-foreground">ℹ️ Le plafond Loi Rist s'applique aux taux horaires en CDDU.</p>

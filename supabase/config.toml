@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.confirm-invoice-payment]
 verify_jwt = false
+
+[functions.verify-siret]
+verify_jwt = false
