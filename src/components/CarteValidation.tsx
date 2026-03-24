@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle, Scale } from 'lucide-react';
+import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle, Scale, Eye } from 'lucide-react';
 import { BadgeCertification } from './BadgeCertification';
 import { PanneauContestation } from './PanneauContestation';
 
@@ -13,6 +14,7 @@ interface CarteValidationProps {
 }
 
 export function CarteValidation({ presence, onValider, onContester, onOuvrirLitige }: CarteValidationProps) {
+  const navigate = useNavigate();
   const [motifLitige, setMotifLitige] = useState('');
   const [showContester, setShowContester] = useState(false);
   const [showContact, setShowContact] = useState(false);
@@ -50,12 +52,27 @@ export function CarteValidation({ presence, onValider, onContester, onOuvrirLiti
           <h3 className="font-semibold text-foreground text-sm">{soignant.prenom} {soignant.nom} · {soignant.profession}</h3>
           <p className="text-xs text-muted-foreground">{mission.intitule}{mission.service ? ` · ${mission.service}` : ''}</p>
         </div>
-        {presence.valide_par_etablissement && (
-          <BadgeCertification
-            perimetreOk={presence.perimetre_gps_valide === true}
-            pasAlerteTeleportation={!presence.alerte_teleportation}
-            valideParEtablissement={true}
-          />
+        {presence.valide_par_etablissement ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/etablissement/presences/mission/${presence.mission_id}`)}
+              className="flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              <Eye className="h-3.5 w-3.5" /> Détail
+            </button>
+            <BadgeCertification
+              perimetreOk={presence.perimetre_gps_valide === true}
+              pasAlerteTeleportation={!presence.alerte_teleportation}
+              valideParEtablissement={true}
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => navigate(`/etablissement/presences/mission/${presence.mission_id}`)}
+            className="flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            <Eye className="h-3.5 w-3.5" /> Détail
+          </button>
         )}
       </div>
 
