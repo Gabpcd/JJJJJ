@@ -41,7 +41,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
   useEffect(() => {
     if (!missionId || !user) return;
     const load = async () => {
-      const [{ data: missionData }, { data: presData }] = await Promise.all([
+      const [{ data: missionData }, { data: presData }, detailRes] = await Promise.all([
         supabase
           .from('missions')
           .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, heures_nuit, heures_dimanche, heures_ferie, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, net_estime, soignant_assigne_id, code_arrivee, code_depart, type_paiement_soignant, etablissement_id')
@@ -52,7 +52,11 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
           .select('*')
           .eq('mission_id', missionId)
           .order('pointage_arrivee_le', { ascending: true }),
+        supabase.rpc('fn_presences_detail_mission' as any, { p_mission_id: missionId }),
       ]);
+
+      // Store detail data for enhanced display
+      const detailData = detailRes.data as any;
 
       // Only fetch codes for établissement/admin (not soignant)
       let codesData: any = null;
@@ -62,7 +66,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       }
 
       if (missionData) {
-        setMission(missionData);
+        setMission({ ...missionData, _detail: detailData });
         if (missionData.soignant_assigne_id) {
           const { data: sg } = await supabase
             .from('soignants')
@@ -121,6 +125,75 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
           </p>
         )}
       </div>
+
+      {/* Synthèse présences via fn_presences_detail_mission */}
+      {mission._detail && (() => {
+        const d = mission._detail;
+        const heuresReelles = d.heures_reelles ?? null;
+        const heuresPlanifiees = d.heures_planifiees ?? mission.duree_heures ?? 0;
+        const deficit = heuresReelles !== null && heuresReelles < heuresPlanifiees * 0.9;
+        const alerteTelep = d.alerte_teleportation === true;
+
+        return (
+          <div className={`card-base mb-6 ${alerteTelep || deficit ? 'border-destructive/40 bg-destructive/5' : ''}`}>
+            <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" /> Synthèse des présences
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Heures planifiées</p>
+                <p className="font-semibold text-foreground">{heuresPlanifiees}h</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Heures réelles</p>
+                <p className={`font-semibold ${deficit ? 'text-destructive' : 'text-foreground'}`}>
+                  {heuresReelles !== null ? `${heuresReelles}h` : '—'}
+                </p>
+              </div>
+              {d.retard_minutes != null && d.retard_minutes > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Retard</p>
+                  <p className="font-semibold text-warning">+{d.retard_minutes} min</p>
+                </div>
+              )}
+              {d.depart_anticipe_minutes != null && d.depart_anticipe_minutes > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Départ anticipé</p>
+                  <p className="font-semibold text-warning">-{d.depart_anticipe_minutes} min</p>
+                </div>
+              )}
+              {d.duree_pause_minutes != null && d.duree_pause_minutes > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Pause</p>
+                  <p className="font-semibold text-muted-foreground">{d.duree_pause_minutes} min</p>
+                </div>
+              )}
+              {d.distance_gps_m != null && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Distance GPS</p>
+                  <p className={`font-semibold ${d.distance_gps_m > 500 ? 'text-destructive' : 'text-foreground'}`}>
+                    {Math.round(d.distance_gps_m)}m
+                  </p>
+                </div>
+              )}
+              {d.methode_pointage && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Méthode</p>
+                  <p className="font-semibold text-foreground">{d.methode_pointage}</p>
+                </div>
+              )}
+            </div>
+
+            {(alerteTelep || deficit) && (
+              <div className="mt-3 pt-3 border-t border-destructive/20 flex items-center gap-2 text-sm text-destructive font-medium">
+                <AlertTriangle className="h-4 w-4" />
+                {alerteTelep && <span>🚨 Alerte téléportation détectée</span>}
+                {deficit && <span>⚠️ Heures réelles inférieures à 90% du planifié</span>}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Codes de pointage — only for établissement/admin */}
       {codes && (

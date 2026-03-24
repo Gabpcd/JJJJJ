@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Clock } from 'lucide-react';
+import { Clock, Pause, Play } from 'lucide-react';
 import { BoutonPointage } from './BoutonPointage';
 import { SaisieCodePointage } from './SaisieCodePointage';
 import { ScannerQRPointage } from './ScannerQRPointage';
@@ -9,6 +9,7 @@ import { ResultatPointage } from './ResultatPointage';
 import { BadgeCertification } from './BadgeCertification';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { toast } from 'sonner';
 
 interface CartePointageProps {
   mission: any;
@@ -127,46 +128,12 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
 
       {/* État 3: En mission */}
       {etat === 'en_mission' && presence && (
-        <div className="space-y-3">
-          <ResultatPointage
-            type="arrivee"
-            heure={presence.pointage_arrivee_le}
-            distanceM={presence.distance_etablissement_m}
-            perimetreOk={presence.perimetre_gps_valide}
-            precisionM={presence.arrivee_precision_gps_m}
-            alerteTeleportation={presence.alerte_teleportation}
-          />
-          {presence.methode_pointage_arrivee === 'CODE' && (
-            <p className="text-xs text-primary font-medium text-center">🔑 Pointé par code</p>
-          )}
-          <BoutonPointage type="depart" onPointage={onPointerDepart} />
-          <SaisieCodePointage
-            type="depart"
-            onValider={async (code) => {
-              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
-                p_presence_id: presence.id,
-                p_code: code,
-              });
-              if (error) return { success: false, message: extraireMessageErreur(error) };
-              if (data?.success === false) return { success: false, message: data.error };
-              onRecharger?.();
-              return { success: true, message: 'Départ pointé par code ✅' };
-            }}
-          />
-          <ScannerQRPointage
-            type="depart"
-            onCodeScanne={async (code) => {
-              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
-                p_presence_id: presence.id,
-                p_code: code,
-              });
-              if (error) return { success: false, message: extraireMessageErreur(error) };
-              if (data?.success === false) return { success: false, message: data.error };
-              onRecharger?.();
-              return { success: true, message: 'Départ pointé par QR ✅' };
-            }}
-          />
-        </div>
+        <EnMissionBlock
+          mission={mission}
+          presence={presence}
+          onPointerDepart={onPointerDepart}
+          onRecharger={onRecharger}
+        />
       )}
 
       {/* État 4: Terminé */}
@@ -220,6 +187,125 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
             )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Sub-component for en_mission state with pause support */
+function EnMissionBlock({ mission, presence, onPointerDepart, onRecharger }: {
+  mission: any; presence: any; onPointerDepart: () => Promise<void>; onRecharger?: () => void;
+}) {
+  const [enPause, setEnPause] = useState(!!presence.pause_debut_le && !presence.pause_fin_le);
+  const [pauseLoading, setPauseLoading] = useState(false);
+  const [chronoPause, setChronoPause] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Chrono for ongoing pause
+  useEffect(() => {
+    if (enPause && presence.pause_debut_le) {
+      const debut = new Date(presence.pause_debut_le).getTime();
+      const tick = () => setChronoPause(Math.floor((Date.now() - debut) / 1000));
+      tick();
+      timerRef.current = setInterval(tick, 1000);
+      return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    } else {
+      setChronoPause(0);
+    }
+  }, [enPause, presence.pause_debut_le]);
+
+  const formatChrono = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  };
+
+  const handlePause = async () => {
+    setPauseLoading(true);
+    try {
+      if (!enPause) {
+        const { error } = await supabase.rpc('fn_pointer_debut_pause' as any, { p_presence_id: presence.id });
+        if (error) { toast.error(extraireMessageErreur(error)); return; }
+        setEnPause(true);
+        toast.success('Pause démarrée');
+      } else {
+        const { error } = await supabase.rpc('fn_pointer_fin_pause' as any, { p_presence_id: presence.id });
+        if (error) { toast.error(extraireMessageErreur(error)); return; }
+        setEnPause(false);
+        toast.success('Pause terminée');
+      }
+      onRecharger?.();
+    } finally {
+      setPauseLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <ResultatPointage
+        type="arrivee"
+        heure={presence.pointage_arrivee_le}
+        distanceM={presence.distance_etablissement_m}
+        perimetreOk={presence.perimetre_gps_valide}
+        precisionM={presence.arrivee_precision_gps_m}
+        alerteTeleportation={presence.alerte_teleportation}
+      />
+      {presence.methode_pointage_arrivee === 'CODE' && (
+        <p className="text-xs text-primary font-medium text-center">🔑 Pointé par code</p>
+      )}
+
+      {/* Bouton pause déjeuner */}
+      <button
+        onClick={handlePause}
+        disabled={pauseLoading}
+        className={`w-full py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+          enPause
+            ? 'bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20'
+            : 'bg-muted border border-border text-muted-foreground hover:bg-muted/80'
+        } disabled:opacity-60`}
+      >
+        {enPause ? (
+          <><Play className="h-4 w-4" /> ▶️ Fin de pause · {formatChrono(chronoPause)}</>
+        ) : (
+          <><Pause className="h-4 w-4" /> ⏸ Pause déjeuner</>
+        )}
+      </button>
+
+      {!enPause && (
+        <>
+          <BoutonPointage type="depart" onPointage={onPointerDepart} />
+          <SaisieCodePointage
+            type="depart"
+            onValider={async (code) => {
+              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
+                p_presence_id: presence.id,
+                p_code: code,
+              });
+              if (error) return { success: false, message: extraireMessageErreur(error) };
+              if (data?.success === false) return { success: false, message: data.error };
+              onRecharger?.();
+              return { success: true, message: 'Départ pointé par code ✅' };
+            }}
+          />
+          <ScannerQRPointage
+            type="depart"
+            onCodeScanne={async (code) => {
+              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
+                p_presence_id: presence.id,
+                p_code: code,
+              });
+              if (error) return { success: false, message: extraireMessageErreur(error) };
+              if (data?.success === false) return { success: false, message: data.error };
+              onRecharger?.();
+              return { success: true, message: 'Départ pointé par QR ✅' };
+            }}
+          />
+        </>
+      )}
+      {enPause && (
+        <p className="text-xs text-muted-foreground text-center italic">
+          Le bouton de départ est masqué pendant la pause.
+        </p>
       )}
     </div>
   );
