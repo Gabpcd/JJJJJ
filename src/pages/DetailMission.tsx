@@ -165,6 +165,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [proposing, setProposing] = useState<string | null>(null);
   const [nbCandidatures, setNbCandidatures] = useState(0);
 
+  // Stripe Connect
+  const [soignantHasConnect, setSoignantHasConnect] = useState(false);
+  const [connectPayLoading, setConnectPayLoading] = useState(false);
+  const [showConnectCheckout, setShowConnectCheckout] = useState(false);
+  const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
+  const [connectDecomposition, setConnectDecomposition] = useState<{ commission_ttc: number; salaire_brut: number; total: number } | null>(null);
+
   useEffect(() => {
     if (!id) return;
     const load = async () => {
