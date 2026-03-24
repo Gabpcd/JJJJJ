@@ -58,6 +58,7 @@ export default function AdminDashboard() {
   const [stripeMoisNb, setStripeMoisNb] = useState(0);
   const [stripeMoisCapture, setStripeMoisCapture] = useState(0);
   const [stripeMoisAttente, setStripeMoisAttente] = useState(0);
+  const [connectStats, setConnectStats] = useState<any>(null);
 
   const [caCommissionsHT, setCaCommissionsHT] = useState(0);
   const [caEncaisse, setCaEncaisse] = useState(0);
