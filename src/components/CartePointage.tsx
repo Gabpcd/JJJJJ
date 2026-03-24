@@ -128,46 +128,12 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
 
       {/* État 3: En mission */}
       {etat === 'en_mission' && presence && (
-        <div className="space-y-3">
-          <ResultatPointage
-            type="arrivee"
-            heure={presence.pointage_arrivee_le}
-            distanceM={presence.distance_etablissement_m}
-            perimetreOk={presence.perimetre_gps_valide}
-            precisionM={presence.arrivee_precision_gps_m}
-            alerteTeleportation={presence.alerte_teleportation}
-          />
-          {presence.methode_pointage_arrivee === 'CODE' && (
-            <p className="text-xs text-primary font-medium text-center">🔑 Pointé par code</p>
-          )}
-          <BoutonPointage type="depart" onPointage={onPointerDepart} />
-          <SaisieCodePointage
-            type="depart"
-            onValider={async (code) => {
-              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
-                p_presence_id: presence.id,
-                p_code: code,
-              });
-              if (error) return { success: false, message: extraireMessageErreur(error) };
-              if (data?.success === false) return { success: false, message: data.error };
-              onRecharger?.();
-              return { success: true, message: 'Départ pointé par code ✅' };
-            }}
-          />
-          <ScannerQRPointage
-            type="depart"
-            onCodeScanne={async (code) => {
-              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
-                p_presence_id: presence.id,
-                p_code: code,
-              });
-              if (error) return { success: false, message: extraireMessageErreur(error) };
-              if (data?.success === false) return { success: false, message: data.error };
-              onRecharger?.();
-              return { success: true, message: 'Départ pointé par QR ✅' };
-            }}
-          />
-        </div>
+        <EnMissionBlock
+          mission={mission}
+          presence={presence}
+          onPointerDepart={onPointerDepart}
+          onRecharger={onRecharger}
+        />
       )}
 
       {/* État 4: Terminé */}
