@@ -283,7 +283,7 @@ export default function ExportPaie() {
               })}
             </tbody>
           </table>
-          <p className="text-xs text-muted-foreground px-3 py-2">{missions.length} missions salariées · cliquez sur une ligne pour voir le détail complet</p>
+          <p className="text-xs text-muted-foreground px-3 py-2">{missions.length} missions salariées · cliquez sur une ligne pour voir le détail des pointages</p>
         </div>
       ) : (
         <EtatVide icone={FileSpreadsheet} titre="Aucune mission salariée terminée" sousTitre={`Aucune mission avec bulletin de paie en ${moisLabel}.`} />
