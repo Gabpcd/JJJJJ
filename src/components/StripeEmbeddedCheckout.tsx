@@ -1,7 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -15,37 +15,110 @@ interface Props {
   onComplete?: () => void;
 }
 
+interface FunctionPayload {
+  client_secret?: string | null;
+  confirmed?: boolean;
+  error?: string;
+  status?: string;
+}
+
+async function readFunctionErrorPayload(fnError: unknown): Promise<FunctionPayload | null> {
+  if (!fnError || typeof fnError !== 'object' || !("context" in fnError)) {
+    return null;
+  }
+
+  const response = (fnError as { context?: Response }).context;
+  if (!(response instanceof Response)) {
+    return null;
+  }
+
+  try {
+    return await response.clone().json();
+  } catch {
+    try {
+      const text = await response.clone().text();
+      return text ? { error: text } : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
 export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }: Props) {
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [loadingCheckout, setLoadingCheckout] = useState(false);
 
-  const fetchClientSecret = useCallback(async () => {
-    setError(null);
-    const { data, error: fnError } = await supabase.functions.invoke('create-invoice-payment', {
-      body: { facture_id: factureId, embedded: true },
+  const handleAlreadyPaid = useCallback(() => {
+    toast.success('Cette facture est déjà payée !');
+    onComplete?.();
+    onClose();
+  }, [onClose, onComplete]);
+
+  const confirmExistingPayment = useCallback(async () => {
+    const { data, error: fnError } = await supabase.functions.invoke('confirm-invoice-payment', {
+      body: { facture_id: factureId },
     });
 
-    if (fnError || data?.error) {
-      // If already paid, treat as success not error
-      if (data?.status === 'PAYEE') {
-        toast.success('Cette facture est déjà payée !');
-        onComplete?.();
-        onClose();
-        throw new Error('__already_paid__');
+    if (!fnError && (data?.confirmed || data?.status === 'PAYEE')) {
+      handleAlreadyPaid();
+      return true;
+    }
+
+    return false;
+  }, [factureId, handleAlreadyPaid]);
+
+  useEffect(() => {
+    if (!open) {
+      setClientSecret(null);
+      setError(null);
+      setConfirming(false);
+      setLoadingCheckout(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const initializeCheckout = async () => {
+      setLoadingCheckout(true);
+      setClientSecret(null);
+      setError(null);
+
+      const { data, error: fnError } = await supabase.functions.invoke('create-invoice-payment', {
+        body: { facture_id: factureId, embedded: true },
+      });
+
+      const payload = data ?? await readFunctionErrorPayload(fnError);
+
+      if (cancelled) return;
+
+      if (!fnError && data?.client_secret) {
+        setClientSecret(data.client_secret);
+        setLoadingCheckout(false);
+        return;
       }
-      const msg = data?.error || 'Erreur lors de la création de la session de paiement';
-      setError(msg);
-      throw new Error(msg);
-    }
 
-    if (!data?.client_secret) {
-      const msg = 'Session de paiement invalide';
-      setError(msg);
-      throw new Error(msg);
-    }
+      if (payload?.status === 'PAYEE' || payload?.error === 'Facture déjà payée') {
+        const synced = await confirmExistingPayment();
+        if (cancelled) return;
+        setLoadingCheckout(false);
+        if (!synced) {
+          handleAlreadyPaid();
+        }
+        return;
+      }
 
-    return data.client_secret;
-  }, [factureId]);
+      setError(payload?.error || 'Erreur lors de la création de la session de paiement');
+      setLoadingCheckout(false);
+    };
+
+    void initializeCheckout();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [confirmExistingPayment, factureId, handleAlreadyPaid, open]);
 
   const handleComplete = useCallback(() => {
     const confirmPayment = async () => {
@@ -80,12 +153,19 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
-        <div className="p-4 border-b border-border">
-          <h2 className="text-lg font-bold text-foreground">Paiement sécurisé</h2>
-          <p className="text-sm text-muted-foreground">Payez votre facture par carte bancaire</p>
-        </div>
+        <DialogHeader className="p-4 border-b border-border space-y-1">
+          <DialogTitle className="text-lg font-bold text-foreground">Paiement sécurisé</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            Payez votre facture par carte bancaire
+          </DialogDescription>
+        </DialogHeader>
 
-        {confirming ? (
+        {loadingCheckout ? (
+          <div className="p-6 text-center">
+            <Loader2 className="h-5 w-5 animate-spin mx-auto mb-3 text-primary" />
+            <p className="text-sm text-foreground">Initialisation du paiement…</p>
+          </div>
+        ) : confirming ? (
           <div className="p-6 text-center">
             <Loader2 className="h-5 w-5 animate-spin mx-auto mb-3 text-primary" />
             <p className="text-sm text-foreground">Confirmation du paiement en cours…</p>
@@ -100,7 +180,7 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
             <EmbeddedCheckoutProvider
               stripe={stripePromise}
               options={{
-                fetchClientSecret,
+                clientSecret,
                 onComplete: handleComplete,
               }}
             >
