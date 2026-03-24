@@ -327,6 +327,15 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
+      {etab && !etab.peut_publier_missions && (
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 mb-4 flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">⏳ Votre compte est en cours de vérification</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vous pourrez publier des missions une fois votre établissement vérifié par l'équipe Jolene (24-48h).</p>
+          </div>
+        </div>
+      )}
 
       {/* KPI row 1 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
