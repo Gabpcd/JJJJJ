@@ -199,6 +199,7 @@ export default function AdminFacturation() {
   const [factures, setFactures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState('TOUS');
   const [recherche, setRecherche] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
