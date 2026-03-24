@@ -24,6 +24,7 @@ import { fr } from 'date-fns/locale';
 const STATUT_COLORS: Record<string, string> = {
   BROUILLON: 'bg-muted text-muted-foreground',
   EMISE: 'bg-primary/10 text-primary',
+  VIREMENT_DECLARE: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   PAYEE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   EN_RETARD: 'bg-destructive/10 text-destructive',
   ANNULEE: 'bg-muted text-muted-foreground line-through',
@@ -32,6 +33,7 @@ const STATUT_COLORS: Record<string, string> = {
 const STATUT_LABELS: Record<string, string> = {
   BROUILLON: 'Brouillon',
   EMISE: 'Émise',
+  VIREMENT_DECLARE: 'Virement déclaré 🔍',
   PAYEE: 'Payée',
   EN_RETARD: 'En retard',
   ANNULEE: 'Annulée',
