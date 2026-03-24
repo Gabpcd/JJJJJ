@@ -23,6 +23,7 @@ function fmt(v: number) {
 
 export default function MesGains() {
   usePageTitle('Mes gains');
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [allMissions, setAllMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
