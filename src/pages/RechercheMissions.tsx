@@ -6,6 +6,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
+import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
