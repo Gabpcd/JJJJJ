@@ -200,7 +200,7 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error("Erreur create-mission-payment:", error instanceof Error ? error.message : error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Erreur interne" }),
+      JSON.stringify({ error: "Une erreur interne est survenue." }),
       { headers: { ...corsHeaders(req), "Content-Type": "application/json" }, status: 500 }
     );
   }
