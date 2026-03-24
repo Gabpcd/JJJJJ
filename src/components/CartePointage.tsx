@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Clock } from 'lucide-react';
+import { Clock, Pause, Play } from 'lucide-react';
 import { BoutonPointage } from './BoutonPointage';
 import { SaisieCodePointage } from './SaisieCodePointage';
 import { ScannerQRPointage } from './ScannerQRPointage';
@@ -9,6 +9,7 @@ import { ResultatPointage } from './ResultatPointage';
 import { BadgeCertification } from './BadgeCertification';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { toast } from 'sonner';
 
 interface CartePointageProps {
   mission: any;
