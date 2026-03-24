@@ -45,6 +45,7 @@ export default function MissionsSoignant() {
   const [loading, setLoading] = useState(true);
   const [filtres, setFiltres] = useState<FiltresMissionsState | null>(null);
   const [heuresSemaine, setHeuresSemaine] = useState(0);
+  const [rcpExpiree, setRcpExpiree] = useState(false);
 
   useEffect(() => {
     if (!user) return;
