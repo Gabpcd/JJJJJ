@@ -26,6 +26,13 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
     });
 
     if (fnError || data?.error) {
+      // If already paid, treat as success not error
+      if (data?.status === 'PAYEE') {
+        toast.success('Cette facture est déjà payée !');
+        onComplete?.();
+        onClose();
+        throw new Error('__already_paid__');
+      }
       const msg = data?.error || 'Erreur lors de la création de la session de paiement';
       setError(msg);
       throw new Error(msg);

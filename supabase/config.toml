@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.chorus-pro-deposit]
 verify_jwt = false
+
+[functions.confirm-invoice-payment]
+verify_jwt = false
