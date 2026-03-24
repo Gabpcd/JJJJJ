@@ -1,4 +1,4 @@
-package fr.soindirect.app;
+package app.jolene.android;
 
 import com.getcapacitor.BridgeActivity;
 

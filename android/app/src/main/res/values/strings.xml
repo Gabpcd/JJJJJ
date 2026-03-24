@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Soin Direct</string>
     <string name="title_activity_main">Soin Direct</string>
-    <string name="package_name">fr.soindirect.app</string>
-    <string name="custom_url_scheme">fr.soindirect.app</string>
+    <string name="package_name">app.jolene.android</string>
+    <string name="custom_url_scheme">app.jolene.android</string>
 </resources>
