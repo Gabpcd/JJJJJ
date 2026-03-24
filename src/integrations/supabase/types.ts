@@ -1772,6 +1772,7 @@ export type Database = {
           id: string
           intitule: string
           mode_attribution: string | null
+          mode_paiement_soignant: string | null
           modifie_le: string | null
           montant_commission_ht: number | null
           montant_commission_ttc: number | null
@@ -1826,6 +1827,7 @@ export type Database = {
           id?: string
           intitule: string
           mode_attribution?: string | null
+          mode_paiement_soignant?: string | null
           modifie_le?: string | null
           montant_commission_ht?: number | null
           montant_commission_ttc?: number | null
@@ -1880,6 +1882,7 @@ export type Database = {
           id?: string
           intitule?: string
           mode_attribution?: string | null
+          mode_paiement_soignant?: string | null
           modifie_le?: string | null
           montant_commission_ht?: number | null
           montant_commission_ttc?: number | null
@@ -2231,6 +2234,81 @@ export type Database = {
           valide_le?: string | null
         }
         Relationships: []
+      }
+      partages_rib: {
+        Row: {
+          actif: boolean | null
+          consulte_le: string | null
+          consulte_par: string | null
+          contrat_id: string
+          document_rib_id: string | null
+          etablissement_id: string
+          id: string
+          mission_id: string
+          partage_le: string | null
+          soignant_id: string
+        }
+        Insert: {
+          actif?: boolean | null
+          consulte_le?: string | null
+          consulte_par?: string | null
+          contrat_id: string
+          document_rib_id?: string | null
+          etablissement_id: string
+          id?: string
+          mission_id: string
+          partage_le?: string | null
+          soignant_id: string
+        }
+        Update: {
+          actif?: boolean | null
+          consulte_le?: string | null
+          consulte_par?: string | null
+          contrat_id?: string
+          document_rib_id?: string | null
+          etablissement_id?: string
+          id?: string
+          mission_id?: string
+          partage_le?: string | null
+          soignant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partages_rib_contrat_id_fkey"
+            columns: ["contrat_id"]
+            isOneToOne: false
+            referencedRelation: "contrats_mission"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partages_rib_document_rib_id_fkey"
+            columns: ["document_rib_id"]
+            isOneToOne: false
+            referencedRelation: "documents_soignants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partages_rib_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partages_rib_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partages_rib_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       plans_prevoyance: {
         Row: {
@@ -2588,7 +2666,6 @@ export type Database = {
           attestation_vaccinations_le: string | null
           avatar_url: string | null
           badge_ambassadeur: boolean
-          bic: string | null
           bio: string | null
           code_ape: string | null
           code_parrainage: string | null
@@ -2607,7 +2684,7 @@ export type Database = {
           est_salarie_etablissement: boolean | null
           heures_cumulees: number | null
           heures_plateforme: number | null
-          iban: string | null
+          iban_last4: string | null
           id: string
           identite_verifiee: boolean | null
           modifie_le: string | null
@@ -2625,6 +2702,7 @@ export type Database = {
           priorite_missions_urgentes: boolean
           profession: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km: number | null
+          rib_partage_le: string | null
           rpps_nom_api: string | null
           rpps_profession_api: string | null
           rpps_verifie: boolean | null
@@ -2674,7 +2752,6 @@ export type Database = {
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
           badge_ambassadeur?: boolean
-          bic?: string | null
           bio?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
@@ -2693,7 +2770,7 @@ export type Database = {
           est_salarie_etablissement?: boolean | null
           heures_cumulees?: number | null
           heures_plateforme?: number | null
-          iban?: string | null
+          iban_last4?: string | null
           id?: string
           identite_verifiee?: boolean | null
           modifie_le?: string | null
@@ -2711,6 +2788,7 @@ export type Database = {
           priorite_missions_urgentes?: boolean
           profession: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km?: number | null
+          rib_partage_le?: string | null
           rpps_nom_api?: string | null
           rpps_profession_api?: string | null
           rpps_verifie?: boolean | null
@@ -2760,7 +2838,6 @@ export type Database = {
           attestation_vaccinations_le?: string | null
           avatar_url?: string | null
           badge_ambassadeur?: boolean
-          bic?: string | null
           bio?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
@@ -2779,7 +2856,7 @@ export type Database = {
           est_salarie_etablissement?: boolean | null
           heures_cumulees?: number | null
           heures_plateforme?: number | null
-          iban?: string | null
+          iban_last4?: string | null
           id?: string
           identite_verifiee?: boolean | null
           modifie_le?: string | null
@@ -2797,6 +2874,7 @@ export type Database = {
           priorite_missions_urgentes?: boolean
           profession?: Database["public"]["Enums"]["type_profession"]
           rayon_deplacement_km?: number | null
+          rib_partage_le?: string | null
           rpps_nom_api?: string | null
           rpps_profession_api?: string | null
           rpps_verifie?: boolean | null
@@ -2926,6 +3004,166 @@ export type Database = {
           statut?: string | null
         }
         Relationships: []
+      }
+      stripe_connect_onboarding: {
+        Row: {
+          business_type: string | null
+          charges_enabled: boolean | null
+          country: string | null
+          cree_le: string | null
+          details_submitted: boolean | null
+          erreur_onboarding: string | null
+          iban_last4: string | null
+          id: string
+          modifie_le: string | null
+          onboarding_complete: boolean | null
+          onboarding_complete_le: string | null
+          payouts_enabled: boolean | null
+          soignant_id: string
+          statut: string | null
+          stripe_account_id: string | null
+          stripe_account_type: string | null
+          type_exercice: string | null
+        }
+        Insert: {
+          business_type?: string | null
+          charges_enabled?: boolean | null
+          country?: string | null
+          cree_le?: string | null
+          details_submitted?: boolean | null
+          erreur_onboarding?: string | null
+          iban_last4?: string | null
+          id?: string
+          modifie_le?: string | null
+          onboarding_complete?: boolean | null
+          onboarding_complete_le?: string | null
+          payouts_enabled?: boolean | null
+          soignant_id: string
+          statut?: string | null
+          stripe_account_id?: string | null
+          stripe_account_type?: string | null
+          type_exercice?: string | null
+        }
+        Update: {
+          business_type?: string | null
+          charges_enabled?: boolean | null
+          country?: string | null
+          cree_le?: string | null
+          details_submitted?: boolean | null
+          erreur_onboarding?: string | null
+          iban_last4?: string | null
+          id?: string
+          modifie_le?: string | null
+          onboarding_complete?: boolean | null
+          onboarding_complete_le?: string | null
+          payouts_enabled?: boolean | null
+          soignant_id?: string
+          statut?: string | null
+          stripe_account_id?: string | null
+          stripe_account_type?: string | null
+          type_exercice?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_connect_onboarding_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: true
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_transfers: {
+        Row: {
+          charge_le: string | null
+          cree_le: string | null
+          erreur: string | null
+          etablissement_id: string
+          facture_id: string | null
+          id: string
+          mission_id: string
+          montant_commission: number
+          montant_soignant: number
+          montant_total: number
+          paye_le: string | null
+          soignant_id: string
+          statut: string
+          stripe_charge_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_payout_id: string | null
+          stripe_transfer_id: string | null
+          transfere_le: string | null
+        }
+        Insert: {
+          charge_le?: string | null
+          cree_le?: string | null
+          erreur?: string | null
+          etablissement_id: string
+          facture_id?: string | null
+          id?: string
+          mission_id: string
+          montant_commission: number
+          montant_soignant: number
+          montant_total: number
+          paye_le?: string | null
+          soignant_id: string
+          statut?: string
+          stripe_charge_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_payout_id?: string | null
+          stripe_transfer_id?: string | null
+          transfere_le?: string | null
+        }
+        Update: {
+          charge_le?: string | null
+          cree_le?: string | null
+          erreur?: string | null
+          etablissement_id?: string
+          facture_id?: string | null
+          id?: string
+          mission_id?: string
+          montant_commission?: number
+          montant_soignant?: number
+          montant_total?: number
+          paye_le?: string | null
+          soignant_id?: string
+          statut?: string
+          stripe_charge_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_payout_id?: string | null
+          stripe_transfer_id?: string | null
+          transfere_le?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_transfers_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_transfers_facture_id_fkey"
+            columns: ["facture_id"]
+            isOneToOne: false
+            referencedRelation: "factures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_transfers_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_transfers_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       suivi_conversion_3200h: {
         Row: {
@@ -3089,6 +3327,7 @@ export type Database = {
       fn_admin_finances_par_etablissement: { Args: never; Returns: Json }
       fn_admin_graphiques: { Args: never; Returns: Json }
       fn_admin_kpi: { Args: never; Returns: Json }
+      fn_admin_stripe_connect_stats: { Args: never; Returns: Json }
       fn_alerte_cddu_repetitif: {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: Json
@@ -3177,6 +3416,10 @@ export type Database = {
         Returns: Json
       }
       fn_consentir_gps: { Args: { p_accepte: boolean }; Returns: Json }
+      fn_consulter_rib_soignant: {
+        Args: { p_mission_id: string }
+        Returns: Json
+      }
       fn_contester_paiement_soignant: {
         Args: { p_motif: string; p_paiement_id: string }
         Returns: Json
@@ -3434,6 +3677,10 @@ export type Database = {
       fn_generer_numero_facture: { Args: never; Returns: string }
       fn_generer_numero_note_honoraires: { Args: never; Returns: string }
       fn_get_my_role: { Args: never; Returns: Json }
+      fn_get_stripe_account_soignant: {
+        Args: { p_soignant_id: string }
+        Returns: string
+      }
       fn_health_check: { Args: never; Returns: Json }
       fn_html_escape: { Args: { p_text: string }; Returns: string }
       fn_is_valid_uuid: { Args: { p_text: string }; Returns: boolean }
@@ -3512,6 +3759,7 @@ export type Database = {
           total_brut: number
         }[]
       }
+      fn_mes_revenus_connect: { Args: { p_mois_debut?: string }; Returns: Json }
       fn_mes_soignants_etablissement: {
         Args: never
         Returns: {
@@ -3556,6 +3804,10 @@ export type Database = {
           total_count: number
           ville: string
         }[]
+      }
+      fn_mode_paiement_mission: {
+        Args: { p_mission_id: string }
+        Returns: Json
       }
       fn_modifier_mission_etablissement: {
         Args: {
@@ -3752,6 +4004,10 @@ export type Database = {
       fn_soignant_pour_etablissement: {
         Args: { p_soignant_id: string }
         Returns: Json
+      }
+      fn_soignant_stripe_connect_actif: {
+        Args: { p_soignant_id: string }
+        Returns: boolean
       }
       fn_soignants_urgence: {
         Args: { p_mission_id: string }
