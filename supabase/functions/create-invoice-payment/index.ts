@@ -2,6 +2,29 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
+async function findMatchingPaymentIntent(
+  stripe: Stripe,
+  factureId: string,
+  customerId?: string | null,
+) {
+  try {
+    const result = await stripe.paymentIntents.search({
+      query: `metadata['facture_id']:'${factureId}'`,
+      limit: 10,
+    });
+
+    const exactMatch = result.data.find((intent) => intent.metadata?.facture_id === factureId);
+    if (exactMatch) return exactMatch;
+  } catch (error) {
+    console.warn("create-invoice-payment: payment intent search unavailable", error);
+  }
+
+  if (!customerId) return null;
+
+  const intents = await stripe.paymentIntents.list({ customer: customerId, limit: 20 });
+  return intents.data.find((intent) => intent.metadata?.facture_id === factureId) ?? null;
+}
+
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
@@ -134,12 +157,44 @@ serve(async (req) => {
         .eq("id", facture.etablissement_id);
     }
 
+    const existingIntent = await findMatchingPaymentIntent(stripe, facture.id, customerId);
+
+    if (existingIntent?.status === "succeeded") {
+      const { error: syncError } = await supabaseAdmin
+        .from("factures")
+        .update({
+          statut: "PAYEE",
+          date_paiement: new Date(existingIntent.created * 1000).toISOString(),
+          stripe_payment_intent_id: existingIntent.id,
+          modifie_le: new Date().toISOString(),
+        })
+        .eq("id", facture.id)
+        .neq("statut", "PAYEE");
+
+      if (syncError) {
+        console.error("create-invoice-payment: sync paid facture failed", syncError);
+      }
+
+      return new Response(JSON.stringify({ error: "Facture déjà payée", status: "PAYEE" }), {
+        status: 409,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    if (existingIntent && ["processing", "requires_capture"].includes(existingIntent.status)) {
+      return new Response(JSON.stringify({ error: "Un paiement est déjà en cours pour cette facture", status: existingIntent.status }), {
+        status: 409,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     const appUrl = getCorsOrigin(req);
     
     console.log(`create-invoice-payment: creating checkout, amount=${facture.montant_ttc}, customer=${customerId}, embedded=${!!embedded}`);
 
     const sessionParams: any = {
       customer: customerId,
+      client_reference_id: facture.id,
       line_items: [
         {
           price_data: {
@@ -157,6 +212,7 @@ serve(async (req) => {
       metadata: { facture_id: facture.id },
       payment_intent_data: {
         metadata: { facture_id: facture.id },
+        description: `Facture ${facture.numero_facture}`,
       },
     };
 
@@ -170,16 +226,20 @@ serve(async (req) => {
 
     const session = await stripe.checkout.sessions.create(sessionParams);
 
-    await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from("factures")
       .update({
         stripe_payment_intent_id: session.payment_intent as string,
-        stripe_hosted_url: session.url,
+        stripe_hosted_url: session.url ?? null,
         modifie_le: new Date().toISOString(),
       })
       .eq("id", facture_id);
 
-    console.log(`create-invoice-payment: session created, client_secret=${!!session.client_secret}, url=${session.url}`);
+    if (updateError) {
+      console.error("create-invoice-payment: facture update failed", updateError);
+    }
+
+    console.log(`create-invoice-payment: session created, id=${session.id}, payment_intent=${session.payment_intent}, client_secret=${!!session.client_secret}, url=${session.url}`);
 
     return new Response(JSON.stringify({ 
       url: session.url, 
