@@ -72,6 +72,58 @@ serve(async (req) => {
     // Handle checkout.session.completed
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
+      const metadataType = session.metadata?.type;
+
+      // ── Connect mission payment flow ──
+      if (metadataType === "CONNECT_MISSION_PAYMENT") {
+        const missionId = session.metadata?.mission_id;
+        const soignantId = session.metadata?.soignant_id;
+        const connectedAccountId = session.metadata?.connected_account_id;
+        const soignantCents = parseInt(session.metadata?.soignant_cents || "0", 10);
+
+        if (missionId && connectedAccountId && soignantCents > 0) {
+          try {
+            const transfer = await stripe.transfers.create({
+              amount: soignantCents,
+              currency: "eur",
+              destination: connectedAccountId,
+              transfer_group: `mission_${missionId}`,
+              metadata: { mission_id: missionId, soignant_id: soignantId || "" },
+            });
+
+            await supabaseAdmin
+              .from("stripe_transfers")
+              .update({
+                statut: "TRANSFERE",
+                stripe_transfer_id: transfer.id,
+                stripe_charge_id: session.payment_intent as string,
+                transfere_le: new Date().toISOString(),
+                modifie_le: new Date().toISOString(),
+              })
+              .eq("mission_id", missionId);
+
+            await supabaseAdmin
+              .from("missions")
+              .update({ mode_paiement_soignant: "STRIPE_CONNECT", modifie_le: new Date().toISOString() })
+              .eq("id", missionId);
+
+            console.log(`Connect transfer ${transfer.id} created for mission ${missionId}`);
+          } catch (transferErr) {
+            console.error("Connect transfer failed:", transferErr);
+            await supabaseAdmin
+              .from("stripe_transfers")
+              .update({ statut: "ECHOUE", modifie_le: new Date().toISOString() })
+              .eq("mission_id", missionId);
+          }
+        }
+
+        return new Response(JSON.stringify({ received: true }), {
+          status: 200,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      // ── Standard facture payment flow ──
       const factureId = session.metadata?.facture_id;
 
       if (!factureId) {
@@ -141,7 +193,7 @@ serve(async (req) => {
           p_navigateur: "stripe-webhook",
         });
 
-        // M6: Send FACTURE_PAYEE email — use destinataire_id only, no raw email address
+        // M6: Send FACTURE_PAYEE email
         {
           const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
           const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
