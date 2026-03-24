@@ -95,6 +95,23 @@ export default function RechercheMissions() {
           setRayonKm(s.rayon_deplacement_km || 50);
         }
       });
+
+    // Vérifier si la RCP est expirée
+    supabase.from('documents_soignants')
+      .select('statut_verification, valide_jusqua')
+      .eq('soignant_id', user.id)
+      .eq('type_document', 'RCP_ASSURANCE')
+      .order('televerse_le', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (!data || data.length === 0) {
+          setRcpExpiree(true);
+        } else {
+          const doc = data[0];
+          const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
+          setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
+        }
+      });
   }, [user]);
 
   useEffect(() => {
