@@ -46,7 +46,7 @@ serve(async (req) => {
         fin_le: body.fin_le,
         taux_horaire_base: body.taux_horaire_base,
       }).select("id, intitule, statut").single();
-      if (error) return new Response(JSON.stringify({ error: "Erreur création", detail: error.message }), { status: 500, headers: corsHeaders });
+      if (error) { console.error("api-v1 POST /missions error:", error.message); return new Response(JSON.stringify({ error: "Erreur création" }), { status: 500, headers: corsHeaders }); }
       return new Response(JSON.stringify({ mission: data }), { status: 201, headers: corsHeaders });
     }
 
