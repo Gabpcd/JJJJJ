@@ -154,6 +154,10 @@ serve(async (req) => {
         },
       ],
       mode: "payment",
+      metadata: { facture_id: facture.id },
+      payment_intent_data: {
+        metadata: { facture_id: facture.id },
+      },
     };
 
     if (embedded) {
