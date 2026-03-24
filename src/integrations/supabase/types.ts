@@ -768,18 +768,23 @@ export type Database = {
       }
       documents_soignants: {
         Row: {
+          coherence_nom: boolean | null
           est_critique: boolean | null
           id: string
           libelle: string | null
           modifie_le: string | null
           motif_rejet: string | null
+          nom_extrait_ia: string | null
           nom_fichier: string
+          prenom_extrait_ia: string | null
           rappel_expire_envoye: boolean | null
           rappel_j30_envoye: boolean | null
           rappel_j7_envoye: boolean | null
+          resultat_ia: Json | null
           s3_bucket: string
           s3_cle: string
           s3_version_id: string | null
+          score_confiance_ia: number | null
           soignant_id: string
           statut_verification:
             | Database["public"]["Enums"]["statut_verification"]
@@ -795,18 +800,23 @@ export type Database = {
           verifie_par: string | null
         }
         Insert: {
+          coherence_nom?: boolean | null
           est_critique?: boolean | null
           id?: string
           libelle?: string | null
           modifie_le?: string | null
           motif_rejet?: string | null
+          nom_extrait_ia?: string | null
           nom_fichier: string
+          prenom_extrait_ia?: string | null
           rappel_expire_envoye?: boolean | null
           rappel_j30_envoye?: boolean | null
           rappel_j7_envoye?: boolean | null
+          resultat_ia?: Json | null
           s3_bucket?: string
           s3_cle: string
           s3_version_id?: string | null
+          score_confiance_ia?: number | null
           soignant_id: string
           statut_verification?:
             | Database["public"]["Enums"]["statut_verification"]
@@ -822,18 +832,23 @@ export type Database = {
           verifie_par?: string | null
         }
         Update: {
+          coherence_nom?: boolean | null
           est_critique?: boolean | null
           id?: string
           libelle?: string | null
           modifie_le?: string | null
           motif_rejet?: string | null
+          nom_extrait_ia?: string | null
           nom_fichier?: string
+          prenom_extrait_ia?: string | null
           rappel_expire_envoye?: boolean | null
           rappel_j30_envoye?: boolean | null
           rappel_j7_envoye?: boolean | null
+          resultat_ia?: Json | null
           s3_bucket?: string
           s3_cle?: string
           s3_version_id?: string | null
+          score_confiance_ia?: number | null
           soignant_id?: string
           statut_verification?:
             | Database["public"]["Enums"]["statut_verification"]
@@ -925,7 +940,9 @@ export type Database = {
           mode_paiement_commission: string | null
           modifie_le: string | null
           motif_rejet: string | null
+          nb_evaluations: number | null
           nom: string
+          note_moyenne: number | null
           palier_commission_id: string | null
           palier_recalcule_le: string | null
           peut_publier_missions: boolean | null
@@ -981,7 +998,9 @@ export type Database = {
           mode_paiement_commission?: string | null
           modifie_le?: string | null
           motif_rejet?: string | null
+          nb_evaluations?: number | null
           nom: string
+          note_moyenne?: number | null
           palier_commission_id?: string | null
           palier_recalcule_le?: string | null
           peut_publier_missions?: boolean | null
@@ -1037,7 +1056,9 @@ export type Database = {
           mode_paiement_commission?: string | null
           modifie_le?: string | null
           motif_rejet?: string | null
+          nb_evaluations?: number | null
           nom?: string
+          note_moyenne?: number | null
           palier_commission_id?: string | null
           palier_recalcule_le?: string | null
           peut_publier_missions?: boolean | null
@@ -2669,6 +2690,8 @@ export type Database = {
           bio: string | null
           code_ape: string | null
           code_parrainage: string | null
+          coherence_details: Json | null
+          coherence_identite: string | null
           compteur_notes_honoraires: number | null
           consentement_gps: boolean | null
           consentement_gps_le: string | null
@@ -2688,7 +2711,9 @@ export type Database = {
           id: string
           identite_verifiee: boolean | null
           modifie_le: string | null
+          nb_evaluations: number | null
           nom: string
+          note_moyenne: number | null
           numero_adeli: string | null
           numero_rpps: string | null
           numero_secu: string | null
@@ -2704,6 +2729,7 @@ export type Database = {
           rayon_deplacement_km: number | null
           rib_partage_le: string | null
           rpps_nom_api: string | null
+          rpps_prenom_api: string | null
           rpps_profession_api: string | null
           rpps_verifie: boolean | null
           rpps_verifie_le: string | null
@@ -2755,6 +2781,8 @@ export type Database = {
           bio?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
+          coherence_details?: Json | null
+          coherence_identite?: string | null
           compteur_notes_honoraires?: number | null
           consentement_gps?: boolean | null
           consentement_gps_le?: string | null
@@ -2774,7 +2802,9 @@ export type Database = {
           id?: string
           identite_verifiee?: boolean | null
           modifie_le?: string | null
+          nb_evaluations?: number | null
           nom: string
+          note_moyenne?: number | null
           numero_adeli?: string | null
           numero_rpps?: string | null
           numero_secu?: string | null
@@ -2790,6 +2820,7 @@ export type Database = {
           rayon_deplacement_km?: number | null
           rib_partage_le?: string | null
           rpps_nom_api?: string | null
+          rpps_prenom_api?: string | null
           rpps_profession_api?: string | null
           rpps_verifie?: boolean | null
           rpps_verifie_le?: string | null
@@ -2841,6 +2872,8 @@ export type Database = {
           bio?: string | null
           code_ape?: string | null
           code_parrainage?: string | null
+          coherence_details?: Json | null
+          coherence_identite?: string | null
           compteur_notes_honoraires?: number | null
           consentement_gps?: boolean | null
           consentement_gps_le?: string | null
@@ -2860,7 +2893,9 @@ export type Database = {
           id?: string
           identite_verifiee?: boolean | null
           modifie_le?: string | null
+          nb_evaluations?: number | null
           nom?: string
+          note_moyenne?: number | null
           numero_adeli?: string | null
           numero_rpps?: string | null
           numero_secu?: string | null
@@ -2876,6 +2911,7 @@ export type Database = {
           rayon_deplacement_km?: number | null
           rib_partage_le?: string | null
           rpps_nom_api?: string | null
+          rpps_prenom_api?: string | null
           rpps_profession_api?: string | null
           rpps_verifie?: boolean | null
           rpps_verifie_le?: string | null
@@ -3326,6 +3362,18 @@ export type Database = {
       fn_admin_finances: { Args: never; Returns: Json }
       fn_admin_finances_par_etablissement: { Args: never; Returns: Json }
       fn_admin_graphiques: { Args: never; Returns: Json }
+      fn_admin_incoherences_identite: {
+        Args: never
+        Returns: {
+          coherence_details: Json
+          coherence_identite: string
+          identite_verifiee: boolean
+          nom: string
+          prenom: string
+          rpps_verifie: boolean
+          soignant_id: string
+        }[]
+      }
       fn_admin_kpi: { Args: never; Returns: Json }
       fn_admin_stripe_connect_stats: { Args: never; Returns: Json }
       fn_alerte_cddu_repetitif: {
@@ -3636,6 +3684,14 @@ export type Database = {
           taux_majoration_nuit_pourcent: number
           type: Database["public"]["Enums"]["type_etablissement"]
         }[]
+      }
+      fn_evaluer_etablissement: {
+        Args: { p_commentaire?: string; p_mission_id: string; p_note: number }
+        Returns: Json
+      }
+      fn_evaluer_soignant: {
+        Args: { p_commentaire?: string; p_mission_id: string; p_note: number }
+        Returns: Json
       }
       fn_exclure_utilisateur: {
         Args: { p_exclu_id: string; p_motif?: string; p_type: string }
@@ -4031,6 +4087,19 @@ export type Database = {
         Args: { p_actif: boolean; p_creneaux?: Json; p_rayon_km?: number }
         Returns: Json
       }
+      fn_top_soignants: {
+        Args: { p_limit?: number; p_profession?: string }
+        Returns: {
+          id: string
+          nb_evaluations: number
+          nom: string
+          note_moyenne: number
+          prenom: string
+          profession: string
+          score_fiabilite: number
+          total_missions_terminees: number
+        }[]
+      }
       fn_traiter_candidature: {
         Args: { p_candidature_id: string; p_decision: string; p_motif?: string }
         Returns: Json
@@ -4068,6 +4137,10 @@ export type Database = {
       }
       fn_valider_presence: { Args: { p_presence_id: string }; Returns: Json }
       fn_valider_presences_lot: { Args: { p_ids: string[] }; Returns: Json }
+      fn_verifier_coherence_identite: {
+        Args: { p_soignant_id: string }
+        Returns: Json
+      }
       fn_verifier_documents_expirants: { Args: never; Returns: number }
       mon_etablissement_id: { Args: never; Returns: string }
       mon_role: { Args: never; Returns: string }
