@@ -95,7 +95,7 @@ export default function AdminModeration() {
   const charger = async () => {
     setLoading(true);
 
-    const [resLitiges, resEvals, resDocs] = await Promise.all([
+    const [resLitiges, resEvals, resDocs, resIncoherences] = await Promise.all([
       supabase
         .from('litiges')
         .select('id, motif, reponse, statut, cree_le, soignant_id, etablissement_id, mission_id, initie_par, resolution, resolu_le')
@@ -114,6 +114,7 @@ export default function AdminModeration() {
         .is('supprime_le', null)
         .order('televerse_le', { ascending: true })
         .limit(50),
+      supabase.rpc('fn_admin_incoherences_identite' as any),
     ]);
 
     if (resLitiges.error || resEvals.error || resDocs.error) {
