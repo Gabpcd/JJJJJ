@@ -2387,21 +2387,29 @@ export type Database = {
           arrivee_modele_terminal: string | null
           arrivee_precision_gps_m: number | null
           cree_le: string | null
+          depart_anticipe_min: number | null
           depart_id_terminal: string | null
           depart_ip: unknown
           depart_lat: number | null
           depart_lng: number | null
           depart_precision_gps_m: number | null
           distance_etablissement_m: number | null
+          duree_brute_min: number | null
+          duree_nette_min: number | null
+          duree_pause_min: number | null
+          heures_reelles: number | null
           id: string
           methode_pointage_arrivee: string | null
           methode_pointage_depart: string | null
           mission_id: string
           modifie_le: string | null
           motif_litige: string | null
+          pause_debut_le: string | null
+          pause_fin_le: string | null
           perimetre_gps_valide: boolean | null
           pointage_arrivee_le: string | null
           pointage_depart_le: string | null
+          retard_min: number | null
           soignant_id: string
           valide_le: string | null
           valide_par_etablissement: boolean | null
@@ -2416,21 +2424,29 @@ export type Database = {
           arrivee_modele_terminal?: string | null
           arrivee_precision_gps_m?: number | null
           cree_le?: string | null
+          depart_anticipe_min?: number | null
           depart_id_terminal?: string | null
           depart_ip?: unknown
           depart_lat?: number | null
           depart_lng?: number | null
           depart_precision_gps_m?: number | null
           distance_etablissement_m?: number | null
+          duree_brute_min?: number | null
+          duree_nette_min?: number | null
+          duree_pause_min?: number | null
+          heures_reelles?: number | null
           id?: string
           methode_pointage_arrivee?: string | null
           methode_pointage_depart?: string | null
           mission_id: string
           modifie_le?: string | null
           motif_litige?: string | null
+          pause_debut_le?: string | null
+          pause_fin_le?: string | null
           perimetre_gps_valide?: boolean | null
           pointage_arrivee_le?: string | null
           pointage_depart_le?: string | null
+          retard_min?: number | null
           soignant_id: string
           valide_le?: string | null
           valide_par_etablissement?: boolean | null
@@ -2445,21 +2461,29 @@ export type Database = {
           arrivee_modele_terminal?: string | null
           arrivee_precision_gps_m?: number | null
           cree_le?: string | null
+          depart_anticipe_min?: number | null
           depart_id_terminal?: string | null
           depart_ip?: unknown
           depart_lat?: number | null
           depart_lng?: number | null
           depart_precision_gps_m?: number | null
           distance_etablissement_m?: number | null
+          duree_brute_min?: number | null
+          duree_nette_min?: number | null
+          duree_pause_min?: number | null
+          heures_reelles?: number | null
           id?: string
           methode_pointage_arrivee?: string | null
           methode_pointage_depart?: string | null
           mission_id?: string
           modifie_le?: string | null
           motif_litige?: string | null
+          pause_debut_le?: string | null
+          pause_fin_le?: string | null
           perimetre_gps_valide?: boolean | null
           pointage_arrivee_le?: string | null
           pointage_depart_le?: string | null
+          retard_min?: number | null
           soignant_id?: string
           valide_le?: string | null
           valide_par_etablissement?: boolean | null
@@ -3952,6 +3976,7 @@ export type Database = {
         Args: { p_code: string; p_mission_id: string }
         Returns: Json
       }
+      fn_pointer_debut_pause: { Args: { p_presence_id: string }; Returns: Json }
       fn_pointer_depart: {
         Args: {
           p_code_depart?: string
@@ -3968,6 +3993,7 @@ export type Database = {
         Args: { p_code: string; p_presence_id: string }
         Returns: Json
       }
+      fn_pointer_fin_pause: { Args: { p_presence_id: string }; Returns: Json }
       fn_pool_urgence_etablissement: {
         Args: { p_etablissement_id: string }
         Returns: {
@@ -3988,6 +4014,10 @@ export type Database = {
       }
       fn_postuler_mission: {
         Args: { p_message?: string; p_mission_id: string }
+        Returns: Json
+      }
+      fn_presences_detail_mission: {
+        Args: { p_mission_id: string }
         Returns: Json
       }
       fn_proposer_mission_soignant: {

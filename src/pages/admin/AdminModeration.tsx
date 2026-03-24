@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { FileCheck, MessageSquare, Check, X, Eye, Mail, Phone, Building2, User, MessageCircle } from 'lucide-react';
+import { FileCheck, MessageSquare, Check, X, Eye, Mail, Phone, Building2, User, MessageCircle, ShieldAlert } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
 import { useNavigate } from 'react-router-dom';
@@ -88,13 +88,14 @@ export default function AdminModeration() {
   const [litiges, setLitiges] = useState<LitigeEnrichi[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [incoherences, setIncoherences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLitigeId, setActionLitigeId] = useState<string | null>(null);
 
   const charger = async () => {
     setLoading(true);
 
-    const [resLitiges, resEvals, resDocs] = await Promise.all([
+    const [resLitiges, resEvals, resDocs, resIncoherences] = await Promise.all([
       supabase
         .from('litiges')
         .select('id, motif, reponse, statut, cree_le, soignant_id, etablissement_id, mission_id, initie_par, resolution, resolu_le')
@@ -113,11 +114,13 @@ export default function AdminModeration() {
         .is('supprime_le', null)
         .order('televerse_le', { ascending: true })
         .limit(50),
+      supabase.rpc('fn_admin_incoherences_identite' as any),
     ]);
 
     if (resLitiges.error || resEvals.error || resDocs.error) {
       toast.error(resLitiges.error?.message || resEvals.error?.message || resDocs.error?.message || 'Impossible de charger la modération');
     }
+    if (resIncoherences.data) setIncoherences(resIncoherences.data as any[] || []);
 
     const litigesBruts = (resLitiges.data ?? []) as LitigeEnrichi[];
 
@@ -228,6 +231,7 @@ export default function AdminModeration() {
             <TabsTrigger value="litiges" className="gap-1.5"><MessageSquare className="h-4 w-4" />Litiges ({litiges.length})</TabsTrigger>
             <TabsTrigger value="evaluations" className="gap-1.5"><Eye className="h-4 w-4" />Évaluations ({evaluations.length})</TabsTrigger>
             <TabsTrigger value="documents" className="gap-1.5"><FileCheck className="h-4 w-4" />Documents ({documents.length})</TabsTrigger>
+            <TabsTrigger value="incoherences" className="gap-1.5"><ShieldAlert className="h-4 w-4" />Identité ({incoherences.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="litiges" className="space-y-4">
@@ -453,6 +457,63 @@ export default function AdminModeration() {
                     </TableRow>
                   ))}
                   {documents.length === 0 && <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Aucun document en attente</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="incoherences">
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Soignant</TableHead>
+                    <TableHead>Nom Profil</TableHead>
+                    <TableHead>Nom RPPS</TableHead>
+                    <TableHead>Nom CNI</TableHead>
+                    <TableHead>Profil ↔ RPPS</TableHead>
+                    <TableHead>Profil ↔ CNI</TableHead>
+                    <TableHead>RPPS ↔ CNI</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {incoherences.map((inc: any) => {
+                    const matchProfilRpps = inc.nom_profil && inc.nom_rpps
+                      ? inc.nom_profil.toUpperCase() === inc.nom_rpps.toUpperCase()
+                      : null;
+                    const matchProfilCni = inc.nom_profil && inc.nom_cni
+                      ? inc.nom_profil.toUpperCase() === inc.nom_cni.toUpperCase()
+                      : null;
+                    const matchRppsCni = inc.nom_rpps && inc.nom_cni
+                      ? inc.nom_rpps.toUpperCase() === inc.nom_cni.toUpperCase()
+                      : null;
+                    return (
+                      <TableRow key={inc.soignant_id}>
+                        <TableCell className="font-medium">
+                          {inc.prenom_profil} {inc.nom_profil}
+                        </TableCell>
+                        <TableCell>{inc.nom_profil || '—'}</TableCell>
+                        <TableCell>{inc.nom_rpps || '—'}</TableCell>
+                        <TableCell>{inc.nom_cni || '—'}</TableCell>
+                        <TableCell className="text-center">
+                          {matchProfilRpps === null ? '—' : matchProfilRpps ? <Check className="h-4 w-4 text-success mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {matchProfilCni === null ? '—' : matchProfilCni ? <Check className="h-4 w-4 text-success mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {matchRppsCni === null ? '—' : matchRppsCni ? <Check className="h-4 w-4 text-success mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
+                        </TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="outline" onClick={() => navigate(`/admin/utilisateurs/${inc.soignant_id}`)}>
+                            <Eye className="mr-1 h-3.5 w-3.5" />Voir
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {incoherences.length === 0 && <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">Aucune incohérence identitaire détectée 🎉</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
