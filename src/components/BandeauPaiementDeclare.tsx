@@ -29,7 +29,7 @@ export function BandeauPaiementDeclare() {
       if (!data || data.length === 0) return;
 
       // Enrich with establishment names
-      const etabIds = [...new Set(data.map((p: any) => p.etablissement_id))];
+      const etabIds = [...new Set(data.map((p: any) => p.etablissement_id))] as string[];
       const { data: etabs } = await supabase
         .from('etablissements')
         .select('id, nom')
