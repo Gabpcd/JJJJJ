@@ -120,6 +120,7 @@ export default function AdminModeration() {
     if (resLitiges.error || resEvals.error || resDocs.error) {
       toast.error(resLitiges.error?.message || resEvals.error?.message || resDocs.error?.message || 'Impossible de charger la modération');
     }
+    if (resIncoherences.data) setIncoherences(resIncoherences.data as any[] || []);
 
     const litigesBruts = (resLitiges.data ?? []) as LitigeEnrichi[];
 
