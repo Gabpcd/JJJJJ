@@ -6,6 +6,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
+import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
@@ -65,7 +66,7 @@ export default function RechercheMissions() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [rcpExpiree, setRcpExpiree] = useState(false);
   // Filtres
   const [profession, setProfession] = useState<string>('');
   const [rayonKm, setRayonKm] = useState(50);
@@ -92,6 +93,23 @@ export default function RechercheMissions() {
           setSoignant(s);
           setProfession(s.profession);
           setRayonKm(s.rayon_deplacement_km || 50);
+        }
+      });
+
+    // Vérifier si la RCP est expirée
+    supabase.from('documents_soignants')
+      .select('statut_verification, valide_jusqua')
+      .eq('soignant_id', user.id)
+      .eq('type_document', 'RCP_ASSURANCE')
+      .order('televerse_le', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (!data || data.length === 0) {
+          setRcpExpiree(true);
+        } else {
+          const doc = data[0];
+          const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
+          setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
         }
       });
   }, [user]);
@@ -230,6 +248,8 @@ export default function RechercheMissions() {
             Filtres
           </Button>
         </div>
+
+        <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} />
 
         {/* Filters */}
         <div className={`${showFilters ? 'block' : 'hidden md:block'} card-base space-y-4`}>

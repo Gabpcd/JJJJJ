@@ -11,6 +11,7 @@ import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
+import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,6 +45,7 @@ export default function MissionsSoignant() {
   const [loading, setLoading] = useState(true);
   const [filtres, setFiltres] = useState<FiltresMissionsState | null>(null);
   const [heuresSemaine, setHeuresSemaine] = useState(0);
+  const [rcpExpiree, setRcpExpiree] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -51,6 +53,23 @@ export default function MissionsSoignant() {
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes')
       .eq('id', user.id).single()
       .then(({ data }) => { if (data) setSoignant(data as any); });
+
+    // Vérifier si la RCP est expirée
+    supabase.from('documents_soignants')
+      .select('statut_verification, valide_jusqua')
+      .eq('soignant_id', user.id)
+      .eq('type_document', 'RCP_ASSURANCE')
+      .order('televerse_le', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (!data || data.length === 0) {
+          setRcpExpiree(true);
+        } else {
+          const doc = data[0];
+          const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
+          setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
+        }
+      });
 
     // M6: Compteur heures planifiées cette semaine
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -180,6 +199,7 @@ export default function MissionsSoignant() {
     <LayoutApp role="SOIGNANT">
       <h1 className="text-xl font-bold text-foreground mb-4">Missions</h1>
 
+      <BandeauDocumentsManquants tousDocumentsValides={!!soignant.tous_documents_valides} rcpExpiree={rcpExpiree} />
       <div className="flex border-b border-border mb-4 overflow-x-auto">
         {onglets.map(o => (
           <button key={o.id} onClick={() => setOnglet(o.id)}
