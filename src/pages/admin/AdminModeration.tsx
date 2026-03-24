@@ -497,13 +497,13 @@ export default function AdminModeration() {
                         <TableCell>{inc.nom_rpps || '—'}</TableCell>
                         <TableCell>{inc.nom_cni || '—'}</TableCell>
                         <TableCell className="text-center">
-                          {matchProfilRpps === null ? '—' : matchProfilRpps ? <Check className="h-4 w-4 text-emerald-500 mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
+                          {matchProfilRpps === null ? '—' : matchProfilRpps ? <Check className="h-4 w-4 text-success mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
                         </TableCell>
                         <TableCell className="text-center">
-                          {matchProfilCni === null ? '—' : matchProfilCni ? <Check className="h-4 w-4 text-emerald-500 mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
+                          {matchProfilCni === null ? '—' : matchProfilCni ? <Check className="h-4 w-4 text-success mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
                         </TableCell>
                         <TableCell className="text-center">
-                          {matchRppsCni === null ? '—' : matchRppsCni ? <Check className="h-4 w-4 text-emerald-500 mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
+                          {matchRppsCni === null ? '—' : matchRppsCni ? <Check className="h-4 w-4 text-success mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
                         </TableCell>
                         <TableCell>
                           <Button size="sm" variant="outline" onClick={() => navigate(`/admin/utilisateurs/${inc.soignant_id}`)}>
