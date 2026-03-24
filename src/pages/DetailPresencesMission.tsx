@@ -7,7 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -22,20 +22,26 @@ function MethodeBadge({ methode }: { methode: string | null }) {
   return <Badge variant="outline" className="text-[10px]">{methode}</Badge>;
 }
 
-export default function DetailPresencesMission() {
+interface Props {
+  role?: 'ADMIN_ETABLISSEMENT' | 'SOIGNANT' | 'ADMIN_PLATEFORME';
+}
+
+export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }: Props) {
   const { id: missionId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, etablissementId } = useEtablissementScope();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [mission, setMission] = useState<any>(null);
   const [presences, setPresences] = useState<any[]>([]);
   const [soignant, setSoignant] = useState<any>(null);
   const [codes, setCodes] = useState<{ code_arrivee: string; code_depart: string } | null>(null);
 
+  const layoutRole = role === 'ADMIN_PLATEFORME' ? 'ADMIN_PLATEFORME' : role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
+
   useEffect(() => {
     if (!missionId || !user) return;
     const load = async () => {
-      const [{ data: missionData }, { data: presData }, codesRes] = await Promise.all([
+      const [{ data: missionData }, { data: presData }] = await Promise.all([
         supabase
           .from('missions')
           .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, heures_nuit, heures_dimanche, heures_ferie, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, net_estime, soignant_assigne_id, code_arrivee, code_depart, type_paiement_soignant, etablissement_id')
@@ -46,8 +52,14 @@ export default function DetailPresencesMission() {
           .select('*')
           .eq('mission_id', missionId)
           .order('pointage_arrivee_le', { ascending: true }),
-        supabase.rpc('fn_codes_pointage_mission' as any, { p_mission_id: missionId }),
       ]);
+
+      // Only fetch codes for établissement/admin (not soignant)
+      let codesData: any = null;
+      if (role !== 'SOIGNANT') {
+        const codesRes = await supabase.rpc('fn_codes_pointage_mission' as any, { p_mission_id: missionId });
+        if (codesRes.data) codesData = codesRes.data;
+      }
 
       if (missionData) {
         setMission(missionData);
@@ -62,14 +74,14 @@ export default function DetailPresencesMission() {
       }
 
       setPresences(presData || []);
-      if (codesRes.data) setCodes(codesRes.data as any);
+      setCodes(codesData);
       setLoading(false);
     };
     load();
-  }, [missionId, user]);
+  }, [missionId, user, role]);
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
-  if (!mission) return <LayoutApp role="ADMIN_ETABLISSEMENT"><p className="text-muted-foreground">Mission introuvable.</p></LayoutApp>;
+  if (loading) return <LayoutApp role={layoutRole}><ChargementPage /></LayoutApp>;
+  if (!mission) return <LayoutApp role={layoutRole}><p className="text-muted-foreground">Mission introuvable.</p></LayoutApp>;
 
   const brut = mission.total_brut || 0;
   const cotis = brut * 0.22;
@@ -88,7 +100,7 @@ export default function DetailPresencesMission() {
   const sortedDays = Object.keys(presencesByDay).sort();
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
+    <LayoutApp role={layoutRole}>
       <Button variant="ghost" size="sm" className="mb-4 gap-1" onClick={() => navigate(-1)}>
         <ArrowLeft className="h-4 w-4" /> Retour
       </Button>
@@ -102,7 +114,7 @@ export default function DetailPresencesMission() {
           <span>⏱ {mission.duree_heures}h prévues</span>
           <span>💰 {fmt(mission.taux_horaire_base)}/h</span>
         </div>
-        {soignant && (
+        {soignant && role !== 'SOIGNANT' && (
           <p className="text-sm font-medium text-foreground mt-2">
             👤 {soignant.prenom} {soignant.nom} · {soignant.profession}
             {soignant.numero_rpps && <span className="text-muted-foreground"> · RPPS {soignant.numero_rpps}</span>}
@@ -110,7 +122,7 @@ export default function DetailPresencesMission() {
         )}
       </div>
 
-      {/* Codes de pointage */}
+      {/* Codes de pointage — only for établissement/admin */}
       {codes && (
         <div className="card-base mb-6">
           <h2 className="font-semibold text-foreground flex items-center gap-2 mb-3">
@@ -165,7 +177,6 @@ export default function DetailPresencesMission() {
                       p.valide_par_etablissement ? 'border-success/30 bg-success/5' :
                       'border-border'
                     }`}>
-                      {/* Créneau label if multiple presences per day */}
                       {presencesByDay[day].length > 1 && (
                         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                           Créneau {idx + 1} / {presencesByDay[day].length}
@@ -285,7 +296,6 @@ export default function DetailPresencesMission() {
           </div>
         </div>
 
-        {/* Majorations */}
         {((mission.montant_majoration_nuit || 0) > 0 || (mission.montant_majoration_dimanche || 0) > 0 || (mission.montant_majoration_ferie || 0) > 0 || (mission.montant_ifm || 0) > 0 || (mission.montant_icp || 0) > 0) && (
           <div className="mt-3 pt-3 border-t border-border">
             <p className="text-xs font-medium text-muted-foreground mb-2">Détail des compléments</p>
@@ -309,7 +319,6 @@ export default function DetailPresencesMission() {
           </div>
         )}
 
-        {/* Net */}
         <div className="mt-3 pt-3 border-t border-border flex justify-between items-center">
           <span className="text-sm text-muted-foreground">Net estimé</span>
           <span className="text-lg font-bold text-success">{fmt(net)}</span>
