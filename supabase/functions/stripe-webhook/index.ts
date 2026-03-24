@@ -294,6 +294,41 @@ serve(async (req) => {
       }
     }
 
+    // Handle account.updated (Connect onboarding status)
+    if (event.type === "account.updated") {
+      const account = event.data.object as Stripe.Account;
+      const accountId = account.id;
+
+      let statut = "EN_COURS";
+      if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+        statut = "COMPLET";
+      } else if (account.requirements?.disabled_reason) {
+        statut = "SUSPENDU";
+      }
+
+      let ibanLast4: string | null = null;
+      if (account.external_accounts?.data?.length) {
+        const bankAccount = account.external_accounts.data[0];
+        if ("last4" in bankAccount) {
+          ibanLast4 = bankAccount.last4 as string;
+        }
+      }
+
+      await supabaseAdmin
+        .from("stripe_connect_onboarding")
+        .update({
+          statut,
+          charges_enabled: account.charges_enabled ?? false,
+          payouts_enabled: account.payouts_enabled ?? false,
+          details_submitted: account.details_submitted ?? false,
+          iban_last4: ibanLast4,
+          modifie_le: new Date().toISOString(),
+        })
+        .eq("stripe_account_id", accountId);
+
+      console.log(`Connect account ${accountId} updated to ${statut}`);
+    }
+
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
