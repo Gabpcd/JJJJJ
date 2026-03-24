@@ -19,13 +19,22 @@ const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'curren
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 const formatDateTime = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-const STATUTS = ['TOUS', 'BROUILLON', 'EMISE', 'PAYEE', 'EN_RETARD', 'ANNULEE'];
+const STATUTS = ['TOUS', 'BROUILLON', 'EMISE', 'VIREMENT_DECLARE', 'PAYEE', 'EN_RETARD', 'ANNULEE'];
 const statutColor: Record<string, string> = {
   BROUILLON: 'secondary',
   EMISE: 'outline',
+  VIREMENT_DECLARE: 'outline',
   PAYEE: 'default',
   EN_RETARD: 'destructive',
   ANNULEE: 'secondary',
+};
+const statutLabel: Record<string, string> = {
+  BROUILLON: 'Brouillon',
+  EMISE: 'Émise',
+  VIREMENT_DECLARE: 'Virement déclaré 🔍',
+  PAYEE: 'Payée',
+  EN_RETARD: 'En retard',
+  ANNULEE: 'Annulée',
 };
 
 function FactureDetailRow({ factureId }: { factureId: string }) {

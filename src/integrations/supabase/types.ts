@@ -2006,6 +2006,88 @@ export type Database = {
           },
         ]
       }
+      paiements_soignant: {
+        Row: {
+          confirme_par_etablissement: boolean | null
+          confirme_par_etablissement_le: string | null
+          confirme_par_soignant: boolean | null
+          confirme_par_soignant_le: string | null
+          conteste: boolean | null
+          cree_le: string | null
+          date_paiement: string | null
+          etablissement_id: string
+          id: string
+          methode: string
+          mission_id: string
+          modifie_le: string | null
+          montant_net: number
+          motif_contestation: string | null
+          reference_virement: string | null
+          soignant_id: string
+          statut: string
+        }
+        Insert: {
+          confirme_par_etablissement?: boolean | null
+          confirme_par_etablissement_le?: string | null
+          confirme_par_soignant?: boolean | null
+          confirme_par_soignant_le?: string | null
+          conteste?: boolean | null
+          cree_le?: string | null
+          date_paiement?: string | null
+          etablissement_id: string
+          id?: string
+          methode: string
+          mission_id: string
+          modifie_le?: string | null
+          montant_net: number
+          motif_contestation?: string | null
+          reference_virement?: string | null
+          soignant_id: string
+          statut?: string
+        }
+        Update: {
+          confirme_par_etablissement?: boolean | null
+          confirme_par_etablissement_le?: string | null
+          confirme_par_soignant?: boolean | null
+          confirme_par_soignant_le?: string | null
+          conteste?: boolean | null
+          cree_le?: string | null
+          date_paiement?: string | null
+          etablissement_id?: string
+          id?: string
+          methode?: string
+          mission_id?: string
+          modifie_le?: string | null
+          montant_net?: number
+          motif_contestation?: string | null
+          reference_virement?: string | null
+          soignant_id?: string
+          statut?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paiements_soignant_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paiements_soignant_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paiements_soignant_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       paliers_bfa: {
         Row: {
           cree_le: string | null
@@ -3044,7 +3126,19 @@ export type Database = {
         Returns: Json
       }
       fn_confirmer_dpae: { Args: { p_contrat_id: string }; Returns: Json }
+      fn_confirmer_reception_paiement: {
+        Args: { p_paiement_id: string }
+        Returns: Json
+      }
+      fn_confirmer_virement_admin: {
+        Args: { p_facture_id: string }
+        Returns: Json
+      }
       fn_consentir_gps: { Args: { p_accepte: boolean }; Returns: Json }
+      fn_contester_paiement_soignant: {
+        Args: { p_motif: string; p_paiement_id: string }
+        Returns: Json
+      }
       fn_contester_presence: {
         Args: { p_motif: string; p_presence_id: string }
         Returns: Json
@@ -3088,6 +3182,16 @@ export type Database = {
           p_profession_requise?: Database["public"]["Enums"]["type_profession"]
           p_service?: string
           p_taux_horaire_base?: number
+        }
+        Returns: Json
+      }
+      fn_declarer_paiement_soignant: {
+        Args: {
+          p_date_paiement?: string
+          p_methode?: string
+          p_mission_id: string
+          p_montant: number
+          p_reference?: string
         }
         Returns: Json
       }
@@ -3562,6 +3666,10 @@ export type Database = {
           score_fiabilite: number
           score_matching: number
         }[]
+      }
+      fn_rejeter_virement_admin: {
+        Args: { p_facture_id: string }
+        Returns: Json
       }
       fn_relancer_signatures_contrats: { Args: never; Returns: number }
       fn_repondre_litige: {

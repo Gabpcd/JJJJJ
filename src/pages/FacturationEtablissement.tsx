@@ -349,9 +349,14 @@ export default function FacturationEtablissement() {
                     <FileText className="h-3.5 w-3.5" /> Détail
                   </button>
 
+                  {f.statut === 'VIREMENT_DECLARE' && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" /> En attente de vérification par Jolene
+                    </span>
+                  )}
+
                   {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
                     <>
-                      {/* Chorus Pro for public sector */}
                       {f.est_secteur_public ? (
                         <FactureChorus facture={f} onUpdate={charger} />
                       ) : (
@@ -377,7 +382,6 @@ export default function FacturationEtablissement() {
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${refreshingId === f.id ? 'animate-spin' : ''}`} />
                       </button>
-
                     </>
                   )}
 
