@@ -199,6 +199,7 @@ export default function MissionsSoignant() {
     <LayoutApp role="SOIGNANT">
       <h1 className="text-xl font-bold text-foreground mb-4">Missions</h1>
 
+      <BandeauDocumentsManquants tousDocumentsValides={!!soignant.tous_documents_valides} rcpExpiree={rcpExpiree} />
       <div className="flex border-b border-border mb-4 overflow-x-auto">
         {onglets.map(o => (
           <button key={o.id} onClick={() => setOnglet(o.id)}
