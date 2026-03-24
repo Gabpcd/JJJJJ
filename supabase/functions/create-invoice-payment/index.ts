@@ -249,9 +249,8 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error("Erreur create-invoice-payment:", msg);
-    return new Response(JSON.stringify({ error: msg }), {
+    console.error("Erreur create-invoice-payment:", error instanceof Error ? error.message : error);
+    return new Response(JSON.stringify({ error: "Une erreur interne est survenue." }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       status: 500,
     });
