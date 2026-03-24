@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 
@@ -19,13 +19,22 @@ const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'curren
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 const formatDateTime = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-const STATUTS = ['TOUS', 'BROUILLON', 'EMISE', 'PAYEE', 'EN_RETARD', 'ANNULEE'];
+const STATUTS = ['TOUS', 'BROUILLON', 'EMISE', 'VIREMENT_DECLARE', 'PAYEE', 'EN_RETARD', 'ANNULEE'];
 const statutColor: Record<string, string> = {
   BROUILLON: 'secondary',
   EMISE: 'outline',
+  VIREMENT_DECLARE: 'outline',
   PAYEE: 'default',
   EN_RETARD: 'destructive',
   ANNULEE: 'secondary',
+};
+const statutLabel: Record<string, string> = {
+  BROUILLON: 'Brouillon',
+  EMISE: 'Émise',
+  VIREMENT_DECLARE: 'Virement déclaré 🔍',
+  PAYEE: 'Payée',
+  EN_RETARD: 'En retard',
+  ANNULEE: 'Annulée',
 };
 
 function FactureDetailRow({ factureId }: { factureId: string }) {
@@ -190,6 +199,7 @@ export default function AdminFacturation() {
   const [factures, setFactures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState('TOUS');
   const [recherche, setRecherche] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -199,7 +209,7 @@ export default function AdminFacturation() {
   const charger = async () => {
     setLoading(true);
     const { data } = await supabase.from('factures')
-      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, etablissements(nom)')
+      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
       .order('date_emission', { ascending: false })
       .limit(500);
     if (data) setFactures(data);
@@ -375,17 +385,70 @@ export default function AdminFacturation() {
                       <TableCell className="font-medium">{formatEur(f.montant_ttc)}</TableCell>
                       <TableCell>{f.nombre_missions}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{f.date_emission ? formatDate(f.date_emission) : '—'}</TableCell>
-                      <TableCell><Badge variant={(statutColor[f.statut] || 'secondary') as any} className="text-[10px]">{f.statut}</Badge></TableCell>
-                      <TableCell className="w-10 pr-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Télécharger la facture PDF"
-                          onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
+                      <TableCell>
+                        <Badge variant={(statutColor[f.statut] || 'secondary') as any} className="text-[10px]">
+                          {statutLabel[f.statut] ?? f.statut}
+                        </Badge>
+                        {f.statut === 'VIREMENT_DECLARE' && f.virement_reference && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Réf: {f.virement_reference}</p>
+                        )}
+                      </TableCell>
+                      <TableCell className="w-auto pr-2">
+                        <div className="flex items-center gap-1">
+                          {f.statut === 'VIREMENT_DECLARE' && (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="h-7 text-xs gap-1"
+                                disabled={actionId === f.id}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setActionId(f.id);
+                                  const { data, error } = await supabase.rpc('fn_confirmer_virement_admin' as any, { p_facture_id: f.id });
+                                  if (error || (data as any)?.error) {
+                                    toast.error((data as any)?.error || error?.message || 'Erreur');
+                                  } else {
+                                    toast.success('Virement confirmé ✅');
+                                    charger();
+                                  }
+                                  setActionId(null);
+                                }}
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" /> Confirmer
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-7 text-xs gap-1"
+                                disabled={actionId === f.id}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setActionId(f.id);
+                                  const { data, error } = await supabase.rpc('fn_rejeter_virement_admin' as any, { p_facture_id: f.id });
+                                  if (error || (data as any)?.error) {
+                                    toast.error((data as any)?.error || error?.message || 'Erreur');
+                                  } else {
+                                    toast.success('Virement rejeté — facture remise en Émise');
+                                    charger();
+                                  }
+                                  setActionId(null);
+                                }}
+                              >
+                                <XCircle className="h-3.5 w-3.5" /> Rejeter
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Télécharger la facture PDF"
+                            onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                     {isExpanded && <FactureDetailRow factureId={f.id} />}

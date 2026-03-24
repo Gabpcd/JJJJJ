@@ -24,6 +24,7 @@ import { fr } from 'date-fns/locale';
 const STATUT_COLORS: Record<string, string> = {
   BROUILLON: 'bg-muted text-muted-foreground',
   EMISE: 'bg-primary/10 text-primary',
+  VIREMENT_DECLARE: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   PAYEE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   EN_RETARD: 'bg-destructive/10 text-destructive',
   ANNULEE: 'bg-muted text-muted-foreground line-through',
@@ -32,6 +33,7 @@ const STATUT_COLORS: Record<string, string> = {
 const STATUT_LABELS: Record<string, string> = {
   BROUILLON: 'Brouillon',
   EMISE: 'Émise',
+  VIREMENT_DECLARE: 'Virement déclaré 🔍',
   PAYEE: 'Payée',
   EN_RETARD: 'En retard',
   ANNULEE: 'Annulée',
@@ -347,9 +349,14 @@ export default function FacturationEtablissement() {
                     <FileText className="h-3.5 w-3.5" /> Détail
                   </button>
 
+                  {f.statut === 'VIREMENT_DECLARE' && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" /> En attente de vérification par Jolene
+                    </span>
+                  )}
+
                   {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
                     <>
-                      {/* Chorus Pro for public sector */}
                       {f.est_secteur_public ? (
                         <FactureChorus facture={f} onUpdate={charger} />
                       ) : (
@@ -375,7 +382,6 @@ export default function FacturationEtablissement() {
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${refreshingId === f.id ? 'animate-spin' : ''}`} />
                       </button>
-
                     </>
                   )}
 
