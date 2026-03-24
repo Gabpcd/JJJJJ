@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Soin Direct</string>
-    <string name="title_activity_main">Soin Direct</string>
+    <string name="app_name">Jolene</string>
+    <string name="title_activity_main">Jolene</string>
     <string name="package_name">app.jolene.android</string>
     <string name="custom_url_scheme">app.jolene.android</string>
 </resources>
