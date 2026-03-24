@@ -3098,11 +3098,11 @@ export type Database = {
         Returns: Json
       }
       fn_annuler_mission_etablissement: {
-        Args: { p_mission_id: string }
+        Args: { p_mission_id: string; p_motif?: string }
         Returns: Json
       }
       fn_annuler_mission_soignant: {
-        Args: { p_mission_id: string }
+        Args: { p_mission_id: string; p_motif?: string }
         Returns: Json
       }
       fn_annuler_serie: { Args: { p_serie_id: string }; Returns: Json }
@@ -3401,19 +3401,19 @@ export type Database = {
       fn_export_fec: {
         Args: { p_annee: number }
         Returns: {
-          comp_aux_libelle: string
+          comp_aux_lib: string
           comp_aux_num: string
-          compte_libelle: string
+          compte_lib: string
           compte_num: string
           credit: number
           debit: number
-          devise: string
           ecriture_date: string
-          ecriture_libelle: string
+          ecriture_lib: string
           ecriture_num: string
+          idevise: string
           journal_code: string
           journal_libelle: string
-          montant: number
+          montant_devise: number
           piece_date: string
           piece_ref: string
         }[]
