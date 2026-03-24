@@ -238,7 +238,7 @@ serve(async (req) => {
       navigateur_acteur: body.navigateur || null,
     });
 
-    return new Response(JSON.stringify({ success: true, etablissement_id: user.id }), {
+    return new Response(JSON.stringify({ success: true, etablissement_id: user.id, auto_verifie: autoVerifie, statut_verification: statutVerification }), {
       status: 200,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
