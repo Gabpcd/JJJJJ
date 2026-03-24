@@ -465,7 +465,7 @@ export default function PresencesSoignant() {
                 const depart = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
 
                 return (
-                  <div key={p.id} className="card-base">
+                  <div key={p.id} className="card-base cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(`/soignant/presences/mission/${p.mission_id}`)}>
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <p className="font-semibold text-sm text-foreground">{m?.intitule}</p>
@@ -474,11 +474,16 @@ export default function PresencesSoignant() {
                           📅 {m?.debut_le && format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}
                         </p>
                       </div>
-                      {p.valide_par_etablissement ? (
-                        <Badge variant="outline" className="bg-success/10 text-success border-success/30 text-[10px]">✅ Validée</Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30 text-[10px]">⏳ Non validée</Badge>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <button className="flex items-center gap-1 text-xs text-primary hover:underline" onClick={e => { e.stopPropagation(); navigate(`/soignant/presences/mission/${p.mission_id}`); }}>
+                          <Eye className="h-3.5 w-3.5" /> Détail
+                        </button>
+                        {p.valide_par_etablissement ? (
+                          <Badge variant="outline" className="bg-success/10 text-success border-success/30 text-[10px]">✅ Validée</Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30 text-[10px]">⏳ Non validée</Badge>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
