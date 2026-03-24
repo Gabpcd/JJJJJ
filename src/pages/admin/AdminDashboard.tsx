@@ -134,6 +134,10 @@ export default function AdminDashboard() {
         setStripeMoisAttente(paiements.filter((p: any) => p.statut === 'AUTORISE').reduce((s: number, p: any) => s + (Number(p.montant_ttc) || 0), 0));
       }
 
+      // Stripe Connect stats
+      const { data: csData } = await supabase.rpc('fn_admin_stripe_connect_stats' as any);
+      if (csData) setConnectStats(csData);
+
       setLoading(false);
     }
     charger();
