@@ -146,6 +146,10 @@ export default function FacturationEtablissement() {
   const rafraichirStatut = async (factureId: string) => {
     setRefreshingId(factureId);
     try {
+      await supabase.functions.invoke('confirm-invoice-payment', {
+        body: { facture_id: factureId },
+      });
+
       const { data, error } = await supabase
         .from('factures')
         .select('statut, date_paiement')

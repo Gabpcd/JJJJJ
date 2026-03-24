@@ -169,7 +169,17 @@ serve(async (req) => {
     // Handle payment_intent.succeeded (backup reconciliation)
     if (event.type === "payment_intent.succeeded") {
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
-      const factureId = paymentIntent.metadata?.facture_id;
+      let factureId = paymentIntent.metadata?.facture_id;
+
+      if (!factureId) {
+        const { data: factureByPaymentIntent } = await supabaseAdmin
+          .from("factures")
+          .select("id")
+          .eq("stripe_payment_intent_id", paymentIntent.id)
+          .maybeSingle();
+
+        factureId = factureByPaymentIntent?.id;
+      }
 
       if (factureId) {
         await supabaseAdmin
@@ -182,6 +192,8 @@ serve(async (req) => {
           })
           .eq("id", factureId)
           .neq("statut", "PAYEE");
+      } else {
+        console.warn(`payment_intent.succeeded without facture mapping: ${paymentIntent.id}`);
       }
     }
 
