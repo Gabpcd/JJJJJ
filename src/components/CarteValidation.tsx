@@ -52,12 +52,19 @@ export function CarteValidation({ presence, onValider, onContester, onOuvrirLiti
           <h3 className="font-semibold text-foreground text-sm">{soignant.prenom} {soignant.nom} · {soignant.profession}</h3>
           <p className="text-xs text-muted-foreground">{mission.intitule}{mission.service ? ` · ${mission.service}` : ''}</p>
         </div>
-        {presence.valide_par_etablissement && (
+        {presence.valide_par_etablissement ? (
           <BadgeCertification
             perimetreOk={presence.perimetre_gps_valide === true}
             pasAlerteTeleportation={!presence.alerte_teleportation}
             valideParEtablissement={true}
           />
+        ) : (
+          <button
+            onClick={() => navigate(`/etablissement/presences/mission/${presence.mission_id}`)}
+            className="flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            <Eye className="h-3.5 w-3.5" /> Détail
+          </button>
         )}
       </div>
 
