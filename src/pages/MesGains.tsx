@@ -106,6 +106,8 @@ export default function MesGains() {
         <p className="text-sm text-muted-foreground mt-1">Visualisez vos revenus en un coup d'œil</p>
       </div>
 
+      <BandeauPaiementDeclare />
+
       {/* KPIs en haut */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <CarteKPI icone={Banknote} valeur={fmt(totalFiltre)} label="Ce mois (net estimé*)" couleurIcone="text-primary" couleurFond="bg-primary/10" />

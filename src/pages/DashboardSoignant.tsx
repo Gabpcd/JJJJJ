@@ -231,6 +231,7 @@ export default function DashboardSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
+      <BandeauEvaluationsEnAttente role="SOIGNANT" />
       <OnboardingGuide role="SOIGNANT" userId={user!.id} />
 
       <BarreCompletionProfil
