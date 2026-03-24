@@ -43,12 +43,12 @@ Deno.serve(async (req) => {
     )
 
     const token = authHeader.replace('Bearer ', '')
-    const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token)
-    if (claimsError || !claimsData?.claims) {
+    const { data: userData, error: authError } = await supabaseUser.auth.getUser(token)
+    if (authError || !userData?.user) {
       return new Response(JSON.stringify({ error: 'Token invalide' }), { status: 401, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
     }
 
-    const userId = claimsData.claims.sub as string
+    const userId = userData.user.id
     const { facture_id, action } = await req.json()
 
     if (!facture_id || !action) {

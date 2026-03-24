@@ -159,33 +159,95 @@ Analyse ce document et vérifie sa conformité.`;
       messages.push({ role: "user", content: userMessage });
     }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages,
-        temperature: 0.1,
-      }),
-    });
+    // Try Lovable AI gateway first, fallback to Anthropic
+    let aiResponse: Response | null = null;
+    let aiSource = "lovable";
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("AI gateway error:", aiResponse.status, errText);
+    try {
+      aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages,
+          temperature: 0.1,
+        }),
+      });
+      if (!aiResponse.ok) {
+        console.warn("Lovable AI gateway failed:", aiResponse.status);
+        aiResponse = null;
+      }
+    } catch (lovableErr) {
+      console.warn("Lovable AI gateway error:", lovableErr);
+    }
+
+    // Fallback: Anthropic Claude API
+    if (!aiResponse) {
+      const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+      if (anthropicKey) {
+        aiSource = "anthropic";
+        console.log("Falling back to Anthropic API");
+        const anthropicMessages = [];
+        const lastMsg = messages[messages.length - 1];
+        if (Array.isArray(lastMsg.content)) {
+          const anthropicContent = lastMsg.content.map((block: any) => {
+            if (block.type === "text") return { type: "text", text: block.text };
+            if (block.type === "image_url") {
+              const dataUrl = block.image_url.url;
+              const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+              if (match) {
+                return { type: "image", source: { type: "base64", media_type: match[1], data: match[2] } };
+              }
+            }
+            return { type: "text", text: "[unsupported block]" };
+          });
+          anthropicMessages.push({ role: "user", content: anthropicContent });
+        } else {
+          anthropicMessages.push({ role: "user", content: lastMsg.content });
+        }
+
+        aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": anthropicKey,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1000,
+            system: messages[0].content,
+            messages: anthropicMessages,
+          }),
+        });
+
+        if (!aiResponse.ok) {
+          console.error("Anthropic API also failed:", aiResponse.status);
+        }
+      }
+    }
+
+    if (!aiResponse || !aiResponse.ok) {
       await supabase.rpc("fn_update_document_verification", {
         p_document_id: document_id, p_statut_verification: "EN_ATTENTE", p_motif_rejet: null,
       });
-
       return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: "AI unavailable" }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content || "";
+    // Handle both OpenAI format (Lovable) and Anthropic format
+    let rawContent = "";
+    if (aiSource === "anthropic") {
+      rawContent = aiData.content?.[0]?.text || "";
+    } else {
+      rawContent = aiData.choices?.[0]?.message?.content || "";
+    }
+    const content = rawContent;
 
     // Parse JSON from response
     let analysis: any;
