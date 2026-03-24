@@ -41,7 +41,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
   useEffect(() => {
     if (!missionId || !user) return;
     const load = async () => {
-      const [{ data: missionData }, { data: presData }] = await Promise.all([
+      const [{ data: missionData }, { data: presData }, detailRes] = await Promise.all([
         supabase
           .from('missions')
           .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, heures_nuit, heures_dimanche, heures_ferie, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, total_brut, net_estime, soignant_assigne_id, code_arrivee, code_depart, type_paiement_soignant, etablissement_id')
@@ -52,7 +52,11 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
           .select('*')
           .eq('mission_id', missionId)
           .order('pointage_arrivee_le', { ascending: true }),
+        supabase.rpc('fn_presences_detail_mission' as any, { p_mission_id: missionId }),
       ]);
+
+      // Store detail data for enhanced display
+      const detailData = detailRes.data as any;
 
       // Only fetch codes for établissement/admin (not soignant)
       let codesData: any = null;
@@ -62,7 +66,7 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       }
 
       if (missionData) {
-        setMission(missionData);
+        setMission({ ...missionData, _detail: detailData });
         if (missionData.soignant_assigne_id) {
           const { data: sg } = await supabase
             .from('soignants')
