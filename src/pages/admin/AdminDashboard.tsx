@@ -402,6 +402,34 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
+        {/* Stripe Connect */}
+        {connectStats && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-primary" /> Stripe Connect
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <p className="text-xs text-muted-foreground">Comptes</p>
+                  <p className="text-xl font-bold text-foreground">{connectStats.total_comptes}</p>
+                  <p className="text-[10px] text-muted-foreground">{connectStats.complets} complets · {connectStats.en_cours} en cours</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <p className="text-xs text-muted-foreground">Transféré</p>
+                  <p className="text-xl font-bold text-success">{formatEur(connectStats.total_transfere)}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <p className="text-xs text-muted-foreground">En attente</p>
+                  <p className="text-xl font-bold text-warning">{formatEur(connectStats.total_en_attente)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Lists */}
         <div className="grid md:grid-cols-3 gap-6">
           <Card>
