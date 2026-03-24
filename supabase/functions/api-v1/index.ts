@@ -29,7 +29,7 @@ serve(async (req) => {
       if (etabId) query = query.eq("etablissement_id", etabId);
       if (statut) query = query.eq("statut", statut);
       const { data, error } = await query.order("debut_le", { ascending: false }).limit(100);
-      if (error) return new Response(JSON.stringify({ error: "Erreur requête", detail: error.message }), { status: 500, headers: corsHeaders });
+      if (error) { console.error("api-v1 GET /missions error:", error.message); return new Response(JSON.stringify({ error: "Erreur requête" }), { status: 500, headers: corsHeaders }); }
       return new Response(JSON.stringify({ missions: data, count: data?.length }), { headers: corsHeaders });
     }
 
