@@ -145,14 +145,17 @@ export default function MesGains() {
           {missions.map(m => {
             const net = m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
             return (
-              <div key={m.id} className="flex items-center justify-between py-3 px-4 rounded-xl border border-border hover:bg-muted/30 transition-colors">
+              <div key={m.id} className="flex items-center justify-between py-3 px-4 rounded-xl border border-border hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/soignant/presences/mission/${m.id}`)}>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground truncate">{m.intitule}</p>
                   <p className="text-xs text-muted-foreground">
                     {format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })} · {m.etablissements?.nom || '—'} · {m.duree_heures}h
                   </p>
                 </div>
-                <span className="font-bold text-primary text-sm shrink-0 ml-3 cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}>{fmt(net)}</span>
+                <div className="flex items-center gap-2 shrink-0 ml-3">
+                  <span className="font-bold text-primary text-sm cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}>{fmt(net)}</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
               </div>
             );
           })}
