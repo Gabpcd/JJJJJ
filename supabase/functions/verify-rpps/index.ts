@@ -214,6 +214,24 @@ serve(async (req) => {
 
       const correspond = nomCorrespond && prenomCorrespond;
 
+      // Sauvegarder les données RPPS API sur le profil soignant si soignant_id fourni
+      if (soignant_id && correspond) {
+        try {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+          await supabaseAdmin.from('soignants').update({
+            rpps_verifie: true,
+            rpps_verifie_le: new Date().toISOString(),
+            rpps_nom_api: result.nom,
+            rpps_prenom_api: result.prenom,
+            rpps_profession_api: result.professionLabel || mapProfessionCode(result.professionCode),
+          } as any).eq('id', soignant_id);
+        } catch (dbErr) {
+          console.error('Erreur sauvegarde RPPS sur soignant:', dbErr);
+        }
+      }
+
       return new Response(JSON.stringify({
         trouve: true,
         correspond,
