@@ -258,7 +258,7 @@ export default function ExportPaie() {
                 const brut = m.total_brut || 0;
                 const net = brut * 0.78;
                 return (
-                  <tr key={m.id} className="border-b border-border/50 hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/etablissement/missions/${m.id}`)}>
+                  <tr key={m.id} className="border-b border-border/50 hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/etablissement/presences/mission/${m.id}`)}>
                     <td className="py-2 px-3 text-xs font-medium">{sg?.prenom && sg?.nom ? `${sg.prenom} ${sg.nom}` : 'Soignant non identifié'}</td>
                     <td className="py-2 px-3 text-xs text-muted-foreground">{m.intitule}</td>
                     <td className="py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">
