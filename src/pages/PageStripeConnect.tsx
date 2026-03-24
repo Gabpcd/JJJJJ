@@ -81,7 +81,7 @@ export default function PageStripeConnect() {
   if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp titre="💳 Mon compte de paiement" role="SOIGNANT">
+    <LayoutApp role="SOIGNANT">
       <div className="max-w-2xl mx-auto space-y-6">
         {/* NON_DEMANDE */}
         {statut === 'NON_DEMANDE' && (
