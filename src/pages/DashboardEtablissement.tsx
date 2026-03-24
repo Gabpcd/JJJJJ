@@ -4,7 +4,7 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
@@ -67,7 +67,7 @@ export default function DashboardEtablissement() {
 
     try {
       const [resEtab, resMissions, resPaliers, resMissionsCeMois, resSoignants] = await Promise.all([
-        supabase.from('etablissements').select('id, nom, type, email_contact, groupe_sante_id, taux_commission_negocie, palier_commission_id, groupes_sante(nom), paliers_commission(nom)').eq('id', etablissementId).maybeSingle(),
+        supabase.from('etablissements').select('id, nom, type, email_contact, groupe_sante_id, taux_commission_negocie, palier_commission_id, peut_publier_missions, statut_verification, groupes_sante(nom), paliers_commission(nom)').eq('id', etablissementId).maybeSingle(),
         supabase.from('missions')
           .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
           .eq('etablissement_id', etablissementId)
@@ -327,6 +327,15 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
+      {etab && !etab.peut_publier_missions && (
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 mb-4 flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">⏳ Votre compte est en cours de vérification</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vous pourrez publier des missions une fois votre établissement vérifié par l'équipe Jolene (24-48h).</p>
+          </div>
+        </div>
+      )}
 
       {/* KPI row 1 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
