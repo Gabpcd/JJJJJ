@@ -385,17 +385,70 @@ export default function AdminFacturation() {
                       <TableCell className="font-medium">{formatEur(f.montant_ttc)}</TableCell>
                       <TableCell>{f.nombre_missions}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{f.date_emission ? formatDate(f.date_emission) : '—'}</TableCell>
-                      <TableCell><Badge variant={(statutColor[f.statut] || 'secondary') as any} className="text-[10px]">{f.statut}</Badge></TableCell>
-                      <TableCell className="w-10 pr-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Télécharger la facture PDF"
-                          onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
+                      <TableCell>
+                        <Badge variant={(statutColor[f.statut] || 'secondary') as any} className="text-[10px]">
+                          {statutLabel[f.statut] ?? f.statut}
+                        </Badge>
+                        {f.statut === 'VIREMENT_DECLARE' && f.virement_reference && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Réf: {f.virement_reference}</p>
+                        )}
+                      </TableCell>
+                      <TableCell className="w-auto pr-2">
+                        <div className="flex items-center gap-1">
+                          {f.statut === 'VIREMENT_DECLARE' && (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="h-7 text-xs gap-1"
+                                disabled={actionId === f.id}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setActionId(f.id);
+                                  const { data, error } = await supabase.rpc('fn_confirmer_virement_admin' as any, { p_facture_id: f.id });
+                                  if (error || (data as any)?.error) {
+                                    toast.error((data as any)?.error || error?.message || 'Erreur');
+                                  } else {
+                                    toast.success('Virement confirmé ✅');
+                                    charger();
+                                  }
+                                  setActionId(null);
+                                }}
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" /> Confirmer
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-7 text-xs gap-1"
+                                disabled={actionId === f.id}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setActionId(f.id);
+                                  const { data, error } = await supabase.rpc('fn_rejeter_virement_admin' as any, { p_facture_id: f.id });
+                                  if (error || (data as any)?.error) {
+                                    toast.error((data as any)?.error || error?.message || 'Erreur');
+                                  } else {
+                                    toast.success('Virement rejeté — facture remise en Émise');
+                                    charger();
+                                  }
+                                  setActionId(null);
+                                }}
+                              >
+                                <XCircle className="h-3.5 w-3.5" /> Rejeter
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Télécharger la facture PDF"
+                            onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                     {isExpanded && <FactureDetailRow factureId={f.id} />}
