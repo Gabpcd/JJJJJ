@@ -77,6 +77,6 @@ serve(async (req) => {
       documentation: "https://app.jolene.app/admin/api"
     }), { status: 404, headers: corsHeaders });
   } catch (e) {
-    return new Response(JSON.stringify({ error: "Erreur interne", detail: String(e) }), { status: 500, headers: corsHeaders });
+    console.error("api-v1 error:", e); return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: corsHeaders });
   }
 });
