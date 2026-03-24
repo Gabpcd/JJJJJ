@@ -9,6 +9,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { CodesPointageMission } from '@/components/CodesPointageMission';
+import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -165,6 +166,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [proposing, setProposing] = useState<string | null>(null);
   const [nbCandidatures, setNbCandidatures] = useState(0);
 
+  // Stripe Connect
+  const [soignantHasConnect, setSoignantHasConnect] = useState(false);
+  const [connectPayLoading, setConnectPayLoading] = useState(false);
+  const [showConnectCheckout, setShowConnectCheckout] = useState(false);
+  const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
+  const [connectDecomposition, setConnectDecomposition] = useState<{ commission_ttc: number; salaire_brut: number; total: number } | null>(null);
+
   useEffect(() => {
     if (!id) return;
     const load = async () => {
@@ -207,6 +215,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           .eq('mission_id', id!)
           .eq('statut', 'EN_ATTENTE');
         setNbCandidatures(count || 0);
+      }
+
+      // Check if soignant has Connect account
+      if (m && m.soignant_assigne_id && (m as any).statut === 'TERMINEE') {
+        const { data: connectData } = await supabase
+          .from('stripe_connect_onboarding')
+          .select('statut')
+          .eq('soignant_id', m.soignant_assigne_id)
+          .maybeSingle();
+        setSoignantHasConnect(connectData?.statut === 'COMPLET');
       }
 
       setLoading(false);
@@ -433,6 +451,42 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   )}
                 </div>
               )}
+              {/* Stripe Connect payment button */}
+              {!isAdmin && m.statut === 'TERMINEE' && soignantHasConnect && (
+                <div className="card-base border-primary/20 space-y-3">
+                  <p className="text-sm font-semibold text-foreground">💳 Payer via Stripe (commission + salaire)</p>
+                  {connectDecomposition && (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>Commission Jolene : {connectDecomposition.commission_ttc.toFixed(2)} €</p>
+                      <p>Salaire soignant : {connectDecomposition.salaire_brut.toFixed(2)} €</p>
+                      <p className="font-semibold text-foreground">Total : {connectDecomposition.total.toFixed(2)} €</p>
+                    </div>
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={connectPayLoading}
+                    onClick={async () => {
+                      setConnectPayLoading(true);
+                      const { data, error: fnErr } = await supabase.functions.invoke('stripe-connect-pay-mission', {
+                        body: { mission_id: m.id },
+                      });
+                      if (fnErr || !data?.client_secret) {
+                        toast.error(data?.error || 'Erreur lors du paiement');
+                        setConnectPayLoading(false);
+                        return;
+                      }
+                      setConnectClientSecret(data.client_secret);
+                      setConnectDecomposition({ commission_ttc: data.commission_ttc, salaire_brut: data.salaire_brut, total: data.total });
+                      setShowConnectCheckout(true);
+                      setConnectPayLoading(false);
+                    }}
+                    className="gap-2"
+                  >
+                    {connectPayLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                    Payer commission + salaire
+                  </Button>
+                </div>
+              )}
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <CodesPointageMission missionId={m.id} />
               )}
@@ -618,6 +672,19 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           typeEvaluateur="ETABLISSEMENT"
           nomEvalue={m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : 'Soignant'}
           onTermine={() => setShowEvaluation(false)}
+        />
+      )}
+
+      {showConnectCheckout && connectClientSecret && (
+        <StripeEmbeddedCheckout
+          factureId={m.id}
+          open={showConnectCheckout}
+          onClose={() => setShowConnectCheckout(false)}
+          onComplete={() => {
+            setShowConnectCheckout(false);
+            toast.success('Paiement effectué ! Le soignant recevra son salaire via Stripe.');
+            window.location.reload();
+          }}
         />
       )}
     </LayoutApp>

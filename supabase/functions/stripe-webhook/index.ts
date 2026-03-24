@@ -72,6 +72,58 @@ serve(async (req) => {
     // Handle checkout.session.completed
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
+      const metadataType = session.metadata?.type;
+
+      // ── Connect mission payment flow ──
+      if (metadataType === "CONNECT_MISSION_PAYMENT") {
+        const missionId = session.metadata?.mission_id;
+        const soignantId = session.metadata?.soignant_id;
+        const connectedAccountId = session.metadata?.connected_account_id;
+        const soignantCents = parseInt(session.metadata?.soignant_cents || "0", 10);
+
+        if (missionId && connectedAccountId && soignantCents > 0) {
+          try {
+            const transfer = await stripe.transfers.create({
+              amount: soignantCents,
+              currency: "eur",
+              destination: connectedAccountId,
+              transfer_group: `mission_${missionId}`,
+              metadata: { mission_id: missionId, soignant_id: soignantId || "" },
+            });
+
+            await supabaseAdmin
+              .from("stripe_transfers")
+              .update({
+                statut: "TRANSFERE",
+                stripe_transfer_id: transfer.id,
+                stripe_charge_id: session.payment_intent as string,
+                transfere_le: new Date().toISOString(),
+                modifie_le: new Date().toISOString(),
+              })
+              .eq("mission_id", missionId);
+
+            await supabaseAdmin
+              .from("missions")
+              .update({ mode_paiement_soignant: "STRIPE_CONNECT", modifie_le: new Date().toISOString() })
+              .eq("id", missionId);
+
+            console.log(`Connect transfer ${transfer.id} created for mission ${missionId}`);
+          } catch (transferErr) {
+            console.error("Connect transfer failed:", transferErr);
+            await supabaseAdmin
+              .from("stripe_transfers")
+              .update({ statut: "ECHOUE", modifie_le: new Date().toISOString() })
+              .eq("mission_id", missionId);
+          }
+        }
+
+        return new Response(JSON.stringify({ received: true }), {
+          status: 200,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      // ── Standard facture payment flow ──
       const factureId = session.metadata?.facture_id;
 
       if (!factureId) {
@@ -141,7 +193,7 @@ serve(async (req) => {
           p_navigateur: "stripe-webhook",
         });
 
-        // M6: Send FACTURE_PAYEE email — use destinataire_id only, no raw email address
+        // M6: Send FACTURE_PAYEE email
         {
           const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
           const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -240,6 +292,41 @@ serve(async (req) => {
       if (failErr) {
         console.error("Erreur mise à jour facture en retard:", failErr);
       }
+    }
+
+    // Handle account.updated (Connect onboarding status)
+    if (event.type === "account.updated") {
+      const account = event.data.object as Stripe.Account;
+      const accountId = account.id;
+
+      let statut = "EN_COURS";
+      if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+        statut = "COMPLET";
+      } else if (account.requirements?.disabled_reason) {
+        statut = "SUSPENDU";
+      }
+
+      let ibanLast4: string | null = null;
+      if (account.external_accounts?.data?.length) {
+        const bankAccount = account.external_accounts.data[0];
+        if ("last4" in bankAccount) {
+          ibanLast4 = bankAccount.last4 as string;
+        }
+      }
+
+      await supabaseAdmin
+        .from("stripe_connect_onboarding")
+        .update({
+          statut,
+          charges_enabled: account.charges_enabled ?? false,
+          payouts_enabled: account.payouts_enabled ?? false,
+          details_submitted: account.details_submitted ?? false,
+          iban_last4: ibanLast4,
+          modifie_le: new Date().toISOString(),
+        })
+        .eq("stripe_account_id", accountId);
+
+      console.log(`Connect account ${accountId} updated to ${statut}`);
     }
 
     return new Response(JSON.stringify({ received: true }), {

@@ -47,3 +47,12 @@ verify_jwt = false
 
 [functions.verify-siret]
 verify_jwt = false
+
+[functions.stripe-connect-onboard]
+verify_jwt = false
+
+[functions.stripe-connect-status]
+verify_jwt = false
+
+[functions.stripe-connect-pay-mission]
+verify_jwt = false
