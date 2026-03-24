@@ -281,6 +281,22 @@ Analyse ce document et vérifie sa conformité.`;
       p_verifie_le: analysis.verdict === "VERIFIE" ? new Date().toISOString() : null,
     });
 
+    // 6b. Store AI-extracted name fields for identity cross-check
+    const nomExtraitIa = analysis.nom_extrait || null;
+    const prenomExtraitIa = analysis.prenom_extrait || null;
+    const scoreConfianceIa = typeof analysis.score_confiance === "number" ? analysis.score_confiance : null;
+    const coherenceNom = nomExtraitIa && soignant?.nom
+      ? nomExtraitIa.toUpperCase() === soignant.nom.toUpperCase()
+      : null;
+
+    await supabase.from("documents_soignants").update({
+      resultat_ia: analysis,
+      nom_extrait_ia: nomExtraitIa,
+      prenom_extrait_ia: prenomExtraitIa,
+      score_confiance_ia: scoreConfianceIa,
+      coherence_nom: coherenceNom,
+    } as any).eq("id", document_id);
+
     // 7. Audit
     await supabase.rpc("fn_ecrire_audit_safe" as any, {
       p_acteur_id: doc.soignant_id,

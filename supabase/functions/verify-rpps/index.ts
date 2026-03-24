@@ -139,6 +139,8 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
   };
 }
 
+import { createClient } from "npm:@supabase/supabase-js@2";
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
