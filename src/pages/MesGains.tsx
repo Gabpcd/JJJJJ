@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Banknote, Clock, Download, TrendingUp } from 'lucide-react';
+import { Banknote, Clock, Download, TrendingUp, ChevronRight } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
