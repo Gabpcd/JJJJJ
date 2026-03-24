@@ -10,6 +10,7 @@ import { GraphiqueGains6Mois } from '@/components/GraphiqueGains6Mois';
 import { ModalAttestation } from '@/components/ModalAttestation';
 import { ModalCotisations } from '@/components/ModalCotisations';
 import { useAuth } from '@/contexts/AuthContext';
+import { BandeauPaiementDeclare } from '@/components/BandeauPaiementDeclare';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

@@ -12,6 +12,7 @@ import { CarteMission } from '@/components/CarteMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EtatVide } from '@/components/EtatVide';
 import { FABCreerMission } from '@/components/FABCreerMission';
+import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { WidgetPalierFidelite } from '@/components/WidgetPalierFidelite';
 import { WidgetBFA } from '@/components/WidgetBFA';
 import { BadgePalier } from '@/components/BadgePalier';
@@ -277,6 +278,7 @@ export default function DashboardEtablissement() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <BandeauEvaluationsEnAttente role="ETABLISSEMENT" />
       <OnboardingGuide role="ADMIN_ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">

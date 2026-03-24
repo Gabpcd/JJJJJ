@@ -18,6 +18,7 @@ import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 import { BoutonFavori } from '@/components/BoutonFavori';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
+import { WorkflowPaiementMission } from '@/components/WorkflowPaiementMission';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';

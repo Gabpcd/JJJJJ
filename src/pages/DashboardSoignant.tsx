@@ -14,6 +14,7 @@ import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { BadgeNiveau } from '@/components/BadgeNiveau';
 import { BandeauGoalGradient, CelebrationJalonManager } from '@/components/GoalGradient';
 import { LayoutApp } from '@/components/LayoutApp';
+import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
 import { JaugeProgression } from '@/components/JaugeProgression';

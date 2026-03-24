@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Briefcase, Phone, ShieldAlert, ShieldCheck, Star } from 'lucide-react';
+import { EtoilesNote } from '@/components/EtoilesNote';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { usePageTitle } from '@/hooks/usePageTitle';
