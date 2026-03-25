@@ -2276,6 +2276,7 @@ export type Database = {
           contrat_id: string
           document_rib_id: string | null
           etablissement_id: string
+          expire_le: string | null
           id: string
           mission_id: string
           partage_le: string | null
@@ -2288,6 +2289,7 @@ export type Database = {
           contrat_id: string
           document_rib_id?: string | null
           etablissement_id: string
+          expire_le?: string | null
           id?: string
           mission_id: string
           partage_le?: string | null
@@ -2300,6 +2302,7 @@ export type Database = {
           contrat_id?: string
           document_rib_id?: string | null
           etablissement_id?: string
+          expire_le?: string | null
           id?: string
           mission_id?: string
           partage_le?: string | null
@@ -4023,6 +4026,7 @@ export type Database = {
       }
       fn_mon_token_calendrier: { Args: never; Returns: string }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
+      fn_nettoyer_partages_rib_expires: { Args: never; Returns: undefined }
       fn_nettoyer_tokens_push: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }

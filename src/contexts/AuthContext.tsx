@@ -68,16 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch { /* fallback */ }
 
-    const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: u.id,
-      p_type_acteur: verifiedRole,
+    const { error: auditError } = await supabase.rpc('fn_audit_connexion', {
       p_action: 'CONNEXION',
-      p_type_ressource: verifiedRole === 'SOIGNANT' ? 'soignant' : 'etablissement',
-      p_id_ressource: u.id,
-      p_cle_s3: null,
-      p_details: { methode: 'email_password', horodatage: new Date().toISOString() },
-      p_ip: null,
-      p_navigateur: navigator.userAgent,
     });
     if (auditError) logger.error('Audit connexion échoué', auditError);
 
@@ -89,25 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const deconnexion = useCallback(async () => {
     const currentUser = user;
     if (currentUser) {
-      // Get server-side role for audit — never use client-side role
-      let auditRole = 'INCONNU';
-      try {
-        const { data: roleData } = await supabase.rpc('fn_get_my_role');
-        if (roleData && (roleData as any).role) {
-          auditRole = (roleData as any).role;
-        }
-      } catch { /* fallback */ }
-
-      const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: currentUser.id,
-        p_type_acteur: auditRole,
+      const { error: auditError } = await supabase.rpc('fn_audit_connexion', {
         p_action: 'DECONNEXION',
-        p_type_ressource: auditRole === 'SOIGNANT' ? 'soignant' : 'etablissement',
-        p_id_ressource: currentUser.id,
-        p_cle_s3: null,
-        p_details: { horodatage: new Date().toISOString() },
-        p_ip: null,
-        p_navigateur: navigator.userAgent,
       });
       if (auditError) logger.error('Audit déconnexion échoué', auditError);
     }

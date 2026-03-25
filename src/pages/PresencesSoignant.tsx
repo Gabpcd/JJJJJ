@@ -164,9 +164,10 @@ export default function PresencesSoignant() {
         valide_par_etablissement, valide_le,
         methode_pointage_arrivee, methode_pointage_depart,
         code_arrivee, code_depart,
-        missions!inner(id, intitule, etablissement_id, debut_le, fin_le)
+        missions!inner(id, intitule, etablissement_id, debut_le, fin_le, statut)
       `)
       .eq('soignant_id', user!.id)
+      .eq('missions.statut', 'TERMINEE')
       .not('pointage_arrivee_le', 'is', null)
       .order('pointage_arrivee_le', { ascending: false })
       .limit(100);
@@ -463,6 +464,7 @@ export default function PresencesSoignant() {
                 const m = p.missions;
                 const arrivee = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
                 const depart = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
+                const heuresTravaillees = arrivee && depart ? ((depart.getTime() - arrivee.getTime()) / 3600000).toFixed(1) : null;
 
                 return (
                   <div key={p.id} className="card-base cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(`/soignant/presences/mission/${p.mission_id}`)}>
@@ -486,7 +488,7 @@ export default function PresencesSoignant() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
+                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
                       <div>
                         <span className="font-medium text-foreground">Arrivée :</span>{' '}
                         {arrivee ? format(arrivee, "HH'h'mm", { locale: fr }) : '—'}
@@ -496,6 +498,10 @@ export default function PresencesSoignant() {
                         <span className="font-medium text-foreground">Départ :</span>{' '}
                         {depart ? format(depart, "HH'h'mm", { locale: fr }) : '—'}
                         <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_depart)}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-foreground">Heures :</span>{' '}
+                        {heuresTravaillees ? `${heuresTravaillees}h` : '—'}
                       </div>
                       {(p.code_arrivee || p.code_depart) && (
                         <div className="col-span-2">
