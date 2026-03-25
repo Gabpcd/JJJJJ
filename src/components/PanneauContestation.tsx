@@ -194,6 +194,37 @@ export function PanneauContestation({
   if (loading) return null;
   if (!litige && !peutContester) return null;
 
+  // Amicable closure logic
+  const monAccord = role === 'SOIGNANT' ? litige?.accord_soignant : litige?.accord_etablissement;
+  const autreAccord = role === 'SOIGNANT' ? litige?.accord_etablissement : litige?.accord_soignant;
+  const peutProposerCloture = litige && statutOuvert && !estResolu && !monAccord;
+  const autreAPropose = litige && statutOuvert && !estResolu && autreAccord && !monAccord;
+  const enAttenteCloture = litige && statutOuvert && !estResolu && monAccord && !autreAccord;
+
+  const proposerCloture = async () => {
+    if (!user || !litige) return;
+    setEnvoi(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_proposer_cloture_litige' as any, {
+        p_litige_id: litige.id,
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      if (data?.statut === 'cloture_validee') {
+        toast.success('✅ Litige clôturé à l\'amiable !');
+      } else {
+        toast.success('Proposition de clôture envoyée');
+      }
+      charger();
+      onUpdate?.();
+    } catch (err: any) {
+      toast.error(extraireMessageErreur(err));
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
   const initiePar = litige?.initie_par === 'SOIGNANT' ? 'soignant' : 'établissement';
 
   return (
