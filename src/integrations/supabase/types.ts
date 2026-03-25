@@ -1635,6 +1635,10 @@ export type Database = {
       }
       litiges: {
         Row: {
+          accord_etablissement: boolean | null
+          accord_etablissement_le: string | null
+          accord_soignant: boolean | null
+          accord_soignant_le: string | null
           cree_le: string | null
           etablissement_id: string
           id: string
@@ -1650,6 +1654,10 @@ export type Database = {
           statut: string | null
         }
         Insert: {
+          accord_etablissement?: boolean | null
+          accord_etablissement_le?: string | null
+          accord_soignant?: boolean | null
+          accord_soignant_le?: string | null
           cree_le?: string | null
           etablissement_id: string
           id?: string
@@ -1665,6 +1673,10 @@ export type Database = {
           statut?: string | null
         }
         Update: {
+          accord_etablissement?: boolean | null
+          accord_etablissement_le?: string | null
+          accord_soignant?: boolean | null
+          accord_soignant_le?: string | null
           cree_le?: string | null
           etablissement_id?: string
           id?: string
@@ -4086,6 +4098,10 @@ export type Database = {
       }
       fn_presences_detail_mission: {
         Args: { p_mission_id: string }
+        Returns: Json
+      }
+      fn_proposer_cloture_litige: {
+        Args: { p_litige_id: string }
         Returns: Json
       }
       fn_proposer_mission_soignant: {
