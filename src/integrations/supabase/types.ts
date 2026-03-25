@@ -3492,6 +3492,7 @@ export type Database = {
         Args: { p_mission_id: string; p_soignant_id: string }
         Returns: Json
       }
+      fn_audit_connexion: { Args: { p_action: string }; Returns: Json }
       fn_auto_facturation_mensuelle: { Args: never; Returns: Json }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_badge_stats: { Args: never; Returns: Json }
