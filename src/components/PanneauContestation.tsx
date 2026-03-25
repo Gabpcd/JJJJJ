@@ -23,6 +23,10 @@ interface Litige {
   cree_le: string;
   resolu_le: string | null;
   resolu_par: string | null;
+  accord_soignant: boolean | null;
+  accord_etablissement: boolean | null;
+  accord_soignant_le: string | null;
+  accord_etablissement_le: string | null;
 }
 
 interface Props {
