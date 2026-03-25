@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { AlertTriangle, Send, Clock, CheckCircle, Shield, MessageSquare, Ban, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Send, Clock, CheckCircle, Shield, MessageSquare, Ban, ArrowRight, Handshake } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
@@ -23,6 +23,10 @@ interface Litige {
   cree_le: string;
   resolu_le: string | null;
   resolu_par: string | null;
+  accord_soignant: boolean | null;
+  accord_etablissement: boolean | null;
+  accord_soignant_le: string | null;
+  accord_etablissement_le: string | null;
 }
 
 interface Props {
@@ -62,7 +66,7 @@ export function PanneauContestation({
   const charger = useCallback(async () => {
     const { data } = await supabase
       .from('litiges')
-      .select('id, presence_id, mission_id, soignant_id, etablissement_id, initie_par, motif, reponse, statut, resolution, resolu_le, resolu_par, cree_le')
+      .select('id, presence_id, mission_id, soignant_id, etablissement_id, initie_par, motif, reponse, statut, resolution, resolu_le, resolu_par, cree_le, accord_soignant, accord_etablissement, accord_soignant_le, accord_etablissement_le')
       .eq('presence_id', presenceId)
       .order('cree_le', { ascending: false })
       .limit(1)
@@ -189,6 +193,37 @@ export function PanneauContestation({
 
   if (loading) return null;
   if (!litige && !peutContester) return null;
+
+  // Amicable closure logic
+  const monAccord = role === 'SOIGNANT' ? litige?.accord_soignant : litige?.accord_etablissement;
+  const autreAccord = role === 'SOIGNANT' ? litige?.accord_etablissement : litige?.accord_soignant;
+  const peutProposerCloture = litige && statutOuvert && !estResolu && !monAccord;
+  const autreAPropose = litige && statutOuvert && !estResolu && autreAccord && !monAccord;
+  const enAttenteCloture = litige && statutOuvert && !estResolu && monAccord && !autreAccord;
+
+  const proposerCloture = async () => {
+    if (!user || !litige) return;
+    setEnvoi(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_proposer_cloture_litige' as any, {
+        p_litige_id: litige.id,
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      if (data?.statut === 'cloture_validee') {
+        toast.success('✅ Litige clôturé à l\'amiable !');
+      } else {
+        toast.success('Proposition de clôture envoyée');
+      }
+      charger();
+      onUpdate?.();
+    } catch (err: any) {
+      toast.error(extraireMessageErreur(err));
+    } finally {
+      setEnvoi(false);
+    }
+  };
 
   const initiePar = litige?.initie_par === 'SOIGNANT' ? 'soignant' : 'établissement';
 
@@ -357,6 +392,36 @@ export function PanneauContestation({
               </button>
               <p className="text-[11px] text-muted-foreground">{reponse.length}/500</p>
             </div>
+          </div>
+        )}
+
+        {/* Amicable closure */}
+        {!estAdminPlateforme && litige && statutOuvert && !estResolu && (
+          <div className="border-t border-border pt-3">
+            {enAttenteCloture && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+                <Clock className="h-3.5 w-3.5" />
+                En attente d'accord de l'autre partie pour la clôture à l'amiable
+              </div>
+            )}
+            {autreAPropose && (
+              <button
+                onClick={proposerCloture}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-success/10 text-success text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-success/20 transition-colors border border-success/20"
+              >
+                <CheckCircle className="h-3.5 w-3.5" /> ✅ Accepter la clôture à l'amiable
+              </button>
+            )}
+            {peutProposerCloture && !autreAPropose && (
+              <button
+                onClick={proposerCloture}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-accent text-accent-foreground text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-accent/80 transition-colors border border-border"
+              >
+                <Handshake className="h-3.5 w-3.5" /> 🤝 Proposer la clôture à l'amiable
+              </button>
+            )}
           </div>
         )}
 
