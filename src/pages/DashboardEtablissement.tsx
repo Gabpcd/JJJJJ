@@ -393,7 +393,12 @@ export default function DashboardEtablissement() {
         <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />
       )}
 
-      {/* Widget BFA */}
+      {/* Carte BFA Info */}
+      {etab && (
+        <CarteBFAInfo etablissementId={etablissementId!} />
+      )}
+
+      {/* Widget BFA (legacy) */}
       {etab && (
         <WidgetBFA etablissementId={etablissementId!} groupeId={etab.groupe_sante_id} />
       )}
