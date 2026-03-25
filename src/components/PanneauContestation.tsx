@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { AlertTriangle, Send, Clock, CheckCircle, Shield, MessageSquare, Ban, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Send, Clock, CheckCircle, Shield, MessageSquare, Ban, ArrowRight, Handshake } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
