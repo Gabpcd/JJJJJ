@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Printer, CheckCircle, Clock, Shield, ExternalLink } from 'lucide-react';
+import { FileText, Printer, CheckCircle, Clock, Shield, ExternalLink, Download } from 'lucide-react';
 import { BandeauRappelDPAE } from '@/components/BandeauRappelDPAE';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -19,6 +19,90 @@ import { sanitizeHTML } from '@/lib/sanitize';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { logger } from '@/lib/logger';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+
+function escapeContractValue(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatContractDate(value?: string | null): string {
+  if (!value) return '—';
+  return format(new Date(value), "dd/MM/yyyy 'à' HH:mm", { locale: fr });
+}
+
+function replaceTemplateVariables(template: string, values: Record<string, string>): string {
+  return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey) => values[rawKey.trim()] ?? '');
+}
+
+function buildFallbackContractHtml({
+  contrat,
+  mission,
+  soignant,
+  etablissement,
+  templateHtml,
+}: {
+  contrat: any;
+  mission?: any;
+  soignant?: any;
+  etablissement?: any;
+  templateHtml?: string | null;
+}) {
+  const valeurs: Record<string, string> = {
+    numero_contrat: escapeContractValue(contrat?.numero_contrat ?? '—'),
+    type_contrat: escapeContractValue(contrat?.type_contrat ?? '—'),
+    mission_intitule: escapeContractValue(mission?.intitule ?? 'Mission'),
+    mission_service: escapeContractValue(mission?.service ?? '—'),
+    mission_debut: escapeContractValue(formatContractDate(mission?.debut_le)),
+    mission_fin: escapeContractValue(formatContractDate(mission?.fin_le)),
+    mission_duree_heures: escapeContractValue(mission?.duree_heures ?? '—'),
+    taux_horaire: mission?.taux_horaire_base != null ? `${Number(mission.taux_horaire_base).toFixed(2)} €` : '—',
+    etablissement_nom: escapeContractValue(etablissement?.nom ?? '—'),
+    etablissement_siret: escapeContractValue(etablissement?.siret ?? '—'),
+    etablissement_finess: escapeContractValue(etablissement?.finess ?? '—'),
+    etablissement_email: escapeContractValue(etablissement?.email_contact ?? '—'),
+    etablissement_telephone: escapeContractValue(etablissement?.telephone_contact ?? '—'),
+    etablissement_adresse: escapeContractValue([
+      etablissement?.adresse_rue,
+      etablissement?.adresse_code_postal,
+      etablissement?.adresse_ville,
+    ].filter(Boolean).join(', ') || '—'),
+    soignant_nom: escapeContractValue([soignant?.prenom, soignant?.nom].filter(Boolean).join(' ') || '—'),
+    soignant_prenom: escapeContractValue(soignant?.prenom ?? '—'),
+    soignant_profession: escapeContractValue(soignant?.profession ?? '—'),
+    soignant_rpps: escapeContractValue(soignant?.numero_rpps ?? '—'),
+  };
+
+  const templateReconstruit = templateHtml
+    ? replaceTemplateVariables(templateHtml, valeurs).replace(/\{\{\s*[^}]+\s*\}\}/g, '')
+    : '';
+
+  if (templateReconstruit.trim()) {
+    return templateReconstruit;
+  }
+
+  return `
+    <article>
+      <h1>Contrat ${valeurs.numero_contrat}</h1>
+      <p><strong>Type :</strong> ${valeurs.type_contrat}</p>
+      <p>Version reconstituée automatiquement à partir des données de mission enregistrées.</p>
+      <h2>Établissement</h2>
+      <p><strong>${valeurs.etablissement_nom}</strong><br/>SIRET : ${valeurs.etablissement_siret}<br/>Adresse : ${valeurs.etablissement_adresse}<br/>Email : ${valeurs.etablissement_email}<br/>Téléphone : ${valeurs.etablissement_telephone}</p>
+      <h2>Soignant·e</h2>
+      <p><strong>${valeurs.soignant_nom}</strong><br/>Profession : ${valeurs.soignant_profession}<br/>RPPS : ${valeurs.soignant_rpps}</p>
+      <h2>Mission concernée</h2>
+      <p><strong>${valeurs.mission_intitule}</strong><br/>Service : ${valeurs.mission_service}<br/>Début : ${valeurs.mission_debut}<br/>Fin : ${valeurs.mission_fin}<br/>Durée prévue : ${valeurs.mission_duree_heures} h<br/>Taux horaire : ${valeurs.taux_horaire}</p>
+      <h2>Signatures</h2>
+      <ul>
+        <li>Établissement : ${contrat?.signature_etablissement ? `signé le ${escapeContractValue(formatContractDate(contrat.signature_etablissement_le))}` : 'en attente'}</li>
+        <li>Soignant·e : ${contrat?.signature_soignant ? `signé le ${escapeContractValue(formatContractDate(contrat.signature_soignant_le))}` : 'en attente'}</li>
+      </ul>
+    </article>
+  `;
+}
 
 export default function ContratMission() {
   usePageTitle('Contrat');
@@ -36,6 +120,7 @@ export default function ContratMission() {
   const [modeSignature, setModeSignature] = useState<'CANVAS' | 'YOUSIGN'>('CANVAS');
   const [yousignLoading, setYousignLoading] = useState(false);
   const [yousignUrl, setYousignUrl] = useState<string | null>(null);
+  const [fallbackHtml, setFallbackHtml] = useState('');
 
   const { role: serverRole } = useRole();
   const role: UserRole = serverRole === 'INCONNU' ? 'SOIGNANT' : serverRole;
@@ -48,6 +133,43 @@ export default function ContratMission() {
         .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, dpae_effectuee, dpae_effectuee_le, mode_signature')
         .eq('id', id)
         .single();
+
+      if (data) {
+        const [missionRes, soignantRes, etabRes, templateRes] = await Promise.all([
+          supabase
+            .from('missions')
+            .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base')
+            .eq('id', data.mission_id)
+            .maybeSingle(),
+          supabase
+            .from('soignants')
+            .select('prenom, nom, profession, numero_rpps')
+            .eq('id', data.soignant_id)
+            .maybeSingle(),
+          supabase
+            .from('etablissements')
+            .select('nom, siret, finess, email_contact, telephone_contact, adresse_rue, adresse_code_postal, adresse_ville')
+            .eq('id', data.etablissement_id)
+            .maybeSingle(),
+          supabase
+            .from('templates_contrat')
+            .select('contenu_html')
+            .eq('type_contrat', data.type_contrat)
+            .eq('est_actif', true)
+            .maybeSingle(),
+        ]);
+
+        setFallbackHtml(buildFallbackContractHtml({
+          contrat: data,
+          mission: missionRes.data,
+          soignant: soignantRes.data,
+          etablissement: etabRes.data,
+          templateHtml: templateRes.data?.contenu_html,
+        }));
+      } else {
+        setFallbackHtml('');
+      }
+
       setContrat(data);
       setLoading(false);
     };
@@ -109,6 +231,39 @@ export default function ContratMission() {
   const handleFallbackCanvas = async () => {
     setModeSignature('CANVAS');
     // Reset mode_signature in DB if needed (admin-only update, so just change UI)
+  };
+
+  const handleDownloadContract = () => {
+    const contractHtml = contrat?.contenu_html || fallbackHtml;
+    if (!contractHtml) {
+      afficherNotification({ type: 'erreur', message: 'Aucun contrat téléchargeable pour le moment.' });
+      return;
+    }
+
+    const documentHtml = `<!doctype html>
+      <html lang="fr">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>${escapeContractValue(contrat?.numero_contrat ?? 'Contrat')}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6; padding: 32px; }
+            h1, h2, h3 { color: #0f172a; }
+            article { max-width: 900px; margin: 0 auto; }
+          </style>
+        </head>
+        <body>${contractHtml}</body>
+      </html>`;
+
+    const blob = new Blob([documentHtml], { type: 'text/html;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${contrat?.numero_contrat ?? 'contrat'}.html`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   };
 
   const handleSigner = async () => {
@@ -196,6 +351,7 @@ export default function ContratMission() {
 
   const isSoignant = contrat.soignant_id === user?.id;
   const dejaSigneParMoi = isSoignant ? contrat.signature_soignant : contrat.signature_etablissement;
+  const contractHtml = contrat.contenu_html || fallbackHtml;
 
   return (
     <LayoutApp role={role}>
@@ -230,10 +386,28 @@ export default function ContratMission() {
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-3 mb-4">
+          <button
+            onClick={handleDownloadContract}
+            disabled={!contractHtml}
+            className="btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="h-4 w-4" /> Télécharger le contrat
+          </button>
+          <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
+            <Printer className="h-4 w-4" /> Imprimer
+          </button>
+        </div>
+
         {/* Contract HTML render */}
         <div className="card-base mb-4 max-h-[60vh] overflow-y-auto contrat-print">
-          {contrat.contenu_html ? (
-            <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(contrat.contenu_html) }} className="prose prose-sm max-w-none text-foreground" />
+          {!contrat.contenu_html && contractHtml && (
+            <p className="text-xs text-muted-foreground mb-4">
+              Le document original n'était pas stocké ; cette version a été reconstituée automatiquement à partir des données de la mission.
+            </p>
+          )}
+          {contractHtml ? (
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(contractHtml) }} className="prose prose-sm max-w-none text-foreground" />
           ) : (
             <p className="text-center text-muted-foreground py-8">Le contenu du contrat n'est pas encore disponible.</p>
           )}
