@@ -19,7 +19,7 @@ import { stockerPointageHorsLigne } from '@/lib/horsLigne';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash, Eye } from 'lucide-react';
+import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash, Eye, Activity } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ export default function PresencesSoignant() {
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [missions, setMissions] = useState<any[]>([]);
+  const [missionsEnCours, setMissionsEnCours] = useState<any[]>([]);
   const [presencesValidees, setPresencesValidees] = useState<any[]>([]);
   const [historiquePresences, setHistoriquePresences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +118,30 @@ export default function PresencesSoignant() {
       missionsList = missionsList.map((m: any) => ({ ...m, etablissements: etabMap[m.etablissement_id] || null }));
     }
     setMissions(missionsList);
+
+    // Missions EN_COURS avec arrivée pointée mais pas de départ
+    const { data: enCoursData } = await supabase
+      .from('missions')
+      .select(`
+        id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id,
+        presences(id, pointage_arrivee_le, pointage_depart_le,
+          perimetre_gps_valide, alerte_teleportation, distance_etablissement_m,
+          arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le,
+          methode_pointage_arrivee, methode_pointage_depart)
+      `)
+      .eq('soignant_assigne_id', user.id)
+      .eq('statut', 'EN_COURS')
+      .order('debut_le', { ascending: false });
+
+    let enCoursList = (enCoursData || []).filter((m: any) => {
+      const p = m.presences?.[0];
+      return p?.pointage_arrivee_le && !p?.pointage_depart_le;
+    });
+    if (enCoursList.length > 0) {
+      const etabMapEC = await fetchEtablissementsSafe(enCoursList.map((m: any) => m.etablissement_id));
+      enCoursList = enCoursList.map((m: any) => ({ ...m, etablissements: etabMapEC[m.etablissement_id] || null }));
+    }
+    setMissionsEnCours(enCoursList);
 
     if (missionsList.length > 0) {
       const missionIds = missionsList.map((m: any) => m.id);
@@ -359,11 +384,38 @@ export default function PresencesSoignant() {
         <p className="text-sm text-muted-foreground mt-1">Pointez vos arrivées et départs pour chaque mission</p>
       </div>
 
-      <Tabs defaultValue="aujourdhui">
-        <TabsList className="w-full max-w-xs mb-4">
+      <Tabs defaultValue="encours">
+        <TabsList className="w-full max-w-md mb-4">
+          <TabsTrigger value="encours" className="flex-1 gap-1.5"><Activity className="h-4 w-4" />En cours</TabsTrigger>
           <TabsTrigger value="aujourdhui" className="flex-1 gap-1.5"><Clock className="h-4 w-4" />Aujourd'hui</TabsTrigger>
           <TabsTrigger value="historique" className="flex-1 gap-1.5"><History className="h-4 w-4" />Historique</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="encours">
+          {missionsEnCours.length > 0 ? (
+            <div className="space-y-4">
+              {missionsEnCours.map((m: any) => {
+                const presence = m.presences?.[0] || null;
+                return (
+                  <CartePointage
+                    key={m.id}
+                    mission={m}
+                    presence={presence}
+                    onPointerArrivee={() => pointerArrivee(m.id)}
+                    onPointerDepart={() => presence ? pointerDepart(presence.id, m.id) : Promise.resolve()}
+                    onRecharger={charger}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <EtatVide
+              icone={Activity}
+              titre="Aucune mission en cours"
+              sousTitre="Les missions avec une arrivée pointée apparaîtront ici."
+            />
+          )}
+        </TabsContent>
 
         <TabsContent value="aujourdhui">
           {missions.length > 0 ? (
