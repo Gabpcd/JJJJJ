@@ -382,6 +382,11 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
+      {/* Carte Commission Jolene */}
+      {etab && (
+        <CarteCommissionJolene etablissementId={etablissementId!} />
+      )}
+
       {/* Widget Palier de Fidélité */}
       {etab && paliers.length > 0 && (
         <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />
