@@ -395,6 +395,36 @@ export function PanneauContestation({
           </div>
         )}
 
+        {/* Amicable closure */}
+        {!estAdminPlateforme && litige && statutOuvert && !estResolu && (
+          <div className="border-t border-border pt-3">
+            {enAttenteCloture && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+                <Clock className="h-3.5 w-3.5" />
+                En attente d'accord de l'autre partie pour la clôture à l'amiable
+              </div>
+            )}
+            {autreAPropose && (
+              <button
+                onClick={proposerCloture}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-success/10 text-success text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-success/20 transition-colors border border-success/20"
+              >
+                <CheckCircle className="h-3.5 w-3.5" /> ✅ Accepter la clôture à l'amiable
+              </button>
+            )}
+            {peutProposerCloture && !autreAPropose && (
+              <button
+                onClick={proposerCloture}
+                disabled={envoi}
+                className="flex items-center gap-1.5 bg-accent text-accent-foreground text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50 hover:bg-accent/80 transition-colors border border-border"
+              >
+                <Handshake className="h-3.5 w-3.5" /> 🤝 Proposer la clôture à l'amiable
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Admin-only: resolution buttons */}
         {estAdminPlateforme && litige && statutOuvert && (
           <div className="space-y-2 border-t border-border pt-3">
