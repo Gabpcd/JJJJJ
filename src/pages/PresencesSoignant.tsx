@@ -119,6 +119,30 @@ export default function PresencesSoignant() {
     }
     setMissions(missionsList);
 
+    // Missions EN_COURS avec arrivée pointée mais pas de départ
+    const { data: enCoursData } = await supabase
+      .from('missions')
+      .select(`
+        id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id,
+        presences(id, pointage_arrivee_le, pointage_depart_le,
+          perimetre_gps_valide, alerte_teleportation, distance_etablissement_m,
+          arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le,
+          methode_pointage_arrivee, methode_pointage_depart)
+      `)
+      .eq('soignant_assigne_id', user.id)
+      .eq('statut', 'EN_COURS')
+      .order('debut_le', { ascending: false });
+
+    let enCoursList = (enCoursData || []).filter((m: any) => {
+      const p = m.presences?.[0];
+      return p?.pointage_arrivee_le && !p?.pointage_depart_le;
+    });
+    if (enCoursList.length > 0) {
+      const etabMapEC = await fetchEtablissementsSafe(enCoursList.map((m: any) => m.etablissement_id));
+      enCoursList = enCoursList.map((m: any) => ({ ...m, etablissements: etabMapEC[m.etablissement_id] || null }));
+    }
+    setMissionsEnCours(enCoursList);
+
     if (missionsList.length > 0) {
       const missionIds = missionsList.map((m: any) => m.id);
       const { data: contratsData } = await supabase
