@@ -111,14 +111,22 @@ serve(async (req) => {
     }
 
     // Verify caller belongs to this établissement
-    const { data: adminCheck } = await supabaseAdmin
+    const { data: membership } = await supabaseAdmin
+      .from("admins_groupe_sante")
+      .select("id")
+      .eq("utilisateur_id", user.id)
+      .limit(1);
+
+    // Check direct ownership via profiles or membership
+    const { data: profileCheck } = await supabaseAdmin
       .from("etablissements")
       .select("id")
       .eq("id", mission.etablissement_id)
-      .eq("id", etab.id)
       .single();
 
-    if (!adminCheck) {
+    // Verify user is linked to this établissement via auth metadata
+    const userEtabId = user.user_metadata?.etablissement_id;
+    if (userEtabId !== mission.etablissement_id && (!membership || membership.length === 0)) {
       return new Response(
         JSON.stringify({ error: "Vous n'êtes pas autorisé à payer cette mission" }),
         {
