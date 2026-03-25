@@ -164,9 +164,10 @@ export default function PresencesSoignant() {
         valide_par_etablissement, valide_le,
         methode_pointage_arrivee, methode_pointage_depart,
         code_arrivee, code_depart,
-        missions!inner(id, intitule, etablissement_id, debut_le, fin_le)
+        missions!inner(id, intitule, etablissement_id, debut_le, fin_le, statut)
       `)
       .eq('soignant_id', user!.id)
+      .eq('missions.statut', 'TERMINEE')
       .not('pointage_arrivee_le', 'is', null)
       .order('pointage_arrivee_le', { ascending: false })
       .limit(100);
