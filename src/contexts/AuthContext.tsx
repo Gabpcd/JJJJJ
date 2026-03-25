@@ -68,16 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch { /* fallback */ }
 
-    const { error: auditError } = await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: u.id,
-      p_type_acteur: verifiedRole,
+    const { error: auditError } = await supabase.rpc('fn_audit_connexion', {
       p_action: 'CONNEXION',
-      p_type_ressource: verifiedRole === 'SOIGNANT' ? 'soignant' : 'etablissement',
-      p_id_ressource: u.id,
-      p_cle_s3: null,
-      p_details: { methode: 'email_password', horodatage: new Date().toISOString() },
-      p_ip: null,
-      p_navigateur: navigator.userAgent,
     });
     if (auditError) logger.error('Audit connexion échoué', auditError);
 
