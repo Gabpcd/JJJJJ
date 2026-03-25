@@ -488,7 +488,7 @@ export default function PresencesSoignant() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
+                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-2">
                       <div>
                         <span className="font-medium text-foreground">Arrivée :</span>{' '}
                         {arrivee ? format(arrivee, "HH'h'mm", { locale: fr }) : '—'}
@@ -498,6 +498,10 @@ export default function PresencesSoignant() {
                         <span className="font-medium text-foreground">Départ :</span>{' '}
                         {depart ? format(depart, "HH'h'mm", { locale: fr }) : '—'}
                         <span className="ml-1 text-[10px]">{getMethodeLabel(p.methode_pointage_depart)}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-foreground">Heures :</span>{' '}
+                        {heuresTravaillees ? `${heuresTravaillees}h` : '—'}
                       </div>
                       {(p.code_arrivee || p.code_depart) && (
                         <div className="col-span-2">
