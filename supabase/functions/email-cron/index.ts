@@ -21,6 +21,6 @@ serve(async () => {
     return new Response(JSON.stringify({ success: true, results }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": (Deno.env.get("APP_URL") || "https://app.jolene.app") } });
   } catch (err) {
     console.error("email-cron error:", err);
-    return new Response(JSON.stringify({ error: "Erreur interne", details: String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Une erreur interne est survenue." }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 });

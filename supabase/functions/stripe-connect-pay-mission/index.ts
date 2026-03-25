@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "npm:stripe@14";
+import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 function getCorsOrigin(req: Request): string {
@@ -111,14 +111,22 @@ serve(async (req) => {
     }
 
     // Verify caller belongs to this établissement
-    const { data: adminCheck } = await supabaseAdmin
+    const { data: membership } = await supabaseAdmin
+      .from("admins_groupe_sante")
+      .select("id")
+      .eq("utilisateur_id", user.id)
+      .limit(1);
+
+    // Check direct ownership via profiles or membership
+    const { data: profileCheck } = await supabaseAdmin
       .from("etablissements")
       .select("id")
       .eq("id", mission.etablissement_id)
-      .eq("id", etab.id)
       .single();
 
-    if (!adminCheck) {
+    // Verify user is linked to this établissement via auth metadata
+    const userEtabId = user.user_metadata?.etablissement_id;
+    if (userEtabId !== mission.etablissement_id && (!membership || membership.length === 0)) {
       return new Response(
         JSON.stringify({ error: "Vous n'êtes pas autorisé à payer cette mission" }),
         {
@@ -190,7 +198,7 @@ serve(async (req) => {
     }
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2023-10-16",
+      apiVersion: "2025-08-27.basil",
     });
 
     // Calculate amounts

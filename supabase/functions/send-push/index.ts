@@ -3,9 +3,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
-  if (origin.endsWith(".lovable.app")) return origin;
-  const allowed = ["https://app.jolene.app", "https://jolene-app.lovable.app", "http://localhost:5173"];
-  return allowed.includes(origin) ? origin : allowed[0];
+  if (
+    origin === "https://app.jolene.app" ||
+    origin === "https://jolene.app" ||
+    origin === "http://localhost:5173" ||
+    origin.endsWith(".lovable.app") ||
+    origin.endsWith(".lovableproject.com")
+  ) {
+    return origin;
+  }
+  return "https://app.jolene.app";
 }
 
 const FCM_SERVER_KEY = Deno.env.get("FCM_SERVER_KEY");
@@ -13,7 +20,7 @@ const FCM_SERVER_KEY = Deno.env.get("FCM_SERVER_KEY");
 serve(async (req) => {
   const corsHeaders = { "Access-Control-Allow-Origin": getCorsOrigin(req), "Content-Type": "application/json" };
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { ...corsHeaders, "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "POST" }});
+    return new Response(null, { headers: { ...corsHeaders, "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version", "Access-Control-Allow-Methods": "POST" }});
   }
   try {
     const authHeader = req.headers.get("Authorization");

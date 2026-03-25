@@ -56,3 +56,12 @@ verify_jwt = false
 
 [functions.stripe-connect-pay-mission]
 verify_jwt = false
+
+[functions.api-v1]
+verify_jwt = false
+
+[functions.send-push]
+verify_jwt = false
+
+[functions.email-cron]
+verify_jwt = false
