@@ -155,7 +155,7 @@ export default function DashboardSoignant() {
         setMissionsOubliDepart(oublis);
       }
       if (gainsMois) {
-        const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0)), 0);
+        const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_estime || (m.total_brut ? m.total_brut * 0.78 : 0)), 0);
         setGainsCeMois({ net, nb: (gainsMois as any[]).length });
       }
       if (gains6m) setGains6Mois(gains6m as any);

@@ -19,7 +19,7 @@ import { stockerPointageHorsLigne } from '@/lib/horsLigne';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash, Eye } from 'lucide-react';
+import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash, Eye, Activity } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
