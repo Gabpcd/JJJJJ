@@ -66,7 +66,7 @@ export function PanneauContestation({
   const charger = useCallback(async () => {
     const { data } = await supabase
       .from('litiges')
-      .select('id, presence_id, mission_id, soignant_id, etablissement_id, initie_par, motif, reponse, statut, resolution, resolu_le, resolu_par, cree_le')
+      .select('id, presence_id, mission_id, soignant_id, etablissement_id, initie_par, motif, reponse, statut, resolution, resolu_le, resolu_par, cree_le, accord_soignant, accord_etablissement, accord_soignant_le, accord_etablissement_le')
       .eq('presence_id', presenceId)
       .order('cree_le', { ascending: false })
       .limit(1)
