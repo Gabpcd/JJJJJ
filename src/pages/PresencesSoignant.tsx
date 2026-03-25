@@ -464,6 +464,7 @@ export default function PresencesSoignant() {
                 const m = p.missions;
                 const arrivee = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
                 const depart = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
+                const heuresTravaillees = arrivee && depart ? ((depart.getTime() - arrivee.getTime()) / 3600000).toFixed(1) : null;
 
                 return (
                   <div key={p.id} className="card-base cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(`/soignant/presences/mission/${p.mission_id}`)}>
