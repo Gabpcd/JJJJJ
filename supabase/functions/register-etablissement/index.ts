@@ -112,7 +112,7 @@ serve(async (req) => {
       }
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
     // 2a. Verify SIRET against INSEE registry
     let siretVerification: any = null;
