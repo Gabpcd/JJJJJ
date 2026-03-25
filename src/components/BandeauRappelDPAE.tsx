@@ -24,8 +24,8 @@ export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, t
     setConfirmedDate(dpaeEffectueeLe ?? null);
   }, [dpaeEffectuee, dpaeEffectueeLe]);
 
-  // Masquer le bandeau pour les remplacements libéraux
-  if (typeContrat === 'REMPLACEMENT_LIBERAL') return null;
+  // Afficher uniquement pour les contrats CDDU
+  if (typeContrat !== 'CDDU') return null;
 
   const handleConfirmer = async () => {
     if (!contratId) return;
