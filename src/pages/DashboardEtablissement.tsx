@@ -29,6 +29,7 @@ import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
 import { CompteurSoignantsDisponibles } from '@/components/dashboard/CompteurSoignantsDisponibles';
+import { CarteCommissionJolene } from '@/components/dashboard/CarteCommissionJolene';
 
 export default function DashboardEtablissement() {
   usePageTitle('Dashboard');
@@ -380,6 +381,11 @@ export default function DashboardEtablissement() {
           <ProchaineMissions missions={prochaines} />
         </FadeInView>
       </div>
+
+      {/* Carte Commission Jolene */}
+      {etab && (
+        <CarteCommissionJolene etablissementId={etablissementId!} />
+      )}
 
       {/* Widget Palier de Fidélité */}
       {etab && paliers.length > 0 && (

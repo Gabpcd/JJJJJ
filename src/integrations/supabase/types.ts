@@ -2331,6 +2331,54 @@ export type Database = {
           },
         ]
       }
+      pauses_presence: {
+        Row: {
+          cree_le: string | null
+          debut_le: string
+          duree_min: number | null
+          fin_le: string | null
+          id: string
+          motif: string | null
+          presence_id: string
+          soignant_id: string
+        }
+        Insert: {
+          cree_le?: string | null
+          debut_le?: string
+          duree_min?: number | null
+          fin_le?: string | null
+          id?: string
+          motif?: string | null
+          presence_id: string
+          soignant_id: string
+        }
+        Update: {
+          cree_le?: string | null
+          debut_le?: string
+          duree_min?: number | null
+          fin_le?: string | null
+          id?: string
+          motif?: string | null
+          presence_id?: string
+          soignant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pauses_presence_presence_id_fkey"
+            columns: ["presence_id"]
+            isOneToOne: false
+            referencedRelation: "presences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pauses_presence_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans_prevoyance: {
         Row: {
           cree_le: string | null
@@ -3399,6 +3447,10 @@ export type Database = {
         }[]
       }
       fn_admin_kpi: { Args: never; Returns: Json }
+      fn_admin_planning_global: {
+        Args: { p_debut?: string; p_fin?: string }
+        Returns: Json
+      }
       fn_admin_stripe_connect_stats: { Args: never; Returns: Json }
       fn_alerte_cddu_repetitif: {
         Args: { p_etablissement_id: string; p_soignant_id: string }
@@ -3423,6 +3475,7 @@ export type Database = {
       }
       fn_anonymiser_gps_anciennes: { Args: never; Returns: undefined }
       fn_appliquer_parrainage: { Args: { p_code: string }; Returns: Json }
+      fn_appliquer_remise_groupe: { Args: never; Returns: Json }
       fn_assigner_mission_admin: {
         Args: { p_mission_id: string; p_soignant_id: string }
         Returns: Json
@@ -3430,6 +3483,7 @@ export type Database = {
       fn_auto_facturation_mensuelle: { Args: never; Returns: Json }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_badge_stats: { Args: never; Returns: Json }
+      fn_bfa_info: { Args: { p_annee?: number }; Returns: Json }
       fn_calculer_bfa: {
         Args: {
           p_annee?: number
@@ -3446,6 +3500,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_calculer_bfa_tous: { Args: never; Returns: Json }
       fn_calculer_cotisations: { Args: { p_mission_id: string }; Returns: Json }
       fn_calculer_heures_totales: {
         Args: { p_soignant_id: string }
@@ -3474,6 +3529,7 @@ export type Database = {
         Args: { p_mission_id: string }
         Returns: Json
       }
+      fn_commission_info_etablissement: { Args: never; Returns: Json }
       fn_compteur_soignants_disponibles: {
         Args: { p_etablissement_id: string }
         Returns: Json
@@ -3735,7 +3791,7 @@ export type Database = {
           ecriture_num: string
           idevise: string
           journal_code: string
-          journal_libelle: string
+          journal_lib: string
           montant_devise: number
           piece_date: string
           piece_ref: string
@@ -3882,6 +3938,7 @@ export type Database = {
           profession_requise: string
           taux_horaire_base: number
           total_count: number
+          type_contrat_recherche: string
           ville: string
         }[]
       }
@@ -3960,6 +4017,14 @@ export type Database = {
         Args: { p_autre_id: string; p_mission_id?: string }
         Returns: string
       }
+      fn_planning_etablissement: {
+        Args: { p_debut?: string; p_fin?: string }
+        Returns: Json
+      }
+      fn_planning_soignant: {
+        Args: { p_debut?: string; p_fin?: string }
+        Returns: Json
+      }
       fn_pointer_arrivee: {
         Args: {
           p_code_arrivee?: string
@@ -3976,7 +4041,10 @@ export type Database = {
         Args: { p_code: string; p_mission_id: string }
         Returns: Json
       }
-      fn_pointer_debut_pause: { Args: { p_presence_id: string }; Returns: Json }
+      fn_pointer_debut_pause: {
+        Args: { p_motif?: string; p_presence_id: string }
+        Returns: Json
+      }
       fn_pointer_depart: {
         Args: {
           p_code_depart?: string
@@ -4099,12 +4167,12 @@ export type Database = {
         Args: { p_mission_id: string }
         Returns: {
           distance_km: number
+          id: string
           nom: string
-          pool_urgence_rayon_km: number
           prenom: string
           score_fiabilite: number
-          soignant_id: string
           telephone: string
+          urgence_rayon_km: number
         }[]
       }
       fn_souscrire_prevoyance: {
