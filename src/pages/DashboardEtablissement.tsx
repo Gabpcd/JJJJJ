@@ -30,6 +30,7 @@ import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
 import { CompteurSoignantsDisponibles } from '@/components/dashboard/CompteurSoignantsDisponibles';
 import { CarteCommissionJolene } from '@/components/dashboard/CarteCommissionJolene';
+import { CarteBFAInfo } from '@/components/dashboard/CarteBFAInfo';
 
 export default function DashboardEtablissement() {
   usePageTitle('Dashboard');
