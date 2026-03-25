@@ -6,7 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
 
 interface Props {
   factureId: string;
@@ -86,12 +87,18 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
       setError(null);
 
       const { data, error: fnError } = await supabase.functions.invoke('create-invoice-payment', {
-        body: { facture_id: factureId, embedded: true },
+        body: { facture_id: factureId, embedded: Boolean(stripePromise) },
       });
 
       const payload = data ?? await readFunctionErrorPayload(fnError);
 
       if (cancelled) return;
+
+      if (!fnError && !stripePromise && data?.url) {
+        toast.info('Redirection vers le paiement sécurisé…');
+        window.location.assign(data.url);
+        return;
+      }
 
       if (!fnError && data?.client_secret) {
         setClientSecret(data.client_secret);

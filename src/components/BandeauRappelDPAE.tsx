@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle, ExternalLink, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -19,6 +19,11 @@ export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, t
   const [confirmed, setConfirmed] = useState(dpaeEffectuee ?? false);
   const [confirmedDate, setConfirmedDate] = useState(dpaeEffectueeLe ?? null);
 
+  useEffect(() => {
+    setConfirmed(dpaeEffectuee ?? false);
+    setConfirmedDate(dpaeEffectueeLe ?? null);
+  }, [dpaeEffectuee, dpaeEffectueeLe]);
+
   // Masquer le bandeau pour les remplacements libéraux
   if (typeContrat === 'REMPLACEMENT_LIBERAL') return null;
 
@@ -26,11 +31,13 @@ export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, t
     if (!contratId) return;
     setConfirming(true);
     try {
-      const { data, error } = await supabase.rpc('fn_confirmer_dpae' as any, { p_contrat_id: contratId });
+      const { data, error } = await supabase.functions.invoke('confirm-dpae', {
+        body: { contrat_id: contratId },
+      });
       if (error) throw error;
       if ((data as any)?.success === false) throw new Error((data as any).error);
       setConfirmed(true);
-      setConfirmedDate(new Date().toISOString());
+      setConfirmedDate((data as any)?.dpae_effectuee_le ?? new Date().toISOString());
       afficherNotification({ type: 'succes', message: 'DPAE confirmée.' });
     } catch (err) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });

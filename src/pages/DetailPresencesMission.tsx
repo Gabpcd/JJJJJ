@@ -15,6 +15,35 @@ function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
+function toNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatHours(value: number): string {
+  return value.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function computeRealHoursFromPresences(presences: any[]): number | null {
+  const totalMinutes = presences.reduce((sum, presence) => {
+    const dureeNette = toNumberOrNull(presence.duree_nette_min);
+    if (dureeNette !== null) return sum + dureeNette;
+
+    if (!presence.pointage_arrivee_le || !presence.pointage_depart_le) return sum;
+
+    const arrivee = new Date(presence.pointage_arrivee_le);
+    const depart = new Date(presence.pointage_depart_le);
+    const dureeBrute = differenceInMinutes(depart, arrivee);
+    const pauseMinutes = toNumberOrNull(presence.duree_pause_min) ?? 0;
+
+    return sum + Math.max(dureeBrute - pauseMinutes, 0);
+  }, 0);
+
+  if (totalMinutes <= 0) return null;
+  return Number((totalMinutes / 60).toFixed(2));
+}
+
 function MethodeBadge({ methode }: { methode: string | null }) {
   if (!methode) return <Badge variant="outline" className="text-[10px]"><Wifi className="h-3 w-3 mr-1" />GPS</Badge>;
   if (methode === 'CODE') return <Badge variant="outline" className="text-[10px] border-primary/30 text-primary"><Keyboard className="h-3 w-3 mr-1" />Code</Badge>;
@@ -129,8 +158,13 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
       {/* Synthèse présences via fn_presences_detail_mission */}
       {mission._detail && (() => {
         const d = mission._detail;
-        const heuresReelles = d.heures_reelles ?? null;
-        const heuresPlanifiees = d.heures_planifiees ?? mission.duree_heures ?? 0;
+        const heuresReelles = toNumberOrNull(d.heures_reelles) ?? computeRealHoursFromPresences(presences);
+        const heuresPlanifiees = toNumberOrNull(d.heures_planifiees) ?? toNumberOrNull(mission.duree_heures) ?? 0;
+        const retardMinutes = toNumberOrNull(d.retard_minutes ?? d.retard_min);
+        const departAnticipeMinutes = toNumberOrNull(d.depart_anticipe_minutes ?? d.depart_anticipe_min);
+        const dureePauseMinutes = toNumberOrNull(d.duree_pause_minutes ?? d.duree_pause_min);
+        const distanceGps = toNumberOrNull(d.distance_gps_m ?? d.distance_m);
+        const methodePointage = d.methode_pointage ?? d.methode_arrivee ?? d.methode_depart ?? null;
         const deficit = heuresReelles !== null && heuresReelles < heuresPlanifiees * 0.9;
         const alerteTelep = d.alerte_teleportation === true;
 
@@ -147,39 +181,39 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
               <div>
                 <p className="text-xs text-muted-foreground">Heures réelles</p>
                 <p className={`font-semibold ${deficit ? 'text-destructive' : 'text-foreground'}`}>
-                  {heuresReelles !== null ? `${heuresReelles}h` : '—'}
+                  {heuresReelles !== null ? `${formatHours(heuresReelles)}h` : '—'}
                 </p>
               </div>
-              {d.retard_minutes != null && d.retard_minutes > 0 && (
+              {retardMinutes !== null && retardMinutes > 0 && (
                 <div>
                   <p className="text-xs text-muted-foreground">Retard</p>
-                  <p className="font-semibold text-warning">+{d.retard_minutes} min</p>
+                  <p className="font-semibold text-warning">+{Math.round(retardMinutes)} min</p>
                 </div>
               )}
-              {d.depart_anticipe_minutes != null && d.depart_anticipe_minutes > 0 && (
+              {departAnticipeMinutes !== null && departAnticipeMinutes > 0 && (
                 <div>
                   <p className="text-xs text-muted-foreground">Départ anticipé</p>
-                  <p className="font-semibold text-warning">-{d.depart_anticipe_minutes} min</p>
+                  <p className="font-semibold text-warning">-{Math.round(departAnticipeMinutes)} min</p>
                 </div>
               )}
-              {d.duree_pause_minutes != null && d.duree_pause_minutes > 0 && (
+              {dureePauseMinutes !== null && dureePauseMinutes > 0 && (
                 <div>
                   <p className="text-xs text-muted-foreground">Pause</p>
-                  <p className="font-semibold text-muted-foreground">{d.duree_pause_minutes} min</p>
+                  <p className="font-semibold text-muted-foreground">{Math.round(dureePauseMinutes)} min</p>
                 </div>
               )}
-              {d.distance_gps_m != null && (
+              {distanceGps !== null && (
                 <div>
                   <p className="text-xs text-muted-foreground">Distance GPS</p>
-                  <p className={`font-semibold ${d.distance_gps_m > 500 ? 'text-destructive' : 'text-foreground'}`}>
-                    {Math.round(d.distance_gps_m)}m
+                  <p className={`font-semibold ${distanceGps > 500 ? 'text-destructive' : 'text-foreground'}`}>
+                    {Math.round(distanceGps)}m
                   </p>
                 </div>
               )}
-              {d.methode_pointage && (
+              {methodePointage && (
                 <div>
                   <p className="text-xs text-muted-foreground">Méthode</p>
-                  <p className="font-semibold text-foreground">{d.methode_pointage}</p>
+                  <p className="font-semibold text-foreground">{methodePointage}</p>
                 </div>
               )}
             </div>
