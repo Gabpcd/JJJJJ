@@ -360,11 +360,38 @@ export default function PresencesSoignant() {
         <p className="text-sm text-muted-foreground mt-1">Pointez vos arrivées et départs pour chaque mission</p>
       </div>
 
-      <Tabs defaultValue="aujourdhui">
-        <TabsList className="w-full max-w-xs mb-4">
+      <Tabs defaultValue="encours">
+        <TabsList className="w-full max-w-md mb-4">
+          <TabsTrigger value="encours" className="flex-1 gap-1.5"><Activity className="h-4 w-4" />En cours</TabsTrigger>
           <TabsTrigger value="aujourdhui" className="flex-1 gap-1.5"><Clock className="h-4 w-4" />Aujourd'hui</TabsTrigger>
           <TabsTrigger value="historique" className="flex-1 gap-1.5"><History className="h-4 w-4" />Historique</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="encours">
+          {missionsEnCours.length > 0 ? (
+            <div className="space-y-4">
+              {missionsEnCours.map((m: any) => {
+                const presence = m.presences?.[0] || null;
+                return (
+                  <CartePointage
+                    key={m.id}
+                    mission={m}
+                    presence={presence}
+                    onPointerArrivee={() => pointerArrivee(m.id)}
+                    onPointerDepart={() => presence ? pointerDepart(presence.id, m.id) : Promise.resolve()}
+                    onRecharger={charger}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <EtatVide
+              icone={Activity}
+              titre="Aucune mission en cours"
+              sousTitre="Les missions avec une arrivée pointée apparaîtront ici."
+            />
+          )}
+        </TabsContent>
 
         <TabsContent value="aujourdhui">
           {missions.length > 0 ? (
