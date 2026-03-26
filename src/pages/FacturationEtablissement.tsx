@@ -136,6 +136,7 @@ export default function FacturationEtablissement() {
       afficherNotification({ type: 'succes', message: `Facture ${result.numero_facture} générée avec succès !` });
       charger();
     } catch (err: any) {
+      capturerErreurSentry(err, 'FacturationEtablissement', 'generer_facture');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
       setGenerating(false);
