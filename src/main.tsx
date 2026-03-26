@@ -119,6 +119,55 @@ function showUpdateBanner() {
 
 import { SentryErrorFallback } from "./components/SentryErrorFallback";
 
+// ─── Capacitor Native Init (deep links + push) ───
+async function initNativePlugins() {
+  if (!Capacitor.isNativePlatform()) return;
+
+  // Deep links — route appUrlOpen events to React Router
+  const { App: CapApp } = await import("@capacitor/app");
+  CapApp.addListener("appUrlOpen", (event) => {
+    const url = new URL(event.url);
+    const path = url.pathname + url.search;
+    if (path) {
+      window.location.hash = ""; // clear hash if any
+      window.history.replaceState(null, "", path);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  });
+
+  // Push notifications — request + register + store token
+  try {
+    const { PushNotifications } = await import("@capacitor/push-notifications");
+    const permResult = await PushNotifications.requestPermissions();
+    if (permResult.receive === "granted") {
+      await PushNotifications.register();
+      PushNotifications.addListener("registration", async (token) => {
+        // Store token in Supabase
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("tokens_push" as any).upsert({
+            utilisateur_id: user.id,
+            token: token.value,
+            plateforme: Capacitor.getPlatform().toUpperCase(),
+            actif: true,
+          }, { onConflict: "token" });
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("Push notifications init failed:", e);
+  }
+
+  // Hide splash screen after app is ready
+  try {
+    const { SplashScreen } = await import("@capacitor/splash-screen");
+    await SplashScreen.hide();
+  } catch {}
+}
+
+initNativePlugins();
+
 createRoot(document.getElementById("root")!).render(
   <Sentry.ErrorBoundary fallback={({ resetError }) => <SentryErrorFallback resetError={resetError} />}>
     <App />
