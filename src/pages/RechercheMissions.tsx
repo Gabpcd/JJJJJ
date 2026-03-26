@@ -77,7 +77,7 @@ export default function RechercheMissions() {
   const [horaire, setHoraire] = useState<Horaire>('TOUS');
   const [showFilters, setShowFilters] = useState(true);
   const [villeRecherche, setVilleRecherche] = useState('');
-
+  const debouncedVille = useDebounce(villeRecherche, 300);
   // Map
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
