@@ -29,7 +29,7 @@ export default function AdminDemo() {
     const { error } = await supabase.rpc('fn_charger_demo_investisseur' as any);
     setLoading(null);
     if (error) {
-      toast.error(error.message);
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
     } else {
       toast.success('Données de démo chargées — 4 établissements, 12 soignants, 35 missions');
       chargerKpi();
@@ -41,7 +41,7 @@ export default function AdminDemo() {
     const { error } = await supabase.rpc('fn_purger_demo' as any);
     setLoading(null);
     if (error) {
-      toast.error(error.message);
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
     } else {
       toast.success('Données de démo supprimées — La base a été nettoyée');
       chargerKpi();

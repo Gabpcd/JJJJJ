@@ -259,7 +259,7 @@ export default function AdminFacturation() {
   const exporterFEC = async () => {
     const annee = new Date().getFullYear();
     const { data, error } = await supabase.rpc('fn_export_fec' as any, { p_annee: annee });
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     const lignes = Array.isArray(data) ? data : [];
     if (lignes.length === 0) { toast.info('Aucune donnée FEC pour ' + annee); return; }
     const cols = Object.keys(lignes[0]);
