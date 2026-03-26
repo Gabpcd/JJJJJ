@@ -175,7 +175,7 @@ export default function AdminDetailUtilisateur() {
       .update({ supprime_le: isSuspended ? null : new Date().toISOString() } as any)
       .eq('id', id!);
 
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Erreur lors de la mise à jour du compte.'); return; }
     toast.success(isSuspended ? 'Compte réactivé' : 'Compte suspendu');
     charger();
   };
