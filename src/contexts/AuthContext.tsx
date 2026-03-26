@@ -90,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (auditError) logger.error('Audit déconnexion échoué', auditError);
     }
     await supabase.auth.signOut();
+    Sentry.setUser(null);
   }, [user]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
