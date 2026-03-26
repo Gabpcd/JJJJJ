@@ -125,7 +125,9 @@ export default function InscriptionEtablissement() {
       }
       navigate('/etablissement/tableau-de-bord');
     } catch (err) {
-      handleError(err, 'inscription établissement');
+      if (!gererErreurSupabase(err, () => handleSubmit(e))) {
+        handleError(err, 'inscription établissement');
+      }
     } finally {
       setSubmitting(false);
     }
