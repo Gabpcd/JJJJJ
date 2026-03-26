@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserRole } from '@/lib/types';
+import type { RpcGetMyRole } from '@/lib/supabase-rpc-types';
 
 interface UseRoleResult {
   role: UserRole | 'INCONNU';
@@ -26,8 +27,9 @@ export function useRole(): UseRoleResult {
       const { data, error } = await supabase.rpc('fn_get_my_role');
       if (!cancelled) {
         if (data && !error) {
-          setRole((data as any).role || 'INCONNU');
-          setEtablissementId((data as any).etablissement_id || null);
+          const result = data as unknown as RpcGetMyRole;
+          setRole((result.role as UserRole) || 'INCONNU');
+          setEtablissementId(result.etablissement_id || null);
         }
         setLoading(false);
       }

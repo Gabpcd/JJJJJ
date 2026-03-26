@@ -32,7 +32,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
     const load = async () => {
       const { data, error } = await supabase.rpc('fn_mode_paiement_mission' as any, { p_mission_id: missionId });
       if (!error && data) {
-        setInfo(data as any);
+        setInfo(data as unknown as InfoPaiement);
       }
       setLoading(false);
     };

@@ -29,10 +29,11 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onEr
       p_rayon_km: newRayon,
       p_creneaux: [],
     });
+    const result = data as unknown as RpcSuccessOrError | null;
     if (error) {
       onError(extraireMessageErreur(error));
-    } else if (data?.error) {
-      onError(data.error);
+    } else if (result?.error) {
+      onError(result.error);
     } else {
       onUpdate(newActif, newRayon, modeZone === 'ville' ? localVille : undefined);
       onSuccess(newActif ? 'Pool urgence activé !' : 'Pool urgence désactivé.');
