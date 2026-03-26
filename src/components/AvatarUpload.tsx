@@ -142,7 +142,7 @@ export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: 
       onUploaded?.(signedUrl);
       toast.success('Photo mise à jour !');
     } catch (err: any) {
-      toast.error(err.message || 'Erreur lors de l\'upload.');
+      toast.error('Une erreur est survenue lors de l\'upload. Veuillez réessayer.');
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';

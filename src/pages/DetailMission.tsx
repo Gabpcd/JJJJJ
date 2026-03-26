@@ -30,6 +30,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { capturerErreurSentry } from '@/lib/sentry';
 
 function scoreColor(score: number): string {
   if (score >= 70) return 'text-success';
@@ -115,6 +116,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
       toast.success(`🚨 ${sent} soignant${sent > 1 ? 's' : ''} alerté${sent > 1 ? 's' : ''}`);
       setAlerted(true);
     } catch (err: any) {
+      capturerErreurSentry(err, 'DetailMission', 'alerter_pool');
       toast.error('Erreur lors de l\'envoi des alertes. Veuillez réessayer.');
     }
     setAlerting(false);
@@ -282,6 +284,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
       afficherNotification({ type: 'succes', message: 'Mission proposée au soignant !' });
     } catch (err: any) {
+      capturerErreurSentry(err, 'DetailMission', 'proposer_soignant');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     }
     setProposing(null);

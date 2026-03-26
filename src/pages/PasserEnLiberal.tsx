@@ -15,6 +15,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ConfettiMini } from '@/components/ConfettiMini';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { capturerErreurSentry } from '@/lib/sentry';
 import jsPDF from 'jspdf';
 
 const STORAGE_KEY = 'liberal_parcours_checks';
@@ -167,7 +168,8 @@ export default function PasserEnLiberal() {
       afficherNotification({ type: 'succes', message: '🎉 Profil libéral activé !' });
       setTimeout(() => navigate('/soignant/tableau-de-bord'), 2000);
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur' });
+      capturerErreurSentry(err, 'PasserEnLiberal', 'activer_liberal');
+      afficherNotification({ type: 'erreur', message: 'Une erreur est survenue. Veuillez réessayer.' });
     } finally { setSaving(false); }
   };
 

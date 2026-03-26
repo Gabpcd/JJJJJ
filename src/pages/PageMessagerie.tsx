@@ -8,7 +8,7 @@ import { sanitizeText } from '@/lib/sanitize';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
-
+import { logger } from '@/lib/logger';
 import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -250,7 +250,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       p_contenu: contenu,
     });
 
-    console.log('fn_envoyer_message result:', { data, error, p_conversation_id: selectedConvId, p_contenu: contenu });
+    logger.debug('fn_envoyer_message result:', { data, error, p_conversation_id: selectedConvId });
 
     if (error) {
       console.error('fn_envoyer_message error:', error);
@@ -310,10 +310,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       resolvedId = resolved;
     }
     const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: resolvedId, p_mission_id: null });
-    console.log('fn_obtenir_conversation (new conv):', { data, error });
+    logger.debug('fn_obtenir_conversation (new conv):', { data, error });
     if (error || !data) {
-      console.error('fn_obtenir_conversation error:', error);
-      toast.error("Impossible de créer la conversation : " + (error?.message || 'Erreur inconnue'));
+      logger.error('fn_obtenir_conversation error:', error);
+      toast.error("Impossible de créer la conversation. Veuillez réessayer.");
       return;
     }
     setShowNewConvModal(false);

@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { PROFESSIONS } from '@/lib/constantes';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { logger } from '@/lib/logger';
 
 interface SoignantPool {
   soignant_id: string;
@@ -213,7 +214,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     }
 
     setAssigningMissionId(mission.id);
-    console.log('pool: proposing mission to soignant', { mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
+    logger.debug('pool: proposing mission to soignant', { mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
 
     const { data: existingCandidature, error: checkError } = await supabase
       .from('candidatures')
@@ -462,7 +463,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                             e.stopPropagation();
                             const base = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
                             const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: s.soignant_id, p_mission_id: null });
-                            console.log('fn_obtenir_conversation pool:', { data, error });
+                            logger.debug('fn_obtenir_conversation pool:', { data, error });
                             if (data) navigate(`${base}?conv=${data}`);
                           }}
                           className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"

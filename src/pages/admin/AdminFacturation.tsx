@@ -237,7 +237,7 @@ export default function AdminFacturation() {
     setGenerating(true);
     try {
       const { data, error } = await supabase.rpc('fn_auto_facturation_mensuelle' as any);
-      if (error) { toast.error(`Erreur : ${error.message}`); return; }
+      if (error) { toast.error('Erreur lors de la génération des factures. Veuillez réessayer.'); return; }
       const result = data as any;
       if (result?.success) {
         if ((result.factures_generees ?? 0) === 0) {
@@ -250,7 +250,7 @@ export default function AdminFacturation() {
         toast.error(result?.error || 'Erreur inconnue lors de la génération');
       }
     } catch (err: any) {
-      toast.error(`Erreur inattendue : ${err.message}`);
+      toast.error('Une erreur inattendue est survenue. Veuillez réessayer.');
     } finally {
       setGenerating(false);
     }

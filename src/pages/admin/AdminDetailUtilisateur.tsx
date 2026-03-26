@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -159,8 +160,8 @@ export default function AdminDetailUtilisateur() {
       toast.success(`Rappel envoyé à ${soignant.prenom}`);
       setDernierRappel(new Date().toISOString());
     } catch (err: any) {
-      console.error('send-email exception:', err);
-      toast.error(`Erreur lors de l'envoi du rappel : ${err?.message || 'réseau indisponible'}`);
+      logger.error('send-email exception:', err);
+      toast.error("Erreur lors de l'envoi du rappel. Veuillez réessayer.");
     }
     setEnvoiRappel(false);
   };
@@ -238,10 +239,10 @@ export default function AdminDetailUtilisateur() {
               type="button"
               onClick={async () => {
                 const { data, error } = await supabaseClient.rpc('fn_obtenir_conversation', { p_autre_id: id!, p_mission_id: null });
-                console.log('fn_obtenir_conversation (admin):', { data, error });
+                logger.debug('fn_obtenir_conversation (admin):', { data, error });
                 if (data) navigate(`/admin/messagerie?conv=${data}`);
                 else {
-                  console.error('fn_obtenir_conversation error:', error);
+                  logger.error('fn_obtenir_conversation error:', error);
                   toast.error("Impossible d'ouvrir la conversation.");
                 }
               }}

@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Landmark, Loader2, Save, CheckCircle } from 'lucide-react';
 import { FadeInView } from '@/components/FadeInView';
 import { Input } from '@/components/ui/input';
+import { capturerErreurSentry } from '@/lib/sentry';
 
 export default function ChorusConfig() {
   usePageTitle('Configuration Chorus Pro');
@@ -70,8 +71,8 @@ export default function ChorusConfig() {
         if (data) setConfigId(data.id);
       }
     } catch (err: any) {
-      console.error(err);
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de la sauvegarde' });
+      capturerErreurSentry(err, 'ChorusConfig', 'sauvegarder');
+      afficherNotification({ type: 'erreur', message: 'Erreur lors de la sauvegarde. Veuillez réessayer.' });
     } finally {
       setSaving(false);
     }

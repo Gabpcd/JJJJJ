@@ -7,6 +7,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { FooterLegal } from '@/components/FooterLegal';
 import { Loader2 } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 export default function PageConnexion() {
   const navigate = useNavigate();
@@ -30,10 +31,10 @@ export default function PageConnexion() {
       // Récupérer le rôle sécurisé via RPC serveur
       const { supabase } = await import('@/integrations/supabase/client');
       const { data: roleData, error: roleError } = await supabase.rpc('fn_get_my_role');
-      console.log('[CONNEXION] fn_get_my_role result:', JSON.stringify(roleData), 'error:', roleError);
+      logger.debug('[CONNEXION] fn_get_my_role result:', JSON.stringify(roleData), 'error:', roleError);
       // The RPC may return { role: 'X' } or just 'X' depending on function signature
       const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
-      console.log('[CONNEXION] Resolved role:', role);
+      logger.debug('[CONNEXION] Resolved role:', role);
       if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') navigate('/admin');
       else if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') navigate('/etablissement/tableau-de-bord');
       else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');

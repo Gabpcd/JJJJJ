@@ -100,12 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
-    console.log('[INSCRIPTION] 1. Début inscription soignant, données:', { email: data.email, prenom: data.prenom, nom: data.nom, profession: data.profession });
+    logger.debug('[INSCRIPTION] 1. Début inscription soignant, données:', { email: data.email, prenom: data.prenom, nom: data.nom, profession: data.profession });
 
     // Étape 1 : signUp Supabase Auth
     let authData: any;
     try {
-      console.log('[INSCRIPTION] 2. Appel supabase.auth.signUp...');
+      logger.debug('[INSCRIPTION] 2. Appel supabase.auth.signUp...');
       const { data: signUpData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.motDePasse,
@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw authError;
       }
       authData = signUpData;
-      console.log('[INSCRIPTION] 3. signUp OK, user id:', authData.user?.id, 'session:', !!authData.session);
+      logger.debug('[INSCRIPTION] 3. signUp OK, user id:', authData.user?.id, 'session:', !!authData.session);
     } catch (err) {
       console.error('[INSCRIPTION] signUp EXCEPTION:', err);
       throw err;
@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn('[INSCRIPTION] 3b. Aucun token dans signUp, tentative via getSession...');
       const { data: sessionData } = await supabase.auth.getSession();
       accessToken = sessionData.session?.access_token;
-      console.log('[INSCRIPTION] 3c. Token via getSession:', !!accessToken);
+      logger.debug('[INSCRIPTION] 3c. Token via getSession:', !!accessToken);
     }
     if (!accessToken) {
       throw new Error('Session introuvable après inscription. Veuillez réessayer.');
@@ -148,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     try {
-      console.log('[INSCRIPTION] 4. Appel fetch register-soignant, body:', registerBody);
+      logger.debug('[INSCRIPTION] 4. Appel fetch register-soignant');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
@@ -160,9 +160,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         { method: 'POST', headers, body: JSON.stringify(registerBody) }
       );
 
-      console.log('[INSCRIPTION] 5. register-soignant HTTP status:', response.status);
+      logger.debug('[INSCRIPTION] 5. register-soignant HTTP status:', response.status);
       const result = await response.json();
-      console.log('[INSCRIPTION] 6. register-soignant réponse:', result);
+      logger.debug('[INSCRIPTION] 6. register-soignant réponse:', result);
 
       if (!response.ok || result?.error) {
         console.error('[INSCRIPTION] 7. ERREUR register-soignant:', result);
@@ -170,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result?.error || 'Erreur lors de la création de votre profil. Veuillez réessayer.');
       }
 
-      console.log('[INSCRIPTION] 7. register-soignant OK ✅');
+      logger.debug('[INSCRIPTION] 7. register-soignant OK ✅');
     } catch (err) {
       console.error('[INSCRIPTION] register-soignant EXCEPTION:', err);
       Sentry.captureException(err, { tags: { composant: 'AuthContext', action: 'inscription_soignant' } });

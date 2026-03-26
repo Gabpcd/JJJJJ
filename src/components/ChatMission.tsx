@@ -109,12 +109,10 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdm
       .select('id, auteur_id, type_auteur, contenu, cree_le')
       .single();
 
-    console.log('ChatMission envoi result:', { data, error });
-
     if (error) {
       console.error('Erreur envoi message mission:', error);
       setTexte(contenuBrut);
-      toast.error(`Impossible d'envoyer le message : ${error.message}`);
+      toast.error("Impossible d'envoyer le message. Veuillez réessayer.");
     } else if (data) {
       setMessages((prev) => (prev.some((msg) => msg.id === data.id) ? prev : [...prev, data as Message]));
     }
