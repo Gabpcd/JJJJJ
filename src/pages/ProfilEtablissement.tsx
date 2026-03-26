@@ -623,6 +623,7 @@ export default function ProfilEtablissement() {
               });
               afficherNotification({ type: 'succes', message: 'Données exportées.' });
             } catch (err: any) {
+              capturerErreurSentry(err, 'ProfilEtablissement', 'export_rgpd');
               afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
             }
           }}
