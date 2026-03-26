@@ -4,6 +4,7 @@ import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, Shi
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleError } from '@/lib/handleError';
+import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
 import { supabase } from '@/integrations/supabase/client';
