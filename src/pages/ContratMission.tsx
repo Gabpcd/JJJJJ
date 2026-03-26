@@ -222,6 +222,7 @@ export default function ContratMission() {
       afficherNotification({ type: 'succes', message: 'Procédure Yousign initialisée ! Cliquez sur le bouton pour signer.' });
     } catch (err: any) {
       logger.error('Yousign create error', err);
+      capturerErreurSentry(err, 'ContratMission', 'yousign_create');
       afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de l\'initialisation Yousign' });
       setModeSignature('CANVAS');
     } finally {
