@@ -15,6 +15,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ConfettiMini } from '@/components/ConfettiMini';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { capturerErreurSentry } from '@/lib/sentry';
 import jsPDF from 'jspdf';
 
 const STORAGE_KEY = 'liberal_parcours_checks';

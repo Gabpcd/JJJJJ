@@ -8,6 +8,7 @@ import { getLabelTypeEtablissement } from '@/lib/constantes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { supabase } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';

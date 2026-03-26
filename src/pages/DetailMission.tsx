@@ -30,6 +30,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { capturerErreurSentry } from '@/lib/sentry';
 
 function scoreColor(score: number): string {
   if (score >= 70) return 'text-success';

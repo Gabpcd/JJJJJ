@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Landmark, Loader2, Save, CheckCircle } from 'lucide-react';
 import { FadeInView } from '@/components/FadeInView';
 import { Input } from '@/components/ui/input';
+import { capturerErreurSentry } from '@/lib/sentry';
 
 export default function ChorusConfig() {
   usePageTitle('Configuration Chorus Pro');
