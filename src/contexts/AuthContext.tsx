@@ -148,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     try {
-      console.log('[INSCRIPTION] 4. Appel fetch register-soignant, body:', registerBody);
+      logger.debug('[INSCRIPTION] 4. Appel fetch register-soignant');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
