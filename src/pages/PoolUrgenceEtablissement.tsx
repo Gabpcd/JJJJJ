@@ -99,7 +99,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         .is('supprime_le', null)
         .order('nom', { ascending: true });
 
-      if (error) { toast.error(error.message); return; }
+      if (error) { toast.error('Erreur lors du chargement des établissements.'); return; }
       const etablissements = (data ?? []) as Array<{ id: string; nom: string }>;
       setEtablissementsAdmin(etablissements);
       setSelectedEtablissementId((current) => current || etablissements[0]?.id || '');
