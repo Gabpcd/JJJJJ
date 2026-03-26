@@ -72,7 +72,7 @@ const contacterDepuisLitige = async (userId: string, navigate: ReturnType<typeof
   console.log('contacterDepuisLitige result:', { data, error });
   if (error) {
     console.error('fn_obtenir_conversation error:', error);
-    toast.error(`Impossible d'ouvrir la conversation : ${error.message}`);
+    toast.error('Impossible d\'ouvrir la conversation. Veuillez réessayer.');
     return;
   }
   if (!data) {
