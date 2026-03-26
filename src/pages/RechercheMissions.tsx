@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -66,6 +67,7 @@ export default function RechercheMissions() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nbAffiche, setNbAffiche] = useState(20);
   const [rcpExpiree, setRcpExpiree] = useState(false);
   // Filtres
   const [profession, setProfession] = useState<string>('');
@@ -76,7 +78,7 @@ export default function RechercheMissions() {
   const [horaire, setHoraire] = useState<Horaire>('TOUS');
   const [showFilters, setShowFilters] = useState(true);
   const [villeRecherche, setVilleRecherche] = useState('');
-
+  const debouncedVille = useDebounce(villeRecherche, 300);
   // Map
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
@@ -145,7 +147,7 @@ export default function RechercheMissions() {
   const filtered = useMemo(() => {
     if (!soignant) return [];
     const typesContrat = getTypesContratSoignant(soignant);
-    const villeSearch = villeRecherche.trim().toLowerCase();
+    const villeSearch = debouncedVille.trim().toLowerCase();
 
     return missions
       .map(m => ({
@@ -153,16 +155,13 @@ export default function RechercheMissions() {
         distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
       }))
       .filter(m => {
-        // Ville filter
         if (villeSearch) {
           const ville = (m.etablissements?.adresse_ville || '').toLowerCase();
           const cp = (m.etablissements?.adresse_code_postal || '').toLowerCase();
           if (!ville.includes(villeSearch) && !cp.startsWith(villeSearch)) return false;
         }
-        // Distance (only if no ville search or combined)
         if (!villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
         if (villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
-        // Contract type
         const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
         if (typeContrat !== 'TOUS') {
           if (typeContrat === 'CDDU' && mType === 'LIBERAL') return false;
@@ -170,14 +169,13 @@ export default function RechercheMissions() {
         } else {
           if (!missionCompatibleContrat(mType, typesContrat)) return false;
         }
-        // Horaire
         if (horaire === 'NUIT' && !isNuit(m.debut_le)) return false;
         if (horaire === 'JOUR' && isNuit(m.debut_le)) return false;
         if (horaire === 'WEEKEND' && !isWeekend(m.debut_le)) return false;
         return true;
       })
       .sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
-  }, [missions, soignant, rayonKm, typeContrat, horaire, villeRecherche]);
+  }, [missions, soignant, rayonKm, typeContrat, horaire, debouncedVille]);
 
   // Initialize / update map
   const initMap = (tab: string) => {
@@ -352,16 +350,25 @@ export default function RechercheMissions() {
 
           <TabsContent value="liste">
             {loading ? <ChargementPage /> : filtered.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {filtered.map(m => (
-                  <CarteMissionSoignant
-                    key={m.id}
-                    mission={m}
-                    soignant={soignant}
-                    onClick={() => navigate(`/soignant/missions/${m.id}`)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filtered.slice(0, nbAffiche).map(m => (
+                    <CarteMissionSoignant
+                      key={m.id}
+                      mission={m}
+                      soignant={soignant}
+                      onClick={() => navigate(`/soignant/missions/${m.id}`)}
+                    />
+                  ))}
+                </div>
+                {nbAffiche < filtered.length && (
+                  <div className="flex justify-center mt-6">
+                    <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
+                      Voir plus ({filtered.length - nbAffiche} restantes)
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <EtatVide
                 icone={SearchX}

@@ -48,6 +48,7 @@ export default function ListeMissions() {
   const [modalDupliquer, setModalDupliquer] = useState<any>(null);
   const [modalAnnuler, setModalAnnuler] = useState<any>(null);
   const [modalAnnulerSerie, setModalAnnulerSerie] = useState<any[] | null>(null);
+  const [nbAffiche, setNbAffiche] = useState(20);
 
   const charger = async () => {
     if (!user) return;
@@ -101,7 +102,7 @@ export default function ListeMissions() {
     if (periodeParam !== filtrePeriode) setFiltrePeriode(periodeParam);
   }, [statutParam, periodeParam]);
 
-  useEffect(() => { charger(); }, [user, etablissementId, filtreStatut, filtrePeriode, debouncedRecherche]);
+  useEffect(() => { charger(); setNbAffiche(20); }, [user, etablissementId, filtreStatut, filtrePeriode, debouncedRecherche]);
 
   const appliquerFiltres = (statut: string, periode: string) => {
     const params = new URLSearchParams();
@@ -202,31 +203,40 @@ export default function ListeMissions() {
 
       {/* Liste */}
       {groupes.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {groupes.map((g, i) => {
-            if (g.type === 'serie') {
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {groupes.slice(0, nbAffiche).map((g, i) => {
+              if (g.type === 'serie') {
+                return (
+                  <FadeInView key={g.serieId} delay={i * 100}>
+                    <CarteSerie
+                      missions={g.missions}
+                      role="etablissement"
+                      onAnnulerSerie={() => setModalAnnulerSerie(g.missions.filter((m: any) => m.statut === 'OUVERTE'))}
+                    />
+                  </FadeInView>
+                );
+              }
               return (
-                <FadeInView key={g.serieId} delay={i * 100}>
-                  <CarteSerie
-                    missions={g.missions}
-                    role="etablissement"
-                    onAnnulerSerie={() => setModalAnnulerSerie(g.missions.filter((m: any) => m.statut === 'OUVERTE'))}
+                <FadeInView key={g.mission.id} delay={i * 100}>
+                  <CarteMission
+                    mission={g.mission}
+                    onDupliquer={(m) => setModalDupliquer(m)}
+                    onAnnuler={(m) => setModalAnnuler(m)}
+                    onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
                   />
                 </FadeInView>
               );
-            }
-            return (
-              <FadeInView key={g.mission.id} delay={i * 100}>
-                <CarteMission
-                  mission={g.mission}
-                  onDupliquer={(m) => setModalDupliquer(m)}
-                  onAnnuler={(m) => setModalAnnuler(m)}
-                  onRepublier={(m) => navigate(`/etablissement/missions/creer?dupliquer=${m.id}`)}
-                />
-              </FadeInView>
-            );
-          })}
-        </div>
+            })}
+          </div>
+          {nbAffiche < groupes.length && (
+            <div className="flex justify-center mt-6">
+              <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
+                Voir plus ({groupes.length - nbAffiche} restantes)
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <EtatVide illustration={<IllustrationMegaphone />} titre="Publiez votre première mission"
           sousTitre="Trouvez un soignant qualifié en quelques heures."
