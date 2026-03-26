@@ -160,9 +160,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         { method: 'POST', headers, body: JSON.stringify(registerBody) }
       );
 
-      console.log('[INSCRIPTION] 5. register-soignant HTTP status:', response.status);
+      logger.debug('[INSCRIPTION] 5. register-soignant HTTP status:', response.status);
       const result = await response.json();
-      console.log('[INSCRIPTION] 6. register-soignant réponse:', result);
+      logger.debug('[INSCRIPTION] 6. register-soignant réponse:', result);
 
       if (!response.ok || result?.error) {
         console.error('[INSCRIPTION] 7. ERREUR register-soignant:', result);
