@@ -67,6 +67,7 @@ export default function RechercheMissions() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nbAffiche, setNbAffiche] = useState(20);
   const [rcpExpiree, setRcpExpiree] = useState(false);
   // Filtres
   const [profession, setProfession] = useState<string>('');
