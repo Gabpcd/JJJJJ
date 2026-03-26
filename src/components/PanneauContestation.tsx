@@ -160,6 +160,7 @@ export function PanneauContestation({
       charger();
       onUpdate?.();
     } catch (err: any) {
+      capturerErreurSentry(err, 'PanneauContestation', 'repondre_litige');
       toast.error(extraireMessageErreur(err));
     } finally {
       setEnvoi(false);
