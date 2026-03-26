@@ -130,6 +130,7 @@ function AppRoutes() {
           <Route path="/cgu" element={<PageCGU />} />
           <Route path="/cgv" element={<PageCGV />} />
           <Route path="/confidentialite" element={<PageConfidentialite />} />
+          <Route path="/politique-confidentialite" element={<PageConfidentialite />} />
           <Route path="/mentions-legales" element={<PageMentionsLegales />} />
 
           {/* Soignant */}

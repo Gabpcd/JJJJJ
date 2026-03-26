@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { SelectProfession } from '@/components/SelectProfession';
+import { FooterLegal } from '@/components/FooterLegal';
 import { CONTRATS, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
 
@@ -161,7 +162,8 @@ export default function InscriptionSoignant() {
   };
 
   return (
-    <div className="min-h-screen gradient-hero flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen gradient-hero flex flex-col">
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
       <div className="card-base max-w-lg w-full">
         <div className="flex items-center justify-center gap-2 mb-6">
           <HeartPulse className="h-7 w-7 text-primary" />
@@ -299,6 +301,8 @@ export default function InscriptionSoignant() {
           Déjà un compte ? <a href="/connexion" className="text-primary hover:underline font-medium">Se connecter</a>
         </p>
       </div>
+      </div>
+      <FooterLegal />
     </div>
   );
 }
