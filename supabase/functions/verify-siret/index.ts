@@ -117,6 +117,31 @@ serve(async (req) => {
   }
 
   try {
+    // Auth: verify JWT user or service_role
+    const authHeader = req.headers.get('Authorization');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Non autorisé' }), {
+        status: 401,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+    const tokenVal = authHeader.replace('Bearer ', '');
+    const isServiceRole = tokenVal === serviceRoleKey;
+    if (!isServiceRole) {
+      const supabaseAuth = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+      );
+      const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(tokenVal);
+      if (authErr || !user) {
+        return new Response(JSON.stringify({ error: 'Token invalide' }), {
+          status: 401,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const { siret, etablissement_id } = await req.json();
     if (!siret || !/^\d{14}$/.test(siret)) {
       return new Response(JSON.stringify({ error: 'SIRET invalide' }), {
