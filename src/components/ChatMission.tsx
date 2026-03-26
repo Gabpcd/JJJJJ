@@ -110,7 +110,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdm
       .single();
 
     if (error) {
-      console.error('Erreur envoi message mission:', error);
+      logger.error('Erreur envoi message mission', error);
       setTexte(contenuBrut);
       toast.error("Impossible d'envoyer le message. Veuillez réessayer.");
     } else if (data) {

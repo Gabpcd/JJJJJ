@@ -44,7 +44,7 @@ export function useOuvrirConversation(baseRoute: string) {
 
     if (error || !data) {
       toast.error("Impossible d'ouvrir la conversation.");
-      console.error('fn_obtenir_conversation error:', error);
+      logger.error('fn_obtenir_conversation error', error);
       return;
     }
 

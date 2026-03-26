@@ -102,7 +102,7 @@ export default function LitigesSoignant() {
       p_motif: newMotif.trim(),
     });
     setCreating(false);
-    if (error) { toast.error('Erreur lors de la création du litige.'); console.error(error); return; }
+    if (error) { toast.error('Erreur lors de la création du litige.'); logger.error('fn_ouvrir_litige_rate_limited error', error); return; }
     if (data?.error) { toast.error(data.error); return; }
     toast.success('Litige ouvert avec succès.');
     setShowNew(false);

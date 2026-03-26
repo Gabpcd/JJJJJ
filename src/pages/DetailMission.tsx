@@ -58,10 +58,10 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
     setAlerting(true);
     try {
       const { data: soignants, error } = await supabase.rpc('fn_soignants_urgence' as any, { p_mission_id: missionId });
-      console.log('fn_soignants_urgence result:', { count: soignants?.length, error });
+      logger.debug('fn_soignants_urgence result:', { count: soignants?.length, error });
 
       if (error || !soignants?.length) {
-        toast.error(error?.message || 'Aucun soignant éligible dans le pool');
+        toast.error('Aucun soignant éligible dans le pool d\'urgence.');
         setAlerting(false);
         return;
       }

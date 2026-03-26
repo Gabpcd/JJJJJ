@@ -17,7 +17,7 @@ export function CompteurSoignantsDisponibles({ etablissementId }: CompteurSoigna
       });
 
       if (error) {
-        console.error('[CompteurSoignantsDisponibles]', error.message);
+        logger.error('[CompteurSoignantsDisponibles]', error);
         setCount(0);
         return;
       }

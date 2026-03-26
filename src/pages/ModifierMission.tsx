@@ -15,7 +15,7 @@ export default function ModifierMission() {
     if (!id) return;
     (async () => {
       const { data, error } = await supabase.from('missions').select('id, intitule, description, service, profession_requise, debut_le, fin_le, taux_horaire_base, est_urgente, niveau_urgence, statut').eq('id', id).single();
-      if (error) console.error('[ModifierMission] Erreur chargement:', error.message);
+      if (error) logger.error('[ModifierMission] Erreur chargement', error);
       setMission(data);
       setLoading(false);
     })();

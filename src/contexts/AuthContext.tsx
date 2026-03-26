@@ -179,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Étape 3 : Email de bienvenue (fire-and-forget)
-    console.log('[INSCRIPTION] 8. Envoi email bienvenue (fire-and-forget)');
+    logger.debug('[INSCRIPTION] 8. Envoi email bienvenue (fire-and-forget)');
     fetch('https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/send-email', {
       method: 'POST',
       headers: {

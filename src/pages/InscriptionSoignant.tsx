@@ -140,7 +140,7 @@ export default function InscriptionSoignant() {
           setRppsResultat({ trouve: false });
         }
       } catch (err) {
-        console.error('verify-rpps fetch exception:', err);
+        logger.error('verify-rpps fetch exception', err);
         setRppsResultat(null);
       }
       setRppsVerifiant(false);
