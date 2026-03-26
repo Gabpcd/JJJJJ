@@ -101,7 +101,8 @@ export interface RpcSupprimerCompte extends RpcSuccessOrError {}
 
 // ─── Urgence ────────────────────────────────────────────
 export interface RpcSoignantsUrgence {
-  id: string;
+  soignant_id: string;
+  id?: string;
   prenom: string;
   nom: string;
   profession: string;

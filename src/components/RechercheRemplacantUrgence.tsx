@@ -91,7 +91,7 @@ export function RechercheRemplacantUrgence({ missionId, onPropose, onError, onSu
       ) : (
         <div className="space-y-2">
           {soignants.map((s) => (
-            <div key={s.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
+            <div key={s.soignant_id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
               <div>
                 <p className="text-sm font-medium text-foreground">
                   {s.prenom} {s.nom}
