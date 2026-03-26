@@ -23,7 +23,7 @@ export function RechercheRemplacantUrgence({ missionId, onPropose, onError, onSu
     if (error) {
       onError(extraireMessageErreur(error));
     } else {
-      setSoignants(Array.isArray(data) ? data : []);
+      setSoignants(Array.isArray(data) ? (data as unknown as RpcSoignantsUrgence[]) : []);
       setLoaded(true);
     }
     setLoading(false);
