@@ -213,7 +213,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     }
 
     setAssigningMissionId(mission.id);
-    console.log('pool: proposing mission to soignant', { mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
+    logger.debug('pool: proposing mission to soignant', { mission_id: mission.id, soignant_id: proposerSoignant.soignant_id });
 
     const { data: existingCandidature, error: checkError } = await supabase
       .from('candidatures')
