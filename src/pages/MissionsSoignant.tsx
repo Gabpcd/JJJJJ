@@ -281,19 +281,28 @@ export default function MissionsSoignant() {
 
           {onglet === 'historique' && (
             missionsAvecDistance.length > 0 ? (
-              <div className="space-y-3">
-                {missionsAvecDistance.map(m => (
-                  <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all">
-                    <div className="flex items-center justify-between mb-2">
-                      <BadgeStatut statut={m.statut} />
-                      <span className="text-xs text-muted-foreground">{format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}</span>
+              <>
+                <div className="space-y-3">
+                  {missionsAvecDistance.slice(0, nbAffiche).map(m => (
+                    <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all">
+                      <div className="flex items-center justify-between mb-2">
+                        <BadgeStatut statut={m.statut} />
+                        <span className="text-xs text-muted-foreground">{format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}</span>
+                      </div>
+                      <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
+                      <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom}</p>
+                      {(m.net_estime || m.net_a_payer) > 0 && <p className="text-sm font-bold text-primary mt-1">Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(m.net_estime || (m.net_a_payer * 0.78))}</p>}
                     </div>
-                    <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom}</p>
-                    {(m.net_estime || m.net_a_payer) > 0 && <p className="text-sm font-bold text-primary mt-1">Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(m.net_estime || (m.net_a_payer * 0.78))}</p>}
+                  ))}
+                </div>
+                {nbAffiche < missionsAvecDistance.length && (
+                  <div className="flex justify-center mt-6">
+                    <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
+                      Voir plus ({missionsAvecDistance.length - nbAffiche} restantes)
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             ) : (
               <EtatVide icone={History} titre="Aucune mission dans l'historique"
                 sousTitre="Vos missions terminées et annulées apparaîtront ici." />
