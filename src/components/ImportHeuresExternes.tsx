@@ -3,6 +3,7 @@ import { Plus, Upload, Loader2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { capturerErreurSentry } from '@/lib/sentry';
 
 interface ImportHeuresExternesProps {
   onDone: () => void;

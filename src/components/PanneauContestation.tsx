@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { sanitizeText } from '@/lib/sanitize';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { toast } from 'sonner';
 
 interface Litige {

@@ -13,6 +13,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle } from 'lucide-react';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { SectionBio } from '@/components/SectionBio';

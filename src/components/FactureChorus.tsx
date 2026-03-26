@@ -3,6 +3,7 @@ import { Landmark, Loader2, ExternalLink, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
+import { capturerErreurSentry } from '@/lib/sentry';
 
 interface Props {
   facture: any;
