@@ -1,17 +1,31 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.jolene.ios',
+  appId: 'app.jolene.mobile',
   appName: 'Jolene',
   webDir: 'dist',
   server: {
     androidScheme: 'https',
+    // Pour le dev local, décommenter la ligne suivante :
+    // url: 'http://localhost:8080',
   },
   plugins: {
-    StatusBar: {
-      style: 'dark',
-      backgroundColor: '#0F172A',
+    SplashScreen: {
+      autoHide: false,
+      launchShowDuration: 2000,
+      backgroundColor: '#FFFFFF',
     },
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#FFFFFF',
+    },
+    Keyboard: {
+      resize: 'body',
+      scrollAssist: true,
+    },
+  },
+  ios: {
+    contentInset: 'automatic',
   },
 };
 

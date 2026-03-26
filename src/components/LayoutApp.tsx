@@ -7,11 +7,7 @@ import { SyncHorsLigne } from '@/components/SyncHorsLigne';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
 
-/** Detect Capacitor native runtime without importing @capacitor/core */
-function isNativePlatform(): boolean {
-  return typeof (window as any).Capacitor !== 'undefined' &&
-    (window as any).Capacitor.isNativePlatform?.() === true;
-}
+import { isNative as isNativePlatform } from '@/lib/platform';
 
 interface LayoutAppProps {
   role: UserRole;
