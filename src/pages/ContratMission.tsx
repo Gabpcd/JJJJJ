@@ -223,7 +223,7 @@ export default function ContratMission() {
     } catch (err: any) {
       logger.error('Yousign create error', err);
       capturerErreurSentry(err, 'ContratMission', 'yousign_create');
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de l\'initialisation Yousign' });
+      afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'initialisation Yousign. Veuillez réessayer.' });
       setModeSignature('CANVAS');
     } finally {
       setYousignLoading(false);

@@ -76,7 +76,7 @@ export function ModalReclamationScore({ onClose, onSuccess }: Props) {
     } as any);
 
     if (error) {
-      setErreur(error.message);
+      setErreur('Erreur lors de l\'envoi de la réclamation. Veuillez réessayer.');
     } else {
       onSuccess();
     }

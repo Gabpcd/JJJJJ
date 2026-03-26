@@ -181,7 +181,7 @@ export default function AdminModeration() {
     });
 
     if (error || (data as any)?.error) {
-      toast.error(error?.message || (data as any)?.error || 'Impossible de résoudre le litige');
+      toast.error('Impossible de résoudre le litige. Veuillez réessayer.');
       setActionLitigeId(null);
       return;
     }

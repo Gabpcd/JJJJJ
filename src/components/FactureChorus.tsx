@@ -94,7 +94,7 @@ export function FactureChorus({ facture, onUpdate }: Props) {
       });
       onUpdate();
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur vérification statut' });
+      afficherNotification({ type: 'erreur', message: 'Erreur lors de la vérification du statut.' });
     } finally {
       setCheckingStatus(false);
     }
