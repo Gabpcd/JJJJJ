@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
 import { supabase } from '@/integrations/supabase/client';
-
 import { Session, User } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 

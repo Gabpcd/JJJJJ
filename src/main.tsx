@@ -116,4 +116,10 @@ function showUpdateBanner() {
   document.body.prepend(banner);
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+import { SentryErrorFallback } from "./components/SentryErrorFallback";
+
+createRoot(document.getElementById("root")!).render(
+  <Sentry.ErrorBoundary fallback={({ resetError }) => <SentryErrorFallback resetError={resetError} />}>
+    <App />
+  </Sentry.ErrorBoundary>
+);
