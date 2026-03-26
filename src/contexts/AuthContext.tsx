@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authData = signUpData;
       logger.debug('[INSCRIPTION] 3. signUp OK, user id:', authData.user?.id, 'session:', !!authData.session);
     } catch (err) {
-      console.error('[INSCRIPTION] signUp EXCEPTION:', err);
+      logger.error('[INSCRIPTION] signUp EXCEPTION', err);
       throw err;
     }
 
