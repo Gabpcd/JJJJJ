@@ -102,7 +102,7 @@ export default function ListeMissions() {
     if (periodeParam !== filtrePeriode) setFiltrePeriode(periodeParam);
   }, [statutParam, periodeParam]);
 
-  useEffect(() => { charger(); }, [user, etablissementId, filtreStatut, filtrePeriode, debouncedRecherche]);
+  useEffect(() => { charger(); setNbAffiche(20); }, [user, etablissementId, filtreStatut, filtrePeriode, debouncedRecherche]);
 
   const appliquerFiltres = (statut: string, periode: string) => {
     const params = new URLSearchParams();
