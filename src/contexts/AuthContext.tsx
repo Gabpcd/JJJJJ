@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn('[INSCRIPTION] 3b. Aucun token dans signUp, tentative via getSession...');
       const { data: sessionData } = await supabase.auth.getSession();
       accessToken = sessionData.session?.access_token;
-      console.log('[INSCRIPTION] 3c. Token via getSession:', !!accessToken);
+      logger.debug('[INSCRIPTION] 3c. Token via getSession:', !!accessToken);
     }
     if (!accessToken) {
       throw new Error('Session introuvable après inscription. Veuillez réessayer.');
