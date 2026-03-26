@@ -50,7 +50,8 @@ export type Database = {
         Row: {
           actif: boolean | null
           cle_api: string
-          cle_secret: string
+          cle_secret: string | null
+          cle_secret_hash: string | null
           cree_le: string | null
           derniere_utilisation: string | null
           etablissement_id: string | null
@@ -63,7 +64,8 @@ export type Database = {
         Insert: {
           actif?: boolean | null
           cle_api: string
-          cle_secret: string
+          cle_secret?: string | null
+          cle_secret_hash?: string | null
           cree_le?: string | null
           derniere_utilisation?: string | null
           etablissement_id?: string | null
@@ -76,7 +78,8 @@ export type Database = {
         Update: {
           actif?: boolean | null
           cle_api?: string
-          cle_secret?: string
+          cle_secret?: string | null
+          cle_secret_hash?: string | null
           cree_le?: string | null
           derniere_utilisation?: string | null
           etablissement_id?: string | null
@@ -3599,6 +3602,15 @@ export type Database = {
         Args: { p_motif: string; p_presence_id: string }
         Returns: Json
       }
+      fn_creer_api_key: {
+        Args: {
+          p_etablissement_id?: string
+          p_groupe_sante_id?: string
+          p_nom: string
+          p_permissions?: string[]
+        }
+        Returns: Json
+      }
       fn_creer_mission: {
         Args: {
           p_debut_le?: string
@@ -4297,6 +4309,10 @@ export type Database = {
       }
       fn_valider_presence: { Args: { p_presence_id: string }; Returns: Json }
       fn_valider_presences_lot: { Args: { p_ids: string[] }; Returns: Json }
+      fn_verifier_api_key: {
+        Args: { p_cle_api: string; p_cle_secret: string }
+        Returns: Json
+      }
       fn_verifier_coherence_identite: {
         Args: { p_soignant_id: string }
         Returns: Json

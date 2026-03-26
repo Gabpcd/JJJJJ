@@ -74,8 +74,12 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
     }
     if (n.lien) {
-      onClose();
-      navigate(n.lien);
+      if (n.lien.startsWith('/') || n.lien.startsWith('https://jolene.app') || n.lien.startsWith('https://jolene-app.lovable.app')) {
+        onClose();
+        navigate(n.lien.replace('https://jolene.app', '').replace('https://jolene-app.lovable.app', '') || '/');
+      } else {
+        toast.error('Lien non autorisé');
+      }
     }
   };
 
@@ -194,7 +198,9 @@ export function BadgeNotification() {
           });
           notification.onclick = () => {
             window.focus();
-            if (n.lien) window.location.href = n.lien;
+            if (n.lien && (n.lien.startsWith('/') || n.lien.startsWith('https://jolene.app') || n.lien.startsWith('https://jolene-app.lovable.app'))) {
+              window.location.href = n.lien.startsWith('/') ? n.lien : n.lien.replace('https://jolene.app', '').replace('https://jolene-app.lovable.app', '') || '/';
+            }
             notification.close();
           };
         }
