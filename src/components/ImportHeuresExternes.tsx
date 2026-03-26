@@ -30,7 +30,7 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
     e.preventDefault();
     if (!user || !fichier) return;
     if (fichier.size > 10 * 1024 * 1024) {
-      toast.error('Fichier trop volumineux. Maximum : 10 Mo.');
+      afficherNotification({ type: 'erreur', message: 'Fichier trop volumineux. Maximum : 10 Mo.' });
       return;
     }
     setSubmitting(true);
