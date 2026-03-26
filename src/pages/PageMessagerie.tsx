@@ -250,7 +250,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       p_contenu: contenu,
     });
 
-    console.log('fn_envoyer_message result:', { data, error, p_conversation_id: selectedConvId, p_contenu: contenu });
+    logger.debug('fn_envoyer_message result:', { data, error, p_conversation_id: selectedConvId });
 
     if (error) {
       console.error('fn_envoyer_message error:', error);
