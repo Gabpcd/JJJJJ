@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import type { RpcSoignantsUrgence } from '@/lib/supabase-rpc-types';
 
 interface RechercheRemplacantUrgenceProps {
   missionId: string;
