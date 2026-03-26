@@ -4,6 +4,7 @@ import { Slider } from '@/components/ui/slider';
 import { Flame, Shield, Star, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import type { RpcSuccessOrError } from '@/lib/supabase-rpc-types';
 
 interface PoolUrgenceToggleProps {
   actif: boolean;
@@ -28,10 +29,11 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onEr
       p_rayon_km: newRayon,
       p_creneaux: [],
     });
+    const result = data as unknown as RpcSuccessOrError | null;
     if (error) {
       onError(extraireMessageErreur(error));
-    } else if (data?.error) {
-      onError(data.error);
+    } else if (result?.error) {
+      onError(result.error);
     } else {
       onUpdate(newActif, newRayon, modeZone === 'ville' ? localVille : undefined);
       onSuccess(newActif ? 'Pool urgence activé !' : 'Pool urgence désactivé.');

@@ -37,7 +37,7 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
         .eq('destinataire_id', user.id)
         .order('cree_le', { ascending: false })
         .limit(50);
-      setNotifications((data as any[]) || []);
+      setNotifications((data as unknown as NotificationItem[]) || []);
       setLoading(false);
     };
     load();

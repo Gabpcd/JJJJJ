@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import type { RpcSuccessOrError } from '@/lib/supabase-rpc-types';
 
 interface BoutonExclusionProps {
   excluId: string;
@@ -29,10 +30,11 @@ export function BoutonExclusion({ excluId, typeExcluPar, label, onDone }: Bouton
       p_motif: motif.trim() || null,
     });
 
+    const result = data as unknown as RpcSuccessOrError | null;
     if (error) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-    } else if (data && !(data as any).success) {
-      afficherNotification({ type: 'erreur', message: (data as any).error });
+    } else if (result && !result.success) {
+      afficherNotification({ type: 'erreur', message: result.error || 'Erreur inconnue' });
     } else {
       afficherNotification({ type: 'succes', message: 'Exclusion enregistrée. Les missions ne seront plus visibles.' });
       onDone?.();

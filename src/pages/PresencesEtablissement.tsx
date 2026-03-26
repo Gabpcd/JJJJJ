@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import type { RpcSuccessOrError, RpcValiderPresencesLot } from '@/lib/supabase-rpc-types';
 import { ClipboardCheck, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -91,9 +92,10 @@ export default function PresencesEtablissement() {
 
   const validerUne = async (presenceId: string) => {
     const { data, error } = await supabase.rpc('fn_valider_presence', { p_presence_id: presenceId });
+    const result = data as unknown as RpcSuccessOrError | null;
 
-    if (error || (data && !(data as any).success)) {
-      afficherNotification({ type: 'erreur', message: (data as any)?.error || extraireMessageErreur(error) });
+    if (error || (result && !result.success)) {
+      afficherNotification({ type: 'erreur', message: result?.error || extraireMessageErreur(error) });
     } else {
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
@@ -112,9 +114,10 @@ export default function PresencesEtablissement() {
       p_presence_id: presenceId,
       p_motif: motif,
     });
+    const result = data as unknown as RpcSuccessOrError | null;
 
-    if (error || (data && !(data as any).success)) {
-      afficherNotification({ type: 'erreur', message: (data as any)?.error || extraireMessageErreur(error) });
+    if (error || (result && !result.success)) {
+      afficherNotification({ type: 'erreur', message: result?.error || extraireMessageErreur(error) });
     } else {
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
@@ -137,11 +140,12 @@ export default function PresencesEtablissement() {
     const ids = presencesSansAlerte.map(p => p.id);
 
     const { data, error } = await supabase.rpc('fn_valider_presences_lot', { p_ids: ids });
+    const result = data as unknown as RpcValiderPresencesLot | null;
 
-    if (error || (data && !(data as any).success)) {
-      afficherNotification({ type: 'erreur', message: (data as any)?.error || extraireMessageErreur(error) });
+    if (error || (result && !result.success)) {
+      afficherNotification({ type: 'erreur', message: result?.error || extraireMessageErreur(error) });
     } else {
-      const nbValidees = (data as any)?.nb_validees ?? ids.length;
+      const nbValidees = result?.nb_validees ?? ids.length;
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
         p_action: 'PRESENCE_VALIDATION_LOT', p_type_ressource: 'presence',

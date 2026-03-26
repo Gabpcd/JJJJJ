@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import type { RpcSoignantsUrgence } from '@/lib/supabase-rpc-types';
 
 interface RechercheRemplacantUrgenceProps {
   missionId: string;
@@ -11,7 +12,7 @@ interface RechercheRemplacantUrgenceProps {
 }
 
 export function RechercheRemplacantUrgence({ missionId, onPropose, onError, onSuccess }: RechercheRemplacantUrgenceProps) {
-  const [soignants, setSoignants] = useState<any[]>([]);
+  const [soignants, setSoignants] = useState<RpcSoignantsUrgence[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [proposing, setProposing] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export function RechercheRemplacantUrgence({ missionId, onPropose, onError, onSu
     if (error) {
       onError(extraireMessageErreur(error));
     } else {
-      setSoignants(Array.isArray(data) ? data : []);
+      setSoignants(Array.isArray(data) ? (data as unknown as RpcSoignantsUrgence[]) : []);
       setLoaded(true);
     }
     setLoading(false);
@@ -89,7 +90,7 @@ export function RechercheRemplacantUrgence({ missionId, onPropose, onError, onSu
         <p className="text-sm text-muted-foreground text-center py-4">Aucun soignant urgence disponible dans le rayon.</p>
       ) : (
         <div className="space-y-2">
-          {soignants.map((s: any) => (
+          {soignants.map((s) => (
             <div key={s.soignant_id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
               <div>
                 <p className="text-sm font-medium text-foreground">
