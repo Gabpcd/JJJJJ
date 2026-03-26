@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { PROFESSIONS } from '@/lib/constantes';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { logger } from '@/lib/logger';
 
 interface SoignantPool {
   soignant_id: string;
