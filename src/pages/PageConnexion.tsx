@@ -121,6 +121,8 @@ export default function PageConnexion() {
           </button>
         </p>
       </div>
+      </div>
+      <FooterLegal />
     </div>
   );
 }
