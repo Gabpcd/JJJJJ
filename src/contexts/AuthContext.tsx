@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Étape 1 : signUp Supabase Auth
     let authData: any;
     try {
-      console.log('[INSCRIPTION] 2. Appel supabase.auth.signUp...');
+      logger.debug('[INSCRIPTION] 2. Appel supabase.auth.signUp...');
       const { data: signUpData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.motDePasse,
