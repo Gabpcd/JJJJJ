@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { SelectProfession } from '@/components/SelectProfession';
+import { FooterLegal } from '@/components/FooterLegal';
 import { CONTRATS, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
 
