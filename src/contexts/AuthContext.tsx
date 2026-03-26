@@ -165,7 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logger.debug('[INSCRIPTION] 6. register-soignant réponse:', result);
 
       if (!response.ok || result?.error) {
-        console.error('[INSCRIPTION] 7. ERREUR register-soignant:', result);
+        logger.error('[INSCRIPTION] ERREUR register-soignant', result);
         try { await supabase.auth.signOut(); } catch { /* ignore */ }
         throw new Error(result?.error || 'Erreur lors de la création de votre profil. Veuillez réessayer.');
       }
