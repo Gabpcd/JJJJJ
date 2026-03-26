@@ -140,11 +140,12 @@ export default function PresencesEtablissement() {
     const ids = presencesSansAlerte.map(p => p.id);
 
     const { data, error } = await supabase.rpc('fn_valider_presences_lot', { p_ids: ids });
+    const result = data as unknown as RpcValiderPresencesLot | null;
 
-    if (error || (data && !(data as any).success)) {
-      afficherNotification({ type: 'erreur', message: (data as any)?.error || extraireMessageErreur(error) });
+    if (error || (result && !result.success)) {
+      afficherNotification({ type: 'erreur', message: result?.error || extraireMessageErreur(error) });
     } else {
-      const nbValidees = (data as any)?.nb_validees ?? ids.length;
+      const nbValidees = result?.nb_validees ?? ids.length;
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
         p_action: 'PRESENCE_VALIDATION_LOT', p_type_ressource: 'presence',
