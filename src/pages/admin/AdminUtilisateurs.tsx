@@ -143,7 +143,7 @@ export default function AdminUtilisateurs() {
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   return (
-    <LayoutAdmin>
+    <>
       <BreadcrumbAdmin pageName="Utilisateurs" />
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Gestion utilisateurs</h1>
