@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { useParams, useNavigate } from 'react-router-dom';
