@@ -90,7 +90,7 @@ export function RechercheRemplacantUrgence({ missionId, onPropose, onError, onSu
         <p className="text-sm text-muted-foreground text-center py-4">Aucun soignant urgence disponible dans le rayon.</p>
       ) : (
         <div className="space-y-2">
-          {soignants.map((s: any) => (
+          {soignants.map((s) => (
             <div key={s.soignant_id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
               <div>
                 <p className="text-sm font-medium text-foreground">
