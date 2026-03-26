@@ -103,7 +103,7 @@ export default function LitigesEtablissement() {
       p_motif: newMotif.trim(),
     });
     setCreating(false);
-    if (error) { toast.error('Erreur lors de la création du litige.'); console.error(error); return; }
+    if (error) { toast.error('Erreur lors de la création du litige.'); return; }
     if (data?.error) { toast.error(data.error); return; }
     toast.success('Litige ouvert avec succès.');
     setShowNew(false);
@@ -113,12 +113,12 @@ export default function LitigesEtablissement() {
   const repondre = async () => {
     if (!replyId || !replyText.trim()) return;
     setSending(true);
-    const { error } = await supabase.from('litiges').update({
-      reponse: replyText.trim(),
-      statut: 'EN_DISCUSSION',
-    } as any).eq('id', replyId);
+    const { data, error } = await supabase.rpc('fn_repondre_litige' as any, {
+      p_litige_id: replyId,
+      p_reponse: replyText.trim(),
+    });
     setSending(false);
-    if (error) { toast.error('Erreur'); return; }
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Erreur lors de l\'envoi de la réponse.'); return; }
     toast.success('Réponse envoyée');
     setReplyId(null);
     setReplyText('');

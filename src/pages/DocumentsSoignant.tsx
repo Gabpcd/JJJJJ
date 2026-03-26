@@ -228,6 +228,11 @@ export default function DocumentsSoignant() {
   const televerser = async (fichier: File, libelle: string, valideDepuis: string, valideJusqua: string) => {
     if (!user || !televersementType) return;
 
+    if (fichier.size > 10 * 1024 * 1024) {
+      toast.error('Fichier trop volumineux. Maximum : 10 Mo.');
+      return;
+    }
+
     const nomSanitise = fichier.name
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')

@@ -54,6 +54,11 @@ export function ModalReclamationScore({ onClose, onSuccess }: Props) {
 
     // Upload justificatif if present
     if (fichier) {
+      if (fichier.size > 10 * 1024 * 1024) {
+        setErreur('Fichier trop volumineux. Maximum : 10 Mo.');
+        setSaving(false);
+        return;
+      }
       const ext = fichier.name.split('.').pop();
       const path = `${user!.id}/reclamations/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('jolene-documents').upload(path, fichier);

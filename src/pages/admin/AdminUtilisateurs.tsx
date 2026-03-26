@@ -10,8 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { capturerErreurSentry } from '@/lib/sentry';
+import { logger } from '@/lib/logger';
 
 export default function AdminUtilisateurs() {
   const navigate = useNavigate();
@@ -65,58 +69,81 @@ export default function AdminUtilisateurs() {
     etabs.filter(e => e.statut_verification === 'EN_ATTENTE' && !e.supprime_le),
   [etabs]);
 
+  const [rejectModalId, setRejectModalId] = useState<string | null>(null);
+  const [rejectMotif, setRejectMotif] = useState('');
+
   const suspendre = async (table: string, id: string) => {
-    const { error } = await supabase.from(table as any).update({ supprime_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) {
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_suspendre_utilisateur' as any, {
+        p_table: table,
+        p_id: id,
+        p_suspendre: true,
+      });
+      if (error) throw error;
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      toast.success('Utilisateur suspendu');
+      charger();
+    } catch (err) {
+      capturerErreurSentry(err, 'AdminUtilisateurs', 'suspendre');
       toast.error('Une erreur est survenue. Veuillez réessayer.');
-      return;
     }
-    toast.success('Utilisateur suspendu');
-    charger();
   };
 
   const reactiver = async (table: string, id: string) => {
-    const { error } = await supabase.from(table as any).update({ supprime_le: null } as any).eq('id', id);
-    if (error) {
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_suspendre_utilisateur' as any, {
+        p_table: table,
+        p_id: id,
+        p_suspendre: false,
+      });
+      if (error) throw error;
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      toast.success('Utilisateur réactivé');
+      charger();
+    } catch (err) {
+      capturerErreurSentry(err, 'AdminUtilisateurs', 'reactiver');
       toast.error('Une erreur est survenue. Veuillez réessayer.');
-      return;
     }
-    toast.success('Utilisateur réactivé');
-    charger();
   };
 
   const validerEtablissement = async (id: string) => {
-    const { error } = await supabase.from('etablissements').update({
-      statut_verification: 'VERIFIE',
-      peut_publier_missions: true,
-      verifie_le: new Date().toISOString(),
-    } as any).eq('id', id);
-    if (error) {
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_valider_etablissement' as any, {
+        p_etablissement_id: id,
+      });
+      if (error) throw error;
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      toast.success('Établissement validé — peut publier des missions');
+      charger();
+    } catch (err) {
+      capturerErreurSentry(err, 'AdminUtilisateurs', 'valider_etablissement');
       toast.error('Une erreur est survenue. Veuillez réessayer.');
-      return;
     }
-    toast.success('Établissement validé — peut publier des missions');
-    charger();
   };
 
-  const rejeterEtablissement = async (id: string) => {
-    const motif = prompt('Motif du rejet (optionnel) :');
-    const { error } = await supabase.from('etablissements').update({
-      statut_verification: 'REJETE',
-      peut_publier_missions: false,
-      motif_rejet: motif || 'Non conforme',
-    } as any).eq('id', id);
-    if (error) {
+  const rejeterEtablissement = async () => {
+    if (!rejectModalId) return;
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_rejeter_etablissement' as any, {
+        p_etablissement_id: rejectModalId,
+        p_motif: rejectMotif.trim() || 'Non conforme',
+      });
+      if (error) throw error;
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      toast.success('Établissement rejeté');
+      setRejectModalId(null);
+      setRejectMotif('');
+      charger();
+    } catch (err) {
+      capturerErreurSentry(err, 'AdminUtilisateurs', 'rejeter_etablissement');
       toast.error('Une erreur est survenue. Veuillez réessayer.');
-      return;
     }
-    toast.success('Établissement rejeté');
-    charger();
   };
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   return (
+    <>
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Utilisateurs" />
       <div className="space-y-6">
@@ -144,7 +171,7 @@ export default function AdminUtilisateurs() {
                     <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white">
                       <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
                     </Button>
-                    <Button size="sm" variant="destructive" onClick={() => rejeterEtablissement(e.id)}>
+                    <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }}>
                       <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}>
@@ -267,7 +294,7 @@ export default function AdminUtilisateurs() {
                             <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white">
                               <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
                             </Button>
-                            <Button size="sm" variant="destructive" onClick={() => rejeterEtablissement(e.id)}>
+                            <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }}>
                               <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
                             </Button>
                           </>
@@ -308,5 +335,28 @@ export default function AdminUtilisateurs() {
         </Tabs>
       </div>
     </LayoutAdmin>
+
+    {/* Modale rejet établissement */}
+    <Dialog open={!!rejectModalId} onOpenChange={() => setRejectModalId(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Rejeter l'établissement</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">Indiquez le motif du rejet (optionnel) :</p>
+          <Textarea
+            value={rejectMotif}
+            onChange={e => setRejectMotif(e.target.value)}
+            placeholder="Motif du rejet..."
+            maxLength={500}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setRejectModalId(null)}>Annuler</Button>
+          <Button variant="destructive" onClick={rejeterEtablissement}>Confirmer le rejet</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

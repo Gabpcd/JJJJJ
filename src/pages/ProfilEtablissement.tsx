@@ -546,14 +546,15 @@ export default function ProfilEtablissement() {
                   setUploadingContrat(false);
                   return;
                 }
-                const { data: urlData } = supabase.storage.from('jolene-documents').getPublicUrl(fileName);
+                const { data: urlData } = await supabase.storage.from('jolene-documents').createSignedUrl(fileName, 300);
+                const contratSignedUrl = urlData?.signedUrl || '';
                 const { error: updateErr } = await supabase.rpc('fn_modifier_mon_etablissement' as any, {
-                  p_contrat_url: urlData.publicUrl,
+                  p_contrat_url: fileName, // Store path, not public URL
                 });
                 if (updateErr) {
                   afficherNotification({ type: 'erreur', message: extraireMessageErreur(updateErr) });
                 } else {
-                  setContratUrl(urlData.publicUrl);
+                  setContratUrl(fileName);
                   setContratUploadeLe(new Date().toISOString());
                   setContratValide(false);
                   afficherNotification({ type: 'succes', message: 'Contrat téléversé. En attente de validation par Jolene.' });

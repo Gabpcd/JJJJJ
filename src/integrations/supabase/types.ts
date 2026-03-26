@@ -3492,11 +3492,23 @@ export type Database = {
         }[]
       }
       fn_admin_kpi: { Args: never; Returns: Json }
+      fn_admin_moderer_evaluation: {
+        Args: { p_action: string; p_evaluation_id: string }
+        Returns: Json
+      }
       fn_admin_planning_global: {
         Args: { p_debut?: string; p_fin?: string }
         Returns: Json
       }
+      fn_admin_rejeter_etablissement: {
+        Args: { p_etablissement_id: string; p_motif?: string }
+        Returns: Json
+      }
       fn_admin_stripe_connect_stats: { Args: never; Returns: Json }
+      fn_admin_suspendre_utilisateur: {
+        Args: { p_id: string; p_suspendre?: boolean; p_table: string }
+        Returns: Json
+      }
       fn_alerte_cddu_repetitif: {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: Json
@@ -4194,6 +4206,10 @@ export type Database = {
       fn_relancer_signatures_contrats: { Args: never; Returns: number }
       fn_repondre_litige: {
         Args: { p_litige_id: string; p_reponse: string }
+        Returns: Json
+      }
+      fn_repondre_proposition: {
+        Args: { p_accepter: boolean; p_candidature_id: string }
         Returns: Json
       }
       fn_resoudre_litige: {
