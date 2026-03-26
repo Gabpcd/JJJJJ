@@ -350,16 +350,25 @@ export default function RechercheMissions() {
 
           <TabsContent value="liste">
             {loading ? <ChargementPage /> : filtered.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {filtered.map(m => (
-                  <CarteMissionSoignant
-                    key={m.id}
-                    mission={m}
-                    soignant={soignant}
-                    onClick={() => navigate(`/soignant/missions/${m.id}`)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filtered.slice(0, nbAffiche).map(m => (
+                    <CarteMissionSoignant
+                      key={m.id}
+                      mission={m}
+                      soignant={soignant}
+                      onClick={() => navigate(`/soignant/missions/${m.id}`)}
+                    />
+                  ))}
+                </div>
+                {nbAffiche < filtered.length && (
+                  <div className="flex justify-center mt-6">
+                    <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
+                      Voir plus ({filtered.length - nbAffiche} restantes)
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <EtatVide
                 icone={SearchX}

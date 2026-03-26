@@ -226,19 +226,28 @@ export default function MissionsSoignant() {
           <p className="text-sm text-muted-foreground mb-3">{missionsAvecDistance.length} mission{missionsAvecDistance.length !== 1 ? 's' : ''} trouvée{missionsAvecDistance.length !== 1 ? 's' : ''}</p>
           {onglet === 'disponibles' && (
             groupes.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {groupes.map((g, i) => {
-                  if (g.type === 'serie') {
-                    return <FadeInView key={g.serieId} delay={i * 100}><CarteSerie missions={g.missions} role="soignant" soignant={soignant} /></FadeInView>;
-                  }
-                  return (
-                    <FadeInView key={g.mission.id} delay={i * 100}>
-                      <CarteMissionSoignant mission={g.mission} soignant={soignant}
-                        onClick={() => navigate(`/soignant/missions/${g.mission.id}`)} />
-                    </FadeInView>
-                  );
-                })}
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {groupes.slice(0, nbAffiche).map((g, i) => {
+                    if (g.type === 'serie') {
+                      return <FadeInView key={g.serieId} delay={i * 100}><CarteSerie missions={g.missions} role="soignant" soignant={soignant} /></FadeInView>;
+                    }
+                    return (
+                      <FadeInView key={g.mission.id} delay={i * 100}>
+                        <CarteMissionSoignant mission={g.mission} soignant={soignant}
+                          onClick={() => navigate(`/soignant/missions/${g.mission.id}`)} />
+                      </FadeInView>
+                    );
+                  })}
+                </div>
+                {nbAffiche < groupes.length && (
+                  <div className="flex justify-center mt-6">
+                    <button onClick={() => setNbAffiche(n => n + 20)} className="btn-secondary text-sm px-6">
+                      Voir plus ({groupes.length - nbAffiche} restantes)
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <EtatVide illustration={<IllustrationBoussole />} titre="Aucune mission pour le moment"
                 sousTitre="Les missions apparaîtront ici dès qu'un établissement en publiera une correspondant à votre profil."
