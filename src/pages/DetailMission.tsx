@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
+import { logger } from '@/lib/logger';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send, CreditCard, MessageCircle, BellRing, Loader2 } from 'lucide-react';
@@ -58,10 +59,10 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
     setAlerting(true);
     try {
       const { data: soignants, error } = await supabase.rpc('fn_soignants_urgence' as any, { p_mission_id: missionId });
-      console.log('fn_soignants_urgence result:', { count: soignants?.length, error });
+      logger.debug('fn_soignants_urgence result:', { count: soignants?.length, error });
 
       if (error || !soignants?.length) {
-        toast.error(error?.message || 'Aucun soignant éligible dans le pool');
+        toast.error('Aucun soignant éligible dans le pool d\'urgence.');
         setAlerting(false);
         return;
       }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 
 interface CompteurSoignantsDisponiblesProps {
   etablissementId: string;
@@ -16,7 +17,7 @@ export function CompteurSoignantsDisponibles({ etablissementId }: CompteurSoigna
       });
 
       if (error) {
-        console.error('[CompteurSoignantsDisponibles]', error.message);
+        logger.error('[CompteurSoignantsDisponibles]', error);
         setCount(0);
         return;
       }

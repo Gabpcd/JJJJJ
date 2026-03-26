@@ -407,7 +407,7 @@ export default function AdminFacturation() {
                                   setActionId(f.id);
                                   const { data, error } = await supabase.rpc('fn_confirmer_virement_admin' as any, { p_facture_id: f.id });
                                   if (error || (data as any)?.error) {
-                                    toast.error((data as any)?.error || error?.message || 'Erreur');
+                                    toast.error('Erreur lors de la confirmation du virement.');
                                   } else {
                                     toast.success('Virement confirmé ✅');
                                     charger();
@@ -427,7 +427,7 @@ export default function AdminFacturation() {
                                   setActionId(f.id);
                                   const { data, error } = await supabase.rpc('fn_rejeter_virement_admin' as any, { p_facture_id: f.id });
                                   if (error || (data as any)?.error) {
-                                    toast.error((data as any)?.error || error?.message || 'Erreur');
+                                    toast.error('Erreur lors du rejet du virement.');
                                   } else {
                                     toast.success('Virement rejeté — facture remise en Émise');
                                     charger();

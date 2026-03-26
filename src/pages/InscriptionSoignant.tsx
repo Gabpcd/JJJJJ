@@ -9,6 +9,7 @@ import { SelectProfession } from '@/components/SelectProfession';
 import { FooterLegal } from '@/components/FooterLegal';
 import { CONTRATS, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
+import { logger } from '@/lib/logger';
 
 
 function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => void }) {
@@ -126,10 +127,10 @@ export default function InscriptionSoignant() {
         );
 
         const data = await response.json();
-        console.log('RPPS response:', data);
+        logger.debug('RPPS response:', data);
 
         if (!response.ok) {
-          console.error('verify-rpps fetch error:', data);
+          logger.error('verify-rpps fetch error', data);
           setRppsResultat(data?.trouve === false ? { trouve: false } : null);
         } else if (data) {
           const nomAffiche = data.nom_api || data.nom || '';
@@ -140,7 +141,7 @@ export default function InscriptionSoignant() {
           setRppsResultat({ trouve: false });
         }
       } catch (err) {
-        console.error('verify-rpps fetch exception:', err);
+        logger.error('verify-rpps fetch exception', err);
         setRppsResultat(null);
       }
       setRppsVerifiant(false);

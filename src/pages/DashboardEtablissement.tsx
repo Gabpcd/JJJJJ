@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
+import { logger } from '@/lib/logger';
 import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
@@ -81,8 +82,8 @@ export default function DashboardEtablissement() {
         supabase.rpc('fn_mes_soignants_etablissement'),
       ]);
 
-      if (resEtab.error) { console.error('[DashboardEtab] Erreur établissement:', resEtab.error); handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
-      else if (!resEtab.data) { console.warn('[DashboardEtab] Aucun établissement trouvé pour user.id:', user.id); partialError = true; }
+      if (resEtab.error) { logger.error('[DashboardEtab] Erreur établissement', resEtab.error); handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
+      else if (!resEtab.data) { logger.warn('[DashboardEtab] Aucun établissement trouvé pour user.id:', user.id); partialError = true; }
       else if (resEtab.data) setEtab(resEtab.data);
 
       const sgMap: Record<string, any> = {};
@@ -99,8 +100,8 @@ export default function DashboardEtablissement() {
         }
       }
 
-      if (resMissions.error) { console.error('[DashboardEtab] Erreur missions:', resMissions.error); handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
-      if (resSoignants.error) { console.error('[DashboardEtab] Erreur soignants RPC:', resSoignants.error); }
+      if (resMissions.error) { logger.error('[DashboardEtab] Erreur missions', resMissions.error); handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
+      if (resSoignants.error) { logger.error('[DashboardEtab] Erreur soignants RPC', resSoignants.error); }
       else if (resMissions.data) setMissions(resMissions.data.map((m: any) => ({
         ...m,
         soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,

@@ -203,7 +203,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
       // Mark as read
       supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId }).then(({ error }) => {
-        if (error) console.error('fn_marquer_messages_lus error:', error);
+        if (error) logger.error('fn_marquer_messages_lus error', error);
         setConversations(prev => prev.map(c => c.id === selectedConvId ? { ...c, non_lus: 0 } : c));
       });
     };
@@ -253,11 +253,11 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
     logger.debug('fn_envoyer_message result:', { data, error, p_conversation_id: selectedConvId });
 
     if (error) {
-      console.error('fn_envoyer_message error:', error);
+      logger.error('fn_envoyer_message error', error);
       toast.error("Impossible d'envoyer le message.");
       setTexte(contenuBrut);
     } else if (data && typeof data === 'object' && (data as any).error) {
-      console.error('fn_envoyer_message returned error:', data);
+      logger.error('fn_envoyer_message returned error', data);
       toast.error("Impossible d'envoyer le message.");
       setTexte(contenuBrut);
     }

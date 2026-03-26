@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { sanitizeText } from '@/lib/sanitize';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 interface Message {
   id: string;
@@ -96,7 +97,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdm
 
     const typeAuteur = isAdmin ? 'ADMIN' : role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT';
 
-    console.log('ChatMission envoi:', { missionId, auteur_id: user.id, type_auteur: typeAuteur, contenu_length: contenu.length });
+    logger.debug('ChatMission envoi:', { missionId, auteur_id: user.id, type_auteur: typeAuteur, contenu_length: contenu.length });
 
     const { data, error } = await supabase
       .from('messages_mission')
@@ -110,7 +111,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdm
       .single();
 
     if (error) {
-      console.error('Erreur envoi message mission:', error);
+      logger.error('Erreur envoi message mission', error);
       setTexte(contenuBrut);
       toast.error("Impossible d'envoyer le message. Veuillez réessayer.");
     } else if (data) {

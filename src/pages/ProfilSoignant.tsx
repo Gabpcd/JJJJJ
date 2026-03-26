@@ -13,6 +13,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle } from 'lucide-react';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { SectionBio } from '@/components/SectionBio';
@@ -224,6 +225,7 @@ export default function ProfilSoignant() {
       URL.revokeObjectURL(url);
       afficherNotification({ type: 'succes', message: 'Données exportées avec succès.' });
     } catch (err: any) {
+      capturerErreurSentry(err, 'ProfilSoignant', 'export_rgpd');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     }
     setExportLoading(false);
@@ -244,6 +246,7 @@ export default function ProfilSoignant() {
       await supabase.auth.signOut();
       navigate('/');
     } catch (err: any) {
+      capturerErreurSentry(err, 'ProfilSoignant', 'supprimer_compte');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     }
     setDeleteLoading(false);

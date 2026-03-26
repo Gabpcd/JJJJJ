@@ -112,13 +112,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
       });
       if (authError) {
-        console.error('[INSCRIPTION] 3. ERREUR signUp:', authError);
+        logger.error('[INSCRIPTION] ERREUR signUp', authError);
         throw authError;
       }
       authData = signUpData;
       logger.debug('[INSCRIPTION] 3. signUp OK, user id:', authData.user?.id, 'session:', !!authData.session);
     } catch (err) {
-      console.error('[INSCRIPTION] signUp EXCEPTION:', err);
+      logger.error('[INSCRIPTION] signUp EXCEPTION', err);
       throw err;
     }
 
@@ -165,21 +165,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logger.debug('[INSCRIPTION] 6. register-soignant réponse:', result);
 
       if (!response.ok || result?.error) {
-        console.error('[INSCRIPTION] 7. ERREUR register-soignant:', result);
+        logger.error('[INSCRIPTION] ERREUR register-soignant', result);
         try { await supabase.auth.signOut(); } catch { /* ignore */ }
         throw new Error(result?.error || 'Erreur lors de la création de votre profil. Veuillez réessayer.');
       }
 
       logger.debug('[INSCRIPTION] 7. register-soignant OK ✅');
     } catch (err) {
-      console.error('[INSCRIPTION] register-soignant EXCEPTION:', err);
+      logger.error('[INSCRIPTION] register-soignant EXCEPTION', err);
       Sentry.captureException(err, { tags: { composant: 'AuthContext', action: 'inscription_soignant' } });
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
       throw err instanceof Error ? err : new Error('Erreur lors de la création de votre profil. Veuillez réessayer.');
     }
 
     // Étape 3 : Email de bienvenue (fire-and-forget)
-    console.log('[INSCRIPTION] 8. Envoi email bienvenue (fire-and-forget)');
+    logger.debug('[INSCRIPTION] 8. Envoi email bienvenue (fire-and-forget)');
     fetch('https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/send-email', {
       method: 'POST',
       headers: {

@@ -350,7 +350,7 @@ export default function DetailMissionSoignant() {
                         }
                         const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: userId, p_mission_id: mission.id });
                         if (error) {
-                          toast.error(`Impossible d'ouvrir la conversation : ${error.message}`);
+                          toast.error("Impossible d'ouvrir la conversation.");
                         } else if (data) {
                           navigate(`/soignant/messagerie?conv=${data}`);
                         } else {
@@ -548,7 +548,7 @@ export default function DetailMissionSoignant() {
                     }
                     const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: userId, p_mission_id: mission.id });
                     if (error) {
-                      toast.error(`Impossible d'ouvrir la conversation : ${error.message}`);
+                      toast.error("Impossible d'ouvrir la conversation.");
                     } else if (data) {
                       navigate(`/soignant/messagerie?conv=${data}`);
                     } else {

@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { sanitizeText } from '@/lib/sanitize';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { toast } from 'sonner';
 
 interface Litige {
@@ -137,6 +138,7 @@ export function PanneauContestation({
       charger();
       onUpdate?.();
     } catch (err: any) {
+      capturerErreurSentry(err, 'PanneauContestation', 'contester_presence');
       toast.error(extraireMessageErreur(err));
     } finally {
       setEnvoi(false);
@@ -159,6 +161,7 @@ export function PanneauContestation({
       charger();
       onUpdate?.();
     } catch (err: any) {
+      capturerErreurSentry(err, 'PanneauContestation', 'repondre_litige');
       toast.error(extraireMessageErreur(err));
     } finally {
       setEnvoi(false);
@@ -181,6 +184,7 @@ export function PanneauContestation({
       charger();
       onUpdate?.();
     } catch (err: any) {
+      capturerErreurSentry(err, 'PanneauContestation', 'resoudre_admin');
       toast.error(extraireMessageErreur(err));
     } finally {
       setEnvoi(false);
@@ -215,6 +219,7 @@ export function PanneauContestation({
       charger();
       onUpdate?.();
     } catch (err: any) {
+      capturerErreurSentry(err, 'PanneauContestation', 'proposer_cloture');
       toast.error(extraireMessageErreur(err));
     } finally {
       setEnvoi(false);

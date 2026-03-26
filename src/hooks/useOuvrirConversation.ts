@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 /**
  * Resolves an établissement record ID to the managing user's auth.users ID.
@@ -9,7 +10,7 @@ import { toast } from 'sonner';
 export async function resoudreUserIdEtablissement(etablissementId: string): Promise<string | null> {
   const { data, error } = await supabase.rpc('fn_user_id_pour_etablissement' as any, { p_etablissement_id: etablissementId });
   if (error || !data) {
-    console.error('fn_user_id_pour_etablissement error:', error);
+    logger.error('fn_user_id_pour_etablissement error', error);
     return null;
   }
   return data as string;
@@ -43,7 +44,7 @@ export function useOuvrirConversation(baseRoute: string) {
 
     if (error || !data) {
       toast.error("Impossible d'ouvrir la conversation.");
-      console.error('fn_obtenir_conversation error:', error);
+      logger.error('fn_obtenir_conversation error', error);
       return;
     }
 

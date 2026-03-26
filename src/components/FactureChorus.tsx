@@ -3,6 +3,7 @@ import { Landmark, Loader2, ExternalLink, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
+import { capturerErreurSentry } from '@/lib/sentry';
 
 interface Props {
   facture: any;
@@ -75,7 +76,8 @@ export function FactureChorus({ facture, onUpdate }: Props) {
       setOpen(false);
       onUpdate();
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors du dépôt Chorus' });
+      capturerErreurSentry(err, 'FactureChorus', 'deposer_chorus');
+      afficherNotification({ type: 'erreur', message: 'Erreur lors du dépôt Chorus. Veuillez réessayer.' });
     } finally {
       setLoading(false);
     }
@@ -94,7 +96,8 @@ export function FactureChorus({ facture, onUpdate }: Props) {
       });
       onUpdate();
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur vérification statut' });
+      capturerErreurSentry(err, 'FactureChorus', 'verifier_statut');
+      afficherNotification({ type: 'erreur', message: 'Erreur lors de la vérification du statut.' });
     } finally {
       setCheckingStatus(false);
     }

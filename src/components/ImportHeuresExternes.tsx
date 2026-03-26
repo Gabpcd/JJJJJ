@@ -3,6 +3,7 @@ import { Plus, Upload, Loader2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { capturerErreurSentry } from '@/lib/sentry';
 
 interface ImportHeuresExternesProps {
   onDone: () => void;
@@ -82,7 +83,8 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
       setFichier(null);
       onDone();
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de la soumission' });
+      capturerErreurSentry(err, 'ImportHeuresExternes', 'soumettre_heures');
+      afficherNotification({ type: 'erreur', message: 'Erreur lors de la soumission. Veuillez réessayer.' });
     } finally {
       setSubmitting(false);
     }

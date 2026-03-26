@@ -3,6 +3,7 @@ import { AlertTriangle, ExternalLink, CheckCircle, Loader2 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -40,6 +41,7 @@ export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, t
       setConfirmedDate((data as any)?.dpae_effectuee_le ?? new Date().toISOString());
       afficherNotification({ type: 'succes', message: 'DPAE confirmée avec succès !' });
     } catch (err) {
+      capturerErreurSentry(err, 'BandeauRappelDPAE', 'confirmer_dpae');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
       setConfirming(false);

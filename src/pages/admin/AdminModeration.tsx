@@ -119,7 +119,7 @@ export default function AdminModeration() {
     ]);
 
     if (resLitiges.error || resEvals.error || resDocs.error) {
-      toast.error(resLitiges.error?.message || resEvals.error?.message || resDocs.error?.message || 'Impossible de charger la modération');
+      toast.error('Impossible de charger les données de modération.');
     }
     if (resIncoherences.data) setIncoherences(resIncoherences.data as any[] || []);
 
@@ -181,7 +181,7 @@ export default function AdminModeration() {
     });
 
     if (error || (data as any)?.error) {
-      toast.error(error?.message || (data as any)?.error || 'Impossible de résoudre le litige');
+      toast.error('Impossible de résoudre le litige. Veuillez réessayer.');
       setActionLitigeId(null);
       return;
     }

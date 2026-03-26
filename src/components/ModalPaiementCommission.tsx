@@ -31,7 +31,7 @@ function FormPaiement({ montant, onSuccess, onCancel }: { montant: number; onSuc
     });
 
     if (error) {
-      setErreur(error.message || 'Erreur de paiement');
+      setErreur('Erreur de paiement. Veuillez réessayer.');
       setLoading(false);
     } else {
       onSuccess();

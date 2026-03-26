@@ -58,7 +58,7 @@ export function ModalReclamationScore({ onClose, onSuccess }: Props) {
       const path = `${user!.id}/reclamations/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('jolene-documents').upload(path, fichier);
       if (upErr) {
-        setErreur('Erreur upload: ' + upErr.message);
+        setErreur('Erreur lors de l\'upload du justificatif. Veuillez réessayer.');
         setSaving(false);
         return;
       }
@@ -76,7 +76,7 @@ export function ModalReclamationScore({ onClose, onSuccess }: Props) {
     } as any);
 
     if (error) {
-      setErreur(error.message);
+      setErreur('Erreur lors de l\'envoi de la réclamation. Veuillez réessayer.');
     } else {
       onSuccess();
     }
