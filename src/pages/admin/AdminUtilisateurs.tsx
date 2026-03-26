@@ -69,53 +69,75 @@ export default function AdminUtilisateurs() {
     etabs.filter(e => e.statut_verification === 'EN_ATTENTE' && !e.supprime_le),
   [etabs]);
 
+  const [rejectModalId, setRejectModalId] = useState<string | null>(null);
+  const [rejectMotif, setRejectMotif] = useState('');
+
   const suspendre = async (table: string, id: string) => {
-    const { error } = await supabase.from(table as any).update({ supprime_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) {
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_suspendre_utilisateur' as any, {
+        p_table: table,
+        p_id: id,
+        p_suspendre: true,
+      });
+      if (error) throw error;
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      toast.success('Utilisateur suspendu');
+      charger();
+    } catch (err) {
+      capturerErreurSentry(err, 'AdminUtilisateurs', 'suspendre');
       toast.error('Une erreur est survenue. Veuillez réessayer.');
-      return;
     }
-    toast.success('Utilisateur suspendu');
-    charger();
   };
 
   const reactiver = async (table: string, id: string) => {
-    const { error } = await supabase.from(table as any).update({ supprime_le: null } as any).eq('id', id);
-    if (error) {
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_suspendre_utilisateur' as any, {
+        p_table: table,
+        p_id: id,
+        p_suspendre: false,
+      });
+      if (error) throw error;
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      toast.success('Utilisateur réactivé');
+      charger();
+    } catch (err) {
+      capturerErreurSentry(err, 'AdminUtilisateurs', 'reactiver');
       toast.error('Une erreur est survenue. Veuillez réessayer.');
-      return;
     }
-    toast.success('Utilisateur réactivé');
-    charger();
   };
 
   const validerEtablissement = async (id: string) => {
-    const { error } = await supabase.from('etablissements').update({
-      statut_verification: 'VERIFIE',
-      peut_publier_missions: true,
-      verifie_le: new Date().toISOString(),
-    } as any).eq('id', id);
-    if (error) {
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_valider_etablissement' as any, {
+        p_etablissement_id: id,
+      });
+      if (error) throw error;
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      toast.success('Établissement validé — peut publier des missions');
+      charger();
+    } catch (err) {
+      capturerErreurSentry(err, 'AdminUtilisateurs', 'valider_etablissement');
       toast.error('Une erreur est survenue. Veuillez réessayer.');
-      return;
     }
-    toast.success('Établissement validé — peut publier des missions');
-    charger();
   };
 
-  const rejeterEtablissement = async (id: string) => {
-    const motif = prompt('Motif du rejet (optionnel) :');
-    const { error } = await supabase.from('etablissements').update({
-      statut_verification: 'REJETE',
-      peut_publier_missions: false,
-      motif_rejet: motif || 'Non conforme',
-    } as any).eq('id', id);
-    if (error) {
+  const rejeterEtablissement = async () => {
+    if (!rejectModalId) return;
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_rejeter_etablissement' as any, {
+        p_etablissement_id: rejectModalId,
+        p_motif: rejectMotif.trim() || 'Non conforme',
+      });
+      if (error) throw error;
+      if ((data as any)?.error) { toast.error((data as any).error); return; }
+      toast.success('Établissement rejeté');
+      setRejectModalId(null);
+      setRejectMotif('');
+      charger();
+    } catch (err) {
+      capturerErreurSentry(err, 'AdminUtilisateurs', 'rejeter_etablissement');
       toast.error('Une erreur est survenue. Veuillez réessayer.');
-      return;
     }
-    toast.success('Établissement rejeté');
-    charger();
   };
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
