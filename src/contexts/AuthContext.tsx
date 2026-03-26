@@ -39,10 +39,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ? toAppUser(session.user) : null);
       setLoading(false);
+
+      // Detect session expiry / sign out triggered by token refresh failure
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' && !session) {
+        Sentry.setUser(null);
+      }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
