@@ -7,6 +7,7 @@ import { handleError } from '@/lib/handleError';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
 import { supabase } from '@/integrations/supabase/client';
+import { FooterLegal } from '@/components/FooterLegal';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
   const [asked, setAsked] = useState(false);
