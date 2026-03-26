@@ -334,5 +334,28 @@ export default function AdminUtilisateurs() {
         </Tabs>
       </div>
     </LayoutAdmin>
+
+    {/* Modale rejet établissement */}
+    <Dialog open={!!rejectModalId} onOpenChange={() => setRejectModalId(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Rejeter l'établissement</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">Indiquez le motif du rejet (optionnel) :</p>
+          <Textarea
+            value={rejectMotif}
+            onChange={e => setRejectMotif(e.target.value)}
+            placeholder="Motif du rejet..."
+            maxLength={500}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setRejectModalId(null)}>Annuler</Button>
+          <Button variant="destructive" onClick={rejeterEtablissement}>Confirmer le rejet</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
