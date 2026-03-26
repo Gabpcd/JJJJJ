@@ -126,10 +126,10 @@ export default function InscriptionSoignant() {
         );
 
         const data = await response.json();
-        console.log('RPPS response:', data);
+        logger.debug('RPPS response:', data);
 
         if (!response.ok) {
-          console.error('verify-rpps fetch error:', data);
+          logger.error('verify-rpps fetch error', data);
           setRppsResultat(data?.trouve === false ? { trouve: false } : null);
         } else if (data) {
           const nomAffiche = data.nom_api || data.nom || '';
