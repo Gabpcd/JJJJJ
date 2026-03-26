@@ -216,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (fnError || result?.error) {
+      Sentry.captureException(fnError || new Error(result?.error), { tags: { composant: 'AuthContext', action: 'inscription_etablissement' } });
       logger.error('register-etablissement échoué', fnError || result?.error);
       try {
         await supabase.auth.signOut();
