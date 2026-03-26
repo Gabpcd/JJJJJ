@@ -4,6 +4,7 @@ import { Slider } from '@/components/ui/slider';
 import { Flame, Shield, Star, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import type { RpcSuccessOrError } from '@/lib/supabase-rpc-types';
 
 interface PoolUrgenceToggleProps {
   actif: boolean;
