@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
