@@ -114,10 +114,10 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
       p_ville: villeValue,
     });
 
-    console.log('missions recherche raw:', { data, error, professionValue, villeValue });
+    logger.debug('missions recherche raw:', { data, error, professionValue, villeValue });
 
     if (error) {
-      console.error('Erreur recherche missions publiques:', error);
+      logger.error('Erreur recherche missions publiques', error);
       setResults([]);
       setTotalCount(0);
       setLoading(false);
