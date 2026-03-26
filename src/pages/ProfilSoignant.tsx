@@ -224,6 +224,7 @@ export default function ProfilSoignant() {
       URL.revokeObjectURL(url);
       afficherNotification({ type: 'succes', message: 'Données exportées avec succès.' });
     } catch (err: any) {
+      capturerErreurSentry(err, 'ProfilSoignant', 'export_rgpd');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     }
     setExportLoading(false);
