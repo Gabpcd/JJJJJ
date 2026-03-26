@@ -92,9 +92,10 @@ export default function PresencesEtablissement() {
 
   const validerUne = async (presenceId: string) => {
     const { data, error } = await supabase.rpc('fn_valider_presence', { p_presence_id: presenceId });
+    const result = data as unknown as RpcSuccessOrError | null;
 
-    if (error || (data && !(data as any).success)) {
-      afficherNotification({ type: 'erreur', message: (data as any)?.error || extraireMessageErreur(error) });
+    if (error || (result && !result.success)) {
+      afficherNotification({ type: 'erreur', message: result?.error || extraireMessageErreur(error) });
     } else {
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
