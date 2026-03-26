@@ -92,7 +92,7 @@ export default function AdminUtilisateurs() {
       verifie_le: new Date().toISOString(),
     } as any).eq('id', id);
     if (error) {
-      toast.error(error.message);
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
       return;
     }
     toast.success('Établissement validé — peut publier des missions');
