@@ -2,8 +2,17 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-serve(async () => {
+serve(async (req) => {
   try {
+    // Auth: service_role only
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader !== `Bearer ${KEY}`) {
+      return new Response(JSON.stringify({ error: 'Non autorisé' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const sb = createClient(URL, KEY);
     const results: Record<string, number> = {};
     const { data: r1 } = await sb.rpc("fn_email_rappels_j1");

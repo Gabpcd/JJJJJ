@@ -156,6 +156,31 @@ serve(async (req) => {
   }
 
   try {
+    // Auth: verify JWT user or service_role
+    const authHeader = req.headers.get('Authorization');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Non autorisé' }), {
+        status: 401,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const isServiceRole = token === serviceRoleKey;
+    if (!isServiceRole) {
+      const supabaseAuth = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+      );
+      const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(token);
+      if (authErr || !user) {
+        return new Response(JSON.stringify({ error: 'Token invalide' }), {
+          status: 401,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const { numero_rpps, rpps, prenom, nom, soignant_id } = await req.json();
     const numeroRpps = String(numero_rpps || rpps || '').trim();
 
