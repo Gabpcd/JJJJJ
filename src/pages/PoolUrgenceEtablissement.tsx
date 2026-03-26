@@ -224,7 +224,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
     if (checkError) {
       console.error('assignation pool check error:', checkError);
-      toast.error(`Impossible de proposer : ${checkError.message}`);
+      toast.error('Impossible de proposer cette mission. Veuillez réessayer.');
       setAssigningMissionId(null);
       return;
     }
