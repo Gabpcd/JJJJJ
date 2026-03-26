@@ -4,7 +4,9 @@ import { HeartPulse, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { FooterLegal } from '@/components/FooterLegal';
+import { Loader2 } from 'lucide-react';
 
 export default function PageConnexion() {
   const navigate = useNavigate();
@@ -45,7 +47,9 @@ export default function PageConnexion() {
         navigate('/inscription/soignant');
       }
     } catch (err) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      if (!gererErreurSupabase(err, () => handleSubmit(e))) {
+        afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -82,7 +86,8 @@ export default function PageConnexion() {
               </div>
             </div>
 
-            <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50">
+            <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {submitting ? 'Connexion…' : 'Se connecter'}
             </button>
           </form>

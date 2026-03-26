@@ -4,6 +4,7 @@ import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } fro
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { SelectProfession } from '@/components/SelectProfession';
 import { FooterLegal } from '@/components/FooterLegal';
 import { CONTRATS, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
@@ -155,7 +156,9 @@ export default function InscriptionSoignant() {
       afficherNotification({ type: 'succes', message: 'Compte créé avec succès ! Bienvenue sur Jolene.' });
       navigate('/soignant/tableau-de-bord');
     } catch (err) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      if (!gererErreurSupabase(err, () => handleSubmit(e))) {
+        afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -289,7 +292,8 @@ export default function InscriptionSoignant() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
-                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {submitting ? 'Création…' : 'Créer mon compte'}
                 </button>
               </div>

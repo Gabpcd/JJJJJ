@@ -4,6 +4,7 @@ import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, Shi
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { handleError } from '@/lib/handleError';
+import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
 import { supabase } from '@/integrations/supabase/client';
@@ -124,7 +125,9 @@ export default function InscriptionEtablissement() {
       }
       navigate('/etablissement/tableau-de-bord');
     } catch (err) {
-      handleError(err, 'inscription établissement');
+      if (!gererErreurSupabase(err, () => handleSubmit(e))) {
+        handleError(err, 'inscription établissement');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -245,7 +248,8 @@ export default function InscriptionEtablissement() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
-                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {submitting ? 'Création…' : 'Créer le compte'}
                 </button>
               </div>
