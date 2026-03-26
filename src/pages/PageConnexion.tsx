@@ -86,7 +86,8 @@ export default function PageConnexion() {
               </div>
             </div>
 
-            <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50">
+            <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {submitting ? 'Connexion…' : 'Se connecter'}
             </button>
           </form>

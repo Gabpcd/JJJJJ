@@ -248,7 +248,8 @@ export default function InscriptionEtablissement() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
-                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {submitting ? 'Création…' : 'Créer le compte'}
                 </button>
               </div>
