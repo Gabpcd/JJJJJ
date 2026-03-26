@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import type { RpcSuccessOrError } from '@/lib/supabase-rpc-types';
 
 interface BoutonExclusionProps {
   excluId: string;
