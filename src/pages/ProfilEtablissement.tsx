@@ -672,7 +672,7 @@ export default function ProfilEtablissement() {
                 onClick={async () => {
                   setDeleting(true);
                   try {
-                    const { data, error } = await supabase.rpc('fn_supprimer_mon_compte' as any);
+                    const { data, error } = await supabase.rpc('fn_supprimer_compte_rate_limited' as any);
                     if (error) throw error;
                     if (data?.error) { afficherNotification({ type: 'erreur', message: data.error }); setDeleting(false); return; }
                     afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection…' });

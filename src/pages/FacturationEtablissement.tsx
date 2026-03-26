@@ -114,7 +114,7 @@ export default function FacturationEtablissement() {
     setGenerating(true);
 
     try {
-      const { data, error } = await supabase.rpc('fn_generer_facture_mensuelle');
+      const { data, error } = await supabase.rpc('fn_generer_facture_rate_limited' as any);
 
       if (error) throw error;
       const result = data as any;
