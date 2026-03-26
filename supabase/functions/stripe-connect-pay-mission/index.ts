@@ -126,7 +126,8 @@ serve(async (req) => {
       .single();
 
     // Verify user is linked to this établissement via auth metadata
-    const userEtabId = user.user_metadata?.etablissement_id;
+    const { data: adminUserData } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const userEtabId = adminUserData?.user?.app_metadata?.etablissement_id || user.id;
     if (userEtabId !== mission.etablissement_id && (!membership || membership.length === 0)) {
       return new Response(
         JSON.stringify({ error: "Vous n'êtes pas autorisé à payer cette mission" }),
