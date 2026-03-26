@@ -462,7 +462,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                             e.stopPropagation();
                             const base = isAdmin ? '/admin/messagerie' : '/etablissement/messagerie';
                             const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: s.soignant_id, p_mission_id: null });
-                            console.log('fn_obtenir_conversation pool:', { data, error });
+                            logger.debug('fn_obtenir_conversation pool:', { data, error });
                             if (data) navigate(`${base}?conv=${data}`);
                           }}
                           className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors shrink-0"

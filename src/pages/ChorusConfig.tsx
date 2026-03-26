@@ -70,8 +70,8 @@ export default function ChorusConfig() {
         if (data) setConfigId(data.id);
       }
     } catch (err: any) {
-      console.error(err);
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de la sauvegarde' });
+      capturerErreurSentry(err, 'ChorusConfig', 'sauvegarder');
+      afficherNotification({ type: 'erreur', message: 'Erreur lors de la sauvegarde. Veuillez réessayer.' });
     } finally {
       setSaving(false);
     }

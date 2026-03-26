@@ -107,7 +107,7 @@ export default function AdminUtilisateurs() {
       motif_rejet: motif || 'Non conforme',
     } as any).eq('id', id);
     if (error) {
-      toast.error(error.message);
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
       return;
     }
     toast.success('Établissement rejeté');

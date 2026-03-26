@@ -283,6 +283,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
       afficherNotification({ type: 'succes', message: 'Mission proposée au soignant !' });
     } catch (err: any) {
+      capturerErreurSentry(err, 'DetailMission', 'proposer_soignant');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     }
     setProposing(null);

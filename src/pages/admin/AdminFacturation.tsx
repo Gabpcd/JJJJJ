@@ -250,7 +250,7 @@ export default function AdminFacturation() {
         toast.error(result?.error || 'Erreur inconnue lors de la génération');
       }
     } catch (err: any) {
-      toast.error(`Erreur inattendue : ${err.message}`);
+      toast.error('Une erreur inattendue est survenue. Veuillez réessayer.');
     } finally {
       setGenerating(false);
     }

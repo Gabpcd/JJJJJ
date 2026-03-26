@@ -170,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result?.error || 'Erreur lors de la création de votre profil. Veuillez réessayer.');
       }
 
-      console.log('[INSCRIPTION] 7. register-soignant OK ✅');
+      logger.debug('[INSCRIPTION] 7. register-soignant OK ✅');
     } catch (err) {
       console.error('[INSCRIPTION] register-soignant EXCEPTION:', err);
       Sentry.captureException(err, { tags: { composant: 'AuthContext', action: 'inscription_soignant' } });

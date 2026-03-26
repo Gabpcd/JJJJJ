@@ -680,6 +680,7 @@ export default function ProfilEtablissement() {
                     await supabase.auth.signOut();
                     navigate('/');
                   } catch (err: any) {
+                    capturerErreurSentry(err, 'ProfilEtablissement', 'supprimer_compte');
                     afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
                     setDeleting(false);
                   }

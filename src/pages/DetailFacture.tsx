@@ -411,6 +411,7 @@ export default function DetailFacture() {
       doc.save(`facture_${facture.numero_facture}.pdf`);
       afficherNotification({ type: 'succes', message: 'PDF téléchargé' });
     } catch (err) {
+      capturerErreurSentry(err, 'DetailFacture', 'generer_pdf');
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la génération du PDF' });
     } finally {
       setGeneratingPdf(false);

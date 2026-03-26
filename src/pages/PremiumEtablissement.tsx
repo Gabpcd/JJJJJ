@@ -31,7 +31,7 @@ export default function PremiumEtablissement() {
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await (supabase.from('liste_attente_premium' as any) as any).insert({ email: trimmed, type_offre: 'PRO_ETABLISSEMENT', utilisateur_id: user?.id });
     setSubmitting(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Inscrit(e) à la liste d\'attente !');
     setEmail('');
   };

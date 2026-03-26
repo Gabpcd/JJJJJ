@@ -310,10 +310,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       resolvedId = resolved;
     }
     const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: resolvedId, p_mission_id: null });
-    console.log('fn_obtenir_conversation (new conv):', { data, error });
+    logger.debug('fn_obtenir_conversation (new conv):', { data, error });
     if (error || !data) {
-      console.error('fn_obtenir_conversation error:', error);
-      toast.error("Impossible de créer la conversation : " + (error?.message || 'Erreur inconnue'));
+      logger.error('fn_obtenir_conversation error:', error);
+      toast.error("Impossible de créer la conversation. Veuillez réessayer.");
       return;
     }
     setShowNewConvModal(false);

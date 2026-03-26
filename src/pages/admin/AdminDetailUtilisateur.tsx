@@ -239,10 +239,10 @@ export default function AdminDetailUtilisateur() {
               type="button"
               onClick={async () => {
                 const { data, error } = await supabaseClient.rpc('fn_obtenir_conversation', { p_autre_id: id!, p_mission_id: null });
-                console.log('fn_obtenir_conversation (admin):', { data, error });
+                logger.debug('fn_obtenir_conversation (admin):', { data, error });
                 if (data) navigate(`/admin/messagerie?conv=${data}`);
                 else {
-                  console.error('fn_obtenir_conversation error:', error);
+                  logger.error('fn_obtenir_conversation error:', error);
                   toast.error("Impossible d'ouvrir la conversation.");
                 }
               }}

@@ -167,7 +167,8 @@ export default function PasserEnLiberal() {
       afficherNotification({ type: 'succes', message: '🎉 Profil libéral activé !' });
       setTimeout(() => navigate('/soignant/tableau-de-bord'), 2000);
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err.message || 'Erreur' });
+      capturerErreurSentry(err, 'PasserEnLiberal', 'activer_liberal');
+      afficherNotification({ type: 'erreur', message: 'Une erreur est survenue. Veuillez réessayer.' });
     } finally { setSaving(false); }
   };
 
