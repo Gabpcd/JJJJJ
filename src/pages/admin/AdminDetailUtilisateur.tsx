@@ -160,8 +160,8 @@ export default function AdminDetailUtilisateur() {
       toast.success(`Rappel envoyé à ${soignant.prenom}`);
       setDernierRappel(new Date().toISOString());
     } catch (err: any) {
-      console.error('send-email exception:', err);
-      toast.error(`Erreur lors de l'envoi du rappel : ${err?.message || 'réseau indisponible'}`);
+      logger.error('send-email exception:', err);
+      toast.error("Erreur lors de l'envoi du rappel. Veuillez réessayer.");
     }
     setEnvoiRappel(false);
   };
