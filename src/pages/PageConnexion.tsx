@@ -7,6 +7,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { FooterLegal } from '@/components/FooterLegal';
 import { Loader2 } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 export default function PageConnexion() {
   const navigate = useNavigate();
