@@ -198,7 +198,9 @@ export function BadgeNotification() {
           });
           notification.onclick = () => {
             window.focus();
-            if (n.lien) window.location.href = n.lien;
+            if (n.lien && (n.lien.startsWith('/') || n.lien.startsWith('https://jolene.app') || n.lien.startsWith('https://jolene-app.lovable.app'))) {
+              window.location.href = n.lien.startsWith('/') ? n.lien : n.lien.replace('https://jolene.app', '').replace('https://jolene-app.lovable.app', '') || '/';
+            }
             notification.close();
           };
         }
