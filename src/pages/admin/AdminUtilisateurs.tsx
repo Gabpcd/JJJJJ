@@ -170,7 +170,7 @@ export default function AdminUtilisateurs() {
                     <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white">
                       <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
                     </Button>
-                    <Button size="sm" variant="destructive" onClick={() => rejeterEtablissement(e.id)}>
+                    <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }}>
                       <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}>

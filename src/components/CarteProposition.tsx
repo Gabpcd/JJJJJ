@@ -112,23 +112,23 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
   const executeAction = async (action: 'ACCEPTEE' | 'REFUSEE') => {
     setLoading(action === 'ACCEPTEE' ? 'accept' : 'refuse');
     try {
+      const { data, error } = await supabase.rpc('fn_repondre_proposition' as any, {
+        p_candidature_id: proposition.id,
+        p_accepter: action === 'ACCEPTEE',
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+
       if (action === 'ACCEPTEE') {
-        const { data, error } = await supabase.rpc('fn_accepter_mission', {
-          p_mission_id: proposition.mission_id,
-        });
-        if (error) throw error;
-        await supabase.from('candidatures').update({ statut: 'ACCEPTEE', traite_le: new Date().toISOString() }).eq('id', proposition.id);
         toast({ title: 'Mission acceptée ✅', description: 'Signez le contrat pour confirmer.' });
         onTraitee(proposition.id);
         navigate(`/soignant/missions/${proposition.mission_id}`);
       } else {
-        const { error } = await supabase.from('candidatures').update({ statut: 'REFUSEE', traite_le: new Date().toISOString() }).eq('id', proposition.id);
-        if (error) throw error;
         toast({ title: 'Mission déclinée', description: 'La proposition a été refusée.' });
         onTraitee(proposition.id);
       }
     } catch (err: any) {
-      toast({ title: 'Erreur', description: err.message || 'Impossible de traiter la proposition', variant: 'destructive' });
+      toast({ title: 'Erreur', description: 'Impossible de traiter la proposition. Veuillez réessayer.', variant: 'destructive' });
     } finally {
       setLoading(null);
     }

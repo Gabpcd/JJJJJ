@@ -192,29 +192,29 @@ export default function AdminModeration() {
   };
 
   const publierEvaluation = async (id: string) => {
-    const { error } = await supabase.from('evaluations').update({ visible: true } as any).eq('id', id);
-    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    const { data, error } = await supabase.rpc('fn_admin_moderer_evaluation' as any, { p_evaluation_id: id, p_action: 'PUBLIER' });
+    if (error || (data as any)?.error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Évaluation publiée');
     charger();
   };
 
   const supprimerEvaluation = async (id: string) => {
-    const { error } = await supabase.from('evaluations').delete().eq('id', id);
-    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    const { data, error } = await supabase.rpc('fn_admin_moderer_evaluation' as any, { p_evaluation_id: id, p_action: 'SUPPRIMER' });
+    if (error || (data as any)?.error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Évaluation supprimée');
     charger();
   };
 
   const validerDocument = async (id: string) => {
-    const { error } = await supabase.from('documents_soignants').update({ statut_verification: 'VALIDE', verifie_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, { p_document_id: id, p_action: 'VALIDER' });
+    if (error || (data as any)?.error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Document validé');
     charger();
   };
 
   const rejeterDocument = async (id: string) => {
-    const { error } = await supabase.from('documents_soignants').update({ statut_verification: 'REJETE', verifie_le: new Date().toISOString(), motif_rejet: 'Rejeté par admin' } as any).eq('id', id);
-    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, { p_document_id: id, p_action: 'REJETER', p_motif: 'Rejeté par admin' });
+    if (error || (data as any)?.error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Document rejeté');
     charger();
   };

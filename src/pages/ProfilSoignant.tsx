@@ -185,12 +185,12 @@ export default function ProfilSoignant() {
       p_specialites: specialites,
     });
 
-    // Also update type_exercice directly
-    const { error: exError } = await supabase.from('soignants').update({
-      type_exercice: typeExercice,
-      attestation_cumul_activite: attestationCumul,
-      taux_horaire_minimum: form.tauxHoraireMinimum,
-    } as any).eq('id', user.id);
+    // Also update type_exercice via RPC
+    const { error: exError } = await supabase.rpc('fn_modifier_mon_profil_extra' as any, {
+      p_type_exercice: typeExercice,
+      p_attestation_cumul_activite: attestationCumul,
+      p_taux_horaire_minimum: form.tauxHoraireMinimum,
+    });
 
     if (error || exError) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error || exError) });

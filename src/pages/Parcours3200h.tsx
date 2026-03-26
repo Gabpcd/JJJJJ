@@ -52,6 +52,10 @@ export default function Parcours3200h() {
   const handleUpload3200h = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    if (file.size > 10 * 1024 * 1024) {
+      afficherNotification({ type: 'erreur', message: 'Fichier trop volumineux. Maximum : 10 Mo.' });
+      return;
+    }
     setUploading(true);
     const path = `${user.id}/attestation_3200h/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const { error: upErr } = await supabase.storage.from('jolene-documents').upload(path, file);
