@@ -167,7 +167,7 @@ export default function DetailMissionSoignant() {
   const postulerMission = async () => {
     setPostulationEnCours(true);
     try {
-      const { data, error } = await supabase.rpc('fn_postuler_mission' as any, {
+      const { data, error } = await supabase.rpc('fn_postuler_mission_rate_limited' as any, {
         p_mission_id: id!,
         p_message: messageCandidature || null,
       });

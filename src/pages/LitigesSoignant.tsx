@@ -97,16 +97,13 @@ export default function LitigesSoignant() {
       return;
     }
 
-    const { error } = await supabase.from('litiges').insert({
-      mission_id: selectedMissionId,
-      presence_id: presenceId,
-      soignant_id: user!.id,
-      etablissement_id: mission.etablissement_id,
-      motif: newMotif.trim(),
-      initie_par: 'SOIGNANT',
+    const { data, error } = await supabase.rpc('fn_ouvrir_litige_rate_limited' as any, {
+      p_mission_id: selectedMissionId,
+      p_motif: newMotif.trim(),
     });
     setCreating(false);
     if (error) { toast.error('Erreur lors de la création du litige.'); console.error(error); return; }
+    if (data?.error) { toast.error(data.error); return; }
     toast.success('Litige ouvert avec succès.');
     setShowNew(false);
     charger();

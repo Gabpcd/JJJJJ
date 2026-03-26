@@ -604,7 +604,7 @@ export default function ProfilEtablissement() {
         <button
           onClick={async () => {
             try {
-              const { data, error } = await supabase.rpc('fn_exporter_mes_donnees' as any);
+              const { data, error } = await supabase.rpc('fn_rgpd_exporter_rate_limited' as any);
               if (error) throw error;
               const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
@@ -672,7 +672,7 @@ export default function ProfilEtablissement() {
                 onClick={async () => {
                   setDeleting(true);
                   try {
-                    const { data, error } = await supabase.rpc('fn_supprimer_mon_compte' as any);
+                    const { data, error } = await supabase.rpc('fn_supprimer_compte_rate_limited' as any);
                     if (error) throw error;
                     if (data?.error) { afficherNotification({ type: 'erreur', message: data.error }); setDeleting(false); return; }
                     afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection…' });

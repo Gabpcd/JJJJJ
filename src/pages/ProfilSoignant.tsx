@@ -205,7 +205,7 @@ export default function ProfilSoignant() {
   const handleExportRGPD = async () => {
     setExportLoading(true);
     try {
-      const { data, error } = await supabase.rpc('fn_exporter_mes_donnees' as any);
+      const { data, error } = await supabase.rpc('fn_rgpd_exporter_rate_limited' as any);
       if (error) throw error;
       // L3: Audit RGPD export
       await supabase.rpc('fn_ecrire_audit_safe', {
@@ -233,7 +233,7 @@ export default function ProfilSoignant() {
   const handleSupprimerCompte = async () => {
     setDeleteLoading(true);
     try {
-      const { data, error } = await supabase.rpc('fn_supprimer_mon_compte' as any);
+      const { data, error } = await supabase.rpc('fn_supprimer_compte_rate_limited' as any);
       if (error) throw error;
       if (data?.error) {
         afficherNotification({ type: 'erreur', message: data.error });

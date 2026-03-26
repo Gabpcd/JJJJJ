@@ -104,16 +104,12 @@ export function PanneauContestation({
     if (!user || !motif.trim()) return;
     setEnvoi(true);
     try {
-      const { error } = await supabase.from('litiges').insert({
-        mission_id: missionId,
-        presence_id: presenceId,
-        soignant_id: soignantId,
-        etablissement_id: etablissementId,
-        motif: sanitizeText(motif.trim()),
-        statut: 'CONTESTEE',
-        initie_par: role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT',
+      const { data: litigeResult, error } = await supabase.rpc('fn_ouvrir_litige_rate_limited' as any, {
+        p_mission_id: missionId,
+        p_motif: sanitizeText(motif.trim()),
       });
       if (error) throw error;
+      if (litigeResult?.error) throw new Error(litigeResult.error);
 
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user.id, p_type_acteur: roleActeur,

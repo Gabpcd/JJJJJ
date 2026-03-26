@@ -2595,6 +2595,33 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limits: {
+        Row: {
+          action: string
+          cle: string
+          derniere_tentative: string | null
+          id: string
+          premiere_tentative: string | null
+          tentatives: number | null
+        }
+        Insert: {
+          action: string
+          cle: string
+          derniere_tentative?: string | null
+          id?: string
+          premiere_tentative?: string | null
+          tentatives?: number | null
+        }
+        Update: {
+          action?: string
+          cle?: string
+          derniere_tentative?: string | null
+          id?: string
+          premiere_tentative?: string | null
+          tentatives?: number | null
+        }
+        Relationships: []
+      }
       reclamations_scoring: {
         Row: {
           cree_le: string | null
@@ -3820,6 +3847,10 @@ export type Database = {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
+      fn_generer_facture_rate_limited: {
+        Args: { p_etablissement_id: string }
+        Returns: Json
+      }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
       fn_generer_numero_contrat_safe: {
@@ -4034,6 +4065,10 @@ export type Database = {
         Args: { p_autre_id: string; p_mission_id?: string }
         Returns: string
       }
+      fn_ouvrir_litige_rate_limited: {
+        Args: { p_mission_id: string; p_motif: string }
+        Returns: Json
+      }
       fn_planning_etablissement: {
         Args: { p_debut?: string; p_fin?: string }
         Returns: Json
@@ -4101,6 +4136,10 @@ export type Database = {
         Args: { p_message?: string; p_mission_id: string }
         Returns: Json
       }
+      fn_postuler_mission_rate_limited: {
+        Args: { p_mission_id: string }
+        Returns: Json
+      }
       fn_presences_detail_mission: {
         Args: { p_mission_id: string }
         Returns: Json
@@ -4154,6 +4193,7 @@ export type Database = {
         Args: { p_soignant_id: string }
         Returns: Json
       }
+      fn_rgpd_exporter_rate_limited: { Args: never; Returns: Json }
       fn_rgpd_purge_automatique_inactifs: {
         Args: never
         Returns: {
@@ -4200,6 +4240,7 @@ export type Database = {
         Args: { p_numero_contrat?: string; p_plan_id: string }
         Returns: Json
       }
+      fn_supprimer_compte_rate_limited: { Args: never; Returns: Json }
       fn_supprimer_mon_compte: { Args: never; Returns: Json }
       fn_terminer_mission: { Args: { p_mission_id: string }; Returns: Json }
       fn_toggle_pool_urgence: {
@@ -4261,6 +4302,15 @@ export type Database = {
         Returns: Json
       }
       fn_verifier_documents_expirants: { Args: never; Returns: number }
+      fn_verifier_rate_limit: {
+        Args: {
+          p_action: string
+          p_cle: string
+          p_fenetre_secondes?: number
+          p_max_tentatives?: number
+        }
+        Returns: boolean
+      }
       mon_etablissement_id: { Args: never; Returns: string }
       mon_role: { Args: never; Returns: string }
     }

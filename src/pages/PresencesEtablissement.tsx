@@ -156,19 +156,16 @@ export default function PresencesEtablissement() {
 
   const ouvrirLitige = async (presenceId: string, missionId: string, soignantId: string, motif: string) => {
     if (!etablissementId || !motif.trim()) return;
-    const { error } = await supabase.from('litiges').insert({
-      mission_id: missionId,
-      presence_id: presenceId,
-      soignant_id: soignantId,
-      etablissement_id: etablissementId,
-      motif: motif.trim(),
-      initie_par: 'ETABLISSEMENT',
+    const { data, error } = await supabase.rpc('fn_ouvrir_litige_rate_limited' as any, {
+      p_mission_id: missionId,
+      p_motif: motif.trim(),
     });
     if (error) {
       toast.error('Erreur lors de la création du litige.');
       console.error(error);
       return;
     }
+    if (data?.error) { toast.error(data.error); return; }
     toast.success('Litige ouvert avec succès.');
     charger();
   };
