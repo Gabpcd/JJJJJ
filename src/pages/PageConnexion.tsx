@@ -47,7 +47,9 @@ export default function PageConnexion() {
         navigate('/inscription/soignant');
       }
     } catch (err) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      if (!gererErreurSupabase(err, () => handleSubmit(e))) {
+        afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      }
     } finally {
       setSubmitting(false);
     }
