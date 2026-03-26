@@ -96,7 +96,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdm
 
     const typeAuteur = isAdmin ? 'ADMIN' : role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT';
 
-    console.log('ChatMission envoi:', { missionId, auteur_id: user.id, type_auteur: typeAuteur, contenu_length: contenu.length });
+    logger.debug('ChatMission envoi:', { missionId, auteur_id: user.id, type_auteur: typeAuteur, contenu_length: contenu.length });
 
     const { data, error } = await supabase
       .from('messages_mission')
