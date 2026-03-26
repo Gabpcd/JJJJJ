@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
       });
       if (authError) {
-        console.error('[INSCRIPTION] 3. ERREUR signUp:', authError);
+        logger.error('[INSCRIPTION] ERREUR signUp', authError);
         throw authError;
       }
       authData = signUpData;
