@@ -4,7 +4,9 @@ import { HeartPulse, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { FooterLegal } from '@/components/FooterLegal';
+import { Loader2 } from 'lucide-react';
 
 export default function PageConnexion() {
   const navigate = useNavigate();
