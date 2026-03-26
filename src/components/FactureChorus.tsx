@@ -75,6 +75,7 @@ export function FactureChorus({ facture, onUpdate }: Props) {
       setOpen(false);
       onUpdate();
     } catch (err: any) {
+      capturerErreurSentry(err, 'FactureChorus', 'deposer_chorus');
       afficherNotification({ type: 'erreur', message: 'Erreur lors du dépôt Chorus. Veuillez réessayer.' });
     } finally {
       setLoading(false);
