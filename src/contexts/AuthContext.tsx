@@ -167,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[INSCRIPTION] 7. register-soignant OK ✅');
     } catch (err) {
       console.error('[INSCRIPTION] register-soignant EXCEPTION:', err);
+      Sentry.captureException(err, { tags: { composant: 'AuthContext', action: 'inscription_soignant' } });
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
       throw err instanceof Error ? err : new Error('Erreur lors de la création de votre profil. Veuillez réessayer.');
     }
