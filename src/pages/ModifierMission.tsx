@@ -4,6 +4,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { FormulaireMission } from '@/components/FormulaireMission';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 
 export default function ModifierMission() {
   const { id } = useParams<{ id: string }>();

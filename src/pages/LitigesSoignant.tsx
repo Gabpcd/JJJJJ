@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 const STATUT_COLORS: Record<string, string> = {
   OUVERT: 'bg-warning/10 text-warning',

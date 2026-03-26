@@ -9,6 +9,7 @@ import { SelectProfession } from '@/components/SelectProfession';
 import { FooterLegal } from '@/components/FooterLegal';
 import { CONTRATS, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
+import { logger } from '@/lib/logger';
 
 
 function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => void }) {

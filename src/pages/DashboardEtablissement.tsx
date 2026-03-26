@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
+import { logger } from '@/lib/logger';
 import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';

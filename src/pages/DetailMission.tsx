@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
+import { logger } from '@/lib/logger';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send, CreditCard, MessageCircle, BellRing, Loader2 } from 'lucide-react';
