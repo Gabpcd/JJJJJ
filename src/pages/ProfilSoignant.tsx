@@ -205,7 +205,7 @@ export default function ProfilSoignant() {
   const handleExportRGPD = async () => {
     setExportLoading(true);
     try {
-      const { data, error } = await supabase.rpc('fn_exporter_mes_donnees' as any);
+      const { data, error } = await supabase.rpc('fn_rgpd_exporter_rate_limited' as any);
       if (error) throw error;
       // L3: Audit RGPD export
       await supabase.rpc('fn_ecrire_audit_safe', {
