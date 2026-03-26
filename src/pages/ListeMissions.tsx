@@ -48,6 +48,7 @@ export default function ListeMissions() {
   const [modalDupliquer, setModalDupliquer] = useState<any>(null);
   const [modalAnnuler, setModalAnnuler] = useState<any>(null);
   const [modalAnnulerSerie, setModalAnnulerSerie] = useState<any[] | null>(null);
+  const [nbAffiche, setNbAffiche] = useState(20);
 
   const charger = async () => {
     if (!user) return;
