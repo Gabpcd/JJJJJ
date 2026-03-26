@@ -12,7 +12,7 @@ interface RechercheRemplacantUrgenceProps {
 }
 
 export function RechercheRemplacantUrgence({ missionId, onPropose, onError, onSuccess }: RechercheRemplacantUrgenceProps) {
-  const [soignants, setSoignants] = useState<any[]>([]);
+  const [soignants, setSoignants] = useState<RpcSoignantsUrgence[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [proposing, setProposing] = useState<string | null>(null);
