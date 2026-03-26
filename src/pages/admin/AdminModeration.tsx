@@ -72,7 +72,7 @@ const contacterDepuisLitige = async (userId: string, navigate: ReturnType<typeof
   console.log('contacterDepuisLitige result:', { data, error });
   if (error) {
     console.error('fn_obtenir_conversation error:', error);
-    toast.error(`Impossible d'ouvrir la conversation : ${error.message}`);
+    toast.error('Impossible d\'ouvrir la conversation. Veuillez réessayer.');
     return;
   }
   if (!data) {
@@ -192,28 +192,28 @@ export default function AdminModeration() {
 
   const publierEvaluation = async (id: string) => {
     const { error } = await supabase.from('evaluations').update({ visible: true } as any).eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Évaluation publiée');
     charger();
   };
 
   const supprimerEvaluation = async (id: string) => {
     const { error } = await supabase.from('evaluations').delete().eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Évaluation supprimée');
     charger();
   };
 
   const validerDocument = async (id: string) => {
     const { error } = await supabase.from('documents_soignants').update({ statut_verification: 'VALIDE', verifie_le: new Date().toISOString() } as any).eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Document validé');
     charger();
   };
 
   const rejeterDocument = async (id: string) => {
     const { error } = await supabase.from('documents_soignants').update({ statut_verification: 'REJETE', verifie_le: new Date().toISOString(), motif_rejet: 'Rejeté par admin' } as any).eq('id', id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     toast.success('Document rejeté');
     charger();
   };

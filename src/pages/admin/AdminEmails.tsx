@@ -97,7 +97,7 @@ export default function AdminEmails() {
     const error = res.ok ? null : { message: `HTTP ${res.status}` };
     setSending(null);
     if (error) {
-      toast.error(error.message);
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
     } else {
       toast.success('Email test envoyé à votre adresse');
       chargerHistorique();

@@ -45,7 +45,7 @@ export function BoutonPointage({ type, onPointage, disabled }: BoutonPointagePro
       {etatGPS === 'erreur' ? (
         <button
           onClick={handleRetry}
-          className="w-full py-5 rounded-2xl text-lg font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          className="w-full py-6 sm:py-5 rounded-2xl text-lg sm:text-base font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 min-h-[60px] bg-destructive text-destructive-foreground hover:bg-destructive/90"
         >
           <RotateCcw className="h-5 w-5" /> Réessayer
         </button>
@@ -53,7 +53,7 @@ export function BoutonPointage({ type, onPointage, disabled }: BoutonPointagePro
         <button
           onClick={handleClick}
           disabled={enCours || disabled}
-          className={`w-full py-5 rounded-2xl text-lg font-bold shadow-lg transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3 ${
+          className={`w-full py-6 sm:py-5 rounded-2xl text-lg sm:text-base font-bold shadow-lg transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3 min-h-[60px] ${
             isArrivee
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : 'bg-foreground/80 text-background hover:bg-foreground/70'

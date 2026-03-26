@@ -175,7 +175,7 @@ export default function AdminDetailUtilisateur() {
       .update({ supprime_le: isSuspended ? null : new Date().toISOString() } as any)
       .eq('id', id!);
 
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Erreur lors de la mise à jour du compte.'); return; }
     toast.success(isSuspended ? 'Compte réactivé' : 'Compte suspendu');
     charger();
   };
@@ -188,7 +188,7 @@ export default function AdminDetailUtilisateur() {
     const email = type === 'soignant' ? soignant?.email : etablissement?.email_contact;
     if (!email) { toast.error('Aucun email trouvé'); return; }
     const { error } = await supabase.auth.resetPasswordForEmail(email);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error('Erreur lors de l\'envoi. Vérifiez l\'email.'); return; }
     toast.success(`Email de réinitialisation envoyé à ${email}`);
   };
 

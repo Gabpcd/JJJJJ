@@ -115,7 +115,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
       toast.success(`🚨 ${sent} soignant${sent > 1 ? 's' : ''} alerté${sent > 1 ? 's' : ''}`);
       setAlerted(true);
     } catch (err: any) {
-      toast.error(`Erreur : ${err.message}`);
+      toast.error('Erreur lors de l\'envoi des alertes. Veuillez réessayer.');
     }
     setAlerting(false);
   };

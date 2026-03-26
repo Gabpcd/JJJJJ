@@ -99,7 +99,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         .is('supprime_le', null)
         .order('nom', { ascending: true });
 
-      if (error) { toast.error(error.message); return; }
+      if (error) { toast.error('Erreur lors du chargement des établissements.'); return; }
       const etablissements = (data ?? []) as Array<{ id: string; nom: string }>;
       setEtablissementsAdmin(etablissements);
       setSelectedEtablissementId((current) => current || etablissements[0]?.id || '');
@@ -224,7 +224,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
     if (checkError) {
       console.error('assignation pool check error:', checkError);
-      toast.error(`Impossible de proposer : ${checkError.message}`);
+      toast.error('Impossible de proposer cette mission. Veuillez réessayer.');
       setAssigningMissionId(null);
       return;
     }
@@ -254,7 +254,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
     if (candError) {
       console.error('assignation pool error:', candError);
-      toast.error(`Impossible de proposer : ${candError.message}`);
+      toast.error('Impossible de proposer cette mission. Veuillez réessayer.');
       setAssigningMissionId(null);
       return;
     }
