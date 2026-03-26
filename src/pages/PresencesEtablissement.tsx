@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import type { RpcSuccessOrError, RpcValiderPresencesLot } from '@/lib/supabase-rpc-types';
 import { ClipboardCheck, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
