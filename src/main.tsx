@@ -1,6 +1,23 @@
 import { createRoot } from "react-dom/client";
+import * as Sentry from "@sentry/react";
 import App from "./App.tsx";
 import "./index.css";
+
+// ─── Sentry Initialization ───
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: import.meta.env.VITE_ENV || import.meta.env.MODE,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
+    ],
+    tracesSampleRate: 0.1,
+    replaysSessionSampleRate: 0,
+    replaysOnErrorSampleRate: 1.0,
+  });
+}
 
 // Apply theme before render to avoid flash
 const stored = localStorage.getItem('theme');
@@ -99,4 +116,10 @@ function showUpdateBanner() {
   document.body.prepend(banner);
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+import { SentryErrorFallback } from "./components/SentryErrorFallback";
+
+createRoot(document.getElementById("root")!).render(
+  <Sentry.ErrorBoundary fallback={({ resetError }) => <SentryErrorFallback resetError={resetError} />}>
+    <App />
+  </Sentry.ErrorBoundary>
+);

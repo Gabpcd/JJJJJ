@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
 import { supabase } from '@/integrations/supabase/client';
-
 import { Session, User } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 
@@ -73,6 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (auditError) logger.error('Audit connexion échoué', auditError);
 
+    // Sentry user identification
+    Sentry.setUser({ id: u.id, email: u.email || undefined });
+
     if (verifiedRole === 'SOIGNANT') {
       supabase.rpc('fn_maj_activite_soignant' as any).then(() => {});
     }
@@ -87,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (auditError) logger.error('Audit déconnexion échoué', auditError);
     }
     await supabase.auth.signOut();
+    Sentry.setUser(null);
   }, [user]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
@@ -163,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[INSCRIPTION] 7. register-soignant OK ✅');
     } catch (err) {
       console.error('[INSCRIPTION] register-soignant EXCEPTION:', err);
+      Sentry.captureException(err, { tags: { composant: 'AuthContext', action: 'inscription_soignant' } });
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
       throw err instanceof Error ? err : new Error('Erreur lors de la création de votre profil. Veuillez réessayer.');
     }
@@ -211,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (fnError || result?.error) {
+      Sentry.captureException(fnError || new Error(result?.error), { tags: { composant: 'AuthContext', action: 'inscription_etablissement' } });
       logger.error('register-etablissement échoué', fnError || result?.error);
       try {
         await supabase.auth.signOut();

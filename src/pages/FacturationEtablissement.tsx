@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
@@ -135,6 +136,7 @@ export default function FacturationEtablissement() {
       afficherNotification({ type: 'succes', message: `Facture ${result.numero_facture} générée avec succès !` });
       charger();
     } catch (err: any) {
+      capturerErreurSentry(err, 'FacturationEtablissement', 'generer_facture');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
       setGenerating(false);
@@ -167,6 +169,7 @@ export default function FacturationEtablissement() {
         }
       }
     } catch (err: any) {
+      capturerErreurSentry(err, 'FacturationEtablissement', 'rafraichir_paiement');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
       setRefreshingId(null);

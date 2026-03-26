@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { CheckAnimation } from '@/components/CheckAnimation';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -221,6 +222,7 @@ export default function ContratMission() {
       afficherNotification({ type: 'succes', message: 'Procédure Yousign initialisée ! Cliquez sur le bouton pour signer.' });
     } catch (err: any) {
       logger.error('Yousign create error', err);
+      capturerErreurSentry(err, 'ContratMission', 'yousign_create');
       afficherNotification({ type: 'erreur', message: err.message || 'Erreur lors de l\'initialisation Yousign' });
       setModeSignature('CANVAS');
     } finally {
@@ -340,6 +342,7 @@ export default function ContratMission() {
         }
       }
     } catch (err) {
+      capturerErreurSentry(err, 'ContratMission', 'signature_contrat');
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la signature' });
     } finally {
       setSigning(false);

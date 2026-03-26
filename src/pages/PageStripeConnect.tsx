@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { capturerErreurSentry } from '@/lib/sentry';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -62,6 +63,7 @@ export default function PageStripeConnect() {
     setActionLoading(true);
     const { data, error } = await supabase.functions.invoke('stripe-connect-onboard');
     if (error || !data?.url) {
+      capturerErreurSentry(error || new Error('No onboard URL'), 'PageStripeConnect', 'stripe_onboard');
       toast.error('Erreur lors de la connexion à Stripe');
       setActionLoading(false);
       return;
