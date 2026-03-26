@@ -73,6 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (auditError) logger.error('Audit connexion échoué', auditError);
 
+    // Sentry user identification
+    Sentry.setUser({ id: u.id, email: u.email || undefined });
+
     if (verifiedRole === 'SOIGNANT') {
       supabase.rpc('fn_maj_activite_soignant' as any).then(() => {});
     }
