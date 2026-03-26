@@ -156,7 +156,9 @@ export default function InscriptionSoignant() {
       afficherNotification({ type: 'succes', message: 'Compte créé avec succès ! Bienvenue sur Jolene.' });
       navigate('/soignant/tableau-de-bord');
     } catch (err) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      if (!gererErreurSupabase(err, () => handleSubmit(e))) {
+        afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      }
     } finally {
       setSubmitting(false);
     }
