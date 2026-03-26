@@ -258,6 +258,8 @@ export default function InscriptionEtablissement() {
           Déjà un compte ? <a href="/connexion" className="text-primary hover:underline font-medium">Se connecter</a>
         </p>
       </div>
+      </div>
+      <FooterLegal />
     </div>
   );
 }
