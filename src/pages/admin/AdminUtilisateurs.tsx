@@ -78,7 +78,7 @@ export default function AdminUtilisateurs() {
   const reactiver = async (table: string, id: string) => {
     const { error } = await supabase.from(table as any).update({ supprime_le: null } as any).eq('id', id);
     if (error) {
-      toast.error(error.message);
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
       return;
     }
     toast.success('Utilisateur réactivé');
