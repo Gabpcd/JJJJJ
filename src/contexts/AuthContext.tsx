@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const inscriptionSoignant = useCallback(async (data: any) => {
-    console.log('[INSCRIPTION] 1. Début inscription soignant, données:', { email: data.email, prenom: data.prenom, nom: data.nom, profession: data.profession });
+    logger.debug('[INSCRIPTION] 1. Début inscription soignant, données:', { email: data.email, prenom: data.prenom, nom: data.nom, profession: data.profession });
 
     // Étape 1 : signUp Supabase Auth
     let authData: any;
