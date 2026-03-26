@@ -162,7 +162,8 @@ export default function InscriptionSoignant() {
   };
 
   return (
-    <div className="min-h-screen gradient-hero flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen gradient-hero flex flex-col">
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
       <div className="card-base max-w-lg w-full">
         <div className="flex items-center justify-center gap-2 mb-6">
           <HeartPulse className="h-7 w-7 text-primary" />
