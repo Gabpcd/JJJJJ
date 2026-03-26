@@ -128,6 +128,9 @@ export default function MissionsSoignant() {
     fetchMissions();
   }, [user, soignant, onglet, filtres]);
 
+  // Reset pagination when tab/filters change
+  useEffect(() => { setNbAffiche(20); }, [onglet, filtres]);
+
   const missionsAvecDistance = useMemo(() => {
     if (!soignant) return [];
     const typesContrat = getTypesContratSoignant(soignant);
