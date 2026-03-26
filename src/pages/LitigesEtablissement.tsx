@@ -103,7 +103,7 @@ export default function LitigesEtablissement() {
       p_motif: newMotif.trim(),
     });
     setCreating(false);
-    if (error) { toast.error('Erreur lors de la création du litige.'); console.error(error); return; }
+    if (error) { toast.error('Erreur lors de la création du litige.'); return; }
     if (data?.error) { toast.error(data.error); return; }
     toast.success('Litige ouvert avec succès.');
     setShowNew(false);
