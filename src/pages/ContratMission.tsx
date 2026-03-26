@@ -342,6 +342,7 @@ export default function ContratMission() {
         }
       }
     } catch (err) {
+      capturerErreurSentry(err, 'ContratMission', 'signature_contrat');
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la signature' });
     } finally {
       setSigning(false);

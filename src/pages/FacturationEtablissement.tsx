@@ -169,6 +169,7 @@ export default function FacturationEtablissement() {
         }
       }
     } catch (err: any) {
+      capturerErreurSentry(err, 'FacturationEtablissement', 'rafraichir_paiement');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     } finally {
       setRefreshingId(null);

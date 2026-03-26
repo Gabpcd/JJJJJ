@@ -176,6 +176,7 @@ export default function DetailMissionSoignant() {
       setCandidatureEnvoyee(true);
       toast.success('Candidature envoyée ! L\'établissement examinera votre profil.');
     } catch (err: any) {
+      capturerErreurSentry(err, 'DetailMissionSoignant', 'candidature');
       toast.error(extraireMessageErreur(err));
     }
     setPostulationEnCours(false);

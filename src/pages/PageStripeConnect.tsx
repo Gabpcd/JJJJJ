@@ -63,6 +63,7 @@ export default function PageStripeConnect() {
     setActionLoading(true);
     const { data, error } = await supabase.functions.invoke('stripe-connect-onboard');
     if (error || !data?.url) {
+      capturerErreurSentry(error || new Error('No onboard URL'), 'PageStripeConnect', 'stripe_onboard');
       toast.error('Erreur lors de la connexion à Stripe');
       setActionLoading(false);
       return;
