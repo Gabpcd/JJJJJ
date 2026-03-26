@@ -245,6 +245,7 @@ export default function ProfilSoignant() {
       await supabase.auth.signOut();
       navigate('/');
     } catch (err: any) {
+      capturerErreurSentry(err, 'ProfilSoignant', 'supprimer_compte');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
     }
     setDeleteLoading(false);

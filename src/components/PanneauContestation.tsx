@@ -218,6 +218,7 @@ export function PanneauContestation({
       charger();
       onUpdate?.();
     } catch (err: any) {
+      capturerErreurSentry(err, 'PanneauContestation', 'proposer_cloture');
       toast.error(extraireMessageErreur(err));
     } finally {
       setEnvoi(false);

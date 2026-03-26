@@ -95,6 +95,7 @@ export function FactureChorus({ facture, onUpdate }: Props) {
       });
       onUpdate();
     } catch (err: any) {
+      capturerErreurSentry(err, 'FactureChorus', 'verifier_statut');
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la vérification du statut.' });
     } finally {
       setCheckingStatus(false);

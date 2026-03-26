@@ -82,6 +82,7 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
       setFichier(null);
       onDone();
     } catch (err: any) {
+      capturerErreurSentry(err, 'ImportHeuresExternes', 'soumettre_heures');
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la soumission. Veuillez réessayer.' });
     } finally {
       setSubmitting(false);
