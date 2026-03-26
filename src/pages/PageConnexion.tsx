@@ -52,8 +52,8 @@ export default function PageConnexion() {
   };
 
   return (
-    <div className="min-h-screen gradient-hero flex items-center justify-center px-4">
-      <div className="card-base max-w-md w-full">
+    <div className="min-h-screen gradient-hero flex flex-col">
+      <div className="flex-1 flex items-center justify-center px-4">
         <div className="flex items-center justify-center gap-2 mb-8">
           <HeartPulse className="h-8 w-8 text-primary" />
           <span className="text-2xl font-bold text-primary-dark">Jolene</span>
