@@ -73,6 +73,7 @@ function showUpdateBanner() {
     justifyContent: 'center',
     gap: '12px',
     padding: '10px 16px',
+    paddingTop: 'calc(10px + env(safe-area-inset-top))',
     background: '#17a2b8',
     color: '#fff',
     fontSize: '14px',
@@ -94,6 +95,8 @@ function showUpdateBanner() {
     fontWeight: '600',
     fontSize: '13px',
     cursor: 'pointer',
+    minHeight: '44px',
+    minWidth: '44px',
   });
   btn.addEventListener('click', () => {
     window.location.reload();
@@ -108,7 +111,9 @@ function showUpdateBanner() {
     color: '#fff',
     fontSize: '16px',
     cursor: 'pointer',
-    padding: '4px',
+    padding: '10px',
+    minHeight: '44px',
+    minWidth: '44px',
     opacity: '0.8',
   });
   close.addEventListener('click', () => banner.remove());
@@ -119,45 +124,61 @@ function showUpdateBanner() {
 
 import { SentryErrorFallback } from "./components/SentryErrorFallback";
 
-// ─── Capacitor Native Init (deep links + push) ───
+// ─── Capacitor Native Init (deep links + push + back button) ───
 async function initNativePlugins() {
   if (!Capacitor.isNativePlatform()) return;
 
-  // Deep links — route appUrlOpen events to React Router
   const { App: CapApp } = await import("@capacitor/app");
+
+  // Deep links — route appUrlOpen events to React Router
   CapApp.addListener("appUrlOpen", (event) => {
     const url = new URL(event.url);
     const path = url.pathname + url.search;
     if (path) {
-      window.location.hash = ""; // clear hash if any
+      window.location.hash = "";
       window.history.replaceState(null, "", path);
       window.dispatchEvent(new PopStateEvent("popstate"));
     }
   });
 
-  // Push notifications — request + register + store token
-  try {
-    const { PushNotifications } = await import("@capacitor/push-notifications");
-    const permResult = await PushNotifications.requestPermissions();
-    if (permResult.receive === "granted") {
-      await PushNotifications.register();
-      PushNotifications.addListener("registration", async (token) => {
-        // Store token in Supabase
-        const { supabase } = await import("@/integrations/supabase/client");
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase.from("tokens_push" as any).upsert({
-            utilisateur_id: user.id,
-            token: token.value,
-            plateforme: Capacitor.getPlatform().toUpperCase(),
-            actif: true,
-          }, { onConflict: "token" });
-        }
-      });
+  // Android hardware back button
+  let lastBackPress = 0;
+  const MAIN_ROUTES = [
+    '/soignant/tableau-de-bord',
+    '/etablissement/tableau-de-bord',
+    '/groupe/tableau-de-bord',
+    '/admin',
+    '/',
+  ];
+
+  CapApp.addListener("backButton", ({ canGoBack }) => {
+    const currentPath = window.location.pathname;
+    const isMainRoute = MAIN_ROUTES.some(r => currentPath === r || currentPath.startsWith(r + '/'));
+
+    if (canGoBack && !isMainRoute) {
+      window.history.back();
+    } else {
+      const now = Date.now();
+      if (now - lastBackPress < 2000) {
+        CapApp.exitApp();
+      } else {
+        lastBackPress = now;
+        // Show a toast — import dynamically to avoid circular deps
+        import('sonner').then(({ toast }) => {
+          toast.info('Appuyez à nouveau pour quitter');
+        });
+      }
     }
-  } catch (e) {
-    console.warn("Push notifications init failed:", e);
-  }
+  });
+
+  // StatusBar configuration
+  try {
+    const { StatusBar, Style } = await import("@capacitor/status-bar");
+    await StatusBar.setStyle({ style: Style.Dark });
+    if (Capacitor.getPlatform() === 'android') {
+      await StatusBar.setBackgroundColor({ color: '#FFFFFF' });
+    }
+  } catch {}
 
   // Hide splash screen after app is ready
   try {

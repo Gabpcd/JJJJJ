@@ -3,6 +3,14 @@ import { Bell, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { Capacitor } from '@capacitor/core';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 const STORAGE_KEY = 'push_permission_asked';
 
@@ -14,6 +22,10 @@ export function DemandePermissionPush() {
   useEffect(() => {
     if (!user) return;
     if (localStorage.getItem(STORAGE_KEY)) return;
+
+    // On native, push is handled in main.tsx via Capacitor PushNotifications
+    if (Capacitor.isNativePlatform()) return;
+
     if (!('Notification' in window)) return;
     if (Notification.permission === 'granted') return;
 
@@ -26,7 +38,6 @@ export function DemandePermissionPush() {
     localStorage.setItem(STORAGE_KEY, 'accepted');
     setVisible(false);
     try {
-      // Lazy import to avoid top-level Firebase SDK loading
       const { demanderPermissionPush } = await import('@/lib/firebase');
       const token = await demanderPermissionPush(user.id, supabase);
       if (token) {
@@ -45,46 +56,47 @@ export function DemandePermissionPush() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 max-w-sm animate-in slide-in-from-bottom-4 fade-in duration-500">
-      <div className="bg-card border border-border rounded-2xl shadow-2xl p-5 relative">
-        <button
-          onClick={handlePlusTard}
-          className="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Fermer"
-        >
-          <X className="h-4 w-4" />
-        </button>
-
-        <div className="flex items-start gap-3 mb-4">
-          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <Bell className="h-5 w-5 text-primary" />
+    <Dialog open={visible} onOpenChange={(open) => { if (!open) handlePlusTard(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+            <Bell className="h-6 w-6 text-primary" />
           </div>
-          <div>
-            <h3 className="font-semibold text-foreground text-sm">
-              🔔 Recevoir les alertes ?
-            </h3>
-            <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
-              Soyez prévenu(e) instantanément quand une mission urgente est publiée.
+          <DialogTitle className="text-center text-lg">
+            Recevoir les alertes missions ?
+          </DialogTitle>
+          <DialogDescription className="text-center text-sm text-muted-foreground leading-relaxed">
+            Jolene vous envoie des notifications pour les nouvelles missions,
+            les rappels de pointage et les mises à jour de vos contrats.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-2">
+          <div className="bg-muted/50 border border-border rounded-xl p-3 text-xs text-muted-foreground space-y-1">
+            <p>✅ Nouvelles missions correspondant à votre profil</p>
+            <p>✅ Rappels de pointage avant vos missions</p>
+            <p>✅ Mises à jour de contrats et paiements</p>
+            <p className="text-muted-foreground/70 italic mt-2">
+              Vous pouvez désactiver les notifications à tout moment depuis les réglages de votre téléphone.
             </p>
           </div>
-        </div>
 
-        <div className="flex gap-2">
-          <button
-            onClick={handleActiver}
-            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
-            style={{ backgroundColor: 'hsl(174, 62%, 38%)' }}
-          >
-            Activer les alertes
-          </button>
-          <button
-            onClick={handlePlusTard}
-            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
-          >
-            Plus tard
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handlePlusTard}
+              className="flex-1 min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+            >
+              Plus tard
+            </button>
+            <button
+              onClick={handleActiver}
+              className="flex-1 min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Activer les notifications
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
