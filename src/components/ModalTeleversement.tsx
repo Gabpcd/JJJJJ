@@ -42,7 +42,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
-  const isMobile = typeof window !== 'undefined' && 'ontouchstart' in window;
+  const isMobile = typeof window !== 'undefined' && ('ontouchstart' in window || isNative());
 
   const sansDate = TYPES_SANS_DATES.includes(typeDocument);
   const sansExpiration = TYPES_SANS_EXPIRATION.includes(typeDocument) || aExpiration === false;
