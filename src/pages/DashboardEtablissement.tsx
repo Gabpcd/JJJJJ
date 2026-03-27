@@ -15,7 +15,7 @@ import { EtatVide } from '@/components/EtatVide';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { WidgetPalierFidelite } from '@/components/WidgetPalierFidelite';
-import { WidgetBFA } from '@/components/WidgetBFA';
+// WidgetBFA removed — CarteBFAInfo handles BFA display via fn_bfa_info RPC
 import { BadgePalier } from '@/components/BadgePalier';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
