@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { usePlatform } from '@/hooks/usePlatform';
+import { hapticImpact } from '@/lib/haptics';
 
 interface PullToRefreshProps {
   onRefresh: () => Promise<void>;
