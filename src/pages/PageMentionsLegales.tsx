@@ -11,10 +11,15 @@ const TOC = [
 
 export default function PageMentionsLegales() {
   return (
-    <LayoutLegal titre="Mentions Légales" dateMaj="12 mars 2026" toc={TOC}>
+    <LayoutLegal
+      titre="Mentions Légales"
+      dateMaj="12 mars 2026"
+      toc={TOC}
+      seoDescription="Mentions légales de Jolene SAS. Éditeur, hébergeur, propriété intellectuelle et coordonnées de contact."
+    >
       {/* Éditeur */}
       <section id="editeur">
-        <h2 className="text-xl font-bold text-primary mb-4">1. Éditeur du site</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">1. Éditeur du site</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
           <p><strong className="text-foreground">Raison sociale :</strong> Jolene SAS</p>
           <p><strong className="text-foreground">Forme juridique :</strong> Société par Actions Simplifiée (SAS)</p>
@@ -29,20 +34,20 @@ export default function PageMentionsLegales() {
 
       {/* Hébergeur */}
       <section id="hebergeur">
-        <h2 className="text-xl font-bold text-primary mb-4">2. Hébergeur</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">2. Hébergeur</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
           <p><strong className="text-foreground">Hébergeur :</strong> Supabase Inc.</p>
           <p><strong className="text-foreground">Adresse :</strong> 970 Toa Payoh North, #07-04, Singapore 318992</p>
           <p><strong className="text-foreground">Infrastructure :</strong> Amazon Web Services (AWS) — Région eu-west-3 (Paris, France)</p>
           <p><strong className="text-foreground">Sécurité :</strong> Chiffrement AES-256 au repos, TLS 1.3 en transit, SOC 2 Type II, ISO 27001</p>
-          <p><strong className="text-foreground">Site web :</strong> <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">supabase.com</a></p>
+          <p><strong className="text-foreground">Site web :</strong> <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">supabase.com</a></p>
         </div>
         <p className="mt-3 text-muted-foreground">L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne. Jolene ne stocke aucune donnée de santé à caractère personnel au sens de l'article L.1111-8 du Code de la santé publique.</p>
       </section>
 
       {/* Nom de domaine */}
       <section id="domaine">
-        <h2 className="text-xl font-bold text-primary mb-4">3. Nom de domaine</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">3. Nom de domaine</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
           <p><strong className="text-foreground">Nom de domaine :</strong> jolene.app</p>
           <p><strong className="text-foreground">Registrar :</strong> Squarespace Domains LLC</p>
@@ -52,7 +57,7 @@ export default function PageMentionsLegales() {
 
       {/* Propriété intellectuelle */}
       <section id="pi">
-        <h2 className="text-xl font-bold text-primary mb-4">4. Propriété intellectuelle</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">4. Propriété intellectuelle</h2>
         <p className="mb-3">L'ensemble des contenus présents sur le site jolene.app (textes, graphismes, images, logos, icônes, logiciels, bases de données) est protégé par le droit d'auteur et le droit des marques.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p>La marque « <strong>Jolene</strong> » est déposée auprès de l'Institut National de la Propriété Industrielle (INPI) sous le <strong>numéro 5186614</strong>.</p>
@@ -62,10 +67,10 @@ export default function PageMentionsLegales() {
 
       {/* Contact */}
       <section id="contact">
-        <h2 className="text-xl font-bold text-primary mb-4">5. Contact</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">5. Contact</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Contact général :</strong> <a href="mailto:contact@jolene.app" className="text-primary hover:underline">contact@jolene.app</a></p>
-          <p><strong className="text-foreground">Délégué à la protection des données (DPO) :</strong> <a href="mailto:dpo@jolene.app" className="text-primary hover:underline">dpo@jolene.app</a></p>
+          <p><strong className="text-foreground">Contact général :</strong> <a href="mailto:contact@jolene.app" className="text-primary underline">contact@jolene.app</a></p>
+          <p><strong className="text-foreground">Délégué à la protection des données (DPO) :</strong> <a href="mailto:dpo@jolene.app" className="text-primary underline">dpo@jolene.app</a></p>
         </div>
         <p className="mt-4 text-muted-foreground">Pour toute question relative au fonctionnement de la Plateforme, à la protection de vos données personnelles ou à l'exercice de vos droits, n'hésitez pas à nous contacter aux adresses ci-dessus.</p>
       </section>

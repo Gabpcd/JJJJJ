@@ -14,10 +14,15 @@ const TOC = [
 
 export default function PageCGV() {
   return (
-    <LayoutLegal titre="Conditions Générales de Vente" dateMaj="12 mars 2026" toc={TOC}>
+    <LayoutLegal
+      titre="Conditions Générales de Vente"
+      dateMaj="12 mars 2026"
+      toc={TOC}
+      seoDescription="Conditions Générales de Vente de Jolene. Frais de service, grille tarifaire dégressive, Bonus de Fidélité Annuel, facturation et conditions de paiement."
+    >
       {/* Article 1 */}
       <section id="art1">
-        <h2 className="text-xl font-bold text-primary mb-4">Article 1 — Objet</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 1 — Objet</h2>
         <p className="mb-3">Les présentes Conditions Générales de Vente (ci-après « CGV ») définissent les conditions financières applicables à l'utilisation de la Plateforme Jolene par les Établissements de santé.</p>
         <p className="mb-3">Elles complètent les Conditions Générales d'Utilisation (CGU) et s'appliquent à toute mission réalisée via la Plateforme.</p>
         <p>L'inscription et l'utilisation de la Plateforme par un Établissement impliquent l'acceptation sans réserve des présentes CGV.</p>
@@ -25,7 +30,7 @@ export default function PageCGV() {
 
       {/* Article 2 */}
       <section id="art2">
-        <h2 className="text-xl font-bold text-primary mb-4">Article 2 — Nature des frais de service</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 2 — Nature des frais de service</h2>
         <p className="mb-3">Jolene facture à l'Établissement des frais de service (commission) calculés en pourcentage du montant brut de chaque mission réalisée. Ces frais rémunèrent l'intermédiation technique, la gestion administrative automatisée (contrats, pointage, conformité) et la mise à disposition de la Plateforme.</p>
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
           <p className="font-semibold text-foreground">Mention obligatoire :</p>
@@ -36,16 +41,16 @@ export default function PageCGV() {
 
       {/* Article 3 */}
       <section id="art3">
-        <h2 className="text-xl font-bold text-primary mb-4">Article 3 — Grille tarifaire dégressive</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 3 — Grille tarifaire dégressive</h2>
         <p className="mb-4">Le taux de commission applicable dépend du volume de missions réalisées par l'Établissement au cours du mois calendaire précédent. Il est recalculé automatiquement le 1er de chaque mois :</p>
 
         <div className="overflow-x-auto mb-4">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-primary text-primary-foreground">
-                <th className="px-4 py-3 text-left font-semibold rounded-tl-xl">Palier</th>
-                <th className="px-4 py-3 text-left font-semibold">Missions / mois</th>
-                <th className="px-4 py-3 text-left font-semibold rounded-tr-xl">Taux de commission</th>
+                <th scope="col" className="px-4 py-3 text-left font-semibold rounded-tl-xl">Palier</th>
+                <th scope="col" className="px-4 py-3 text-left font-semibold">Missions / mois</th>
+                <th scope="col" className="px-4 py-3 text-left font-semibold rounded-tr-xl">Taux de commission</th>
               </tr>
             </thead>
             <tbody>
@@ -79,16 +84,16 @@ export default function PageCGV() {
 
       {/* Article 4 */}
       <section id="art4">
-        <h2 className="text-xl font-bold text-primary mb-4">Article 4 — Bonus de Fidélité Annuel (BFA)</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 4 — Bonus de Fidélité Annuel (BFA)</h2>
         <p className="mb-4">Les Établissements ayant réalisé un volume significatif de missions sur l'année civile bénéficient d'un Bonus de Fidélité Annuel (BFA), versé sous forme d'avoir sur les factures de janvier de l'année suivante :</p>
 
         <div className="overflow-x-auto mb-4">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-primary text-primary-foreground">
-                <th className="px-4 py-3 text-left font-semibold rounded-tl-xl">Palier BFA</th>
-                <th className="px-4 py-3 text-left font-semibold">Missions / an</th>
-                <th className="px-4 py-3 text-left font-semibold rounded-tr-xl">Taux BFA</th>
+                <th scope="col" className="px-4 py-3 text-left font-semibold rounded-tl-xl">Palier BFA</th>
+                <th scope="col" className="px-4 py-3 text-left font-semibold">Missions / an</th>
+                <th scope="col" className="px-4 py-3 text-left font-semibold rounded-tr-xl">Taux BFA</th>
               </tr>
             </thead>
             <tbody>
@@ -116,12 +121,12 @@ export default function PageCGV() {
 
       {/* Article 5 */}
       <section id="art5">
-        <h2 className="text-xl font-bold text-primary mb-4">Article 5 — Facturation et paiement</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 5 — Facturation et paiement</h2>
 
-        <h3 className="text-base font-semibold text-foreground mt-6 mb-2">5.1 — Émission des factures</h3>
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">5.1 — Émission des factures</h3>
         <p className="mb-3">Les factures sont émises mensuellement et regroupent l'ensemble des missions réalisées au cours du mois écoulé. Chaque facture détaille le nombre de missions, les montants bruts, le taux de commission appliqué et le montant HT, TVA et TTC.</p>
 
-        <h3 className="text-base font-semibold text-foreground mt-6 mb-2">5.2 — Modes de paiement</h3>
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">5.2 — Modes de paiement</h3>
         <p className="mb-3">Trois modes de paiement sont disponibles :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Paiement par carte bancaire (Stripe)</strong> : paiement en ligne sécurisé, traitement immédiat. Mode par défaut pour les établissements privés.</li>
@@ -129,14 +134,14 @@ export default function PageCGV() {
           <li><strong>Dépôt sur Chorus Pro</strong> : pour les établissements publics soumis à l'obligation de facturation électronique (ordonnance n° 2014-697 du 26 juin 2014). La facture est déposée automatiquement sur Chorus Pro.</li>
         </ul>
 
-        <h3 className="text-base font-semibold text-foreground mt-6 mb-2">5.3 — Délais de paiement</h3>
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">5.3 — Délais de paiement</h3>
         <p className="mb-3">Les factures sont payables à 30 jours date de facture pour les établissements privés, et à 50 jours pour les établissements publics (conformément à l'article L.2192-10 du Code de la commande publique).</p>
         <p>Tout retard de paiement entraîne de plein droit l'application de pénalités de retard au taux de la BCE majoré de 10 points, ainsi qu'une indemnité forfaitaire de recouvrement de 40 € (articles L.441-10 et D.441-5 du Code de commerce).</p>
       </section>
 
       {/* Article 6 */}
       <section id="art6">
-        <h2 className="text-xl font-bold text-primary mb-4">Article 6 — Programme Free Transition</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 6 — Programme Free Transition</h2>
         <p className="mb-3">Le programme Free Transition permet aux Soignants ayant atteint 3 200 heures cumulées de bénéficier d'un accompagnement vers l'exercice libéral.</p>
         <p className="mb-3">La prise en charge par Jolene comprend :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
@@ -149,7 +154,7 @@ export default function PageCGV() {
 
       {/* Article 7 */}
       <section id="art7">
-        <h2 className="text-xl font-bold text-primary mb-4">Article 7 — Secteur public et affacturage</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 7 — Secteur public et affacturage</h2>
         <p className="mb-3">Pour les établissements publics de santé (hôpitaux, CHU, CH, ESPIC), Jolene propose des conditions adaptées :</p>
         <ul className="list-disc pl-6 space-y-2 mb-3">
           <li><strong>Facturation Chorus Pro</strong> : dépôt automatique des factures conformément aux obligations réglementaires.</li>
@@ -161,7 +166,7 @@ export default function PageCGV() {
 
       {/* Article 8 */}
       <section id="art8">
-        <h2 className="text-xl font-bold text-primary mb-4">Article 8 — Non-sollicitation</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">Article 8 — Non-sollicitation</h2>
         <p className="mb-3">L'Établissement s'engage à ne pas recruter, embaucher ou solliciter directement, par quelque moyen que ce soit, un Soignant rencontré par l'intermédiaire de la Plateforme, pendant une durée de douze (12) mois suivant la dernière mission réalisée via Jolene.</p>
         <p>En cas de manquement, l'Établissement sera redevable d'une indemnité forfaitaire de cinq mille (5 000) euros par Soignant sollicité, sans préjudice de dommages et intérêts complémentaires.</p>
       </section>
