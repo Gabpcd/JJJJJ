@@ -309,21 +309,69 @@
 
 /* ═══ Page transitions ═══ */
 .page-transition {
-  will-change: opacity;
+  will-change: opacity, transform;
 }
+
+/* --- Web: light fade --- */
 .page-enter {
-  animation: page-fade-in 0.3s ease-out both;
+  animation: page-fade-in 0.15s ease-out both;
 }
 .page-exit {
-  animation: page-fade-out 0.15s ease-in both;
+  animation: page-fade-out 0.1s ease-in both;
 }
 @keyframes page-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes page-fade-out {
   from { opacity: 1; }
   to { opacity: 0; }
+}
+
+/* --- iOS: horizontal slide (push/pop) --- */
+.ios-enter-forward {
+  animation: ios-slide-in-right 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+.ios-exit-forward {
+  animation: ios-slide-out-left 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+.ios-enter-back {
+  animation: ios-slide-in-left 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+.ios-exit-back {
+  animation: ios-slide-out-right 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+@keyframes ios-slide-in-right {
+  from { opacity: 0.6; transform: translateX(30%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes ios-slide-out-left {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0.6; transform: translateX(-15%); }
+}
+@keyframes ios-slide-in-left {
+  from { opacity: 0.6; transform: translateX(-30%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes ios-slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0.6; transform: translateX(30%); }
+}
+
+/* --- Android: Material fade --- */
+.android-enter {
+  animation: android-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.android-exit {
+  animation: android-fade-out 0.15s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes android-fade-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes android-fade-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.97); }
 }
 
 /* ═══ FadeInView — card cascade ═══ */
