@@ -8,6 +8,7 @@ import { fr } from 'date-fns/locale';
 import { sanitizeText } from '@/lib/sanitize';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import { hapticImpact } from '@/lib/haptics';
 
 interface Message {
   id: string;
