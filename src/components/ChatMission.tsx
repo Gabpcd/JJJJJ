@@ -8,6 +8,7 @@ import { fr } from 'date-fns/locale';
 import { sanitizeText } from '@/lib/sanitize';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import { hapticImpact } from '@/lib/haptics';
 
 interface Message {
   id: string;
@@ -116,6 +117,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdm
       toast.error("Impossible d'envoyer le message. Veuillez réessayer.");
     } else if (data) {
       setMessages((prev) => (prev.some((msg) => msg.id === data.id) ? prev : [...prev, data as Message]));
+      hapticImpact('light');
     }
 
     setEnvoi(false);

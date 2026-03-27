@@ -1,0 +1,26 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "TEAM_ID.app.jolene.mobile"
+        ],
+        "paths": [
+          "/soignant/*",
+          "/etablissement/*",
+          "/groupe/*",
+          "/admin/*",
+          "/connexion",
+          "/inscription/*",
+          "/missions/*"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TEAM_ID.app.jolene.mobile"
+    ]
+  }
+}

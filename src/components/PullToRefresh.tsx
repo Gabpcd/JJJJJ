@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { usePlatform } from '@/hooks/usePlatform';
+import { hapticImpact } from '@/lib/haptics';
 
 interface PullToRefreshProps {
   onRefresh: () => Promise<void>;
@@ -45,6 +46,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
 
     if (pullDistance >= THRESHOLD) {
       setRefreshing(true);
+      hapticImpact('light');
       try {
         await onRefresh();
       } finally {

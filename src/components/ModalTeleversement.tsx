@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
 import { X, Upload, Camera } from 'lucide-react';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
+import { isNative } from '@/lib/platform';
+import { toast } from 'sonner';
 
 // Types de documents sans dates de validité
 const TYPES_SANS_DATES = ['RIB', 'KBIS'];
@@ -40,7 +42,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
-  const isMobile = typeof window !== 'undefined' && 'ontouchstart' in window;
+  const isMobile = typeof window !== 'undefined' && ('ontouchstart' in window || isNative());
 
   const sansDate = TYPES_SANS_DATES.includes(typeDocument);
   const sansExpiration = TYPES_SANS_EXPIRATION.includes(typeDocument) || aExpiration === false;
@@ -111,16 +113,58 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
           )}
         </div>
 
-        {/* Camera scanner - mobile only */}
+        {/* Camera / gallery buttons - mobile only */}
         {isMobile && (
-          <div className="mt-3">
+          <div className="mt-3 flex gap-2">
             <input ref={cameraRef} type="file" accept="image/*,.heic,.heif" capture="environment" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
             <button
-              onClick={() => cameraRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition"
+              onClick={async () => {
+                if (isNative()) {
+                  try {
+                    const { prendrePhoto } = await import('@/lib/platform');
+                    const result = await prendrePhoto();
+                    if (result?.dataUrl) {
+                      const res = await fetch(result.dataUrl);
+                      const blob = await res.blob();
+                      const file = new File([blob], `photo_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
+                      handleFile(file);
+                    }
+                  } catch {
+                    toast.error("Impossible d'accéder à la caméra.");
+                  }
+                } else {
+                  cameraRef.current?.click();
+                }
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition min-h-[44px]"
             >
-              <Camera className="h-5 w-5" /> Scanner avec la caméra
+              <Camera className="h-5 w-5" /> Prendre une photo
             </button>
+            {isNative() && (
+              <button
+                onClick={async () => {
+                  try {
+                    const { Camera: CapCamera, CameraResultType, CameraSource } = await import('@capacitor/camera');
+                    const photo = await CapCamera.getPhoto({
+                      resultType: CameraResultType.DataUrl,
+                      source: CameraSource.Photos,
+                      quality: 80,
+                    });
+                    if (photo.dataUrl) {
+                      const res = await fetch(photo.dataUrl);
+                      const blob = await res.blob();
+                      const file = new File([blob], `galerie_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
+                      handleFile(file);
+                    }
+                  } catch {
+                    toast.error("Impossible d'accéder à la galerie.");
+                  }
+                }}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-secondary/50 border-2 border-dashed border-border rounded-xl text-foreground font-semibold hover:bg-secondary/80 transition min-h-[44px]"
+              >
+                <Upload className="h-5 w-5" /> Galerie
+              </button>
+            )}
           </div>
         )}
 
