@@ -189,6 +189,10 @@ async function initNativePlugins() {
 
 initNativePlugins();
 
+// Configure keyboard behavior per-platform
+import { configurerClavier } from './lib/platform';
+configurerClavier();
+
 createRoot(document.getElementById("root")!).render(
   <Sentry.ErrorBoundary fallback={({ resetError }) => <SentryErrorFallback resetError={resetError} />}>
     <App />
