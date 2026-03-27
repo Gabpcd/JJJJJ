@@ -108,6 +108,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const [showLiberal, setShowLiberal] = useState(false);
   const [isLiberal, setIsLiberal] = useState(false);
   const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
+  const [contratNonValide, setContratNonValide] = useState(false);
   const { count: messagesNonLus } = useMessagesNonLus();
 
   useEffect(() => {
@@ -125,9 +126,12 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           }
         });
     } else if (role === 'ADMIN_ETABLISSEMENT') {
-      supabase.from('etablissements').select('nom, logo_url').eq('id', user.id).single()
+      supabase.from('etablissements').select('nom, logo_url, contrat_valide').eq('id', user.id).single()
         .then(({ data }) => {
-          if (data) setUserInfo({ prenom: data.nom, nom: '', avatarUrl: (data as any).logo_url });
+          if (data) {
+            setUserInfo({ prenom: data.nom, nom: '', avatarUrl: (data as any).logo_url });
+            setContratNonValide(!(data as any).contrat_valide);
+          }
         });
     }
   }, [role, user]);
