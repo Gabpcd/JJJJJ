@@ -125,6 +125,7 @@
     height: 100%;
     margin: 0;
     padding: 0;
+    overscroll-behavior-y: none; /* Disable Android overscroll glow in WebView */
   }
 
   body {
@@ -132,6 +133,7 @@
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
+    -webkit-overflow-scrolling: touch; /* iOS elastic bounce */
   }
 
   /* Safe area spacer: navy background extends under the status bar / Dynamic Island */
