@@ -15,7 +15,7 @@ import { EtatVide } from '@/components/EtatVide';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { WidgetPalierFidelite } from '@/components/WidgetPalierFidelite';
-import { WidgetBFA } from '@/components/WidgetBFA';
+// WidgetBFA removed — CarteBFAInfo handles BFA display via fn_bfa_info RPC
 import { BadgePalier } from '@/components/BadgePalier';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -40,6 +40,7 @@ export default function DashboardEtablissement() {
   const { afficherNotification } = useNotification();
   const [etab, setEtab] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
+  const [aDejaPublie, setADejaPublie] = useState<boolean | null>(null);
   const [kpi, setKpi] = useState({ ouvertes: 0, enCours: 0, terminees: 0, taux: 0 });
   const [contratsCount, setContratsCount] = useState(0);
   const [presencesCount, setPresencesCount] = useState(0);
@@ -239,8 +240,8 @@ export default function DashboardEtablissement() {
         (supabase.from('presences' as any) as any).select('id, missions!inner(id)', { count: 'exact', head: true }).eq('missions.etablissement_id', etablissementId),
         supabase.from('factures').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId).eq('statut', 'EMISE'),
       ]);
-      if (resO.error || resEC.error || resT.error || resTotal.error || resAssigned.error) partialError = true;
       const totalN = resTotal.count ?? 0;
+      setADejaPublie(totalN > 0);
       setKpi({
         ouvertes: resO.count ?? 0,
         enCours: resEC.count ?? 0,
@@ -395,14 +396,9 @@ export default function DashboardEtablissement() {
         <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />
       )}
 
-      {/* Carte BFA Info */}
+      {/* Carte BFA Info — only if RPC returns data */}
       {etab && (
         <CarteBFAInfo etablissementId={etablissementId!} />
-      )}
-
-      {/* Widget BFA (legacy) */}
-      {etab && (
-        <WidgetBFA etablissementId={etablissementId!} groupeId={etab.groupe_sante_id} />
       )}
 
       <div>
@@ -423,8 +419,10 @@ export default function DashboardEtablissement() {
               </FadeInView>
             ))}
           </div>
-        ) : (
+        ) : aDejaPublie === false ? (
           <EtatVide icone={ClipboardList} titre="Publiez votre première mission" sousTitre="Les soignants qualifiés de votre zone seront notifiés immédiatement" boutonLabel="Publier une mission" boutonRoute="/etablissement/missions/creer" />
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-6">Aucune mission récente.</p>
         )}
       </div>
 

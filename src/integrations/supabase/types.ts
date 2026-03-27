@@ -1367,6 +1367,8 @@ export type Database = {
       groupes_sante: {
         Row: {
           adresse_facturation: string | null
+          bfa_contrat_signe_le: string | null
+          bfa_eligible: boolean | null
           couleur_primaire: string | null
           couleur_secondaire: string | null
           cree_le: string | null
@@ -1389,6 +1391,8 @@ export type Database = {
         }
         Insert: {
           adresse_facturation?: string | null
+          bfa_contrat_signe_le?: string | null
+          bfa_eligible?: boolean | null
           couleur_primaire?: string | null
           couleur_secondaire?: string | null
           cree_le?: string | null
@@ -1411,6 +1415,8 @@ export type Database = {
         }
         Update: {
           adresse_facturation?: string | null
+          bfa_contrat_signe_le?: string | null
+          bfa_eligible?: boolean | null
           couleur_primaire?: string | null
           couleur_secondaire?: string | null
           cree_le?: string | null
@@ -3513,6 +3519,10 @@ export type Database = {
         Args: { p_id: string; p_suspendre?: boolean; p_table: string }
         Returns: Json
       }
+      fn_admin_valider_contrat_etablissement: {
+        Args: { p_etablissement_id: string; p_valider?: boolean }
+        Returns: Json
+      }
       fn_admin_valider_etablissement: {
         Args: { p_etablissement_id: string }
         Returns: Json
@@ -4090,6 +4100,8 @@ export type Database = {
         Args: { p_assujetti_tva: boolean; p_numero_tva?: string }
         Returns: Json
       }
+      fn_mon_bfa: { Args: never; Returns: Json }
+      fn_mon_contrat_plateforme: { Args: never; Returns: Json }
       fn_mon_token_calendrier: { Args: never; Returns: string }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
       fn_nettoyer_partages_rib_expires: { Args: never; Returns: undefined }
@@ -4279,6 +4291,7 @@ export type Database = {
         Args: { p_numero_contrat?: string; p_plan_id: string }
         Returns: Json
       }
+      fn_stats_dashboard_etablissement: { Args: never; Returns: Json }
       fn_supprimer_compte_rate_limited: { Args: never; Returns: Json }
       fn_supprimer_mon_compte: { Args: never; Returns: Json }
       fn_terminer_mission: { Args: { p_mission_id: string }; Returns: Json }
@@ -4321,6 +4334,10 @@ export type Database = {
           p_verifie_le?: string
         }
         Returns: undefined
+      }
+      fn_uploader_contrat_plateforme: {
+        Args: { p_contrat_url: string }
+        Returns: Json
       }
       fn_upsert_token_push: {
         Args: { p_plateforme: string; p_token: string }

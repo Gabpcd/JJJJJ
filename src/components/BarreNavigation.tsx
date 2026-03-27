@@ -57,6 +57,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
   { icone: BarChart3, label: 'Gestion RH', route: '/etablissement/rh' },
   { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+  { icone: FileText, label: 'Contrat plateforme', route: '/etablissement/contrat-plateforme' },
   { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
   { icone: Code2, label: 'API', route: '/etablissement/api' },
   { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
@@ -107,6 +108,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const [showLiberal, setShowLiberal] = useState(false);
   const [isLiberal, setIsLiberal] = useState(false);
   const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
+  const [contratNonValide, setContratNonValide] = useState(false);
   const { count: messagesNonLus } = useMessagesNonLus();
 
   useEffect(() => {
@@ -124,9 +126,12 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           }
         });
     } else if (role === 'ADMIN_ETABLISSEMENT') {
-      supabase.from('etablissements').select('nom, logo_url').eq('id', user.id).single()
+      supabase.from('etablissements').select('nom, logo_url, contrat_valide').eq('id', user.id).single()
         .then(({ data }) => {
-          if (data) setUserInfo({ prenom: data.nom, nom: '', avatarUrl: (data as any).logo_url });
+          if (data) {
+            setUserInfo({ prenom: data.nom, nom: '', avatarUrl: (data as any).logo_url });
+            setContratNonValide(!(data as any).contrat_valide);
+          }
         });
     }
   }, [role, user]);
@@ -187,13 +192,19 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           {items.map((item) => {
             const actif = location.pathname === item.route;
             const isMsgRoute = item.label === 'Messagerie';
+            const isContratPlateforme = item.route === '/etablissement/contrat-plateforme';
             return (
               <button key={item.route} onClick={() => navigate(item.route)} aria-label={item.label} aria-current={actif ? 'page' : undefined} className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}>
                 <item.icone className="h-5 w-5" />
                 <span className="flex-1">{item.label}</span>
                 {isMsgRoute && messagesNonLus > 0 && (
-                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-destructive text-white text-[10px] font-bold px-1">
+                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
                     {messagesNonLus > 9 ? '9+' : messagesNonLus}
+                  </span>
+                )}
+                {isContratPlateforme && contratNonValide && (
+                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-warning text-warning-foreground text-[10px] font-bold px-1">
+                    !
                   </span>
                 )}
               </button>
