@@ -419,8 +419,10 @@ export default function DashboardEtablissement() {
               </FadeInView>
             ))}
           </div>
-        ) : (
+        ) : aDejaPublie === false ? (
           <EtatVide icone={ClipboardList} titre="Publiez votre première mission" sousTitre="Les soignants qualifiés de votre zone seront notifiés immédiatement" boutonLabel="Publier une mission" boutonRoute="/etablissement/missions/creer" />
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-6">Aucune mission récente.</p>
         )}
       </div>
 
