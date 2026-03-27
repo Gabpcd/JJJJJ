@@ -3492,6 +3492,10 @@ export type Database = {
         }[]
       }
       fn_admin_kpi: { Args: never; Returns: Json }
+      fn_admin_moderer_document: {
+        Args: { p_action: string; p_document_id: string; p_motif?: string }
+        Returns: Json
+      }
       fn_admin_moderer_evaluation: {
         Args: { p_action: string; p_evaluation_id: string }
         Returns: Json
@@ -3507,6 +3511,10 @@ export type Database = {
       fn_admin_stripe_connect_stats: { Args: never; Returns: Json }
       fn_admin_suspendre_utilisateur: {
         Args: { p_id: string; p_suspendre?: boolean; p_table: string }
+        Returns: Json
+      }
+      fn_admin_valider_etablissement: {
+        Args: { p_etablissement_id: string }
         Returns: Json
       }
       fn_alerte_cddu_repetitif: {
@@ -4072,6 +4080,17 @@ export type Database = {
           p_types_contrat?: string[]
           p_ville_recherche?: string
           p_ville_urgence?: string
+        }
+        Returns: Json
+      }
+      fn_modifier_mon_profil_extra: {
+        Args: {
+          p_adresse_lat?: number
+          p_adresse_lng?: number
+          p_disponible_urgence?: boolean
+          p_rayon_deplacement_km?: number
+          p_type_exercice?: string
+          p_urgence_rayon_km?: number
         }
         Returns: Json
       }
