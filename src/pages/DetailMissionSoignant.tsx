@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
+import { hapticNotification } from '@/lib/haptics';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Mail, Building2, MessageCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
