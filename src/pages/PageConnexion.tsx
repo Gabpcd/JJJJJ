@@ -26,6 +26,16 @@ export default function PageConnexion() {
   const [motDePasse, setMotDePasse] = useState('');
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioLoading, setBioLoading] = useState(false);
+
+  useEffect(() => {
+    if (isNative()) {
+      isBiometricAvailable().then((ok) => {
+        setBioAvailable(ok && isBiometricEnabled());
+      });
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
