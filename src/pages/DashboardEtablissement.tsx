@@ -396,14 +396,9 @@ export default function DashboardEtablissement() {
         <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />
       )}
 
-      {/* Carte BFA Info */}
+      {/* Carte BFA Info — only if RPC returns data */}
       {etab && (
         <CarteBFAInfo etablissementId={etablissementId!} />
-      )}
-
-      {/* Widget BFA (legacy) */}
-      {etab && (
-        <WidgetBFA etablissementId={etablissementId!} groupeId={etab.groupe_sante_id} />
       )}
 
       <div>
