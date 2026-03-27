@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { useAuth } from '@/contexts/AuthContext';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 
