@@ -1,4 +1,7 @@
 import { Capacitor } from '@capacitor/core';
+import { toast } from 'sonner';
+
+export type Platform = 'web' | 'ios' | 'android';
 
 /** True when running inside a Capacitor native shell (iOS / Android). */
 export function isNative(): boolean {
@@ -13,6 +16,11 @@ export function isAndroid(): boolean {
   return isNative() && Capacitor.getPlatform() === 'android';
 }
 
+export function getPlatform(): Platform {
+  if (!Capacitor.isNativePlatform()) return 'web';
+  return Capacitor.getPlatform() as 'ios' | 'android';
+}
+
 /**
  * Opens a URL in the appropriate way:
  * - Native: uses @capacitor/browser (in-app browser)
@@ -24,6 +32,79 @@ export async function ouvrirLienExterne(url: string): Promise<void> {
     await Browser.open({ url });
   } else {
     window.open(url, '_blank', 'noopener');
+  }
+}
+
+/**
+ * Share content using native share sheet or web fallback.
+ */
+export async function partagerContenu(options: {
+  title: string;
+  text?: string;
+  url: string;
+}): Promise<void> {
+  if (isNative()) {
+    try {
+      const { Share } = await import('@capacitor/share');
+      await Share.share({
+        title: options.title,
+        text: options.text,
+        url: options.url,
+        dialogTitle: options.title,
+      });
+    } catch {
+      // User cancelled — ignore
+    }
+    return;
+  }
+
+  // Web: navigator.share or clipboard fallback
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: options.title,
+        text: options.text,
+        url: options.url,
+      });
+    } catch {
+      // User cancelled
+    }
+  } else {
+    try {
+      await navigator.clipboard.writeText(options.url);
+      toast.success('Lien copié dans le presse-papiers');
+    } catch {
+      toast.error('Impossible de copier le lien');
+    }
+  }
+}
+
+/**
+ * Configure keyboard behavior per-platform.
+ * Call once at app startup on native.
+ */
+export async function configurerClavier(): Promise<void> {
+  if (!isNative()) return;
+
+  try {
+    const { Keyboard } = await import('@capacitor/keyboard');
+    const platform = Capacitor.getPlatform();
+
+    if (platform === 'ios') {
+      await Keyboard.setResizeMode({ mode: 'body' as any });
+    } else if (platform === 'android') {
+      await Keyboard.setResizeMode({ mode: 'native' as any });
+    }
+
+    // Scroll active element into view when keyboard shows
+    Keyboard.addListener('keyboardWillShow', () => {
+      setTimeout(() => {
+        const el = document.activeElement as HTMLElement | null;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    });
+  } catch {
+    // Keyboard plugin not available
   }
 }
 
@@ -69,11 +150,10 @@ export async function prendrePhoto(): Promise<{ dataUrl: string } | null> {
     const { Camera, CameraResultType, CameraSource } = await import('@capacitor/camera');
     const photo = await Camera.getPhoto({
       resultType: CameraResultType.DataUrl,
-      source: CameraSource.Prompt, // Ask: camera or gallery
+      source: CameraSource.Prompt,
       quality: 80,
     });
     return photo.dataUrl ? { dataUrl: photo.dataUrl } : null;
   }
-  // Web fallback — caller should use <input type="file"> instead
   return null;
 }
