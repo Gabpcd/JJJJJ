@@ -24,6 +24,7 @@ export function BoutonPointage({ type, onPointage, disabled }: BoutonPointagePro
 
     try {
       await onPointage();
+      hapticImpact('medium');
     } catch {
       // error handled by parent
     } finally {

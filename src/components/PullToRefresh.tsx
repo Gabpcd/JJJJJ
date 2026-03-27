@@ -46,6 +46,7 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
 
     if (pullDistance >= THRESHOLD) {
       setRefreshing(true);
+      hapticImpact('light');
       try {
         await onRefresh();
       } finally {
