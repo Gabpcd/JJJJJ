@@ -3799,27 +3799,19 @@ export type Database = {
         Returns: boolean
       }
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
+      fn_etablissement_pour_mission: {
+        Args: { p_etablissement_id: string }
+        Returns: Json
+      }
       fn_etablissement_pour_soignant: {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
       fn_etablissement_public: {
         Args: { p_etablissement_id: string }
-        Returns: {
-          adresse_code_postal: string
-          adresse_departement: string
-          adresse_lat: number
-          adresse_lng: number
-          adresse_rue: string
-          adresse_ville: string
-          email_contact: string
-          finess: string
-          id: string
-          nom: string
-          telephone_contact: string
-          type: Database["public"]["Enums"]["type_etablissement"]
-        }[]
+        Returns: Json
       }
+      fn_etablissements_avec_missions_ouvertes: { Args: never; Returns: Json }
       fn_etablissements_safe: {
         Args: { p_ids: string[] }
         Returns: {

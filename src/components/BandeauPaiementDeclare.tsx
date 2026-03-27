@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Banknote, Check, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -28,14 +29,11 @@ export function BandeauPaiementDeclare() {
 
       if (!data || data.length === 0) return;
 
-      // Enrich with establishment names
+      // Enrich with establishment names via secure RPC
       const etabIds = [...new Set(data.map((p: any) => p.etablissement_id))] as string[];
-      const { data: etabs } = await supabase
-        .from('etablissements')
-        .select('id, nom')
-        .in('id', etabIds);
+      const safeMap = await fetchEtablissementsSafe(etabIds);
       const etabMap: Record<string, string> = {};
-      (etabs || []).forEach((e: any) => { etabMap[e.id] = e.nom; });
+      Object.entries(safeMap).forEach(([id, e]) => { etabMap[id] = e.nom; });
 
       setPaiements(data.map((p: any) => ({
         id: p.id,
