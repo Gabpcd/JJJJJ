@@ -161,6 +161,18 @@ export default function PageConnexion() {
             </button>
           </form>
 
+          {/* Biometric login button — native only */}
+          {bioAvailable && (
+            <button
+              onClick={handleBiometricLogin}
+              disabled={bioLoading}
+              className="btn-secondary w-full inline-flex items-center justify-center gap-2 min-h-[44px]"
+            >
+              {bioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Fingerprint className="h-5 w-5" />}
+              {bioLoading ? 'Vérification…' : `Se connecter avec ${getBiometricLabel()}`}
+            </button>
+          )}
+
           <div className="my-6 flex items-center gap-3">
             <div className="flex-1 h-px bg-border" />
             <span className="text-xs text-muted-foreground">ou</span>
