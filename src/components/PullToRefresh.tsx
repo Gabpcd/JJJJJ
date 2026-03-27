@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { usePlatform } from '@/hooks/usePlatform';
 
@@ -21,11 +21,6 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // On web, just render children
-  if (platform === 'web') {
-    return <>{children}</>;
-  }
-
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (refreshing) return;
     const el = containerRef.current;
@@ -41,7 +36,6 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
       setPullDistance(0);
       return;
     }
-    // Dampen the pull distance
     setPullDistance(Math.min(diff * 0.5, THRESHOLD * 1.5));
   }, [pulling, refreshing]);
 
@@ -59,6 +53,11 @@ export function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
     }
     setPullDistance(0);
   }, [pulling, pullDistance, onRefresh]);
+
+  // On web, just render children without touch handlers
+  if (platform === 'web') {
+    return <>{children}</>;
+  }
 
   return (
     <div
