@@ -471,6 +471,12 @@
 @media (prefers-reduced-motion: reduce) {
   .page-enter,
   .page-exit,
+  .ios-enter-forward,
+  .ios-exit-forward,
+  .ios-enter-back,
+  .ios-exit-back,
+  .android-enter,
+  .android-exit,
   .fade-in-view,
   .confetti-mini-particle,
   .check-animation-circle,
