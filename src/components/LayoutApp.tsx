@@ -44,7 +44,12 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
           ? "flex-1 overflow-y-auto md:ml-[260px]"
           : "flex-1 md:ml-[260px]"
         }
-        style={isNative ? { paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))' } : { paddingBottom: '5rem' }}
+        style={{
+          paddingTop: isNative ? 'env(safe-area-inset-top)' : undefined,
+          paddingBottom: isNative
+            ? 'calc(5rem + env(safe-area-inset-bottom))'
+            : '5rem',
+        }}
       >
         <div className="max-w-6xl mx-auto px-4 py-6 md:pb-6">
           {children}
