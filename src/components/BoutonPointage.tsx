@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Flag, Loader2, RotateCcw } from 'lucide-react';
+import { hapticImpact } from '@/lib/haptics';
 
 interface BoutonPointageProps {
   type: 'arrivee' | 'depart';
