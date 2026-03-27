@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Banknote, Check, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
