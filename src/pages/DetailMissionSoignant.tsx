@@ -224,6 +224,7 @@ export default function DetailMissionSoignant() {
 
       setMission({ ...mission, statut: 'ASSIGNEE', soignant_assigne_id: user!.id });
       setAnimationSucces(true);
+      hapticNotification('success');
 
       // Redirect to contract signing after animation
       if (data?.contrat_id) {
