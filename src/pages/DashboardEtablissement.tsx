@@ -39,6 +39,7 @@ export default function DashboardEtablissement() {
   const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   const [etab, setEtab] = useState<any>(null);
+  const [missions, setMissions] = useState<any[]>([]);
   const [aDejaPublie, setADejaPublie] = useState<boolean | null>(null);
   const [kpi, setKpi] = useState({ ouvertes: 0, enCours: 0, terminees: 0, taux: 0 });
   const [contratsCount, setContratsCount] = useState(0);
