@@ -147,11 +147,10 @@ export default function ContratMission() {
             .select('prenom, nom, profession, numero_rpps')
             .eq('id', data.soignant_id)
             .maybeSingle(),
-          supabase
-            .from('etablissements')
-            .select('nom, siret, finess, email_contact, telephone_contact, adresse_rue, adresse_code_postal, adresse_ville')
-            .eq('id', data.etablissement_id)
-            .maybeSingle(),
+          supabase.rpc('fn_etablissement_pour_mission' as any, { p_etablissement_id: data.etablissement_id }).then(({ data: d, error: e }) => ({
+            data: Array.isArray(d) ? d[0] || null : d,
+            error: e,
+          })),
           supabase
             .from('templates_contrat')
             .select('contenu_html')

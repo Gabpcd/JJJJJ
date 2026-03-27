@@ -74,12 +74,9 @@ export function BandeauEvaluationsEnAttente({ role }: Props) {
       if (role === 'SOIGNANT') {
         // Need establishment names
         const etabIds = [...new Set(nonEvaluees.map(m => m.etablissement_id))];
-        const { data: etabs } = await supabase
-          .from('etablissements')
-          .select('id, nom')
-          .in('id', etabIds);
+        const safeMap = await fetchEtablissementsSafe(etabIds);
         const etabMap: Record<string, string> = {};
-        (etabs || []).forEach((e: any) => { etabMap[e.id] = e.nom; });
+        Object.entries(safeMap).forEach(([id, e]) => { etabMap[id] = e.nom; });
 
         setMissions(nonEvaluees.map(m => ({
           ...m,

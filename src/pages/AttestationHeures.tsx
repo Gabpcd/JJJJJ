@@ -31,7 +31,7 @@ export default function AttestationHeures() {
       const [{ data: sg }, { data: ms }] = await Promise.all([
         supabase.from('soignants').select('prenom, nom, profession, numero_rpps, numero_adeli').eq('id', user.id).single(),
         supabase.from('missions')
-          .select('intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, statut, etablissements(nom, adresse_ville, finess)')
+          .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, statut, etablissement_id')
           .eq('soignant_assigne_id', user.id)
           .eq('statut', 'TERMINEE')
           .gte('debut_le', debut)
@@ -39,7 +39,15 @@ export default function AttestationHeures() {
           .order('debut_le', { ascending: true }),
       ]);
       setSoignant(sg);
-      setMissions((ms as any[]) || []);
+      // Enrich with safe establishment data
+      const missionsArr = (ms as any[]) || [];
+      const etabIds = [...new Set(missionsArr.map(m => m.etablissement_id).filter(Boolean))];
+      const safeMap = await fetchEtablissementsSafe(etabIds);
+      const enriched = missionsArr.map(m => ({
+        ...m,
+        etablissements: safeMap[m.etablissement_id] || null,
+      }));
+      setMissions(enriched);
 
       // Audit HDS
       await supabase.rpc('fn_ecrire_audit_safe', {
