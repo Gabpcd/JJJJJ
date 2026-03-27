@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
 import { X, Upload, Camera } from 'lucide-react';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
+import { isNative } from '@/lib/platform';
+import { toast } from 'sonner';
 
 // Types de documents sans dates de validité
 const TYPES_SANS_DATES = ['RIB', 'KBIS'];
