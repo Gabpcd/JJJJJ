@@ -239,8 +239,8 @@ export default function DashboardEtablissement() {
         (supabase.from('presences' as any) as any).select('id, missions!inner(id)', { count: 'exact', head: true }).eq('missions.etablissement_id', etablissementId),
         supabase.from('factures').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId).eq('statut', 'EMISE'),
       ]);
-      if (resO.error || resEC.error || resT.error || resTotal.error || resAssigned.error) partialError = true;
       const totalN = resTotal.count ?? 0;
+      setADejaPublie(totalN > 0);
       setKpi({
         ouvertes: resO.count ?? 0,
         enCours: resEC.count ?? 0,
