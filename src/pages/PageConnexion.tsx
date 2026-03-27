@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HeartPulse, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { HeartPulse, Mail, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -8,6 +8,15 @@ import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { FooterLegal } from '@/components/FooterLegal';
 import { Loader2 } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import { isNative } from '@/lib/platform';
+import {
+  isBiometricAvailable,
+  isBiometricEnabled,
+  authenticateWithBiometric,
+  enableBiometric,
+  getBiometricLabel,
+} from '@/lib/biometric';
+import { hapticNotification } from '@/lib/haptics';
 
 export default function PageConnexion() {
   const navigate = useNavigate();
