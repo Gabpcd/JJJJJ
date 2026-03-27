@@ -97,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (auditError) logger.error('Audit déconnexion échoué', auditError);
     }
     await supabase.auth.signOut();
+    viderCacheHorsLigne();
     Sentry.setUser(null);
   }, [user]);
 
