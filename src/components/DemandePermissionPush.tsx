@@ -23,7 +23,7 @@ export function DemandePermissionPush() {
     if (!user) return;
     if (localStorage.getItem(STORAGE_KEY)) return;
 
-    // On native, push is handled in main.tsx via Capacitor PushNotifications
+    // On native, push is handled via initNativePush after login
     if (Capacitor.isNativePlatform()) return;
 
     if (!('Notification' in window)) return;
