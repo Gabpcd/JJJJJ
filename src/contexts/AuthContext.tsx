@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
+import { viderCacheHorsLigne } from '@/lib/cacheHorsLigne';
 
 interface AppUser {
   id: string;
@@ -96,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (auditError) logger.error('Audit déconnexion échoué', auditError);
     }
     await supabase.auth.signOut();
+    viderCacheHorsLigne();
     Sentry.setUser(null);
   }, [user]);
 

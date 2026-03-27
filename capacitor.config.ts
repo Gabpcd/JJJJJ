@@ -11,8 +11,8 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
-      launchAutoHide: true,
+      launchShowDuration: 1500,
+      launchAutoHide: false, // We hide manually after session check
       backgroundColor: '#FFFFFF',
       showSpinner: false,
     },

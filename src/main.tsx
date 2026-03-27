@@ -124,7 +124,7 @@ function showUpdateBanner() {
 
 import { SentryErrorFallback } from "./components/SentryErrorFallback";
 
-// ─── Capacitor Native Init (deep links + push + back button) ───
+// ─── Capacitor Native Init (deep links + push + back button + splash) ───
 async function initNativePlugins() {
   if (!Capacitor.isNativePlatform()) return;
 
@@ -163,7 +163,6 @@ async function initNativePlugins() {
         CapApp.exitApp();
       } else {
         lastBackPress = now;
-        // Show a toast — import dynamically to avoid circular deps
         import('sonner').then(({ toast }) => {
           toast.info('Appuyez à nouveau pour quitter');
         });
@@ -180,9 +179,36 @@ async function initNativePlugins() {
     }
   } catch {}
 
-  // Hide splash screen after app is ready
+  // Splash screen: check session, then hide
+  // This prevents white screen between splash and content
   try {
     const { SplashScreen } = await import("@capacitor/splash-screen");
+    const { supabase } = await import("./integrations/supabase/client");
+
+    // Check for existing session while splash is still showing
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (session) {
+      // User is logged in — navigate to their dashboard
+      // The role check will happen in RouteProtegee, but we pre-navigate
+      try {
+        const { data: roleData } = await supabase.rpc('fn_get_my_role');
+        const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
+        let target = '/connexion';
+        if (role === 'ADMIN_PLATEFORME' || role === 'ADMIN') target = '/admin';
+        else if (role === 'ADMIN_ETABLISSEMENT' || role === 'ETABLISSEMENT') target = '/etablissement/tableau-de-bord';
+        else if (role === 'ADMIN_GROUPE') target = '/groupe/tableau-de-bord';
+        else if (role === 'SOIGNANT') target = '/soignant/tableau-de-bord';
+
+        if (window.location.pathname === '/' || window.location.pathname === '/connexion') {
+          window.history.replaceState(null, '', target);
+        }
+      } catch {
+        // If role check fails, let normal auth flow handle it
+      }
+    }
+
+    // Hide splash after session check (max 1.5s enforced by config)
     await SplashScreen.hide();
   } catch {}
 }

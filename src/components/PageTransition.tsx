@@ -1,34 +1,59 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigationType } from 'react-router-dom';
+import { getPlatform } from '@/lib/platform';
 
 interface PageTransitionProps {
   children: React.ReactNode;
 }
 
+/**
+ * Platform-adaptive page transitions:
+ * - iOS: horizontal slide (push/pop feel)
+ * - Android: fast fade (Material Design)
+ * - Web: instant or very light fade (150ms)
+ */
 export function PageTransition({ children }: PageTransitionProps) {
   const location = useLocation();
+  const navType = useNavigationType();
+  const platform = getPlatform();
   const [displayChildren, setDisplayChildren] = useState(children);
   const [phase, setPhase] = useState<'enter' | 'exit'>('enter');
   const prevKey = useRef(location.key);
+  const isBack = useRef(false);
 
   useEffect(() => {
     if (location.key !== prevKey.current) {
+      isBack.current = navType === 'POP';
       setPhase('exit');
+
+      const exitDuration = platform === 'ios' ? 250 : platform === 'android' ? 150 : 100;
+
       const timer = setTimeout(() => {
         prevKey.current = location.key;
         setDisplayChildren(children);
         setPhase('enter');
-      }, 150);
+      }, exitDuration);
       return () => clearTimeout(timer);
     } else {
       setDisplayChildren(children);
     }
-  }, [children, location.key]);
+  }, [children, location.key, navType, platform]);
+
+  // Determine CSS class based on platform and direction
+  const getTransitionClass = () => {
+    if (phase === 'exit') {
+      if (platform === 'ios') return isBack.current ? 'ios-exit-back' : 'ios-exit-forward';
+      if (platform === 'android') return 'android-exit';
+      return 'page-exit';
+    }
+    // enter
+    if (platform === 'ios') return isBack.current ? 'ios-enter-back' : 'ios-enter-forward';
+    if (platform === 'android') return 'android-enter';
+    return 'page-enter';
+  };
 
   return (
-    <div
-      className={`page-transition ${phase === 'exit' ? 'page-exit' : 'page-enter'}`}
-    >
+    <div className={`page-transition ${getTransitionClass()}`}>
       {displayChildren}
     </div>
   );

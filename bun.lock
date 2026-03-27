@@ -15,6 +15,7 @@
         "@capacitor/haptics": "^8.0.2",
         "@capacitor/ios": "^8.2.0",
         "@capacitor/keyboard": "^8.0.2",
+        "@capacitor/preferences": "^8.0.1",
         "@capacitor/push-notifications": "^8.0.3",
         "@capacitor/share": "^8.0.1",
         "@capacitor/splash-screen": "^8.0.1",
@@ -139,6 +140,8 @@
     "@capacitor/ios": ["@capacitor/ios@8.2.0", "", { "peerDependencies": { "@capacitor/core": "^8.2.0" } }, "sha512-X2/VtM4qP/R1SM0VQ5W/VotEc6PS/KTooD33EijsfAHWBdee+xmBapW8SeNLnu16wJ+tsfWlvtipaJEyfKbRKQ=="],
 
     "@capacitor/keyboard": ["@capacitor/keyboard@8.0.2", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/keyboard/-/keyboard-8.0.2.tgz", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-he6xKmTBp5AhVrWJeEi6RYkJ25FjLLdNruBU2wafpITk3Nb7UdzOj96x3K6etFuEj8/rtn9WXBTs1o2XA86A1A=="],
+
+    "@capacitor/preferences": ["@capacitor/preferences@8.0.1", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/preferences/-/preferences-8.0.1.tgz", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-T6no3ebi79XJCk91U3Jp/liJUwgBdvHR+s6vhvPkPxSuch7z3zx5Rv1bdWM6sWruNx+pViuEGqZvbfCdyBvcHQ=="],
 
     "@capacitor/push-notifications": ["@capacitor/push-notifications@8.0.3", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/push-notifications/-/push-notifications-8.0.3.tgz", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-jmBBoJvOzmzem8YoO9dQJBPFiM1bksTNAoV7yksCBN10BybAOtmBF19vFPt/jr2KGAirnPZz0ne2X0OH/rRGtg=="],
 
