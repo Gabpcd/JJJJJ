@@ -3719,6 +3719,7 @@ export type Database = {
         Args: { p_chorus_id?: string; p_facture_id: string }
         Returns: Json
       }
+      fn_detail_facture: { Args: { p_facture_id: string }; Returns: Json }
       fn_detecter_teleportation: {
         Args: {
           p_horodatage: string
@@ -3969,6 +3970,7 @@ export type Database = {
         }[]
       }
       fn_mes_exclusions_recues: { Args: never; Returns: Json }
+      fn_mes_factures: { Args: never; Returns: Json }
       fn_mes_filleuls: { Args: never; Returns: Json }
       fn_mes_missions_soignant: {
         Args: never
