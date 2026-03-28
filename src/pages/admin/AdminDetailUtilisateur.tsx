@@ -431,8 +431,8 @@ export default function AdminDetailUtilisateur() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
                 <CardContent className="pt-6 text-center">
-                  <div className="text-4xl font-bold text-primary">{soignant.score_fiabilite}</div>
-                  <p className="text-sm text-muted-foreground mt-1">Score de fiabilité / 100</p>
+                  <div className="text-4xl font-bold text-primary">{soignant.score_fiabilite != null && soignant.total_missions_terminees > 0 ? soignant.score_fiabilite : '—'}</div>
+                  <p className="text-sm text-muted-foreground mt-1">{soignant.score_fiabilite != null && soignant.total_missions_terminees > 0 ? 'Score de fiabilité / 100' : 'Pas encore d\'évaluation'}</p>
                 </CardContent>
               </Card>
               <Card>
