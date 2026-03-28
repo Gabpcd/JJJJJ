@@ -115,7 +115,8 @@ export default function LitigesEtablissement() {
       p_reponse: replyText.trim(),
     });
     setSending(false);
-    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Erreur lors de l\'envoi de la réponse.'); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    if ((data as any)?.error) { toast.error((data as any).error); return; }
     toast.success('Réponse envoyée');
     setReplyId(null);
     setReplyText('');
