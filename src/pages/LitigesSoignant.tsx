@@ -160,6 +160,7 @@ export default function LitigesSoignant() {
     charger();
   };
 
+  const renderReponses = (reponse: string | null) => {
     if (!reponse) return null;
     const entries = reponse.split('\n---\n').filter(Boolean);
     if (entries.length <= 1 && !reponse.includes('[')) {
