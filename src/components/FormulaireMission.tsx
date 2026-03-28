@@ -495,7 +495,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         </div>
 
         {/* Warning Rist */}
-        {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} ristPlafondActif={ristPlafondActif} />}
+        {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} ristPlafondActif={ristPlafondActif} estSecteurPublic={estSecteurPublic} />}
 
         {/* Urgence */}
         <div className="flex items-center justify-between">

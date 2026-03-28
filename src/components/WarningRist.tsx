@@ -8,8 +8,8 @@ interface WarningRistProps {
   estSecteurPublic?: boolean;
 }
 
-export function WarningRist({ profession, tauxSaisi, ristPlafondActif }: WarningRistProps) {
-  if (!ristPlafondActif) return null;
+export function WarningRist({ profession, tauxSaisi, ristPlafondActif, estSecteurPublic }: WarningRistProps) {
+  if (!ristPlafondActif || estSecteurPublic === false) return null;
   const plafond = PLAFONDS_RIST[profession];
   if (!plafond || tauxSaisi <= plafond) return null;
 
