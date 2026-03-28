@@ -31,6 +31,10 @@ export default function LitigesSoignant() {
   const [replyId, setReplyId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
+  const [clotureLoading, setClotureLoading] = useState<string | null>(null);
+  const [mediationId, setMediationId] = useState<string | null>(null);
+  const [mediationMsg, setMediationMsg] = useState('');
+  const [mediationSending, setMediationSending] = useState(false);
 
   // New dispute modal
   const [showNew, setShowNew] = useState(false);
