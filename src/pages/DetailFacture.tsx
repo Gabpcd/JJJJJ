@@ -475,7 +475,12 @@ export default function DetailFacture() {
               <p className="text-sm text-muted-foreground">
                 Échéance : {format(new Date(facture.date_echeance), 'dd MMMM yyyy', { locale: fr })}
               </p>
-            )}
+          )}
+          {facture.mode_paiement && (
+            <span className="text-xs text-muted-foreground ml-2">
+              Mode : {facture.mode_paiement === 'STRIPE' ? 'Carte bancaire' : facture.mode_paiement === 'VIREMENT' ? 'Virement bancaire' : facture.mode_paiement === 'SEPA' ? 'Prélèvement SEPA' : facture.mode_paiement}
+            </span>
+          )}
           </div>
           <div className="text-right">
             <p className="text-sm font-bold text-foreground">{ENTREPRISE.nom}</p>
