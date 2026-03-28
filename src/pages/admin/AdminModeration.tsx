@@ -176,26 +176,46 @@ export default function AdminModeration() {
     charger();
   }, []);
 
-  const resoudreLitige = async (id: string, statut: 'RESOLU_SOIGNANT' | 'RESOLU_ETABLISSEMENT' | 'FERME') => {
-    setActionLitigeId(id);
+  const openResolutionForm = (id: string) => {
+    setResolutionFormId(id);
+    setResolutionText('');
+    setEnFaveurDe('');
+    setAjusterHeures('');
+    setAjusterTaux('');
+  };
 
-    const resolution = statut === 'FERME'
-      ? 'Fermé par admin'
-      : `Résolu en faveur du ${statut === 'RESOLU_SOIGNANT' ? 'soignant' : 'établissement'}`;
+  const resoudreLitige = async () => {
+    if (!resolutionFormId || !resolutionText.trim() || !enFaveurDe) {
+      toast.error('Veuillez remplir la résolution et choisir en faveur de qui.');
+      return;
+    }
+    if (resolutionText.trim().length < 10) {
+      toast.error('La résolution doit contenir au moins 10 caractères.');
+      return;
+    }
+    setActionLitigeId(resolutionFormId);
 
-    const { data, error } = await supabase.rpc('fn_resoudre_litige' as any, {
-      p_litige_id: id,
-      p_statut: statut,
-      p_resolution: resolution,
+    const { data, error } = await supabase.rpc('fn_admin_resoudre_litige' as any, {
+      p_litige_id: resolutionFormId,
+      p_resolution: resolutionText.trim(),
+      p_en_faveur_de: enFaveurDe,
+      p_ajuster_heures: ajusterHeures ? parseFloat(ajusterHeures) : null,
+      p_ajuster_taux: ajusterTaux ? parseFloat(ajusterTaux) : null,
     });
 
-    if (error || (data as any)?.error) {
-      toast.error('Impossible de résoudre le litige. Veuillez réessayer.');
+    if (error) {
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
+      setActionLitigeId(null);
+      return;
+    }
+    if ((data as any)?.error) {
+      toast.error((data as any).error);
       setActionLitigeId(null);
       return;
     }
 
-    toast.success(statut === 'FERME' ? 'Litige fermé' : 'Litige résolu');
+    toast.success('Litige résolu avec succès.');
+    setResolutionFormId(null);
     await charger();
     setActionLitigeId(null);
   };
