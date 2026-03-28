@@ -3868,7 +3868,7 @@ export type Database = {
           taux_majoration_dimanche_pourcent: number
           taux_majoration_ferie_pourcent: number
           taux_majoration_nuit_pourcent: number
-          type: Database["public"]["Enums"]["type_etablissement"]
+          type: string
         }[]
       }
       fn_evaluer_etablissement: {
@@ -4015,7 +4015,7 @@ export type Database = {
           nom: string
           numero_rpps: string
           prenom: string
-          profession: Database["public"]["Enums"]["type_profession"]
+          profession: string
           rpps_verifie: boolean
           score_fiabilite: number
           telephone: string
