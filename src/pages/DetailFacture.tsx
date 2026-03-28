@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle, Clock, ChevronDown, ChevronRight, Download, MapPin } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
