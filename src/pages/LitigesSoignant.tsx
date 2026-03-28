@@ -112,6 +112,10 @@ export default function LitigesSoignant() {
 
   const repondre = async () => {
     if (!replyId || !replyText.trim()) return;
+    if (replyText.trim().length < 10) {
+      toast.error('La réponse doit contenir au moins 10 caractères.');
+      return;
+    }
     setSending(true);
     const { data, error } = await supabase.rpc('fn_repondre_litige' as any, {
       p_litige_id: replyId,
@@ -123,6 +127,33 @@ export default function LitigesSoignant() {
     setReplyId(null);
     setReplyText('');
     charger();
+  };
+
+  const renderReponses = (reponse: string | null) => {
+    if (!reponse) return null;
+    const entries = reponse.split('\n---\n').filter(Boolean);
+    if (entries.length <= 1 && !reponse.includes('[')) {
+      return <div className="text-sm"><span className="text-muted-foreground">Réponse établissement :</span> <span className="text-foreground">{reponse}</span></div>;
+    }
+    return (
+      <div className="space-y-2 mt-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fil de discussion</p>
+        {entries.map((entry, i) => {
+          const match = entry.match(/^\[(.+?)\]\s*(.+?):\s*([\s\S]*)$/);
+          if (!match) return <div key={i} className="text-sm text-foreground bg-muted/30 rounded-lg p-2">{entry}</div>;
+          const [, date, auteur, texte] = match;
+          return (
+            <div key={i} className="bg-muted/30 rounded-lg p-3 text-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-semibold text-foreground text-xs">{auteur}</span>
+                <span className="text-[10px] text-muted-foreground">{date}</span>
+              </div>
+              <p className="text-foreground">{texte.trim()}</p>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
@@ -160,7 +191,7 @@ export default function LitigesSoignant() {
 
               <div className="space-y-2 text-sm">
                 <div><span className="text-muted-foreground">Motif :</span> <span className="text-foreground">{l.motif}</span></div>
-                {l.reponse && <div><span className="text-muted-foreground">Réponse établissement :</span> <span className="text-foreground">{l.reponse}</span></div>}
+                {renderReponses(l.reponse)}
                 {l.resolution && <div className="bg-success/5 border border-success/20 rounded-lg p-2"><span className="text-muted-foreground">Résolution admin :</span> <span className="text-success font-medium">{l.resolution}</span></div>}
               </div>
 

@@ -233,15 +233,29 @@ export default function DetailFacture() {
     const [resF, resM, resE] = await Promise.all([
       supabase.from('factures').select('id, numero_facture, montant_ht, montant_tva, montant_ttc, taux_tva, nombre_missions, statut, date_emission, date_echeance, date_paiement, periode_debut, periode_fin, mode_paiement, stripe_hosted_url, chorus_pro_statut, est_secteur_public, etablissement_id, virement_reference').eq('id', id).eq('etablissement_id', user.id).single(),
       supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, profession_requise, soignant_assigne_id, soignants(nom, prenom), montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, taux_ifm, taux_icp')
-        .eq('facture_id', id)
+        .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, profession_requise, soignant_assigne_id, soignants(nom, prenom), montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, taux_ifm, taux_icp, statut')
+        .eq('etablissement_id', user.id)
+        .eq('commission_facturee', true)
+        .eq('statut', 'TERMINEE')
         .order('debut_le', { ascending: true }),
       supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie, paliers_commission(nom)').eq('id', user.id).single(),
     ]);
 
     if (resF.data) setFacture(resF.data);
-    if (resM.data) {
-      setMissions(resM.data);
+    if (resM.data && resF.data) {
+      // Filter missions by facture period
+      const fData = resF.data as any;
+      let filteredMissions = resM.data;
+      if (fData.periode_debut && fData.periode_fin) {
+        const pdStart = new Date(fData.periode_debut).getTime();
+        const pdEnd = new Date(fData.periode_fin).getTime();
+        filteredMissions = resM.data.filter((m: any) => {
+          if (!m.debut_le) return false;
+          const mDate = new Date(m.debut_le).getTime();
+          return mDate >= pdStart && mDate <= pdEnd;
+        });
+      }
+      setMissions(filteredMissions);
       // Fetch presences for all missions
       const missionIds = resM.data.map((m: any) => m.id);
       if (missionIds.length > 0) {
@@ -461,7 +475,12 @@ export default function DetailFacture() {
               <p className="text-sm text-muted-foreground">
                 Échéance : {format(new Date(facture.date_echeance), 'dd MMMM yyyy', { locale: fr })}
               </p>
-            )}
+          )}
+          {facture.mode_paiement && (
+            <span className="text-xs text-muted-foreground ml-2">
+              Mode : {facture.mode_paiement === 'STRIPE' ? 'Carte bancaire' : facture.mode_paiement === 'VIREMENT' ? 'Virement bancaire' : facture.mode_paiement === 'SEPA' ? 'Prélèvement SEPA' : facture.mode_paiement}
+            </span>
+          )}
           </div>
           <div className="text-right">
             <p className="text-sm font-bold text-foreground">{ENTREPRISE.nom}</p>

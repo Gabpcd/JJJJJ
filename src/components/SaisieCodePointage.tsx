@@ -94,7 +94,7 @@ export function SaisieCodePointage({ type, onValider }: SaisieCodePointageProps)
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Demandez le code à 6 chiffres à l'établissement
+        Entrez le code de pointage à 6 chiffres communiqué par l'établissement
       </p>
 
       <div className="flex justify-center gap-2" onPaste={handlePaste}>

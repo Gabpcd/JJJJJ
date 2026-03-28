@@ -4,7 +4,7 @@ import { fr } from 'date-fns/locale';
 import { Clock, Pause, Play } from 'lucide-react';
 import { BoutonPointage } from './BoutonPointage';
 import { SaisieCodePointage } from './SaisieCodePointage';
-import { ScannerQRPointage } from './ScannerQRPointage';
+
 import { ResultatPointage } from './ResultatPointage';
 import { BadgeCertification } from './BadgeCertification';
 import { supabase } from '@/integrations/supabase/client';
@@ -108,19 +108,6 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
               if (data?.success === false) return { success: false, message: data.error };
               onRecharger?.();
               return { success: true, message: 'Arrivée pointée par code ✅' };
-            }}
-          />
-          <ScannerQRPointage
-            type="arrivee"
-            onCodeScanne={async (code) => {
-              const { data, error } = await supabase.rpc('fn_pointer_arrivee_code' as any, {
-                p_mission_id: mission.id,
-                p_code: code,
-              });
-              if (error) return { success: false, message: extraireMessageErreur(error) };
-              if (data?.success === false) return { success: false, message: data.error };
-              onRecharger?.();
-              return { success: true, message: 'Arrivée pointée par QR ✅' };
             }}
           />
         </div>
@@ -285,19 +272,6 @@ function EnMissionBlock({ mission, presence, onPointerDepart, onRecharger }: {
               if (data?.success === false) return { success: false, message: data.error };
               onRecharger?.();
               return { success: true, message: 'Départ pointé par code ✅' };
-            }}
-          />
-          <ScannerQRPointage
-            type="depart"
-            onCodeScanne={async (code) => {
-              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
-                p_presence_id: presence.id,
-                p_code: code,
-              });
-              if (error) return { success: false, message: extraireMessageErreur(error) };
-              if (data?.success === false) return { success: false, message: data.error };
-              onRecharger?.();
-              return { success: true, message: 'Départ pointé par QR ✅' };
             }}
           />
         </>
