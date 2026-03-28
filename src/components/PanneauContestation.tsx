@@ -226,7 +226,7 @@ export function PanneauContestation({
     }
   };
 
-  const initiePar = litige?.initie_par === 'SOIGNANT' ? 'soignant' : 'établissement';
+  const initiePar = litige?.initie_par === 'SOIGNANT' ? 'du soignant' : "de l'établissement";
 
   return (
     <div className="border border-border rounded-xl overflow-hidden mt-2">
@@ -253,7 +253,7 @@ export function PanneauContestation({
               </div>
               <div className="flex-1">
                 <p className="text-xs font-semibold text-foreground">
-                  Contestation de l'{initiePar}
+                  Contestation {initiePar}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {format(new Date(litige.cree_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}

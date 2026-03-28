@@ -15,6 +15,10 @@ import { FileCheck, MessageSquare, Check, X, Eye, Mail, Phone, Building2, User, 
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
 import { useNavigate } from 'react-router-dom';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type LitigeEnrichi = {
   id: string;
@@ -92,7 +96,12 @@ export default function AdminModeration() {
   const [incoherences, setIncoherences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLitigeId, setActionLitigeId] = useState<string | null>(null);
-
+  // Resolution form state
+  const [resolutionFormId, setResolutionFormId] = useState<string | null>(null);
+  const [resolutionText, setResolutionText] = useState('');
+  const [enFaveurDe, setEnFaveurDe] = useState<string>('');
+  const [ajusterHeures, setAjusterHeures] = useState('');
+  const [ajusterTaux, setAjusterTaux] = useState('');
   const charger = async () => {
     setLoading(true);
 
@@ -167,26 +176,46 @@ export default function AdminModeration() {
     charger();
   }, []);
 
-  const resoudreLitige = async (id: string, statut: 'RESOLU_SOIGNANT' | 'RESOLU_ETABLISSEMENT' | 'FERME') => {
-    setActionLitigeId(id);
+  const openResolutionForm = (id: string) => {
+    setResolutionFormId(id);
+    setResolutionText('');
+    setEnFaveurDe('');
+    setAjusterHeures('');
+    setAjusterTaux('');
+  };
 
-    const resolution = statut === 'FERME'
-      ? 'Fermé par admin'
-      : `Résolu en faveur du ${statut === 'RESOLU_SOIGNANT' ? 'soignant' : 'établissement'}`;
+  const resoudreLitige = async () => {
+    if (!resolutionFormId || !resolutionText.trim() || !enFaveurDe) {
+      toast.error('Veuillez remplir la résolution et choisir en faveur de qui.');
+      return;
+    }
+    if (resolutionText.trim().length < 10) {
+      toast.error('La résolution doit contenir au moins 10 caractères.');
+      return;
+    }
+    setActionLitigeId(resolutionFormId);
 
-    const { data, error } = await supabase.rpc('fn_resoudre_litige' as any, {
-      p_litige_id: id,
-      p_statut: statut,
-      p_resolution: resolution,
+    const { data, error } = await supabase.rpc('fn_admin_resoudre_litige' as any, {
+      p_litige_id: resolutionFormId,
+      p_resolution: resolutionText.trim(),
+      p_en_faveur_de: enFaveurDe,
+      p_ajuster_heures: ajusterHeures ? parseFloat(ajusterHeures) : null,
+      p_ajuster_taux: ajusterTaux ? parseFloat(ajusterTaux) : null,
     });
 
-    if (error || (data as any)?.error) {
-      toast.error('Impossible de résoudre le litige. Veuillez réessayer.');
+    if (error) {
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
+      setActionLitigeId(null);
+      return;
+    }
+    if ((data as any)?.error) {
+      toast.error((data as any).error);
       setActionLitigeId(null);
       return;
     }
 
-    toast.success(statut === 'FERME' ? 'Litige fermé' : 'Litige résolu');
+    toast.success('Litige résolu avec succès.');
+    setResolutionFormId(null);
     await charger();
     setActionLitigeId(null);
   };
@@ -371,32 +400,47 @@ export default function AdminModeration() {
                       emptyLabel="Messagerie indisponible pour ce conflit."
                     />
 
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => resoudreLitige(litige.id, 'RESOLU_SOIGNANT')}
-                        className="bg-success text-success-foreground hover:bg-success/90"
-                        disabled={actionLitigeId === litige.id}
-                      >
-                        Résoudre soignant
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => resoudreLitige(litige.id, 'RESOLU_ETABLISSEMENT')}
-                        disabled={actionLitigeId === litige.id}
-                      >
-                        Résoudre établissement
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => resoudreLitige(litige.id, 'FERME')}
-                        disabled={actionLitigeId === litige.id}
-                      >
-                        Fermer
-                      </Button>
-                    </div>
+                    {resolutionFormId === litige.id ? (
+                      <div className="space-y-4 border-t border-border pt-4">
+                        <div>
+                          <Label className="mb-1.5 block">Résolution *</Label>
+                          <Textarea value={resolutionText} onChange={e => setResolutionText(e.target.value)} placeholder="Expliquez la décision prise..." rows={3} />
+                        </div>
+                        <div>
+                          <Label className="mb-1.5 block">En faveur de *</Label>
+                          <Select value={enFaveurDe} onValueChange={setEnFaveurDe}>
+                            <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="SOIGNANT">Soignant</SelectItem>
+                              <SelectItem value="ETABLISSEMENT">Établissement</SelectItem>
+                              <SelectItem value="NEUTRE">Neutre</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="mb-1.5 block">Ajuster les heures</Label>
+                            <Input type="number" step="0.25" min="0" value={ajusterHeures} onChange={e => setAjusterHeures(e.target.value)} placeholder="Heures réelles" />
+                          </div>
+                          <div>
+                            <Label className="mb-1.5 block">Ajuster le taux (€/h)</Label>
+                            <Input type="number" step="0.01" min="0" value={ajusterTaux} onChange={e => setAjusterTaux(e.target.value)} placeholder="Nouveau taux" />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={resoudreLitige} disabled={actionLitigeId === litige.id || !resolutionText.trim() || !enFaveurDe}>
+                            {actionLitigeId === litige.id ? 'Résolution…' : 'Valider la résolution'}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setResolutionFormId(null)}>Annuler</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" onClick={() => openResolutionForm(litige.id)} disabled={actionLitigeId === litige.id}>
+                          Résoudre
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
