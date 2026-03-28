@@ -5,7 +5,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Scale, MessageCircle, Send, PlusCircle } from 'lucide-react';
+import { Scale, MessageCircle, Send, PlusCircle, Handshake, ShieldAlert } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +31,10 @@ export default function LitigesEtablissement() {
   const [replyId, setReplyId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
+  const [clotureLoading, setClotureLoading] = useState<string | null>(null);
+  const [mediationId, setMediationId] = useState<string | null>(null);
+  const [mediationMsg, setMediationMsg] = useState('');
+  const [mediationSending, setMediationSending] = useState(false);
 
   // New dispute modal
   const [showNew, setShowNew] = useState(false);
@@ -129,6 +133,33 @@ export default function LitigesEtablissement() {
     charger();
   };
 
+  const demanderCloture = async (litigeId: string) => {
+    setClotureLoading(litigeId);
+    const { data, error } = await supabase.rpc('fn_cloturer_litige_mutuel' as any, { p_litige_id: litigeId });
+    setClotureLoading(null);
+    if (error || data?.error) { toast.error(data?.error || 'Erreur lors de la demande de clôture.'); return; }
+    if (data?.cloture) {
+      toast.success('Litige clôturé d\'un commun accord !');
+    } else {
+      toast.success('Votre accord a été enregistré. En attente de l\'accord de l\'autre partie.');
+    }
+    charger();
+  };
+
+  const demanderMediation = async (litigeId: string) => {
+    setMediationSending(true);
+    const { data, error } = await supabase.rpc('fn_demander_mediation_admin' as any, {
+      p_litige_id: litigeId,
+      p_message: mediationMsg.trim() || null,
+    });
+    setMediationSending(false);
+    if (error || data?.error) { toast.error(data?.error || 'Erreur lors de la demande de médiation.'); return; }
+    toast.success('Demande de médiation envoyée à l\'administrateur.');
+    setMediationId(null);
+    setMediationMsg('');
+    charger();
+  };
+
   const renderReponses = (reponse: string | null) => {
     if (!reponse) return null;
     // Parse cumulative responses (format: "[date] auteur: texte\n---\n[date] auteur: texte")
@@ -197,22 +228,72 @@ export default function LitigesEtablissement() {
               </div>
 
               {(l.statut === 'OUVERT' || l.statut === 'EN_DISCUSSION') && (
-                <div className="mt-3 pt-3 border-t border-border">
-                  {replyId === l.id ? (
-                    <div className="space-y-2">
-                      <Textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Votre réponse..." rows={3} />
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={repondre} disabled={sending} className="gap-1.5">
-                          <Send className="h-3.5 w-3.5" /> Envoyer
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setReplyId(null)}>Annuler</Button>
-                      </div>
+                <div className="mt-3 pt-3 border-t border-border space-y-3">
+                  {(l.accord_soignant || l.accord_etablissement) && (
+                    <div className="flex gap-2 text-xs">
+                      <span className={l.accord_soignant ? 'text-success' : 'text-muted-foreground'}>
+                        {l.accord_soignant ? '✅' : '⏳'} Soignant
+                      </span>
+                      <span className={l.accord_etablissement ? 'text-success' : 'text-muted-foreground'}>
+                        {l.accord_etablissement ? '✅' : '⏳'} Établissement
+                      </span>
                     </div>
-                  ) : (
-                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setReplyId(l.id)}>
-                      <MessageCircle className="h-3.5 w-3.5" /> Répondre
-                    </Button>
                   )}
+
+                  <div className="flex flex-wrap gap-2">
+                    {replyId === l.id ? (
+                      <div className="w-full space-y-2">
+                        <Textarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Votre réponse..." rows={3} />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={repondre} disabled={sending} className="gap-1.5">
+                            <Send className="h-3.5 w-3.5" /> Envoyer
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setReplyId(null)}>Annuler</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setReplyId(l.id)}>
+                          <MessageCircle className="h-3.5 w-3.5" /> Répondre
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 border-success/30 text-success hover:bg-success/10"
+                          disabled={clotureLoading === l.id}
+                          onClick={() => demanderCloture(l.id)}
+                        >
+                          <Handshake className="h-3.5 w-3.5" />
+                          {clotureLoading === l.id ? 'En cours…' : 'Accepter la clôture'}
+                        </Button>
+                        {mediationId === l.id ? (
+                          <div className="w-full space-y-2 mt-2">
+                            <Textarea
+                              value={mediationMsg}
+                              onChange={e => setMediationMsg(e.target.value)}
+                              placeholder="Expliquez pourquoi vous sollicitez un administrateur (optionnel)..."
+                              rows={2}
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => demanderMediation(l.id)} disabled={mediationSending} className="gap-1.5">
+                                <ShieldAlert className="h-3.5 w-3.5" /> {mediationSending ? 'Envoi…' : 'Envoyer la demande'}
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setMediationId(null)}>Annuler</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 border-warning/30 text-warning hover:bg-warning/10"
+                            onClick={() => setMediationId(l.id)}
+                          >
+                            <ShieldAlert className="h-3.5 w-3.5" /> Demander l'aide d'un admin
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
