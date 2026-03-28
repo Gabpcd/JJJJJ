@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle, Clock, ChevronDown, ChevronRight, Download, MapPin } from 'lucide-react';
+import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle, Clock, Download } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
@@ -9,13 +9,14 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { PaiementVirement } from '@/components/PaiementVirement';
-import { format, differenceInMinutes } from 'date-fns';
+import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 
 const STATUT_COLORS: Record<string, string> = {
   BROUILLON: 'bg-muted text-muted-foreground',
@@ -35,184 +36,23 @@ const STATUT_LABELS: Record<string, string> = {
   ANNULEE: 'Annulée',
 };
 
-const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
-const formatHeure = (d: string) => format(new Date(d), 'HH:mm', { locale: fr });
-const formatDateCourte = (d: string) => format(new Date(d), 'EEEE dd/MM/yyyy', { locale: fr });
+const MODE_LABELS: Record<string, string> = {
+  STRIPE: 'Carte bancaire',
+  VIREMENT: 'Virement bancaire',
+  SEPA: 'Prélèvement SEPA',
+};
 
-function dureeEntre(debut: string, fin: string): string {
+const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
+
+function calcHeures(debut: string, fin: string): string {
   const mins = differenceInMinutes(new Date(fin), new Date(debut));
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
+  const h = Math.floor(Math.abs(mins) / 60);
+  const m = Math.abs(mins) % 60;
   return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
 }
 
-function PresencesJour({ presences }: { presences: any[] }) {
-  if (!presences || presences.length === 0) {
-    return <p className="text-xs text-muted-foreground italic py-1">Aucun pointage enregistré</p>;
-  }
-
-  // Group by date
-  const parJour: Record<string, any[]> = {};
-  presences.forEach(p => {
-    const jour = p.pointage_arrivee_le
-      ? format(new Date(p.pointage_arrivee_le), 'yyyy-MM-dd')
-      : 'inconnu';
-    if (!parJour[jour]) parJour[jour] = [];
-    parJour[jour].push(p);
-  });
-
-  return (
-    <div className="space-y-1">
-      {Object.entries(parJour).sort().map(([jour, pList]) => (
-        <div key={jour} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs">
-          <span className="font-medium text-foreground w-36 capitalize">
-            {jour !== 'inconnu' ? formatDateCourte(jour + 'T00:00:00') : '—'}
-          </span>
-          {pList.map((p, i) => (
-            <span key={p.id} className="text-muted-foreground">
-              {p.pointage_arrivee_le ? formatHeure(p.pointage_arrivee_le) : '?'}
-              {' → '}
-              {p.pointage_depart_le ? formatHeure(p.pointage_depart_le) : '?'}
-              {p.pointage_arrivee_le && p.pointage_depart_le && (
-                <span className="text-foreground font-medium ml-1">
-                  ({dureeEntre(p.pointage_arrivee_le, p.pointage_depart_le)})
-                </span>
-              )}
-              {p.methode_pointage_arrivee && (
-                <span className="ml-1 text-[10px] text-muted-foreground/70">
-                  [{p.methode_pointage_arrivee}]
-                </span>
-              )}
-            </span>
-          ))}
-          {pList.length > 1 && (
-            <span className="text-[10px] text-primary font-medium">
-              (pause entre shifts)
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MissionDetail({ mission, presences }: { mission: any; presences: any[] }) {
-  const [open, setOpen] = useState(false);
-  const missionPresences = presences.filter(p => p.mission_id === mission.id);
-
-  const totalMaj = (mission.montant_majoration_nuit ?? 0) +
-    (mission.montant_majoration_dimanche ?? 0) +
-    (mission.montant_majoration_ferie ?? 0);
-
-  return (
-    <div className="border border-border/60 rounded-lg overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between p-3 hover:bg-muted/30 transition-colors text-left"
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            {open ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
-            <span className="font-semibold text-foreground text-sm">{mission.intitule}</span>
-            <span className="text-xs text-muted-foreground">
-              {mission.soignants ? `${(mission.soignants as any).prenom} ${(mission.soignants as any).nom}` : ''}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-1 ml-6">
-            <span>{mission.profession_requise}</span>
-            <span>{mission.debut_le ? format(new Date(mission.debut_le), 'dd/MM/yyyy', { locale: fr }) : '—'} → {mission.fin_le ? format(new Date(mission.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}</span>
-            <span>{mission.duree_heures ?? 0}h</span>
-          </div>
-        </div>
-        <div className="text-right shrink-0 ml-3">
-          <p className="text-sm font-bold text-primary">{formatEur(mission.montant_commission_ht ?? 0)}</p>
-          <p className="text-[10px] text-muted-foreground">commission HT</p>
-        </div>
-      </button>
-
-      {open && (
-        <div className="border-t border-border/60 bg-muted/20 p-4 space-y-4">
-          {/* Financial breakdown */}
-          <div>
-            <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">💶 Décomposition financière</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Taux horaire</span>
-                <span className="font-medium">{formatEur(mission.taux_horaire_base ?? 0)}/h</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Durée</span>
-                <span className="font-medium">{mission.duree_heures ?? 0}h</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Brut soignant</span>
-                <span className="font-medium">{formatEur(mission.total_brut ?? 0)}</span>
-              </div>
-              {(mission.montant_majoration_nuit ?? 0) > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">🌙 Majoration nuit</span>
-                  <span className="font-medium">{formatEur(mission.montant_majoration_nuit)}</span>
-                </div>
-              )}
-              {(mission.montant_majoration_dimanche ?? 0) > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">☀️ Majoration dimanche</span>
-                  <span className="font-medium">{formatEur(mission.montant_majoration_dimanche)}</span>
-                </div>
-              )}
-              {(mission.montant_majoration_ferie ?? 0) > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">🎌 Majoration férié</span>
-                  <span className="font-medium">{formatEur(mission.montant_majoration_ferie)}</span>
-                </div>
-              )}
-              {(mission.montant_ifm ?? 0) > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">IFM ({(mission.taux_ifm ?? 10)}%)</span>
-                  <span className="font-medium">{formatEur(mission.montant_ifm)}</span>
-                </div>
-              )}
-              {(mission.montant_icp ?? 0) > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">ICP ({(mission.taux_icp ?? 10)}%)</span>
-                  <span className="font-medium">{formatEur(mission.montant_icp)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Commission detail */}
-          <div>
-            <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">🏷️ Commission Jolene</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Taux commission</span>
-                <span className="font-medium">{mission.taux_commission ?? 15}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Commission HT</span>
-                <span className="font-semibold text-primary">{formatEur(mission.montant_commission_ht ?? 0)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">TVA commission</span>
-                <span className="font-medium">{formatEur(mission.montant_commission_tva ?? 0)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Commission TTC</span>
-                <span className="font-bold text-foreground">{formatEur(mission.montant_commission_ttc ?? 0)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Pointages */}
-          <div>
-            <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">⏱️ Pointages détaillés</h4>
-            <PresencesJour presences={missionPresences} />
-          </div>
-        </div>
-      )}
-    </div>
-  );
+function calcHeuresNum(debut: string, fin: string): number {
+  return Math.abs(differenceInMinutes(new Date(fin), new Date(debut))) / 60;
 }
 
 export default function DetailFacture() {
@@ -224,22 +64,21 @@ export default function DetailFacture() {
   const [loading, setLoading] = useState(true);
   const [facture, setFacture] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
-  const [presences, setPresences] = useState<any[]>([]);
   const [etab, setEtab] = useState<any>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const charger = async () => {
     if (!user || !id || !etablissementId) return;
+    setLoading(true);
 
-    // Use RPC for facture detail + missions
     const [resDetail, resE] = await Promise.all([
       supabase.rpc('fn_detail_facture' as any, { p_facture_id: id }),
-      supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie, paliers_commission(nom)').eq('id', etablissementId).single(),
+      supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie').eq('id', etablissementId).single(),
     ]);
 
     if (resDetail.error) {
-      toast.error('Une erreur est survenue. Veuillez réessayer.');
+      toast.error('Erreur chargement facture');
       setLoading(false);
       return;
     }
@@ -251,26 +90,7 @@ export default function DetailFacture() {
 
     const detail = resDetail.data as any;
     if (detail?.facture) setFacture(detail.facture);
-
-    const rpcMissions = Array.isArray(detail?.missions) ? detail.missions : [];
-    
-    if (rpcMissions.length > 0) {
-      // Map soignant_nom into the soignants sub-object for compatibility with MissionDetail
-      setMissions(rpcMissions.map((m: any) => ({
-        ...m,
-        soignants: m.soignant_nom ? { prenom: m.soignant_nom.split(' ')[0] || '', nom: m.soignant_nom.split(' ').slice(1).join(' ') || '' } : null,
-      })));
-
-      // Fetch presences for all missions
-      const missionIds = rpcMissions.map((m: any) => m.id).filter(Boolean);
-      if (missionIds.length > 0) {
-        const { data: presData } = await supabase.from('presences')
-          .select('id, mission_id, pointage_arrivee_le, pointage_depart_le, methode_pointage_arrivee, methode_pointage_depart, valide_par_etablissement')
-          .in('mission_id', missionIds)
-          .order('pointage_arrivee_le', { ascending: true });
-        if (presData) setPresences(presData);
-      }
-    }
+    if (Array.isArray(detail?.missions)) setMissions(detail.missions);
     if (resE.data) setEtab(resE.data);
     setLoading(false);
   };
@@ -280,12 +100,10 @@ export default function DetailFacture() {
   const genererPDF = () => {
     if (!facture || !etab) return;
     setGeneratingPdf(true);
-
     try {
       const doc = new jsPDF();
       const pw = doc.internal.pageSize.getWidth();
 
-      // Header
       doc.setFillColor(23, 162, 184);
       doc.rect(0, 0, pw, 32, 'F');
       doc.setTextColor(255, 255, 255);
@@ -296,7 +114,6 @@ export default function DetailFacture() {
       doc.setFontSize(9);
       doc.text(`Statut : ${STATUT_LABELS[facture.statut] ?? facture.statut}`, pw - 14, 16, { align: 'right' });
 
-      // Company & Client
       doc.setTextColor(0, 0, 0);
       let y = 42;
       doc.setFontSize(10);
@@ -312,104 +129,50 @@ export default function DetailFacture() {
       doc.text(etab.nom, pw - 80, y + 5);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text(`${etab.adresse_rue}`, pw - 80, y + 10);
+      doc.text(etab.adresse_rue, pw - 80, y + 10);
       doc.text(`${etab.adresse_code_postal} ${etab.adresse_ville}`, pw - 80, y + 15);
       doc.text(`SIRET : ${etab.siret}`, pw - 80, y + 20);
 
-      y += 30;
+      y += 32;
       doc.setFontSize(8);
-      const addMeta = (label: string, value: string) => {
-        doc.text(`${label} : ${value}`, 14, y);
+      if (facture.date_emission) {
+        doc.text(`Date d'émission : ${format(new Date(facture.date_emission), 'dd/MM/yyyy')}`, 14, y);
         y += 5;
-      };
-      addMeta('Date d\'émission', facture.date_emission ? format(new Date(facture.date_emission), 'dd/MM/yyyy') : '—');
-      addMeta('Échéance', facture.date_echeance ? format(new Date(facture.date_echeance), 'dd/MM/yyyy') : '—');
-      addMeta('Commission', `${etab.taux_commission_negocie ?? 15}% (${etab.paliers_commission?.nom ?? 'Standard'})`);
-
+      }
+      if (facture.date_echeance) {
+        doc.text(`Échéance : ${format(new Date(facture.date_echeance), 'dd/MM/yyyy')}`, 14, y);
+        y += 5;
+      }
       y += 5;
 
-      // Missions table
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Détail des missions', 14, y);
-      y += 3;
-
-      const tableData = missions.map(m => {
-        const sg = m.soignants as any;
-        const totalMaj = (m.montant_majoration_nuit ?? 0) + (m.montant_majoration_dimanche ?? 0) + (m.montant_majoration_ferie ?? 0);
-        return [
-          m.intitule?.substring(0, 25) || '—',
-          sg ? `${sg.prenom} ${sg.nom}` : '—',
-          m.debut_le ? format(new Date(m.debut_le), 'dd/MM') + ' → ' + (m.fin_le ? format(new Date(m.fin_le), 'dd/MM') : '') : '—',
-          `${m.duree_heures ?? 0}h`,
-          formatEur(m.taux_horaire_base ?? 0),
-          formatEur(m.total_brut ?? 0),
-          totalMaj > 0 ? formatEur(totalMaj) : '—',
-          formatEur(m.montant_commission_ht ?? 0),
-        ];
-      });
+      const tableData = missions.map(m => [
+        m.debut_le ? format(new Date(m.debut_le), 'dd/MM') : '—',
+        m.intitule?.substring(0, 25) || '—',
+        m.soignant_nom || '—',
+        m.debut_le && m.fin_le ? calcHeures(m.debut_le, m.fin_le) : '—',
+        formatEur(m.taux_horaire_base ?? 0),
+        formatEur(m.total_brut ?? 0),
+        `${m.taux_commission ?? 0}%`,
+        formatEur(m.montant_commission_ht ?? 0),
+      ]);
 
       autoTable(doc, {
         startY: y,
-        head: [['Mission', 'Soignant', 'Dates', 'Heures', 'Taux/h', 'Brut', 'Maj.', 'Com. HT']],
+        head: [['Date', 'Mission', 'Soignant', 'Heures', 'Taux/h', 'Brut', 'Tx Com.', 'Com. HT']],
         body: tableData,
         styles: { fontSize: 7, cellPadding: 2 },
         headStyles: { fillColor: [23, 162, 184], textColor: 255, fontStyle: 'bold' },
-        columnStyles: {
-          0: { cellWidth: 32 },
-          4: { halign: 'right' },
-          5: { halign: 'right' },
-          6: { halign: 'right' },
-          7: { halign: 'right', fontStyle: 'bold' },
-        },
         margin: { left: 14, right: 14 },
       });
 
       y = (doc as any).lastAutoTable?.finalY ?? y + 30;
-      y += 5;
+      y += 10;
 
-      // Pointages detail per mission
-      missions.forEach(m => {
-        const mPresences = presences.filter(p => p.mission_id === m.id);
-        if (mPresences.length === 0) return;
-
-        if (y > 260) { doc.addPage(); y = 20; }
-
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`⏱ Pointages — ${m.intitule}`, 14, y);
-        y += 4;
-
-        const presData = mPresences.map(p => [
-          p.pointage_arrivee_le ? format(new Date(p.pointage_arrivee_le), 'dd/MM/yyyy') : '—',
-          p.pointage_arrivee_le ? formatHeure(p.pointage_arrivee_le) : '—',
-          p.pointage_depart_le ? formatHeure(p.pointage_depart_le) : '—',
-          p.pointage_arrivee_le && p.pointage_depart_le ? dureeEntre(p.pointage_arrivee_le, p.pointage_depart_le) : '—',
-          p.methode_pointage_arrivee ?? '—',
-          p.valide_par_etablissement ? '✓' : '—',
-        ]);
-
-        autoTable(doc, {
-          startY: y,
-          head: [['Date', 'Arrivée', 'Départ', 'Durée', 'Méthode', 'Validé']],
-          body: presData,
-          styles: { fontSize: 6.5, cellPadding: 1.5 },
-          headStyles: { fillColor: [240, 240, 240], textColor: [60, 60, 60], fontStyle: 'bold' },
-          margin: { left: 20, right: 14 },
-        });
-
-        y = (doc as any).lastAutoTable?.finalY ?? y + 15;
-        y += 4;
-      });
-
-      // Totals
       if (y > 240) { doc.addPage(); y = 20; }
-      y += 5;
       doc.setDrawColor(200, 200, 200);
       doc.line(pw - 100, y, pw - 14, y);
       y += 8;
       doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
       doc.text('Total HT', pw - 100, y);
       doc.text(formatEur(facture.montant_ht), pw - 14, y, { align: 'right' });
       y += 6;
@@ -421,12 +184,11 @@ export default function DetailFacture() {
       doc.text('Total TTC', pw - 100, y);
       doc.text(formatEur(facture.montant_ttc), pw - 14, y, { align: 'right' });
 
-      // Footer
       const ph = doc.internal.pageSize.getHeight();
       doc.setFontSize(6.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(140, 140, 140);
-      doc.text(`${ENTREPRISE.nom} — Facture détaillée générée le ${format(new Date(), 'dd/MM/yyyy à HH:mm')}`, pw / 2, ph - 8, { align: 'center' });
+      doc.text(`${ENTREPRISE.nom} — Facture générée le ${format(new Date(), 'dd/MM/yyyy à HH:mm')}`, pw / 2, ph - 8, { align: 'center' });
 
       doc.save(`facture_${facture.numero_facture}.pdf`);
       afficherNotification({ type: 'succes', message: 'PDF téléchargé' });
@@ -439,7 +201,11 @@ export default function DetailFacture() {
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
-  if (!facture) return <LayoutApp role="ADMIN_ETABLISSEMENT"><p className="text-center text-muted-foreground py-12">Facture introuvable.</p></LayoutApp>;
+  if (!facture) return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <p className="text-center text-muted-foreground py-12">Facture introuvable.</p>
+    </LayoutApp>
+  );
 
   const canPay = facture.statut === 'EMISE' || facture.statut === 'EN_RETARD';
 
@@ -453,14 +219,14 @@ export default function DetailFacture() {
         <div className="flex flex-wrap gap-2">
           <button onClick={genererPDF} disabled={generatingPdf} className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50">
             {generatingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            PDF complet
+            PDF
           </button>
           <button onClick={() => window.print()} className="btn-secondary text-sm flex items-center gap-1.5">
             <Printer className="h-4 w-4" /> Imprimer
           </button>
           {canPay && !facture.est_secteur_public && (
             <button onClick={() => setShowCheckout(true)} className="btn-primary text-sm flex items-center gap-1.5">
-              <CreditCard className="h-4 w-4" /> Payer par carte
+              <CreditCard className="h-4 w-4" /> Payer
             </button>
           )}
         </div>
@@ -469,7 +235,7 @@ export default function DetailFacture() {
       {/* Invoice card */}
       <div className="card-base print-invoice print-full">
         {/* Header facture */}
-        <div className="flex flex-col sm:flex-row justify-between gap-4 mb-8 pb-6 border-b border-border">
+        <div className="flex flex-col sm:flex-row justify-between gap-4 mb-6 pb-4 border-b border-border">
           <div>
             <h1 className="text-2xl font-black text-foreground">FACTURE</h1>
             <p className="text-lg font-bold text-primary mt-1">{facture.numero_facture}</p>
@@ -480,12 +246,12 @@ export default function DetailFacture() {
               <p className="text-sm text-muted-foreground">
                 Échéance : {format(new Date(facture.date_echeance), 'dd MMMM yyyy', { locale: fr })}
               </p>
-          )}
-          {facture.mode_paiement && (
-            <span className="text-xs text-muted-foreground ml-2">
-              Mode : {facture.mode_paiement === 'STRIPE' ? 'Carte bancaire' : facture.mode_paiement === 'VIREMENT' ? 'Virement bancaire' : facture.mode_paiement === 'SEPA' ? 'Prélèvement SEPA' : facture.mode_paiement}
-            </span>
-          )}
+            )}
+            {facture.mode_paiement && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Mode : {MODE_LABELS[facture.mode_paiement] ?? facture.mode_paiement}
+              </p>
+            )}
           </div>
           <div className="text-right">
             <p className="text-sm font-bold text-foreground">{ENTREPRISE.nom}</p>
@@ -504,11 +270,6 @@ export default function DetailFacture() {
           <span className={`px-3 py-1 rounded-full text-xs font-bold ${STATUT_COLORS[facture.statut] ?? STATUT_COLORS.BROUILLON}`}>
             {STATUT_LABELS[facture.statut] ?? facture.statut}
           </span>
-          {etab?.paliers_commission && (
-            <span className="text-xs text-muted-foreground ml-2">
-              Commission {(etab as any).paliers_commission.nom} ({etab.taux_commission_negocie ?? 15}%)
-            </span>
-          )}
         </div>
 
         {facture.statut === 'VIREMENT_DECLARE' && (
@@ -523,20 +284,58 @@ export default function DetailFacture() {
           </div>
         )}
 
-        {/* Missions detail */}
+        {/* Missions table */}
         <h2 className="text-sm font-bold text-foreground mb-3 uppercase tracking-wider">
           📋 Missions facturées ({missions.length})
         </h2>
-        <div className="space-y-2 mb-6">
-          {missions.map(m => (
-            <MissionDetail key={m.id} mission={m} presences={presences} />
-          ))}
-        </div>
+
+        {missions.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic py-4">Aucune mission liée à cette facture.</p>
+        ) : (
+          <div className="overflow-x-auto mb-6">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Mission</TableHead>
+                  <TableHead>Soignant</TableHead>
+                  <TableHead className="text-right">Heures</TableHead>
+                  <TableHead className="text-right">Taux/h</TableHead>
+                  <TableHead className="text-right">Brut</TableHead>
+                  <TableHead className="text-right">Tx Com.</TableHead>
+                  <TableHead className="text-right">Com. HT</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {missions.map((m: any, i: number) => {
+                  const heures = m.debut_le && m.fin_le ? calcHeures(m.debut_le, m.fin_le) : '—';
+                  return (
+                    <TableRow key={m.id ?? i}>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {m.debut_le ? format(new Date(m.debut_le), 'dd/MM/yy', { locale: fr }) : '—'}
+                      </TableCell>
+                      <TableCell className="text-xs font-medium">{m.intitule || '—'}</TableCell>
+                      <TableCell className="text-xs">
+                        <div>{m.soignant_nom || '—'}</div>
+                        {m.profession && <div className="text-muted-foreground text-[10px]">{m.profession}</div>}
+                      </TableCell>
+                      <TableCell className="text-xs text-right">{heures}</TableCell>
+                      <TableCell className="text-xs text-right">{formatEur(m.taux_horaire_base ?? 0)}</TableCell>
+                      <TableCell className="text-xs text-right">{formatEur(m.total_brut ?? 0)}</TableCell>
+                      <TableCell className="text-xs text-right">{m.taux_commission ?? 0}%</TableCell>
+                      <TableCell className="text-xs text-right font-semibold text-primary">{formatEur(m.montant_commission_ht ?? 0)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         {/* Totals */}
         <div className="border-t-2 border-border pt-4 space-y-2 max-w-xs ml-auto">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Total HT</span>
+            <span className="text-muted-foreground">Total commissions HT</span>
             <span className="font-medium text-foreground">{formatEur(facture.montant_ht ?? 0)}</span>
           </div>
           <div className="flex justify-between text-sm">
@@ -547,6 +346,12 @@ export default function DetailFacture() {
             <span className="text-foreground">Total TTC</span>
             <span className="text-primary">{formatEur(facture.montant_ttc ?? 0)}</span>
           </div>
+          {facture.mode_paiement && (
+            <div className="flex justify-between text-xs pt-1">
+              <span className="text-muted-foreground">Mode de paiement</span>
+              <span className="text-foreground">{MODE_LABELS[facture.mode_paiement] ?? facture.mode_paiement}</span>
+            </div>
+          )}
         </div>
 
         {/* Payment info */}
@@ -559,14 +364,12 @@ export default function DetailFacture() {
           </div>
         )}
 
-        {/* Payment actions for unpaid */}
         {canPay && !facture.est_secteur_public && (
           <div className="mt-6 no-print">
             <PaiementVirement facture={facture} onUpdate={charger} />
           </div>
         )}
 
-        {/* Footer */}
         <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
           <p>{ENTREPRISE.nom} — Plateforme de mise en relation soignants-établissements</p>
           <p>Facture détaillée — Commission sur missions terminées</p>
