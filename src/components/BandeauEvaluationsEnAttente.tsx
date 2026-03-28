@@ -29,7 +29,7 @@ export function BandeauEvaluationsEnAttente({ role }: Props) {
       // Get terminated missions for this user
       let query = supabase
         .from('missions')
-        .select('id, intitule, soignant_assigne_id, etablissement_id')
+        .select('id, intitule, soignant_assigne_id, etablissement_id, etablissements(nom)')
         .eq('statut', 'TERMINEE')
         .limit(50);
 
