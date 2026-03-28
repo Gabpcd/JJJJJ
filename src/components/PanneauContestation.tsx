@@ -226,7 +226,7 @@ export function PanneauContestation({
     }
   };
 
-  const initiePar = litige?.initie_par === 'SOIGNANT' ? 'soignant' : 'établissement';
+  const initiePar = litige?.initie_par === 'SOIGNANT' ? 'du soignant' : "de l'établissement";
 
   return (
     <div className="border border-border rounded-xl overflow-hidden mt-2">
