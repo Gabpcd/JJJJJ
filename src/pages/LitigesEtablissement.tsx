@@ -296,9 +296,6 @@ export default function LitigesEtablissement() {
                   </div>
                 </div>
               )}
-                  )}
-                </div>
-              )}
             </div>
           ))}
         </div>
