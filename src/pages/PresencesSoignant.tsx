@@ -187,7 +187,6 @@ export default function PresencesSoignant() {
         id, mission_id, soignant_id, pointage_arrivee_le, pointage_depart_le,
         valide_par_etablissement, valide_le,
         methode_pointage_arrivee, methode_pointage_depart,
-        code_arrivee, code_depart,
         missions(id, intitule, etablissement_id, debut_le, fin_le, statut)
       `)
       .eq('soignant_id', user!.id)

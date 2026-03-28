@@ -380,8 +380,8 @@ export default function ProfilSoignant() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">RPPS</label>
-                <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} disabled={rppsVerifie} className={`input-base ${rppsVerifie ? 'bg-muted cursor-not-allowed' : ''}`} />
+                <label className="text-sm font-medium text-foreground mb-1.5 block">RPPS <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
+                <input value={form.rpps} readOnly className="input-base bg-muted cursor-not-allowed" />
                 {rppsVerifie && <p className="text-[10px] text-success mt-1">✓ Vérifié via l'Annuaire Santé</p>}
               </div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">ADELI</label><input value={form.adeli} onChange={e => maj('adeli', e.target.value)} className="input-base" /></div>

@@ -51,7 +51,9 @@ export function BandeauPaiementDeclare() {
       const { error } = await (supabase.from('paiements_soignant' as any) as any)
         .update({
           statut: confirme ? 'CONFIRME' : 'CONTESTE',
-          traite_le: new Date().toISOString(),
+          confirme_par_soignant: confirme,
+          confirme_par_soignant_le: new Date().toISOString(),
+          conteste: !confirme,
         })
         .eq('id', paiementId);
 
