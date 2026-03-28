@@ -166,7 +166,6 @@ export default function PresencesEtablissement() {
     });
     if (error) {
       toast.error('Erreur lors de la création du litige.');
-      console.error(error);
       return;
     }
     if (data?.error) { toast.error(data.error); return; }
