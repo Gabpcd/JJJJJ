@@ -606,7 +606,7 @@ export default function ProfilEtablissement() {
         <button
           onClick={async () => {
             try {
-              const { data, error } = await supabase.rpc('fn_rgpd_exporter_rate_limited' as any);
+              const { data, error } = await supabase.rpc('fn_exporter_rgpd_etablissement' as any);
               if (error) throw error;
               const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
               const url = URL.createObjectURL(blob);

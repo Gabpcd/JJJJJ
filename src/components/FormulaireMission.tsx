@@ -61,21 +61,23 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [contratNonValide, setContratNonValide] = useState(false);
 
   // Load rist_plafond_actif + commission info + type + siret validation
+  const [estSecteurPublic, setEstSecteurPublic] = useState(false);
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom), siret, contrat_valide').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom), siret, contrat_valide, est_secteur_public').eq('id', user.id).single().then(({ data }) => {
       if (data) {
+        setEstSecteurPublic(data.est_secteur_public === true);
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
-        setRistPlafondActif(data.rist_plafond_actif === true || typesPublics.includes(data.type));
+        const isPublic = data.est_secteur_public === true || typesPublics.includes(data.type);
+        setRistPlafondActif(data.rist_plafond_actif === true && isPublic);
         setTauxCommission(data.taux_commission_negocie ?? 15);
         setEtablissementType(data.type);
         if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);
-        // Luhn check on siret
-        const s = data.siret || '';
-        if (!/^\d{14}$/.test(s) || /^0+$/.test(s)) { setSiretInvalide(true); return; }
-        let sum = 0;
-        for (let i = 0; i < 14; i++) { let d = parseInt(s[i], 10); if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; } sum += d; }
-        if (sum % 10 !== 0) setSiretInvalide(true);
+        // SIRET check: must exist and not be empty
+        const s = (data.siret || '').trim();
+        if (!s || s.length === 0) {
+          setSiretInvalide(true);
+        }
         // Check contrat validation
         if (!data.contrat_valide) setContratNonValide(true);
       }
@@ -333,7 +335,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       {siretInvalide && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-          <span>Complétez votre SIRET pour publier des missions. <Link to="/etablissement/profil" className="text-primary hover:underline font-medium">Aller au profil →</Link></span>
+          <span>Veuillez compléter votre SIRET dans votre profil avant de publier une mission. <Link to="/etablissement/profil" className="text-primary hover:underline font-medium">Aller au profil →</Link></span>
         </div>
       )}
 
@@ -493,7 +495,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         </div>
 
         {/* Warning Rist */}
-        {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} ristPlafondActif={ristPlafondActif} />}
+        {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} ristPlafondActif={ristPlafondActif} estSecteurPublic={estSecteurPublic} />}
 
         {/* Urgence */}
         <div className="flex items-center justify-between">
