@@ -53,8 +53,9 @@ export function EvaluationPostMission({ missionId, evalueId, typeEvaluateur, nom
       if (error) throw error;
       toast.success('Merci pour votre évaluation !');
       onTermine();
-    } catch {
-      toast.error("Erreur lors de l'envoi de l'évaluation");
+    } catch (err: any) {
+      const msg = err?.message || err?.details || "Erreur lors de l'envoi de l'évaluation";
+      toast.error(msg);
     } finally {
       setEnvoi(false);
     }

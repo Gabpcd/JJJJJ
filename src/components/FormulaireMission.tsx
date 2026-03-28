@@ -76,8 +76,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         // SIRET check: must exist and not be empty
         const s = (data.siret || '').trim();
         setSiretInvalide(!s || s.length === 0);
-        // Check contrat validation
-        if (!data.contrat_valide) setContratNonValide(true);
+        // Check contrat validation — explicit reset
+        setContratNonValide(data.contrat_valide !== true);
       }
     });
   }, [user]);
