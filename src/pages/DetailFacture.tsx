@@ -233,37 +233,25 @@ export default function DetailFacture() {
     const [resF, resM, resE] = await Promise.all([
       supabase.from('factures').select('id, numero_facture, montant_ht, montant_tva, montant_ttc, taux_tva, nombre_missions, statut, date_emission, date_echeance, date_paiement, periode_debut, periode_fin, mode_paiement, stripe_hosted_url, chorus_pro_statut, est_secteur_public, etablissement_id, virement_reference').eq('id', id).eq('etablissement_id', etablissementId).single(),
       supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, profession_requise, soignant_assigne_id, montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, taux_ifm, taux_icp, statut')
+        .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, profession_requise, soignant_assigne_id, montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, taux_ifm, taux_icp, statut, facture_id')
         .eq('etablissement_id', etablissementId)
-        .eq('commission_facturee', true)
-        .eq('statut', 'TERMINEE')
+        .eq('facture_id', id!)
         .order('debut_le', { ascending: true }),
       supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie, paliers_commission(nom)').eq('id', etablissementId).single(),
     ]);
 
     if (resF.data) setFacture(resF.data);
     if (resM.data && resF.data) {
-      // Filter missions by facture period
-      const fData = resF.data as any;
-      let filteredMissions = resM.data as any[];
-      if (fData.periode_debut && fData.periode_fin) {
-        const pdStart = new Date(fData.periode_debut).getTime();
-        const pdEnd = new Date(fData.periode_fin).getTime();
-        filteredMissions = (resM.data as any[]).filter((m: any) => {
-          if (!m.debut_le) return false;
-          const mDate = new Date(m.debut_le).getTime();
-          return mDate >= pdStart && mDate <= pdEnd;
-        });
-      }
+      const allMissions = resM.data as any[];
 
       // Fetch soignant names separately (no FK on missions table)
-      const sgIds = [...new Set(filteredMissions.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
+      const sgIds = [...new Set(allMissions.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
       let sgMap: Record<string, any> = {};
       if (sgIds.length > 0) {
         const { data: sgData } = await supabase.from('soignants').select('id, prenom, nom').in('id', sgIds);
         if (sgData) for (const s of sgData) sgMap[s.id] = s;
       }
-      setMissions(filteredMissions.map((m: any) => ({
+      setMissions(allMissions.map((m: any) => ({
         ...m,
         soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
       })));
