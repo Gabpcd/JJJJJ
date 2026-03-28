@@ -384,9 +384,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {getLabelProfession(m.soignants.profession)} ·{' '}
-                      <span className={`font-semibold ${scoreColor(m.soignants.score_fiabilite || 0)}`}>
-                        ⭐ {m.soignants.score_fiabilite || 0}/100 ({scoreLabel(m.soignants.score_fiabilite || 0)})
-                      </span>
+                      {m.soignants.score_fiabilite != null && m.soignants.total_missions_terminees > 0 ? (
+                        <span className={`font-semibold ${scoreColor(m.soignants.score_fiabilite)}`}>
+                          ⭐ {m.soignants.score_fiabilite}/100 ({scoreLabel(m.soignants.score_fiabilite)})
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Pas encore d'évaluation</span>
+                      )}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {m.soignants.telephone ? `📱 ${m.soignants.telephone}` : '📞 Numéro disponible le jour de la mission'}
