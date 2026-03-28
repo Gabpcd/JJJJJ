@@ -72,7 +72,7 @@ export function BandeauEvaluationsEnAttente({ role }: Props) {
 
       // Enrich with names
       if (role === 'SOIGNANT') {
-        // Need establishment names
+        // Get establishment names from joined data first, fallback to fetchEtablissementsSafe
         const etabIds = [...new Set(nonEvaluees.map(m => m.etablissement_id))];
         const safeMap = await fetchEtablissementsSafe(etabIds);
         const etabMap: Record<string, string> = {};
@@ -80,7 +80,7 @@ export function BandeauEvaluationsEnAttente({ role }: Props) {
 
         setMissions(nonEvaluees.map(m => ({
           ...m,
-          nom_evalue: etabMap[m.etablissement_id] || 'Établissement',
+          nom_evalue: (m as any).etablissements?.nom || etabMap[m.etablissement_id] || 'Établissement inconnu',
         })));
       } else {
         // Need soignant names

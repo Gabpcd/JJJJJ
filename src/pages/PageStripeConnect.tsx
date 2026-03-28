@@ -63,8 +63,14 @@ export default function PageStripeConnect() {
     setActionLoading(true);
     const { data, error } = await supabase.functions.invoke('stripe-connect-onboard');
     if (error || !data?.url) {
-      capturerErreurSentry(error || new Error('No onboard URL'), 'PageStripeConnect', 'stripe_onboard');
-      toast.error('Erreur lors de la connexion à Stripe');
+      // Check for 403 (not in production / not LIBERAL)
+      const is403 = data?.error?.includes('libéral') || error?.message?.includes('403') || error?.status === 403;
+      if (is403) {
+        toast.info('La connexion Stripe sera disponible au lancement. Votre compte sera activé automatiquement.');
+      } else {
+        capturerErreurSentry(error || new Error('No onboard URL'), 'PageStripeConnect', 'stripe_onboard');
+        toast.error('Erreur lors de la connexion à Stripe. Veuillez réessayer.');
+      }
       setActionLoading(false);
       return;
     }
