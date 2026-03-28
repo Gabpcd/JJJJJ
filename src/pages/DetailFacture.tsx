@@ -88,9 +88,22 @@ export default function DetailFacture() {
       return;
     }
 
-    const detail = resDetail.data as any;
+    let detail = resDetail.data as any;
+    // Handle case where RPC returns stringified JSON
+    if (typeof detail === 'string') {
+      try { detail = JSON.parse(detail); } catch { /* keep as-is */ }
+    }
+    // Handle case where data is wrapped in an array
+    if (Array.isArray(detail) && detail.length === 1) {
+      detail = detail[0];
+    }
+    console.log('[DetailFacture] RPC response:', JSON.stringify(detail)?.substring(0, 500));
     if (detail?.facture) setFacture(detail.facture);
-    if (Array.isArray(detail?.missions)) setMissions(detail.missions);
+    if (Array.isArray(detail?.missions)) {
+      setMissions(detail.missions);
+    } else {
+      console.warn('[DetailFacture] missions not found in response, keys:', detail ? Object.keys(detail) : 'null');
+    }
     if (resE.data) setEtab(resE.data);
     setLoading(false);
   };
