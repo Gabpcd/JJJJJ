@@ -70,11 +70,11 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
           <Trophy className="h-3.5 w-3.5" />
           {info.palier_actuel}
         </span>
-        <span className="text-2xl font-extrabold text-foreground">{fmt(info.montant_estime)}</span>
+        <span className="text-2xl font-extrabold text-foreground">{fmt(montant)}</span>
       </div>
 
       <p className="text-sm text-muted-foreground mb-4">
-        {info.missions_annee} mission{info.missions_annee > 1 ? 's' : ''} cette année · {fmt(info.commissions_ht)} de commissions HT
+        {info.missions_annee} mission{info.missions_annee > 1 ? 's' : ''} cette année · {fmt(commissions)} de commissions HT
       </p>
 
       {/* Barre de progression */}

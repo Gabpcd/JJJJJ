@@ -396,10 +396,8 @@ export default function DashboardEtablissement() {
         <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />
       )}
 
-      {/* Carte BFA Info — only if RPC returns data */}
-      {etab && (
-        <CarteBFAInfo etablissementId={etablissementId!} />
-      )}
+      {/* Carte BFA Info — only if eligible (component hides itself if not) */}
+      {etab && <CarteBFAInfo etablissementId={etablissementId!} />}
 
       <div>
         <div className="flex items-center justify-between mb-3">
