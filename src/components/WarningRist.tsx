@@ -5,6 +5,7 @@ interface WarningRistProps {
   profession: string;
   tauxSaisi: number;
   ristPlafondActif: boolean;
+  estSecteurPublic?: boolean;
 }
 
 export function WarningRist({ profession, tauxSaisi, ristPlafondActif }: WarningRistProps) {
