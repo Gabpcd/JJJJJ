@@ -35,7 +35,13 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
   useEffect(() => {
     const load = async () => {
       const { data, error } = await supabase.rpc('fn_bfa_info' as any);
-      if (!error && data && (data as any).eligible !== false) setInfo(data as any);
+      if (!error && data) {
+        const d = data as any;
+        // Hide BFA if not yet eligible (0 missions and no active tier)
+        if (d.missions_annee > 0 || (d.palier_actuel && d.palier_actuel !== 'Pas encore éligible')) {
+          setInfo(d);
+        }
+      }
       setLoading(false);
     };
     load();
