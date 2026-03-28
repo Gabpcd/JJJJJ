@@ -192,7 +192,7 @@ export default function PresencesSoignant() {
         missions(id, intitule, etablissement_id, debut_le, fin_le, statut)
       `)
       .eq('soignant_id', user!.id)
-      .order('created_at', { ascending: false })
+      .order('cree_le', { ascending: false })
       .limit(100);
 
     let allList = allPresences || [];
