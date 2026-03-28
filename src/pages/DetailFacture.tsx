@@ -242,27 +242,16 @@ export default function DetailFacture() {
 
     if (resF.data) setFacture(resF.data);
     if (resM.data && resF.data) {
-      // Filter missions by facture period
-      const fData = resF.data as any;
-      let filteredMissions = resM.data as any[];
-      if (fData.periode_debut && fData.periode_fin) {
-        const pdStart = new Date(fData.periode_debut).getTime();
-        const pdEnd = new Date(fData.periode_fin).getTime();
-        filteredMissions = (resM.data as any[]).filter((m: any) => {
-          if (!m.debut_le) return false;
-          const mDate = new Date(m.debut_le).getTime();
-          return mDate >= pdStart && mDate <= pdEnd;
-        });
-      }
+      const allMissions = resM.data as any[];
 
       // Fetch soignant names separately (no FK on missions table)
-      const sgIds = [...new Set(filteredMissions.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
+      const sgIds = [...new Set(allMissions.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
       let sgMap: Record<string, any> = {};
       if (sgIds.length > 0) {
         const { data: sgData } = await supabase.from('soignants').select('id, prenom, nom').in('id', sgIds);
         if (sgData) for (const s of sgData) sgMap[s.id] = s;
       }
-      setMissions(filteredMissions.map((m: any) => ({
+      setMissions(allMissions.map((m: any) => ({
         ...m,
         soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
       })));
