@@ -3520,6 +3520,16 @@ export type Database = {
         Args: { p_etablissement_id: string; p_motif?: string }
         Returns: Json
       }
+      fn_admin_resoudre_litige: {
+        Args: {
+          p_ajuster_heures?: number
+          p_ajuster_taux?: number
+          p_en_faveur_de?: string
+          p_litige_id: string
+          p_resolution: string
+        }
+        Returns: Json
+      }
       fn_admin_stripe_connect_stats: { Args: never; Returns: Json }
       fn_admin_suspendre_utilisateur: {
         Args: { p_id: string; p_suspendre?: boolean; p_table: string }
