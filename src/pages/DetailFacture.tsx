@@ -13,6 +13,7 @@ import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
