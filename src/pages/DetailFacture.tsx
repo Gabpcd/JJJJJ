@@ -282,7 +282,7 @@ export default function DetailFacture() {
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, [user, id]);
+  useEffect(() => { charger(); }, [user, id, etablissementId]);
 
   const genererPDF = () => {
     if (!facture || !etab) return;
