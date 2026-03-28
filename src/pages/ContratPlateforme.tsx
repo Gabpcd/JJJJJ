@@ -60,7 +60,7 @@ export default function ContratPlateforme() {
 
     setUploading(true);
     try {
-      const path = `contrats-plateforme/${user.id}/contrat.pdf`;
+      const path = `${user.id}/contrats-plateforme/contrat.pdf`;
       const { error: uploadError } = await supabase.storage
         .from('jolene-documents')
         .upload(path, file, { upsert: true, contentType: 'application/pdf' });
