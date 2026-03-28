@@ -35,7 +35,7 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
   useEffect(() => {
     const load = async () => {
       const { data, error } = await supabase.rpc('fn_bfa_info' as any);
-      if (!error && data) setInfo(data as any);
+      if (!error && data && (data as any).eligible !== false) setInfo(data as any);
       setLoading(false);
     };
     load();
@@ -43,6 +43,9 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
 
   if (loading || !info) return null;
 
+  // Guard against NaN values
+  const montant = isNaN(info.montant_estime) ? 0 : info.montant_estime;
+  const commissions = isNaN(info.commissions_ht) ? 0 : info.commissions_ht;
   const progressMax = info.prochain_palier_missions_min ?? info.missions_annee;
   const progressPct = progressMax > 0 ? Math.min(Math.round((info.missions_annee / progressMax) * 100), 100) : 100;
 
@@ -67,11 +70,11 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
           <Trophy className="h-3.5 w-3.5" />
           {info.palier_actuel}
         </span>
-        <span className="text-2xl font-extrabold text-foreground">{fmt(info.montant_estime)}</span>
+        <span className="text-2xl font-extrabold text-foreground">{fmt(montant)}</span>
       </div>
 
       <p className="text-sm text-muted-foreground mb-4">
-        {info.missions_annee} mission{info.missions_annee > 1 ? 's' : ''} cette année · {fmt(info.commissions_ht)} de commissions HT
+        {info.missions_annee} mission{info.missions_annee > 1 ? 's' : ''} cette année · {fmt(commissions)} de commissions HT
       </p>
 
       {/* Barre de progression */}
