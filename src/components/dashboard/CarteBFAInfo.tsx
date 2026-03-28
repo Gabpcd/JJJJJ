@@ -49,10 +49,20 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
 
   if (loading || !info) return null;
 
-  // Guard against NaN values
-  const montant = isNaN(info.montant_estime) ? 0 : info.montant_estime;
-  const commissions = isNaN(info.commissions_ht) ? 0 : info.commissions_ht;
-  const progressMax = info.prochain_palier_missions_min ?? info.missions_annee;
+  // Map RPC field names
+  const montant = isNaN(info.montant_bfa_estime) ? 0 : (info.montant_bfa_estime ?? 0);
+  const commissions = isNaN(info.commissions_ht_annee) ? 0 : (info.commissions_ht_annee ?? 0);
+  const prochainPalier = info.prochain_palier;
+  const missionsManquantes = info.missions_manquantes ?? 0;
+  const palierActuel = info.palier_actuel ?? 'Aucun';
+
+  // Find prochain palier missions_min from paliers array
+  const prochainPalierData = prochainPalier && info.paliers
+    ? info.paliers.find((p: any) => p.nom === prochainPalier)
+    : null;
+  const prochainMissionsMin = prochainPalierData?.missions_min ?? info.missions_annee;
+
+  const progressMax = prochainMissionsMin > 0 ? prochainMissionsMin : info.missions_annee;
   const progressPct = progressMax > 0 ? Math.min(Math.round((info.missions_annee / progressMax) * 100), 100) : 100;
 
   const palierColors: Record<string, string> = {
@@ -72,9 +82,9 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
 
       {/* Palier actuel + montant */}
       <div className="flex items-baseline gap-3 mb-1">
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold text-white ${palierColors[info.palier_actuel] || 'bg-muted-foreground'}`}>
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold text-white ${palierColors[palierActuel] || 'bg-muted-foreground'}`}>
           <Trophy className="h-3.5 w-3.5" />
-          {info.palier_actuel}
+          {palierActuel}
         </span>
         <span className="text-2xl font-extrabold text-foreground">{fmt(montant)}</span>
       </div>
@@ -84,11 +94,11 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
       </p>
 
       {/* Barre de progression */}
-      {info.prochain_palier_nom && info.missions_restantes != null && info.missions_restantes > 0 && (
+      {prochainPalier && missionsManquantes > 0 && (
         <div className="mb-4">
           <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-            <span>{info.missions_annee} / {info.prochain_palier_missions_min}</span>
-            <span className="font-medium">Palier {info.prochain_palier_nom}</span>
+            <span>{info.missions_annee} / {prochainMissionsMin}</span>
+            <span className="font-medium">Palier {prochainPalier}</span>
           </div>
           <div className="relative h-2.5 rounded-full bg-muted overflow-hidden">
             <div
@@ -97,7 +107,7 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
             />
           </div>
           <p className="text-xs text-muted-foreground mt-1.5">
-            Encore <span className="font-bold text-amber-600">{info.missions_restantes}</span> mission{info.missions_restantes > 1 ? 's' : ''} manquante{info.missions_restantes > 1 ? 's' : ''}
+            Encore <span className="font-bold text-amber-600">{missionsManquantes}</span> mission{missionsManquantes > 1 ? 's' : ''} manquante{missionsManquantes > 1 ? 's' : ''}
           </p>
         </div>
       )}
@@ -105,33 +115,36 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
       {/* Liste des paliers */}
       {info.paliers && info.paliers.length > 0 && (
         <div className="space-y-1.5 mb-4">
-          {info.paliers.map((p) => (
-            <div
-              key={p.nom}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-                p.est_actuel
-                  ? 'bg-primary/10 border border-primary/20 font-semibold text-foreground'
-                  : p.atteint
-                  ? 'bg-muted/50 text-foreground'
-                  : 'text-muted-foreground'
-              }`}
-            >
-              <div className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 ${
-                p.atteint || p.est_actuel ? 'bg-primary text-primary-foreground' : 'border-2 border-border'
-              }`}>
-                {(p.atteint || p.est_actuel) && <Check className="h-3 w-3" />}
+          {info.paliers.map((p: any) => {
+            const estActuel = p.nom === palierActuel;
+            return (
+              <div
+                key={p.nom}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                  estActuel
+                    ? 'bg-primary/10 border border-primary/20 font-semibold text-foreground'
+                    : p.atteint
+                    ? 'bg-muted/50 text-foreground'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                <div className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 ${
+                  p.atteint || estActuel ? 'bg-primary text-primary-foreground' : 'border-2 border-border'
+                }`}>
+                  {(p.atteint || estActuel) && <Check className="h-3 w-3" />}
+                </div>
+                <span className="flex-1">{p.nom}</span>
+                <span className="text-xs opacity-70">
+                  {p.missions_max ? `${p.missions_min}-${p.missions_max}` : `${p.missions_min}+`} missions
+                </span>
+                <span className="font-medium">{p.taux_bfa ?? p.taux}%</span>
               </div>
-              <span className="flex-1">{p.nom}</span>
-              <span className="text-xs opacity-70">
-                {p.missions_max ? `${p.missions_min}-${p.missions_max}` : `${p.missions_min}+`} missions
-              </span>
-              <span className="font-medium">{p.taux}%</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {!info.prochain_palier_nom && (
+      {!prochainPalier && (
         <p className="text-xs text-success font-medium mb-3">🎉 Palier maximum atteint !</p>
       )}
 
