@@ -564,8 +564,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         )}
 
         {/* Estimation (récurrent) */}
-        {modeRecurrent && creneaux.length > 0 && taux > 0 && recurrenceValidation && (() => {
-          const totalH = creneaux.reduce((s, c) => s + c.dureeHeures, 0);
+        {modeRecurrent && taux > 0 && recurrenceValidation && recurrenceValidation.totalHebdo > 0 && (() => {
+          const totalH = creneaux.length > 0
+            ? creneaux.reduce((s, c) => s + c.dureeHeures, 0)
+            : recurrenceValidation.totalHebdo;
+          const label = creneaux.length > 0
+            ? `${creneaux.length} créneau${creneaux.length > 1 ? 'x' : ''} — ${totalH.toFixed(0)}h total`
+            : `${recurrenceValidation.totalHebdo}h / semaine (renseignez les dates pour le total)`;
           return (
             <div className="bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5">
               <p className="font-bold text-foreground mb-3">💰 Estimation de rémunération (série)</p>
@@ -575,11 +580,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                   <span className="font-medium">{taux.toFixed(2)} €/h</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{creneaux.length} créneau{creneaux.length > 1 ? 'x' : ''} — {totalH.toFixed(0)}h total</span>
+                  <span className="text-muted-foreground">{label}</span>
                   <span className="font-medium">~{totalH.toFixed(0)}h</span>
                 </div>
                 <div className="border-t border-border pt-2 flex justify-between">
-                  <span className="text-muted-foreground">Base brute estimée (série)</span>
+                  <span className="text-muted-foreground">Base brute estimée</span>
                   <span className="font-bold text-primary">~{(taux * totalH).toFixed(2)} €</span>
                 </div>
               </div>
@@ -588,9 +593,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         })()}
 
         {/* Encart commission dégressive */}
-        {taux > 0 && dureeEstimee > 0 && !modeRecurrent && (
+        {taux > 0 && ((dureeEstimee > 0 && !modeRecurrent) || (modeRecurrent && recurrenceValidation && recurrenceValidation.totalHebdo > 0)) && (
           <EncartCommissionDegressif
-            netEstime={taux * dureeEstimee * 1.21}
+            netEstime={taux * (modeRecurrent ? (recurrenceValidation?.totalHebdo ?? 0) : dureeEstimee) * 1.21}
             tauxActuel={tauxCommission}
             palierNom={palierNom}
           />
