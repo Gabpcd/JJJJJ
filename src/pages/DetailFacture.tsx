@@ -13,6 +13,7 @@ import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -230,50 +231,38 @@ export default function DetailFacture() {
 
   const charger = async () => {
     if (!user || !id || !etablissementId) return;
-    const [resF, resM, resPeriod, resE] = await Promise.all([
-      supabase.from('factures').select('id, numero_facture, montant_ht, montant_tva, montant_ttc, taux_tva, nombre_missions, statut, date_emission, date_echeance, date_paiement, periode_debut, periode_fin, mode_paiement, stripe_hosted_url, chorus_pro_statut, est_secteur_public, etablissement_id, virement_reference').eq('id', id).eq('etablissement_id', etablissementId).single(),
-      supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, profession_requise, soignant_assigne_id, montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, taux_ifm, taux_icp, statut, facture_id')
-        .eq('etablissement_id', etablissementId)
-        .eq('facture_id', id!)
-        .order('debut_le', { ascending: true }),
-      // Also fetch by period as fallback
-      supabase.from('factures').select('periode_debut, periode_fin').eq('id', id!).maybeSingle(),
+
+    // Use RPC for facture detail + missions
+    const [resDetail, resE] = await Promise.all([
+      supabase.rpc('fn_detail_facture' as any, { p_facture_id: id }),
       supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie, paliers_commission(nom)').eq('id', etablissementId).single(),
     ]);
 
-    if (resF.data) setFacture(resF.data);
-    
-    let allMissions = (resM.data || []) as any[];
-    
-    // Fallback: if no missions found by facture_id, search by period
-    if (allMissions.length === 0 && resPeriod.data?.periode_debut && resPeriod.data?.periode_fin) {
-      const { data: periodMissions } = await supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, profession_requise, soignant_assigne_id, montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, taux_ifm, taux_icp, statut, facture_id')
-        .eq('etablissement_id', etablissementId)
-        .eq('statut', 'TERMINEE')
-        .gte('debut_le', resPeriod.data.periode_debut)
-        .lte('debut_le', resPeriod.data.periode_fin + 'T23:59:59')
-        .order('debut_le', { ascending: true });
-      if (periodMissions && periodMissions.length > 0) allMissions = periodMissions;
+    if (resDetail.error) {
+      toast.error('Une erreur est survenue. Veuillez réessayer.');
+      setLoading(false);
+      return;
+    }
+    if ((resDetail.data as any)?.error) {
+      toast.error((resDetail.data as any).error);
+      setLoading(false);
+      return;
     }
 
-    if (allMissions.length > 0 && resF.data) {
+    const detail = resDetail.data as any;
+    if (detail?.facture) setFacture(detail.facture);
 
-      // Fetch soignant names separately (no FK on missions table)
-      const sgIds = [...new Set(allMissions.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
-      let sgMap: Record<string, any> = {};
-      if (sgIds.length > 0) {
-        const { data: sgData } = await supabase.from('soignants').select('id, prenom, nom').in('id', sgIds);
-        if (sgData) for (const s of sgData) sgMap[s.id] = s;
-      }
-      setMissions(allMissions.map((m: any) => ({
+    const rpcMissions = Array.isArray(detail?.missions) ? detail.missions : [];
+    
+    if (rpcMissions.length > 0) {
+      // Map soignant_nom into the soignants sub-object for compatibility with MissionDetail
+      setMissions(rpcMissions.map((m: any) => ({
         ...m,
-        soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
+        soignants: m.soignant_nom ? { prenom: m.soignant_nom.split(' ')[0] || '', nom: m.soignant_nom.split(' ').slice(1).join(' ') || '' } : null,
       })));
 
       // Fetch presences for all missions
-      const missionIds = allMissions.map((m: any) => m.id);
+      const missionIds = rpcMissions.map((m: any) => m.id).filter(Boolean);
       if (missionIds.length > 0) {
         const { data: presData } = await supabase.from('presences')
           .select('id, mission_id, pointage_arrivee_le, pointage_depart_le, methode_pointage_arrivee, methode_pointage_depart, valide_par_etablissement')

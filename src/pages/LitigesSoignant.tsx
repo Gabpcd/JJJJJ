@@ -96,8 +96,8 @@ export default function LitigesSoignant() {
       p_motif: newMotif.trim(),
     });
     setCreating(false);
-    if (error) { toast.error('Erreur lors de la création du litige.'); logger.error('fn_ouvrir_litige_rate_limited error', error); return; }
-    if (data?.error) { toast.error(data.error); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); logger.error('fn_ouvrir_litige_rate_limited error', error); return; }
+    if ((data as any)?.error) { toast.error((data as any).error); return; }
     toast.success('Litige ouvert avec succès.');
     setShowNew(false);
     charger();
@@ -115,7 +115,8 @@ export default function LitigesSoignant() {
       p_reponse: replyText.trim(),
     });
     setSending(false);
-    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Erreur lors de l\'envoi de la réponse.'); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    if ((data as any)?.error) { toast.error((data as any).error); return; }
     toast.success('Réponse envoyée');
     setReplyId(null);
     setReplyText('');
@@ -126,7 +127,8 @@ export default function LitigesSoignant() {
     setClotureLoading(litigeId);
     const { data, error } = await supabase.rpc('fn_cloturer_litige_mutuel' as any, { p_litige_id: litigeId });
     setClotureLoading(null);
-    if (error || data?.error) { toast.error(data?.error || 'Erreur lors de la demande de clôture.'); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    if ((data as any)?.error) { toast.error((data as any).error); return; }
     if (data?.cloture) {
       toast.success('Litige clôturé d\'un commun accord !');
     } else {
@@ -142,7 +144,8 @@ export default function LitigesSoignant() {
       p_message: mediationMsg.trim() || null,
     });
     setMediationSending(false);
-    if (error || data?.error) { toast.error(data?.error || 'Erreur lors de la demande de médiation.'); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    if ((data as any)?.error) { toast.error((data as any).error); return; }
     toast.success('Demande de médiation envoyée à l\'administrateur.');
     setMediationId(null);
     setMediationMsg('');
