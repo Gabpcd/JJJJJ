@@ -127,7 +127,8 @@ export default function LitigesSoignant() {
     setClotureLoading(litigeId);
     const { data, error } = await supabase.rpc('fn_cloturer_litige_mutuel' as any, { p_litige_id: litigeId });
     setClotureLoading(null);
-    if (error || data?.error) { toast.error(data?.error || 'Erreur lors de la demande de clôture.'); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    if ((data as any)?.error) { toast.error((data as any).error); return; }
     if (data?.cloture) {
       toast.success('Litige clôturé d\'un commun accord !');
     } else {
