@@ -133,6 +133,33 @@ export default function LitigesEtablissement() {
     charger();
   };
 
+  const demanderCloture = async (litigeId: string) => {
+    setClotureLoading(litigeId);
+    const { data, error } = await supabase.rpc('fn_cloturer_litige_mutuel' as any, { p_litige_id: litigeId });
+    setClotureLoading(null);
+    if (error || data?.error) { toast.error(data?.error || 'Erreur lors de la demande de clôture.'); return; }
+    if (data?.cloture) {
+      toast.success('Litige clôturé d\'un commun accord !');
+    } else {
+      toast.success('Votre accord a été enregistré. En attente de l\'accord de l\'autre partie.');
+    }
+    charger();
+  };
+
+  const demanderMediation = async (litigeId: string) => {
+    setMediationSending(true);
+    const { data, error } = await supabase.rpc('fn_demander_mediation_admin' as any, {
+      p_litige_id: litigeId,
+      p_message: mediationMsg.trim() || null,
+    });
+    setMediationSending(false);
+    if (error || data?.error) { toast.error(data?.error || 'Erreur lors de la demande de médiation.'); return; }
+    toast.success('Demande de médiation envoyée à l\'administrateur.');
+    setMediationId(null);
+    setMediationMsg('');
+    charger();
+  };
+
   const renderReponses = (reponse: string | null) => {
     if (!reponse) return null;
     // Parse cumulative responses (format: "[date] auteur: texte\n---\n[date] auteur: texte")
