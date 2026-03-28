@@ -253,7 +253,7 @@ export function PanneauContestation({
               </div>
               <div className="flex-1">
                 <p className="text-xs font-semibold text-foreground">
-                  Contestation de l'{initiePar}
+                  Contestation {initiePar}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {format(new Date(litige.cree_le), "d MMM yyyy 'à' HH:mm", { locale: fr })}
