@@ -47,7 +47,7 @@ function computeRealHoursFromPresences(presences: any[]): number | null {
 function MethodeBadge({ methode }: { methode: string | null }) {
   if (!methode) return <Badge variant="outline" className="text-[10px]"><Wifi className="h-3 w-3 mr-1" />GPS</Badge>;
   if (methode === 'CODE') return <Badge variant="outline" className="text-[10px] border-primary/30 text-primary"><Keyboard className="h-3 w-3 mr-1" />Code</Badge>;
-  if (methode === 'QR') return <Badge variant="outline" className="text-[10px] border-primary/30 text-primary"><QrCode className="h-3 w-3 mr-1" />QR Code</Badge>;
+  if (methode === 'QR') return <Badge variant="outline" className="text-[10px] border-primary/30 text-primary"><Keyboard className="h-3 w-3 mr-1" />Code</Badge>;
   return <Badge variant="outline" className="text-[10px]">{methode}</Badge>;
 }
 

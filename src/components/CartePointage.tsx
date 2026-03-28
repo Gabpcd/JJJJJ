@@ -274,19 +274,6 @@ function EnMissionBlock({ mission, presence, onPointerDepart, onRecharger }: {
               return { success: true, message: 'Départ pointé par code ✅' };
             }}
           />
-          <ScannerQRPointage
-            type="depart"
-            onCodeScanne={async (code) => {
-              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
-                p_presence_id: presence.id,
-                p_code: code,
-              });
-              if (error) return { success: false, message: extraireMessageErreur(error) };
-              if (data?.success === false) return { success: false, message: data.error };
-              onRecharger?.();
-              return { success: true, message: 'Départ pointé par QR ✅' };
-            }}
-          />
         </>
       )}
       {enPause && (

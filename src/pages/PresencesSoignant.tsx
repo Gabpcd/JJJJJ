@@ -367,7 +367,7 @@ export default function PresencesSoignant() {
     if (!m) return '—';
     if (m === 'GPS') return '📍 GPS';
     if (m === 'CODE') return '🔢 Code';
-    if (m === 'QR') return '📱 QR Code';
+    if (m === 'QR') return '🔢 Code';
     return m;
   };
 
