@@ -149,9 +149,13 @@ export function ListeCandidatures({ missionId, modePaiement, onAccepted, onError
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.soignant.bio}</p>
                   )}
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className={`badge-base text-[10px] ${scoreBadge(c.soignant?.score_fiabilite || 0)}`}>
-                      ⭐ {c.soignant?.score_fiabilite || 0}/100
-                    </span>
+                    {c.soignant?.score_fiabilite != null && c.soignant?.total_missions_terminees > 0 ? (
+                      <span className={`badge-base text-[10px] ${scoreBadge(c.soignant.score_fiabilite)}`}>
+                        ⭐ {c.soignant.score_fiabilite}/100
+                      </span>
+                    ) : (
+                      <span className="badge-base text-[10px] bg-muted text-muted-foreground">Pas encore d'évaluation</span>
+                    )}
                     {c.soignant?.annees_experience > 0 && (
                       <span className="text-[10px] text-muted-foreground">{c.soignant.annees_experience} ans d'exp.</span>
                     )}

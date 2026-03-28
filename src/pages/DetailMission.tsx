@@ -384,9 +384,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {getLabelProfession(m.soignants.profession)} ·{' '}
-                      <span className={`font-semibold ${scoreColor(m.soignants.score_fiabilite || 0)}`}>
-                        ⭐ {m.soignants.score_fiabilite || 0}/100 ({scoreLabel(m.soignants.score_fiabilite || 0)})
-                      </span>
+                      {m.soignants.score_fiabilite != null && m.soignants.total_missions_terminees > 0 ? (
+                        <span className={`font-semibold ${scoreColor(m.soignants.score_fiabilite)}`}>
+                          ⭐ {m.soignants.score_fiabilite}/100 ({scoreLabel(m.soignants.score_fiabilite)})
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Pas encore d'évaluation</span>
+                      )}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {m.soignants.telephone ? `📱 ${m.soignants.telephone}` : '📞 Numéro disponible le jour de la mission'}
@@ -547,9 +551,13 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                             </div>
                           </td>
                           <td className="py-3">
-                            <span className={`badge-base text-[10px] ${scoreBadgeClasses(r.score_fiabilite || 0)}`}>
-                              {r.score_fiabilite || 0}/100
-                            </span>
+                            {r.score_fiabilite != null && r.score_fiabilite > 0 ? (
+                              <span className={`badge-base text-[10px] ${scoreBadgeClasses(r.score_fiabilite)}`}>
+                                {r.score_fiabilite}/100
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">—</span>
+                            )}
                           </td>
                           <td className="py-3 text-muted-foreground">{r.distance_km != null ? `${r.distance_km.toFixed(1)} km` : '—'}</td>
                           <td className="py-3 text-muted-foreground">{r.missions_etablissement ?? 0}</td>

@@ -929,6 +929,7 @@ export type Database = {
           couleur_theme: string | null
           cree_le: string | null
           delai_paiement_jours: number | null
+          description: string | null
           email_contact: string
           est_secteur_public: boolean | null
           finess: string | null
@@ -936,6 +937,7 @@ export type Database = {
           finess_verifie_le: string | null
           formule_abonnement: string | null
           groupe_sante_id: string | null
+          horaires_ouverture: Json | null
           id: string
           logo_url: string | null
           missions_mois_precedent: number | null
@@ -987,6 +989,7 @@ export type Database = {
           couleur_theme?: string | null
           cree_le?: string | null
           delai_paiement_jours?: number | null
+          description?: string | null
           email_contact: string
           est_secteur_public?: boolean | null
           finess?: string | null
@@ -994,6 +997,7 @@ export type Database = {
           finess_verifie_le?: string | null
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
+          horaires_ouverture?: Json | null
           id?: string
           logo_url?: string | null
           missions_mois_precedent?: number | null
@@ -1045,6 +1049,7 @@ export type Database = {
           couleur_theme?: string | null
           cree_le?: string | null
           delai_paiement_jours?: number | null
+          description?: string | null
           email_contact?: string
           est_secteur_public?: boolean | null
           finess?: string | null
@@ -1052,6 +1057,7 @@ export type Database = {
           finess_verifie_le?: string | null
           formule_abonnement?: string | null
           groupe_sante_id?: string | null
+          horaires_ouverture?: Json | null
           id?: string
           logo_url?: string | null
           missions_mois_precedent?: number | null
@@ -3601,6 +3607,10 @@ export type Database = {
         Returns: Json
       }
       fn_charger_demo_investisseur: { Args: never; Returns: Json }
+      fn_cloturer_litige_mutuel: {
+        Args: { p_litige_id: string }
+        Returns: Json
+      }
       fn_codes_pointage_mission: {
         Args: { p_mission_id: string }
         Returns: Json
@@ -3639,6 +3649,10 @@ export type Database = {
           p_nom: string
           p_permissions?: string[]
         }
+        Returns: Json
+      }
+      fn_creer_litige: {
+        Args: { p_mission_id: string; p_motif?: string; p_presence_id?: string }
         Returns: Json
       }
       fn_creer_mission: {
@@ -3695,6 +3709,10 @@ export type Database = {
       }
       fn_declarer_virement: {
         Args: { p_facture_id: string; p_reference: string }
+        Returns: Json
+      }
+      fn_demander_mediation_admin: {
+        Args: { p_litige_id: string; p_message?: string }
         Returns: Json
       }
       fn_deposer_chorus: {
@@ -3875,6 +3893,7 @@ export type Database = {
         }[]
       }
       fn_exporter_mes_donnees: { Args: never; Returns: Json }
+      fn_exporter_rgpd_etablissement: { Args: never; Returns: Json }
       fn_generer_code_parrainage: { Args: never; Returns: string }
       fn_generer_facture: { Args: { p_mission_id: string }; Returns: Json }
       fn_generer_facture_mensuelle: {
@@ -4093,6 +4112,25 @@ export type Database = {
           p_rayon_deplacement_km?: number
           p_type_exercice?: string
           p_urgence_rayon_km?: number
+        }
+        Returns: Json
+      }
+      fn_modifier_profil_etablissement: {
+        Args: {
+          p_adresse_code_postal?: string
+          p_adresse_departement?: string
+          p_adresse_lat?: number
+          p_adresse_lng?: number
+          p_adresse_rue?: string
+          p_adresse_ville?: string
+          p_couleur_theme?: string
+          p_description?: string
+          p_email_contact?: string
+          p_finess?: string
+          p_horaires_ouverture?: Json
+          p_mode_paiement_commission?: string
+          p_nom?: string
+          p_telephone_contact?: string
         }
         Returns: Json
       }
@@ -4346,6 +4384,10 @@ export type Database = {
       fn_user_id_pour_etablissement: {
         Args: { p_etablissement_id: string }
         Returns: string
+      }
+      fn_valider_alerte_presence: {
+        Args: { p_presence_id: string }
+        Returns: Json
       }
       fn_valider_etablissement: {
         Args: { p_etablissement_id: string; p_motif?: string; p_statut: string }
