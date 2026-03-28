@@ -96,7 +96,12 @@ export default function AdminModeration() {
   const [incoherences, setIncoherences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLitigeId, setActionLitigeId] = useState<string | null>(null);
-
+  // Resolution form state
+  const [resolutionFormId, setResolutionFormId] = useState<string | null>(null);
+  const [resolutionText, setResolutionText] = useState('');
+  const [enFaveurDe, setEnFaveurDe] = useState<string>('');
+  const [ajusterHeures, setAjusterHeures] = useState('');
+  const [ajusterTaux, setAjusterTaux] = useState('');
   const charger = async () => {
     setLoading(true);
 
