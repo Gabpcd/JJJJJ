@@ -89,13 +89,9 @@ export default function ContratPlateforme() {
   const telechargerContrat = async () => {
     if (!contrat?.contrat_url) return;
     try {
-      // If it's a storage path, create a signed URL
-      if (!contrat.contrat_url.startsWith('http')) {
-        const { data } = await supabase.storage.from('jolene-documents').createSignedUrl(contrat.contrat_url, 300);
-        if (data?.signedUrl) window.open(data.signedUrl, '_blank');
-      } else {
-        window.open(contrat.contrat_url, '_blank');
-      }
+      const { data } = await supabase.storage.from('jolene-documents').createSignedUrl(contrat.contrat_url, 300);
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+      else toast.error('Impossible de générer le lien de téléchargement.');
     } catch {
       toast.error('Impossible de télécharger le contrat.');
     }
