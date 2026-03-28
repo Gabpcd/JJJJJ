@@ -71,10 +71,8 @@ export default function ContratPlateforme() {
       });
       if (rpcError) throw rpcError;
 
-      // Trigger AI verification (non-blocking)
-      supabase.functions.invoke('verify-document', {
-        body: { document_id: `contrat-plateforme-${user.id}` },
-      }).catch(() => { /* verification non bloquante */ });
+      // Contract verification is done manually by admin via fn_admin_valider_contrat_etablissement
+      // No AI verification for platform contracts (not in documents_soignants table)
 
       toast.success('Contrat téléversé — en cours de vérification.');
       await charger();

@@ -41,16 +41,19 @@ export function EvaluationPostMission({ missionId, evalueId, typeEvaluateur, nom
     if (!user || note === 0) return;
     setEnvoi(true);
     try {
-      const { error } = await supabase.from('evaluations').insert({
-        mission_id: missionId,
-        evaluateur_id: user.id,
-        evalue_id: evalueId,
-        type_evaluateur: typeEvaluateur,
-        note,
-        commentaire: commentaire.trim() ? sanitizeText(commentaire.trim()) : null,
-        visible: false,
+      // Use the appropriate RPC based on evaluator type
+      const rpcName = typeEvaluateur === 'ETABLISSEMENT' ? 'fn_evaluer_soignant' : 'fn_evaluer_etablissement';
+      const { data, error } = await supabase.rpc(rpcName as any, {
+        p_mission_id: missionId,
+        p_note: note,
+        p_commentaire: commentaire.trim() ? sanitizeText(commentaire.trim()) : null,
       });
       if (error) throw error;
+      if (data && typeof data === 'object' && (data as any).error) {
+        toast.error((data as any).error);
+        setEnvoi(false);
+        return;
+      }
       toast.success('Merci pour votre évaluation !');
       onTermine();
     } catch (err: any) {

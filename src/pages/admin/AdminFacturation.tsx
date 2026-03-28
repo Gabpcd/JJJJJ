@@ -45,11 +45,19 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
   useEffect(() => {
     supabase
       .from('missions')
-      .select('id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_commission_ht, montant_commission_ttc, soignant_assigne_id, soignants(nom, prenom)')
+      .select('id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_commission_ht, montant_commission_ttc, soignant_assigne_id')
       .eq('facture_id', factureId)
       .order('debut_le', { ascending: true })
-      .then(({ data }) => {
-        setMissions((data as any[]) || []);
+      .then(async ({ data }) => {
+        const mList = (data as any[]) || [];
+        // Fetch soignant names separately (no FK on missions)
+        const sgIds = [...new Set(mList.map(m => m.soignant_assigne_id).filter(Boolean))];
+        let sgMap: Record<string, any> = {};
+        if (sgIds.length > 0) {
+          const { data: sgData } = await supabase.from('soignants').select('id, prenom, nom').in('id', sgIds);
+          if (sgData) for (const s of sgData) sgMap[s.id] = s;
+        }
+        setMissions(mList.map(m => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
         setLoading(false);
       });
   }, [factureId]);
