@@ -242,8 +242,20 @@ export default function DetailFacture() {
     ]);
 
     if (resF.data) setFacture(resF.data);
-    if (resM.data) {
-      setMissions(resM.data);
+    if (resM.data && resF.data) {
+      // Filter missions by facture period
+      const fData = resF.data as any;
+      let filteredMissions = resM.data;
+      if (fData.periode_debut && fData.periode_fin) {
+        const pdStart = new Date(fData.periode_debut).getTime();
+        const pdEnd = new Date(fData.periode_fin).getTime();
+        filteredMissions = resM.data.filter((m: any) => {
+          if (!m.debut_le) return false;
+          const mDate = new Date(m.debut_le).getTime();
+          return mDate >= pdStart && mDate <= pdEnd;
+        });
+      }
+      setMissions(filteredMissions);
       // Fetch presences for all missions
       const missionIds = resM.data.map((m: any) => m.id);
       if (missionIds.length > 0) {
