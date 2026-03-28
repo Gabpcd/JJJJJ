@@ -18,7 +18,10 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 const STATUT_COLORS: Record<string, string> = {
   OUVERT: 'bg-warning/10 text-warning',
+  EN_COURS: 'bg-primary/10 text-primary',
   EN_DISCUSSION: 'bg-primary/10 text-primary',
+  EN_MEDIATION: 'bg-info/10 text-info',
+  CONTESTEE: 'bg-warning/10 text-warning',
   RESOLU: 'bg-success/10 text-success',
   FERME: 'bg-muted text-muted-foreground',
 };
