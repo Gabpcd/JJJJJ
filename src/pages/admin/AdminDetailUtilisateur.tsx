@@ -510,7 +510,7 @@ export default function AdminDetailUtilisateur() {
               <Card>
                 <CardHeader><CardTitle className="text-sm">Statistiques</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                  <ProfileRow label="Score fiabilité" value={`${soignant.score_fiabilite ?? 0}/100`} />
+                  <ProfileRow label="Score fiabilité" value={soignant.score_fiabilite != null && soignant.total_missions_terminees > 0 ? `${soignant.score_fiabilite}/100` : 'Pas encore d\'évaluation'} />
                   <ProfileRow label="Missions terminées" value={soignant.total_missions_terminees ?? 0} />
                   <ProfileRow label="Missions annulées" value={soignant.total_missions_annulees ?? 0} />
                   <ProfileRow label="Heures cumulées" value={`${soignant.heures_cumulees ?? 0}h`} />

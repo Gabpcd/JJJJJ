@@ -215,7 +215,7 @@ export default function AdminUtilisateurs() {
                       <TableCell className="font-medium">{s.prenom} {s.nom}</TableCell>
                       <TableCell>{s.profession}</TableCell>
                       <TableCell>{s.rpps_verifie ? <Badge className="bg-success text-success-foreground text-[10px]">Vérifié</Badge> : <Badge variant="outline" className="text-[10px]">Non</Badge>}</TableCell>
-                      <TableCell>{s.score_fiabilite}/100</TableCell>
+                      <TableCell>{s.score_fiabilite != null && s.total_missions_terminees > 0 ? `${s.score_fiabilite}/100` : '—'}</TableCell>
                       <TableCell>{s.total_missions_terminees}</TableCell>
                       <TableCell>{s.supprime_le ? <Badge variant="destructive" className="text-[10px]">Suspendu</Badge> : <Badge className="bg-success text-success-foreground text-[10px]">Actif</Badge>}</TableCell>
                       <TableCell className="text-right space-x-1 whitespace-nowrap">

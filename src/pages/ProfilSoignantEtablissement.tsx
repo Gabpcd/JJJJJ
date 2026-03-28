@@ -165,7 +165,7 @@ export default function ProfilSoignantEtablissement() {
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Score de fiabilité</span>
-                  <span className="font-bold text-foreground">{soignant.score_fiabilite ?? 0}/100</span>
+                  <span className="font-bold text-foreground">{soignant.score_fiabilite != null && soignant.total_missions_terminees > 0 ? `${soignant.score_fiabilite}/100` : 'Pas encore d\'évaluation'}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Évaluations</span>
