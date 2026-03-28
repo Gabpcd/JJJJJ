@@ -37,7 +37,7 @@ export function BandeauPaiementDeclare() {
 
       setPaiements(data.map((p: any) => ({
         id: p.id,
-        montant: p.montant,
+        montant: p.montant_net,
         mission_id: p.mission_id,
         etablissement_nom: etabMap[p.etablissement_id] || 'Établissement',
       })));
