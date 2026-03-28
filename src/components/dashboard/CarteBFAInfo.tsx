@@ -2,25 +2,16 @@ import { useState, useEffect } from 'react';
 import { Trophy, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
-interface PalierBFA {
-  nom: string;
-  missions_min: number;
-  missions_max: number | null;
-  taux: number;
-  atteint: boolean;
-  est_actuel: boolean;
-}
-
 interface BFAInfo {
   palier_actuel: string;
-  taux_bfa: number;
-  montant_estime: number;
+  montant_bfa_estime: number;
   missions_annee: number;
-  commissions_ht: number;
-  prochain_palier_nom: string | null;
-  prochain_palier_missions_min: number | null;
-  missions_restantes: number | null;
-  paliers: PalierBFA[];
+  commissions_ht_annee: number;
+  prochain_palier: string | null;
+  missions_manquantes: number;
+  bfa_verse: boolean;
+  montant_verse: number | null;
+  paliers: any[];
   explication: string;
 }
 
