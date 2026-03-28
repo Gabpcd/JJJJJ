@@ -35,7 +35,7 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
   useEffect(() => {
     const load = async () => {
       const { data, error } = await supabase.rpc('fn_bfa_info' as any);
-      if (!error && data) setInfo(data as any);
+      if (!error && data && (data as any).eligible !== false) setInfo(data as any);
       setLoading(false);
     };
     load();
