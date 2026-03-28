@@ -336,11 +336,20 @@ export default function ProfilSoignant() {
           <h2 className="text-base font-semibold text-foreground mb-4">Identité</h2>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Prénom</label><input value={form.prenom} onChange={e => maj('prenom', e.target.value)} className="input-base" /></div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" /></div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Prénom <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
+                <input value={form.prenom} readOnly className="input-base bg-muted cursor-not-allowed" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Nom <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
+                <input value={form.nom} readOnly className="input-base bg-muted cursor-not-allowed" />
+              </div>
             </div>
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} className="input-base" /></div>
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance</label><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className="input-base" /></div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
+              <input type="date" value={form.dateNaissance} readOnly className="input-base bg-muted cursor-not-allowed" />
+            </div>
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email</label><input value={email} disabled className="input-base bg-muted cursor-not-allowed" /></div>
           </div>
         </div>
@@ -371,8 +380,8 @@ export default function ProfilSoignant() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">RPPS</label>
-                <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} disabled={rppsVerifie} className={`input-base ${rppsVerifie ? 'bg-muted cursor-not-allowed' : ''}`} />
+                <label className="text-sm font-medium text-foreground mb-1.5 block">RPPS <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
+                <input value={form.rpps} readOnly className="input-base bg-muted cursor-not-allowed" />
                 {rppsVerifie && <p className="text-[10px] text-success mt-1">✓ Vérifié via l'Annuaire Santé</p>}
               </div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">ADELI</label><input value={form.adeli} onChange={e => maj('adeli', e.target.value)} className="input-base" /></div>
