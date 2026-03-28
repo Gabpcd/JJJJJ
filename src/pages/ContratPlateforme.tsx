@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { supabase } from '@/integrations/supabase/client';
 import { capturerErreurSentry } from '@/lib/sentry';
-import { FileText, Upload, CheckCircle, Clock, Download, ExternalLink, Loader2 } from 'lucide-react';
+import { FileText, Upload, CheckCircle, Clock, Download, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,14 +24,14 @@ interface ContratInfo {
 
 export default function ContratPlateforme() {
   usePageTitle('Contrat plateforme');
-  const { user } = useAuth();
+  const { user, etablissementId } = useEtablissementScope();
   const [contrat, setContrat] = useState<ContratInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const charger = async () => {
-    if (!user) return;
+    if (!user || !etablissementId) return;
     try {
       const { data, error } = await supabase.rpc('fn_mon_contrat_plateforme' as any);
       if (error) throw error;
@@ -43,11 +43,11 @@ export default function ContratPlateforme() {
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, [user]);
+  useEffect(() => { charger(); }, [user, etablissementId]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user || !etablissementId) return;
 
     if (file.type !== 'application/pdf') {
       toast.error('Seuls les fichiers PDF sont acceptés.');
@@ -60,21 +60,29 @@ export default function ContratPlateforme() {
 
     setUploading(true);
     try {
-      const path = `${user.id}/contrats-plateforme/contrat.pdf`;
+      // Use etablissementId for storage path (RLS requires user ID as first path segment)
+      const path = `${etablissementId}/contrats-plateforme/contrat_${Date.now()}.pdf`;
       const { error: uploadError } = await supabase.storage
         .from('jolene-documents')
         .upload(path, file, { upsert: true, contentType: 'application/pdf' });
       if (uploadError) throw uploadError;
 
-      const { error: rpcError } = await supabase.rpc('fn_uploader_contrat_plateforme' as any, {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('fn_uploader_contrat_plateforme' as any, {
         p_contrat_url: path,
       });
       if (rpcError) throw rpcError;
+      if ((rpcData as any)?.error) throw new Error((rpcData as any).error);
 
-      // Contract verification is done manually by admin via fn_admin_valider_contrat_etablissement
-      // No AI verification for platform contracts (not in documents_soignants table)
+      // Try AI verification (non-blocking)
+      try {
+        await supabase.functions.invoke('verify-document', {
+          body: { document_id: `contrat-plateforme-${etablissementId}`, path, type: 'CONTRAT_PLATEFORME' },
+        });
+      } catch {
+        // AI verification is optional — admin validates manually
+      }
 
-      toast.success('Contrat téléversé — en cours de vérification.');
+      toast.success('Contrat téléversé — en cours de vérification par notre équipe.');
       await charger();
     } catch (err) {
       capturerErreurSentry(err, 'ContratPlateforme', 'upload');
@@ -176,9 +184,23 @@ export default function ContratPlateforme() {
                 </span>.
                 Il est en cours de vérification par notre équipe. Vous serez notifié dès qu'il sera validé.
               </p>
-              <Button variant="outline" onClick={telechargerContrat} className="gap-2">
-                <ExternalLink className="h-4 w-4" /> Voir le contrat téléversé
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={telechargerContrat} className="gap-2">
+                  <ExternalLink className="h-4 w-4" /> Voir le contrat téléversé
+                </Button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleUpload}
+                  className="hidden"
+                  aria-label="Remplacer le contrat"
+                />
+                <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} className="gap-2">
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {uploading ? 'Envoi…' : 'Remplacer le contrat'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -226,9 +248,23 @@ export default function ContratPlateforme() {
                 </p>
               </div>
             </div>
-            <Button variant="outline" onClick={telechargerContrat} className="gap-2">
-              <Download className="h-4 w-4" /> Télécharger le contrat
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={telechargerContrat} className="gap-2">
+                <Download className="h-4 w-4" /> Télécharger le contrat
+              </Button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/pdf"
+                onChange={handleUpload}
+                className="hidden"
+                aria-label="Remplacer le contrat"
+              />
+              <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} className="gap-2">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {uploading ? 'Envoi…' : 'Remplacer le contrat'}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

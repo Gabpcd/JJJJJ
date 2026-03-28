@@ -85,25 +85,11 @@ export default function LitigesSoignant() {
       toast.error('Veuillez sélectionner une mission et saisir un motif.');
       return;
     }
-    setCreating(true);
-    const mission = missionsTerminees.find(m => m.id === selectedMissionId);
-    if (!mission) { setCreating(false); return; }
-
-    // Get or create a presence for this mission
-    const { data: presenceData } = await supabase
-      .from('presences')
-      .select('id')
-      .eq('mission_id', selectedMissionId)
-      .eq('soignant_id', user!.id)
-      .limit(1)
-      .maybeSingle();
-
-    const presenceId = presenceData?.id;
-    if (!presenceId) {
-      toast.error('Aucune présence trouvée pour cette mission. Un pointage est nécessaire pour ouvrir un litige.');
-      setCreating(false);
+    if (newMotif.trim().length < 10) {
+      toast.error('Le motif doit contenir au moins 10 caractères.');
       return;
     }
+    setCreating(true);
 
     const { data, error } = await supabase.rpc('fn_ouvrir_litige_rate_limited' as any, {
       p_mission_id: selectedMissionId,
