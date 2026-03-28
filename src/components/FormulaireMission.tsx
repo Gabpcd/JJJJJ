@@ -75,9 +75,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);
         // SIRET check: must exist and not be empty
         const s = (data.siret || '').trim();
-        if (!s || s.length === 0) {
-          setSiretInvalide(true);
-        }
+        setSiretInvalide(!s || s.length === 0);
         // Check contrat validation
         if (!data.contrat_valide) setContratNonValide(true);
       }
