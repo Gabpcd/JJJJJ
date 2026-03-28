@@ -66,15 +66,17 @@ export default function ContratPlateforme() {
         .upload(path, file, { upsert: true, contentType: 'application/pdf' });
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('jolene-documents').getPublicUrl(path);
-      const contratUrl = urlData?.publicUrl || path;
-
       const { error: rpcError } = await supabase.rpc('fn_uploader_contrat_plateforme' as any, {
-        p_contrat_url: contratUrl,
+        p_contrat_url: path,
       });
       if (rpcError) throw rpcError;
 
-      toast.success('Contrat téléversé avec succès. Il sera vérifié par notre équipe.');
+      // Trigger AI verification (non-blocking)
+      supabase.functions.invoke('verify-document', {
+        body: { document_id: `contrat-plateforme-${user.id}` },
+      }).catch(() => { /* verification non bloquante */ });
+
+      toast.success('Contrat téléversé — en cours de vérification.');
       await charger();
     } catch (err) {
       capturerErreurSentry(err, 'ContratPlateforme', 'upload');
