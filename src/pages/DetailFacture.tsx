@@ -237,6 +237,8 @@ export default function DetailFacture() {
         .eq('etablissement_id', etablissementId)
         .eq('facture_id', id!)
         .order('debut_le', { ascending: true }),
+      // Also fetch by period as fallback
+      supabase.from('factures').select('periode_debut, periode_fin').eq('id', id!).maybeSingle(),
       supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie, paliers_commission(nom)').eq('id', etablissementId).single(),
     ]);
 
