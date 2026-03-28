@@ -191,7 +191,7 @@ export default function LitigesSoignant() {
 
               <div className="space-y-2 text-sm">
                 <div><span className="text-muted-foreground">Motif :</span> <span className="text-foreground">{l.motif}</span></div>
-                {l.reponse && <div><span className="text-muted-foreground">Réponse établissement :</span> <span className="text-foreground">{l.reponse}</span></div>}
+                {renderReponses(l.reponse)}
                 {l.resolution && <div className="bg-success/5 border border-success/20 rounded-lg p-2"><span className="text-muted-foreground">Résolution admin :</span> <span className="text-success font-medium">{l.resolution}</span></div>}
               </div>
 
