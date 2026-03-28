@@ -144,7 +144,8 @@ export default function LitigesSoignant() {
       p_message: mediationMsg.trim() || null,
     });
     setMediationSending(false);
-    if (error || data?.error) { toast.error(data?.error || 'Erreur lors de la demande de médiation.'); return; }
+    if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
+    if ((data as any)?.error) { toast.error((data as any).error); return; }
     toast.success('Demande de médiation envoyée à l\'administrateur.');
     setMediationId(null);
     setMediationMsg('');
