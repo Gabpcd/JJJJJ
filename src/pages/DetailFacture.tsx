@@ -273,7 +273,7 @@ export default function DetailFacture() {
       })));
 
       // Fetch presences for all missions
-      const missionIds = (resM.data as any[]).map((m: any) => m.id);
+      const missionIds = allMissions.map((m: any) => m.id);
       if (missionIds.length > 0) {
         const { data: presData } = await supabase.from('presences')
           .select('id, mission_id, pointage_arrivee_le, pointage_depart_le, methode_pointage_arrivee, methode_pointage_depart, valide_par_etablissement')
