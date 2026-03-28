@@ -229,7 +229,7 @@ export default function LitigesSoignant() {
                 {l.resolution && <div className="bg-success/5 border border-success/20 rounded-lg p-2"><span className="text-muted-foreground">Résolution admin :</span> <span className="text-success font-medium">{l.resolution}</span></div>}
               </div>
 
-              {(l.statut === 'OUVERT' || l.statut === 'EN_DISCUSSION') && (
+              {(['OUVERT', 'EN_COURS', 'EN_DISCUSSION', 'EN_MEDIATION', 'CONTESTEE'].includes(l.statut)) && (
                 <div className="mt-3 pt-3 border-t border-border space-y-3">
                   {/* Accord indicators */}
                   {(l.accord_soignant || l.accord_etablissement) && (
