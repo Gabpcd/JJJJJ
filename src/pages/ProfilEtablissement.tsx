@@ -286,7 +286,7 @@ export default function ProfilEtablissement() {
       p_adresse_code_postal: form.codePostal,
       p_adresse_departement: form.departement || null,
       p_email_contact: form.emailContact,
-      p_telephone_contact: form.telephoneContact || null,
+      p_telephone: form.telephoneContact || null,
       p_adresse_lat: lat ? parseFloat(lat) : null,
       p_adresse_lng: lng ? parseFloat(lng) : null,
       p_taux_majoration_nuit: form.tauxNuit,
