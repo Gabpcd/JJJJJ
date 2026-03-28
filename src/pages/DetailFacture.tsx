@@ -230,19 +230,35 @@ export default function DetailFacture() {
 
   const charger = async () => {
     if (!user || !id || !etablissementId) return;
-    const [resF, resM, resE] = await Promise.all([
+    const [resF, resM, resPeriod, resE] = await Promise.all([
       supabase.from('factures').select('id, numero_facture, montant_ht, montant_tva, montant_ttc, taux_tva, nombre_missions, statut, date_emission, date_echeance, date_paiement, periode_debut, periode_fin, mode_paiement, stripe_hosted_url, chorus_pro_statut, est_secteur_public, etablissement_id, virement_reference').eq('id', id).eq('etablissement_id', etablissementId).single(),
       supabase.from('missions')
         .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, profession_requise, soignant_assigne_id, montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, taux_ifm, taux_icp, statut, facture_id')
         .eq('etablissement_id', etablissementId)
         .eq('facture_id', id!)
         .order('debut_le', { ascending: true }),
+      // Also fetch by period as fallback
+      supabase.from('factures').select('periode_debut, periode_fin').eq('id', id!).maybeSingle(),
       supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie, paliers_commission(nom)').eq('id', etablissementId).single(),
     ]);
 
     if (resF.data) setFacture(resF.data);
-    if (resM.data && resF.data) {
-      const allMissions = resM.data as any[];
+    
+    let allMissions = (resM.data || []) as any[];
+    
+    // Fallback: if no missions found by facture_id, search by period
+    if (allMissions.length === 0 && resPeriod.data?.periode_debut && resPeriod.data?.periode_fin) {
+      const { data: periodMissions } = await supabase.from('missions')
+        .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, profession_requise, soignant_assigne_id, montant_commission_ht, montant_commission_tva, montant_commission_ttc, taux_commission, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, montant_ifm, montant_icp, taux_ifm, taux_icp, statut, facture_id')
+        .eq('etablissement_id', etablissementId)
+        .eq('statut', 'TERMINEE')
+        .gte('debut_le', resPeriod.data.periode_debut)
+        .lte('debut_le', resPeriod.data.periode_fin + 'T23:59:59')
+        .order('debut_le', { ascending: true });
+      if (periodMissions && periodMissions.length > 0) allMissions = periodMissions;
+    }
+
+    if (allMissions.length > 0 && resF.data) {
 
       // Fetch soignant names separately (no FK on missions table)
       const sgIds = [...new Set(allMissions.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
@@ -257,7 +273,7 @@ export default function DetailFacture() {
       })));
 
       // Fetch presences for all missions
-      const missionIds = (resM.data as any[]).map((m: any) => m.id);
+      const missionIds = allMissions.map((m: any) => m.id);
       if (missionIds.length > 0) {
         const { data: presData } = await supabase.from('presences')
           .select('id, mission_id, pointage_arrivee_le, pointage_depart_le, methode_pointage_arrivee, methode_pointage_depart, valide_par_etablissement')
