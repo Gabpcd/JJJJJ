@@ -23,7 +23,7 @@ export function BandeauPaiementDeclare() {
     const load = async () => {
       const { data } = await supabase
         .from('paiements_soignant' as any)
-        .select('id, montant, mission_id, etablissement_id')
+        .select('id, montant_net, mission_id, etablissement_id')
         .eq('soignant_id', user.id)
         .eq('statut', 'DECLARE') as any;
 
