@@ -43,6 +43,9 @@ export function CarteBFAInfo({ etablissementId }: { etablissementId: string }) {
 
   if (loading || !info) return null;
 
+  // Guard against NaN values
+  const montant = isNaN(info.montant_estime) ? 0 : info.montant_estime;
+  const commissions = isNaN(info.commissions_ht) ? 0 : info.commissions_ht;
   const progressMax = info.prochain_palier_missions_min ?? info.missions_annee;
   const progressPct = progressMax > 0 ? Math.min(Math.round((info.missions_annee / progressMax) * 100), 100) : 100;
 
