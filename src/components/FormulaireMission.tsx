@@ -335,7 +335,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       {siretInvalide && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 flex items-center gap-2 text-sm">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-          <span>Complétez votre SIRET pour publier des missions. <Link to="/etablissement/profil" className="text-primary hover:underline font-medium">Aller au profil →</Link></span>
+          <span>Veuillez compléter votre SIRET dans votre profil avant de publier une mission. <Link to="/etablissement/profil" className="text-primary hover:underline font-medium">Aller au profil →</Link></span>
         </div>
       )}
 
