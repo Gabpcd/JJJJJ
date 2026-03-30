@@ -193,7 +193,7 @@ export default function ProfilEtablissement() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent, logo_url, mode_paiement_commission, contrat_valide, contrat_url, contrat_uploade_le').eq('id', user.id).single().then(({ data }) => {
+    supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data }: any) => {
       if (data) {
         setSiret(data.siret);
         setType(data.type);

@@ -64,7 +64,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [estSecteurPublic, setEstSecteurPublic] = useState(false);
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('rist_plafond_actif, type, taux_commission_negocie, paliers_commission(nom), siret, contrat_valide, est_secteur_public').eq('id', user.id).single().then(({ data }) => {
+    supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data }: any) => {
       if (data) {
         setEstSecteurPublic(data.est_secteur_public === true);
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];

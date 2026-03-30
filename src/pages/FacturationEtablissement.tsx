@@ -78,7 +78,7 @@ export default function FacturationEtablissement() {
     if (!user) return;
 
     const [resEtab, resFact, resMNF, resPrelev] = await Promise.all([
-      supabase.from('etablissements').select('id, nom, type, taux_commission_negocie, palier_commission_id, groupe_sante_id, paliers_commission(nom), mode_paiement_commission').eq('id', user.id).single(),
+      supabase.rpc('fn_mon_etablissement_complet' as any),
       supabase.rpc('fn_mes_factures' as any),
       supabase.from('missions')
         .select('id, intitule, debut_le, fin_le, montant_commission_ht, montant_commission_ttc, statut')
