@@ -212,6 +212,9 @@ export default function ProfilEtablissement() {
           tauxDimanche: data.taux_majoration_dimanche_pourcent ?? 50,
           tauxFerie: data.taux_majoration_ferie_pourcent ?? 100,
         });
+        setLat(data.adresse_lat?.toString() || '');
+        setLng(data.adresse_lng?.toString() || '');
+        setCouleurTheme(data.couleur_theme || '#17A2B8');
       }
       setLoading(false);
     });
