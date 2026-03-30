@@ -230,16 +230,7 @@ export default function ProfilEtablissement() {
   const [lng, setLng] = useState('');
   const [couleurTheme, setCouleurTheme] = useState('#17A2B8');
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from('etablissements').select('adresse_lat, adresse_lng, couleur_theme').eq('id', user.id).single().then(({ data }) => {
-      if (data) {
-        setLat(data.adresse_lat?.toString() || '');
-        setLng(data.adresse_lng?.toString() || '');
-        setCouleurTheme(data.couleur_theme || '#17A2B8');
-      }
-    });
-  }, [user]);
+  // adresse_lat, adresse_lng, couleur_theme are loaded from the RPC in the main useEffect above
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
 
