@@ -101,20 +101,30 @@ export function getTypeContratRechercheBadge(type: string): { label: string; cla
   }
 }
 
-export function missionCompatibleContrat(pref: ContratPreference, typesContratSoignant: string[]): boolean {
-  if (pref === 'TOUS') return true;
+export function missionCompatibleContrat(pref: ContratPreference | string, typesContratSoignant: string[]): boolean {
+  if (!pref || pref === 'TOUS') return true;
   if (pref === 'LIBERAL') return typesContratSoignant.includes('LIBERAL');
-  // SALARIE = CDDU, VACATION, SALARIE
-  return typesContratSoignant.some(t => ['CDDU', 'VACATION', 'SALARIE'].includes(t));
+  if (pref === 'SALARIE') return typesContratSoignant.some(t => ['CDDU', 'CDDU_USAGE', 'VACATION', 'SALARIE'].includes(t));
+  return true;
 }
 
-/** Parse the types_contrat_acceptes JSON string or fall back to type_contrat */
-export function getTypesContratSoignant(soignant: { type_contrat?: string | null; types_contrat_acceptes?: string | null }): string[] {
+/** Parse the types_contrat_acceptes (JSON array or comma-separated) or fall back to type_exercice/type_contrat */
+export function getTypesContratSoignant(soignant: { type_contrat?: string | null; types_contrat_acceptes?: string | null; type_exercice?: string | null }): string[] {
   if (soignant.types_contrat_acceptes) {
-    try {
-      const arr = JSON.parse(soignant.types_contrat_acceptes);
-      if (Array.isArray(arr) && arr.length > 0) return arr;
-    } catch { /* fallback */ }
+    // Handle both JSON array and comma-separated string
+    const raw = soignant.types_contrat_acceptes.trim();
+    if (raw.startsWith('[')) {
+      try {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr) && arr.length > 0) return arr;
+      } catch { /* fallback to comma split */ }
+    }
+    // Comma-separated: "CDDU,LIBERAL"
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length > 0) return parts;
   }
+  // Fallback based on type_exercice
+  if (soignant.type_exercice === 'MIXTE') return ['CDDU', 'LIBERAL'];
+  if (soignant.type_exercice === 'LIBERAL') return ['LIBERAL'];
   return soignant.type_contrat ? [soignant.type_contrat] : ['CDDU'];
 }

@@ -87,7 +87,7 @@ export default function RechercheMissions() {
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants')
-      .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes')
+      .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
       .eq('id', user.id).single()
       .then(({ data }) => {
         if (data) {
@@ -165,7 +165,11 @@ export default function RechercheMissions() {
         }
         // Distance filter only when searching by ville
         if (villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
+        // Contract type compatibility: use soignant's accepted types
         const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
+        const typesAcceptes = getTypesContratSoignant(soignant);
+        if (!missionCompatibleContrat(mType, typesAcceptes)) return false;
+        // Additional UI filter
         if (typeContrat !== 'TOUS') {
           if (typeContrat === 'CDDU' && mType === 'LIBERAL') return false;
           if (typeContrat === 'LIBERAL' && mType === 'SALARIE') return false;

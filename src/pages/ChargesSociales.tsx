@@ -70,7 +70,6 @@ export default function ChargesSociales() {
           .select('total_brut')
           .eq('soignant_assigne_id', user.id)
           .eq('statut', 'TERMINEE')
-          .eq('type_paiement_soignant', 'NOTE_HONORAIRES')
           .gte('fin_le', debutAnnee),
         supabase
           .from('documents_soignants')
