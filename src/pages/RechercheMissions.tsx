@@ -87,7 +87,7 @@ export default function RechercheMissions() {
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants')
-      .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes')
+      .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
       .eq('id', user.id).single()
       .then(({ data }) => {
         if (data) {
