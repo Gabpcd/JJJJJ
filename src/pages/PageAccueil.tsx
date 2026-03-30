@@ -6,6 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { PROFESSIONS } from '@/lib/constantes';
 import { useDebounce } from '@/hooks/useDebounce';
 import { publicSupabase } from '@/integrations/supabase/public-client';
+import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 /* ─── Animated counter ─── */
 function CompteurAnime({ cible, suffixe, prefix }: { cible: number; suffixe?: string; prefix?: string }) {
