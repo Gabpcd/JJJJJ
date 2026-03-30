@@ -501,7 +501,7 @@ export default function DetailMissionSoignant() {
                           {postulationEnCours ? 'Envoi en cours…' : '📨 Postuler à cette mission'}
                         </button>
                         <p className="text-[10px] text-muted-foreground text-center mt-2">
-                          L'établissement examinera votre candidature et vous sera notifié de sa décision.
+                          L'établissement examinera votre candidature. Vous serez notifié(e) de sa décision.
                         </p>
                       </>
                     ) : (
