@@ -163,14 +163,12 @@ export default function RechercheMissions() {
           const cp = (m.etablissements?.adresse_code_postal || '').toLowerCase();
           if (!ville.includes(villeSearch) && !cp.startsWith(villeSearch)) return false;
         }
-        if (!villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
+        // Distance filter only when searching by ville
         if (villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
         const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
         if (typeContrat !== 'TOUS') {
           if (typeContrat === 'CDDU' && mType === 'LIBERAL') return false;
           if (typeContrat === 'LIBERAL' && mType === 'SALARIE') return false;
-        } else {
-          if (!missionCompatibleContrat(mType, typesContrat)) return false;
         }
         if (horaire === 'NUIT' && !isNuit(m.debut_le)) return false;
         if (horaire === 'JOUR' && isNuit(m.debut_le)) return false;
