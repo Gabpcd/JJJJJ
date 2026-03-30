@@ -136,7 +136,10 @@ export default function RechercheMissions() {
       if (tauxMin > 0) query = query.gte('taux_horaire_base', tauxMin);
       if (urgentesOnly) query = query.eq('est_urgente', true);
 
-      const { data } = await query;
+      const { data, error } = await query;
+      if (error) {
+        console.error('[RechercheMissions] Erreur requête missions:', error);
+      }
       const enriched = data ? await enrichirEtablissements(data as any) : [];
       setMissions(enriched);
       setLoading(false);
