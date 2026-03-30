@@ -186,7 +186,7 @@ export default function ProfilSoignant() {
     });
 
     // Also update type_exercice via RPC
-    const { error: exError } = await supabase.rpc('fn_modifier_mon_profil_extra' as any, {
+    const { error: exError } = await supabase.rpc('fn_modifier_mon_profil' as any, {
       p_type_exercice: typeExercice,
       p_attestation_cumul_activite: attestationCumul,
       p_taux_horaire_minimum: form.tauxHoraireMinimum,
