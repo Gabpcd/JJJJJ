@@ -111,10 +111,12 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
     const professionValue = nextProfession?.trim() || null;
     const villeValue = nextVille?.trim() || null;
 
-    const { data, error } = await publicSupabase.rpc('fn_missions_publiques_recherche', {
+    // Try authenticated client first (RPC only granted to authenticated), fall back to public
+    const client = supabase;
+    const { data, error } = await client.rpc('fn_missions_publiques_recherche', {
       p_profession: professionValue,
       p_ville: villeValue,
-    });
+    } as any);
 
     logger.debug('missions recherche raw:', { data, error, professionValue, villeValue });
 
