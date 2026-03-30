@@ -29,7 +29,7 @@ export default function AttestationHeures() {
     if (!user || !debut || !fin) return;
     const load = async () => {
       const [{ data: sg }, { data: ms }] = await Promise.all([
-        supabase.from('soignants').select('prenom, nom, profession, numero_rpps, numero_adeli').eq('id', user.id).single(),
+        supabase.rpc('fn_mon_profil_soignant_complet' as any),
         supabase.from('missions')
           .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, statut, etablissement_id')
           .eq('soignant_assigne_id', user.id)

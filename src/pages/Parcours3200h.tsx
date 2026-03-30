@@ -24,7 +24,7 @@ export default function Parcours3200h() {
   useEffect(() => {
     if (!user) return;
     Promise.all([
-      supabase.from('soignants').select('heures_cumulees, eligible_conversion_3200h, type_exercice, statut_liberal, siret_liberal').eq('id', user.id).single(),
+      supabase.rpc('fn_mon_profil_soignant_complet' as any),
       supabase.from('suivi_conversion_3200h').select('id, soignant_id, heures_actuelles, jalon_800h_atteint, jalon_1600h_atteint, jalon_2400h_atteint, jalon_3200h_atteint').eq('soignant_id', user.id).maybeSingle(),
       supabase.from('missions').select('debut_le, duree_heures').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').order('debut_le', { ascending: true }),
     ]).then(([{ data: sg }, { data: sv }, { data: ms }]) => {

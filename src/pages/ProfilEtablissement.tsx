@@ -193,7 +193,7 @@ export default function ProfilEtablissement() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('etablissements').select('nom, siret, finess, type, convention_collective, adresse_rue, adresse_ville, adresse_code_postal, adresse_departement, email_contact, telephone_contact, taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent, taux_majoration_ferie_pourcent, logo_url, mode_paiement_commission, contrat_valide, contrat_url, contrat_uploade_le').eq('id', user.id).single().then(({ data }) => {
+    supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data }: any) => {
       if (data) {
         setSiret(data.siret);
         setType(data.type);
@@ -212,6 +212,9 @@ export default function ProfilEtablissement() {
           tauxDimanche: data.taux_majoration_dimanche_pourcent ?? 50,
           tauxFerie: data.taux_majoration_ferie_pourcent ?? 100,
         });
+        setLat(data.adresse_lat?.toString() || '');
+        setLng(data.adresse_lng?.toString() || '');
+        setCouleurTheme(data.couleur_theme || '#17A2B8');
       }
       setLoading(false);
     });
@@ -230,16 +233,7 @@ export default function ProfilEtablissement() {
   const [lng, setLng] = useState('');
   const [couleurTheme, setCouleurTheme] = useState('#17A2B8');
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from('etablissements').select('adresse_lat, adresse_lng, couleur_theme').eq('id', user.id).single().then(({ data }) => {
-      if (data) {
-        setLat(data.adresse_lat?.toString() || '');
-        setLng(data.adresse_lng?.toString() || '');
-        setCouleurTheme(data.couleur_theme || '#17A2B8');
-      }
-    });
-  }, [user]);
+  // adresse_lat, adresse_lng, couleur_theme are loaded from the RPC in the main useEffect above
 
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
 

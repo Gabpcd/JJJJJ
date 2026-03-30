@@ -3846,10 +3846,6 @@ export type Database = {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
-      fn_etablissement_public: {
-        Args: { p_etablissement_id: string }
-        Returns: Json
-      }
       fn_etablissements_avec_missions_ouvertes: { Args: never; Returns: Json }
       fn_etablissements_safe: {
         Args: { p_ids: string[] }
@@ -4152,6 +4148,8 @@ export type Database = {
       }
       fn_mon_bfa: { Args: never; Returns: Json }
       fn_mon_contrat_plateforme: { Args: never; Returns: Json }
+      fn_mon_etablissement_complet: { Args: never; Returns: Json }
+      fn_mon_profil_soignant_complet: { Args: never; Returns: Json }
       fn_mon_token_calendrier: { Args: never; Returns: string }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
       fn_nettoyer_partages_rib_expires: { Args: never; Returns: undefined }

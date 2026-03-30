@@ -74,7 +74,7 @@ export default function DetailFacture() {
 
     const [resDetail, resE] = await Promise.all([
       supabase.rpc('fn_detail_facture' as any, { p_facture_id: id }),
-      supabase.from('etablissements').select('nom, siret, adresse_rue, adresse_ville, adresse_code_postal, taux_commission_negocie').eq('id', etablissementId).single(),
+      supabase.rpc('fn_mon_etablissement_complet' as any),
     ]);
 
     if (resDetail.error) {
