@@ -101,11 +101,11 @@ export function getTypeContratRechercheBadge(type: string): { label: string; cla
   }
 }
 
-export function missionCompatibleContrat(pref: ContratPreference, typesContratSoignant: string[]): boolean {
-  if (pref === 'TOUS') return true;
+export function missionCompatibleContrat(pref: ContratPreference | string, typesContratSoignant: string[]): boolean {
+  if (!pref || pref === 'TOUS') return true;
   if (pref === 'LIBERAL') return typesContratSoignant.includes('LIBERAL');
-  // SALARIE = CDDU, VACATION, SALARIE
-  return typesContratSoignant.some(t => ['CDDU', 'VACATION', 'SALARIE'].includes(t));
+  if (pref === 'SALARIE') return typesContratSoignant.some(t => ['CDDU', 'CDDU_USAGE', 'VACATION', 'SALARIE'].includes(t));
+  return true;
 }
 
 /** Parse the types_contrat_acceptes JSON string or fall back to type_contrat */
