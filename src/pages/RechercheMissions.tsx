@@ -136,7 +136,10 @@ export default function RechercheMissions() {
       if (tauxMin > 0) query = query.gte('taux_horaire_base', tauxMin);
       if (urgentesOnly) query = query.eq('est_urgente', true);
 
-      const { data } = await query;
+      const { data, error } = await query;
+      if (error) {
+        console.error('[RechercheMissions] Erreur requête missions:', error);
+      }
       const enriched = data ? await enrichirEtablissements(data as any) : [];
       setMissions(enriched);
       setLoading(false);
@@ -160,14 +163,12 @@ export default function RechercheMissions() {
           const cp = (m.etablissements?.adresse_code_postal || '').toLowerCase();
           if (!ville.includes(villeSearch) && !cp.startsWith(villeSearch)) return false;
         }
-        if (!villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
+        // Distance filter only when searching by ville
         if (villeSearch && m.distance_km !== null && m.distance_km > rayonKm) return false;
         const mType = m.type_contrat_recherche || extraireContratPreference(m.description);
         if (typeContrat !== 'TOUS') {
           if (typeContrat === 'CDDU' && mType === 'LIBERAL') return false;
           if (typeContrat === 'LIBERAL' && mType === 'SALARIE') return false;
-        } else {
-          if (!missionCompatibleContrat(mType, typesContrat)) return false;
         }
         if (horaire === 'NUIT' && !isNuit(m.debut_le)) return false;
         if (horaire === 'JOUR' && isNuit(m.debut_le)) return false;

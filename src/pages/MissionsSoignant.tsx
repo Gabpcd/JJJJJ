@@ -101,9 +101,7 @@ export default function MissionsSoignant() {
 
       if (onglet === 'disponibles') {
         query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any).gte('debut_le', maintenantIso);
-        if (soignant.type_contrat === 'LIBERAL') {
-          query = query.eq('type_paiement_soignant', 'NOTE_HONORAIRES');
-        }
+        // Contract type compatibility is handled client-side via missionCompatibleContrat
         query = query.order('est_urgente', { ascending: false }).order('niveau_urgence', { ascending: false }).order('debut_le', { ascending: true });
         if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);
         if (filtres?.dateFin) query = query.lte('debut_le', filtres.dateFin);

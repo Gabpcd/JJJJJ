@@ -3846,6 +3846,10 @@ export type Database = {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
+      fn_etablissement_public: {
+        Args: { p_etablissement_id: string }
+        Returns: Json
+      }
       fn_etablissements_avec_missions_ouvertes: { Args: never; Returns: Json }
       fn_etablissements_safe: {
         Args: { p_ids: string[] }
