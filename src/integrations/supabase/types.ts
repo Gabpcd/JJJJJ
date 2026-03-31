@@ -4274,11 +4274,14 @@ export type Database = {
           est_favori: boolean
           id: string
           missions_etab: number
+          nb_evaluations: number
           nom: string
+          note_moyenne: number
           prenom: string
           profession: Database["public"]["Enums"]["type_profession"]
           score_fiabilite: number
           score_matching: number
+          type_exercice: string
         }[]
       }
       fn_rejeter_virement_admin: {
