@@ -202,6 +202,7 @@ export default function DashboardEtablissement() {
           setCandidaturesRecentes(dashStats.candidatures_recentes ?? []);
           setMissionsAssigneesDetail(dashStats.missions_assignees_detail ?? []);
         }
+      } catch {}
 
       // Graphiques + favoris (non-bloquant)
       try {
