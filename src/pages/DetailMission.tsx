@@ -509,9 +509,17 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   <MessageCircle className="h-4 w-4" /> Contacter l'établissement
                 </button>
               )}
-              {(isAdmin || m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && (
+              {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' || m.statut === 'TERMINEE' || m.statut === 'ABSENCE' || m.statut === 'LITIGE') && m.soignant_assigne_id && (
                 <div id="chat-mission">
-                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur={isAdmin ? 'Admin' : (m.etablissements?.nom || 'Établissement')} isAdmin={isAdmin} />
+                  <ChatConversation
+                    missionId={m.id}
+                    autreUserId={m.soignant_assigne_id}
+                  />
+                </div>
+              )}
+              {isAdmin && m.statut === 'OUVERTE' && (
+                <div id="chat-mission">
+                  <ChatMission missionId={m.id} role="ETABLISSEMENT" prenomUtilisateur="Admin" isAdmin />
                 </div>
               )}
             </div>
