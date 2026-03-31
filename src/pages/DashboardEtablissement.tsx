@@ -204,6 +204,11 @@ export default function DashboardEtablissement() {
         }
       } catch {}
 
+      // Unread messages count
+      try {
+        const { data: unreadData } = await supabase.rpc('fn_messages_non_lus');
+        if (typeof unreadData === 'number') setMessagesNonLus(unreadData);
+      } catch {}
       // Graphiques + favoris (non-bloquant)
       try {
         const semaines: { label: string; count: number }[] = [];
