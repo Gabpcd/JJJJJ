@@ -64,7 +64,7 @@ export default function DashboardEtablissement() {
   const [candidaturesEnAttente, setCandidaturesEnAttente] = useState(0);
   const [candidaturesRecentes, setCandidaturesRecentes] = useState<any[]>([]);
   const [missionsAssigneesDetail, setMissionsAssigneesDetail] = useState<any[]>([]);
-
+  const [messagesNonLus, setMessagesNonLus] = useState(0);
   const charger = async () => {
     if (!user || !etablissementId) return;
     let partialError = false;
