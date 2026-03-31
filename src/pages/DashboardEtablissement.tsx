@@ -194,6 +194,15 @@ export default function DashboardEtablissement() {
         }
       } catch {}
 
+      // Load candidatures en attente + missions assignées via dashboard RPC
+      try {
+        const { data: dashStats } = await supabase.rpc('fn_stats_dashboard_etablissement' as any);
+        if (dashStats) {
+          setCandidaturesEnAttente(dashStats.candidatures_en_attente ?? 0);
+          setCandidaturesRecentes(dashStats.candidatures_recentes ?? []);
+          setMissionsAssigneesDetail(dashStats.missions_assignees_detail ?? []);
+        }
+
       // Graphiques + favoris (non-bloquant)
       try {
         const semaines: { label: string; count: number }[] = [];
