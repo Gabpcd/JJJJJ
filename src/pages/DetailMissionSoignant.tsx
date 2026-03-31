@@ -13,6 +13,7 @@ import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatMission } from '@/components/ChatMission';
+import { ChatConversation } from '@/components/ChatConversation';
 import { BlocConformite } from '@/components/BlocConformite';
 import { BandeauGraceDocuments } from '@/components/BandeauGraceDocuments';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
