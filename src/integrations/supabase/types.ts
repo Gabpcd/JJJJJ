@@ -4098,9 +4098,14 @@ export type Database = {
           p_adresse_rue?: string
           p_adresse_ville?: string
           p_annees_experience?: number
+          p_attestation_cumul_activite?: boolean
           p_avatar_url?: string
           p_bio?: string
+          p_consentement_gps?: boolean
           p_date_naissance?: string
+          p_disponible_urgence?: boolean
+          p_est_cumul_activite?: boolean
+          p_est_salarie_etablissement?: boolean
           p_nom?: string
           p_numero_adeli?: string
           p_numero_rpps?: string
@@ -4111,6 +4116,8 @@ export type Database = {
           p_telephone?: string
           p_type_exercice?: string
           p_types_contrat?: string[]
+          p_types_contrat_acceptes?: string
+          p_urgence_rayon_km?: number
           p_ville_recherche?: string
           p_ville_urgence?: string
         }
@@ -4306,6 +4313,7 @@ export type Database = {
         }[]
       }
       fn_sanitiser_html: { Args: { p_html: string }; Returns: string }
+      fn_sauvegarder_profil: { Args: { p_data: Json }; Returns: Json }
       fn_set_user_role: {
         Args: { p_etablissement_id?: string; p_role: string; p_user_id: string }
         Returns: undefined

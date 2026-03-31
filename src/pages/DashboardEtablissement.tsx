@@ -61,6 +61,9 @@ export default function DashboardEtablissement() {
   const [topSoignants, setTopSoignants] = useState<any[]>([]);
   const [turnover, setTurnover] = useState({ ceMois: 0, moisPrec: 0 });
   const [prochaines, setProchaines] = useState<any[]>([]);
+  const [candidaturesEnAttente, setCandidaturesEnAttente] = useState(0);
+  const [candidaturesRecentes, setCandidaturesRecentes] = useState<any[]>([]);
+  const [missionsAssigneesDetail, setMissionsAssigneesDetail] = useState<any[]>([]);
 
   const charger = async () => {
     if (!user || !etablissementId) return;
@@ -191,6 +194,16 @@ export default function DashboardEtablissement() {
         }
       } catch {}
 
+      // Load candidatures en attente + missions assignées via dashboard RPC
+      try {
+        const { data: dashStats } = await supabase.rpc('fn_stats_dashboard_etablissement' as any);
+        if (dashStats) {
+          setCandidaturesEnAttente(dashStats.candidatures_en_attente ?? 0);
+          setCandidaturesRecentes(dashStats.candidatures_recentes ?? []);
+          setMissionsAssigneesDetail(dashStats.missions_assignees_detail ?? []);
+        }
+      } catch {}
+
       // Graphiques + favoris (non-bloquant)
       try {
         const semaines: { label: string; count: number }[] = [];
@@ -310,6 +323,53 @@ export default function DashboardEtablissement() {
         <div className="mb-6">
           <h1 className="text-xl font-bold text-foreground">Tableau de bord</h1>
         </div>
+      )}
+
+      {/* 🔔 Candidatures en attente */}
+      {candidaturesEnAttente > 0 && (
+        <FadeInView delay={0}>
+          <div className="card-base border-warning/30 bg-warning/5 mb-4">
+            <p className="text-sm font-semibold text-warning flex items-center gap-2 mb-2">
+              🔔 {candidaturesEnAttente} candidature{candidaturesEnAttente > 1 ? 's' : ''} en attente
+            </p>
+            <div className="space-y-1.5">
+              {candidaturesRecentes.slice(0, 5).map((c: any) => (
+                <div key={c.candidature_id} className="flex items-center justify-between text-sm">
+                  <span className="text-foreground">
+                    👤 {c.soignant_nom} · <span className="text-muted-foreground">{c.mission_intitule}</span>
+                  </span>
+                  <button onClick={() => navigate(`/etablissement/missions/${c.mission_id}`)} className="text-xs text-primary hover:underline">
+                    Voir →
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </FadeInView>
+      )}
+
+      {/* ✅ Missions confirmées */}
+      {missionsAssigneesDetail.length > 0 && (
+        <FadeInView delay={50}>
+          <div className="card-base border-success/30 bg-success/5 mb-4">
+            <p className="text-sm font-semibold text-success flex items-center gap-2 mb-2">
+              ✅ {missionsAssigneesDetail.length} mission{missionsAssigneesDetail.length > 1 ? 's' : ''} confirmée{missionsAssigneesDetail.length > 1 ? 's' : ''}
+            </p>
+            <div className="space-y-1.5">
+              {missionsAssigneesDetail.slice(0, 5).map((m: any) => (
+                <div key={m.mission_id} className="flex items-center justify-between text-sm">
+                  <span className="text-foreground">
+                    {m.intitule} · <span className="text-muted-foreground">{m.soignant_nom}</span>
+                    {m.debut_le && <span className="text-muted-foreground"> · {new Date(m.debut_le).toLocaleDateString('fr-FR')}</span>}
+                  </span>
+                  <button onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)} className="text-xs text-primary hover:underline">
+                    Voir →
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </FadeInView>
       )}
 
       {/* Actions rapides */}

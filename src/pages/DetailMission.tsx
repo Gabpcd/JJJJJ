@@ -4,7 +4,7 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { logger } from '@/lib/logger';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Eye, Star, Send, CreditCard, MessageCircle, BellRing, Loader2 } from 'lucide-react';
+import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Star, Send, CreditCard, MessageCircle, BellRing, Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
@@ -328,12 +328,23 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </div>
       )}
 
+      {/* Candidatures en haut si mode CANDIDATURE et OUVERTE */}
+      {m.mode_attribution === 'CANDIDATURE' && m.statut === 'OUVERTE' && (
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-foreground mb-3">Candidatures {nbCandidatures > 0 ? `(${nbCandidatures})` : ''}</h2>
+          <ListeCandidatures
+            missionId={m.id}
+            modePaiement={(m.etablissements as any)?.mode_paiement_commission}
+            onAccepted={() => window.location.reload()}
+            onError={(msg) => toast.error(msg)}
+            onSuccess={(msg) => toast.success(msg)}
+          />
+        </div>
+      )}
+
       <Tabs defaultValue="details">
         <TabsList className="mb-4">
           <TabsTrigger value="details">Détails</TabsTrigger>
-          {m.statut === 'OUVERTE' && m.mode_attribution === 'CANDIDATURE' && (
-            <TabsTrigger value="candidatures">Candidatures{nbCandidatures > 0 ? ` (${nbCandidatures})` : ''}</TabsTrigger>
-          )}
           {m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
         </TabsList>
 
@@ -400,6 +411,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
                     </div>
                   </div>
+                ) : m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' ? (
+                  <div className="text-center py-6">
+                    <p className="text-sm text-muted-foreground">Chargement des informations du soignant…</p>
+                  </div>
                 ) : (
                   <div className="text-center py-6">
                     <UserSearch className="h-12 w-12 text-muted-foreground/30 mx-auto mb-2" />
@@ -414,10 +429,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 <AlerterPoolUrgence missionId={m.id} mission={m} user={user} afficherNotification={afficherNotification} />
               )}
 
-              <div className="card-base flex items-center gap-2 text-sm text-muted-foreground">
-                <Eye className="h-4 w-4" />
-                <span>0 soignants ont vu cette mission</span>
-              </div>
 
               {/* Recherche remplaçant urgence si ABSENCE */}
               {m.statut === 'ABSENCE' && (
@@ -505,21 +516,6 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           </div>
         </TabsContent>
 
-        {/* Candidatures tab */}
-        {m.statut === 'OUVERTE' && m.mode_attribution === 'CANDIDATURE' && (
-          <TabsContent value="candidatures">
-            <div className="card-base">
-              <h2 className="font-semibold text-foreground mb-4">📋 Candidatures reçues</h2>
-              <ListeCandidatures
-                missionId={m.id}
-                modePaiement={(m.etablissements as any)?.mode_paiement_commission}
-                onAccepted={() => window.location.reload()}
-                onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
-                onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
-              />
-            </div>
-          </TabsContent>
-        )}
 
         {m.statut === 'OUVERTE' && (
           <TabsContent value="recommandations">
