@@ -102,7 +102,15 @@ export default function ProfilSoignantEtablissement() {
                   <h1 className="text-2xl font-bold text-foreground">{soignant.prenom} {soignant.nom}</h1>
                   <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Briefcase className="h-4 w-4 text-primary" /> {getLabelProfession(soignant.profession)}</span>
+                    {soignant.type_exercice && (
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${soignant.type_exercice === 'LIBERAL' ? 'bg-info/10 text-info' : soignant.type_exercice === 'MIXTE' ? 'bg-purple-100 text-purple-700' : 'bg-muted text-muted-foreground'}`}>
+                        {soignant.type_exercice === 'MIXTE' ? 'Salarié + Libéral' : soignant.type_exercice === 'LIBERAL' ? 'Libéral' : 'Salarié'}
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1"><Star className="h-4 w-4 text-primary" /> {soignant.score_fiabilite != null && soignant.total_missions_terminees > 0 ? `${soignant.score_fiabilite}/100` : 'Pas encore d\'évaluation'}</span>
+                    {soignant.note_moyenne != null && soignant.nb_evaluations > 0 && (
+                      <span className="inline-flex items-center gap-1">⭐ {Number(soignant.note_moyenne).toFixed(1)}/5 ({soignant.nb_evaluations} avis)</span>
+                    )}
                   </div>
                 </div>
               </div>
