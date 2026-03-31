@@ -61,6 +61,9 @@ export default function DashboardEtablissement() {
   const [topSoignants, setTopSoignants] = useState<any[]>([]);
   const [turnover, setTurnover] = useState({ ceMois: 0, moisPrec: 0 });
   const [prochaines, setProchaines] = useState<any[]>([]);
+  const [candidaturesEnAttente, setCandidaturesEnAttente] = useState(0);
+  const [candidaturesRecentes, setCandidaturesRecentes] = useState<any[]>([]);
+  const [missionsAssigneesDetail, setMissionsAssigneesDetail] = useState<any[]>([]);
 
   const charger = async () => {
     if (!user || !etablissementId) return;
