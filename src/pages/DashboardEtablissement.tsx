@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, MessageCircle } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
@@ -64,7 +64,7 @@ export default function DashboardEtablissement() {
   const [candidaturesEnAttente, setCandidaturesEnAttente] = useState(0);
   const [candidaturesRecentes, setCandidaturesRecentes] = useState<any[]>([]);
   const [missionsAssigneesDetail, setMissionsAssigneesDetail] = useState<any[]>([]);
-
+  const [messagesNonLus, setMessagesNonLus] = useState(0);
   const charger = async () => {
     if (!user || !etablissementId) return;
     let partialError = false;
@@ -204,6 +204,11 @@ export default function DashboardEtablissement() {
         }
       } catch {}
 
+      // Unread messages count
+      try {
+        const { data: unreadData } = await supabase.rpc('fn_messages_non_lus');
+        if (typeof unreadData === 'number') setMessagesNonLus(unreadData);
+      } catch {}
       // Graphiques + favoris (non-bloquant)
       try {
         const semaines: { label: string; count: number }[] = [];
@@ -372,7 +377,23 @@ export default function DashboardEtablissement() {
         </FadeInView>
       )}
 
-      {/* Actions rapides */}
+      {/* 💬 Messages non lus */}
+      {messagesNonLus > 0 && (
+        <FadeInView delay={75}>
+          <div
+            className="card-base border-primary/30 bg-primary/5 mb-4 cursor-pointer hover:bg-primary/10 transition-colors"
+            onClick={() => navigate('/etablissement/messagerie')}
+          >
+            <p className="text-sm font-semibold text-primary flex items-center gap-2">
+              <MessageCircle className="h-4 w-4" />
+              💬 {messagesNonLus} message{messagesNonLus > 1 ? 's' : ''} non lu{messagesNonLus > 1 ? 's' : ''}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Cliquez pour ouvrir la messagerie</p>
+          </div>
+        </FadeInView>
+      )}
+
+
       <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
         <button onClick={() => navigate('/etablissement/missions/creer')} className="btn-primary text-sm whitespace-nowrap flex items-center gap-2">
           <FileText className="h-4 w-4" /> Publier une mission

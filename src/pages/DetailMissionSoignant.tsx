@@ -13,6 +13,7 @@ import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatMission } from '@/components/ChatMission';
+import { ChatConversation } from '@/components/ChatConversation';
 import { BlocConformite } from '@/components/BlocConformite';
 import { BandeauGraceDocuments } from '@/components/BandeauGraceDocuments';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
@@ -593,10 +594,10 @@ export default function DetailMissionSoignant() {
           {/* Chat — visible si ASSIGNEE, EN_COURS, TERMINEE, ABSENCE ou LITIGE */}
           {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS' || mission.statut === 'TERMINEE' || mission.statut === 'ABSENCE' || mission.statut === 'LITIGE') && estAssigne && (
             <div id="chat-mission">
-              <ChatMission
+              <ChatConversation
                 missionId={mission.id}
-                role="SOIGNANT"
-                prenomUtilisateur={soignant.prenom}
+                autreUserId={mission.etablissement_id}
+                isEtablissement
               />
             </div>
           )}
