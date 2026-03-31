@@ -8,6 +8,7 @@ import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Star, Send, CreditCar
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
+import { ChatConversation } from '@/components/ChatConversation';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { CodesPointageMission } from '@/components/CodesPointageMission';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
