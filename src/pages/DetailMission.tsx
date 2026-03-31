@@ -608,8 +608,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         );
                       })}
                     </tbody>
-                  </table>
-                </div>
+                   </table>
+                 </div>
+                </TooltipProvider>
               ) : (
                 <div className="text-center py-8 space-y-2">
                   <p className="text-sm text-muted-foreground">Aucun soignant disponible pour cette profession.</p>
