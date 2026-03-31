@@ -91,7 +91,7 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
       setLoading(false);
 
       // Mark as read
-      supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).catch(() => {});
+      supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(() => {});
     };
 
     load();
