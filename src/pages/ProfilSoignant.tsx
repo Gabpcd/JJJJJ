@@ -261,8 +261,8 @@ export default function ProfilSoignant() {
     if (!user) return;
     supabase.rpc('fn_note_moyenne' as any, { p_user_id: user.id })
       .then(({ data }: any) => {
-        if (data && typeof data === 'object') setNoteMoyenne(data);
-        else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
+        if (Array.isArray(data) && data.length > 0) setNoteMoyenne(data[0]);
+        else if (data && typeof data === 'object' && !Array.isArray(data) && 'total' in data) setNoteMoyenne(data);
       });
     supabase.rpc('fn_mes_evaluations_recues' as any)
       .then(({ data }: any) => {
