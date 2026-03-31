@@ -304,9 +304,11 @@ export default function ProfilSoignant() {
             <div className="mt-3 space-y-2">
               {evaluations.slice(0, 5).map((ev: any, i: number) => (
                 <div key={i} className="text-sm text-muted-foreground border-t border-border pt-2">
-                  <span className="text-foreground font-medium">{'⭐'.repeat(ev.note)}</span>
-                  {ev.commentaire && <p className="text-xs mt-0.5">{ev.commentaire}</p>}
-                  {ev.cree_le && <p className="text-[10px] text-muted-foreground/60">{format(new Date(ev.cree_le), 'd MMM yyyy', { locale: fr })}</p>}
+                  <span className="text-foreground font-medium">⭐ {ev.note}/5</span>
+                  {ev.mission_intitule && <span className="ml-1">— {ev.mission_intitule}</span>}
+                  {ev.cree_le && <span className="ml-1">— {format(new Date(ev.cree_le), 'd MMM yyyy', { locale: fr })}</span>}
+                  {ev.type_evaluateur && <span className="ml-1">— par {ev.type_evaluateur === 'ETABLISSEMENT' ? 'l\'établissement' : 'le soignant'}</span>}
+                  {ev.commentaire && <p className="text-xs mt-0.5 italic">{ev.commentaire}</p>}
                 </div>
               ))}
             </div>
