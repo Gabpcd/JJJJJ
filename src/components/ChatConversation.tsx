@@ -108,7 +108,7 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
         const msg = payload.new as Message;
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         if (msg.auteur_id !== user?.id) {
-          supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).catch(() => {});
+          supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(() => {});
         }
       })
       .subscribe();
