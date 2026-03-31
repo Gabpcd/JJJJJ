@@ -411,6 +411,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       <BoutonExclusion excluId={m.soignant_assigne_id} typeExcluPar="ETABLISSEMENT" />
                     </div>
                   </div>
+                ) : m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS' ? (
+                  <div className="text-center py-6">
+                    <p className="text-sm text-muted-foreground">Chargement des informations du soignant…</p>
+                  </div>
                 ) : (
                   <div className="text-center py-6">
                     <UserSearch className="h-12 w-12 text-muted-foreground/30 mx-auto mb-2" />
