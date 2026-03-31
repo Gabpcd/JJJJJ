@@ -397,6 +397,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate">
+                      {c.mission_intitule && <span className="text-primary/80">📋 {c.mission_intitule} · </span>}
                       {c.dernier_contenu ? c.dernier_contenu.slice(0, 50) : 'Aucun message'}
                     </p>
                   </div>
