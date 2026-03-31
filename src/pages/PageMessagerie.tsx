@@ -30,6 +30,7 @@ interface Conversation {
   dernier_contenu: string | null;
   non_lus: number;
   is_jolene?: boolean;
+  mission_intitule?: string | null;
 }
 
 interface Message {
