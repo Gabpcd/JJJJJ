@@ -32,6 +32,7 @@ import { fr } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 function scoreColor(score: number): string {
   if (score >= 70) return 'text-success';
