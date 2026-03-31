@@ -325,6 +325,53 @@ export default function DashboardEtablissement() {
         </div>
       )}
 
+      {/* 🔔 Candidatures en attente */}
+      {candidaturesEnAttente > 0 && (
+        <FadeInView delay={0}>
+          <div className="card-base border-warning/30 bg-warning/5 mb-4">
+            <p className="text-sm font-semibold text-warning flex items-center gap-2 mb-2">
+              🔔 {candidaturesEnAttente} candidature{candidaturesEnAttente > 1 ? 's' : ''} en attente
+            </p>
+            <div className="space-y-1.5">
+              {candidaturesRecentes.slice(0, 5).map((c: any) => (
+                <div key={c.candidature_id} className="flex items-center justify-between text-sm">
+                  <span className="text-foreground">
+                    👤 {c.soignant_nom} · <span className="text-muted-foreground">{c.mission_intitule}</span>
+                  </span>
+                  <button onClick={() => navigate(`/etablissement/missions/${c.mission_id}`)} className="text-xs text-primary hover:underline">
+                    Voir →
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </FadeInView>
+      )}
+
+      {/* ✅ Missions confirmées */}
+      {missionsAssigneesDetail.length > 0 && (
+        <FadeInView delay={50}>
+          <div className="card-base border-success/30 bg-success/5 mb-4">
+            <p className="text-sm font-semibold text-success flex items-center gap-2 mb-2">
+              ✅ {missionsAssigneesDetail.length} mission{missionsAssigneesDetail.length > 1 ? 's' : ''} confirmée{missionsAssigneesDetail.length > 1 ? 's' : ''}
+            </p>
+            <div className="space-y-1.5">
+              {missionsAssigneesDetail.slice(0, 5).map((m: any) => (
+                <div key={m.mission_id} className="flex items-center justify-between text-sm">
+                  <span className="text-foreground">
+                    {m.intitule} · <span className="text-muted-foreground">{m.soignant_nom}</span>
+                    {m.debut_le && <span className="text-muted-foreground"> · {new Date(m.debut_le).toLocaleDateString('fr-FR')}</span>}
+                  </span>
+                  <button onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)} className="text-xs text-primary hover:underline">
+                    Voir →
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </FadeInView>
+      )}
+
       {/* Actions rapides */}
       <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
         <button onClick={() => navigate('/etablissement/missions/creer')} className="btn-primary text-sm whitespace-nowrap flex items-center gap-2">

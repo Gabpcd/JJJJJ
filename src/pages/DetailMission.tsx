@@ -328,12 +328,23 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         </div>
       )}
 
+      {/* Candidatures en haut si mode CANDIDATURE et OUVERTE */}
+      {m.mode_attribution === 'CANDIDATURE' && m.statut === 'OUVERTE' && (
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-foreground mb-3">Candidatures {nbCandidatures > 0 ? `(${nbCandidatures})` : ''}</h2>
+          <ListeCandidatures
+            missionId={m.id}
+            modePaiement={(m.etablissements as any)?.mode_paiement_commission}
+            onAccepted={() => window.location.reload()}
+            onError={(msg) => toast.error(msg)}
+            onSuccess={(msg) => toast.success(msg)}
+          />
+        </div>
+      )}
+
       <Tabs defaultValue="details">
         <TabsList className="mb-4">
           <TabsTrigger value="details">Détails</TabsTrigger>
-          {m.statut === 'OUVERTE' && m.mode_attribution === 'CANDIDATURE' && (
-            <TabsTrigger value="candidatures">Candidatures{nbCandidatures > 0 ? ` (${nbCandidatures})` : ''}</TabsTrigger>
-          )}
           {m.statut === 'OUVERTE' && <TabsTrigger value="recommandations" onClick={chargerRecommandations}>Soignants recommandés</TabsTrigger>}
         </TabsList>
 
