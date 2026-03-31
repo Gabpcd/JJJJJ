@@ -156,6 +156,14 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       return 'Jolene';
     };
 
+    // Fetch mission intitulés for conversations with mission_id
+    const missionIds = [...new Set(convs.map(c => c.mission_id).filter(Boolean))] as string[];
+    const missionMap = new Map<string, string>();
+    if (missionIds.length > 0) {
+      const { data: missionData } = await supabase.from('missions').select('id, intitule').in('id', missionIds);
+      missionData?.forEach(m => missionMap.set(m.id, m.intitule));
+    }
+
     const enriched: Conversation[] = convs.map(c => {
       const autreId = c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id;
       const info = userMap.get(autreId) || userMap.get(c.participant_1_id) || userMap.get(c.participant_2_id);
@@ -177,6 +185,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         dernier_contenu: lastMsgMap.get(c.id) || null,
         non_lus: unreadMap.get(c.id) || 0,
         is_jolene: isJolene,
+        mission_intitule: c.mission_id ? missionMap.get(c.mission_id) || null : null,
       };
     });
 
