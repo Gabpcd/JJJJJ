@@ -124,6 +124,10 @@ export default function ProfilSoignantEtablissement() {
                   <p className="font-medium text-foreground">{getLabelProfession(soignant.profession)}</p>
                 </div>
                 <div>
+                  <p className="text-muted-foreground">Type d'exercice</p>
+                  <p className="font-medium text-foreground">{soignant.type_exercice === 'MIXTE' ? 'Salarié + Libéral' : soignant.type_exercice === 'LIBERAL' ? 'Libéral' : 'Salarié'}</p>
+                </div>
+                <div>
                   <p className="text-muted-foreground">RPPS</p>
                   <p className="font-medium text-foreground">{soignant.numero_rpps || '—'}</p>
                 </div>
@@ -135,7 +139,35 @@ export default function ProfilSoignantEtablissement() {
                   <p className="text-muted-foreground">Missions terminées</p>
                   <p className="font-medium text-foreground">{soignant.total_missions_terminees ?? 0}</p>
                 </div>
+                {soignant.annees_experience > 0 && (
+                  <div>
+                    <p className="text-muted-foreground">Années d'expérience</p>
+                    <p className="font-medium text-foreground">{soignant.annees_experience} ans</p>
+                  </div>
+                )}
+                {soignant.disponible_urgence && (
+                  <div>
+                    <p className="text-muted-foreground">Pool urgence</p>
+                    <p className="font-medium text-success">🚨 Disponible</p>
+                  </div>
+                )}
               </div>
+              {soignant.bio && (
+                <div className="mt-4">
+                  <p className="text-muted-foreground text-sm mb-1">Bio</p>
+                  <p className="text-sm text-foreground">{soignant.bio}</p>
+                </div>
+              )}
+              {soignant.specialites && (Array.isArray(soignant.specialites) ? soignant.specialites : []).length > 0 && (
+                <div className="mt-3">
+                  <p className="text-muted-foreground text-sm mb-1">Spécialités</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(Array.isArray(soignant.specialites) ? soignant.specialites : []).map((s: string) => (
+                      <span key={s} className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="card-base">
