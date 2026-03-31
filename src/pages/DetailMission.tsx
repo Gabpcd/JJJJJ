@@ -32,6 +32,7 @@ import { fr } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 function scoreColor(score: number): string {
   if (score >= 70) return 'text-success';
@@ -524,6 +525,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {loadingReco ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">Analyse en cours…</p>
               ) : recommandations.length > 0 ? (
+                <TooltipProvider>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -538,22 +540,34 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {recommandations.map((r: any) => (
+                      {recommandations.map((r: any) => {
+                        const typeExo = r.type_exercice || 'SALARIE';
+                        const missionContrat = (m as any).type_contrat_recherche;
+                        const incompatible = (missionContrat === 'LIBERAL' && typeExo === 'SALARIE') || (missionContrat === 'SALARIE' && typeExo === 'LIBERAL');
+                        return (
                         <tr key={r.id} className="hover:bg-muted/50">
                           <td className="py-3 font-medium text-foreground">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               {r.est_favori && <Star className="h-3.5 w-3.5 text-warning fill-warning" />}
-                              {r.prenom} {r.nom}
+                              <span>{r.prenom} {r.nom}</span>
+                              <span className={`badge-base text-[10px] ${typeExo === 'LIBERAL' ? 'bg-info/10 text-info' : typeExo === 'MIXTE' ? 'bg-purple-100 text-purple-700' : 'bg-muted text-muted-foreground'}`}>
+                                {typeExo === 'MIXTE' ? 'Salarié + Libéral' : typeExo === 'LIBERAL' ? 'Libéral' : 'Salarié'}
+                              </span>
                             </div>
                           </td>
                           <td className="py-3">
-                            {r.score_fiabilite != null && r.score_fiabilite > 0 ? (
-                              <span className={`badge-base text-[10px] ${scoreBadgeClasses(r.score_fiabilite)}`}>
-                                {r.score_fiabilite}/100
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">—</span>
-                            )}
+                            <div className="space-y-0.5">
+                              {r.score_fiabilite != null && r.score_fiabilite > 0 ? (
+                                <span className={`badge-base text-[10px] ${scoreBadgeClasses(r.score_fiabilite)}`}>
+                                  ⭐ {r.score_fiabilite}/100
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">—</span>
+                              )}
+                              {r.note_moyenne != null && r.nb_evaluations > 0 && (
+                                <p className="text-[10px] text-muted-foreground">{Number(r.note_moyenne).toFixed(1)}/5 ({r.nb_evaluations} avis)</p>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 text-muted-foreground">{r.distance_km != null ? `${r.distance_km.toFixed(1)} km` : '—'}</td>
                           <td className="py-3 text-muted-foreground">{r.missions_etablissement ?? 0}</td>
@@ -568,23 +582,35 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                               {r.distance_km != null && r.distance_km > 50 && (
                                 <span className="badge-base bg-muted text-muted-foreground text-[9px]">📍 Hors zone</span>
                               )}
+                              {incompatible && (
+                                <span className="badge-base bg-destructive/10 text-destructive text-[9px]">⚠️ Type incompatible</span>
+                              )}
                             </div>
                           </td>
                           <td className="py-3">
-                            <button
-                               onClick={() => proposerMission(r.id)}
-                               disabled={proposing === r.id}
-                               className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50"
-                             >
-                               <Send className="h-3.5 w-3.5" />
-                               {proposing === r.id ? '…' : 'Proposer'}
-                             </button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <button
+                                     onClick={() => proposerMission(r.id)}
+                                     disabled={proposing === r.id || incompatible}
+                                     className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                   >
+                                     <Send className="h-3.5 w-3.5" />
+                                     {proposing === r.id ? '…' : 'Proposer'}
+                                   </button>
+                                </span>
+                              </TooltipTrigger>
+                              {incompatible && <TooltipContent>Type d'exercice incompatible avec cette mission</TooltipContent>}
+                            </Tooltip>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
-                  </table>
-                </div>
+                   </table>
+                 </div>
+                </TooltipProvider>
               ) : (
                 <div className="text-center py-8 space-y-2">
                   <p className="text-sm text-muted-foreground">Aucun soignant disponible pour cette profession.</p>

@@ -142,8 +142,13 @@ export function ListeCandidatures({ missionId, modePaiement, onAccepted, onError
             <div key={c.id} className="card-base border-primary/20">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-foreground">
+                  <p className="font-semibold text-sm text-foreground flex items-center gap-1.5 flex-wrap">
                     👤 {c.soignant?.prenom} {c.soignant?.nom}
+                    {c.soignant?.type_exercice && (
+                      <span className={`badge-base text-[10px] ${c.soignant.type_exercice === 'LIBERAL' ? 'bg-info/10 text-info' : c.soignant.type_exercice === 'MIXTE' ? 'bg-purple-100 text-purple-700' : 'bg-muted text-muted-foreground'}`}>
+                        {c.soignant.type_exercice === 'MIXTE' ? 'Salarié + Libéral' : c.soignant.type_exercice === 'LIBERAL' ? 'Libéral' : 'Salarié'}
+                      </span>
+                    )}
                   </p>
                   {c.soignant?.bio && (
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.soignant.bio}</p>
@@ -155,6 +160,9 @@ export function ListeCandidatures({ missionId, modePaiement, onAccepted, onError
                       </span>
                     ) : (
                       <span className="badge-base text-[10px] bg-muted text-muted-foreground">Pas encore d'évaluation</span>
+                    )}
+                    {c.soignant?.note_moyenne != null && c.soignant?.nb_evaluations > 0 && (
+                      <span className="text-[10px] text-muted-foreground">{Number(c.soignant.note_moyenne).toFixed(1)}/5 ({c.soignant.nb_evaluations} avis)</span>
                     )}
                     {c.soignant?.annees_experience > 0 && (
                       <span className="text-[10px] text-muted-foreground">{c.soignant.annees_experience} ans d'exp.</span>
