@@ -173,6 +173,10 @@ export default function DetailSerieSoignant() {
           setModalCodeTravail(error);
           break;
         }
+      } else if (data?.choix_requis) {
+        // Series don't support contract choice — inform user to accept individually
+        toast.error('Cette mission nécessite un choix de contrat. Acceptez-la individuellement.');
+        echouees++;
       } else if (data?.error) {
         echouees++;
       } else {
