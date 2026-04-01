@@ -383,7 +383,7 @@ export default function FacturationEtablissement() {
                             )}
                           </div>
                           {/* RIB soignant */}
-                          {!isStripeConnect && (
+                          {!isStripeConnect && m.type_paiement_soignant !== 'NOTE_HONORAIRES' && (
                             <div className="mt-1">
                               {ribCache[m.mission_id] ? (
                                 <p className="text-[10px] text-muted-foreground">IBAN : {ribCache[m.mission_id]}</p>
