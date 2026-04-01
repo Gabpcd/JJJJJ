@@ -506,7 +506,7 @@ export default function DetailMissionSoignant() {
                           <p className="text-[10px] text-muted-foreground text-right mt-0.5">{messageCandidature.length}/300</p>
                         </div>
                         <button
-                          onClick={postulerMission}
+                          onClick={() => postulerMission()}
                           disabled={postulationEnCours || !conformiteOk || chevauchement}
                           className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
                         >
