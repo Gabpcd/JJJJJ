@@ -4175,6 +4175,7 @@ export type Database = {
         Args: { p_mission_id: string; p_motif: string }
         Returns: Json
       }
+      fn_paiements_etablissement: { Args: never; Returns: Json }
       fn_planning_etablissement: {
         Args: { p_debut?: string; p_fin?: string }
         Returns: Json
