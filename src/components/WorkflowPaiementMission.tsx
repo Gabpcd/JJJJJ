@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Banknote, FileText, Loader2 } from 'lucide-react';
+import { CreditCard, Banknote, FileText, Loader2, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,11 +24,15 @@ interface InfoPaiement {
   type_exercice?: string;
 }
 
+const isRefValid = (ref: string) => ref.trim().length >= 5 && /\d/.test(ref);
+
 export function WorkflowPaiementMission({ missionId, soignantAssigneId, etablissementId, onStartConnectPay, soignantHasConnect }: Props) {
   const [info, setInfo] = useState<InfoPaiement | null>(null);
   const [loading, setLoading] = useState(true);
   const [declaring, setDeclaring] = useState(false);
   const [reference, setReference] = useState('');
+  const [ribLoading, setRibLoading] = useState(false);
+  const [ribData, setRibData] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -41,9 +45,23 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
     load();
   }, [missionId]);
 
+  const consulterRib = async () => {
+    setRibLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_consulter_rib_soignant' as any, { p_mission_id: missionId });
+      if (error) throw error;
+      const result = data as any;
+      if (result?.error) throw new Error(result.error);
+      setRibData(result?.iban || result);
+    } catch (e: any) {
+      toast.error(e?.message || 'Impossible de consulter le RIB');
+    }
+    setRibLoading(false);
+  };
+
   const declarerPaiement = async () => {
-    if (reference.trim().length < 5) {
-      toast.error('La référence doit contenir au moins 5 caractères');
+    if (!isRefValid(reference)) {
+      toast.error('La référence doit contenir au moins 5 caractères dont 1 chiffre');
       return;
     }
     setDeclaring(true);
@@ -106,6 +124,9 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   const methodeLabel = info.mode_recommande === 'VIREMENT_NOTE_HONORAIRES' ? "Note d'honoraires" : 'Bulletin de paie';
   const icone = info.mode_recommande === 'VIREMENT_NOTE_HONORAIRES' ? FileText : Banknote;
   const Icone = icone;
+  const trimmedRef = reference.trim();
+  const refTooShort = trimmedRef.length > 0 && trimmedRef.length < 5;
+  const refNoDigit = trimmedRef.length >= 5 && !/\d/.test(trimmedRef);
 
   return (
     <div className="card-base border-primary/20 space-y-3">
@@ -116,24 +137,42 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
         <p>Net à payer au soignant : {fmt(info.montant_soignant)}</p>
         <p>Méthode : <span className="font-medium text-foreground">{methodeLabel}</span></p>
       </div>
-      {info.iban_soignant && (
+
+      {/* RIB soignant */}
+      {info.iban_soignant ? (
         <p className="text-xs text-muted-foreground">
           RIB : ****{info.iban_soignant}
         </p>
+      ) : (
+        <div className="flex items-center gap-2">
+          {ribData ? (
+            <p className="text-xs text-muted-foreground">IBAN : {ribData}</p>
+          ) : (
+            <Button size="sm" variant="ghost" className="gap-1 text-xs h-7" onClick={consulterRib} disabled={ribLoading}>
+              {ribLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+              Consulter le RIB
+            </Button>
+          )}
+        </div>
       )}
+
       <div className="space-y-2">
-        <label className="text-xs font-medium text-foreground">Référence de paiement * <span className="font-normal text-muted-foreground">(min. 5 car.)</span></label>
+        <label className="text-xs font-medium text-foreground">Référence de paiement *</label>
         <Input
-          placeholder="Ex: VIR-2026-001, CHQ-12345"
+          placeholder="Ex: VIR-2026-03-001"
           value={reference}
           onChange={e => setReference(e.target.value)}
           className="text-sm"
         />
-        {reference.trim().length > 0 && reference.trim().length < 5 && (
+        <p className="text-[10px] text-muted-foreground">Numéro de virement bancaire, référence de chèque ou numéro de facture</p>
+        {refTooShort && (
           <p className="text-[10px] text-destructive">Minimum 5 caractères</p>
         )}
+        {refNoDigit && (
+          <p className="text-[10px] text-destructive">La référence doit contenir au moins 1 chiffre</p>
+        )}
       </div>
-      <Button size="sm" variant="outline" onClick={declarerPaiement} disabled={declaring || reference.trim().length < 5} className="gap-2">
+      <Button size="sm" variant="outline" onClick={declarerPaiement} disabled={declaring || !isRefValid(reference)} className="gap-2">
         <Banknote className="h-4 w-4" /> {declaring ? 'Déclaration…' : 'Déclarer le paiement effectué'}
       </Button>
     </div>

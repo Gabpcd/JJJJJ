@@ -4,7 +4,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, Building2, AlertTriangle, Download, Banknote } from 'lucide-react';
+import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, Building2, AlertTriangle, Download, Banknote, Info, Eye, ChevronDown } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
@@ -12,11 +12,13 @@ import { BadgePalier } from '@/components/BadgePalier';
 import { FactureChorus, ChorusStatutBadge } from '@/components/FactureChorus';
 import { PaiementVirement } from '@/components/PaiementVirement';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
+import { ENTREPRISE } from '@/constantes/entreprise';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -55,6 +57,8 @@ const PAIEMENT_STATUT_LABELS: Record<string, string> = {
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 
+const isRefValid = (ref: string) => ref.trim().length >= 5 && /\d/.test(ref);
+
 export default function FacturationEtablissement() {
   usePageTitle('Facturation');
   const navigate = useNavigate();
@@ -76,6 +80,8 @@ export default function FacturationEtablissement() {
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
   const [filtreStatut, setFiltreStatut] = useState<string | null>(searchParams.get('filtre'));
   const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
+  const [ribCache, setRibCache] = useState<Record<string, string>>({});
+  const [ribLoadingId, setRibLoadingId] = useState<string | null>(null);
 
   // Paiements soignants state
   const [paiementsData, setPaiementsData] = useState<any>(null);
@@ -173,8 +179,8 @@ export default function FacturationEtablissement() {
 
   const declarerPaiementSoignant = async (missionId: string, montant: number) => {
     const ref = declaringRef[missionId]?.trim();
-    if (!ref || ref.length < 5) {
-      toast.error('La référence doit contenir au moins 5 caractères');
+    if (!ref || !isRefValid(ref)) {
+      toast.error('La référence doit contenir au moins 5 caractères dont 1 chiffre');
       return;
     }
     setDeclaringId(missionId);
@@ -214,8 +220,6 @@ export default function FacturationEtablissement() {
       if (data?.error) throw new Error(data.error);
       if (data?.client_secret) {
         toast.success('Session de paiement créée — redirection…');
-        // The StripeEmbeddedCheckout or redirect would be handled here
-        // For now we use the return_url from the edge function
       }
       charger();
     } catch (e: any) {
@@ -223,6 +227,20 @@ export default function FacturationEtablissement() {
     } finally {
       setConnectPayingId(null);
     }
+  };
+
+  const consulterRib = async (missionId: string) => {
+    setRibLoadingId(missionId);
+    try {
+      const { data, error } = await supabase.rpc('fn_consulter_rib_soignant' as any, { p_mission_id: missionId });
+      if (error) throw error;
+      const result = data as any;
+      if (result?.error) throw new Error(result.error);
+      setRibCache(prev => ({ ...prev, [missionId]: result?.iban || String(result) }));
+    } catch (e: any) {
+      toast.error(e?.message || 'Impossible de consulter le RIB');
+    }
+    setRibLoadingId(null);
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
@@ -274,6 +292,34 @@ export default function FacturationEtablissement() {
 
         {/* ===== ONGLET 1 : PAIEMENTS SOIGNANTS ===== */}
         <TabsContent value="paiements">
+          {/* Encart informatif collapsible */}
+          <Collapsible className="mb-6">
+            <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-primary hover:underline w-full">
+              <Info className="h-4 w-4" />
+              <span>Comment fonctionne le paiement ?</span>
+              <ChevronDown className="h-4 w-4 ml-auto transition-transform [[data-state=open]>&]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-3 rounded-xl border border-border bg-muted/30 p-4 text-xs text-muted-foreground space-y-3">
+                <div>
+                  <p className="font-semibold text-foreground mb-1">• Mission salariée (CDDU)</p>
+                  <p>Vous payez le soignant directement (bulletin de paie). Déclarez le paiement ici avec la référence de virement. Le soignant confirme la réception. La commission Jolene est facturée séparément chaque mois.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground mb-1">• Mission libérale avec Stripe Connect</p>
+                  <p>Cliquez sur « Payer via Stripe ». Le paiement est automatiquement réparti : le soignant reçoit ses honoraires, Jolene retient sa commission. Rien d'autre à faire.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground mb-1">• Mission libérale sans Stripe</p>
+                  <p>Vous payez le soignant par virement sur base de sa note d'honoraires. Déclarez le paiement avec la référence. La commission Jolene est facturée séparément.</p>
+                </div>
+                <div className="border-t border-border pt-3 text-destructive font-medium">
+                  ⚠️ Délai de paiement : 30 jours maximum après la fin de la mission. Au-delà de 60 jours d'impayé, la publication de nouvelles missions est suspendue.
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           {/* KPI */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <FadeInView delay={0}>
@@ -301,13 +347,22 @@ export default function FacturationEtablissement() {
                 {missionsAPayer.map((m: any) => {
                   const joursSinceFin = m.fin_le ? Math.floor((Date.now() - new Date(m.fin_le).getTime()) / 86400000) : 0;
                   const isStripeConnect = m.soignant_stripe_connect === true && m.type_paiement_soignant === 'NOTE_HONORAIRES';
+                  const currentRef = declaringRef[m.mission_id] || '';
+                  const trimmedRef = currentRef.trim();
+                  const refTooShort = trimmedRef.length > 0 && trimmedRef.length < 5;
+                  const refNoDigit = trimmedRef.length >= 5 && !/\d/.test(trimmedRef);
 
                   return (
                     <div key={m.mission_id} className="flex flex-col gap-3 p-3 rounded-lg border border-border/50 bg-background">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div className="flex-1">
                           <p className="text-sm font-semibold text-foreground">{m.soignant_nom}</p>
-                          <p className="text-xs text-muted-foreground">{m.intitule}</p>
+                          <button
+                            onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
+                            className="text-xs text-primary hover:underline text-left"
+                          >
+                            {m.intitule}
+                          </button>
                           <div className="flex flex-wrap items-center gap-2 mt-1">
                             <span className="text-xs text-muted-foreground">
                               Fin : {m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
@@ -327,6 +382,23 @@ export default function FacturationEtablissement() {
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">⚠️ {joursSinceFin}j depuis fin de mission</span>
                             )}
                           </div>
+                          {/* RIB soignant */}
+                          {!isStripeConnect && (
+                            <div className="mt-1">
+                              {ribCache[m.mission_id] ? (
+                                <p className="text-[10px] text-muted-foreground">IBAN : {ribCache[m.mission_id]}</p>
+                              ) : (
+                                <button
+                                  onClick={() => consulterRib(m.mission_id)}
+                                  disabled={ribLoadingId === m.mission_id}
+                                  className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                                >
+                                  {ribLoadingId === m.mission_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+                                  Consulter le RIB du soignant
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <span className="text-sm font-bold text-foreground">{fmt(m.net_a_payer ?? m.total_brut ?? 0)}</span>
                       </div>
@@ -346,20 +418,24 @@ export default function FacturationEtablissement() {
                           <div className="flex-1 w-full sm:w-auto space-y-1">
                             <input
                               type="text"
-                              placeholder="Référence (min. 5 car.) — Ex: VIR-2026-001"
-                              value={declaringRef[m.mission_id] || ''}
+                              placeholder="Ex: VIR-2026-03-001"
+                              value={currentRef}
                               onChange={e => setDeclaringRef(prev => ({ ...prev, [m.mission_id]: e.target.value }))}
                               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
-                            {(declaringRef[m.mission_id]?.trim().length ?? 0) > 0 && (declaringRef[m.mission_id]?.trim().length ?? 0) < 5 && (
+                            <p className="text-[10px] text-muted-foreground">Numéro de virement bancaire, référence de chèque ou numéro de facture</p>
+                            {refTooShort && (
                               <p className="text-[10px] text-destructive">Minimum 5 caractères</p>
+                            )}
+                            {refNoDigit && (
+                              <p className="text-[10px] text-destructive">La référence doit contenir au moins 1 chiffre</p>
                             )}
                           </div>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => declarerPaiementSoignant(m.mission_id, m.net_a_payer ?? m.total_brut ?? 0)}
-                            disabled={declaringId === m.mission_id || (declaringRef[m.mission_id]?.trim().length ?? 0) < 5}
+                            disabled={declaringId === m.mission_id || !isRefValid(currentRef)}
                             className="gap-1 shrink-0"
                           >
                             {declaringId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Banknote className="h-3.5 w-3.5" />}
@@ -399,7 +475,15 @@ export default function FacturationEtablissement() {
                         <tr className="border-b border-border/50">
                           <td className="py-2 text-muted-foreground">{p.date_paiement ? format(new Date(p.date_paiement), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
                           <td className="py-2 text-foreground">{p.soignant_nom || '—'}</td>
-                          <td className="py-2 text-foreground truncate max-w-[180px]">{p.mission_intitule || '—'}</td>
+                          <td className="py-2">
+                            {p.mission_id ? (
+                              <button onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)} className="text-primary hover:underline truncate max-w-[180px] block text-left">
+                                {p.mission_intitule || '—'}
+                              </button>
+                            ) : (
+                              <span className="text-foreground truncate max-w-[180px] block">{p.mission_intitule || '—'}</span>
+                            )}
+                          </td>
                           <td className="py-2 text-xs text-muted-foreground">{p.reference_virement || '—'}</td>
                           <td className="py-2 text-muted-foreground">{p.methode || '—'}</td>
                           <td className="py-2 text-right font-medium">{fmt(p.montant_net ?? 0)}</td>
@@ -408,7 +492,7 @@ export default function FacturationEtablissement() {
                               {PAIEMENT_STATUT_LABELS[p.statut] ?? p.statut}
                             </span>
                             {p.confirme_par_soignant && (
-                              <span className="ml-1 text-[10px] text-success">✅</span>
+                              <span className="ml-1 text-[10px] text-success">✅ {p.confirme_par_soignant_le ? format(new Date(p.confirme_par_soignant_le), 'dd/MM', { locale: fr }) : ''}</span>
                             )}
                           </td>
                         </tr>
@@ -416,6 +500,13 @@ export default function FacturationEtablissement() {
                           <tr>
                             <td colSpan={7} className="py-1 px-2 text-xs text-destructive">
                               ⚠️ Motif : {p.motif_contestation}
+                            </td>
+                          </tr>
+                        )}
+                        {p.echeance_le && p.statut !== 'CONFIRME' && p.statut !== 'CONTESTE' && (
+                          <tr>
+                            <td colSpan={7} className="py-0.5 px-2 text-[10px] text-muted-foreground">
+                              Échéance : {format(new Date(p.echeance_le), 'dd/MM/yyyy', { locale: fr })}
                             </td>
                           </tr>
                         )}
@@ -469,6 +560,25 @@ export default function FacturationEtablissement() {
             </div>
           )}
 
+          {/* RIB Jolene pour paiement par virement */}
+          <div className="card-base mb-6 bg-muted/30">
+            <div className="flex items-start gap-3">
+              <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">🏦 Coordonnées bancaires Jolene SASU</p>
+                {ENTREPRISE.iban && ENTREPRISE.iban !== 'FR76 XXXX XXXX XXXX XXXX XXXX XXX' ? (
+                  <>
+                    <p className="text-xs text-muted-foreground"><strong>IBAN :</strong> {ENTREPRISE.iban}</p>
+                    <p className="text-xs text-muted-foreground"><strong>BIC :</strong> {ENTREPRISE.bic}</p>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Coordonnées bancaires disponibles prochainement</p>
+                )}
+                <p className="text-xs text-muted-foreground"><strong>Référence à indiquer :</strong> le numéro de facture</p>
+              </div>
+            </div>
+          </div>
+
           {/* Missions non facturées */}
           <div id="missions-non-facturees" className="card-base mb-6">
             <div className="flex items-center justify-between mb-4">
@@ -491,7 +601,11 @@ export default function FacturationEtablissement() {
                       {missionsNonFacturees.map(m => (
                         <tr key={m.id} className="border-b border-border/50">
                           <td className="py-2 text-muted-foreground">{m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
-                          <td className="py-2 text-foreground">{m.intitule}</td>
+                          <td className="py-2">
+                            <button onClick={() => navigate(`/etablissement/missions/${m.id}`)} className="text-primary hover:underline text-left">
+                              {m.intitule}
+                            </button>
+                          </td>
                           <td className="py-2 text-right font-medium">{(m.montant_commission_ht ?? 0).toFixed(2)} €</td>
                         </tr>
                       ))}
