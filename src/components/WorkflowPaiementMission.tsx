@@ -122,15 +122,18 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
         </p>
       )}
       <div className="space-y-2">
-        <label className="text-xs font-medium text-foreground">Référence de paiement *</label>
+        <label className="text-xs font-medium text-foreground">Référence de paiement * <span className="font-normal text-muted-foreground">(min. 5 car.)</span></label>
         <Input
-          placeholder="Numéro de virement, référence chèque, etc."
+          placeholder="Ex: VIR-2026-001, CHQ-12345"
           value={reference}
           onChange={e => setReference(e.target.value)}
           className="text-sm"
         />
+        {reference.trim().length > 0 && reference.trim().length < 5 && (
+          <p className="text-[10px] text-destructive">Minimum 5 caractères</p>
+        )}
       </div>
-      <Button size="sm" variant="outline" onClick={declarerPaiement} disabled={declaring || !reference.trim()} className="gap-2">
+      <Button size="sm" variant="outline" onClick={declarerPaiement} disabled={declaring || reference.trim().length < 5} className="gap-2">
         <Banknote className="h-4 w-4" /> {declaring ? 'Déclaration…' : 'Déclarer le paiement effectué'}
       </Button>
     </div>
