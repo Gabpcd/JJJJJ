@@ -24,7 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { PoolUrgenceToggle } from '@/components/PoolUrgenceToggle';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 function StripeConnectBanner({ userId }: { userId?: string }) {
