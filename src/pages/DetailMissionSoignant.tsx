@@ -167,14 +167,17 @@ export default function DetailMissionSoignant() {
   const duree = mission.duree_heures ?? ((new Date(mission.fin_le).getTime() - new Date(mission.debut_le).getTime()) / 3600000);
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
 
-  const postulerMission = async () => {
+  const postulerMission = async (choixContrat?: string) => {
     setPostulationEnCours(true);
     try {
-      const { data, error } = await supabase.rpc('fn_postuler_mission' as any, {
-        p_mission_id: id!,
-        p_message: messageCandidature || null,
-      });
+      const params: any = { p_mission_id: id!, p_message: messageCandidature || null };
+      if (choixContrat) params.p_choix_contrat = choixContrat;
+      const { data, error } = await supabase.rpc('fn_postuler_mission' as any, params);
       if (error) { toast.error(extraireMessageErreur(error)); return; }
+      if (data?.choix_requis) {
+        setChoixContratDialog({ open: true, options: data.options || [], action: 'postuler' });
+        return;
+      }
       if (data?.error) { toast.error(data.error); return; }
       setCandidatureEnvoyee(true);
       toast.success('Candidature envoyée ! L\'établissement examinera votre profil.');
@@ -185,10 +188,12 @@ export default function DetailMissionSoignant() {
     setPostulationEnCours(false);
   };
 
-  const accepterMission = async () => {
+  const accepterMission = async (choixContrat?: string) => {
     setAcceptationEnCours(true);
     try {
-      const { data, error } = await supabase.rpc('fn_accepter_mission' as any, { p_mission_id: id! });
+      const params: any = { p_mission_id: id! };
+      if (choixContrat) params.p_choix_contrat = choixContrat;
+      const { data, error } = await supabase.rpc('fn_accepter_mission' as any, params);
 
       if (error) {
         if (estBlocageCodeTravail(error)) {
@@ -198,6 +203,10 @@ export default function DetailMissionSoignant() {
         } else {
           toast.error(extraireMessageErreur(error));
         }
+        return;
+      }
+      if (data?.choix_requis) {
+        setChoixContratDialog({ open: true, options: data.options || [], action: 'accepter' });
         return;
       }
       if (data?.error) {
