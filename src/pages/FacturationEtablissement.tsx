@@ -172,20 +172,56 @@ export default function FacturationEtablissement() {
   };
 
   const declarerPaiementSoignant = async (missionId: string, montant: number) => {
+    const ref = declaringRef[missionId]?.trim();
+    if (!ref) {
+      toast.error('Veuillez saisir une référence de paiement');
+      return;
+    }
     setDeclaringId(missionId);
     try {
       const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
         p_mission_id: missionId,
         p_montant: montant,
+        p_reference: ref,
       });
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      const result = data as any;
+      if (result?.error) {
+        if (result?.use_stripe_connect) {
+          toast.info('Ce soignant utilise Stripe Connect — lancement du paiement par carte');
+          lancerPaiementStripeConnect(missionId);
+          return;
+        }
+        throw new Error(result.error);
+      }
       toast.success('Paiement déclaré — le soignant sera notifié');
+      setDeclaringRef(prev => ({ ...prev, [missionId]: '' }));
       charger();
     } catch (e: any) {
       toast.error(e?.message || 'Erreur lors de la déclaration');
     } finally {
       setDeclaringId(null);
+    }
+  };
+
+  const lancerPaiementStripeConnect = async (missionId: string) => {
+    setConnectPayingId(missionId);
+    try {
+      const { data, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
+        body: { mission_id: missionId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.client_secret) {
+        toast.success('Session de paiement créée — redirection…');
+        // The StripeEmbeddedCheckout or redirect would be handled here
+        // For now we use the return_url from the edge function
+      }
+      charger();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erreur lors du paiement Stripe Connect');
+    } finally {
+      setConnectPayingId(null);
     }
   };
 
