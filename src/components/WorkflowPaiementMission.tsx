@@ -42,8 +42,8 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   }, [missionId]);
 
   const declarerPaiement = async () => {
-    if (!reference.trim()) {
-      toast.error('Veuillez saisir une référence de paiement');
+    if (reference.trim().length < 5) {
+      toast.error('La référence doit contenir au moins 5 caractères');
       return;
     }
     setDeclaring(true);
