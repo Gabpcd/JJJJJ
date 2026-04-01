@@ -138,22 +138,24 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
         <p>Méthode : <span className="font-medium text-foreground">{methodeLabel}</span></p>
       </div>
 
-      {/* RIB soignant */}
-      {info.iban_soignant ? (
-        <p className="text-xs text-muted-foreground">
-          RIB : ****{info.iban_soignant}
-        </p>
-      ) : (
-        <div className="flex items-center gap-2">
-          {ribData ? (
-            <p className="text-xs text-muted-foreground">IBAN : {ribData}</p>
-          ) : (
-            <Button size="sm" variant="ghost" className="gap-1 text-xs h-7" onClick={consulterRib} disabled={ribLoading}>
-              {ribLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
-              Consulter le RIB
-            </Button>
-          )}
-        </div>
+      {/* RIB soignant — uniquement pour les missions salariées (bulletin de paie) */}
+      {info.mode_recommande === 'VIREMENT_PAIE' && (
+        info.iban_soignant ? (
+          <p className="text-xs text-muted-foreground">
+            RIB : ****{info.iban_soignant}
+          </p>
+        ) : (
+          <div className="flex items-center gap-2">
+            {ribData ? (
+              <p className="text-xs text-muted-foreground">IBAN : {ribData}</p>
+            ) : (
+              <Button size="sm" variant="ghost" className="gap-1 text-xs h-7" onClick={consulterRib} disabled={ribLoading}>
+                {ribLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+                Consulter le RIB
+              </Button>
+            )}
+          </div>
+        )
       )}
 
       <div className="space-y-2">
