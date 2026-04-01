@@ -218,10 +218,11 @@ export default function FacturationEtablissement() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      if (data?.client_secret) {
-        toast.success('Session de paiement créée — redirection…');
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
       }
-      charger();
+      toast.error('Aucune URL de paiement reçue');
     } catch (e: any) {
       toast.error(e?.message || 'Erreur lors du paiement Stripe Connect');
     } finally {
