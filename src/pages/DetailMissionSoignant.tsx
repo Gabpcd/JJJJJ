@@ -619,7 +619,7 @@ export default function DetailMissionSoignant() {
       <ModalConfirmation
         ouvert={modalConfirm}
         onFermer={() => setModalConfirm(false)}
-        onConfirmer={accepterMission}
+        onConfirmer={() => accepterMission()}
         titre="Accepter cette mission ?"
         message={`Vous vous engagez à être présent(e) le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })} de ${format(new Date(mission.debut_le), "HH'h'mm", { locale: fr })} à ${format(new Date(mission.fin_le), "HH'h'mm", { locale: fr })}. Une annulation tardive impactera votre score de fiabilité.`}
         labelConfirmer="Oui, j'accepte"
