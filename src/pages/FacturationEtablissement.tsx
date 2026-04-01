@@ -254,6 +254,11 @@ export default function FacturationEtablissement() {
               </span>
             </div>
           )}
+          {etab?.est_secteur_public && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary mt-1">
+              🏛️ Secteur public — Chorus Pro
+            </span>
+          )}
         </div>
         {etab?.paliers_commission && (
           <BadgePalier palierNom={etab.paliers_commission.nom} taux={etab.taux_commission_negocie ?? 15} />
