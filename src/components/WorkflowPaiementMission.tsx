@@ -42,18 +42,16 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   const declarerPaiement = async () => {
     setDeclaring(true);
     try {
-      const { error } = await (supabase.from('paiements_soignant' as any) as any).insert({
-        mission_id: missionId,
-        soignant_id: soignantAssigneId,
-        etablissement_id: etablissementId,
-        montant: info?.montant_soignant || 0,
-        mode: info?.mode_recommande || 'VIREMENT_PAIE',
-        statut: 'DECLARE',
+      const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
+        p_mission_id: missionId,
+        p_montant: info?.montant_soignant || 0,
+        p_methode: info?.mode_recommande === 'VIREMENT_NOTE_HONORAIRES' ? 'NOTE_HONORAIRES' : 'VIREMENT',
       });
       if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
       toast.success('Paiement déclaré — le soignant sera notifié');
-    } catch {
-      toast.error('Erreur lors de la déclaration');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erreur lors de la déclaration');
     }
     setDeclaring(false);
   };

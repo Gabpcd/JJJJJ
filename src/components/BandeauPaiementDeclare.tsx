@@ -48,14 +48,12 @@ export function BandeauPaiementDeclare() {
   const traiter = async (paiementId: string, confirme: boolean) => {
     setProcessing(paiementId);
     try {
-      const { error } = await (supabase.from('paiements_soignant' as any) as any)
-        .update({
-          statut: confirme ? 'CONFIRME' : 'CONTESTE',
-          confirme_par_soignant: confirme,
-          confirme_par_soignant_le: new Date().toISOString(),
-          conteste: !confirme,
-        })
-        .eq('id', paiementId);
+      const rpcName = confirme ? 'fn_confirmer_paiement_soignant' : 'fn_contester_paiement_soignant';
+      const { data, error } = await supabase.rpc(rpcName as any, {
+        p_paiement_id: paiementId,
+        ...(confirme ? {} : { p_motif: 'Contesté par le soignant' }),
+      });
+      if ((data as any)?.error) throw new Error((data as any).error);
 
       if (error) throw error;
       toast.success(confirme ? 'Paiement confirmé ✅' : 'Contestation envoyée');
