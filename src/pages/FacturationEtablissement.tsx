@@ -173,8 +173,8 @@ export default function FacturationEtablissement() {
 
   const declarerPaiementSoignant = async (missionId: string, montant: number) => {
     const ref = declaringRef[missionId]?.trim();
-    if (!ref) {
-      toast.error('Veuillez saisir une référence de paiement');
+    if (!ref || ref.length < 5) {
+      toast.error('La référence doit contenir au moins 5 caractères');
       return;
     }
     setDeclaringId(missionId);
@@ -253,6 +253,11 @@ export default function FacturationEtablissement() {
                 Palier <span className="font-semibold text-foreground">{etab.paliers_commission.nom}</span> — Commission : {etab.taux_commission_negocie ?? 15}%
               </span>
             </div>
+          )}
+          {etab?.est_secteur_public && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary mt-1">
+              🏛️ Secteur public — Chorus Pro
+            </span>
           )}
         </div>
         {etab?.paliers_commission && (
@@ -338,20 +343,23 @@ export default function FacturationEtablissement() {
                         </Button>
                       ) : (
                         <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
-                          <div className="flex-1 w-full sm:w-auto">
+                          <div className="flex-1 w-full sm:w-auto space-y-1">
                             <input
                               type="text"
-                              placeholder="Référence de paiement (obligatoire)"
+                              placeholder="Référence (min. 5 car.) — Ex: VIR-2026-001"
                               value={declaringRef[m.mission_id] || ''}
                               onChange={e => setDeclaringRef(prev => ({ ...prev, [m.mission_id]: e.target.value }))}
                               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
+                            {(declaringRef[m.mission_id]?.trim().length ?? 0) > 0 && (declaringRef[m.mission_id]?.trim().length ?? 0) < 5 && (
+                              <p className="text-[10px] text-destructive">Minimum 5 caractères</p>
+                            )}
                           </div>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => declarerPaiementSoignant(m.mission_id, m.net_a_payer ?? m.total_brut ?? 0)}
-                            disabled={declaringId === m.mission_id || !(declaringRef[m.mission_id]?.trim())}
+                            disabled={declaringId === m.mission_id || (declaringRef[m.mission_id]?.trim().length ?? 0) < 5}
                             className="gap-1 shrink-0"
                           >
                             {declaringId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Banknote className="h-3.5 w-3.5" />}

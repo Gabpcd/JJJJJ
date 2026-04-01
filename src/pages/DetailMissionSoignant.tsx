@@ -5,6 +5,7 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { hapticNotification } from '@/lib/haptics';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Mail, Building2, MessageCircle } from 'lucide-react';
+import { ChoixContratDialog } from '@/components/ChoixContratDialog';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
@@ -78,6 +79,7 @@ export default function DetailMissionSoignant() {
   const [messageCandidature, setMessageCandidature] = useState('');
   const [candidatureEnvoyee, setCandidatureEnvoyee] = useState(false);
   const [postulationEnCours, setPostulationEnCours] = useState(false);
+  const [choixContratDialog, setChoixContratDialog] = useState<{ open: boolean; options: any[]; action: 'postuler' | 'accepter' }>({ open: false, options: [], action: 'postuler' });
 
   useEffect(() => {
     if (!user || !id) return;
@@ -166,14 +168,17 @@ export default function DetailMissionSoignant() {
   const duree = mission.duree_heures ?? ((new Date(mission.fin_le).getTime() - new Date(mission.debut_le).getTime()) / 3600000);
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
 
-  const postulerMission = async () => {
+  const postulerMission = async (choixContrat?: string) => {
     setPostulationEnCours(true);
     try {
-      const { data, error } = await supabase.rpc('fn_postuler_mission' as any, {
-        p_mission_id: id!,
-        p_message: messageCandidature || null,
-      });
+      const params: any = { p_mission_id: id!, p_message: messageCandidature || null };
+      if (choixContrat) params.p_choix_contrat = choixContrat;
+      const { data, error } = await supabase.rpc('fn_postuler_mission' as any, params);
       if (error) { toast.error(extraireMessageErreur(error)); return; }
+      if (data?.choix_requis) {
+        setChoixContratDialog({ open: true, options: data.options || [], action: 'postuler' });
+        return;
+      }
       if (data?.error) { toast.error(data.error); return; }
       setCandidatureEnvoyee(true);
       toast.success('Candidature envoyée ! L\'établissement examinera votre profil.');
@@ -184,10 +189,12 @@ export default function DetailMissionSoignant() {
     setPostulationEnCours(false);
   };
 
-  const accepterMission = async () => {
+  const accepterMission = async (choixContrat?: string) => {
     setAcceptationEnCours(true);
     try {
-      const { data, error } = await supabase.rpc('fn_accepter_mission' as any, { p_mission_id: id! });
+      const params: any = { p_mission_id: id! };
+      if (choixContrat) params.p_choix_contrat = choixContrat;
+      const { data, error } = await supabase.rpc('fn_accepter_mission' as any, params);
 
       if (error) {
         if (estBlocageCodeTravail(error)) {
@@ -197,6 +204,10 @@ export default function DetailMissionSoignant() {
         } else {
           toast.error(extraireMessageErreur(error));
         }
+        return;
+      }
+      if (data?.choix_requis) {
+        setChoixContratDialog({ open: true, options: data.options || [], action: 'accepter' });
         return;
       }
       if (data?.error) {
@@ -495,7 +506,7 @@ export default function DetailMissionSoignant() {
                           <p className="text-[10px] text-muted-foreground text-right mt-0.5">{messageCandidature.length}/300</p>
                         </div>
                         <button
-                          onClick={postulerMission}
+                          onClick={() => postulerMission()}
                           disabled={postulationEnCours || !conformiteOk || chevauchement}
                           className="btn-primary w-full text-base py-3.5 disabled:opacity-50 active:scale-[0.97] transition-transform"
                         >
@@ -608,7 +619,7 @@ export default function DetailMissionSoignant() {
       <ModalConfirmation
         ouvert={modalConfirm}
         onFermer={() => setModalConfirm(false)}
-        onConfirmer={accepterMission}
+        onConfirmer={() => accepterMission()}
         titre="Accepter cette mission ?"
         message={`Vous vous engagez à être présent(e) le ${format(new Date(mission.debut_le), 'EEEE d MMMM', { locale: fr })} de ${format(new Date(mission.debut_le), "HH'h'mm", { locale: fr })} à ${format(new Date(mission.fin_le), "HH'h'mm", { locale: fr })}. Une annulation tardive impactera votre score de fiabilité.`}
         labelConfirmer="Oui, j'accepte"
@@ -648,6 +659,18 @@ export default function DetailMissionSoignant() {
           onTermine={() => { setAnimationSucces(false); navigate('/soignant/missions'); }}
         />
       )}
+
+      <ChoixContratDialog
+        open={choixContratDialog.open}
+        options={choixContratDialog.options}
+        onClose={() => { setChoixContratDialog(prev => ({ ...prev, open: false })); setPostulationEnCours(false); setAcceptationEnCours(false); }}
+        onChoose={(val) => {
+          setChoixContratDialog(prev => ({ ...prev, open: false }));
+          if (choixContratDialog.action === 'postuler') postulerMission(val);
+          else accepterMission(val);
+        }}
+        loading={postulationEnCours || acceptationEnCours}
+      />
 
     </LayoutApp>
   );
