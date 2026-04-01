@@ -66,6 +66,8 @@ export default function FacturationEtablissement() {
   const [payingId, setPayingId] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [declaringId, setDeclaringId] = useState<string | null>(null);
+  const [declaringRef, setDeclaringRef] = useState<Record<string, string>>({});
+  const [connectPayingId, setConnectPayingId] = useState<string | null>(null);
   const [factures, setFactures] = useState<any[]>([]);
   const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
   const [etab, setEtab] = useState<any>(null);
