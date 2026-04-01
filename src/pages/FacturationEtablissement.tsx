@@ -173,8 +173,8 @@ export default function FacturationEtablissement() {
 
   const declarerPaiementSoignant = async (missionId: string, montant: number) => {
     const ref = declaringRef[missionId]?.trim();
-    if (!ref) {
-      toast.error('Veuillez saisir une référence de paiement');
+    if (!ref || ref.length < 5) {
+      toast.error('La référence doit contenir au moins 5 caractères');
       return;
     }
     setDeclaringId(missionId);
