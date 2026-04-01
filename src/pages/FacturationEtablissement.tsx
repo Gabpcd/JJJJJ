@@ -66,6 +66,8 @@ export default function FacturationEtablissement() {
   const [payingId, setPayingId] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [declaringId, setDeclaringId] = useState<string | null>(null);
+  const [declaringRef, setDeclaringRef] = useState<Record<string, string>>({});
+  const [connectPayingId, setConnectPayingId] = useState<string | null>(null);
   const [factures, setFactures] = useState<any[]>([]);
   const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
   const [etab, setEtab] = useState<any>(null);
@@ -170,20 +172,56 @@ export default function FacturationEtablissement() {
   };
 
   const declarerPaiementSoignant = async (missionId: string, montant: number) => {
+    const ref = declaringRef[missionId]?.trim();
+    if (!ref) {
+      toast.error('Veuillez saisir une référence de paiement');
+      return;
+    }
     setDeclaringId(missionId);
     try {
       const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
         p_mission_id: missionId,
         p_montant: montant,
+        p_reference: ref,
       });
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      const result = data as any;
+      if (result?.error) {
+        if (result?.use_stripe_connect) {
+          toast.info('Ce soignant utilise Stripe Connect — lancement du paiement par carte');
+          lancerPaiementStripeConnect(missionId);
+          return;
+        }
+        throw new Error(result.error);
+      }
       toast.success('Paiement déclaré — le soignant sera notifié');
+      setDeclaringRef(prev => ({ ...prev, [missionId]: '' }));
       charger();
     } catch (e: any) {
       toast.error(e?.message || 'Erreur lors de la déclaration');
     } finally {
       setDeclaringId(null);
+    }
+  };
+
+  const lancerPaiementStripeConnect = async (missionId: string) => {
+    setConnectPayingId(missionId);
+    try {
+      const { data, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
+        body: { mission_id: missionId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.client_secret) {
+        toast.success('Session de paiement créée — redirection…');
+        // The StripeEmbeddedCheckout or redirect would be handled here
+        // For now we use the return_url from the edge function
+      }
+      charger();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erreur lors du paiement Stripe Connect');
+    } finally {
+      setConnectPayingId(null);
     }
   };
 
@@ -255,37 +293,75 @@ export default function FacturationEtablissement() {
 
             {missionsAPayer.length > 0 ? (
               <div className="space-y-3">
-                {missionsAPayer.map((m: any) => (
-                  <div key={m.mission_id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border/50 bg-background">
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-foreground">{m.soignant_nom}</p>
-                      <p className="text-xs text-muted-foreground">{m.intitule}</p>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="text-xs text-muted-foreground">
-                          Fin : {m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
-                        </span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          m.type_paiement_soignant === 'NOTE_HONORAIRES' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-muted text-muted-foreground'
-                        }`}>
-                          {m.type_paiement_soignant === 'NOTE_HONORAIRES' ? 'Note d\'honoraires' : 'Bulletin de paie'}
-                        </span>
+                {missionsAPayer.map((m: any) => {
+                  const joursSinceFin = m.fin_le ? Math.floor((Date.now() - new Date(m.fin_le).getTime()) / 86400000) : 0;
+                  const isStripeConnect = m.soignant_stripe_connect === true && m.type_paiement_soignant === 'NOTE_HONORAIRES';
+
+                  return (
+                    <div key={m.mission_id} className="flex flex-col gap-3 p-3 rounded-lg border border-border/50 bg-background">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-foreground">{m.soignant_nom}</p>
+                          <p className="text-xs text-muted-foreground">{m.intitule}</p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <span className="text-xs text-muted-foreground">
+                              Fin : {m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              m.type_paiement_soignant === 'NOTE_HONORAIRES' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {m.type_paiement_soignant === 'NOTE_HONORAIRES' ? "Note d'honoraires" : 'Bulletin de paie'}
+                            </span>
+                            {joursSinceFin >= 60 && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">🚫 Publication suspendue — Régularisez vos paiements</span>
+                            )}
+                            {joursSinceFin >= 30 && joursSinceFin < 60 && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">🔴 Retard de paiement ({joursSinceFin}j)</span>
+                            )}
+                            {joursSinceFin >= 15 && joursSinceFin < 30 && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">⚠️ {joursSinceFin}j depuis fin de mission</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-sm font-bold text-foreground">{fmt(m.net_a_payer ?? m.total_brut ?? 0)}</span>
                       </div>
+
+                      {isStripeConnect ? (
+                        <Button
+                          size="sm"
+                          onClick={() => lancerPaiementStripeConnect(m.mission_id)}
+                          disabled={connectPayingId === m.mission_id}
+                          className="gap-2 self-end"
+                        >
+                          {connectPayingId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
+                          💳 Payer via Stripe
+                        </Button>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                          <div className="flex-1 w-full sm:w-auto">
+                            <input
+                              type="text"
+                              placeholder="Référence de paiement (obligatoire)"
+                              value={declaringRef[m.mission_id] || ''}
+                              onChange={e => setDeclaringRef(prev => ({ ...prev, [m.mission_id]: e.target.value }))}
+                              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => declarerPaiementSoignant(m.mission_id, m.net_a_payer ?? m.total_brut ?? 0)}
+                            disabled={declaringId === m.mission_id || !(declaringRef[m.mission_id]?.trim())}
+                            className="gap-1 shrink-0"
+                          >
+                            {declaringId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Banknote className="h-3.5 w-3.5" />}
+                            Déclarer le paiement
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-foreground">{fmt(m.net_a_payer ?? m.total_brut ?? 0)}</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => declarerPaiementSoignant(m.mission_id, m.net_a_payer ?? m.total_brut ?? 0)}
-                        disabled={declaringId === m.mission_id}
-                        className="gap-1"
-                      >
-                        {declaringId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Banknote className="h-3.5 w-3.5" />}
-                        Déclarer le paiement
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">✅ Aucune mission en attente de paiement.</p>
@@ -303,6 +379,7 @@ export default function FacturationEtablissement() {
                       <th className="pb-2 font-medium">Date</th>
                       <th className="pb-2 font-medium">Soignant</th>
                       <th className="pb-2 font-medium">Mission</th>
+                      <th className="pb-2 font-medium">Référence</th>
                       <th className="pb-2 font-medium">Méthode</th>
                       <th className="pb-2 font-medium text-right">Montant</th>
                       <th className="pb-2 font-medium text-right">Statut</th>
@@ -310,18 +387,31 @@ export default function FacturationEtablissement() {
                   </thead>
                   <tbody>
                     {paiementsRecents.map((p: any) => (
-                      <tr key={p.paiement_id} className="border-b border-border/50">
-                        <td className="py-2 text-muted-foreground">{p.date_paiement ? format(new Date(p.date_paiement), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
-                        <td className="py-2 text-foreground">{p.soignant_nom || '—'}</td>
-                        <td className="py-2 text-foreground truncate max-w-[200px]">{p.mission_intitule || '—'}</td>
-                        <td className="py-2 text-muted-foreground">{p.methode || '—'}</td>
-                        <td className="py-2 text-right font-medium">{fmt(p.montant_net ?? 0)}</td>
-                        <td className="py-2 text-right">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PAIEMENT_STATUT_COLORS[p.statut] ?? 'bg-muted text-muted-foreground'}`}>
-                            {PAIEMENT_STATUT_LABELS[p.statut] ?? p.statut}
-                          </span>
-                        </td>
-                      </tr>
+                      <React.Fragment key={p.paiement_id}>
+                        <tr className="border-b border-border/50">
+                          <td className="py-2 text-muted-foreground">{p.date_paiement ? format(new Date(p.date_paiement), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
+                          <td className="py-2 text-foreground">{p.soignant_nom || '—'}</td>
+                          <td className="py-2 text-foreground truncate max-w-[180px]">{p.mission_intitule || '—'}</td>
+                          <td className="py-2 text-xs text-muted-foreground">{p.reference_virement || '—'}</td>
+                          <td className="py-2 text-muted-foreground">{p.methode || '—'}</td>
+                          <td className="py-2 text-right font-medium">{fmt(p.montant_net ?? 0)}</td>
+                          <td className="py-2 text-right">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PAIEMENT_STATUT_COLORS[p.statut] ?? 'bg-muted text-muted-foreground'}`}>
+                              {PAIEMENT_STATUT_LABELS[p.statut] ?? p.statut}
+                            </span>
+                            {p.confirme_par_soignant && (
+                              <span className="ml-1 text-[10px] text-success">✅</span>
+                            )}
+                          </td>
+                        </tr>
+                        {p.statut === 'CONTESTE' && p.motif_contestation && (
+                          <tr>
+                            <td colSpan={7} className="py-1 px-2 text-xs text-destructive">
+                              ⚠️ Motif : {p.motif_contestation}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>

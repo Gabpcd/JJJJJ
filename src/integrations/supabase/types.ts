@@ -2108,6 +2108,7 @@ export type Database = {
           conteste: boolean | null
           cree_le: string | null
           date_paiement: string | null
+          echeance_le: string | null
           etablissement_id: string
           id: string
           methode: string
@@ -2116,8 +2117,11 @@ export type Database = {
           montant_net: number
           motif_contestation: string | null
           reference_virement: string | null
+          relance_1_le: string | null
+          relance_2_le: string | null
           soignant_id: string
           statut: string
+          stripe_transfer_id: string | null
         }
         Insert: {
           confirme_par_etablissement?: boolean | null
@@ -2127,6 +2131,7 @@ export type Database = {
           conteste?: boolean | null
           cree_le?: string | null
           date_paiement?: string | null
+          echeance_le?: string | null
           etablissement_id: string
           id?: string
           methode: string
@@ -2135,8 +2140,11 @@ export type Database = {
           montant_net: number
           motif_contestation?: string | null
           reference_virement?: string | null
+          relance_1_le?: string | null
+          relance_2_le?: string | null
           soignant_id: string
           statut?: string
+          stripe_transfer_id?: string | null
         }
         Update: {
           confirme_par_etablissement?: boolean | null
@@ -2146,6 +2154,7 @@ export type Database = {
           conteste?: boolean | null
           cree_le?: string | null
           date_paiement?: string | null
+          echeance_le?: string | null
           etablissement_id?: string
           id?: string
           methode?: string
@@ -2154,8 +2163,11 @@ export type Database = {
           montant_net?: number
           motif_contestation?: string | null
           reference_virement?: string | null
+          relance_1_le?: string | null
+          relance_2_le?: string | null
           soignant_id?: string
           statut?: string
+          stripe_transfer_id?: string | null
         }
         Relationships: [
           {
@@ -3547,6 +3559,7 @@ export type Database = {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: Json
       }
+      fn_alerter_paiements_retard: { Args: never; Returns: undefined }
       fn_annuler_mission: {
         Args: { p_mission_id: string; p_motif?: string }
         Returns: Json
