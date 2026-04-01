@@ -45,7 +45,6 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
         p_mission_id: missionId,
         p_montant: info?.montant_soignant || 0,
-        p_methode: info?.mode_recommande === 'VIREMENT_NOTE_HONORAIRES' ? 'NOTE_HONORAIRES' : 'VIREMENT',
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
