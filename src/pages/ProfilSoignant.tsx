@@ -14,7 +14,7 @@ import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { capturerErreurSentry } from '@/lib/sentry';
-import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle } from 'lucide-react';
+import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle, CreditCard, AlertTriangle, ExternalLink } from 'lucide-react';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { SectionBio } from '@/components/SectionBio';
 import { EncartInvitation } from '@/components/EncartInvitation';
@@ -24,6 +24,91 @@ import { Switch } from '@/components/ui/switch';
 import { PoolUrgenceToggle } from '@/components/PoolUrgenceToggle';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+
+function StripeConnectBanner({ userId }: { userId?: string }) {
+  const [status, setStatus] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!userId) return;
+    supabase.functions.invoke('stripe-connect-status').then(({ data }) => {
+      setStatus(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [userId]);
+
+  if (loading || !status) return null;
+
+  const lancerOnboarding = async () => {
+    setActionLoading(true);
+    const { data, error } = await supabase.functions.invoke('stripe-connect-onboard');
+    if (error || !data?.url) {
+      const is403 = data?.error?.includes('libéral') || error?.message?.includes('403') || error?.status === 403;
+      if (is403) {
+        toast('La connexion Stripe sera disponible au lancement.', { icon: 'ℹ️' });
+      } else {
+        toast.error('Erreur lors de la connexion à Stripe.');
+      }
+      setActionLoading(false);
+      return;
+    }
+    window.open(data.url, '_blank');
+    setActionLoading(false);
+  };
+
+  // Onboarding complet
+  if (status.statut === 'COMPLET' && status.charges_enabled && status.payouts_enabled) {
+    return (
+      <div className="mt-4 p-3 rounded-xl border border-success/30 bg-success/5 flex items-center gap-3">
+        <CheckCircle className="h-5 w-5 text-success shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-success">✅ Stripe Connect actif</p>
+          <p className="text-xs text-muted-foreground">Vos honoraires sont versés automatiquement.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Onboarding en cours (compte existe mais pas finalisé)
+  if (status.statut === 'EN_COURS' || status.statut === 'SUSPENDU') {
+    return (
+      <div className="mt-4 p-3 rounded-xl border border-warning/30 bg-warning/5 space-y-2">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-warning">⚠️ Votre compte Stripe Connect n'est pas finalisé.</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Finalisez-le pour recevoir vos honoraires automatiquement.</p>
+          </div>
+        </div>
+        <Button size="sm" variant="outline" onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
+          {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+          Finaliser mon compte Stripe
+        </Button>
+      </div>
+    );
+  }
+
+  // Pas de compte
+  return (
+    <div className="mt-4 p-3 rounded-xl border border-border bg-muted/30 space-y-2">
+      <div className="flex items-start gap-3">
+        <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-foreground">💳 Activez Stripe Connect pour recevoir vos honoraires automatiquement.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Sans Stripe Connect, les établissements vous paieront par virement.</p>
+        </div>
+      </div>
+      <Button size="sm" onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
+        {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+        Activer Stripe Connect
+      </Button>
+    </div>
+  );
+}
 
 export default function ProfilSoignant() {
   usePageTitle('Profil');
@@ -434,18 +519,21 @@ export default function ProfilSoignant() {
           </RadioGroup>
 
           {(typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && (
-            <div className="mt-4 p-3 bg-warning/5 border border-warning/20 rounded-xl">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <Checkbox
-                  checked={attestationCumul}
-                  onCheckedChange={(v) => setAttestationCumul(!!v)}
-                  className="mt-0.5"
-                />
-                <span className="text-sm text-foreground">
-                  ✅ J'atteste avoir vérifié que mon contrat de travail actuel autorise le cumul d'activités conformément à l'article L1222-5 du Code du travail.
-                </span>
-              </label>
-            </div>
+            <>
+              <div className="mt-4 p-3 bg-warning/5 border border-warning/20 rounded-xl">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <Checkbox
+                    checked={attestationCumul}
+                    onCheckedChange={(v) => setAttestationCumul(!!v)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm text-foreground">
+                    ✅ J'atteste avoir vérifié que mon contrat de travail actuel autorise le cumul d'activités conformément à l'article L1222-5 du Code du travail.
+                  </span>
+                </label>
+              </div>
+              <StripeConnectBanner userId={user?.id} />
+            </>
           )}
         </div>
 
