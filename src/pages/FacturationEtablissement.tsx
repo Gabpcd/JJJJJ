@@ -707,7 +707,7 @@ export default function FacturationEtablissement() {
                           </p>
                         )}
                       </div>
-                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <div className="flex flex-wrap gap-2 shrink-0">
                         <button onClick={() => navigate(`/etablissement/facturation/${f.id}`)} className="btn-secondary text-xs flex items-center gap-1">
                           <FileText className="h-3.5 w-3.5" /> Détail
                         </button>
@@ -719,15 +719,47 @@ export default function FacturationEtablissement() {
                         {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
                           <>
                             {f.est_secteur_public ? (
-                              <FactureChorus facture={f} onUpdate={charger} />
+                              <div className="w-full mt-2 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+                                <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                  🏛️ Paiement secteur public
+                                </p>
+                                <p className="text-xs text-muted-foreground">Cette facture sera déposée sur Chorus Pro.</p>
+                                <FactureChorus facture={f} onUpdate={charger} />
+                                {f.chorus_pro_numero_flux && (
+                                  <p className="text-xs text-muted-foreground">Référence Chorus : {f.chorus_pro_numero_flux}</p>
+                                )}
+                              </div>
                             ) : (
-                              <>
-                                <button onClick={() => payerParCarte(f)} disabled={payingId === f.id} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50">
-                                  {payingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
-                                  Payer par carte
-                                </button>
-                                <PaiementVirement facture={f} onUpdate={charger} />
-                              </>
+                              <div className="w-full mt-2 space-y-4">
+                                <p className="text-sm font-semibold text-foreground">Comment payer cette facture ?</p>
+                                {/* Option 1 : Carte */}
+                                <div className="rounded-xl border border-border p-4 space-y-2">
+                                  <p className="text-sm font-semibold text-foreground">Option 1 : 💳 Payer par carte bancaire</p>
+                                  <p className="text-xs text-muted-foreground">Paiement sécurisé par Stripe. Confirmation immédiate.</p>
+                                  <button onClick={() => payerParCarte(f)} disabled={payingId === f.id} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50">
+                                    {payingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
+                                    Payer maintenant
+                                  </button>
+                                </div>
+                                {/* Option 2 : Virement */}
+                                <div className="rounded-xl border border-border p-4 space-y-2">
+                                  <p className="text-sm font-semibold text-foreground">Option 2 : 🏦 Payer par virement bancaire</p>
+                                  <div className="text-xs text-muted-foreground space-y-0.5 bg-muted/50 rounded-lg p-3">
+                                    <p><strong>Bénéficiaire :</strong> {ENTREPRISE.nom}</p>
+                                    {ENTREPRISE.iban && ENTREPRISE.iban !== 'FR76 XXXX XXXX XXXX XXXX XXXX XXX' ? (
+                                      <>
+                                        <p><strong>IBAN :</strong> {ENTREPRISE.iban}</p>
+                                        <p><strong>BIC :</strong> {ENTREPRISE.bic}</p>
+                                      </>
+                                    ) : (
+                                      <p className="italic">Coordonnées bancaires disponibles prochainement</p>
+                                    )}
+                                    <p><strong>Référence obligatoire :</strong> {f.numero_facture}</p>
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground">Délai de traitement : 2-3 jours ouvrés.</p>
+                                  <PaiementVirement facture={f} onUpdate={charger} />
+                                </div>
+                              </div>
                             )}
                             <button onClick={() => rafraichirStatut(f.id)} disabled={refreshingId === f.id} className="btn-secondary text-xs flex items-center gap-1 disabled:opacity-50" title="Rafraîchir">
                               <RefreshCw className={`h-3.5 w-3.5 ${refreshingId === f.id ? 'animate-spin' : ''}`} />

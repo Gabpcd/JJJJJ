@@ -434,18 +434,21 @@ export default function ProfilSoignant() {
           </RadioGroup>
 
           {(typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && (
-            <div className="mt-4 p-3 bg-warning/5 border border-warning/20 rounded-xl">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <Checkbox
-                  checked={attestationCumul}
-                  onCheckedChange={(v) => setAttestationCumul(!!v)}
-                  className="mt-0.5"
-                />
-                <span className="text-sm text-foreground">
-                  ✅ J'atteste avoir vérifié que mon contrat de travail actuel autorise le cumul d'activités conformément à l'article L1222-5 du Code du travail.
-                </span>
-              </label>
-            </div>
+            <>
+              <div className="mt-4 p-3 bg-warning/5 border border-warning/20 rounded-xl">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <Checkbox
+                    checked={attestationCumul}
+                    onCheckedChange={(v) => setAttestationCumul(!!v)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm text-foreground">
+                    ✅ J'atteste avoir vérifié que mon contrat de travail actuel autorise le cumul d'activités conformément à l'article L1222-5 du Code du travail.
+                  </span>
+                </label>
+              </div>
+              <StripeConnectBanner userId={user?.id} />
+            </>
           )}
         </div>
 
