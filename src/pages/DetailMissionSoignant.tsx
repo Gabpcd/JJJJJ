@@ -5,6 +5,7 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { hapticNotification } from '@/lib/haptics';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Mail, Building2, MessageCircle } from 'lucide-react';
+import { ChoixContratDialog } from '@/components/ChoixContratDialog';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
