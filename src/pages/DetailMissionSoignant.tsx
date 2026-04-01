@@ -660,6 +660,18 @@ export default function DetailMissionSoignant() {
         />
       )}
 
+      <ChoixContratDialog
+        open={choixContratDialog.open}
+        options={choixContratDialog.options}
+        onClose={() => { setChoixContratDialog(prev => ({ ...prev, open: false })); setPostulationEnCours(false); setAcceptationEnCours(false); }}
+        onChoose={(val) => {
+          setChoixContratDialog(prev => ({ ...prev, open: false }));
+          if (choixContratDialog.action === 'postuler') postulerMission(val);
+          else accepterMission(val);
+        }}
+        loading={postulationEnCours || acceptationEnCours}
+      />
+
     </LayoutApp>
   );
 }
