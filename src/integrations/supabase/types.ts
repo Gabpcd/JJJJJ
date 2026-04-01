@@ -217,6 +217,7 @@ export type Database = {
           soignant_id: string
           statut: string | null
           traite_le: string | null
+          type_contrat_choisi: string | null
         }
         Insert: {
           cree_le?: string | null
@@ -227,6 +228,7 @@ export type Database = {
           soignant_id: string
           statut?: string | null
           traite_le?: string | null
+          type_contrat_choisi?: string | null
         }
         Update: {
           cree_le?: string | null
@@ -237,6 +239,7 @@ export type Database = {
           soignant_id?: string
           statut?: string | null
           traite_le?: string | null
+          type_contrat_choisi?: string | null
         }
         Relationships: [
           {
@@ -1803,6 +1806,7 @@ export type Database = {
         Row: {
           annulee_le: string | null
           annulee_par: string | null
+          choix_contrat_soignant: string | null
           code_arrivee: string | null
           code_depart: string | null
           commission_facturee: boolean | null
@@ -1858,6 +1862,7 @@ export type Database = {
         Insert: {
           annulee_le?: string | null
           annulee_par?: string | null
+          choix_contrat_soignant?: string | null
           code_arrivee?: string | null
           code_depart?: string | null
           commission_facturee?: boolean | null
@@ -1913,6 +1918,7 @@ export type Database = {
         Update: {
           annulee_le?: string | null
           annulee_par?: string | null
+          choix_contrat_soignant?: string | null
           code_arrivee?: string | null
           code_depart?: string | null
           commission_facturee?: boolean | null
@@ -3496,7 +3502,10 @@ export type Database = {
       est_admin: { Args: never; Returns: boolean }
       est_admin_etablissement: { Args: never; Returns: boolean }
       est_soignant: { Args: never; Returns: boolean }
-      fn_accepter_mission: { Args: { p_mission_id: string }; Returns: Json }
+      fn_accepter_mission: {
+        Args: { p_choix_contrat?: string; p_mission_id: string }
+        Returns: Json
+      }
       fn_activer_liberal: { Args: never; Returns: Json }
       fn_admin_conformite: { Args: never; Returns: Json }
       fn_admin_conformite_detail: { Args: { p_type: string }; Returns: Json }
@@ -4253,7 +4262,11 @@ export type Database = {
         }[]
       }
       fn_postuler_mission: {
-        Args: { p_message?: string; p_mission_id: string }
+        Args: {
+          p_choix_contrat?: string
+          p_message?: string
+          p_mission_id: string
+        }
         Returns: Json
       }
       fn_postuler_mission_rate_limited: {
