@@ -413,6 +413,40 @@ export default function FacturationEtablissement() {
                           {connectPayingId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
                           💳 Payer via Stripe
                         </Button>
+                      ) : m.type_paiement_soignant === 'NOTE_HONORAIRES' && m.soignant_stripe_connect === false ? (
+                        <>
+                          <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground space-y-1 w-full">
+                            <p className="font-semibold text-warning flex items-center gap-1">
+                              <AlertTriangle className="h-3.5 w-3.5" /> Ce soignant n'a pas encore finalisé son compte Stripe Connect.
+                            </p>
+                            <p>En attendant, vous pouvez le payer par virement et déclarer le paiement avec une référence.</p>
+                            <p className="text-muted-foreground/70">Le soignant sera invité à finaliser son compte Stripe pour les prochaines missions.</p>
+                          </div>
+                          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 w-full">
+                            <div className="flex-1 w-full sm:w-auto space-y-1">
+                              <input
+                                type="text"
+                                placeholder="Ex: VIR-2026-03-001"
+                                value={currentRef}
+                                onChange={e => setDeclaringRef(prev => ({ ...prev, [m.mission_id]: e.target.value }))}
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              />
+                              <p className="text-[10px] text-muted-foreground">Numéro de virement bancaire, référence de chèque ou numéro de facture</p>
+                              {refTooShort && <p className="text-[10px] text-destructive">Minimum 5 caractères</p>}
+                              {refNoDigit && <p className="text-[10px] text-destructive">La référence doit contenir au moins 1 chiffre</p>}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => declarerPaiementSoignant(m.mission_id, m.net_a_payer ?? m.total_brut ?? 0)}
+                              disabled={declaringId === m.mission_id || !isRefValid(currentRef)}
+                              className="gap-1 shrink-0"
+                            >
+                              {declaringId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Banknote className="h-3.5 w-3.5" />}
+                              Déclarer le paiement
+                            </Button>
+                          </div>
+                        </>
                       ) : (
                         <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
                           <div className="flex-1 w-full sm:w-auto space-y-1">
