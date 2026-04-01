@@ -78,6 +78,7 @@ export default function DetailMissionSoignant() {
   const [messageCandidature, setMessageCandidature] = useState('');
   const [candidatureEnvoyee, setCandidatureEnvoyee] = useState(false);
   const [postulationEnCours, setPostulationEnCours] = useState(false);
+  const [choixContratDialog, setChoixContratDialog] = useState<{ open: boolean; options: any[]; action: 'postuler' | 'accepter' }>({ open: false, options: [], action: 'postuler' });
 
   useEffect(() => {
     if (!user || !id) return;
