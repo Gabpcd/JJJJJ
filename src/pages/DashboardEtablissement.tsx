@@ -279,6 +279,20 @@ export default function DashboardEtablissement() {
         </FadeInView>
       )}
 
+      {/* ⚖️ Litiges ouverts */}
+      {stats.litiges_ouverts > 0 && (
+        <FadeInView delay={80}>
+          <button
+            className="w-full card-base border-warning/30 bg-warning/5 mb-4 hover:bg-warning/10 transition-colors text-left"
+            onClick={() => navigate('/etablissement/litiges')}
+          >
+            <p className="text-sm font-semibold text-warning flex items-center gap-2">
+              ⚖️ {stats.litiges_ouverts} litige{stats.litiges_ouverts > 1 ? 's' : ''} en cours — Cliquez pour gérer
+            </p>
+          </button>
+        </FadeInView>
+      )}
+
       {/* 💬 Messages non lus */}
       {stats.messages_non_lus > 0 && (
         <FadeInView delay={75}>
