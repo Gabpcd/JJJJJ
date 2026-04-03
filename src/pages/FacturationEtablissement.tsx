@@ -82,6 +82,7 @@ export default function FacturationEtablissement() {
   const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
   const [ribCache, setRibCache] = useState<Record<string, string>>({});
   const [ribLoadingId, setRibLoadingId] = useState<string | null>(null);
+  const [filtreStatutPaiement, setFiltreStatutPaiement] = useState<string | null>(null);
 
   // Paiements soignants state
   const [paiementsData, setPaiementsData] = useState<any>(null);
