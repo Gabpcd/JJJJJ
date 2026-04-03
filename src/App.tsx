@@ -81,6 +81,7 @@ const ChorusConfig = lazy(() => import("./pages/ChorusConfig"));
 const PoolUrgenceEtablissement = lazy(() => import("./pages/PoolUrgenceEtablissement"));
 const ContratPlateforme = lazy(() => import("./pages/ContratPlateforme"));
 const DetailPresencesMission = lazy(() => import("./pages/DetailPresencesMission"));
+const ObligationsFinancieres = lazy(() => import("./pages/ObligationsFinancieres"));
 
 /* ─── Shared protected ─── */
 const ContratMission = lazy(() => import("./pages/ContratMission"));
@@ -188,6 +189,7 @@ function AppRoutes() {
           <Route path="/etablissement/pool-soignants" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PoolUrgenceEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/dashboard" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/contrat-plateforme" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ContratPlateforme /></RouteProtegee>} />
+          <Route path="/etablissement/obligations" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ObligationsFinancieres /></RouteProtegee>} />
           <Route path="/etablissement/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageMessagerie role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><LitigesEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/presences/mission/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailPresencesMission /></RouteProtegee>} />

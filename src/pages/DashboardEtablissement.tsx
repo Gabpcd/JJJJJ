@@ -360,13 +360,13 @@ export default function DashboardEtablissement() {
           <CarteKPI icone={Users} valeur={stats.soignants_ce_mois} label="Soignants ce mois" sousLabel={`Pool urgence : ${stats.pool_urgence_count}`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/etablissement/pool-urgence" />
         </FadeInView>
         <FadeInView delay={300}>
-          <CarteKPI icone={CreditCard} valeur={stats.missions_a_payer} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/facturation" />
+          <CarteKPI icone={CreditCard} valeur={stats.missions_a_payer} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/obligations" />
         </FadeInView>
         <FadeInView delay={350}>
           {stats.commissions_impayees > 0 ? (
-            <CarteKPI icone={FileText} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(stats.commissions_impayees)} label={`⚠️ ${stats.nb_factures_impayees} facture(s) impayée(s)`} couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/facturation?tab=commissions" />
+            <CarteKPI icone={FileText} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(stats.commissions_impayees)} label={`⚠️ ${stats.nb_factures_impayees} facture(s) impayée(s)`} couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/obligations" />
           ) : (
-            <CarteKPI icone={FileText} valeur="✅ À jour" label="Commissions Jolene" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/facturation?tab=commissions" />
+            <CarteKPI icone={FileText} valeur="✅ À jour" label="Commissions Jolene" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/obligations" />
           )}
         </FadeInView>
       </div>

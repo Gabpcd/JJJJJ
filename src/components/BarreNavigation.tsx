@@ -58,6 +58,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
   { icone: BarChart3, label: 'Gestion RH', route: '/etablissement/rh' },
   { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+  { icone: Banknote, label: 'Obligations', route: '/etablissement/obligations' },
   { icone: FileText, label: 'Contrat plateforme', route: '/etablissement/contrat-plateforme' },
   { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
   { icone: Code2, label: 'API', route: '/etablissement/api' },
