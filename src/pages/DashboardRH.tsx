@@ -1,20 +1,21 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BarChart3, Users, TrendingUp, Download, Loader2, Target, Coins } from 'lucide-react';
+import { BarChart3, Users, TrendingUp, Download, Loader2, Target, Coins, Calendar, Briefcase, CheckCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
-import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 
 const COUT_MOYEN_SECTEUR = 28;
+const fmtEur = (v: number, decimals = 0) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: decimals }).format(v);
 
 export default function DashboardRH() {
   const { user, etablissementId } = useEtablissementScope();
@@ -23,231 +24,82 @@ export default function DashboardRH() {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [missions, setMissions] = useState<any[]>([]);
-  const [allMissions, setAllMissions] = useState<any[]>([]);
-  const [soignantMap, setSoignantMap] = useState<Record<string, any>>({});
-  const [etabNom, setEtabNom] = useState('');
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
     if (!user || !etablissementId) return;
     const load = async () => {
       setLoading(true);
-      const sixMonthsAgo = subMonths(new Date(), 6).toISOString();
-
-      const [{ data: missionsData }, { data: soignantsData }, { data: allMissionsData }, { data: etabData }] = await Promise.all([
-        supabase
-          .from('missions')
-          .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_ifm, montant_icp, soignant_assigne_id, statut, montant_commission_ttc')
-          .eq('etablissement_id', etablissementId)
-          .eq('statut', 'TERMINEE')
-          .gte('fin_le', sixMonthsAgo)
-          .order('fin_le', { ascending: true }),
-        supabase.rpc('fn_mes_soignants_etablissement'),
-        supabase
-          .from('missions')
-          .select('id, statut, soignant_assigne_id, debut_le')
-          .eq('etablissement_id', etablissementId)
-          .gte('cree_le', sixMonthsAgo),
-        supabase.from('etablissements').select('nom').eq('id', etablissementId).single(),
-      ]);
-
-      const sgMap: Record<string, any> = {};
-      if (Array.isArray(soignantsData)) {
-        for (const s of soignantsData) sgMap[s.id] = s;
+      const { data, error } = await supabase.rpc('fn_stats_rh_etablissement' as any);
+      if (error) {
+        console.error('[DashboardRH] RPC error', error);
+      } else {
+        setStats(data);
       }
-
-      // Fallback: fetch soignant names directly if RPC returned empty
-      if (Object.keys(sgMap).length === 0 && missionsData) {
-        const sgIds = [...new Set((missionsData as any[]).map((m: any) => m.soignant_assigne_id).filter(Boolean))];
-        if (sgIds.length > 0) {
-          const { data: sgDirect } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite, numero_rpps').in('id', sgIds);
-          if (sgDirect) for (const s of sgDirect) sgMap[s.id] = s;
-        }
-      }
-      setSoignantMap(sgMap);
-      setMissions((missionsData as any[]) || []);
-      setAllMissions((allMissionsData as any[]) || []);
-      setEtabNom(etabData?.nom || '');
       setLoading(false);
     };
     load();
   }, [user, etablissementId]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !stats) return;
     const vue = searchParams.get('vue');
     if (!vue) return;
-    document.getElementById(vue)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [loading, searchParams]);
-
-  // Monthly cost data for chart
-  const monthlyData = useMemo(() => {
-    const months: { label: string; cout: number; soignants: Set<string>; date: Date }[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = subMonths(new Date(), i);
-      const start = startOfMonth(d);
-      const end = endOfMonth(d);
-      const monthMissions = missions.filter(m => {
-        const fin = new Date(m.fin_le);
-        return fin >= start && fin <= end;
-      });
-      const soignantIds = new Set(monthMissions.map(m => m.soignant_assigne_id).filter(Boolean));
-      months.push({
-        label: format(d, 'MMM yy', { locale: fr }),
-        cout: monthMissions.reduce((s, m) => s + (m.total_brut || 0), 0),
-        soignants: soignantIds,
-        date: d,
-      });
-    }
-    return months;
-  }, [missions]);
-
-  // Fill rate
-  const tauxRemplissage = useMemo(() => {
-    if (allMissions.length === 0) return 0;
-    const pourvues = allMissions.filter(m => m.soignant_assigne_id && ['ASSIGNEE', 'EN_COURS', 'TERMINEE'].includes(m.statut)).length;
-    return Math.round((pourvues / allMissions.length) * 100);
-  }, [allMissions]);
-
-  // Top 5 soignants
-  const topSoignants = useMemo(() => {
-    const counts: Record<string, { count: number; heures: number; brut: number }> = {};
-    for (const m of missions) {
-      if (!m.soignant_assigne_id) continue;
-      if (!counts[m.soignant_assigne_id]) counts[m.soignant_assigne_id] = { count: 0, heures: 0, brut: 0 };
-      counts[m.soignant_assigne_id].count++;
-      counts[m.soignant_assigne_id].heures += m.duree_heures || 0;
-      counts[m.soignant_assigne_id].brut += m.total_brut || 0;
-    }
-    return Object.entries(counts)
-      .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, 5)
-      .map(([id, stats]) => ({ id, ...stats, sg: soignantMap[id] }));
-  }, [missions, soignantMap]);
-
-  // Current month stats
-  const currentMonth = useMemo(() => {
-    const now = new Date();
-    const start = startOfMonth(now);
-    const end = endOfMonth(now);
-    const cm = missions.filter(m => {
-      const fin = new Date(m.fin_le);
-      return fin >= start && fin <= end;
-    });
-    const totalHeures = cm.reduce((s, m) => s + (m.duree_heures || 0), 0);
-    const totalBrut = cm.reduce((s, m) => s + (m.total_brut || 0), 0);
-    const coutMoyenHeure = totalHeures > 0 ? totalBrut / totalHeures : 0;
-    return { missions: cm.length, heures: totalHeures, brut: totalBrut, coutMoyenHeure };
-  }, [missions]);
-
-  const soignantsCeMois = useMemo(() => {
-    const start = startOfMonth(new Date());
-    const end = endOfMonth(new Date());
-    const map: Record<string, { id: string; heures: number; brut: number; missions: any[]; sg: any }> = {};
-
-    for (const mission of missions) {
-      const fin = new Date(mission.fin_le);
-      if (fin < start || fin > end || !mission.soignant_assigne_id) continue;
-      if (!map[mission.soignant_assigne_id]) {
-        map[mission.soignant_assigne_id] = {
-          id: mission.soignant_assigne_id,
-          heures: 0,
-          brut: 0,
-          missions: [],
-          sg: soignantMap[mission.soignant_assigne_id],
-        };
-      }
-      map[mission.soignant_assigne_id].heures += mission.duree_heures || 0;
-      map[mission.soignant_assigne_id].brut += mission.total_brut || 0;
-      map[mission.soignant_assigne_id].missions.push(mission);
-    }
-
-    return Object.values(map).sort((a, b) => b.missions.length - a.missions.length);
-  }, [missions, soignantMap]);
-
-  // Forecast
-  const previsionMois = useMemo(() => {
-    const now = new Date();
-    const jourDansMois = now.getDate();
-    const totalJours = endOfMonth(now).getDate();
-    if (jourDansMois < 3) return currentMonth.brut;
-    return Math.round((currentMonth.brut / jourDansMois) * totalJours);
-  }, [currentMonth]);
+    setTimeout(() => {
+      document.getElementById(vue)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }, [loading, searchParams, stats]);
 
   const handleGeneratePDF = async () => {
+    if (!stats) return;
     setGenerating(true);
     try {
       const doc = new jsPDF();
       const now = new Date();
       const moisLabel = format(now, 'MMMM yyyy', { locale: fr });
 
-      // Header
       doc.setFontSize(20);
       doc.setTextColor(23, 162, 184);
       doc.text('Jolene', 14, 20);
       doc.setFontSize(10);
       doc.setTextColor(100);
-      doc.text(`Rapport RH mensuel — ${moisLabel}`, 14, 28);
-      doc.text(`Établissement : ${etabNom}`, 14, 34);
-      doc.text(`Généré le ${format(now, 'dd/MM/yyyy à HH:mm', { locale: fr })}`, 14, 40);
-
+      doc.text(`Rapport RH — ${moisLabel}`, 14, 28);
+      doc.text(`Généré le ${format(now, 'dd/MM/yyyy à HH:mm', { locale: fr })}`, 14, 34);
       doc.setDrawColor(200);
-      doc.line(14, 44, 196, 44);
+      doc.line(14, 38, 196, 38);
 
-      // KPIs
       doc.setFontSize(14);
       doc.setTextColor(0);
-      doc.text('Indicateurs du mois', 14, 54);
+      doc.text('Indicateurs', 14, 48);
       doc.setFontSize(10);
-      doc.text(`Missions terminées : ${currentMonth.missions}`, 14, 62);
-      doc.text(`Heures totales : ${currentMonth.heures.toFixed(1)}h`, 14, 68);
-      doc.text(`Coût total : ${currentMonth.brut.toFixed(2)} €`, 14, 74);
-      doc.text(`Coût moyen/heure : ${currentMonth.coutMoyenHeure.toFixed(2)} € (secteur : ${COUT_MOYEN_SECTEUR} €)`, 14, 80);
-      doc.text(`Taux de remplissage : ${tauxRemplissage}%`, 14, 86);
+      doc.text(`Missions terminées : ${stats.terminees_total} (dont ${stats.terminees_mois_prec} mois précédent)`, 14, 56);
+      doc.text(`Coût total terminé : ${fmtEur(stats.cout_total_termine, 2)}`, 14, 62);
+      doc.text(`Coût moyen/heure : ${fmtEur(stats.cout_moyen_heure, 2)} (secteur : ${COUT_MOYEN_SECTEUR} €)`, 14, 68);
+      doc.text(`Taux de remplissage : ${stats.taux_remplissage}%`, 14, 74);
+      doc.text(`Soignants mobilisés : ${stats.soignants_total}`, 14, 80);
+      doc.text(`Budget prévisionnel : ${fmtEur(stats.cout_previsionnel, 2)} (${stats.assignees_total} missions à venir)`, 14, 86);
 
-      // Soignants table
-      doc.setFontSize(14);
-      doc.text('Soignants utilisés', 14, 100);
+      if (stats.top_soignants?.length > 0) {
+        doc.setFontSize(14);
+        doc.text('Top soignants', 14, 100);
+        autoTable(doc, {
+          startY: 104,
+          head: [['Soignant', 'Profession', 'Missions', 'Total facturé', 'Score']],
+          body: stats.top_soignants.map((s: any) => [
+            s.nom, s.profession, String(s.nb_missions), fmtEur(s.total_facture, 2), String(s.score_fiabilite ?? '-'),
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [23, 162, 184] },
+          styles: { fontSize: 9 },
+        });
+      }
 
-      const tableData = topSoignants.map(s => [
-        `${s.sg?.prenom || ''} ${s.sg?.nom || ''}`,
-        s.sg?.profession || '',
-        String(s.count),
-        `${s.heures.toFixed(1)}h`,
-        `${s.brut.toFixed(2)} €`,
-      ]);
-
-      autoTable(doc, {
-        startY: 104,
-        head: [['Soignant', 'Profession', 'Missions', 'Heures', 'Montant brut']],
-        body: tableData,
-        theme: 'striped',
-        headStyles: { fillColor: [23, 162, 184] },
-        styles: { fontSize: 9 },
-      });
-
-      // Cost chart (simplified table)
-      const finalY = (doc as any).lastAutoTable?.finalY || 150;
-      doc.setFontSize(14);
-      doc.text('Coût staffing — 6 derniers mois', 14, finalY + 14);
-
-      autoTable(doc, {
-        startY: finalY + 18,
-        head: [['Mois', 'Coût total', 'Soignants']],
-        body: monthlyData.map(m => [m.label, `${m.cout.toFixed(2)} €`, String(m.soignants.size)]),
-        theme: 'striped',
-        headStyles: { fillColor: [23, 162, 184] },
-        styles: { fontSize: 9 },
-      });
-
-      // Footer
       const pageHeight = doc.internal.pageSize.height;
       doc.setFontSize(8);
       doc.setTextColor(150);
-      doc.text('Jolene — Rapport généré automatiquement. Données à titre indicatif.', 14, pageHeight - 10);
-
+      doc.text('Jolene — Rapport généré automatiquement.', 14, pageHeight - 10);
       doc.save(`rapport_rh_${format(now, 'yyyy-MM')}.pdf`);
-      afficherNotification({ type: 'succes', message: '✅ Rapport PDF généré et téléchargé' });
+      afficherNotification({ type: 'succes', message: '✅ Rapport PDF téléchargé' });
     } catch {
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la génération du PDF' });
     }
@@ -255,8 +107,13 @@ export default function DashboardRH() {
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (!stats) return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <EtatVide icone={BarChart3} titre="Données indisponibles" sousTitre="Impossible de charger les statistiques RH." />
+    </LayoutApp>
+  );
 
-  const chartData = monthlyData.map(m => ({ name: m.label, cout: Math.round(m.cout), soignants: m.soignants.size }));
+  const previsionTotal = (stats.cout_ce_mois ?? 0) + (stats.cout_previsionnel ?? 0);
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -267,181 +124,162 @@ export default function DashboardRH() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Analyse de vos coûts de staffing et suivi des soignants</p>
         </div>
-        <button
-          onClick={handleGeneratePDF}
-          disabled={generating}
-          className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50"
-        >
+        <button onClick={handleGeneratePDF} disabled={generating} className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50">
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          {generating ? 'Génération…' : 'Rapport du mois (PDF)'}
+          {generating ? 'Génération…' : 'Rapport (PDF)'}
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}>
+      {/* KPI Row 1 — Financier */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div className="card-base text-center">
           <Coins className="h-5 w-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(currentMonth.brut)}</p>
-          <p className="text-xs text-muted-foreground">Coût total ce mois</p>
+          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_mois_prec)}</p>
+          <p className="text-xs text-muted-foreground">Coût mois précédent</p>
+          <p className="text-[10px] text-muted-foreground">{stats.mois_precedent}</p>
         </div>
-        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/rh?vue=soignants-mois')}>
-          <Users className="h-5 w-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{new Set(missions.filter(m => {
-            const fin = new Date(m.fin_le);
-            return fin >= startOfMonth(new Date()) && fin <= endOfMonth(new Date());
-          }).map(m => m.soignant_assigne_id)).size}</p>
-          <p className="text-xs text-muted-foreground">Soignants ce mois</p>
+        <div className="card-base text-center">
+          <Coins className="h-5 w-5 text-info mx-auto mb-1" />
+          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_ce_mois)}</p>
+          <p className="text-xs text-muted-foreground">Coût ce mois</p>
+          <p className="text-[10px] text-muted-foreground">{stats.mois_en_cours}</p>
         </div>
-        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?periode=mois')}>
-          <Target className="h-5 w-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{tauxRemplissage}%</p>
-          <p className="text-xs text-muted-foreground">Taux de remplissage</p>
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=ASSIGNEE')}>
+          <Briefcase className="h-5 w-5 text-warning mx-auto mb-1" />
+          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_previsionnel)}</p>
+          <p className="text-xs text-muted-foreground">Budget prévisionnel</p>
+          <p className="text-[10px] text-muted-foreground">{stats.assignees_total} mission{stats.assignees_total > 1 ? 's' : ''} à venir</p>
         </div>
-        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/rh?vue=cout-moyen')}>
+        <div className="card-base text-center">
           <TrendingUp className="h-5 w-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 1 }).format(currentMonth.coutMoyenHeure)}</p>
+          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_moyen_heure, 2)}</p>
           <p className="text-xs text-muted-foreground">Coût moyen / heure</p>
+          <p className="text-[10px] text-muted-foreground">
+            Secteur : {COUT_MOYEN_SECTEUR} €
+            {stats.cout_moyen_heure > 0 && stats.cout_moyen_heure < COUT_MOYEN_SECTEUR && <span className="text-primary ml-1">✅</span>}
+            {stats.cout_moyen_heure >= COUT_MOYEN_SECTEUR && <span className="text-destructive ml-1">⚠️</span>}
+          </p>
         </div>
       </div>
 
-      {/* Forecasts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      {/* KPI Row 2 — Opérationnel */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="card-base">
-          <h3 className="font-semibold text-foreground mb-1">📈 Prévision</h3>
-          <p className="text-sm text-muted-foreground">
-            À ce rythme, votre budget staffing ce mois sera de <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(previsionMois)}</span>
-          </p>
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="h-5 w-5 text-primary" />
+            <span className="font-semibold text-foreground">Taux de remplissage</span>
+          </div>
+          <p className="text-3xl font-bold text-foreground mb-2">{stats.taux_remplissage}%</p>
+          <Progress value={stats.taux_remplissage} className="h-2" />
         </div>
-        <div id="cout-moyen" className="card-base">
-          <h3 className="font-semibold text-foreground mb-1">📊 Comparaison secteur</h3>
-          <p className="text-sm text-muted-foreground">
-            Votre coût moyen/heure : <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(currentMonth.coutMoyenHeure)}</span> — Moyenne du secteur : <span className="font-bold text-foreground">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(COUT_MOYEN_SECTEUR)}</span>
-            {currentMonth.coutMoyenHeure > 0 && currentMonth.coutMoyenHeure < COUT_MOYEN_SECTEUR && (
-              <span className="text-xs text-primary ml-1">✅ En dessous de la moyenne</span>
-            )}
-            {currentMonth.coutMoyenHeure >= COUT_MOYEN_SECTEUR && (
-              <span className="text-xs text-destructive ml-1">⚠️ Au-dessus de la moyenne</span>
-            )}
-          </p>
+        <div className="card-base cursor-pointer hover:shadow-md transition-shadow" onClick={() => {
+          document.getElementById('top-soignants')?.scrollIntoView({ behavior: 'smooth' });
+        }}>
+          <div className="flex items-center gap-2 mb-2">
+            <Users className="h-5 w-5 text-info" />
+            <span className="font-semibold text-foreground">Soignants mobilisés</span>
+          </div>
+          <p className="text-3xl font-bold text-foreground">{stats.soignants_total}</p>
+          <p className="text-xs text-muted-foreground">{stats.soignants_ce_mois} ce mois</p>
+        </div>
+        <div className="card-base cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}>
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle className="h-5 w-5 text-success" />
+            <span className="font-semibold text-foreground">Missions terminées</span>
+          </div>
+          <p className="text-3xl font-bold text-foreground">{stats.terminees_total}</p>
+          <p className="text-xs text-muted-foreground">{stats.terminees_mois_prec} le mois précédent</p>
         </div>
       </div>
 
-      <div id="soignants-mois" className="card-base mb-6">
-        <h2 className="text-lg font-bold text-foreground mb-4">Soignants différents ce mois</h2>
-        {soignantsCeMois.length > 0 ? (
-          <div className="space-y-3">
-            {soignantsCeMois.map((s) => (
+      {/* Prévision */}
+      <div className="card-base mb-6">
+        <h3 className="font-semibold text-foreground mb-1 flex items-center gap-2">📈 Prévision</h3>
+        <p className="text-sm text-muted-foreground">
+          {stats.cout_ce_mois > 0 ? (
+            <>Ce mois : <span className="font-bold text-foreground">{fmtEur(stats.cout_ce_mois)}</span> dépensés + <span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel)}</span> à venir = <span className="font-bold text-foreground">{fmtEur(previsionTotal)}</span> prévisionnel</>
+          ) : stats.cout_previsionnel > 0 ? (
+            <>Aucune mission terminée ce mois. <span className="font-bold text-foreground">{stats.assignees_total}</span> mission{stats.assignees_total > 1 ? 's' : ''} à venir pour un budget prévisionnel de <span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel)}</span></>
+          ) : (
+            <>Aucune activité ce mois.</>
+          )}
+        </p>
+      </div>
+
+      {/* Comparaison secteur */}
+      {stats.cout_moyen_heure > 0 && (
+        <div className="card-base mb-6">
+          <h3 className="font-semibold text-foreground mb-1 flex items-center gap-2">📊 Comparaison secteur</h3>
+          <p className="text-sm text-muted-foreground">
+            Votre coût moyen/heure : <span className="font-bold text-foreground">{fmtEur(stats.cout_moyen_heure, 2)}</span> — Moyenne du secteur : <span className="font-bold text-foreground">{fmtEur(COUT_MOYEN_SECTEUR)}</span>
+            {stats.cout_moyen_heure < COUT_MOYEN_SECTEUR && <span className="text-primary ml-2">✅ En dessous de la moyenne</span>}
+            {stats.cout_moyen_heure >= COUT_MOYEN_SECTEUR && <span className="text-destructive ml-2">⚠️ Au-dessus de la moyenne</span>}
+          </p>
+        </div>
+      )}
+
+      {/* Prochaines missions */}
+      {stats.prochaines_missions?.length > 0 && (
+        <div className="card-base mb-6">
+          <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" /> Prochaines missions
+          </h2>
+          <div className="space-y-2">
+            {stats.prochaines_missions.map((m: any) => (
               <button
-                key={s.id}
-                type="button"
-                onClick={() => navigate(`/etablissement/soignants/${s.id}`)}
-                className="w-full rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/30"
+                key={m.mission_id}
+                onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
+                className="w-full flex items-center justify-between p-3 rounded-xl border border-border hover:bg-muted/30 transition-colors text-left"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-foreground">{s.sg?.prenom && s.sg?.nom ? `${s.sg.prenom} ${s.sg.nom}` : 'Soignant non identifié'}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {s.missions.length} mission{s.missions.length > 1 ? 's' : ''} · {s.heures.toFixed(1)}h · {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(s.brut)}
-                    </p>
-                  </div>
-                  <span className="text-xs font-medium text-primary">Voir le profil →</span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-foreground truncate">{m.intitule}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {m.debut_le ? new Date(m.debut_le).toLocaleDateString('fr-FR') : '—'} · {fmtEur(m.total_brut ?? 0)}
+                    {m.soignant_nom && <> · {m.soignant_nom}</>}
+                  </p>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {s.missions.slice(0, 4).map((mission) => (
-                    <span key={mission.id} className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">
-                      {mission.intitule}
-                    </span>
-                  ))}
-                  {s.missions.length > 4 && (
-                    <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
-                      +{s.missions.length - 4} autres
-                    </span>
-                  )}
-                </div>
+                <Badge variant={m.statut === 'ASSIGNEE' ? 'default' : 'secondary'} className={m.statut === 'OUVERTE' ? 'bg-warning/10 text-warning border-warning/30' : ''}>
+                  {m.statut === 'ASSIGNEE' ? '✅ Assignée' : m.statut === 'EN_COURS' ? '▶️ En cours' : '🟠 Ouverte'}
+                </Badge>
               </button>
             ))}
           </div>
-        ) : (
-          <EtatVide icone={Users} titre="Aucun soignant ce mois" sousTitre="Les soignants affectés à vos missions apparaîtront ici." />
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Chart */}
-      <div className="card-base mb-6">
-        <h2 className="text-lg font-bold text-foreground mb-4">Coût total staffing — 6 derniers mois</h2>
-        {chartData.some(d => d.cout > 0) ? (
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" className="text-xs fill-muted-foreground" />
-              <YAxis className="text-xs fill-muted-foreground" />
-              <Tooltip
-                contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-                labelStyle={{ color: 'hsl(var(--foreground))' }}
-                formatter={(value: number) => [new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value), 'Coût']}
-              />
-              <Bar dataKey="cout" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <EtatVide icone={BarChart3} titre="Pas encore de données" sousTitre="Les coûts apparaîtront une fois vos premières missions terminées." />
-        )}
-      </div>
-
-      {/* Soignants par mois chart */}
-      <div className="card-base mb-6">
-        <h2 className="text-lg font-bold text-foreground mb-4">Soignants différents par mois</h2>
-        {chartData.some(d => d.soignants > 0) ? (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" className="text-xs fill-muted-foreground" />
-              <YAxis className="text-xs fill-muted-foreground" allowDecimals={false} />
-              <Tooltip
-                contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-                formatter={(value: number) => [value, 'Soignants']}
-              />
-              <Bar dataKey="soignants" fill="hsl(var(--accent))" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : null}
-      </div>
-
-      {/* Top 5 soignants */}
-      <div className="card-base mb-6">
-        <h2 className="text-lg font-bold text-foreground mb-4">Top 5 soignants les plus sollicités</h2>
-        {topSoignants.length > 0 ? (
+      {/* Top soignants */}
+      <div id="top-soignants" className="card-base mb-6">
+        <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+          <Users className="h-5 w-5 text-primary" /> Top soignants
+        </h2>
+        {stats.top_soignants?.length > 0 ? (
           <div className="space-y-3">
-            {topSoignants.map((s, i) => (
-              <div key={s.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+            {stats.top_soignants.map((s: any, i: number) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                 <div className="flex items-center gap-3">
                   <span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{s.sg?.prenom} {s.sg?.nom}</p>
+                    <p className="text-sm font-medium text-foreground">{s.nom}</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{s.sg?.profession}</span>
-                      {s.sg?.score_fiabilite != null && (
-                        <span className="text-xs text-primary font-medium">Score : {s.sg.score_fiabilite}</span>
+                      <span className="text-xs text-muted-foreground">{s.profession}</span>
+                      {s.score_fiabilite != null && (
+                        <span className="text-xs text-primary font-medium">Score : {s.score_fiabilite}</span>
                       )}
-                      {Array.isArray(s.sg?.specialites) && s.sg.specialites.length > 0 && (
-                        <div className="flex gap-1">
-                          {(s.sg.specialites as string[]).slice(0, 2).map((sp: string) => (
-                            <span key={sp} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">{sp}</span>
-                          ))}
-                        </div>
+                      {s.note_moyenne != null && s.note_moyenne > 0 && (
+                        <span className="text-xs text-warning font-medium">⭐ {s.note_moyenne.toFixed(1)}</span>
                       )}
                     </div>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-foreground">{s.count} missions</p>
-                  <p className="text-xs text-muted-foreground">{s.heures.toFixed(0)}h — {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(s.brut)}</p>
+                  <p className="text-sm font-semibold text-foreground">{s.nb_missions} mission{s.nb_missions > 1 ? 's' : ''}</p>
+                  <p className="text-xs text-muted-foreground">{fmtEur(s.total_facture, 2)}</p>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <EtatVide icone={Users} titre="Aucun soignant" sousTitre="Publiez vos premières missions pour voir vos statistiques." />
+          <EtatVide icone={Users} titre="Aucun soignant" sousTitre="Les statistiques apparaîtront une fois vos premières missions terminées." />
         )}
       </div>
     </LayoutApp>
