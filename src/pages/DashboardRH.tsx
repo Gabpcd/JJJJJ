@@ -283,7 +283,7 @@ export default function DashboardRH() {
                   <p className="text-sm font-semibold text-foreground">{s.nb_missions} mission{s.nb_missions > 1 ? 's' : ''}</p>
                   <p className="text-xs text-muted-foreground">{fmtEur(s.total_facture, 2)}</p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         ) : (
