@@ -544,7 +544,7 @@ export default function FacturationEtablissement() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paiementsRecents.map((p: any) => (
+                    {paiementsFiltres.map((p: any) => (
                       <React.Fragment key={p.paiement_id}>
                         <tr className="border-b border-border/50">
                           <td className="py-2 text-muted-foreground">{p.date_paiement ? format(new Date(p.date_paiement), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
