@@ -4,7 +4,8 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { logger } from '@/lib/logger';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Star, Send, CreditCard, MessageCircle, BellRing, Loader2 } from 'lucide-react';
+import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Star, Send, CreditCard, MessageCircle, BellRing, Loader2, Scale } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
@@ -176,6 +177,28 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   // Litige existant
   const [litigeExistant, setLitigeExistant] = useState<any>(null);
   const [loadingLitige, setLoadingLitige] = useState(false);
+  const [showLitigeForm, setShowLitigeForm] = useState(false);
+  const [litigeMotif, setLitigeMotif] = useState('');
+  const [litigeCreating, setLitigeCreating] = useState(false);
+
+  const ouvrirLitige = async () => {
+    if (litigeMotif.trim().length < 10) {
+      toast.error('Le motif doit contenir au moins 10 caractères.');
+      return;
+    }
+    setLitigeCreating(true);
+    const { data, error } = await supabase.rpc('fn_ouvrir_litige_rate_limited' as any, {
+      p_mission_id: id,
+      p_motif: litigeMotif.trim(),
+    });
+    setLitigeCreating(false);
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || 'Une erreur est survenue. Veuillez réessayer.');
+      return;
+    }
+    toast.success('Litige ouvert avec succès');
+    window.location.reload();
+  };
 
   // Stripe Connect
   const [soignantHasConnect, setSoignantHasConnect] = useState(false);
@@ -531,12 +554,26 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   </div>
                 ) : (
                   <div className="card-base">
-                    <button
-                      onClick={() => navigate('/etablissement/litiges')}
-                      className="text-sm text-warning hover:underline font-medium flex items-center gap-1.5"
-                    >
-                      ⚖️ Ouvrir un litige pour cette mission
-                    </button>
+                    {showLitigeForm ? (
+                      <div className="space-y-3">
+                        <h3 className="font-semibold flex items-center gap-2"><Scale className="h-4 w-4 text-warning" /> Ouvrir un litige</h3>
+                        <Textarea value={litigeMotif} onChange={e => setLitigeMotif(e.target.value)}
+                          placeholder="Décrivez le problème rencontré (min. 10 caractères)..." rows={3} />
+                        <div className="flex gap-2">
+                          <Button onClick={ouvrirLitige} disabled={litigeCreating || litigeMotif.trim().length < 10}>
+                            {litigeCreating ? 'Création…' : '⚠️ Confirmer le litige'}
+                          </Button>
+                          <Button variant="ghost" onClick={() => setShowLitigeForm(false)}>Annuler</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowLitigeForm(true)}
+                        className="text-sm text-warning hover:underline font-medium flex items-center gap-1.5"
+                      >
+                        ⚖️ Ouvrir un litige pour cette mission
+                      </button>
+                    )}
                   </div>
                 )
               )}
