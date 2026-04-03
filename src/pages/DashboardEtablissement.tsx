@@ -23,10 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
-import { KPICoutMoyenHeure } from '@/components/dashboard/KPICoutMoyenHeure';
-import { JaugeTauxRemplissage } from '@/components/dashboard/JaugeTauxRemplissage';
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
-import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
 import { CarteCommissionJolene } from '@/components/dashboard/CarteCommissionJolene';
 import { CarteBFAInfo } from '@/components/dashboard/CarteBFAInfo';
