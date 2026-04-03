@@ -202,59 +202,66 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
         </div>
       )}
 
-      {/* Ouvrir un litige formel */}
-      {onOuvrirLitige && presence.pointage_depart_le && (
+      {/* Litige section */}
+      {litigeExistant ? (
         <div className="border-t border-border pt-2">
-          {showLitige ? (
-            <div className="space-y-2">
-              <textarea
-                value={motifLitigeFormel}
-                onChange={e => setMotifLitigeFormel(e.target.value)}
-                placeholder="Décrivez le motif du litige..."
-                className="input-base w-full text-sm"
-                rows={3}
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    onOuvrirLitige(presence.id, presence.mission_id, presence.soignant_id, motifLitigeFormel);
-                    setShowLitige(false);
-                    setMotifLitigeFormel('');
-                  }}
-                  disabled={!motifLitigeFormel.trim()}
-                  className="flex items-center gap-1.5 bg-warning/10 text-warning text-xs font-semibold px-3 py-2 rounded-xl hover:bg-warning/20 transition-colors disabled:opacity-50"
-                >
-                  <Scale className="h-3.5 w-3.5" /> Confirmer le litige
-                </button>
-                <button
-                  onClick={() => setShowLitige(false)}
-                  className="text-xs text-muted-foreground hover:text-foreground px-3 py-2"
-                >
-                  Annuler
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowLitige(true)}
-              className="flex items-center gap-1.5 text-xs text-warning hover:text-warning/80 font-medium transition-colors"
-            >
-              <Scale className="h-3.5 w-3.5" /> Ouvrir un litige
-            </button>
-          )}
+          <FilDiscussionLitige litige={litigeExistant} onUpdate={onUpdate || (() => {})} />
         </div>
-      )}
+      ) : (
+        <>
+          {onOuvrirLitige && presence.pointage_depart_le && (
+            <div className="border-t border-border pt-2">
+              {showLitige ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={motifLitigeFormel}
+                    onChange={e => setMotifLitigeFormel(e.target.value)}
+                    placeholder="Décrivez le motif du litige..."
+                    className="input-base w-full text-sm"
+                    rows={3}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        onOuvrirLitige(presence.id, presence.mission_id, presence.soignant_id, motifLitigeFormel);
+                        setShowLitige(false);
+                        setMotifLitigeFormel('');
+                      }}
+                      disabled={!motifLitigeFormel.trim()}
+                      className="flex items-center gap-1.5 bg-warning/10 text-warning text-xs font-semibold px-3 py-2 rounded-xl hover:bg-warning/20 transition-colors disabled:opacity-50"
+                    >
+                      <Scale className="h-3.5 w-3.5" /> Confirmer le litige
+                    </button>
+                    <button
+                      onClick={() => setShowLitige(false)}
+                      className="text-xs text-muted-foreground hover:text-foreground px-3 py-2"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowLitige(true)}
+                  className="flex items-center gap-1.5 text-xs text-warning hover:text-warning/80 font-medium transition-colors"
+                >
+                  <Scale className="h-3.5 w-3.5" /> Ouvrir un litige
+                </button>
+              )}
+            </div>
+          )}
 
-      {/* Contestation panel for validated presences */}
-      {presence.valide_par_etablissement && (
-        <PanneauContestation
-          presenceId={presence.id}
-          missionId={presence.mission_id}
-          etablissementId={mission.etablissement_id}
-          soignantId={presence.soignant_id}
-          presenceValideeLe={presence.valide_le}
-          role="ETABLISSEMENT"
-        />
+          {presence.valide_par_etablissement && (
+            <PanneauContestation
+              presenceId={presence.id}
+              missionId={presence.mission_id}
+              etablissementId={mission.etablissement_id}
+              soignantId={presence.soignant_id}
+              presenceValideeLe={presence.valide_le}
+              role="ETABLISSEMENT"
+            />
+          )}
+        </>
       )}
     </div>
   );
