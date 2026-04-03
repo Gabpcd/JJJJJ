@@ -614,13 +614,31 @@ export default function FacturationEtablissement() {
           {/* KPI commissions */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <FadeInView delay={0}>
-              <CarteKPI icone={Clock} valeur={fmt(kpiCommissions.enAttente)} label="Commissions en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+              <div
+                className={`cursor-pointer hover:shadow-md transition-all rounded-2xl ${filtreStatut === 'EN_ATTENTE' ? 'ring-2 ring-primary' : ''}`}
+                onClick={() => {
+                  setFiltreStatut(filtreStatut === 'EN_ATTENTE' ? null : 'EN_ATTENTE');
+                  document.getElementById('missions-non-facturees')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                <CarteKPI icone={Clock} valeur={fmt(kpiCommissions.enAttente)} label="Commissions en attente" sousLabel={filtreStatut === 'EN_ATTENTE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'} couleurIcone="text-warning" couleurFond="bg-warning/10" />
+              </div>
             </FadeInView>
             <FadeInView delay={100}>
-              <CarteKPI icone={FileText} valeur={fmt(kpiCommissions.enCours)} label="Factures en cours" couleurIcone="text-primary" couleurFond="bg-primary/10" />
+              <div
+                className={`cursor-pointer hover:shadow-md transition-all rounded-2xl ${filtreStatut === 'EN_COURS' ? 'ring-2 ring-primary' : ''}`}
+                onClick={() => setFiltreStatut(filtreStatut === 'EN_COURS' ? null : 'EN_COURS')}
+              >
+                <CarteKPI icone={FileText} valeur={fmt(kpiCommissions.enCours)} label="Factures en cours" sousLabel={filtreStatut === 'EN_COURS' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'} couleurIcone="text-primary" couleurFond="bg-primary/10" />
+              </div>
             </FadeInView>
             <FadeInView delay={200}>
-              <CarteKPI icone={CheckCircle} valeur={fmt(kpiCommissions.totalPaye)} label="Total payé" couleurIcone="text-success" couleurFond="bg-success/10" />
+              <div
+                className={`cursor-pointer hover:shadow-md transition-all rounded-2xl ${filtreStatut === 'PAYEE' ? 'ring-2 ring-primary' : ''}`}
+                onClick={() => setFiltreStatut(filtreStatut === 'PAYEE' ? null : 'PAYEE')}
+              >
+                <CarteKPI icone={CheckCircle} valeur={fmt(kpiCommissions.totalPaye)} label="Total payé" sousLabel={filtreStatut === 'PAYEE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'} couleurIcone="text-success" couleurFond="bg-success/10" />
+              </div>
             </FadeInView>
           </div>
 
