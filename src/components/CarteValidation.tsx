@@ -5,12 +5,15 @@ import { fr } from 'date-fns/locale';
 import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle, Scale, Eye } from 'lucide-react';
 import { BadgeCertification } from './BadgeCertification';
 import { PanneauContestation } from './PanneauContestation';
+import { FilDiscussionLitige } from './FilDiscussionLitige';
 
 interface CarteValidationProps {
   presence: any;
+  litigeExistant?: any;
   onValider: (id: string) => Promise<void>;
   onContester: (id: string, motif: string) => Promise<void>;
   onOuvrirLitige?: (presenceId: string, missionId: string, soignantId: string, motif: string) => Promise<void>;
+  onUpdate?: () => void;
 }
 
 export function CarteValidation({ presence, onValider, onContester, onOuvrirLitige }: CarteValidationProps) {

@@ -317,7 +317,7 @@ export function PanneauContestation({
             {litige.statut === 'CONTESTEE' && !litige.reponse && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
                 <Clock className="h-3.5 w-3.5" />
-                En attente de la réponse de l'{autreRoleLabel === (litige.initie_par === 'SOIGNANT' ? 'soignant' : 'établissement') ? roleLabel : autreRoleLabel}…
+                En attente de la réponse {autreRoleLabel === 'soignant' ? 'du soignant' : "de l'établissement"}…
                 <span className="ml-auto text-[11px]">72h pour répondre</span>
               </div>
             )}
