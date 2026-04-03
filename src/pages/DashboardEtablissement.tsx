@@ -127,6 +127,7 @@ export default function DashboardEtablissement() {
           soignants_ce_mois: d.soignants_ce_mois ?? 0,
           commissions_impayees: d.commissions_impayees ?? 0,
           nb_factures_impayees: d.nb_factures_impayees ?? 0,
+          litiges_ouverts: d.litiges_ouverts ?? 0,
         });
       } else if (resDashStats.error) {
         logger.error('[DashboardEtab] Erreur stats RPC', resDashStats.error);
