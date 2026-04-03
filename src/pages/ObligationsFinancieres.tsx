@@ -209,7 +209,7 @@ export default function ObligationsFinancieres() {
               label="🔴 Total impayé"
               detail="Voir tout le détail"
               onClick={() => allerSection(sectionTotal)}
-              className={`border-2 ${data.total_du > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-success/30 bg-success/5'}`}
+              accent={data.total_du > 0 ? 'destructive' : 'success'}
             />
             <ResumeCard
               value={fmt(data.total_soignants_du)}
