@@ -22,6 +22,7 @@ export default function PresencesEtablissement() {
   const { afficherNotification } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [presences, setPresences] = useState<any[]>([]);
+  const [litiges, setLitiges] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [modalLot, setModalLot] = useState(false);
   const tabParam = searchParams.get('tab');
