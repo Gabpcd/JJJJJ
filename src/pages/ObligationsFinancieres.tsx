@@ -14,7 +14,7 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { ENTREPRISE } from '@/constantes/entreprise';
-import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Users, Banknote, ExternalLink } from 'lucide-react';
+import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -35,6 +35,40 @@ function TypeExerciceBadge({ type }: { type: string }) {
   };
   const info = map[type] || { label: type, cls: 'bg-muted text-muted-foreground' };
   return <Badge className={info.cls}>{info.label}</Badge>;
+}
+
+function ResumeCard({
+  value,
+  label,
+  detail,
+  onClick,
+  className,
+}: {
+  value: string;
+  label: string;
+  detail: string;
+  onClick?: () => void;
+  className?: string;
+}) {
+  return (
+    <Card className={className}>
+      <CardContent className="p-0">
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={!onClick}
+          className="w-full rounded-xl px-6 py-6 text-center transition-all hover:bg-muted/20 focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
+        >
+          <p className="text-3xl font-bold">{value}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{label}</p>
+          <p className="mt-2 inline-flex items-center gap-1 text-xs text-primary">
+            <ExternalLink className="h-3.5 w-3.5" />
+            {detail}
+          </p>
+        </button>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function ObligationsFinancieres() {
@@ -61,7 +95,9 @@ export default function ObligationsFinancieres() {
     }
   };
 
-  useEffect(() => { charger(); }, [user, etablissementId]);
+  useEffect(() => {
+    charger();
+  }, [user, etablissementId]);
 
   const declarer = async (missionId: string) => {
     const ref = declaringRef[missionId] || '';
@@ -100,9 +136,13 @@ export default function ObligationsFinancieres() {
     }
   };
 
+  const allerSection = (sectionId?: string) => {
+    if (!sectionId) return;
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
 
-  // All clear state
   if (data && data.total_du === 0) {
     return (
       <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -132,43 +172,63 @@ export default function ObligationsFinancieres() {
   const facturesImpayees = data.factures_impayees || [];
   const missionsNonFacturees = data.missions_non_facturees || [];
 
+  const sectionTotal = missionsNonPayees.length > 0
+    ? 'section-missions-a-payer'
+    : facturesImpayees.length > 0
+      ? 'section-factures-impayees'
+      : paiementsEnAttente.length > 0
+        ? 'section-paiements-en-attente'
+        : missionsNonFacturees.length > 0
+          ? 'section-commissions-a-venir'
+          : 'section-paiements-confirmes';
+
+  const sectionSoignants = missionsNonPayees.length > 0
+    ? 'section-missions-a-payer'
+    : paiementsEnAttente.length > 0
+      ? 'section-paiements-en-attente'
+      : undefined;
+
+  const sectionCommissions = facturesImpayees.length > 0
+    ? 'section-factures-impayees'
+    : missionsNonFacturees.length > 0
+      ? 'section-commissions-a-venir'
+      : undefined;
+
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="space-y-6">
-        {/* Header */}
         <div>
           <h1 className="text-2xl font-bold">💰 Mes obligations financières</h1>
-          <p className="text-muted-foreground">Récapitulatif de tous vos paiements en attente</p>
+          <p className="text-muted-foreground">Vue unique de tous les impayés : soignants + commissions Jolene.</p>
         </div>
 
-        {/* Summary cards */}
         <FadeInView>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className={`border-2 ${data.total_du > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-success/30 bg-success/5'}`}>
-              <CardContent className="pt-6 text-center">
-                <p className="text-3xl font-bold">{fmt(data.total_du)}</p>
-                <p className="text-sm text-muted-foreground mt-1">🔴 Total dû</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <p className="text-2xl font-bold">{fmt(data.total_soignants_du)}</p>
-                <p className="text-sm text-muted-foreground mt-1">👩‍⚕️ Soignants · {data.nb_missions_non_payees} mission(s)</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <p className="text-2xl font-bold">{fmt(data.total_commissions_du)}</p>
-                <p className="text-sm text-muted-foreground mt-1">📄 Commission Jolene · {data.nb_factures_impayees} facture(s)</p>
-              </CardContent>
-            </Card>
+            <ResumeCard
+              value={fmt(data.total_du)}
+              label="🔴 Total impayé"
+              detail="Voir tout le détail"
+              onClick={() => allerSection(sectionTotal)}
+              className={`border-2 ${data.total_du > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-success/30 bg-success/5'}`}
+            />
+            <ResumeCard
+              value={fmt(data.total_soignants_du)}
+              label={`👩‍⚕️ Soignants à régler · ${data.nb_missions_non_payees} mission(s)`}
+              detail="Voir les paiements soignants"
+              onClick={sectionSoignants ? () => allerSection(sectionSoignants) : undefined}
+            />
+            <ResumeCard
+              value={fmt(data.total_commissions_du)}
+              label={`📄 Commissions Jolene · ${data.nb_factures_impayees} facture(s)`}
+              detail="Voir les commissions impayées"
+              onClick={sectionCommissions ? () => allerSection(sectionCommissions) : undefined}
+            />
           </div>
         </FadeInView>
 
-        {/* Section 1: Missions à payer */}
         {missionsNonPayees.length > 0 && (
           <FadeInView delay={100}>
-            <Card>
+            <Card id="section-missions-a-payer">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-warning" />
@@ -184,11 +244,18 @@ export default function ObligationsFinancieres() {
                           <button onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)} className="font-semibold text-sm text-primary hover:underline text-left">
                             {m.intitule}
                           </button>
+                          {m.soignant_id ? (
+                            <button onClick={() => navigate(`/etablissement/soignants/${m.soignant_id}`)} className="text-xs text-muted-foreground hover:text-primary hover:underline text-left">
+                              {m.soignant_nom}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">{m.soignant_nom}</span>
+                          )}
                           <TypeExerciceBadge type={m.soignant_type_exercice} />
                           <RetardBadge jours={m.jours_depuis_fin} />
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {m.soignant_nom} · {m.soignant_profession} · {Math.round(m.heures || 0)}h
+                          {m.soignant_profession} · {Math.round(m.heures || 0)}h pointées
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {m.debut_le && new Date(m.debut_le).toLocaleDateString('fr-FR')} → {m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}
@@ -202,7 +269,6 @@ export default function ObligationsFinancieres() {
                       </div>
                     </div>
 
-                    {/* Action: Stripe Connect or manual */}
                     {m.soignant_stripe_connect ? (
                       <Button
                         size="sm"
@@ -237,10 +303,9 @@ export default function ObligationsFinancieres() {
           </FadeInView>
         )}
 
-        {/* Section 2: Paiements en attente de confirmation */}
         {paiementsEnAttente.length > 0 && (
           <FadeInView delay={200}>
-            <Card>
+            <Card id="section-paiements-en-attente">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="w-5 h-5 text-amber-500" />
@@ -249,7 +314,7 @@ export default function ObligationsFinancieres() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {paiementsEnAttente.map((p: any) => (
-                  <div key={p.paiement_id} className="flex items-center justify-between p-3 rounded-lg border">
+                  <div key={p.paiement_id} className="flex items-center justify-between gap-3 p-3 rounded-lg border">
                     <div className="min-w-0 flex-1">
                       <button onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)} className="font-medium text-sm text-primary hover:underline text-left">
                         {p.mission_intitule}
@@ -272,10 +337,9 @@ export default function ObligationsFinancieres() {
           </FadeInView>
         )}
 
-        {/* Section 3: Factures Jolene impayées */}
         {facturesImpayees.length > 0 && (
           <FadeInView delay={300}>
-            <Card>
+            <Card id="section-factures-impayees">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-destructive" />
@@ -285,14 +349,14 @@ export default function ObligationsFinancieres() {
               <CardContent className="space-y-3">
                 {facturesImpayees.map((f: any) => (
                   <div key={f.facture_id} className="p-4 rounded-lg border space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-semibold text-sm">{f.numero_facture}</p>
                         <p className="text-xs text-muted-foreground">
                           {f.nombre_missions} mission(s) · Échéance : {f.date_echeance && new Date(f.date_echeance).toLocaleDateString('fr-FR')}
                         </p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <p className="font-bold">{fmt(f.montant_ttc)}</p>
                         <p className="text-[10px] text-muted-foreground">{fmt(f.montant_ht)} HT + {fmt(f.montant_tva)} TVA</p>
                       </div>
@@ -312,10 +376,9 @@ export default function ObligationsFinancieres() {
           </FadeInView>
         )}
 
-        {/* Section 4: Derniers paiements confirmés */}
         {paiementsConfirmes.length > 0 && (
           <FadeInView delay={400}>
-            <Card>
+            <Card id="section-paiements-confirmes">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <CheckCircle className="w-5 h-5 text-success" />
@@ -354,10 +417,9 @@ export default function ObligationsFinancieres() {
           </FadeInView>
         )}
 
-        {/* Section 5: Commissions à venir */}
         {missionsNonFacturees.length > 0 && (
           <FadeInView delay={500}>
-            <Card>
+            <Card id="section-commissions-a-venir">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-muted-foreground" />
@@ -367,7 +429,7 @@ export default function ObligationsFinancieres() {
               <CardContent className="space-y-2">
                 <p className="text-xs text-muted-foreground mb-3">Missions terminées pas encore facturées par Jolene</p>
                 {missionsNonFacturees.map((m: any) => (
-                  <div key={m.mission_id} className="flex items-center justify-between p-3 rounded-lg border">
+                  <div key={m.mission_id} className="flex items-center justify-between gap-3 p-3 rounded-lg border">
                     <div>
                       <button onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)} className="font-medium text-sm text-primary hover:underline text-left">
                         {m.intitule}
@@ -376,7 +438,7 @@ export default function ObligationsFinancieres() {
                         Terminée le {m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <p className="font-medium text-sm">{fmt(m.montant_commission_ttc)}</p>
                       <p className="text-[10px] text-muted-foreground">{fmt(m.montant_commission_ht)} HT</p>
                     </div>
