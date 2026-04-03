@@ -5,8 +5,7 @@ import { logger } from '@/lib/logger';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, MessageCircle, CreditCard, Zap } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, MessageCircle, CreditCard, Zap } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { CarteMission } from '@/components/CarteMission';
@@ -23,10 +22,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
-import { KPICoutMoyenHeure } from '@/components/dashboard/KPICoutMoyenHeure';
-import { JaugeTauxRemplissage } from '@/components/dashboard/JaugeTauxRemplissage';
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
-import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
 import { CarteCommissionJolene } from '@/components/dashboard/CarteCommissionJolene';
 import { CarteBFAInfo } from '@/components/dashboard/CarteBFAInfo';
@@ -59,13 +55,11 @@ export default function DashboardEtablissement() {
     missions_a_payer: 0,
     missions_terminees_ce_mois: 0,
     soignants_ce_mois: 0,
+    commissions_impayees: 0,
+    nb_factures_impayees: 0,
   });
 
-  // HR state
-  const [coutMoyen, setCoutMoyen] = useState({ totalBrut: 0, totalHeures: 0 });
-  const [remplissage, setRemplissage] = useState({ pourvues: 0, total: 0 });
   const [topSoignants, setTopSoignants] = useState<any[]>([]);
-  const [turnover, setTurnover] = useState({ ceMois: 0, moisPrec: 0 });
   const [prochaines, setProchaines] = useState<any[]>([]);
 
   const charger = async () => {
@@ -73,7 +67,6 @@ export default function DashboardEtablissement() {
     let partialError = false;
     const now = new Date();
     const debutMois = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const debutMoisPrec = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
 
     try {
       // Primary data: RPC stats + etab + recent missions + paliers
@@ -132,6 +125,8 @@ export default function DashboardEtablissement() {
           missions_a_payer: d.missions_a_payer ?? 0,
           missions_terminees_ce_mois: d.missions_terminees_ce_mois ?? 0,
           soignants_ce_mois: d.soignants_ce_mois ?? 0,
+          commissions_impayees: d.commissions_impayees ?? 0,
+          nb_factures_impayees: d.nb_factures_impayees ?? 0,
         });
       } else if (resDashStats.error) {
         logger.error('[DashboardEtab] Erreur stats RPC', resDashStats.error);
@@ -139,19 +134,11 @@ export default function DashboardEtablissement() {
       }
 
       // --- HR QUERIES (non-blocking) ---
+      // --- Minimal secondary queries (top soignants + prochaines missions) ---
       try {
-        const [resCout, resTotalMois, resPourvues, resSgCeMois, resSgMoisPrec, resProchaines] = await Promise.all([
+        const [resCout, resProchaines] = await Promise.all([
           supabase.from('missions').select('total_brut, duree_heures, soignant_assigne_id')
             .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
-          supabase.from('missions').select('id', { count: 'exact', head: true })
-            .eq('etablissement_id', etablissementId).gte('cree_le', debutMois),
-          supabase.from('missions').select('id', { count: 'exact', head: true })
-            .eq('etablissement_id', etablissementId).gte('cree_le', debutMois).not('soignant_assigne_id', 'is', null),
-          supabase.from('missions').select('soignant_assigne_id')
-            .eq('etablissement_id', etablissementId).not('soignant_assigne_id', 'is', null).gte('debut_le', debutMois),
-          supabase.from('missions').select('soignant_assigne_id')
-            .eq('etablissement_id', etablissementId).not('soignant_assigne_id', 'is', null)
-            .gte('debut_le', debutMoisPrec).lt('debut_le', debutMois),
           supabase.from('missions')
             .select('id, intitule, debut_le, statut, soignant_assigne_id')
             .eq('etablissement_id', etablissementId).gte('debut_le', now.toISOString())
@@ -160,10 +147,6 @@ export default function DashboardEtablissement() {
         ]);
 
         if (resCout.data) {
-          const tb = resCout.data.reduce((s: number, m: any) => s + (m.total_brut || 0), 0);
-          const th = resCout.data.reduce((s: number, m: any) => s + (m.duree_heures || 0), 0);
-          setCoutMoyen({ totalBrut: tb, totalHeures: th });
-
           const counts: Record<string, number> = {};
           for (const m of resCout.data) {
             if (m.soignant_assigne_id) counts[m.soignant_assigne_id] = (counts[m.soignant_assigne_id] || 0) + 1;
@@ -179,12 +162,6 @@ export default function DashboardEtablissement() {
             return { id, prenom: sg?.prenom || 'Soignant', nom: sg?.nom || '', score_fiabilite: sg?.score_fiabilite ?? 0, count };
           }));
         }
-
-        setRemplissage({ pourvues: resPourvues.count ?? 0, total: resTotalMois.count ?? 0 });
-
-        const distinctCe = new Set((resSgCeMois.data || []).map((m: any) => m.soignant_assigne_id)).size;
-        const distinctPrec = new Set((resSgMoisPrec.data || []).map((m: any) => m.soignant_assigne_id)).size;
-        setTurnover({ ceMois: distinctCe, moisPrec: distinctPrec });
 
         if (resProchaines.data) {
           setProchaines(resProchaines.data.map((m: any) => ({
@@ -374,25 +351,23 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
-      {/* KPI row 3 — HR indicators */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      {/* KPI row 3 — Operational indicators from RPC */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <FadeInView delay={400}>
-          <div className="cursor-pointer" onClick={() => navigate('/etablissement/rh?vue=cout-moyen')}>
-            <KPICoutMoyenHeure totalBrut={coutMoyen.totalBrut} totalHeures={coutMoyen.totalHeures} />
-          </div>
+          <CarteKPI icone={Zap} valeur={`${stats.pool_urgence_count} soignants`} label="Pool urgence" couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/pool-urgence" />
         </FadeInView>
         <FadeInView delay={450}>
-          <div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?periode=mois')}>
-            <JaugeTauxRemplissage pourvues={remplissage.pourvues} total={remplissage.total} />
-          </div>
+          <CarteKPI icone={MessageCircle} valeur={`${stats.messages_non_lus} non lu(s)`} label="Messages" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/etablissement/messagerie" />
         </FadeInView>
         <FadeInView delay={500}>
-          <div className="cursor-pointer" onClick={() => navigate('/etablissement/pool-soignants')}>
-            <IndicateurTurnover soignantsCeMois={stats.soignants_ce_mois} soignantsMoisPrecedent={turnover.moisPrec} />
-          </div>
+          <CarteKPI icone={CreditCard} valeur={`${stats.missions_a_payer} mission(s)`} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/facturation" />
         </FadeInView>
         <FadeInView delay={550}>
-          <CarteKPI icone={CheckCircle} valeur={stats.missions_terminees_ce_mois} label="Terminées ce mois" sousLabel={`Total : ${stats.missions_terminees}`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/missions?statut=TERMINEE" />
+          {stats.commissions_impayees > 0 ? (
+            <CarteKPI icone={FileText} valeur={`${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(stats.commissions_impayees)}`} label={`⚠️ ${stats.nb_factures_impayees} facture(s) impayée(s)`} couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/facturation?tab=commissions" />
+          ) : (
+            <CarteKPI icone={FileText} valeur="✅ À jour" label="Commissions Jolene" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/facturation?tab=commissions" />
+          )}
         </FadeInView>
       </div>
 
