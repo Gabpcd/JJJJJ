@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
+import { getLabelProfession } from '@/lib/constantes';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
@@ -43,6 +45,38 @@ function JaugeForce({ motDePasse }: { motDePasse: string }) {
         ))}
       </div>
       <p className="text-[10px] text-muted-foreground mt-0.5">{labels[force]}</p>
+    </div>
+  );
+}
+
+function ExerciceTypeSection({ profession, estSalarieEtablissement, onChangeSalarie }: { profession: string; estSalarieEtablissement: boolean | null; onChangeSalarie: (v: boolean) => void }) {
+  const { uniqueType } = useTypesExerciceAutorises(profession);
+
+  if (uniqueType) {
+    return (
+      <div>
+        <label className="text-sm font-medium text-foreground mb-1.5 block">Type d'exercice</label>
+        <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
+          <p className="text-sm text-foreground">
+            En tant que <strong>{getLabelProfession(profession)}</strong>, votre type d'exercice est automatiquement défini comme <strong>{uniqueType === 'SALARIE' ? 'salarié' : uniqueType === 'LIBERAL' ? 'libéral' : 'mixte'}</strong>.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <label className="text-sm font-medium text-foreground mb-1.5 block">Êtes-vous actuellement salarié(e) d'un établissement de santé ?</label>
+      <div className="flex gap-3 mt-1">
+        <button type="button" onClick={() => onChangeSalarie(true)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${estSalarieEtablissement === true ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Oui</button>
+        <button type="button" onClick={() => onChangeSalarie(false)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${estSalarieEtablissement === false ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Non</button>
+      </div>
+      {estSalarieEtablissement === true && (
+        <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+          <p className="text-xs text-foreground">ℹ️ Vous pourrez effectuer des missions sur Jolene en complément de votre activité salariée. Vérifiez que votre contrat de travail n'inclut pas de clause d'exclusivité.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -274,18 +308,7 @@ export default function InscriptionSoignant() {
                 )}
               </div>
               {/* Question salarié établissement */}
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Êtes-vous actuellement salarié(e) d'un établissement de santé ?</label>
-                <div className="flex gap-3 mt-1">
-                  <button type="button" onClick={() => maj('estSalarieEtablissement', true)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${form.estSalarieEtablissement === true ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Oui</button>
-                  <button type="button" onClick={() => maj('estSalarieEtablissement', false)} className={`flex-1 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${form.estSalarieEtablissement === false ? 'border-primary bg-primary/5 text-primary' : 'border-input text-muted-foreground hover:bg-accent/50'}`}>Non</button>
-                </div>
-                {form.estSalarieEtablissement === true && (
-                  <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
-                    <p className="text-xs text-foreground">ℹ️ Vous pourrez effectuer des missions sur Jolene en complément de votre activité salariée. Vérifiez que votre contrat de travail n'inclut pas de clause d'exclusivité.</p>
-                  </div>
-                )}
-              </div>
+              <ExerciceTypeSection profession={form.profession} estSalarieEtablissement={form.estSalarieEtablissement} onChangeSalarie={(v) => maj('estSalarieEtablissement', v)} />
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon de déplacement : <span className="text-primary font-bold">{form.rayon} km</span></label>
                 <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full h-2 bg-primary/20 rounded-full appearance-none cursor-pointer accent-primary" />

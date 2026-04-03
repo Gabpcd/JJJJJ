@@ -2747,6 +2747,24 @@ export type Database = {
           },
         ]
       }
+      regles_exercice_profession: {
+        Row: {
+          description: string | null
+          profession: Database["public"]["Enums"]["type_profession"]
+          types_exercice_autorises: string[]
+        }
+        Insert: {
+          description?: string | null
+          profession: Database["public"]["Enums"]["type_profession"]
+          types_exercice_autorises: string[]
+        }
+        Update: {
+          description?: string | null
+          profession?: Database["public"]["Enums"]["type_profession"]
+          types_exercice_autorises?: string[]
+        }
+        Relationships: []
+      }
       rist_plafonds: {
         Row: {
           coefficient_plafond: number | null
@@ -4328,6 +4346,11 @@ export type Database = {
         Args: { p_mission_id: string }
         Returns: Json
       }
+      fn_profession_peut_etre_liberal: {
+        Args: { p_profession: string }
+        Returns: boolean
+      }
+      fn_professions_liberales: { Args: never; Returns: Json }
       fn_proposer_cloture_litige: {
         Args: { p_litige_id: string }
         Returns: Json
@@ -4465,6 +4488,10 @@ export type Database = {
           p_statut: string
         }
         Returns: Json
+      }
+      fn_types_exercice_autorises: {
+        Args: { p_profession: string }
+        Returns: string[]
       }
       fn_update_document_verification: {
         Args: {
