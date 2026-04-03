@@ -8,6 +8,7 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CONTRATS, getLabelProfession, getTypesContratSoignant } from '@/lib/constantes';
+import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { useRole } from '@/hooks/useRole';
