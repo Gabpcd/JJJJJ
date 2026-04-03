@@ -172,6 +172,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [proposing, setProposing] = useState<string | null>(null);
   const [nbCandidatures, setNbCandidatures] = useState(0);
 
+  // Litige existant
+  const [litigeExistant, setLitigeExistant] = useState<any>(null);
+  const [loadingLitige, setLoadingLitige] = useState(false);
+
   // Stripe Connect
   const [soignantHasConnect, setSoignantHasConnect] = useState(false);
   const [connectPayLoading, setConnectPayLoading] = useState(false);
