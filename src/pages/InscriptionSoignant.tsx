@@ -81,7 +81,7 @@ function ExerciceTypeSection({ profession, estSalarieEtablissement, onChangeSala
   );
 }
 
-
+export default function InscriptionSoignant() {
   const navigate = useNavigate();
   const { inscriptionSoignant } = useAuth();
   const { afficherNotification } = useNotification();
