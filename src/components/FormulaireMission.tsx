@@ -408,12 +408,19 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         {/* Type de profil recherché */}
         <div>
           <label className="text-sm font-medium text-foreground mb-2 block">Type de profil recherché</label>
+          {uniqueExType === 'SALARIE' ? (
+            <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
+              <p className="text-sm text-foreground">
+                Pour cette profession, seuls les profils <strong>salariés</strong> sont autorisés.
+              </p>
+            </div>
+          ) : (
           <div className="space-y-2">
             {([
               { value: 'TOUS' as const, label: 'Tous les profils', desc: 'Salariés et libéraux peuvent postuler' },
               { value: 'SALARIE' as const, label: 'Salarié uniquement', desc: 'Contrat CDDU — soumis au plafond 48h/semaine' },
               { value: 'LIBERAL' as const, label: 'Libéral uniquement', desc: 'Remplacement libéral — pas de plafond horaire' },
-            ]).map(opt => (
+            ]).filter(opt => !typesExAutorise || opt.value === 'TOUS' || typesExAutorise.includes(opt.value)).map(opt => (
               <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
                 <input
                   type="radio" name="contratPreference"
@@ -428,6 +435,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
               </label>
             ))}
           </div>
+          )}
         </div>
 
         {/* Mode ponctuel: horaires */}

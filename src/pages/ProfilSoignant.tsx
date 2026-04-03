@@ -481,10 +481,18 @@ export default function ProfilSoignant() {
         {/* Type d'exercice */}
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Type d'exercice</h2>
+          {uniqueType ? (
+            <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
+              <p className="text-sm text-foreground">
+                En tant que <strong>{getLabelProfession(profession)}</strong>, votre type d'exercice est automatiquement défini comme <strong>{uniqueType === 'SALARIE' ? 'salarié' : uniqueType === 'LIBERAL' ? 'libéral' : 'mixte'}</strong>.
+              </p>
+            </div>
+          ) : (
           <RadioGroup value={typeExercice} onValueChange={(v) => {
             setTypeExercice(v);
             if (v === 'SALARIE') setAttestationCumul(false);
           }} className="space-y-3">
+            {(!typesAutorises || typesAutorises.includes('SALARIE')) && (
             <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-input px-4 py-3 hover:bg-accent/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
               <RadioGroupItem value="SALARIE" id="ex-salarie" className="mt-0.5" />
               <div>
@@ -492,6 +500,8 @@ export default function ProfilSoignant() {
                 <p className="text-xs text-muted-foreground mt-0.5">Je suis salarié(e) dans un établissement</p>
               </div>
             </label>
+            )}
+            {(!typesAutorises || typesAutorises.includes('LIBERAL')) && (
             <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${statutLiberal === 'ACTIF' ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
               <RadioGroupItem value="LIBERAL" id="ex-liberal" className="mt-0.5" disabled={statutLiberal !== 'ACTIF'} />
               <div>
@@ -505,6 +515,8 @@ export default function ProfilSoignant() {
                 )}
               </div>
             </label>
+            )}
+            {(!typesAutorises || typesAutorises.includes('MIXTE')) && (
             <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${statutLiberal === 'ACTIF' ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
               <RadioGroupItem value="MIXTE" id="ex-mixte" className="mt-0.5" disabled={statutLiberal !== 'ACTIF'} />
               <div>
@@ -518,9 +530,11 @@ export default function ProfilSoignant() {
                 )}
               </div>
             </label>
+            )}
           </RadioGroup>
+          )}
 
-          {(typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && (
+          {(typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && !uniqueType && (
             <>
               <div className="mt-4 p-3 bg-warning/5 border border-warning/20 rounded-xl">
                 <label className="flex items-start gap-3 cursor-pointer">
