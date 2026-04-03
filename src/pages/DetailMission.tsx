@@ -177,6 +177,28 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   // Litige existant
   const [litigeExistant, setLitigeExistant] = useState<any>(null);
   const [loadingLitige, setLoadingLitige] = useState(false);
+  const [showLitigeForm, setShowLitigeForm] = useState(false);
+  const [litigeMotif, setLitigeMotif] = useState('');
+  const [litigeCreating, setLitigeCreating] = useState(false);
+
+  const ouvrirLitige = async () => {
+    if (litigeMotif.trim().length < 10) {
+      toast.error('Le motif doit contenir au moins 10 caractères.');
+      return;
+    }
+    setLitigeCreating(true);
+    const { data, error } = await supabase.rpc('fn_ouvrir_litige_rate_limited' as any, {
+      p_mission_id: id,
+      p_motif: litigeMotif.trim(),
+    });
+    setLitigeCreating(false);
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || 'Une erreur est survenue. Veuillez réessayer.');
+      return;
+    }
+    toast.success('Litige ouvert avec succès');
+    window.location.reload();
+  };
 
   // Stripe Connect
   const [soignantHasConnect, setSoignantHasConnect] = useState(false);
