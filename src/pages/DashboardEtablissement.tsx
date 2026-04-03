@@ -13,7 +13,7 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EtatVide } from '@/components/EtatVide';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
-import { WidgetPalierFidelite } from '@/components/WidgetPalierFidelite';
+
 import { BadgePalier } from '@/components/BadgePalier';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
