@@ -175,16 +175,45 @@ export default function DashboardRH() {
 
       {/* Détail inline missions du mois sélectionné */}
       {detailMois && (() => {
+        const isPrev = detailMois === 'previsionnel';
         const detailMissions = detailMois === 'prec' ? stats.missions_mois_prec
           : detailMois === 'courant' ? stats.missions_ce_mois
-          : detailMois === 'previsionnel' ? stats.prochaines_missions
+          : isPrev ? stats.prochaines_missions
           : [];
         const detailTitre = detailMois === 'prec' ? stats.mois_precedent
           : detailMois === 'courant' ? stats.mois_en_cours
-          : 'Missions à venir';
-        const messageVide = detailMois === 'previsionnel'
+          : 'Budget prévisionnel';
+        const messageVide = isPrev
           ? 'Aucune mission planifiée'
           : `Aucune mission terminée ${detailMois === 'prec' ? 'le mois précédent' : 'ce mois'}`;
+
+        const missionsConfirmees = isPrev ? (detailMissions || []).filter((m: any) => m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') : [];
+        const missionsOuvertes = isPrev ? (detailMissions || []).filter((m: any) => m.statut === 'OUVERTE') : [];
+
+        const renderMissionRow = (m: any, grise = false) => (
+          <button key={m.mission_id} onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
+            className={`w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-left ${grise ? 'opacity-60' : ''}`}>
+            <div>
+              <p className={`font-medium text-sm ${grise ? 'text-muted-foreground' : 'text-foreground'}`}>{m.intitule}</p>
+              <p className="text-xs text-muted-foreground">
+                {m.soignant_nom} · {m.soignant_profession} · {Math.round(m.heures || 0)}h
+              </p>
+            </div>
+            <div className="text-right flex items-center gap-2">
+              {isPrev && m.statut && (
+                <Badge variant={m.statut === 'ASSIGNEE' ? 'default' : 'secondary'} className={m.statut === 'OUVERTE' ? 'bg-warning/10 text-warning border-warning/30' : ''}>
+                  {m.statut === 'ASSIGNEE' ? '✅ Assignée' : m.statut === 'EN_COURS' ? '▶️ En cours' : '🟠 Ouverte'}
+                </Badge>
+              )}
+              <div>
+                <p className={`font-semibold text-sm ${grise ? 'text-muted-foreground' : 'text-foreground'}`}>{fmtEur(m.total_brut)}</p>
+                {m.montant_commission_ttc > 0 && (
+                  <p className="text-[10px] text-muted-foreground">+ {fmtEur(m.montant_commission_ttc)} com.</p>
+                )}
+              </div>
+            </div>
+          </button>
+        );
 
         return (
           <div className="card-base mb-4">
@@ -192,32 +221,34 @@ export default function DashboardRH() {
               <h3 className="font-semibold text-foreground">Détail — {detailTitre}</h3>
               <button onClick={() => setDetailMois(null)} className="text-xs text-primary hover:underline">Fermer</button>
             </div>
-            {detailMissions?.length > 0 ? (
+            {isPrev ? (
+              <>
+                {missionsConfirmees.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-sm font-semibold text-foreground mb-2">
+                      ✅ Missions confirmées ({missionsConfirmees.length}) — {fmtEur(missionsConfirmees.reduce((s: number, m: any) => s + (m.total_brut || 0), 0))}
+                    </p>
+                    <div className="space-y-2">{missionsConfirmees.map((m: any) => renderMissionRow(m))}</div>
+                  </div>
+                )}
+                {missionsOuvertes.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold text-warning mb-2">
+                      🟠 Missions ouvertes — en attente de soignant ({missionsOuvertes.length})
+                    </p>
+                    <div className="space-y-2">{missionsOuvertes.map((m: any) => renderMissionRow(m, true))}</div>
+                    <p className="text-xs text-muted-foreground mt-2 italic">
+                      Le coût des missions ouvertes n'est pas inclus dans le budget prévisionnel car aucun soignant n'est encore assigné.
+                    </p>
+                  </div>
+                )}
+                {missionsConfirmees.length === 0 && missionsOuvertes.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">{messageVide}</p>
+                )}
+              </>
+            ) : detailMissions?.length > 0 ? (
               <div className="space-y-2">
-                {detailMissions.map((m: any) => (
-                  <button key={m.mission_id} onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
-                    className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-left">
-                    <div>
-                      <p className="font-medium text-sm text-foreground">{m.intitule}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {m.soignant_nom} · {m.soignant_profession} · {Math.round(m.heures || 0)}h
-                      </p>
-                    </div>
-                    <div className="text-right flex items-center gap-2">
-                      {detailMois === 'previsionnel' && m.statut && (
-                        <Badge variant={m.statut === 'ASSIGNEE' ? 'default' : 'secondary'} className={m.statut === 'OUVERTE' ? 'bg-warning/10 text-warning border-warning/30' : ''}>
-                          {m.statut === 'ASSIGNEE' ? '✅ Assignée' : m.statut === 'EN_COURS' ? '▶️ En cours' : '🟠 Ouverte'}
-                        </Badge>
-                      )}
-                      <div>
-                        <p className="font-semibold text-sm text-foreground">{fmtEur(m.total_brut)}</p>
-                        {m.montant_commission_ttc > 0 && (
-                          <p className="text-[10px] text-muted-foreground">+ {fmtEur(m.montant_commission_ttc)} com.</p>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                {detailMissions.map((m: any) => renderMissionRow(m))}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">{messageVide}</p>
