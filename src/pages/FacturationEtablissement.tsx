@@ -354,7 +354,7 @@ export default function FacturationEtablissement() {
           {/* KPI */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             <button
-              onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE')}
+              onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE'); scrollToHistorique(); }}
               className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
                 filtreStatutPaiement === 'PAYE' ? 'border-primary ring-2 ring-primary/20' : 'border-border'
               }`}
