@@ -16,7 +16,7 @@ interface CarteValidationProps {
   onUpdate?: () => void;
 }
 
-export function CarteValidation({ presence, onValider, onContester, onOuvrirLitige }: CarteValidationProps) {
+export function CarteValidation({ presence, litigeExistant, onValider, onContester, onOuvrirLitige, onUpdate }: CarteValidationProps) {
   const navigate = useNavigate();
   const [motifLitige, setMotifLitige] = useState('');
   const [showContester, setShowContester] = useState(false);
