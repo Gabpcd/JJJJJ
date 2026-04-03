@@ -22,6 +22,7 @@ import { BoutonFavori } from '@/components/BoutonFavori';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
 import { WorkflowPaiementMission } from '@/components/WorkflowPaiementMission';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
+import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
