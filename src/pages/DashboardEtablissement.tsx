@@ -56,6 +56,8 @@ export default function DashboardEtablissement() {
     missions_a_payer: 0,
     missions_terminees_ce_mois: 0,
     soignants_ce_mois: 0,
+    commissions_impayees: 0,
+    nb_factures_impayees: 0,
   });
 
   // HR state
