@@ -510,6 +510,36 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   }}
                 />
               )}
+              {/* Litige section */}
+              {!isAdmin && (m.statut === 'TERMINEE' || m.statut === 'LITIGE') && m.soignant_assigne_id && (
+                litigeExistant ? (
+                  <div className="card-base border-warning/30">
+                    <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">⚖️ Litige en cours</h2>
+                    <FilDiscussionLitige
+                      litige={{
+                        id: litigeExistant.litige_id,
+                        statut: litigeExistant.statut,
+                        motif: litigeExistant.motif,
+                        cree_le: litigeExistant.cree_le,
+                        accord_soignant: litigeExistant.accord_soignant,
+                        accord_etablissement: litigeExistant.accord_etablissement,
+                        resolution: litigeExistant.resolution,
+                        missions: { intitule: m.intitule },
+                      }}
+                      onUpdate={() => window.location.reload()}
+                    />
+                  </div>
+                ) : (
+                  <div className="card-base">
+                    <button
+                      onClick={() => navigate('/etablissement/litiges')}
+                      className="text-sm text-warning hover:underline font-medium flex items-center gap-1.5"
+                    >
+                      ⚖️ Ouvrir un litige pour cette mission
+                    </button>
+                  </div>
+                )
+              )
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <CodesPointageMission missionId={m.id} />
               )}
