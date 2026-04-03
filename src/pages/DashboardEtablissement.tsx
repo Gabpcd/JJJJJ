@@ -67,7 +67,6 @@ export default function DashboardEtablissement() {
     let partialError = false;
     const now = new Date();
     const debutMois = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const debutMoisPrec = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
 
     try {
       // Primary data: RPC stats + etab + recent missions + paliers
