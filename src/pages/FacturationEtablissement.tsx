@@ -385,8 +385,101 @@ export default function FacturationEtablissement() {
             </button>
           </div>
 
+          {/* Historique paiements — affiché en premier pour visibilité après clic KPI */}
+          <div className="card-base mb-6" id="historique-paiements">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-foreground">{titreHistorique}</h2>
+              {filtreStatutPaiement && (
+                <button onClick={() => setFiltreStatutPaiement(null)} className="text-xs text-primary hover:underline">
+                  Voir tout ({paiementsRecents.length})
+                </button>
+              )}
+            </div>
+            {filtreStatutPaiement && paiementsFiltres.length === 0 ? (
+              <div className="p-6 rounded-xl bg-success/10 text-center">
+                <p className="text-lg font-semibold text-success">
+                  {filtreStatutPaiement === 'CONTESTE' ? '✅ Aucun paiement contesté' :
+                   filtreStatutPaiement === 'PAYE' ? 'Aucun paiement déclaré ou confirmé' :
+                   'Aucun paiement en attente'}
+                </p>
+                <button onClick={() => setFiltreStatutPaiement(null)} className="text-sm text-primary hover:underline mt-2">
+                  Voir tous les paiements
+                </button>
+              </div>
+            ) : paiementsFiltres.length > 0 ? (
+              <>
+                {filtreStatutPaiement && (
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {paiementsFiltres.length} résultat{paiementsFiltres.length > 1 ? 's' : ''}
+                  </p>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-muted-foreground">
+                        <th className="pb-2 font-medium">Date</th>
+                        <th className="pb-2 font-medium">Soignant</th>
+                        <th className="pb-2 font-medium">Mission</th>
+                        <th className="pb-2 font-medium">Référence</th>
+                        <th className="pb-2 font-medium">Méthode</th>
+                        <th className="pb-2 font-medium text-right">Montant</th>
+                        <th className="pb-2 font-medium text-right">Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paiementsFiltres.map((p: any) => (
+                        <React.Fragment key={p.paiement_id}>
+                          <tr className="border-b border-border/50">
+                            <td className="py-2 text-muted-foreground">{p.date_paiement ? format(new Date(p.date_paiement), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
+                            <td className="py-2 text-foreground">{p.soignant_nom || '—'}</td>
+                            <td className="py-2">
+                              {p.mission_id ? (
+                                <button onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)} className="text-primary hover:underline truncate max-w-[180px] block text-left">
+                                  {p.mission_intitule || '—'}
+                                </button>
+                              ) : (
+                                <span className="text-foreground truncate max-w-[180px] block">{p.mission_intitule || '—'}</span>
+                              )}
+                            </td>
+                            <td className="py-2 text-xs text-muted-foreground">{p.reference_virement || '—'}</td>
+                            <td className="py-2 text-muted-foreground">{p.methode || '—'}</td>
+                            <td className="py-2 text-right font-medium">{fmt(p.montant_net ?? 0)}</td>
+                            <td className="py-2 text-right">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PAIEMENT_STATUT_COLORS[p.statut] ?? 'bg-muted text-muted-foreground'}`}>
+                                {PAIEMENT_STATUT_LABELS[p.statut] ?? p.statut}
+                              </span>
+                              {p.confirme_par_soignant && (
+                                <span className="ml-1 text-[10px] text-success">✅ {p.confirme_par_soignant_le ? format(new Date(p.confirme_par_soignant_le), 'dd/MM', { locale: fr }) : ''}</span>
+                              )}
+                            </td>
+                          </tr>
+                          {p.statut === 'CONTESTE' && p.motif_contestation && (
+                            <tr>
+                              <td colSpan={7} className="py-1 px-2 text-xs text-destructive">
+                                ⚠️ Motif : {p.motif_contestation}
+                              </td>
+                            </tr>
+                          )}
+                          {p.echeance_le && p.statut !== 'CONFIRME' && p.statut !== 'CONTESTE' && (
+                            <tr>
+                              <td colSpan={7} className="py-0.5 px-2 text-[10px] text-muted-foreground">
+                                Échéance : {format(new Date(p.echeance_le), 'dd/MM/yyyy', { locale: fr })}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">Aucun paiement enregistré.</p>
+            )}
+          </div>
+
           {/* Missions à payer */}
-          <div className="card-base mb-6">
+          <div className="card-base">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-foreground flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-warning" /> Missions à payer
@@ -535,93 +628,6 @@ export default function FacturationEtablissement() {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">✅ Aucune mission en attente de paiement.</p>
-            )}
-          </div>
-
-          {/* Historique paiements */}
-          <div className="card-base" id="historique-paiements">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-foreground">{titreHistorique}</h2>
-              {filtreStatutPaiement && (
-                <button onClick={() => setFiltreStatutPaiement(null)} className="text-xs text-primary hover:underline">
-                  Voir tout ({paiementsRecents.length})
-                </button>
-              )}
-            </div>
-            {filtreStatutPaiement && paiementsFiltres.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                {filtreStatutPaiement === 'CONTESTE' ? '✅ Aucun paiement contesté' : `Aucun paiement avec ce statut`}
-              </p>
-            )}
-            {filtreStatutPaiement && paiementsFiltres.length > 0 && (
-              <p className="text-xs text-muted-foreground mb-3">
-                {paiementsFiltres.length} résultat{paiementsFiltres.length > 1 ? 's' : ''}
-              </p>
-            )}
-            {paiementsFiltres.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="pb-2 font-medium">Date</th>
-                      <th className="pb-2 font-medium">Soignant</th>
-                      <th className="pb-2 font-medium">Mission</th>
-                      <th className="pb-2 font-medium">Référence</th>
-                      <th className="pb-2 font-medium">Méthode</th>
-                      <th className="pb-2 font-medium text-right">Montant</th>
-                      <th className="pb-2 font-medium text-right">Statut</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paiementsFiltres.map((p: any) => (
-                      <React.Fragment key={p.paiement_id}>
-                        <tr className="border-b border-border/50">
-                          <td className="py-2 text-muted-foreground">{p.date_paiement ? format(new Date(p.date_paiement), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
-                          <td className="py-2 text-foreground">{p.soignant_nom || '—'}</td>
-                          <td className="py-2">
-                            {p.mission_id ? (
-                              <button onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)} className="text-primary hover:underline truncate max-w-[180px] block text-left">
-                                {p.mission_intitule || '—'}
-                              </button>
-                            ) : (
-                              <span className="text-foreground truncate max-w-[180px] block">{p.mission_intitule || '—'}</span>
-                            )}
-                          </td>
-                          <td className="py-2 text-xs text-muted-foreground">{p.reference_virement || '—'}</td>
-                          <td className="py-2 text-muted-foreground">{p.methode || '—'}</td>
-                          <td className="py-2 text-right font-medium">{fmt(p.montant_net ?? 0)}</td>
-                          <td className="py-2 text-right">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PAIEMENT_STATUT_COLORS[p.statut] ?? 'bg-muted text-muted-foreground'}`}>
-                              {PAIEMENT_STATUT_LABELS[p.statut] ?? p.statut}
-                            </span>
-                            {p.confirme_par_soignant && (
-                              <span className="ml-1 text-[10px] text-success">✅ {p.confirme_par_soignant_le ? format(new Date(p.confirme_par_soignant_le), 'dd/MM', { locale: fr }) : ''}</span>
-                            )}
-                          </td>
-                        </tr>
-                        {p.statut === 'CONTESTE' && p.motif_contestation && (
-                          <tr>
-                            <td colSpan={7} className="py-1 px-2 text-xs text-destructive">
-                              ⚠️ Motif : {p.motif_contestation}
-                            </td>
-                          </tr>
-                        )}
-                        {p.echeance_le && p.statut !== 'CONFIRME' && p.statut !== 'CONTESTE' && (
-                          <tr>
-                            <td colSpan={7} className="py-0.5 px-2 text-[10px] text-muted-foreground">
-                              Échéance : {format(new Date(p.echeance_le), 'dd/MM/yyyy', { locale: fr })}
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                {filtreStatutPaiement ? 'Aucun paiement dans cette catégorie.' : 'Aucun paiement enregistré.'}
-              </p>
             )}
           </div>
         </TabsContent>
