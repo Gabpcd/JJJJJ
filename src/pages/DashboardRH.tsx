@@ -25,6 +25,7 @@ export default function DashboardRH() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [stats, setStats] = useState<any>(null);
+  const [detailMois, setDetailMois] = useState<'prec' | 'courant' | null>(null);
 
   useEffect(() => {
     if (!user || !etablissementId) return;
