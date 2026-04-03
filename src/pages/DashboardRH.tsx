@@ -113,7 +113,8 @@ export default function DashboardRH() {
     </LayoutApp>
   );
 
-  const previsionTotal = (stats.cout_ce_mois ?? 0) + (stats.cout_previsionnel ?? 0);
+  const coutTotalMoisPrec = (stats.cout_mois_prec ?? 0) + (stats.commission_mois_prec ?? 0);
+  const coutTotalCeMois = (stats.cout_ce_mois ?? 0) + (stats.commission_ce_mois ?? 0);
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -134,21 +135,30 @@ export default function DashboardRH() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <div className="card-base text-center">
           <Coins className="h-5 w-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_mois_prec)}</p>
+          <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalMoisPrec)}</p>
           <p className="text-xs text-muted-foreground">Coût mois précédent</p>
           <p className="text-[10px] text-muted-foreground">{stats.mois_precedent}</p>
+          {(stats.commission_mois_prec ?? 0) > 0 && (
+            <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_mois_prec)} de commission Jolene</p>
+          )}
         </div>
         <div className="card-base text-center">
           <Coins className="h-5 w-5 text-info mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_ce_mois)}</p>
+          <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalCeMois)}</p>
           <p className="text-xs text-muted-foreground">Coût ce mois</p>
           <p className="text-[10px] text-muted-foreground">{stats.mois_en_cours}</p>
+          {(stats.commission_ce_mois ?? 0) > 0 && (
+            <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_ce_mois)} de commission Jolene</p>
+          )}
         </div>
         <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=ASSIGNEE')}>
           <Briefcase className="h-5 w-5 text-warning mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_previsionnel)}</p>
+          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_previsionnel_total ?? stats.cout_previsionnel ?? 0)}</p>
           <p className="text-xs text-muted-foreground">Budget prévisionnel</p>
           <p className="text-[10px] text-muted-foreground">{stats.assignees_total} mission{stats.assignees_total > 1 ? 's' : ''} à venir</p>
+          {(stats.cout_previsionnel_brut ?? 0) > 0 && (
+            <p className="text-[10px] text-muted-foreground">{fmtEur(stats.cout_previsionnel_brut)} soignants + {fmtEur(stats.commission_previsionnelle ?? 0)} commission</p>
+          )}
         </div>
         <div className="card-base text-center">
           <TrendingUp className="h-5 w-5 text-primary mx-auto mb-1" />
