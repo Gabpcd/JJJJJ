@@ -800,10 +800,10 @@ export default function FacturationEtablissement() {
                             </button>
                           </>
                         )}
-                        {f.statut === 'PAYEE' && f.stripe_hosted_url && (
-                          <a href={f.stripe_hosted_url} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs flex items-center gap-1">
-                            <CheckCircle className="h-3.5 w-3.5" /> Reçu
-                          </a>
+                        {f.statut === 'PAYEE' && (
+                          <button onClick={() => navigate(`/etablissement/facturation/${f.id}`)} className="btn-secondary text-xs flex items-center gap-1">
+                            <Download className="h-3.5 w-3.5" /> PDF
+                          </button>
                         )}
                       </div>
                     </div>
