@@ -302,7 +302,7 @@ export default function FacturationEtablissement() {
         )}
       </div>
 
-      <Tabs defaultValue="paiements" className="w-full">
+      <Tabs defaultValue={searchParams.get('tab') || 'paiements'} className="w-full">
         <TabsList className="w-full grid grid-cols-3 mb-6">
           <TabsTrigger value="paiements">💰 Paiements soignants</TabsTrigger>
           <TabsTrigger value="commissions">📄 Commissions Jolene</TabsTrigger>
