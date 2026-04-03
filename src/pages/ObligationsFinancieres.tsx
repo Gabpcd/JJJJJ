@@ -42,32 +42,32 @@ function ResumeCard({
   label,
   detail,
   onClick,
-  className,
+  accent,
 }: {
   value: string;
   label: string;
   detail: string;
   onClick?: () => void;
-  className?: string;
+  accent?: 'destructive' | 'success' | 'default';
 }) {
+  const borderCls = accent === 'destructive' ? 'border-destructive/30' : accent === 'success' ? 'border-success/30' : '';
+  const bgCls = accent === 'destructive' ? 'bg-destructive/5' : accent === 'success' ? 'bg-success/5' : '';
   return (
-    <Card className={className}>
-      <CardContent className="p-0">
-        <button
-          type="button"
-          onClick={onClick}
-          disabled={!onClick}
-          className="w-full rounded-xl px-6 py-6 text-center transition-all hover:bg-muted/20 focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
-        >
-          <p className="text-3xl font-bold">{value}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{label}</p>
-          <p className="mt-2 inline-flex items-center gap-1 text-xs text-primary">
-            <ExternalLink className="h-3.5 w-3.5" />
-            {detail}
-          </p>
-        </button>
-      </CardContent>
-    </Card>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={`card-kpi text-center w-full ${borderCls} ${bgCls} ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
+    >
+      <p className="text-2xl font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground mt-1">{label}</p>
+      {onClick && (
+        <p className="mt-2 inline-flex items-center gap-1 text-xs text-primary">
+          <ExternalLink className="h-3.5 w-3.5" />
+          {detail}
+        </p>
+      )}
+    </button>
   );
 }
 
@@ -209,7 +209,7 @@ export default function ObligationsFinancieres() {
               label="🔴 Total impayé"
               detail="Voir tout le détail"
               onClick={() => allerSection(sectionTotal)}
-              className={`border-2 ${data.total_du > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-success/30 bg-success/5'}`}
+              accent={data.total_du > 0 ? 'destructive' : 'success'}
             />
             <ResumeCard
               value={fmt(data.total_soignants_du)}
