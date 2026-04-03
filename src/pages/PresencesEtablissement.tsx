@@ -30,7 +30,7 @@ export default function PresencesEtablissement() {
 
   const charger = useCallback(async () => {
     if (!user || !etablissementId) return;
-    const [{ data: presData }, { data: soignantsData }] = await Promise.all([
+    const [{ data: presData }, { data: soignantsData }, { data: litigesData }] = await Promise.all([
       supabase
         .from('presences')
         .select(`
@@ -47,7 +47,20 @@ export default function PresencesEtablissement() {
         .not('pointage_arrivee_le', 'is', null)
         .order('pointage_arrivee_le', { ascending: false }),
       supabase.rpc('fn_mes_soignants_etablissement'),
+      supabase
+        .from('litiges')
+        .select('id, mission_id, motif, statut, initie_par, cree_le, resolution, accord_soignant, accord_etablissement')
+        .eq('etablissement_id', etablissementId),
     ]);
+
+    // Build litiges map by mission_id
+    const litigesMap: Record<string, any> = {};
+    if (Array.isArray(litigesData)) {
+      for (const l of litigesData) {
+        litigesMap[l.mission_id] = l;
+      }
+    }
+    setLitiges(litigesMap);
 
     const sgMap: Record<string, any> = {};
     if (Array.isArray(soignantsData)) {
