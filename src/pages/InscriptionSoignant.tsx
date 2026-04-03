@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
+import { getLabelProfession } from '@/lib/constantes';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
