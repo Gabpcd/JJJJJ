@@ -22,6 +22,7 @@ export default function PresencesEtablissement() {
   const { afficherNotification } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
   const [presences, setPresences] = useState<any[]>([]);
+  const [litiges, setLitiges] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [modalLot, setModalLot] = useState(false);
   const tabParam = searchParams.get('tab');
@@ -29,7 +30,7 @@ export default function PresencesEtablissement() {
 
   const charger = useCallback(async () => {
     if (!user || !etablissementId) return;
-    const [{ data: presData }, { data: soignantsData }] = await Promise.all([
+    const [{ data: presData }, { data: soignantsData }, { data: litigesData }] = await Promise.all([
       supabase
         .from('presences')
         .select(`
@@ -46,7 +47,20 @@ export default function PresencesEtablissement() {
         .not('pointage_arrivee_le', 'is', null)
         .order('pointage_arrivee_le', { ascending: false }),
       supabase.rpc('fn_mes_soignants_etablissement'),
+      supabase
+        .from('litiges')
+        .select('id, mission_id, motif, statut, initie_par, cree_le, resolution, accord_soignant, accord_etablissement')
+        .eq('etablissement_id', etablissementId),
     ]);
+
+    // Build litiges map by mission_id
+    const litigesMap: Record<string, any> = {};
+    if (Array.isArray(litigesData)) {
+      for (const l of litigesData) {
+        litigesMap[l.mission_id] = l;
+      }
+    }
+    setLitiges(litigesMap);
 
     const sgMap: Record<string, any> = {};
     if (Array.isArray(soignantsData)) {
@@ -226,7 +240,7 @@ export default function PresencesEtablissement() {
           {aValider.length > 0 ? (
             <div className="space-y-4">
               {aValider.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
+                <CarteValidation key={p.id} presence={p} litigeExistant={litiges[p.mission_id]} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} onUpdate={charger} />
               ))}
             </div>
           ) : (
@@ -238,7 +252,7 @@ export default function PresencesEtablissement() {
           {enCours.length > 0 ? (
             <div className="space-y-4">
               {enCours.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
+                <CarteValidation key={p.id} presence={p} litigeExistant={litiges[p.mission_id]} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} onUpdate={charger} />
               ))}
             </div>
           ) : (
@@ -250,7 +264,7 @@ export default function PresencesEtablissement() {
           {validees.length > 0 ? (
             <div className="space-y-4">
               {validees.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
+                <CarteValidation key={p.id} presence={p} litigeExistant={litiges[p.mission_id]} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} onUpdate={charger} />
               ))}
             </div>
           ) : (
@@ -262,7 +276,7 @@ export default function PresencesEtablissement() {
           {alertes.length > 0 ? (
             <div className="space-y-4">
               {alertes.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
+                <CarteValidation key={p.id} presence={p} litigeExistant={litiges[p.mission_id]} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} onUpdate={charger} />
               ))}
             </div>
           ) : (

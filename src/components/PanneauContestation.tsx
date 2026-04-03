@@ -270,7 +270,7 @@ export function PanneauContestation({
                 </div>
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-foreground">
-                    Réponse de l'{litige.initie_par === 'SOIGNANT' ? 'établissement' : 'soignant'}
+                    Réponse {litige.initie_par === 'SOIGNANT' ? "de l'établissement" : 'du soignant'}
                   </p>
                   <p className="text-sm text-foreground mt-1 bg-muted/50 rounded-lg px-3 py-2">{litige.reponse}</p>
                 </div>
@@ -317,7 +317,7 @@ export function PanneauContestation({
             {litige.statut === 'CONTESTEE' && !litige.reponse && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
                 <Clock className="h-3.5 w-3.5" />
-                En attente de la réponse de l'{autreRoleLabel === (litige.initie_par === 'SOIGNANT' ? 'soignant' : 'établissement') ? roleLabel : autreRoleLabel}…
+                En attente de la réponse {autreRoleLabel === 'soignant' ? 'du soignant' : "de l'établissement"}…
                 <span className="ml-auto text-[11px]">72h pour répondre</span>
               </div>
             )}
