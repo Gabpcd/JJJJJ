@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, MessageCircle, CreditCard, Zap } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, MessageCircle, CreditCard, Zap } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
