@@ -4239,6 +4239,7 @@ export type Database = {
       fn_nettoyer_tokens_push: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
+      fn_obligations_financieres: { Args: never; Returns: Json }
       fn_obtenir_conversation: {
         Args: { p_autre_id: string; p_mission_id?: string }
         Returns: string
