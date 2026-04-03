@@ -341,7 +341,7 @@ export default function DashboardEtablissement() {
           <CarteKPI icone={Star} valeur={stats.candidatures_en_attente} label="Candidatures en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/missions?statut=OUVERTE" />
         </FadeInView>
         <FadeInView delay={250}>
-          <CarteKPI icone={Users} valeur={stats.soignants_ce_mois} label="Soignants ce mois" sousLabel={`Pool urgence : ${stats.pool_urgence_count}`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/etablissement/pool-soignants" />
+          <CarteKPI icone={Users} valeur={stats.soignants_ce_mois} label="Soignants ce mois" sousLabel={`Pool urgence : ${stats.pool_urgence_count}`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/etablissement/pool-urgence" />
         </FadeInView>
         <FadeInView delay={300}>
           <CarteKPI icone={CreditCard} valeur={stats.missions_a_payer} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/facturation" />
