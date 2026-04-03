@@ -57,6 +57,8 @@ export default function DashboardEtablissement() {
     pool_urgence_count: 0,
     messages_non_lus: 0,
     missions_a_payer: 0,
+    missions_terminees_ce_mois: 0,
+    soignants_ce_mois: 0,
   });
 
   // HR state
@@ -65,7 +67,6 @@ export default function DashboardEtablissement() {
   const [topSoignants, setTopSoignants] = useState<any[]>([]);
   const [turnover, setTurnover] = useState({ ceMois: 0, moisPrec: 0 });
   const [prochaines, setProchaines] = useState<any[]>([]);
-  const [missionsCeMois, setMissionsCeMois] = useState(0);
 
   const charger = async () => {
     if (!user || !etablissementId) return;
