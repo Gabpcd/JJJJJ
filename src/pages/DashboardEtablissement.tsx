@@ -353,25 +353,23 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
-      {/* KPI row 3 — HR indicators */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      {/* KPI row 3 — Operational indicators from RPC */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <FadeInView delay={400}>
-          <div className="cursor-pointer" onClick={() => navigate('/etablissement/rh?vue=cout-moyen')}>
-            <KPICoutMoyenHeure totalBrut={coutMoyen.totalBrut} totalHeures={coutMoyen.totalHeures} />
-          </div>
+          <CarteKPI icone={Zap} valeur={`${stats.pool_urgence_count} soignants`} label="Pool urgence" couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/pool-urgence" />
         </FadeInView>
         <FadeInView delay={450}>
-          <div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?periode=mois')}>
-            <JaugeTauxRemplissage pourvues={remplissage.pourvues} total={remplissage.total} />
-          </div>
+          <CarteKPI icone={MessageCircle} valeur={`${stats.messages_non_lus} non lu(s)`} label="Messages" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/etablissement/messagerie" />
         </FadeInView>
         <FadeInView delay={500}>
-          <div className="cursor-pointer" onClick={() => navigate('/etablissement/pool-soignants')}>
-            <IndicateurTurnover soignantsCeMois={stats.soignants_ce_mois} soignantsMoisPrecedent={turnover.moisPrec} />
-          </div>
+          <CarteKPI icone={CreditCard} valeur={`${stats.missions_a_payer} mission(s)`} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/facturation" />
         </FadeInView>
         <FadeInView delay={550}>
-          <CarteKPI icone={CheckCircle} valeur={stats.missions_terminees_ce_mois} label="Terminées ce mois" sousLabel={`Total : ${stats.missions_terminees}`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/missions?statut=TERMINEE" />
+          {stats.commissions_impayees > 0 ? (
+            <CarteKPI icone={FileText} valeur={`${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(stats.commissions_impayees)}`} label={`⚠️ ${stats.nb_factures_impayees} facture(s) impayée(s)`} couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/facturation?tab=commissions" />
+          ) : (
+            <CarteKPI icone={FileText} valeur="✅ À jour" label="Commissions Jolene" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/facturation?tab=commissions" />
+          )}
         </FadeInView>
       </div>
 
