@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Scale, PlusCircle } from 'lucide-react';
+import { Scale, PlusCircle, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
@@ -16,11 +18,24 @@ import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
 
+const STATUT_COLORS: Record<string, string> = {
+  OUVERT: 'bg-warning/10 text-warning',
+  EN_COURS: 'bg-primary/10 text-primary',
+  EN_DISCUSSION: 'bg-primary/10 text-primary',
+  EN_MEDIATION: 'bg-info/10 text-info',
+  CONTESTEE: 'bg-warning/10 text-warning',
+  RESOLU: 'bg-success/10 text-success',
+  CLOTURE: 'bg-success/10 text-success',
+  FERME: 'bg-muted text-muted-foreground',
+};
+
 export default function LitigesEtablissement() {
   usePageTitle('Litiges');
+  const navigate = useNavigate();
   const { user, etablissementId } = useEtablissementScope();
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // New dispute modal
   const [showNew, setShowNew] = useState(false);
@@ -31,12 +46,13 @@ export default function LitigesEtablissement() {
 
   const charger = async () => {
     if (!user || !etablissementId) return;
-    const { data } = await supabase
-      .from('litiges')
-      .select('*, missions(intitule, debut_le)')
-      .eq('etablissement_id', etablissementId)
-      .order('cree_le', { ascending: false });
-    setLitiges(data || []);
+    const { data, error } = await supabase.rpc('fn_litiges_etablissement' as any);
+    if (error) {
+      toast.error('Erreur lors du chargement des litiges.');
+      setLoading(false);
+      return;
+    }
+    setLitiges(Array.isArray(data) ? data : []);
     setLoading(false);
   };
 
@@ -105,11 +121,71 @@ export default function LitigesEtablissement() {
         <EtatVide icone={Scale} titre="Aucun litige" sousTitre="Aucun litige sur vos missions. Cliquez sur « Ouvrir un litige » pour contester une mission." />
       ) : (
         <div className="space-y-4">
-          {litiges.map(l => (
-            <div key={l.id} className="card-base">
-              <FilDiscussionLitige litige={l} onUpdate={charger} />
-            </div>
-          ))}
+          {litiges.map((l: any) => {
+            const isExpanded = expandedId === l.litige_id;
+            return (
+              <div key={l.litige_id} className="card-base">
+                {/* Summary row */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <button
+                      onClick={() => navigate(`/etablissement/missions/${l.mission_id}`)}
+                      className="font-semibold text-sm text-foreground hover:text-primary hover:underline text-left"
+                    >
+                      {l.mission_intitule || 'Mission'}
+                    </button>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      👤 {l.soignant_nom} · {l.soignant_profession}
+                      {l.mission_debut && ` · ${format(new Date(l.mission_debut), 'd MMM yyyy', { locale: fr })}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      <span className="font-medium">Motif :</span> {l.motif}
+                    </p>
+                    {l.dernier_message && (
+                      <p className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1">
+                        <MessageCircle className="h-3 w-3" />
+                        {l.dernier_message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <Badge className={STATUT_COLORS[l.statut] || ''}>{l.statut}</Badge>
+                    {l.nb_messages > 0 && (
+                      <span className="text-[10px] text-muted-foreground">{l.nb_messages} message{l.nb_messages > 1 ? 's' : ''}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Toggle discussion */}
+                <div className="mt-3 pt-2 border-t border-border">
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : l.litige_id)}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    {isExpanded ? '▲ Masquer la discussion' : '▼ Voir le litige'}
+                  </button>
+                </div>
+
+                {isExpanded && (
+                  <div className="mt-3">
+                    <FilDiscussionLitige
+                      litige={{
+                        id: l.litige_id,
+                        statut: l.statut,
+                        motif: l.motif,
+                        cree_le: l.cree_le,
+                        accord_soignant: l.accord_soignant,
+                        accord_etablissement: l.accord_etablissement,
+                        resolution: l.resolution,
+                        missions: { intitule: l.mission_intitule },
+                      }}
+                      onUpdate={charger}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

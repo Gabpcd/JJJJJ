@@ -57,6 +57,7 @@ export default function DashboardEtablissement() {
     soignants_ce_mois: 0,
     commissions_impayees: 0,
     nb_factures_impayees: 0,
+    litiges_ouverts: 0,
   });
 
   const [topSoignants, setTopSoignants] = useState<any[]>([]);

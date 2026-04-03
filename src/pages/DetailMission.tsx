@@ -227,6 +227,14 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         setNbCandidatures(count || 0);
       }
 
+      // Check if litige exists for this mission
+      if (m && ['TERMINEE', 'LITIGE', 'EN_COURS'].includes((m as any).statut)) {
+        const { data: litigeData } = await supabase.rpc('fn_litige_pour_mission' as any, { p_mission_id: id });
+        if (litigeData && (litigeData as any).exists !== false && (litigeData as any).litige_id) {
+          setLitigeExistant(litigeData);
+        }
+      }
+
       // Check if soignant has Connect account
       if (m && m.soignant_assigne_id && (m as any).statut === 'TERMINEE') {
         const { data: connectData } = await supabase
