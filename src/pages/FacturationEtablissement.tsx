@@ -629,7 +629,7 @@ export default function FacturationEtablissement() {
               }`}
             >
               <p className="text-2xl font-bold text-foreground">{fmt(kpiCommissions.enAttente)}</p>
-              <p className="text-sm text-muted-foreground">Commissions en attente</p>
+              <p className="text-sm text-muted-foreground">Total dû</p>
             </button>
             <button
               onClick={() => setFiltreStatut(filtreStatut === 'EN_COURS' ? null : 'EN_COURS')}
