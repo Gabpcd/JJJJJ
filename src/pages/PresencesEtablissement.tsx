@@ -240,7 +240,7 @@ export default function PresencesEtablissement() {
           {aValider.length > 0 ? (
             <div className="space-y-4">
               {aValider.map(p => (
-                <CarteValidation key={p.id} presence={p} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} />
+                <CarteValidation key={p.id} presence={p} litigeExistant={litiges[p.mission_id]} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} onUpdate={charger} />
               ))}
             </div>
           ) : (
