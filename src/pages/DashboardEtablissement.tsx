@@ -360,7 +360,7 @@ export default function DashboardEtablissement() {
           <CarteKPI icone={Users} valeur={stats.soignants_ce_mois} label="Soignants ce mois" sousLabel={`Pool urgence : ${stats.pool_urgence_count}`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/etablissement/pool-urgence" />
         </FadeInView>
         <FadeInView delay={300}>
-          <CarteKPI icone={CreditCard} valeur={stats.missions_a_payer} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/facturation" />
+          <CarteKPI icone={CreditCard} valeur={stats.missions_a_payer} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/obligations" />
         </FadeInView>
         <FadeInView delay={350}>
           {stats.commissions_impayees > 0 ? (
