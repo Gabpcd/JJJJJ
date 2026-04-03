@@ -130,8 +130,9 @@ export default function DashboardEtablissement() {
           pool_urgence_count: d.pool_urgence_count ?? 0,
           messages_non_lus: d.messages_non_lus ?? 0,
           missions_a_payer: d.missions_a_payer ?? 0,
+          missions_terminees_ce_mois: d.missions_terminees_ce_mois ?? 0,
+          soignants_ce_mois: d.soignants_ce_mois ?? 0,
         });
-        setMissionsCeMois(d.missions_terminees ?? 0);
       } else if (resDashStats.error) {
         logger.error('[DashboardEtab] Erreur stats RPC', resDashStats.error);
         partialError = true;
