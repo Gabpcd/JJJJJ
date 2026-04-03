@@ -133,7 +133,7 @@ export default function DashboardRH() {
 
       {/* KPI Row 1 — Financier */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-        <div className="card-base text-center">
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}>
           <Coins className="h-5 w-5 text-primary mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalMoisPrec)}</p>
           <p className="text-xs text-muted-foreground">Coût mois précédent</p>
@@ -142,7 +142,7 @@ export default function DashboardRH() {
             <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_mois_prec)} de commission Jolene</p>
           )}
         </div>
-        <div className="card-base text-center">
+        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}>
           <Coins className="h-5 w-5 text-info mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalCeMois)}</p>
           <p className="text-xs text-muted-foreground">Coût ce mois</p>

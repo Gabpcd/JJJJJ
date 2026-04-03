@@ -554,12 +554,26 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   </div>
                 ) : (
                   <div className="card-base">
-                    <button
-                      onClick={() => navigate('/etablissement/litiges')}
-                      className="text-sm text-warning hover:underline font-medium flex items-center gap-1.5"
-                    >
-                      ⚖️ Ouvrir un litige pour cette mission
-                    </button>
+                    {showLitigeForm ? (
+                      <div className="space-y-3">
+                        <h3 className="font-semibold flex items-center gap-2"><Scale className="h-4 w-4 text-warning" /> Ouvrir un litige</h3>
+                        <Textarea value={litigeMotif} onChange={e => setLitigeMotif(e.target.value)}
+                          placeholder="Décrivez le problème rencontré (min. 10 caractères)..." rows={3} />
+                        <div className="flex gap-2">
+                          <Button onClick={ouvrirLitige} disabled={litigeCreating || litigeMotif.trim().length < 10}>
+                            {litigeCreating ? 'Création…' : '⚠️ Confirmer le litige'}
+                          </Button>
+                          <Button variant="ghost" onClick={() => setShowLitigeForm(false)}>Annuler</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowLitigeForm(true)}
+                        className="text-sm text-warning hover:underline font-medium flex items-center gap-1.5"
+                      >
+                        ⚖️ Ouvrir un litige pour cette mission
+                      </button>
+                    )}
                   </div>
                 )
               )}
