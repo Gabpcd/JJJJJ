@@ -370,7 +370,7 @@ export default function DashboardEtablissement() {
               <CarteKPI
                 icone={hasImpayes ? CreditCard : CheckCircle}
                 valeur={hasImpayes ? totalImpayes : 0}
-                label={hasImpayes ? 'Impayés' : 'Paiements à jour'}
+                label={hasImpayes ? 'Impayés — ⚠️ Cliquez pour payer' : 'Paiements à jour'}
                 sousLabel={sousLabelParts.length > 0 ? sousLabelParts.join(' + ') : undefined}
                 couleurIcone={hasImpayes ? 'text-destructive' : 'text-success'}
                 couleurFond={hasImpayes ? 'bg-destructive/10' : 'bg-success/10'}
