@@ -571,8 +571,12 @@ export default function FacturationEtablissement() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">Aucun paiement enregistré.</p>
-            )}
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {filtreStatutPaiement ? 'Aucun paiement dans cette catégorie.' : 'Aucun paiement enregistré.'}
+              </p>
+            );
+            })()}
+          </div>
           </div>
         </TabsContent>
 
