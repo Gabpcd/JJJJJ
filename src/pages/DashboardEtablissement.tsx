@@ -136,19 +136,11 @@ export default function DashboardEtablissement() {
       }
 
       // --- HR QUERIES (non-blocking) ---
+      // --- Minimal secondary queries (top soignants + prochaines missions) ---
       try {
-        const [resCout, resTotalMois, resPourvues, resSgCeMois, resSgMoisPrec, resProchaines] = await Promise.all([
+        const [resCout, resProchaines] = await Promise.all([
           supabase.from('missions').select('total_brut, duree_heures, soignant_assigne_id')
             .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
-          supabase.from('missions').select('id', { count: 'exact', head: true })
-            .eq('etablissement_id', etablissementId).gte('cree_le', debutMois),
-          supabase.from('missions').select('id', { count: 'exact', head: true })
-            .eq('etablissement_id', etablissementId).gte('cree_le', debutMois).not('soignant_assigne_id', 'is', null),
-          supabase.from('missions').select('soignant_assigne_id')
-            .eq('etablissement_id', etablissementId).not('soignant_assigne_id', 'is', null).gte('debut_le', debutMois),
-          supabase.from('missions').select('soignant_assigne_id')
-            .eq('etablissement_id', etablissementId).not('soignant_assigne_id', 'is', null)
-            .gte('debut_le', debutMoisPrec).lt('debut_le', debutMois),
           supabase.from('missions')
             .select('id, intitule, debut_le, statut, soignant_assigne_id')
             .eq('etablissement_id', etablissementId).gte('debut_le', now.toISOString())
@@ -157,10 +149,6 @@ export default function DashboardEtablissement() {
         ]);
 
         if (resCout.data) {
-          const tb = resCout.data.reduce((s: number, m: any) => s + (m.total_brut || 0), 0);
-          const th = resCout.data.reduce((s: number, m: any) => s + (m.duree_heures || 0), 0);
-          setCoutMoyen({ totalBrut: tb, totalHeures: th });
-
           const counts: Record<string, number> = {};
           for (const m of resCout.data) {
             if (m.soignant_assigne_id) counts[m.soignant_assigne_id] = (counts[m.soignant_assigne_id] || 0) + 1;
@@ -176,12 +164,6 @@ export default function DashboardEtablissement() {
             return { id, prenom: sg?.prenom || 'Soignant', nom: sg?.nom || '', score_fiabilite: sg?.score_fiabilite ?? 0, count };
           }));
         }
-
-        setRemplissage({ pourvues: resPourvues.count ?? 0, total: resTotalMois.count ?? 0 });
-
-        const distinctCe = new Set((resSgCeMois.data || []).map((m: any) => m.soignant_assigne_id)).size;
-        const distinctPrec = new Set((resSgMoisPrec.data || []).map((m: any) => m.soignant_assigne_id)).size;
-        setTurnover({ ceMois: distinctCe, moisPrec: distinctPrec });
 
         if (resProchaines.data) {
           setProchaines(resProchaines.data.map((m: any) => ({
