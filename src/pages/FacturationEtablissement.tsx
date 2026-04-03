@@ -404,15 +404,15 @@ export default function FacturationEtablissement() {
                           {!isStripeConnect && m.type_paiement_soignant !== 'NOTE_HONORAIRES' && (
                             <div className="mt-1">
                               {ribCache[m.mission_id] ? (
-                                <p className="text-[10px] text-muted-foreground">IBAN : {ribCache[m.mission_id]}</p>
+                                <p className="text-[10px] text-success flex items-center gap-1">✅ {ribCache[m.mission_id]}</p>
                               ) : (
                                 <button
                                   onClick={() => consulterRib(m.mission_id)}
                                   disabled={ribLoadingId === m.mission_id}
                                   className="text-[10px] text-primary hover:underline flex items-center gap-1"
                                 >
-                                  {ribLoadingId === m.mission_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
-                                  Consulter le RIB du soignant
+                                  {ribLoadingId === m.mission_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+                                  📄 Voir le RIB (PDF)
                                 </button>
                               )}
                             </div>
