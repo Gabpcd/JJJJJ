@@ -855,7 +855,7 @@ export default function FacturationEtablissement() {
                   return;
                 }
                 factures.forEach(f => {
-                  if (f.stripe_hosted_url) window.open(f.stripe_hosted_url, '_blank');
+                  window.open(`/etablissement/facturation/${f.id}`, '_blank');
                 });
               }}>
                 <FileText className="h-4 w-4" /> Télécharger toutes les factures
