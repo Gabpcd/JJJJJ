@@ -21,7 +21,7 @@ export function IndicateurTurnover({ soignantsCeMois, soignantsMoisPrecedent }: 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="text-2xl font-bold text-foreground">{soignantsCeMois}</p>
-            {soignantsMoisPrecedent > 0 && (
+            {soignantsMoisPrecedent > 0 && soignantsCeMois > 0 && (
               <span className={`flex items-center text-xs font-medium ${instable ? 'text-warning' : 'text-success'}`}>
                 {diff > 0 ? <ArrowUp className="h-3 w-3" /> : diff < 0 ? <ArrowDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
                 {Math.abs(diff)}%
@@ -29,7 +29,8 @@ export function IndicateurTurnover({ soignantsCeMois, soignantsMoisPrecedent }: 
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">Soignants différents ce mois</p>
-          {instable && <p className="text-[10px] text-warning mt-0.5">Turnover élevé</p>}
+          {soignantsCeMois === 0 && <p className="text-[10px] text-muted-foreground mt-0.5">Aucune mission ce mois</p>}
+          {instable && soignantsCeMois > 0 && <p className="text-[10px] text-warning mt-0.5">Turnover élevé</p>}
         </div>
       </div>
     </div>
