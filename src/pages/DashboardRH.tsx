@@ -242,7 +242,7 @@ export default function DashboardRH() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-foreground truncate">{m.intitule}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {m.debut_le ? new Date(m.debut_le).toLocaleDateString('fr-FR') : '—'} · {fmtEur(m.total_brut ?? 0)}
+                    {m.debut_le ? new Date(m.debut_le).toLocaleDateString('fr-FR') : '—'} · {fmtEur(m.total_brut ?? 0)}{m.montant_commission_ttc ? ` + ${fmtEur(m.montant_commission_ttc)} com.` : ''}
                     {m.soignant_nom && <> · {m.soignant_nom}</>}
                   </p>
                 </div>
