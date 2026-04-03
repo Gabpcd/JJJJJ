@@ -82,6 +82,7 @@ export default function FacturationEtablissement() {
   const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
   const [ribCache, setRibCache] = useState<Record<string, string>>({});
   const [ribLoadingId, setRibLoadingId] = useState<string | null>(null);
+  const [filtreStatutPaiement, setFiltreStatutPaiement] = useState<string | null>(null);
 
   // Paiements soignants state
   const [paiementsData, setPaiementsData] = useState<any>(null);
@@ -237,7 +238,17 @@ export default function FacturationEtablissement() {
       if (error) throw error;
       const result = data as any;
       if (result?.error) throw new Error(result.error);
-      setRibCache(prev => ({ ...prev, [missionId]: result?.iban || String(result) }));
+      if (result?.s3_cle && result?.s3_bucket) {
+        const { data: signedData } = await supabase.storage.from(result.s3_bucket).createSignedUrl(result.s3_cle, 300);
+        if (signedData?.signedUrl) {
+          window.open(signedData.signedUrl, '_blank');
+          setRibCache(prev => ({ ...prev, [missionId]: result.nom_fichier || 'RIB consulté' }));
+        } else {
+          toast.error('Impossible de générer le lien de téléchargement');
+        }
+      } else {
+        setRibCache(prev => ({ ...prev, [missionId]: result?.iban || String(result) }));
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Impossible de consulter le RIB');
     }
@@ -324,13 +335,19 @@ export default function FacturationEtablissement() {
           {/* KPI */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <FadeInView delay={0}>
-              <CarteKPI icone={Banknote} valeur={fmt(paiementsData?.total_paye ?? 0)} label="Total payé" couleurIcone="text-success" couleurFond="bg-success/10" />
+              <div className="cursor-pointer" onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE')}>
+                <CarteKPI icone={Banknote} valeur={fmt(paiementsData?.total_paye ?? 0)} label="Total payé" sousLabel={filtreStatutPaiement === 'PAYE' ? '🔍 Filtre actif' : undefined} couleurIcone="text-success" couleurFond="bg-success/10" />
+              </div>
             </FadeInView>
             <FadeInView delay={100}>
-              <CarteKPI icone={Clock} valeur={fmt(paiementsData?.total_en_attente ?? 0)} label="En attente de confirmation" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+              <div className="cursor-pointer" onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'DECLARE' ? null : 'DECLARE')}>
+                <CarteKPI icone={Clock} valeur={fmt(paiementsData?.total_en_attente ?? 0)} label="En attente de confirmation" sousLabel={filtreStatutPaiement === 'DECLARE' ? '🔍 Filtre actif' : undefined} couleurIcone="text-warning" couleurFond="bg-warning/10" />
+              </div>
             </FadeInView>
             <FadeInView delay={200}>
-              <CarteKPI icone={AlertTriangle} valeur={fmt(paiementsData?.total_conteste ?? 0)} label="Contesté" couleurIcone="text-destructive" couleurFond="bg-destructive/10" />
+              <div className="cursor-pointer" onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'CONTESTE' ? null : 'CONTESTE')}>
+                <CarteKPI icone={AlertTriangle} valeur={fmt(paiementsData?.total_conteste ?? 0)} label="Contesté" sousLabel={filtreStatutPaiement === 'CONTESTE' ? '🔍 Filtre actif' : undefined} couleurIcone="text-destructive" couleurFond="bg-destructive/10" />
+              </div>
             </FadeInView>
           </div>
 
@@ -387,15 +404,15 @@ export default function FacturationEtablissement() {
                           {!isStripeConnect && m.type_paiement_soignant !== 'NOTE_HONORAIRES' && (
                             <div className="mt-1">
                               {ribCache[m.mission_id] ? (
-                                <p className="text-[10px] text-muted-foreground">IBAN : {ribCache[m.mission_id]}</p>
+                                <p className="text-[10px] text-success flex items-center gap-1">✅ {ribCache[m.mission_id]}</p>
                               ) : (
                                 <button
                                   onClick={() => consulterRib(m.mission_id)}
                                   disabled={ribLoadingId === m.mission_id}
                                   className="text-[10px] text-primary hover:underline flex items-center gap-1"
                                 >
-                                  {ribLoadingId === m.mission_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
-                                  Consulter le RIB du soignant
+                                  {ribLoadingId === m.mission_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+                                  📄 Voir le RIB (PDF)
                                 </button>
                               )}
                             </div>
@@ -489,8 +506,21 @@ export default function FacturationEtablissement() {
 
           {/* Historique paiements */}
           <div className="card-base">
-            <h2 className="font-bold text-foreground mb-4">Historique des paiements</h2>
-            {paiementsRecents.length > 0 ? (
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-foreground">Historique des paiements</h2>
+              {filtreStatutPaiement && (
+                <button onClick={() => setFiltreStatutPaiement(null)} className="text-xs text-primary hover:underline">Voir tout</button>
+              )}
+            </div>
+            {(() => {
+              const paiementsFiltres = filtreStatutPaiement === 'PAYE'
+                ? paiementsRecents.filter((p: any) => p.statut === 'DECLARE' || p.statut === 'CONFIRME')
+                : filtreStatutPaiement === 'DECLARE'
+                ? paiementsRecents.filter((p: any) => p.statut === 'DECLARE')
+                : filtreStatutPaiement === 'CONTESTE'
+                ? paiementsRecents.filter((p: any) => p.statut === 'CONTESTE')
+                : paiementsRecents;
+              return paiementsFiltres.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -551,8 +581,11 @@ export default function FacturationEtablissement() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">Aucun paiement enregistré.</p>
-            )}
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {filtreStatutPaiement ? 'Aucun paiement dans cette catégorie.' : 'Aucun paiement enregistré.'}
+              </p>
+            );
+            })()}
           </div>
         </TabsContent>
 
@@ -767,10 +800,10 @@ export default function FacturationEtablissement() {
                             </button>
                           </>
                         )}
-                        {f.statut === 'PAYEE' && f.stripe_hosted_url && (
-                          <a href={f.stripe_hosted_url} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs flex items-center gap-1">
-                            <CheckCircle className="h-3.5 w-3.5" /> Reçu
-                          </a>
+                        {f.statut === 'PAYEE' && (
+                          <button onClick={() => navigate(`/etablissement/facturation/${f.id}`)} className="btn-secondary text-xs flex items-center gap-1">
+                            <Download className="h-3.5 w-3.5" /> PDF
+                          </button>
                         )}
                       </div>
                     </div>
@@ -821,7 +854,7 @@ export default function FacturationEtablissement() {
                   return;
                 }
                 factures.forEach(f => {
-                  if (f.stripe_hosted_url) window.open(f.stripe_hosted_url, '_blank');
+                  window.open(`/etablissement/facturation/${f.id}`, '_blank');
                 });
               }}>
                 <FileText className="h-4 w-4" /> Télécharger toutes les factures
