@@ -351,8 +351,8 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
-      {/* KPI row 2 — Candidatures, Soignants ce mois, À payer, Commissions */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      {/* KPI row 2 — Candidatures, Soignants ce mois, Impayés global */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
         <FadeInView delay={200}>
           <CarteKPI icone={Star} valeur={stats.candidatures_en_attente} label="Candidatures en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/missions?statut=OUVERTE" />
         </FadeInView>
@@ -360,14 +360,24 @@ export default function DashboardEtablissement() {
           <CarteKPI icone={Users} valeur={stats.soignants_ce_mois} label="Soignants ce mois" sousLabel={`Pool urgence : ${stats.pool_urgence_count}`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/etablissement/pool-urgence" />
         </FadeInView>
         <FadeInView delay={300}>
-          <CarteKPI icone={CreditCard} valeur={stats.missions_a_payer} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/obligations" />
-        </FadeInView>
-        <FadeInView delay={350}>
-          {stats.commissions_impayees > 0 ? (
-            <CarteKPI icone={FileText} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(stats.commissions_impayees)} label={`⚠️ ${stats.nb_factures_impayees} facture(s) impayée(s)`} couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/obligations" />
-          ) : (
-            <CarteKPI icone={FileText} valeur="✅ À jour" label="Commissions Jolene" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/obligations" />
-          )}
+          {(() => {
+            const totalImpayes = stats.missions_a_payer + stats.nb_factures_impayees;
+            const hasImpayes = totalImpayes > 0;
+            const sousLabelParts: string[] = [];
+            if (stats.missions_a_payer > 0) sousLabelParts.push(`${stats.missions_a_payer} soignant(s)`);
+            if (stats.nb_factures_impayees > 0) sousLabelParts.push(`${stats.nb_factures_impayees} facture(s) Jolene`);
+            return (
+              <CarteKPI
+                icone={hasImpayes ? CreditCard : CheckCircle}
+                valeur={hasImpayes ? `${totalImpayes} impayé(s)` : '✅ À jour'}
+                label={hasImpayes ? '⚠️ Cliquez pour régler' : 'Paiements'}
+                sousLabel={sousLabelParts.length > 0 ? sousLabelParts.join(' + ') : undefined}
+                couleurIcone={hasImpayes ? 'text-destructive' : 'text-success'}
+                couleurFond={hasImpayes ? 'bg-destructive/10' : 'bg-success/10'}
+                lien="/etablissement/obligations"
+              />
+            );
+          })()}
         </FadeInView>
       </div>
 
