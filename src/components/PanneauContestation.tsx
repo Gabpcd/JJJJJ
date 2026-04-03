@@ -270,7 +270,7 @@ export function PanneauContestation({
                 </div>
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-foreground">
-                    Réponse de l'{litige.initie_par === 'SOIGNANT' ? 'établissement' : 'soignant'}
+                    Réponse {litige.initie_par === 'SOIGNANT' ? "de l'établissement" : 'du soignant'}
                   </p>
                   <p className="text-sm text-foreground mt-1 bg-muted/50 rounded-lg px-3 py-2">{litige.reponse}</p>
                 </div>
