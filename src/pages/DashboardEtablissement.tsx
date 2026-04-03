@@ -25,7 +25,6 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
 import { CarteCommissionJolene } from '@/components/dashboard/CarteCommissionJolene';
-import { CarteBFAInfo } from '@/components/dashboard/CarteBFAInfo';
 
 export default function DashboardEtablissement() {
   usePageTitle('Dashboard');
