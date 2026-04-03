@@ -60,11 +60,7 @@ export default function DashboardEtablissement() {
     nb_factures_impayees: 0,
   });
 
-  // HR state
-  const [coutMoyen, setCoutMoyen] = useState({ totalBrut: 0, totalHeures: 0 });
-  const [remplissage, setRemplissage] = useState({ pourvues: 0, total: 0 });
   const [topSoignants, setTopSoignants] = useState<any[]>([]);
-  const [turnover, setTurnover] = useState({ ceMois: 0, moisPrec: 0 });
   const [prochaines, setProchaines] = useState<any[]>([]);
 
   const charger = async () => {
