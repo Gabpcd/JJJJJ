@@ -81,6 +81,7 @@ const ChorusConfig = lazy(() => import("./pages/ChorusConfig"));
 const PoolUrgenceEtablissement = lazy(() => import("./pages/PoolUrgenceEtablissement"));
 const ContratPlateforme = lazy(() => import("./pages/ContratPlateforme"));
 const DetailPresencesMission = lazy(() => import("./pages/DetailPresencesMission"));
+const ObligationsFinancieres = lazy(() => import("./pages/ObligationsFinancieres"));
 
 /* ─── Shared protected ─── */
 const ContratMission = lazy(() => import("./pages/ContratMission"));
