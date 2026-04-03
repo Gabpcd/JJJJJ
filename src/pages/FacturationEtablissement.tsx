@@ -267,6 +267,14 @@ export default function FacturationEtablissement() {
     ? paiementsRecents.filter((p: any) => p.statut === 'CONTESTE')
     : paiementsRecents;
 
+  console.log('[FACTURATION DEBUG]', {
+    filtreStatutPaiement,
+    paiementsRecents: paiementsRecents.length,
+    paiementsFiltres: paiementsFiltres.length,
+    statuts: paiementsRecents.map((p: any) => p.statut),
+    rawKeys: paiementsData ? Object.keys(paiementsData) : null,
+  });
+
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {showSuccessBanner && (
