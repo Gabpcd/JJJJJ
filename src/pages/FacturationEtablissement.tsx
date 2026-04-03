@@ -587,7 +587,6 @@ export default function FacturationEtablissement() {
             );
             })()}
           </div>
-          </div>
         </TabsContent>
 
         {/* ===== ONGLET 2 : COMMISSIONS JOLENE ===== */}
