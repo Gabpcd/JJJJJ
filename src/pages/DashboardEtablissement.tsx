@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { logger } from '@/lib/logger';
-import { SkeletonDashboard, SkeletonList } from '@/components/SkeletonCard';
+import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, MessageCircle } from 'lucide-react';
+import { Briefcase, PlayCircle, CheckCircle, TrendingUp, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, MessageCircle, CreditCard, Zap } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
@@ -15,7 +15,6 @@ import { EtatVide } from '@/components/EtatVide';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { WidgetPalierFidelite } from '@/components/WidgetPalierFidelite';
-// WidgetBFA removed — CarteBFAInfo handles BFA display via fn_bfa_info RPC
 import { BadgePalier } from '@/components/BadgePalier';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -29,7 +28,6 @@ import { JaugeTauxRemplissage } from '@/components/dashboard/JaugeTauxRemplissag
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { IndicateurTurnover } from '@/components/dashboard/IndicateurTurnover';
 import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
-import { CompteurSoignantsDisponibles } from '@/components/dashboard/CompteurSoignantsDisponibles';
 import { CarteCommissionJolene } from '@/components/dashboard/CarteCommissionJolene';
 import { CarteBFAInfo } from '@/components/dashboard/CarteBFAInfo';
 
@@ -41,40 +39,44 @@ export default function DashboardEtablissement() {
   const [etab, setEtab] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [aDejaPublie, setADejaPublie] = useState<boolean | null>(null);
-  const [kpi, setKpi] = useState({ ouvertes: 0, enCours: 0, terminees: 0, taux: 0 });
-  const [contratsCount, setContratsCount] = useState(0);
-  const [presencesCount, setPresencesCount] = useState(0);
-  const [facturesImpayees, setFacturesImpayees] = useState(0);
   const [loading, setLoading] = useState(true);
   const [erreurPartielle, setErreurPartielle] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState<any>(null);
   const [modalAnnuler, setModalAnnuler] = useState<any>(null);
   const [paliers, setPaliers] = useState<any[]>([]);
-  const [missionsCeMois, setMissionsCeMois] = useState(0);
-  const [missionsParSemaine, setMissionsParSemaine] = useState<any[]>([]);
-  const [coutParMois, setCoutParMois] = useState<any[]>([]);
-  const [favoris, setFavoris] = useState<any[]>([]);
 
-  // New HR state
+  // All stats from RPC
+  const [stats, setStats] = useState<any>({
+    missions_ouvertes: 0,
+    missions_assignees: 0,
+    missions_en_cours: 0,
+    missions_terminees: 0,
+    candidatures_en_attente: 0,
+    candidatures_recentes: [],
+    missions_assignees_detail: [],
+    pool_urgence_count: 0,
+    messages_non_lus: 0,
+    missions_a_payer: 0,
+  });
+
+  // HR state
   const [coutMoyen, setCoutMoyen] = useState({ totalBrut: 0, totalHeures: 0 });
   const [remplissage, setRemplissage] = useState({ pourvues: 0, total: 0 });
   const [topSoignants, setTopSoignants] = useState<any[]>([]);
   const [turnover, setTurnover] = useState({ ceMois: 0, moisPrec: 0 });
   const [prochaines, setProchaines] = useState<any[]>([]);
-  const [candidaturesEnAttente, setCandidaturesEnAttente] = useState(0);
-  const [candidaturesRecentes, setCandidaturesRecentes] = useState<any[]>([]);
-  const [missionsAssigneesDetail, setMissionsAssigneesDetail] = useState<any[]>([]);
-  const [messagesNonLus, setMessagesNonLus] = useState(0);
+  const [missionsCeMois, setMissionsCeMois] = useState(0);
+
   const charger = async () => {
     if (!user || !etablissementId) return;
     let partialError = false;
     const now = new Date();
     const debutMois = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const debutMoisPrec = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-    const finMoisPrec = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
 
     try {
-      const [resEtab, resMissions, resPaliers, resMissionsCeMois, resSoignants] = await Promise.all([
+      // Primary data: RPC stats + etab + recent missions + paliers
+      const [resEtab, resMissions, resPaliers, resDashStats, resSoignants] = await Promise.all([
         supabase.rpc('fn_mon_etablissement_complet' as any),
         supabase.from('missions')
           .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
@@ -82,20 +84,18 @@ export default function DashboardEtablissement() {
           .order('cree_le', { ascending: false })
           .limit(5),
         supabase.from('paliers_commission').select('id, nom, missions_min, missions_max, ordre').eq('est_actif', true).order('ordre', { ascending: true }),
-        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
+        supabase.rpc('fn_stats_dashboard_etablissement' as any),
         supabase.rpc('fn_mes_soignants_etablissement'),
       ]);
 
-      if (resEtab.error) { logger.error('[DashboardEtab] Erreur établissement', resEtab.error); handleErrorSilent(resEtab.error, '[DashboardEtab] Erreur établissement'); partialError = true; }
-      else if (!resEtab.data) { logger.warn('[DashboardEtab] Aucun établissement trouvé pour user.id:', user.id); partialError = true; }
+      if (resEtab.error) { logger.error('[DashboardEtab] Erreur établissement', resEtab.error); partialError = true; }
       else if (resEtab.data) setEtab(resEtab.data);
 
+      // Build soignant map
       const sgMap: Record<string, any> = {};
       if (Array.isArray(resSoignants.data)) {
         for (const s of resSoignants.data) sgMap[s.id] = s;
       }
-
-      // Fallback: fetch soignant names directly if RPC returned empty
       if (Object.keys(sgMap).length === 0 && resMissions.data) {
         const sgIds = [...new Set((resMissions.data as any[]).map((m: any) => m.soignant_assigne_id).filter(Boolean))];
         if (sgIds.length > 0) {
@@ -104,37 +104,52 @@ export default function DashboardEtablissement() {
         }
       }
 
-      if (resMissions.error) { logger.error('[DashboardEtab] Erreur missions', resMissions.error); handleErrorSilent(resMissions.error, '[DashboardEtab] Erreur missions'); partialError = true; }
-      if (resSoignants.error) { logger.error('[DashboardEtab] Erreur soignants RPC', resSoignants.error); }
-      if (resMissions.data) setMissions(resMissions.data.map((m: any) => ({
-        ...m,
-        soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
-      })));
+      if (resMissions.error) { logger.error('[DashboardEtab] Erreur missions', resMissions.error); partialError = true; }
+      if (resMissions.data) {
+        setMissions(resMissions.data.map((m: any) => ({
+          ...m,
+          soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
+        })));
+        setADejaPublie(resMissions.data.length > 0);
+      }
 
       if (resPaliers.data) setPaliers(resPaliers.data);
-      setMissionsCeMois(resMissionsCeMois.count ?? 0);
 
-      // --- NEW HR QUERIES (non-blocking) ---
+      // Dashboard stats RPC — single source of truth for all KPIs
+      if (resDashStats.data) {
+        const d = resDashStats.data;
+        setStats({
+          missions_ouvertes: d.missions_ouvertes ?? 0,
+          missions_assignees: d.missions_assignees ?? 0,
+          missions_en_cours: d.missions_en_cours ?? 0,
+          missions_terminees: d.missions_terminees ?? 0,
+          candidatures_en_attente: d.candidatures_en_attente ?? 0,
+          candidatures_recentes: d.candidatures_recentes ?? [],
+          missions_assignees_detail: d.missions_assignees_detail ?? [],
+          pool_urgence_count: d.pool_urgence_count ?? 0,
+          messages_non_lus: d.messages_non_lus ?? 0,
+          missions_a_payer: d.missions_a_payer ?? 0,
+        });
+        setMissionsCeMois(d.missions_terminees ?? 0);
+      } else if (resDashStats.error) {
+        logger.error('[DashboardEtab] Erreur stats RPC', resDashStats.error);
+        partialError = true;
+      }
+
+      // --- HR QUERIES (non-blocking) ---
       try {
-        // Coût moyen + remplissage + turnover + top soignants + prochaines
         const [resCout, resTotalMois, resPourvues, resSgCeMois, resSgMoisPrec, resProchaines] = await Promise.all([
-          // Missions terminées ce mois avec montants
           supabase.from('missions').select('total_brut, duree_heures, soignant_assigne_id')
             .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
-          // Total missions publiées ce mois
           supabase.from('missions').select('id', { count: 'exact', head: true })
             .eq('etablissement_id', etablissementId).gte('cree_le', debutMois),
-          // Missions pourvues ce mois
           supabase.from('missions').select('id', { count: 'exact', head: true })
             .eq('etablissement_id', etablissementId).gte('cree_le', debutMois).not('soignant_assigne_id', 'is', null),
-          // Soignants distincts ce mois
           supabase.from('missions').select('soignant_assigne_id')
             .eq('etablissement_id', etablissementId).not('soignant_assigne_id', 'is', null).gte('debut_le', debutMois),
-          // Soignants distincts mois précédent
           supabase.from('missions').select('soignant_assigne_id')
             .eq('etablissement_id', etablissementId).not('soignant_assigne_id', 'is', null)
             .gte('debut_le', debutMoisPrec).lt('debut_le', debutMois),
-          // 5 prochaines missions
           supabase.from('missions')
             .select('id, intitule, debut_le, statut, soignant_assigne_id')
             .eq('etablissement_id', etablissementId).gte('debut_le', now.toISOString())
@@ -142,48 +157,33 @@ export default function DashboardEtablissement() {
             .order('debut_le', { ascending: true }).limit(5),
         ]);
 
-        // Coût moyen
         if (resCout.data) {
           const tb = resCout.data.reduce((s: number, m: any) => s + (m.total_brut || 0), 0);
           const th = resCout.data.reduce((s: number, m: any) => s + (m.duree_heures || 0), 0);
           setCoutMoyen({ totalBrut: tb, totalHeures: th });
 
-          // Top 3 soignants from terminated missions
           const counts: Record<string, number> = {};
           for (const m of resCout.data) {
             if (m.soignant_assigne_id) counts[m.soignant_assigne_id] = (counts[m.soignant_assigne_id] || 0) + 1;
           }
           const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
-
-          // Fetch missing soignant names if not in sgMap
           const missingIds = sorted.map(([id]) => id).filter(id => !sgMap[id]);
           if (missingIds.length > 0) {
             const { data: sgExtra } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite').in('id', missingIds);
             if (sgExtra) for (const s of sgExtra) sgMap[s.id] = s;
           }
-
-          const top = sorted.map(([id, count]) => {
+          setTopSoignants(sorted.map(([id, count]) => {
             const sg = sgMap[id];
-            return {
-              id,
-              prenom: sg?.prenom || 'Soignant',
-              nom: sg?.nom || '',
-              score_fiabilite: sg?.score_fiabilite ?? 0,
-              count,
-            };
-          });
-          setTopSoignants(top);
+            return { id, prenom: sg?.prenom || 'Soignant', nom: sg?.nom || '', score_fiabilite: sg?.score_fiabilite ?? 0, count };
+          }));
         }
 
-        // Remplissage
         setRemplissage({ pourvues: resPourvues.count ?? 0, total: resTotalMois.count ?? 0 });
 
-        // Turnover
         const distinctCe = new Set((resSgCeMois.data || []).map((m: any) => m.soignant_assigne_id)).size;
         const distinctPrec = new Set((resSgMoisPrec.data || []).map((m: any) => m.soignant_assigne_id)).size;
         setTurnover({ ceMois: distinctCe, moisPrec: distinctPrec });
 
-        // Prochaines missions
         if (resProchaines.data) {
           setProchaines(resProchaines.data.map((m: any) => ({
             ...m,
@@ -194,83 +194,8 @@ export default function DashboardEtablissement() {
         }
       } catch {}
 
-      // Load candidatures en attente + missions assignées via dashboard RPC
-      try {
-        const { data: dashStats } = await supabase.rpc('fn_stats_dashboard_etablissement' as any);
-        if (dashStats) {
-          setCandidaturesEnAttente(dashStats.candidatures_en_attente ?? 0);
-          setCandidaturesRecentes(dashStats.candidatures_recentes ?? []);
-          setMissionsAssigneesDetail(dashStats.missions_assignees_detail ?? []);
-        }
-      } catch {}
-
-      // Unread messages count
-      try {
-        const { data: unreadData } = await supabase.rpc('fn_messages_non_lus');
-        if (typeof unreadData === 'number') setMessagesNonLus(unreadData);
-      } catch {}
-      // Graphiques + favoris (non-bloquant)
-      try {
-        const semaines: { label: string; count: number }[] = [];
-        for (let i = 7; i >= 0; i--) {
-          const end = new Date(now); end.setDate(end.getDate() - i * 7);
-          const start = new Date(end); start.setDate(start.getDate() - 7);
-          const { count } = await supabase.from('missions').select('id', { count: 'exact', head: true })
-            .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE')
-            .gte('fin_le', start.toISOString()).lt('fin_le', end.toISOString());
-          semaines.push({ label: `S-${i}`, count: count ?? 0 });
-        }
-        setMissionsParSemaine(semaines);
-
-        const mois: { label: string; total: number }[] = [];
-        for (let i = 3; i >= 0; i--) {
-          const moisDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          const finMoisD = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
-          const { data: mData } = await supabase.from('missions').select('total_brut')
-            .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE')
-            .gte('fin_le', moisDate.toISOString()).lte('fin_le', finMoisD.toISOString());
-          const total = (mData || []).reduce((s: number, m: any) => s + (m.total_brut || 0), 0);
-          mois.push({ label: moisDate.toLocaleDateString('fr-FR', { month: 'short' }), total });
-        }
-        setCoutParMois(mois);
-
-          const { data: favData } = await (supabase.from('favoris' as any) as any).select('soignant_id, cree_le').eq('etablissement_id', etablissementId).order('cree_le', { ascending: false }).limit(5);
-        if (favData && favData.length > 0) {
-          const enriched = favData.map((f: any) => ({ ...(sgMap[f.soignant_id] || { id: f.soignant_id }), soignant_id: f.soignant_id }));
-          setFavoris(enriched);
-        }
-      } catch {}
-
     } catch (err) {
       handleErrorSilent(err, '[DashboardEtab] Erreur critique');
-      partialError = true;
-    }
-
-    // KPI
-    try {
-      const [resO, resEC, resT, resTotal, resAssigned, resContrats, resPresences, resFactures] = await Promise.all([
-        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId).eq('statut', 'OUVERTE'),
-        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId).eq('statut', 'EN_COURS'),
-        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
-        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId),
-        supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId).not('soignant_assigne_id', 'is', null),
-        supabase.from('contrats_mission').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId),
-        (supabase.from('presences' as any) as any).select('id, missions!inner(id)', { count: 'exact', head: true }).eq('missions.etablissement_id', etablissementId),
-        supabase.from('factures').select('id', { count: 'exact', head: true }).eq('etablissement_id', etablissementId).eq('statut', 'EMISE'),
-      ]);
-      const totalN = resTotal.count ?? 0;
-      setADejaPublie(totalN > 0);
-      setKpi({
-        ouvertes: resO.count ?? 0,
-        enCours: resEC.count ?? 0,
-        terminees: resT.count ?? 0,
-        taux: totalN > 0 ? Math.round(((resAssigned.count ?? 0) / totalN) * 100) : 0,
-      });
-      setContratsCount(resContrats.count ?? 0);
-      setPresencesCount(resPresences.count ?? 0);
-      setFacturesImpayees(resFactures.count ?? 0);
-    } catch (err) {
-      handleErrorSilent(err, '[DashboardEtab] Erreur KPI');
       partialError = true;
     }
 
@@ -331,22 +256,21 @@ export default function DashboardEtablissement() {
       )}
 
       {/* 🔔 Candidatures en attente */}
-      {candidaturesEnAttente > 0 && (
+      {stats.candidatures_en_attente > 0 && (
         <FadeInView delay={0}>
           <div className="card-base border-warning/30 bg-warning/5 mb-4">
             <p className="text-sm font-semibold text-warning flex items-center gap-2 mb-2">
-              🔔 {candidaturesEnAttente} candidature{candidaturesEnAttente > 1 ? 's' : ''} en attente
+              🔔 {stats.candidatures_en_attente} candidature{stats.candidatures_en_attente > 1 ? 's' : ''} en attente
             </p>
             <div className="space-y-1.5">
-              {candidaturesRecentes.slice(0, 5).map((c: any) => (
-                <div key={c.candidature_id} className="flex items-center justify-between text-sm">
+              {stats.candidatures_recentes.slice(0, 5).map((c: any) => (
+                <button key={c.candidature_id} onClick={() => navigate(`/etablissement/missions/${c.mission_id}`)}
+                  className="w-full flex items-center justify-between text-sm p-1.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
                   <span className="text-foreground">
                     👤 {c.soignant_nom} · <span className="text-muted-foreground">{c.mission_intitule}</span>
                   </span>
-                  <button onClick={() => navigate(`/etablissement/missions/${c.mission_id}`)} className="text-xs text-primary hover:underline">
-                    Voir →
-                  </button>
-                </div>
+                  <span className="text-xs text-primary shrink-0">Voir →</span>
+                </button>
               ))}
             </div>
           </div>
@@ -354,23 +278,22 @@ export default function DashboardEtablissement() {
       )}
 
       {/* ✅ Missions confirmées */}
-      {missionsAssigneesDetail.length > 0 && (
+      {stats.missions_assignees_detail.length > 0 && (
         <FadeInView delay={50}>
           <div className="card-base border-success/30 bg-success/5 mb-4">
             <p className="text-sm font-semibold text-success flex items-center gap-2 mb-2">
-              ✅ {missionsAssigneesDetail.length} mission{missionsAssigneesDetail.length > 1 ? 's' : ''} confirmée{missionsAssigneesDetail.length > 1 ? 's' : ''}
+              ✅ {stats.missions_assignees_detail.length} mission{stats.missions_assignees_detail.length > 1 ? 's' : ''} confirmée{stats.missions_assignees_detail.length > 1 ? 's' : ''}
             </p>
             <div className="space-y-1.5">
-              {missionsAssigneesDetail.slice(0, 5).map((m: any) => (
-                <div key={m.mission_id} className="flex items-center justify-between text-sm">
+              {stats.missions_assignees_detail.slice(0, 5).map((m: any) => (
+                <button key={m.mission_id} onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
+                  className="w-full flex items-center justify-between text-sm p-1.5 rounded-lg hover:bg-muted/50 transition-colors text-left">
                   <span className="text-foreground">
                     {m.intitule} · <span className="text-muted-foreground">{m.soignant_nom}</span>
                     {m.debut_le && <span className="text-muted-foreground"> · {new Date(m.debut_le).toLocaleDateString('fr-FR')}</span>}
                   </span>
-                  <button onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)} className="text-xs text-primary hover:underline">
-                    Voir →
-                  </button>
-                </div>
+                  <span className="text-xs text-primary shrink-0">Voir →</span>
+                </button>
               ))}
             </div>
           </div>
@@ -378,21 +301,20 @@ export default function DashboardEtablissement() {
       )}
 
       {/* 💬 Messages non lus */}
-      {messagesNonLus > 0 && (
+      {stats.messages_non_lus > 0 && (
         <FadeInView delay={75}>
-          <div
-            className="card-base border-primary/30 bg-primary/5 mb-4 cursor-pointer hover:bg-primary/10 transition-colors"
+          <button
+            className="w-full card-base border-primary/30 bg-primary/5 mb-4 hover:bg-primary/10 transition-colors text-left"
             onClick={() => navigate('/etablissement/messagerie')}
           >
             <p className="text-sm font-semibold text-primary flex items-center gap-2">
               <MessageCircle className="h-4 w-4" />
-              💬 {messagesNonLus} message{messagesNonLus > 1 ? 's' : ''} non lu{messagesNonLus > 1 ? 's' : ''}
+              💬 {stats.messages_non_lus} message{stats.messages_non_lus > 1 ? 's' : ''} non lu{stats.messages_non_lus > 1 ? 's' : ''}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Cliquez pour ouvrir la messagerie</p>
-          </div>
+          </button>
         </FadeInView>
       )}
-
 
       <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
         <button onClick={() => navigate('/etablissement/missions/creer')} className="btn-primary text-sm whitespace-nowrap flex items-center gap-2">
@@ -408,13 +330,6 @@ export default function DashboardEtablissement() {
         )}
       </div>
 
-      {/* Compteur soignants disponibles — clickable */}
-      <div className="mb-6 cursor-pointer" onClick={() => navigate('/etablissement/pool-urgence?disponibles=1')}>
-        <FadeInView delay={50}>
-          <CompteurSoignantsDisponibles etablissementId={etablissementId!} />
-        </FadeInView>
-      </div>
-
       {etab && !etab.peut_publier_missions && (
         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 mb-4 flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
@@ -425,59 +340,77 @@ export default function DashboardEtablissement() {
         </div>
       )}
 
-      {/* KPI row 1 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <FadeInView delay={0}><div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?statut=OUVERTE')}><CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" /></div></FadeInView>
-        <FadeInView delay={100}><div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?statut=EN_COURS')}><CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" /></div></FadeInView>
-        <FadeInView delay={200}><div className="cursor-pointer" onClick={() => navigate('/etablissement/contrats?statut=SIGNE_COMPLET')}><CarteKPI icone={FileText} valeur={contratsCount} label="Contrats" couleurIcone="text-info" couleurFond="bg-info/10" /></div></FadeInView>
-        <FadeInView delay={300}><div className="cursor-pointer" onClick={() => navigate('/etablissement/presences?tab=validees')}><CarteKPI icone={ClipboardCheck} valeur={presencesCount} label="Présences" couleurIcone="text-success" couleurFond="bg-success/10" /></div></FadeInView>
+      {/* KPI row 1 — All from RPC */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
+        <FadeInView delay={0}>
+          <CarteKPI icone={Briefcase} valeur={stats.missions_ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/etablissement/missions?statut=OUVERTE" />
+        </FadeInView>
+        <FadeInView delay={50}>
+          <CarteKPI icone={ClipboardCheck} valeur={stats.missions_assignees} label="Assignées" couleurIcone="text-info" couleurFond="bg-info/10" lien="/etablissement/missions?statut=ASSIGNEE" />
+        </FadeInView>
+        <FadeInView delay={100}>
+          <CarteKPI icone={PlayCircle} valeur={stats.missions_en_cours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/missions?statut=EN_COURS" />
+        </FadeInView>
+        <FadeInView delay={150}>
+          <CarteKPI icone={CheckCircle} valeur={stats.missions_terminees} label="Terminées" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/missions?statut=TERMINEE" />
+        </FadeInView>
       </div>
 
-      {/* KPI row 2 — HR indicators */}
+      {/* KPI row 2 — Candidatures, Pool, Messages, À payer */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-6">
+        <FadeInView delay={200}>
+          <CarteKPI icone={Star} valeur={stats.candidatures_en_attente} label="Candidatures en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/missions?statut=OUVERTE" />
+        </FadeInView>
+        <FadeInView delay={250}>
+          <CarteKPI icone={Zap} valeur={stats.pool_urgence_count} label="Pool urgence" couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/pool-urgence" />
+        </FadeInView>
+        <FadeInView delay={300}>
+          <CarteKPI icone={MessageCircle} valeur={stats.messages_non_lus} label="Messages non lus" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/etablissement/messagerie" />
+        </FadeInView>
+        <FadeInView delay={350}>
+          <CarteKPI icone={CreditCard} valeur={stats.missions_a_payer} label="Missions à payer" couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/facturation" />
+        </FadeInView>
+      </div>
+
+      {/* KPI row 3 — HR indicators */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <FadeInView delay={400}>
           <div className="cursor-pointer" onClick={() => navigate('/etablissement/rh?vue=cout-moyen')}>
             <KPICoutMoyenHeure totalBrut={coutMoyen.totalBrut} totalHeures={coutMoyen.totalHeures} />
           </div>
         </FadeInView>
-        <FadeInView delay={500}>
+        <FadeInView delay={450}>
           <div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?periode=mois')}>
             <JaugeTauxRemplissage pourvues={remplissage.pourvues} total={remplissage.total} />
           </div>
         </FadeInView>
-        <FadeInView delay={600}>
+        <FadeInView delay={500}>
           <div className="cursor-pointer" onClick={() => navigate('/etablissement/rh?vue=soignants-mois')}>
             <IndicateurTurnover soignantsCeMois={turnover.ceMois} soignantsMoisPrecedent={turnover.moisPrec} />
           </div>
         </FadeInView>
-        <FadeInView delay={700}>
-          <div className="cursor-pointer" onClick={() => navigate('/etablissement/missions?statut=TERMINEE&periode=mois')}>
-            <CarteKPI icone={CheckCircle} valeur={missionsCeMois} label="Missions terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
-          </div>
+        <FadeInView delay={550}>
+          <CarteKPI icone={CheckCircle} valeur={missionsCeMois} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/missions?statut=TERMINEE&periode=mois" />
         </FadeInView>
       </div>
 
       {/* Top soignants + Prochaines missions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <FadeInView delay={800}>
+        <FadeInView delay={600}>
           <TopSoignants soignants={topSoignants} etablissementId={etablissementId!} onSelectSoignant={(soignantId) => navigate(`/etablissement/soignants/${soignantId}`)} />
         </FadeInView>
-        <FadeInView delay={900}>
+        <FadeInView delay={650}>
           <ProchaineMissions missions={prochaines} />
         </FadeInView>
       </div>
 
       {/* Carte Commission Jolene */}
-      {etab && (
-        <CarteCommissionJolene etablissementId={etablissementId!} />
-      )}
+      {etab && <CarteCommissionJolene etablissementId={etablissementId!} />}
 
       {/* Widget Palier de Fidélité */}
-      {etab && paliers.length > 0 && (
-        <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />
-      )}
+      {etab && paliers.length > 0 && <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />}
 
-      {/* Carte BFA Info — only if eligible (component hides itself if not) */}
+      {/* Carte BFA Info */}
       {etab && <CarteBFAInfo etablissementId={etablissementId!} />}
 
       <div>
