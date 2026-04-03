@@ -174,43 +174,57 @@ export default function DashboardRH() {
       </div>
 
       {/* Détail inline missions du mois sélectionné */}
-      {detailMois && (
-        <div className="card-base mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-foreground">
-              Détail — {detailMois === 'prec' ? stats.mois_precedent : stats.mois_en_cours}
-            </h3>
-            <button onClick={() => setDetailMois(null)} className="text-xs text-primary hover:underline">
-              Fermer
-            </button>
-          </div>
-          {(detailMois === 'prec' ? stats.missions_mois_prec : stats.missions_ce_mois)?.length > 0 ? (
-            <div className="space-y-2">
-              {(detailMois === 'prec' ? stats.missions_mois_prec : stats.missions_ce_mois).map((m: any) => (
-                <button key={m.mission_id} onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
-                  className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-left">
-                  <div>
-                    <p className="font-medium text-sm text-foreground">{m.intitule}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {m.soignant_nom} · {m.soignant_profession} · {Math.round(m.heures || 0)}h
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-sm text-foreground">{fmtEur(m.total_brut)}</p>
-                    {m.montant_commission_ttc > 0 && (
-                      <p className="text-[10px] text-muted-foreground">+ {fmtEur(m.montant_commission_ttc)} com.</p>
-                    )}
-                  </div>
-                </button>
-              ))}
+      {detailMois && (() => {
+        const detailMissions = detailMois === 'prec' ? stats.missions_mois_prec
+          : detailMois === 'courant' ? stats.missions_ce_mois
+          : detailMois === 'previsionnel' ? stats.prochaines_missions
+          : [];
+        const detailTitre = detailMois === 'prec' ? stats.mois_precedent
+          : detailMois === 'courant' ? stats.mois_en_cours
+          : 'Missions à venir';
+        const messageVide = detailMois === 'previsionnel'
+          ? 'Aucune mission planifiée'
+          : `Aucune mission terminée ${detailMois === 'prec' ? 'le mois précédent' : 'ce mois'}`;
+
+        return (
+          <div className="card-base mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-foreground">Détail — {detailTitre}</h3>
+              <button onClick={() => setDetailMois(null)} className="text-xs text-primary hover:underline">Fermer</button>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Aucune mission terminée {detailMois === 'prec' ? 'le mois précédent' : 'ce mois'}
-            </p>
-          )}
-        </div>
-      )}
+            {detailMissions?.length > 0 ? (
+              <div className="space-y-2">
+                {detailMissions.map((m: any) => (
+                  <button key={m.mission_id} onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
+                    className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-left">
+                    <div>
+                      <p className="font-medium text-sm text-foreground">{m.intitule}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {m.soignant_nom} · {m.soignant_profession} · {Math.round(m.heures || 0)}h
+                      </p>
+                    </div>
+                    <div className="text-right flex items-center gap-2">
+                      {detailMois === 'previsionnel' && m.statut && (
+                        <Badge variant={m.statut === 'ASSIGNEE' ? 'default' : 'secondary'} className={m.statut === 'OUVERTE' ? 'bg-warning/10 text-warning border-warning/30' : ''}>
+                          {m.statut === 'ASSIGNEE' ? '✅ Assignée' : m.statut === 'EN_COURS' ? '▶️ En cours' : '🟠 Ouverte'}
+                        </Badge>
+                      )}
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">{fmtEur(m.total_brut)}</p>
+                        {m.montant_commission_ttc > 0 && (
+                          <p className="text-[10px] text-muted-foreground">+ {fmtEur(m.montant_commission_ttc)} com.</p>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">{messageVide}</p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* KPI Row 2 — Opérationnel */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
