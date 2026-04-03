@@ -206,12 +206,10 @@ export default function DashboardRH() {
       <div className="card-base mb-6">
         <h3 className="font-semibold text-foreground mb-1 flex items-center gap-2">📈 Prévision</h3>
         <p className="text-sm text-muted-foreground">
-          {stats.cout_ce_mois > 0 ? (
-            <>Ce mois : <span className="font-bold text-foreground">{fmtEur(stats.cout_ce_mois)}</span> dépensés + <span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel)}</span> à venir = <span className="font-bold text-foreground">{fmtEur(previsionTotal)}</span> prévisionnel</>
-          ) : stats.cout_previsionnel > 0 ? (
-            <>Aucune mission terminée ce mois. <span className="font-bold text-foreground">{stats.assignees_total}</span> mission{stats.assignees_total > 1 ? 's' : ''} à venir pour un budget prévisionnel de <span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel)}</span></>
+          {(stats.cout_previsionnel_total ?? stats.cout_previsionnel ?? 0) > 0 ? (
+            <>Budget prévisionnel : <span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel_total ?? stats.cout_previsionnel)}</span> (<span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel_brut ?? stats.cout_previsionnel ?? 0)}</span> soignants + <span className="font-bold text-foreground">{fmtEur(stats.commission_previsionnelle ?? 0)}</span> commission Jolene) pour <span className="font-bold text-foreground">{stats.assignees_total}</span> mission{stats.assignees_total > 1 ? 's' : ''} à venir ({stats.heures_prevues ?? 0}h)</>
           ) : (
-            <>Aucune activité ce mois.</>
+            <>Aucune mission planifiée.</>
           )}
         </p>
       </div>
@@ -221,7 +219,7 @@ export default function DashboardRH() {
         <div className="card-base mb-6">
           <h3 className="font-semibold text-foreground mb-1 flex items-center gap-2">📊 Comparaison secteur</h3>
           <p className="text-sm text-muted-foreground">
-            Votre coût moyen/heure : <span className="font-bold text-foreground">{fmtEur(stats.cout_moyen_heure, 2)}</span> — Moyenne du secteur : <span className="font-bold text-foreground">{fmtEur(COUT_MOYEN_SECTEUR)}</span>
+            Coût moyen/heure soignant : <span className="font-bold text-foreground">{fmtEur(stats.cout_moyen_heure, 2)}</span> (hors commission) — Moyenne du secteur : <span className="font-bold text-foreground">{fmtEur(COUT_MOYEN_SECTEUR)}</span>
             {stats.cout_moyen_heure < COUT_MOYEN_SECTEUR && <span className="text-primary ml-2">✅ En dessous de la moyenne</span>}
             {stats.cout_moyen_heure >= COUT_MOYEN_SECTEUR && <span className="text-destructive ml-2">⚠️ Au-dessus de la moyenne</span>}
           </p>
