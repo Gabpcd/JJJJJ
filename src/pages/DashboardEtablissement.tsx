@@ -391,14 +391,27 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
-      {/* Carte Commission Jolene */}
-      {etab && <CarteCommissionJolene etablissementId={etablissementId!} />}
-
-      {/* Widget Palier de Fidélité */}
-      {etab && paliers.length > 0 && <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={stats.missions_terminees_ce_mois} />}
-
-      {/* Carte BFA Info */}
-      {etab && <CarteBFAInfo etablissementId={etablissementId!} />}
+      {/* Commission Jolene — carte compacte */}
+      {etab && (
+        <div className="card-base cursor-pointer hover:shadow-md mb-6" onClick={() => navigate('/etablissement/facturation?tab=commissions')}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Commission Jolene</p>
+              <p className="text-xs text-muted-foreground">
+                Palier {etab.paliers_commission?.nom || paliers[0]?.nom || 'Découverte'}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-primary">{etab.taux_commission_negocie ?? 15}%</p>
+              {paliers[1] && (
+                <p className="text-[10px] text-muted-foreground">
+                  Prochain : {paliers[1].nom} →
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-3">
