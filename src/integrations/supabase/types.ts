@@ -3933,10 +3933,7 @@ export type Database = {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
-      fn_generer_facture_rate_limited: {
-        Args: { p_etablissement_id: string }
-        Returns: Json
-      }
+      fn_generer_facture_rate_limited: { Args: never; Returns: Json }
       fn_generer_jours_feries: { Args: { p_annee: number }; Returns: undefined }
       fn_generer_numero_contrat: { Args: { p_type: string }; Returns: string }
       fn_generer_numero_contrat_safe: {
