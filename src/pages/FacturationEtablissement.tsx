@@ -364,7 +364,7 @@ export default function FacturationEtablissement() {
               <p className="text-xs mt-1 text-muted-foreground">{filtreStatutPaiement === 'PAYE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'}</p>
             </button>
             <button
-              onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'DECLARE' ? null : 'DECLARE')}
+              onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'DECLARE' ? null : 'DECLARE'); scrollToHistorique(); }}
               className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
                 filtreStatutPaiement === 'DECLARE' ? 'border-warning ring-2 ring-warning/20' : 'border-border'
               }`}
