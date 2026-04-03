@@ -60,12 +60,15 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
       {couleurTheme && <div className="h-1 -mt-4 md:-mt-6 -mx-4 md:-mx-6 mb-3" style={{ backgroundColor: couleurTheme }} />}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2 flex-wrap">
-          {m.est_urgente && (
+           {m.est_urgente && (
             <span className="badge-base bg-destructive/10 text-destructive text-[10px]">
               {m.niveau_urgence === 3 ? '🚨 URGENT Critique' : m.niveau_urgence === 2 ? '🔥 URGENT Élevé' : '⚡ URGENT'}
             </span>
           )}
           <BadgeStatut statut={m.statut} />
+          {m.has_litige && (
+            <span className="badge-base bg-warning/10 text-warning text-[10px]">⚠️ Litige</span>
+          )}
           {tempsInfo && (
             <span className={`text-[10px] font-medium ${tempsInfo.couleur}`}>{tempsInfo.texte}</span>
           )}
