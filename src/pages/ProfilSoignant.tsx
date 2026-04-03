@@ -152,6 +152,7 @@ export default function ProfilSoignant() {
    const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
    const [typeExercice, setTypeExercice] = useState('SALARIE');
    const [attestationCumul, setAttestationCumul] = useState(false);
+   const { typesAutorises, uniqueType } = useTypesExerciceAutorises(profession);
   const [heuresCumulees, setHeuresCumulees] = useState(0);
   const [statutLiberal, setStatutLiberal] = useState('');
   useEffect(() => {
