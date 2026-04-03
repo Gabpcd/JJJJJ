@@ -3997,6 +3997,8 @@ export type Database = {
       fn_health_check: { Args: never; Returns: Json }
       fn_html_escape: { Args: { p_text: string }; Returns: string }
       fn_is_valid_uuid: { Args: { p_text: string }; Returns: boolean }
+      fn_litige_pour_mission: { Args: { p_mission_id: string }; Returns: Json }
+      fn_litiges_etablissement: { Args: never; Returns: Json }
       fn_maj_activite_soignant: { Args: never; Returns: Json }
       fn_marquer_messages_lus: {
         Args: { p_conversation_id: string }

@@ -22,6 +22,7 @@ import { BoutonFavori } from '@/components/BoutonFavori';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
 import { WorkflowPaiementMission } from '@/components/WorkflowPaiementMission';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
+import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -172,6 +173,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [proposing, setProposing] = useState<string | null>(null);
   const [nbCandidatures, setNbCandidatures] = useState(0);
 
+  // Litige existant
+  const [litigeExistant, setLitigeExistant] = useState<any>(null);
+  const [loadingLitige, setLoadingLitige] = useState(false);
+
   // Stripe Connect
   const [soignantHasConnect, setSoignantHasConnect] = useState(false);
   const [connectPayLoading, setConnectPayLoading] = useState(false);
@@ -221,6 +226,14 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           .eq('mission_id', id!)
           .eq('statut', 'EN_ATTENTE');
         setNbCandidatures(count || 0);
+      }
+
+      // Check if litige exists for this mission
+      if (m && ['TERMINEE', 'LITIGE', 'EN_COURS'].includes((m as any).statut)) {
+        const { data: litigeData } = await supabase.rpc('fn_litige_pour_mission' as any, { p_mission_id: id });
+        if (litigeData && (litigeData as any).exists !== false && (litigeData as any).litige_id) {
+          setLitigeExistant(litigeData);
+        }
       }
 
       // Check if soignant has Connect account
@@ -496,6 +509,36 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     setConnectPayLoading(false);
                   }}
                 />
+              )}
+              {/* Litige section */}
+              {!isAdmin && (m.statut === 'TERMINEE' || m.statut === 'LITIGE') && m.soignant_assigne_id && (
+                litigeExistant ? (
+                  <div className="card-base border-warning/30">
+                    <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">⚖️ Litige en cours</h2>
+                    <FilDiscussionLitige
+                      litige={{
+                        id: litigeExistant.litige_id,
+                        statut: litigeExistant.statut,
+                        motif: litigeExistant.motif,
+                        cree_le: litigeExistant.cree_le,
+                        accord_soignant: litigeExistant.accord_soignant,
+                        accord_etablissement: litigeExistant.accord_etablissement,
+                        resolution: litigeExistant.resolution,
+                        missions: { intitule: m.intitule },
+                      }}
+                      onUpdate={() => window.location.reload()}
+                    />
+                  </div>
+                ) : (
+                  <div className="card-base">
+                    <button
+                      onClick={() => navigate('/etablissement/litiges')}
+                      className="text-sm text-warning hover:underline font-medium flex items-center gap-1.5"
+                    >
+                      ⚖️ Ouvrir un litige pour cette mission
+                    </button>
+                  </div>
+                )
               )}
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <CodesPointageMission missionId={m.id} />

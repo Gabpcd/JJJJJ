@@ -57,6 +57,7 @@ export default function DashboardEtablissement() {
     soignants_ce_mois: 0,
     commissions_impayees: 0,
     nb_factures_impayees: 0,
+    litiges_ouverts: 0,
   });
 
   const [topSoignants, setTopSoignants] = useState<any[]>([]);
@@ -127,6 +128,7 @@ export default function DashboardEtablissement() {
           soignants_ce_mois: d.soignants_ce_mois ?? 0,
           commissions_impayees: d.commissions_impayees ?? 0,
           nb_factures_impayees: d.nb_factures_impayees ?? 0,
+          litiges_ouverts: d.litiges_ouverts ?? 0,
         });
       } else if (resDashStats.error) {
         logger.error('[DashboardEtab] Erreur stats RPC', resDashStats.error);
@@ -276,6 +278,20 @@ export default function DashboardEtablissement() {
               ))}
             </div>
           </div>
+        </FadeInView>
+      )}
+
+      {/* ⚖️ Litiges ouverts */}
+      {stats.litiges_ouverts > 0 && (
+        <FadeInView delay={80}>
+          <button
+            className="w-full card-base border-warning/30 bg-warning/5 mb-4 hover:bg-warning/10 transition-colors text-left"
+            onClick={() => navigate('/etablissement/litiges')}
+          >
+            <p className="text-sm font-semibold text-warning flex items-center gap-2">
+              ⚖️ {stats.litiges_ouverts} litige{stats.litiges_ouverts > 1 ? 's' : ''} en cours — Cliquez pour gérer
+            </p>
+          </button>
         </FadeInView>
       )}
 

@@ -241,6 +241,25 @@ export default function ListeMissions() {
             </div>
           )}
         </>
+      ) : filtreStatut ? (
+        <EtatVide
+          icone={Search}
+          titre={
+            filtreStatut === 'OUVERTE' ? 'Aucune mission ouverte' :
+            filtreStatut === 'ASSIGNEE' ? 'Aucune mission assignée' :
+            filtreStatut === 'EN_COURS' ? 'Aucune mission en cours' :
+            filtreStatut === 'TERMINEE' ? 'Aucune mission terminée' :
+            filtreStatut === 'ANNULEE_PAR_ETABLISSEMENT' ? 'Aucune mission annulée' :
+            filtreStatut === 'LITIGE' ? 'Aucun litige' :
+            'Aucune mission trouvée'
+          }
+          sousTitre="Essayez un autre filtre ou publiez une nouvelle mission."
+          boutonLabel="Voir toutes les missions"
+          boutonRoute="/etablissement/missions"
+        />
+      ) : (counts[''] ?? 0) > 0 ? (
+        <EtatVide icone={Search} titre="Aucune mission récente" sousTitre="Vos missions précédentes n'apparaissent pas dans ce filtre."
+          boutonLabel="Publier une mission" boutonRoute="/etablissement/missions/creer" />
       ) : (
         <EtatVide illustration={<IllustrationMegaphone />} titre="Publiez votre première mission"
           sousTitre="Trouvez un soignant qualifié en quelques heures."

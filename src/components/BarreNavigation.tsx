@@ -54,6 +54,7 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: Flame, label: 'Pool urgence 🚨', route: '/etablissement/pool-urgence' },
   { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
+  { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
   { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
   { icone: BarChart3, label: 'Gestion RH', route: '/etablissement/rh' },
   { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
@@ -61,7 +62,6 @@ const NAV_ETABLISSEMENT: NavItem[] = [
   { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
   { icone: Code2, label: 'API', route: '/etablissement/api' },
   { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
-  { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
   { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
   { icone: Crown, label: 'Premium', route: '/etablissement/premium' },
   { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
@@ -193,6 +193,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             const actif = location.pathname === item.route;
             const isMsgRoute = item.label === 'Messagerie';
             const isContratPlateforme = item.route === '/etablissement/contrat-plateforme';
+            const isLitigesRoute = item.route === '/etablissement/litiges';
             return (
               <button key={item.route} onClick={() => navigate(item.route)} aria-label={item.label} aria-current={actif ? 'page' : undefined} className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}>
                 <item.icone className="h-5 w-5" />
