@@ -335,36 +335,20 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
-      {/* KPI row 2 — Candidatures, Pool, Messages, À payer */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-6">
+      {/* KPI row 2 — Candidatures, Soignants ce mois, À payer, Commissions */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <FadeInView delay={200}>
           <CarteKPI icone={Star} valeur={stats.candidatures_en_attente} label="Candidatures en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/missions?statut=OUVERTE" />
         </FadeInView>
         <FadeInView delay={250}>
-          <CarteKPI icone={Zap} valeur={stats.pool_urgence_count} label="Pool urgence" couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/pool-urgence" />
+          <CarteKPI icone={Users} valeur={stats.soignants_ce_mois} label="Soignants ce mois" sousLabel={`Pool urgence : ${stats.pool_urgence_count}`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/etablissement/pool-soignants" />
         </FadeInView>
         <FadeInView delay={300}>
-          <CarteKPI icone={MessageCircle} valeur={stats.messages_non_lus} label="Messages non lus" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/etablissement/messagerie" />
+          <CarteKPI icone={CreditCard} valeur={stats.missions_a_payer} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/facturation" />
         </FadeInView>
         <FadeInView delay={350}>
-          <CarteKPI icone={CreditCard} valeur={stats.missions_a_payer} label="Missions à payer" couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/facturation" />
-        </FadeInView>
-      </div>
-
-      {/* KPI row 3 — Operational indicators from RPC */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <FadeInView delay={400}>
-          <CarteKPI icone={Zap} valeur={`${stats.pool_urgence_count} soignants`} label="Pool urgence" couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/pool-urgence" />
-        </FadeInView>
-        <FadeInView delay={450}>
-          <CarteKPI icone={MessageCircle} valeur={`${stats.messages_non_lus} non lu(s)`} label="Messages" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/etablissement/messagerie" />
-        </FadeInView>
-        <FadeInView delay={500}>
-          <CarteKPI icone={CreditCard} valeur={`${stats.missions_a_payer} mission(s)`} label="Soignants à payer" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/facturation" />
-        </FadeInView>
-        <FadeInView delay={550}>
           {stats.commissions_impayees > 0 ? (
-            <CarteKPI icone={FileText} valeur={`${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(stats.commissions_impayees)}`} label={`⚠️ ${stats.nb_factures_impayees} facture(s) impayée(s)`} couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/facturation?tab=commissions" />
+            <CarteKPI icone={FileText} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(stats.commissions_impayees)} label={`⚠️ ${stats.nb_factures_impayees} facture(s) impayée(s)`} couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/facturation?tab=commissions" />
           ) : (
             <CarteKPI icone={FileText} valeur="✅ À jour" label="Commissions Jolene" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/facturation?tab=commissions" />
           )}
