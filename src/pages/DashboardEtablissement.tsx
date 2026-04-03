@@ -410,7 +410,7 @@ export default function DashboardEtablissement() {
       {etab && <CarteCommissionJolene etablissementId={etablissementId!} />}
 
       {/* Widget Palier de Fidélité */}
-      {etab && paliers.length > 0 && <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />}
+      {etab && paliers.length > 0 && <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={stats.missions_terminees_ce_mois} />}
 
       {/* Carte BFA Info */}
       {etab && <CarteBFAInfo etablissementId={etablissementId!} />}
