@@ -387,12 +387,12 @@ export default function DashboardEtablissement() {
           </div>
         </FadeInView>
         <FadeInView delay={500}>
-          <div className="cursor-pointer" onClick={() => navigate('/etablissement/rh?vue=soignants-mois')}>
-            <IndicateurTurnover soignantsCeMois={turnover.ceMois} soignantsMoisPrecedent={turnover.moisPrec} />
+          <div className="cursor-pointer" onClick={() => navigate('/etablissement/pool-soignants')}>
+            <IndicateurTurnover soignantsCeMois={stats.soignants_ce_mois} soignantsMoisPrecedent={turnover.moisPrec} />
           </div>
         </FadeInView>
         <FadeInView delay={550}>
-          <CarteKPI icone={CheckCircle} valeur={missionsCeMois} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/missions?statut=TERMINEE&periode=mois" />
+          <CarteKPI icone={CheckCircle} valeur={stats.missions_terminees_ce_mois} label="Terminées ce mois" sousLabel={`Total : ${stats.missions_terminees}`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/missions?statut=TERMINEE" />
         </FadeInView>
       </div>
 
