@@ -364,9 +364,9 @@ export default function DashboardEtablissement() {
         </FadeInView>
         <FadeInView delay={350}>
           {stats.commissions_impayees > 0 ? (
-            <CarteKPI icone={FileText} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(stats.commissions_impayees)} label={`⚠️ ${stats.nb_factures_impayees} facture(s) impayée(s)`} couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/facturation?tab=commissions" />
+            <CarteKPI icone={FileText} valeur={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(stats.commissions_impayees)} label={`⚠️ ${stats.nb_factures_impayees} facture(s) impayée(s)`} couleurIcone="text-destructive" couleurFond="bg-destructive/10" lien="/etablissement/obligations" />
           ) : (
-            <CarteKPI icone={FileText} valeur="✅ À jour" label="Commissions Jolene" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/facturation?tab=commissions" />
+            <CarteKPI icone={FileText} valeur="✅ À jour" label="Commissions Jolene" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/obligations" />
           )}
         </FadeInView>
       </div>
