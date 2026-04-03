@@ -263,7 +263,7 @@ export default function DashboardRH() {
         {stats.top_soignants?.length > 0 ? (
           <div className="space-y-3">
             {stats.top_soignants.map((s: any, i: number) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+              <button key={i} onClick={() => s.soignant_id && navigate(`/etablissement/soignants/${s.soignant_id}`)} className="w-full flex items-center justify-between py-2 border-b border-border/50 last:border-0 hover:bg-muted/30 rounded-lg transition-colors text-left">
                 <div className="flex items-center gap-3">
                   <span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span>
                   <div>
@@ -283,7 +283,7 @@ export default function DashboardRH() {
                   <p className="text-sm font-semibold text-foreground">{s.nb_missions} mission{s.nb_missions > 1 ? 's' : ''}</p>
                   <p className="text-xs text-muted-foreground">{fmtEur(s.total_facture, 2)}</p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         ) : (

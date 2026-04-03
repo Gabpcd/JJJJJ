@@ -422,14 +422,14 @@ export default function ContratMission() {
           {/* Etablissement signature */}
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              {contrat.signature_etablissement ? (
+              {(contrat.statut === 'SIGNE_COMPLET' || contrat.signature_etablissement) ? (
                 <CheckCircle className="h-5 w-5 text-success" />
               ) : (
                 <Clock className="h-5 w-5 text-warning" />
               )}
               <span className="text-sm text-foreground">
-                Établissement : {contrat.signature_etablissement
-                  ? `✅ Signé le ${format(new Date(contrat.signature_etablissement_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}`
+                Établissement : {(contrat.statut === 'SIGNE_COMPLET' || contrat.signature_etablissement)
+                  ? `✅ Signé${contrat.signature_etablissement_le ? ` le ${format(new Date(contrat.signature_etablissement_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}` : ''}`
                   : '⏳ En attente'}
               </span>
             </div>
@@ -441,14 +441,14 @@ export default function ContratMission() {
           {/* Soignant signature */}
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              {contrat.signature_soignant ? (
+              {(contrat.statut === 'SIGNE_COMPLET' || contrat.signature_soignant) ? (
                 <CheckCircle className="h-5 w-5 text-success" />
               ) : (
                 <Clock className="h-5 w-5 text-warning" />
               )}
               <span className="text-sm text-foreground">
-                Soignant(e) : {contrat.signature_soignant
-                  ? `✅ Signé le ${format(new Date(contrat.signature_soignant_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}`
+                Soignant(e) : {(contrat.statut === 'SIGNE_COMPLET' || contrat.signature_soignant)
+                  ? `✅ Signé${contrat.signature_soignant_le ? ` le ${format(new Date(contrat.signature_soignant_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}` : ''}`
                   : '⏳ En attente'}
               </span>
             </div>
