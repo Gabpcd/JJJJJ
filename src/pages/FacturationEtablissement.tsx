@@ -267,13 +267,17 @@ export default function FacturationEtablissement() {
     ? paiementsRecents.filter((p: any) => p.statut === 'CONTESTE')
     : paiementsRecents;
 
-  console.log('[FACTURATION DEBUG]', {
-    filtreStatutPaiement,
-    paiementsRecents: paiementsRecents.length,
-    paiementsFiltres: paiementsFiltres.length,
-    statuts: paiementsRecents.map((p: any) => p.statut),
-    rawKeys: paiementsData ? Object.keys(paiementsData) : null,
-  });
+  const scrollToHistorique = () => {
+    setTimeout(() => document.getElementById('historique-paiements')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  };
+
+  const titreHistorique = filtreStatutPaiement === 'PAYE'
+    ? 'Paiements déclarés / confirmés'
+    : filtreStatutPaiement === 'DECLARE'
+    ? 'Paiements en attente de confirmation'
+    : filtreStatutPaiement === 'CONTESTE'
+    ? 'Paiements contestés'
+    : 'Historique des paiements';
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -350,7 +354,7 @@ export default function FacturationEtablissement() {
           {/* KPI */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             <button
-              onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE')}
+              onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE'); scrollToHistorique(); }}
               className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
                 filtreStatutPaiement === 'PAYE' ? 'border-primary ring-2 ring-primary/20' : 'border-border'
               }`}
@@ -360,7 +364,7 @@ export default function FacturationEtablissement() {
               <p className="text-xs mt-1 text-muted-foreground">{filtreStatutPaiement === 'PAYE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'}</p>
             </button>
             <button
-              onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'DECLARE' ? null : 'DECLARE')}
+              onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'DECLARE' ? null : 'DECLARE'); scrollToHistorique(); }}
               className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
                 filtreStatutPaiement === 'DECLARE' ? 'border-warning ring-2 ring-warning/20' : 'border-border'
               }`}
@@ -370,7 +374,7 @@ export default function FacturationEtablissement() {
               <p className="text-xs mt-1 text-muted-foreground">{filtreStatutPaiement === 'DECLARE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'}</p>
             </button>
             <button
-              onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'CONTESTE' ? null : 'CONTESTE')}
+              onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'CONTESTE' ? null : 'CONTESTE'); scrollToHistorique(); }}
               className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
                 filtreStatutPaiement === 'CONTESTE' ? 'border-destructive ring-2 ring-destructive/20' : 'border-border'
               }`}
@@ -535,15 +539,25 @@ export default function FacturationEtablissement() {
           </div>
 
           {/* Historique paiements */}
-          <div className="card-base">
+          <div className="card-base" id="historique-paiements">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-foreground">Historique des paiements</h2>
+              <h2 className="font-bold text-foreground">{titreHistorique}</h2>
               {filtreStatutPaiement && (
                 <button onClick={() => setFiltreStatutPaiement(null)} className="text-xs text-primary hover:underline">
                   Voir tout ({paiementsRecents.length})
                 </button>
               )}
             </div>
+            {filtreStatutPaiement && paiementsFiltres.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {filtreStatutPaiement === 'CONTESTE' ? '✅ Aucun paiement contesté' : `Aucun paiement avec ce statut`}
+              </p>
+            )}
+            {filtreStatutPaiement && paiementsFiltres.length > 0 && (
+              <p className="text-xs text-muted-foreground mb-3">
+                {paiementsFiltres.length} résultat{paiementsFiltres.length > 1 ? 's' : ''}
+              </p>
+            )}
             {paiementsFiltres.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
