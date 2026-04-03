@@ -259,6 +259,13 @@ export default function FacturationEtablissement() {
 
   const missionsAPayer = paiementsData?.missions_a_payer ?? [];
   const paiementsRecents = paiementsData?.paiements_recents ?? [];
+  const paiementsFiltres = filtreStatutPaiement === 'PAYE'
+    ? paiementsRecents.filter((p: any) => p.statut === 'DECLARE' || p.statut === 'CONFIRME')
+    : filtreStatutPaiement === 'DECLARE'
+    ? paiementsRecents.filter((p: any) => p.statut === 'DECLARE')
+    : filtreStatutPaiement === 'CONTESTE'
+    ? paiementsRecents.filter((p: any) => p.statut === 'CONTESTE')
+    : paiementsRecents;
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -524,18 +531,12 @@ export default function FacturationEtablissement() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-foreground">Historique des paiements</h2>
               {filtreStatutPaiement && (
-                <button onClick={() => setFiltreStatutPaiement(null)} className="text-xs text-primary hover:underline">Voir tout</button>
+                <button onClick={() => setFiltreStatutPaiement(null)} className="text-xs text-primary hover:underline">
+                  Voir tout ({paiementsRecents.length})
+                </button>
               )}
             </div>
-            {(() => {
-              const paiementsFiltres = filtreStatutPaiement === 'PAYE'
-                ? paiementsRecents.filter((p: any) => p.statut === 'DECLARE' || p.statut === 'CONFIRME')
-                : filtreStatutPaiement === 'DECLARE'
-                ? paiementsRecents.filter((p: any) => p.statut === 'DECLARE')
-                : filtreStatutPaiement === 'CONTESTE'
-                ? paiementsRecents.filter((p: any) => p.statut === 'CONTESTE')
-                : paiementsRecents;
-              return paiementsFiltres.length > 0 ? (
+            {paiementsFiltres.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -599,8 +600,7 @@ export default function FacturationEtablissement() {
               <p className="text-sm text-muted-foreground text-center py-4">
                 {filtreStatutPaiement ? 'Aucun paiement dans cette catégorie.' : 'Aucun paiement enregistré.'}
               </p>
-            );
-            })()}
+            )}
           </div>
         </TabsContent>
 
