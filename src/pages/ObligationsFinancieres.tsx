@@ -121,7 +121,7 @@ export default function ObligationsFinancieres() {
   if (!data) {
     return (
       <LayoutApp role="ADMIN_ETABLISSEMENT">
-        <EtatVide titre="Erreur de chargement" message="Impossible de charger vos obligations financières." />
+        <EtatVide titre="Erreur de chargement" description="Impossible de charger vos obligations financières." />
       </LayoutApp>
     );
   }
