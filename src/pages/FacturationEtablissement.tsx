@@ -618,34 +618,37 @@ export default function FacturationEtablissement() {
           )}
 
           {/* KPI commissions */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            <FadeInView delay={0}>
-              <div
-                className={`cursor-pointer hover:shadow-md transition-all rounded-2xl ${filtreStatut === 'EN_ATTENTE' ? 'ring-2 ring-primary' : ''}`}
-                onClick={() => {
-                  setFiltreStatut(filtreStatut === 'EN_ATTENTE' ? null : 'EN_ATTENTE');
-                  document.getElementById('missions-non-facturees')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-              >
-                <CarteKPI icone={Clock} valeur={fmt(kpiCommissions.enAttente)} label="Commissions en attente" sousLabel={filtreStatut === 'EN_ATTENTE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'} couleurIcone="text-warning" couleurFond="bg-warning/10" />
-              </div>
-            </FadeInView>
-            <FadeInView delay={100}>
-              <div
-                className={`cursor-pointer hover:shadow-md transition-all rounded-2xl ${filtreStatut === 'EN_COURS' ? 'ring-2 ring-primary' : ''}`}
-                onClick={() => setFiltreStatut(filtreStatut === 'EN_COURS' ? null : 'EN_COURS')}
-              >
-                <CarteKPI icone={FileText} valeur={fmt(kpiCommissions.enCours)} label="Factures en cours" sousLabel={filtreStatut === 'EN_COURS' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'} couleurIcone="text-primary" couleurFond="bg-primary/10" />
-              </div>
-            </FadeInView>
-            <FadeInView delay={200}>
-              <div
-                className={`cursor-pointer hover:shadow-md transition-all rounded-2xl ${filtreStatut === 'PAYEE' ? 'ring-2 ring-primary' : ''}`}
-                onClick={() => setFiltreStatut(filtreStatut === 'PAYEE' ? null : 'PAYEE')}
-              >
-                <CarteKPI icone={CheckCircle} valeur={fmt(kpiCommissions.totalPaye)} label="Total payé" sousLabel={filtreStatut === 'PAYEE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'} couleurIcone="text-success" couleurFond="bg-success/10" />
-              </div>
-            </FadeInView>
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <button
+              onClick={() => {
+                setFiltreStatut(filtreStatut === 'EN_ATTENTE' ? null : 'EN_ATTENTE');
+                document.getElementById('missions-non-facturees')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
+                filtreStatut === 'EN_ATTENTE' ? 'border-primary ring-2 ring-primary/20' : 'border-border'
+              }`}
+            >
+              <p className="text-2xl font-bold text-foreground">{fmt(kpiCommissions.enAttente)}</p>
+              <p className="text-sm text-muted-foreground">Commissions en attente</p>
+            </button>
+            <button
+              onClick={() => setFiltreStatut(filtreStatut === 'EN_COURS' ? null : 'EN_COURS')}
+              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
+                filtreStatut === 'EN_COURS' ? 'border-warning ring-2 ring-warning/20' : 'border-border'
+              }`}
+            >
+              <p className="text-2xl font-bold text-foreground">{fmt(kpiCommissions.enCours)}</p>
+              <p className="text-sm text-muted-foreground">Factures en cours</p>
+            </button>
+            <button
+              onClick={() => setFiltreStatut(filtreStatut === 'PAYEE' ? null : 'PAYEE')}
+              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
+                filtreStatut === 'PAYEE' ? 'border-success ring-2 ring-success/20' : 'border-border'
+              }`}
+            >
+              <p className="text-2xl font-bold text-foreground">{fmt(kpiCommissions.totalPaye)}</p>
+              <p className="text-sm text-muted-foreground">Total payé</p>
+            </button>
           </div>
 
           {paiementsData && (
