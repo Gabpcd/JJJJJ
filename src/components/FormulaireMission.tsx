@@ -58,6 +58,14 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
   const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
+  const { typesAutorises: typesExAutorise, uniqueType: uniqueExType } = useTypesExerciceAutorises(profession);
+
+  // Auto-set contratPreference when profession only allows SALARIE
+  useEffect(() => {
+    if (uniqueExType === 'SALARIE') {
+      setContratPreference('SALARIE');
+    }
+  }, [uniqueExType]);
   const [siretInvalide, setSiretInvalide] = useState(false);
   const [contratNonValide, setContratNonValide] = useState(false);
 
