@@ -1764,6 +1764,41 @@ export type Database = {
           },
         ]
       }
+      messages_litige: {
+        Row: {
+          auteur_id: string
+          contenu: string
+          cree_le: string | null
+          id: string
+          litige_id: string
+          type_auteur: string
+        }
+        Insert: {
+          auteur_id: string
+          contenu: string
+          cree_le?: string | null
+          id?: string
+          litige_id: string
+          type_auteur: string
+        }
+        Update: {
+          auteur_id?: string
+          contenu?: string
+          cree_le?: string | null
+          id?: string
+          litige_id?: string
+          type_auteur?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_litige_litige_id_fkey"
+            columns: ["litige_id"]
+            isOneToOne: false
+            referencedRelation: "litiges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages_mission: {
         Row: {
           auteur_id: string
@@ -3564,6 +3599,10 @@ export type Database = {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
+      fn_ajouter_message_litige: {
+        Args: { p_contenu: string; p_litige_id: string }
+        Returns: Json
+      }
       fn_alerte_cddu_repetitif: {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: Json
@@ -3639,6 +3678,10 @@ export type Database = {
         Returns: Json
       }
       fn_charger_demo_investisseur: { Args: never; Returns: Json }
+      fn_cloturer_litige: {
+        Args: { p_litige_id: string; p_resolution?: string }
+        Returns: Json
+      }
       fn_cloturer_litige_mutuel: {
         Args: { p_litige_id: string }
         Returns: Json
@@ -3745,6 +3788,10 @@ export type Database = {
       }
       fn_demander_mediation_admin: {
         Args: { p_litige_id: string; p_message?: string }
+        Returns: Json
+      }
+      fn_demander_mediation_litige: {
+        Args: { p_litige_id: string }
         Returns: Json
       }
       fn_deposer_chorus: {
@@ -4170,6 +4217,10 @@ export type Database = {
           p_nom?: string
           p_telephone_contact?: string
         }
+        Returns: Json
+      }
+      fn_modifier_reference_paiement: {
+        Args: { p_nouvelle_reference: string; p_paiement_id: string }
         Returns: Json
       }
       fn_modifier_tva_liberal: {
