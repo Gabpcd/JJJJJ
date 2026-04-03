@@ -267,13 +267,17 @@ export default function FacturationEtablissement() {
     ? paiementsRecents.filter((p: any) => p.statut === 'CONTESTE')
     : paiementsRecents;
 
-  console.log('[FACTURATION DEBUG]', {
-    filtreStatutPaiement,
-    paiementsRecents: paiementsRecents.length,
-    paiementsFiltres: paiementsFiltres.length,
-    statuts: paiementsRecents.map((p: any) => p.statut),
-    rawKeys: paiementsData ? Object.keys(paiementsData) : null,
-  });
+  const scrollToHistorique = () => {
+    setTimeout(() => document.getElementById('historique-paiements')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  };
+
+  const titreHistorique = filtreStatutPaiement === 'PAYE'
+    ? 'Paiements déclarés / confirmés'
+    : filtreStatutPaiement === 'DECLARE'
+    ? 'Paiements en attente de confirmation'
+    : filtreStatutPaiement === 'CONTESTE'
+    ? 'Paiements contestés'
+    : 'Historique des paiements';
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
