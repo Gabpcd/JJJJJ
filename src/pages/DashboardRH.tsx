@@ -113,7 +113,8 @@ export default function DashboardRH() {
     </LayoutApp>
   );
 
-  const previsionTotal = (stats.cout_ce_mois ?? 0) + (stats.cout_previsionnel ?? 0);
+  const coutTotalMoisPrec = (stats.cout_mois_prec ?? 0) + (stats.commission_mois_prec ?? 0);
+  const coutTotalCeMois = (stats.cout_ce_mois ?? 0) + (stats.commission_ce_mois ?? 0);
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -134,21 +135,30 @@ export default function DashboardRH() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <div className="card-base text-center">
           <Coins className="h-5 w-5 text-primary mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_mois_prec)}</p>
+          <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalMoisPrec)}</p>
           <p className="text-xs text-muted-foreground">Coût mois précédent</p>
           <p className="text-[10px] text-muted-foreground">{stats.mois_precedent}</p>
+          {(stats.commission_mois_prec ?? 0) > 0 && (
+            <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_mois_prec)} de commission Jolene</p>
+          )}
         </div>
         <div className="card-base text-center">
           <Coins className="h-5 w-5 text-info mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_ce_mois)}</p>
+          <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalCeMois)}</p>
           <p className="text-xs text-muted-foreground">Coût ce mois</p>
           <p className="text-[10px] text-muted-foreground">{stats.mois_en_cours}</p>
+          {(stats.commission_ce_mois ?? 0) > 0 && (
+            <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_ce_mois)} de commission Jolene</p>
+          )}
         </div>
         <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=ASSIGNEE')}>
           <Briefcase className="h-5 w-5 text-warning mx-auto mb-1" />
-          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_previsionnel)}</p>
+          <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_previsionnel_total ?? stats.cout_previsionnel ?? 0)}</p>
           <p className="text-xs text-muted-foreground">Budget prévisionnel</p>
           <p className="text-[10px] text-muted-foreground">{stats.assignees_total} mission{stats.assignees_total > 1 ? 's' : ''} à venir</p>
+          {(stats.cout_previsionnel_brut ?? 0) > 0 && (
+            <p className="text-[10px] text-muted-foreground">{fmtEur(stats.cout_previsionnel_brut)} soignants + {fmtEur(stats.commission_previsionnelle ?? 0)} commission</p>
+          )}
         </div>
         <div className="card-base text-center">
           <TrendingUp className="h-5 w-5 text-primary mx-auto mb-1" />
@@ -196,12 +206,10 @@ export default function DashboardRH() {
       <div className="card-base mb-6">
         <h3 className="font-semibold text-foreground mb-1 flex items-center gap-2">📈 Prévision</h3>
         <p className="text-sm text-muted-foreground">
-          {stats.cout_ce_mois > 0 ? (
-            <>Ce mois : <span className="font-bold text-foreground">{fmtEur(stats.cout_ce_mois)}</span> dépensés + <span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel)}</span> à venir = <span className="font-bold text-foreground">{fmtEur(previsionTotal)}</span> prévisionnel</>
-          ) : stats.cout_previsionnel > 0 ? (
-            <>Aucune mission terminée ce mois. <span className="font-bold text-foreground">{stats.assignees_total}</span> mission{stats.assignees_total > 1 ? 's' : ''} à venir pour un budget prévisionnel de <span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel)}</span></>
+          {(stats.cout_previsionnel_total ?? stats.cout_previsionnel ?? 0) > 0 ? (
+            <>Budget prévisionnel : <span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel_total ?? stats.cout_previsionnel)}</span> (<span className="font-bold text-foreground">{fmtEur(stats.cout_previsionnel_brut ?? stats.cout_previsionnel ?? 0)}</span> soignants + <span className="font-bold text-foreground">{fmtEur(stats.commission_previsionnelle ?? 0)}</span> commission Jolene) pour <span className="font-bold text-foreground">{stats.assignees_total}</span> mission{stats.assignees_total > 1 ? 's' : ''} à venir ({stats.heures_prevues ?? 0}h)</>
           ) : (
-            <>Aucune activité ce mois.</>
+            <>Aucune mission planifiée.</>
           )}
         </p>
       </div>
@@ -211,7 +219,7 @@ export default function DashboardRH() {
         <div className="card-base mb-6">
           <h3 className="font-semibold text-foreground mb-1 flex items-center gap-2">📊 Comparaison secteur</h3>
           <p className="text-sm text-muted-foreground">
-            Votre coût moyen/heure : <span className="font-bold text-foreground">{fmtEur(stats.cout_moyen_heure, 2)}</span> — Moyenne du secteur : <span className="font-bold text-foreground">{fmtEur(COUT_MOYEN_SECTEUR)}</span>
+            Coût moyen/heure soignant : <span className="font-bold text-foreground">{fmtEur(stats.cout_moyen_heure, 2)}</span> (hors commission) — Moyenne du secteur : <span className="font-bold text-foreground">{fmtEur(COUT_MOYEN_SECTEUR)}</span>
             {stats.cout_moyen_heure < COUT_MOYEN_SECTEUR && <span className="text-primary ml-2">✅ En dessous de la moyenne</span>}
             {stats.cout_moyen_heure >= COUT_MOYEN_SECTEUR && <span className="text-destructive ml-2">⚠️ Au-dessus de la moyenne</span>}
           </p>
@@ -234,7 +242,7 @@ export default function DashboardRH() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-foreground truncate">{m.intitule}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {m.debut_le ? new Date(m.debut_le).toLocaleDateString('fr-FR') : '—'} · {fmtEur(m.total_brut ?? 0)}
+                    {m.debut_le ? new Date(m.debut_le).toLocaleDateString('fr-FR') : '—'} · {fmtEur(m.total_brut ?? 0)}{m.montant_commission_ttc ? ` + ${fmtEur(m.montant_commission_ttc)} com.` : ''}
                     {m.soignant_nom && <> · {m.soignant_nom}</>}
                   </p>
                 </div>
