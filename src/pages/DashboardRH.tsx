@@ -152,7 +152,7 @@ export default function DashboardRH() {
             <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_ce_mois)} de commission Jolene</p>
           )}
         </div>
-        <div className="card-base text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=ASSIGNEE')}>
+        <div className={`card-base text-center cursor-pointer hover:shadow-md transition-shadow ${detailMois === 'previsionnel' ? 'ring-2 ring-primary' : ''}`} onClick={() => setDetailMois(detailMois === 'previsionnel' ? null : 'previsionnel')}>
           <Briefcase className="h-5 w-5 text-warning mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{fmtEur(stats.cout_previsionnel_total ?? stats.cout_previsionnel ?? 0)}</p>
           <p className="text-xs text-muted-foreground">Budget prévisionnel</p>
