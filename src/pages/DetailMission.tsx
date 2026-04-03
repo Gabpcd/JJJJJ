@@ -539,7 +539,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     </button>
                   </div>
                 )
-              )
+              )}
               {(m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') && (
                 <CodesPointageMission missionId={m.id} />
               )}
