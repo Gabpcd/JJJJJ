@@ -57,6 +57,8 @@ export default function DashboardEtablissement() {
     pool_urgence_count: 0,
     messages_non_lus: 0,
     missions_a_payer: 0,
+    missions_terminees_ce_mois: 0,
+    soignants_ce_mois: 0,
   });
 
   // HR state
@@ -65,7 +67,6 @@ export default function DashboardEtablissement() {
   const [topSoignants, setTopSoignants] = useState<any[]>([]);
   const [turnover, setTurnover] = useState({ ceMois: 0, moisPrec: 0 });
   const [prochaines, setProchaines] = useState<any[]>([]);
-  const [missionsCeMois, setMissionsCeMois] = useState(0);
 
   const charger = async () => {
     if (!user || !etablissementId) return;
@@ -129,8 +130,9 @@ export default function DashboardEtablissement() {
           pool_urgence_count: d.pool_urgence_count ?? 0,
           messages_non_lus: d.messages_non_lus ?? 0,
           missions_a_payer: d.missions_a_payer ?? 0,
+          missions_terminees_ce_mois: d.missions_terminees_ce_mois ?? 0,
+          soignants_ce_mois: d.soignants_ce_mois ?? 0,
         });
-        setMissionsCeMois(d.missions_terminees ?? 0);
       } else if (resDashStats.error) {
         logger.error('[DashboardEtab] Erreur stats RPC', resDashStats.error);
         partialError = true;
@@ -385,12 +387,12 @@ export default function DashboardEtablissement() {
           </div>
         </FadeInView>
         <FadeInView delay={500}>
-          <div className="cursor-pointer" onClick={() => navigate('/etablissement/rh?vue=soignants-mois')}>
-            <IndicateurTurnover soignantsCeMois={turnover.ceMois} soignantsMoisPrecedent={turnover.moisPrec} />
+          <div className="cursor-pointer" onClick={() => navigate('/etablissement/pool-soignants')}>
+            <IndicateurTurnover soignantsCeMois={stats.soignants_ce_mois} soignantsMoisPrecedent={turnover.moisPrec} />
           </div>
         </FadeInView>
         <FadeInView delay={550}>
-          <CarteKPI icone={CheckCircle} valeur={missionsCeMois} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/missions?statut=TERMINEE&periode=mois" />
+          <CarteKPI icone={CheckCircle} valeur={stats.missions_terminees_ce_mois} label="Terminées ce mois" sousLabel={`Total : ${stats.missions_terminees}`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/missions?statut=TERMINEE" />
         </FadeInView>
       </div>
 
@@ -408,7 +410,7 @@ export default function DashboardEtablissement() {
       {etab && <CarteCommissionJolene etablissementId={etablissementId!} />}
 
       {/* Widget Palier de Fidélité */}
-      {etab && paliers.length > 0 && <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={missionsCeMois} />}
+      {etab && paliers.length > 0 && <WidgetPalierFidelite etab={etab} paliers={paliers} missionsCeMois={stats.missions_terminees_ce_mois} />}
 
       {/* Carte BFA Info */}
       {etab && <CarteBFAInfo etablissementId={etablissementId!} />}
