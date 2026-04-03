@@ -238,7 +238,17 @@ export default function FacturationEtablissement() {
       if (error) throw error;
       const result = data as any;
       if (result?.error) throw new Error(result.error);
-      setRibCache(prev => ({ ...prev, [missionId]: result?.iban || String(result) }));
+      if (result?.s3_cle && result?.s3_bucket) {
+        const { data: signedData } = await supabase.storage.from(result.s3_bucket).createSignedUrl(result.s3_cle, 300);
+        if (signedData?.signedUrl) {
+          window.open(signedData.signedUrl, '_blank');
+          setRibCache(prev => ({ ...prev, [missionId]: result.nom_fichier || 'RIB consulté' }));
+        } else {
+          toast.error('Impossible de générer le lien de téléchargement');
+        }
+      } else {
+        setRibCache(prev => ({ ...prev, [missionId]: result?.iban || String(result) }));
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Impossible de consulter le RIB');
     }
