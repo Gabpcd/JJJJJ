@@ -333,31 +333,37 @@ export default function FacturationEtablissement() {
           </Collapsible>
 
           {/* KPI */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            <FadeInView delay={0}>
-              <div
-                className={`cursor-pointer hover:shadow-md transition-all rounded-2xl ${filtreStatutPaiement === 'PAYE' ? 'ring-2 ring-primary' : ''}`}
-                onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE')}
-              >
-                <CarteKPI icone={Banknote} valeur={fmt(paiementsData?.total_paye ?? 0)} label="Total payé" sousLabel={filtreStatutPaiement === 'PAYE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'} couleurIcone="text-success" couleurFond="bg-success/10" />
-              </div>
-            </FadeInView>
-            <FadeInView delay={100}>
-              <div
-                className={`cursor-pointer hover:shadow-md transition-all rounded-2xl ${filtreStatutPaiement === 'DECLARE' ? 'ring-2 ring-primary' : ''}`}
-                onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'DECLARE' ? null : 'DECLARE')}
-              >
-                <CarteKPI icone={Clock} valeur={fmt(paiementsData?.total_en_attente ?? 0)} label="En attente de confirmation" sousLabel={filtreStatutPaiement === 'DECLARE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'} couleurIcone="text-warning" couleurFond="bg-warning/10" />
-              </div>
-            </FadeInView>
-            <FadeInView delay={200}>
-              <div
-                className={`cursor-pointer hover:shadow-md transition-all rounded-2xl ${filtreStatutPaiement === 'CONTESTE' ? 'ring-2 ring-primary' : ''}`}
-                onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'CONTESTE' ? null : 'CONTESTE')}
-              >
-                <CarteKPI icone={AlertTriangle} valeur={fmt(paiementsData?.total_conteste ?? 0)} label="Contesté" sousLabel={filtreStatutPaiement === 'CONTESTE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'} couleurIcone="text-destructive" couleurFond="bg-destructive/10" />
-              </div>
-            </FadeInView>
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <button
+              onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE')}
+              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
+                filtreStatutPaiement === 'PAYE' ? 'border-primary ring-2 ring-primary/20' : 'border-border'
+              }`}
+            >
+              <p className="text-2xl font-bold text-foreground">{fmt(paiementsData?.total_paye ?? 0)}</p>
+              <p className="text-sm text-muted-foreground">Total payé</p>
+              <p className="text-xs mt-1 text-muted-foreground">{filtreStatutPaiement === 'PAYE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'}</p>
+            </button>
+            <button
+              onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'DECLARE' ? null : 'DECLARE')}
+              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
+                filtreStatutPaiement === 'DECLARE' ? 'border-warning ring-2 ring-warning/20' : 'border-border'
+              }`}
+            >
+              <p className="text-2xl font-bold text-foreground">{fmt(paiementsData?.total_en_attente ?? 0)}</p>
+              <p className="text-sm text-muted-foreground">En attente de confirmation</p>
+              <p className="text-xs mt-1 text-muted-foreground">{filtreStatutPaiement === 'DECLARE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'}</p>
+            </button>
+            <button
+              onClick={() => setFiltreStatutPaiement(filtreStatutPaiement === 'CONTESTE' ? null : 'CONTESTE')}
+              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
+                filtreStatutPaiement === 'CONTESTE' ? 'border-destructive ring-2 ring-destructive/20' : 'border-border'
+              }`}
+            >
+              <p className="text-2xl font-bold text-foreground">{fmt(paiementsData?.total_conteste ?? 0)}</p>
+              <p className="text-sm text-muted-foreground">Contesté</p>
+              <p className="text-xs mt-1 text-muted-foreground">{filtreStatutPaiement === 'CONTESTE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'}</p>
+            </button>
           </div>
 
           {/* Missions à payer */}
