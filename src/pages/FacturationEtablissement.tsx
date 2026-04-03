@@ -126,10 +126,10 @@ export default function FacturationEtablissement() {
       setPaiementsData(resPaiements.data);
     }
 
-    const enAttente = (resMNF.data ?? []).reduce((s: number, m: any) => s + (m.montant_commission_ttc ?? 0), 0);
-    const enCours = facturesRpc.filter((f: any) => f.statut === 'EMISE' || f.statut === 'EN_RETARD').reduce((s: number, f: any) => s + (f.montant_ttc ?? 0), 0);
+    const nonFacture = (resMNF.data ?? []).reduce((s: number, m: any) => s + (m.montant_commission_ttc ?? 0), 0);
+    const enCours = facturesRpc.filter((f: any) => f.statut === 'EMISE' || f.statut === 'EN_RETARD' || f.statut === 'VIREMENT_DECLARE').reduce((s: number, f: any) => s + (f.montant_ttc ?? 0), 0);
     const totalPaye = facturesRpc.filter((f: any) => f.statut === 'PAYEE').reduce((s: number, f: any) => s + (f.montant_ttc ?? 0), 0);
-    setKpiCommissions({ enAttente, enCours, totalPaye });
+    setKpiCommissions({ enAttente: nonFacture + enCours, enCours, totalPaye });
 
     setLoading(false);
   };
