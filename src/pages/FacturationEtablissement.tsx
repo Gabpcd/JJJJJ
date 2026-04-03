@@ -539,15 +539,25 @@ export default function FacturationEtablissement() {
           </div>
 
           {/* Historique paiements */}
-          <div className="card-base">
+          <div className="card-base" id="historique-paiements">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-foreground">Historique des paiements</h2>
+              <h2 className="font-bold text-foreground">{titreHistorique}</h2>
               {filtreStatutPaiement && (
                 <button onClick={() => setFiltreStatutPaiement(null)} className="text-xs text-primary hover:underline">
                   Voir tout ({paiementsRecents.length})
                 </button>
               )}
             </div>
+            {filtreStatutPaiement && paiementsFiltres.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {filtreStatutPaiement === 'CONTESTE' ? '✅ Aucun paiement contesté' : `Aucun paiement avec ce statut`}
+              </p>
+            )}
+            {filtreStatutPaiement && paiementsFiltres.length > 0 && (
+              <p className="text-xs text-muted-foreground mb-3">
+                {paiementsFiltres.length} résultat{paiementsFiltres.length > 1 ? 's' : ''}
+              </p>
+            )}
             {paiementsFiltres.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
