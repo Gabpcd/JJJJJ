@@ -4379,6 +4379,7 @@ export type Database = {
         Returns: Json
       }
       fn_stats_dashboard_etablissement: { Args: never; Returns: Json }
+      fn_stats_rh_etablissement: { Args: never; Returns: Json }
       fn_supprimer_compte_rate_limited: { Args: never; Returns: Json }
       fn_supprimer_mon_compte: { Args: never; Returns: Json }
       fn_terminer_mission: { Args: { p_mission_id: string }; Returns: Json }
