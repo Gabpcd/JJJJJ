@@ -67,9 +67,10 @@ export default function ListeMissions() {
     if (filtrePeriode === 'mois') query = query.gte('fin_le', debutMois).lt('fin_le', finMois);
     if (debouncedRecherche) query = query.ilike('intitule', `%${debouncedRecherche}%`);
 
-    const [{ data }, { data: sgData }] = await Promise.all([
+    const [{ data }, { data: sgData }, { data: litigesData }] = await Promise.all([
       query,
       supabase.rpc('fn_mes_soignants_etablissement'),
+      supabase.from('litiges').select('mission_id').eq('etablissement_id', etabId),
     ]);
 
     // Map soignant data by ID
@@ -78,9 +79,12 @@ export default function ListeMissions() {
       for (const s of sgData) sgMap[s.id] = s;
     }
 
+    const litigesMissionIds = new Set((litigesData || []).map((l: any) => l.mission_id));
+
     setMissions((data || []).map((m: any) => ({
       ...m,
       soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
+      has_litige: litigesMissionIds.has(m.id),
     })));
 
     // M2: Single count query with status grouping instead of 7 parallel queries
