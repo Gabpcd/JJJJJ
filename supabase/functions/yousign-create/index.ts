@@ -142,9 +142,9 @@ Deno.serve(async (req) => {
 
     if (!signatureReqRes.ok) {
       const errText = await signatureReqRes.text();
-      console.error("Yousign create signature request error:", errText);
+      console.error("Yousign create signature request error:", signatureReqRes.status, errText);
       return new Response(
-        JSON.stringify({ error: "Erreur Yousign", fallback: true, details: errText }),
+        JSON.stringify({ error: "Service de signature indisponible, veuillez réessayer", fallback: true }),
         { status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
@@ -171,9 +171,9 @@ Deno.serve(async (req) => {
 
     if (!docRes.ok) {
       const errText = await docRes.text();
-      console.error("Yousign upload document error:", errText);
+      console.error("Yousign upload document error:", docRes.status, errText);
       return new Response(
-        JSON.stringify({ error: "Erreur upload document Yousign", fallback: true }),
+        JSON.stringify({ error: "Erreur lors de l'envoi du document, veuillez réessayer", fallback: true }),
         { status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
 
       if (!signerRes.ok) {
         const errText = await signerRes.text();
-        console.error("Yousign add signer error:", errText);
+        console.error("Yousign add signer error:", signerRes.status, errText);
         return null;
       }
       return await signerRes.json();
@@ -246,9 +246,9 @@ Deno.serve(async (req) => {
 
     if (!activateRes.ok) {
       const errText = await activateRes.text();
-      console.error("Yousign activate error:", errText);
+      console.error("Yousign activate error:", activateRes.status, errText);
       return new Response(
-        JSON.stringify({ error: "Erreur activation Yousign", fallback: true }),
+        JSON.stringify({ error: "Erreur lors de l'activation de la signature, veuillez réessayer", fallback: true }),
         { status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }

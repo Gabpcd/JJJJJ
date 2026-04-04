@@ -18,4 +18,19 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-charts': ['recharts'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-pdf': ['jspdf', 'jspdf-autotable'],
+          'vendor-date': ['date-fns'],
+          'vendor-ui': ['sonner', '@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-tooltip'],
+        },
+      },
+    },
+  },
 }));

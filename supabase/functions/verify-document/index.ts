@@ -27,21 +27,26 @@ function wait(ms: number) {
 }
 
 async function loadDocumentWithRetry(supabase: any, documentId: string, attempts = 4) {
-  let lastError: unknown = null;
   for (let attempt = 0; attempt < attempts; attempt++) {
     const { data, error, status, statusText } = await supabase
       .from("documents_soignants")
       .select("id, soignant_id, type_document, nom_fichier, s3_cle, s3_bucket, type_mime")
       .eq("id", documentId)
       .maybeSingle();
-    
+
     console.log(`[verify-document] attempt ${attempt + 1}: data=${!!data}, error=${error?.message || 'none'}, status=${status}, statusText=${statusText}`);
-    
+
     if (data) return data;
-    lastError = error;
+
+    // If there's a real error (not just "row not found"), fail immediately
+    if (error && !error.message?.includes("not found") && status !== 406) {
+      throw new Error(`Erreur base de données: ${error.message}`);
+    }
+
+    // Only retry if document simply doesn't exist yet (race condition after insert)
     if (attempt < attempts - 1) await wait(350 * (attempt + 1));
   }
-  throw lastError instanceof Error ? lastError : new Error("Document introuvable après " + attempts + " tentatives pour id=" + documentId);
+  throw new Error("Document introuvable");
 }
 
 serve(async (req) => {
@@ -109,6 +114,19 @@ serve(async (req) => {
       }
     }
     const base64 = btoa(binary);
+
+    // Whitelist allowed MIME types for security
+    const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
+    if (doc.type_mime && !ALLOWED_MIME_TYPES.includes(doc.type_mime)) {
+      await supabase.rpc("fn_update_document_verification", {
+        p_document_id: document_id,
+        p_statut_verification: "REJETE",
+        p_motif_rejet: `Type de fichier non autorisé: ${doc.type_mime}`,
+      });
+      return new Response(JSON.stringify({ success: true, verdict: "REJETE", reason: "Unsupported MIME type" }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
 
     const isImage = doc.type_mime?.startsWith("image/");
     const isPdf = doc.type_mime === "application/pdf";
