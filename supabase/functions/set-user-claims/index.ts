@@ -47,8 +47,13 @@ serve(async (req) => {
     }
 
     // Only service_role calls are allowed — no user self-assignment
+    // Use timing-safe comparison to prevent timing attacks
     const bearerToken = authHeader.replace("Bearer ", "");
-    if (bearerToken !== serviceRoleKey) {
+    const encoder = new TextEncoder();
+    const a = encoder.encode(bearerToken);
+    const b = encoder.encode(serviceRoleKey);
+    const isAuthorized = a.byteLength === b.byteLength && crypto.subtle.timingSafeEqual(a, b);
+    if (!isAuthorized) {
       return new Response(JSON.stringify({ error: "Interdit — accès service_role uniquement" }), {
         status: 403,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },

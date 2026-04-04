@@ -79,13 +79,7 @@ serve(async (req) => {
       });
     }
 
-    if (contrat.type_contrat === "REMPLACEMENT_LIBERAL") {
-      return new Response(JSON.stringify({ success: true, dpae_effectuee_le: contrat.dpae_effectuee_le }), {
-        status: 200,
-        headers: corsHeaders(req),
-      });
-    }
-
+    // Authorization check — must run BEFORE any early return (including REMPLACEMENT_LIBERAL)
     const { data: userData } = await supabaseAdmin.auth.admin.getUserById(user.id);
     const userEtabId = userData?.user?.app_metadata?.etablissement_id || user.id;
 
@@ -112,6 +106,14 @@ serve(async (req) => {
     if (!authorized) {
       return new Response(JSON.stringify({ success: false, error: "Accès refusé" }), {
         status: 403,
+        headers: corsHeaders(req),
+      });
+    }
+
+    // REMPLACEMENT_LIBERAL contracts don't need DPAE — return success after auth check
+    if (contrat.type_contrat === "REMPLACEMENT_LIBERAL") {
+      return new Response(JSON.stringify({ success: true, dpae_effectuee_le: contrat.dpae_effectuee_le }), {
+        status: 200,
         headers: corsHeaders(req),
       });
     }

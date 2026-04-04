@@ -66,11 +66,15 @@ serve(async (req) => {
 
     const { action, payment_method_id } = await req.json();
 
-    // Get establishment
+    // Resolve real etablissement_id from user metadata (not userId)
+    const { data: adminUserData } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const etablissementId = adminUserData?.user?.app_metadata?.etablissement_id || userId;
+
+    // Get establishment using resolved ID
     const { data: etab, error: etabErr } = await supabaseAdmin
       .from("etablissements")
       .select("id, nom, email_contact, stripe_customer_id")
-      .eq("id", userId)
+      .eq("id", etablissementId)
       .single();
 
     if (etabErr || !etab) {
