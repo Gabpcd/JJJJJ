@@ -39,7 +39,13 @@ serve(async (req) => {
     { auth: { persistSession: false } }
   );
 
-  const authHeader = req.headers.get("Authorization")!;
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Non autorisé — header manquant" }), {
+      status: 401,
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
 
   try {
     // Authenticate

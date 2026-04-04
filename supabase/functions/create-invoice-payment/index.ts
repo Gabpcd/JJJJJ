@@ -176,20 +176,28 @@ serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ error: "Facture déjà payée", status: "PAYEE" }), {
-        status: 409,
+        status: 400,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     if (existingIntent && ["processing", "requires_capture"].includes(existingIntent.status)) {
       return new Response(JSON.stringify({ error: "Un paiement est déjà en cours pour cette facture", status: existingIntent.status }), {
-        status: 409,
+        status: 400,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    const montantCents = Math.round((facture.montant_ttc ?? 0) * 100);
+    if (montantCents <= 0) {
+      return new Response(JSON.stringify({ error: "Montant de la facture invalide" }), {
+        status: 400,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     const appUrl = getCorsOrigin(req);
-    
+
     console.log(`create-invoice-payment: creating checkout, amount=${facture.montant_ttc}, customer=${customerId}, embedded=${!!embedded}`);
 
     const sessionParams: any = {
@@ -203,7 +211,7 @@ serve(async (req) => {
               name: `Facture ${facture.numero_facture}`,
               description: `Commission Jolene — ${facture.nombre_missions ?? 0} missions`,
             },
-            unit_amount: Math.round((facture.montant_ttc ?? 0) * 100),
+            unit_amount: montantCents,
           },
           quantity: 1,
         },
@@ -237,6 +245,7 @@ serve(async (req) => {
 
     if (updateError) {
       console.error("create-invoice-payment: facture update failed", updateError);
+      // Non-blocking: session was created, log the issue but continue
     }
 
     console.log(`create-invoice-payment: session created, id=${session.id}, payment_intent=${session.payment_intent}, client_secret=${!!session.client_secret}, url=${session.url}`);

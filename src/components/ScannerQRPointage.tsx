@@ -58,6 +58,7 @@ export function ScannerQRPointage({ type, onCodeScanne }: ScannerQRPointageProps
     };
 
     const demarrer = async () => {
+      if (cancelled) return;
       setScanning(true);
       setErreurCamera(null);
       setResultat(null);

@@ -38,6 +38,7 @@ export function useRole(): UseRoleResult {
     fetchRole();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
       if (session) {
         fetchRole();
       } else {

@@ -22,7 +22,7 @@ export function gererErreurSupabase(error: unknown, retryFn?: () => void): boole
     });
     // Redirect after a short delay so user sees the toast
     setTimeout(() => {
-      window.location.href = '/connexion';
+      window.location.replace('/connexion');
     }, 1500);
     return true;
   }

@@ -78,6 +78,15 @@ serve(async (req) => {
 
       // ── Connect mission payment flow ──
       if (metadataType === "CONNECT_MISSION_PAYMENT") {
+        // Verify payment actually succeeded before creating transfer
+        if (session.payment_status !== "paid") {
+          console.warn(`CONNECT_MISSION_PAYMENT session ${session.id} not paid (status: ${session.payment_status}), skipping transfer`);
+          return new Response(JSON.stringify({ received: true, skipped: "not_paid" }), {
+            status: 200,
+            headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+          });
+        }
+
         const missionId = session.metadata?.mission_id;
         const soignantId = session.metadata?.soignant_id;
         const connectedAccountId = session.metadata?.connected_account_id;

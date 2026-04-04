@@ -21,7 +21,12 @@ export function RouteProtegee({ rolesAutorises, children }: RouteProtegeeProps) 
     return <Navigate to="/confirmer-email" replace />;
   }
 
-  if (!roleServeur || roleServeur === 'INCONNU' || !rolesAutorises.includes(roleServeur)) {
+  if (!roleServeur || roleServeur === 'INCONNU') {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!rolesAutorises.includes(roleServeur)) {
+    // Redirect to the user's own dashboard
     switch (roleServeur) {
       case 'SOIGNANT': return <Navigate to="/soignant/tableau-de-bord" replace />;
       case 'ADMIN_ETABLISSEMENT': return <Navigate to="/etablissement/tableau-de-bord" replace />;

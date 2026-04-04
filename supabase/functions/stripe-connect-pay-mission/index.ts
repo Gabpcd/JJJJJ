@@ -111,24 +111,32 @@ serve(async (req) => {
       );
     }
 
-    // Verify caller belongs to this établissement
-    const { data: membership } = await supabaseAdmin
-      .from("admins_groupe_sante")
-      .select("id")
-      .eq("utilisateur_id", user.id)
-      .limit(1);
-
-    // Check direct ownership via profiles or membership
-    const { data: profileCheck } = await supabaseAdmin
-      .from("etablissements")
-      .select("id")
-      .eq("id", mission.etablissement_id)
-      .single();
-
     // Verify user is linked to this établissement via auth metadata
     const { data: adminUserData } = await supabaseAdmin.auth.admin.getUserById(user.id);
     const userEtabId = adminUserData?.user?.app_metadata?.etablissement_id || user.id;
-    if (userEtabId !== mission.etablissement_id && (!membership || membership.length === 0)) {
+
+    // Check group membership for the specific establishment's group
+    let isGroupAdmin = false;
+    if (userEtabId !== mission.etablissement_id && etab) {
+      const { data: missionEtab } = await supabaseAdmin
+        .from("etablissements")
+        .select("groupe_sante_id")
+        .eq("id", mission.etablissement_id)
+        .single();
+
+      if (missionEtab?.groupe_sante_id) {
+        const { data: membership } = await supabaseAdmin
+          .from("admins_groupe_sante")
+          .select("id")
+          .eq("utilisateur_id", user.id)
+          .eq("groupe_id", missionEtab.groupe_sante_id)
+          .limit(1);
+
+        isGroupAdmin = !!membership && membership.length > 0;
+      }
+    }
+
+    if (userEtabId !== mission.etablissement_id && !isGroupAdmin) {
       return new Response(
         JSON.stringify({ error: "Vous n'êtes pas autorisé à payer cette mission" }),
         {
@@ -267,8 +275,19 @@ serve(async (req) => {
       return_url: `${origin}/etablissement/missions?paiement=succes`,
     });
 
-    // Insert stripe_transfers record
-    if (!existingTransfer) {
+    // Upsert stripe_transfers record
+    if (existingTransfer) {
+      await supabaseAdmin
+        .from("stripe_transfers")
+        .update({
+          stripe_checkout_session_id: session.id,
+          montant_soignant_cents: soignantCents,
+          montant_commission_cents: commissionCents,
+          statut: "EN_ATTENTE",
+          modifie_le: new Date().toISOString(),
+        })
+        .eq("id", existingTransfer.id);
+    } else {
       await supabaseAdmin.from("stripe_transfers").insert({
         mission_id,
         soignant_id: soignantId,
