@@ -91,7 +91,9 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
       setLoading(false);
 
       // Mark as read
-      supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(() => {});
+      supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(({ error }) => {
+        if (error) logger.error('ChatConversation: fn_marquer_messages_lus error', error);
+      });
     };
 
     load();
@@ -108,7 +110,9 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
         const msg = payload.new as Message;
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         if (msg.auteur_id !== user?.id) {
-          supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(() => {});
+          supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(({ error }) => {
+            if (error) logger.error('ChatConversation: fn_marquer_messages_lus error', error);
+          });
         }
       })
       .subscribe();

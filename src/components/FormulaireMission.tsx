@@ -73,7 +73,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [estSecteurPublic, setEstSecteurPublic] = useState(false);
   useEffect(() => {
     if (!user) return;
-    supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data }: any) => {
+    supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data, error }: any) => {
+      if (error) {
+        console.error('FormulaireMission: fn_mon_etablissement_complet error', error);
+        return;
+      }
       if (data) {
         setEstSecteurPublic(data.est_secteur_public === true);
         const typesPublics = ['HOPITAL_PUBLIC', 'CENTRE_SANTE'];
@@ -102,7 +106,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     const dupId = searchParams.get('dupliquer');
     if (dupId && !missionSource) {
-      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche').eq('id', dupId).single().then(({ data }) => {
+      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche').eq('id', dupId).single().then(({ data, error }) => {
+        if (error) {
+          console.error('FormulaireMission: mission duplication fetch error', error);
+          return;
+        }
         if (data) {
           setIntitule(data.intitule);
           setDescription(data.description || '');

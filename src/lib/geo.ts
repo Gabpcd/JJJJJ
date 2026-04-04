@@ -6,7 +6,7 @@ export function calculerDistanceKm(
   lat1: number | null, lng1: number | null,
   lat2: number | null, lng2: number | null
 ): number | null {
-  if (!lat1 || !lng1 || !lat2 || !lng2) return null;
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return null;
 
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 type TypeNotification = 'succes' | 'erreur' | 'avertissement' | 'info';
@@ -32,9 +32,23 @@ const BG_CLASSES: Record<TypeNotification, string> = {
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Cleanup all timers on unmount
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(timer => clearTimeout(timer));
+      timersRef.current.clear();
+    };
+  }, []);
 
   const retirer = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
   }, []);
 
   const afficherNotification = useCallback((n: Omit<Notification, 'id'>) => {
@@ -46,7 +60,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       return next.slice(-3); // max 3
     });
 
-    setTimeout(() => retirer(id), duree);
+    const timer = setTimeout(() => {
+      retirer(id);
+    }, duree);
+    timersRef.current.set(id, timer);
   }, [retirer]);
 
   return (

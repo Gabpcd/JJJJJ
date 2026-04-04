@@ -18,15 +18,18 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
   const isNative = useMemo(() => isNativePlatform(), []);
 
   useEffect(() => {
+    let mounted = true;
     let cleanup: (() => void) | undefined;
 
     import('@/lib/firebase').then(({ ecouterMessagesForeground }) => {
+      if (!mounted) return;
       cleanup = ecouterMessagesForeground((payload) => {
         toast.info(payload.title || 'Notification', { description: payload.body });
       });
     });
 
     return () => {
+      mounted = false;
       cleanup?.();
     };
   }, []);

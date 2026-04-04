@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import * as Sentry from '@sentry/react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
 
       // Detect session expiry / sign out triggered by token refresh failure
-      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' && !session) {
+      if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
         Sentry.setUser(null);
       }
     });
@@ -155,10 +155,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
-      headers['apikey'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscmlweHRzeWVnanNobmh6amt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMTk2OTYsImV4cCI6MjA4ODc5NTY5Nn0.ywor0oGht7aYi8J1YwNRo_rfmJtQ6GBodmCp1kAB3UY';
+      headers['apikey'] = SUPABASE_PUBLISHABLE_KEY;
 
       const response = await fetch(
-        'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/register-soignant',
+        `${SUPABASE_URL}/functions/v1/register-soignant`,
         { method: 'POST', headers, body: JSON.stringify(registerBody) }
       );
 
@@ -182,11 +182,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Étape 3 : Email de bienvenue (fire-and-forget)
     logger.debug('[INSCRIPTION] 8. Envoi email bienvenue (fire-and-forget)');
-    fetch('https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/send-email', {
+    fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscmlweHRzeWVnanNobmh6amt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMTk2OTYsImV4cCI6MjA4ODc5NTY5Nn0.ywor0oGht7aYi8J1YwNRo_rfmJtQ6GBodmCp1kAB3UY',
+        'apikey': SUPABASE_PUBLISHABLE_KEY,
         ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
       },
       body: JSON.stringify({ type: 'BIENVENUE_SOIGNANT', data: { prenom: data.prenom }, destinataire_id: userId }),

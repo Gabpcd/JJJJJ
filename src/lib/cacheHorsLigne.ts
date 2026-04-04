@@ -52,7 +52,7 @@ export async function chargerCacheHorsLigne(): Promise<(CachedData & { timestamp
       Preferences.get({ key: CACHE_TIMESTAMP_KEY }),
     ]);
 
-    const hasData = profil.value || missions.value || contrats.value;
+    const hasData = profil.value !== null || missions.value !== null || contrats.value !== null;
     if (!hasData) return null;
 
     return {
