@@ -311,21 +311,21 @@ export default function PageAccueil() {
       <section className="py-20 md:py-28 bg-card">
         <div className="max-w-5xl mx-auto px-4">
           <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold text-center mb-4">Comment ça marche</h2>
-            <p className="text-muted-foreground text-center mb-14 max-w-lg mx-auto">Trois étapes pour pourvoir un poste en toute sérénité.</p>
+            <h2 className="text-2xl md:text-4xl font-bold text-center mb-4">Comment ça marche 🚀</h2>
+            <p className="text-muted-foreground text-center mb-14 max-w-lg mx-auto">Trois étapes ultra-simples pour trouver votre mission de rêve ☀️</p>
           </RevealOnScroll>
           <div className="grid md:grid-cols-3 gap-8 md:gap-12">
             {[
-              { icon: ClipboardList, num: '1', titre: 'Publiez une mission', desc: 'Décrivez le poste, les horaires et le taux. La mission est visible en temps réel.' },
-              { icon: Users, num: '2', titre: 'Recevez des candidatures', desc: 'Les soignants qualifiés postulent. Consultez leurs profils vérifiés et choisissez.' },
-              { icon: CheckCircle, num: '3', titre: 'Gérez tout en ligne', desc: 'Contrat, pointage, facturation : tout est automatisé et conforme.' },
+              { icon: ClipboardList, num: '1', emoji: '📝', titre: 'Publiez une mission', desc: 'Décrivez le poste, les horaires et le taux. La mission est visible instantanément !' },
+              { icon: Users, num: '2', emoji: '🙋‍♀️', titre: 'Recevez des candidatures', desc: 'Les soignants qualifiés postulent. Consultez leurs profils vérifiés et choisissez.' },
+              { icon: CheckCircle, num: '3', emoji: '🎉', titre: 'Gérez tout en ligne', desc: 'Contrat, pointage, facturation : tout est automatisé et conforme.' },
             ].map((step, i) => (
               <RevealOnScroll key={i} delay={i * 150}>
                 <div className="flex flex-col items-center text-center group">
-                  <div className="w-20 h-20 rounded-2xl bg-primary/10 dark:bg-primary/15 flex items-center justify-center mb-5 group-hover:bg-primary/20 transition-colors duration-300">
-                    <step.icon className="h-9 w-9 text-primary" strokeWidth={1.5} />
+                  <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-105 transition-transform duration-300" style={{ background: i === 0 ? 'linear-gradient(135deg, hsl(330 85% 60% / 0.15), hsl(330 85% 60% / 0.05))' : i === 1 ? 'linear-gradient(135deg, hsl(270 60% 50% / 0.15), hsl(270 60% 50% / 0.05))' : 'linear-gradient(135deg, hsl(174 72% 48% / 0.15), hsl(174 72% 48% / 0.05))' }}>
+                    <span className="text-3xl">{step.emoji}</span>
                   </div>
-                  <span className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Étape {step.num}</span>
+                  <span className="text-xs font-bold uppercase tracking-widest mb-2 bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}>Étape {step.num}</span>
                   <h3 className="text-lg font-bold text-foreground mb-2">{step.titre}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
                 </div>
