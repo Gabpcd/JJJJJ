@@ -266,7 +266,7 @@ export default function PageAccueil() {
       {/* ═══ Section 1 — Hero ═══ */}
       <section className="relative overflow-hidden">
         {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent-navy/10 dark:from-primary/5 dark:to-[hsl(222,47%,11%)]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-rose/6 dark:from-primary/5 dark:to-rose/3" />
         {/* Decorative SVGs */}
         <svg className="absolute top-10 right-[10%] w-64 h-64 opacity-[0.06] dark:opacity-[0.04]" viewBox="0 0 200 200"><circle cx="100" cy="100" r="90" stroke="currentColor" className="text-primary" strokeWidth="2" fill="none" /><circle cx="100" cy="100" r="50" stroke="currentColor" className="text-primary" strokeWidth="1.5" fill="none" /></svg>
         <svg className="absolute bottom-10 left-[5%] w-48 h-48 opacity-[0.06] dark:opacity-[0.04]" viewBox="0 0 100 100"><rect x="20" y="40" width="60" height="20" rx="3" fill="currentColor" className="text-primary" /><rect x="40" y="20" width="20" height="60" rx="3" fill="currentColor" className="text-primary" /></svg>
@@ -289,7 +289,7 @@ export default function PageAccueil() {
             </button>
             <button
               onClick={() => navigate('/inscription/etablissement')}
-              className="inline-flex items-center justify-center gap-2 border-2 border-foreground text-foreground hover:bg-foreground hover:text-background rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200"
+              className="inline-flex items-center justify-center gap-2 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200"
             >
               Je suis un établissement <ArrowRight className="h-4 w-4" />
             </button>
@@ -389,7 +389,7 @@ export default function PageAccueil() {
 
             {/* Établissements */}
             <RevealOnScroll delay={150}>
-              <div className="rounded-2xl border border-border bg-foreground/[0.03] dark:bg-foreground/[0.05] p-8 md:p-10 h-full">
+              <div className="rounded-2xl border border-teal/20 bg-teal/5 dark:bg-teal/10 p-8 md:p-10 h-full">
                 <h3 className="text-xl font-bold text-foreground mb-6">Pour les établissements</h3>
                 <ul className="space-y-4">
                   {[
@@ -399,8 +399,8 @@ export default function PageAccueil() {
                     { icon: Receipt, text: 'Facturation automatisée' },
                   ].map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
-                      <div className="mt-0.5 w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                        <item.icon className="h-4 w-4 text-foreground" />
+                      <div className="mt-0.5 w-8 h-8 rounded-lg bg-teal/10 dark:bg-teal/20 flex items-center justify-center shrink-0">
+                        <item.icon className="h-4 w-4 text-teal" />
                       </div>
                       <span className="text-foreground font-medium">{item.text}</span>
                     </li>
@@ -408,7 +408,7 @@ export default function PageAccueil() {
                 </ul>
                 <button
                   onClick={() => navigate('/inscription/etablissement')}
-                  className="mt-8 inline-flex items-center gap-2 text-foreground font-semibold text-sm hover:underline underline-offset-4"
+                  className="mt-8 inline-flex items-center gap-2 text-teal font-semibold text-sm hover:underline underline-offset-4"
                 >
                   Publier une mission <ArrowRight className="h-4 w-4" />
                 </button>
@@ -438,8 +438,8 @@ export default function PageAccueil() {
               </div>
               {/* Carte CB */}
               <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-5">
-                <div className="w-14 h-14 rounded-xl bg-accent-navy/10 dark:bg-foreground/10 flex items-center justify-center shrink-0">
-                  <span className="text-lg font-extrabold text-accent-navy dark:text-foreground tracking-tight">CB</span>
+                <div className="w-14 h-14 rounded-xl bg-rose/10 flex items-center justify-center shrink-0">
+                  <span className="text-lg font-extrabold text-rose tracking-tight">CB</span>
                 </div>
                 <div>
                   <p className="font-bold text-foreground text-sm">Clinique des Bluets</p>
@@ -486,7 +486,7 @@ export default function PageAccueil() {
 
       {/* ═══ Section 7 — CTA final ═══ */}
       <section className="relative py-20 md:py-28 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-primary/5" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-rose/6" />
         <div className="relative max-w-3xl mx-auto px-4 text-center">
           <RevealOnScroll>
             <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier votre staffing médical ?</h2>
@@ -500,7 +500,7 @@ export default function PageAccueil() {
               </button>
               <button
                 onClick={() => navigate('/inscription/etablissement')}
-                className="inline-flex items-center justify-center gap-2 border-2 border-foreground text-foreground hover:bg-foreground hover:text-background rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200"
+                className="inline-flex items-center justify-center gap-2 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200"
               >
                 Je suis un établissement <ArrowRight className="h-4 w-4" />
               </button>
