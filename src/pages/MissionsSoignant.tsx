@@ -195,7 +195,8 @@ export default function MissionsSoignant() {
 
   if (!soignant) return <LayoutApp role="SOIGNANT"><SkeletonList count={4} /></LayoutApp>;
 
-  const onglets: { id: Onglet; label: string }[] = [
+  const mesMissionsCount = missions.filter(() => onglet === 'mes_missions').length || missionsAvecDistance.length;
+  const onglets: { id: Onglet; label: string; count?: number }[] = [
     { id: 'disponibles', label: 'Disponibles' },
     { id: 'mes_missions', label: 'Mes missions' },
     { id: 'historique', label: 'Historique' },
@@ -259,20 +260,33 @@ export default function MissionsSoignant() {
 
           {onglet === 'mes_missions' && (
             missionsAvecDistance.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {missionsAvecDistance.map(m => (
-                  <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all">
-                    <div className="flex items-center justify-between mb-2">
-                      <BadgeStatut statut={m.statut} />
-                      {m.est_urgente && <span className="badge-base bg-destructive text-destructive-foreground text-[10px]">🔥 URGENT</span>}
+              <div className="space-y-2">
+                {missionsAvecDistance.map(m => {
+                  const dureeH = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
+                  return (
+                    <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
+                      <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
+                        <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
+                        <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
+                        <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <BadgeStatut statut={m.statut} />
+                          {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
+                        </div>
+                        <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                        </p>
+                        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                          <span>🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })} ({Math.round(dureeH)}h)</span>
+                          {m.taux_horaire_base && <span className="text-primary font-semibold">{m.taux_horaire_base} €/h</span>}
+                        </div>
+                      </div>
                     </div>
-                    <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom} · {m.etablissements?.adresse_ville}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      📅 {format(new Date(m.debut_le), "EEE d MMM · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <EtatVide icone={Briefcase} titre="Vous n'avez pas encore de mission en cours"
@@ -293,7 +307,7 @@ export default function MissionsSoignant() {
                       </div>
                       <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
                       <p className="text-xs text-muted-foreground mt-1">🏥 {m.etablissements?.nom}</p>
-                      {(m.net_estime || m.net_a_payer) > 0 && <p className="text-sm font-bold text-primary mt-1">Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(m.net_estime || (m.net_a_payer * 0.78))}</p>}
+                      {(m.net_estime ?? m.net_a_payer ?? 0) > 0 && <p className="text-sm font-bold text-primary mt-1">Net estimé* : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : 0))}</p>}
                     </div>
                   ))}
                 </div>

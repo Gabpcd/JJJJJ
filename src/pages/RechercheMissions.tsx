@@ -340,11 +340,41 @@ export default function RechercheMissions() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Badge variant="outline">{filtered.length} mission{filtered.length > 1 ? 's' : ''}</Badge>
-            <span>dans un rayon de {rayonKm} km</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Badge variant="outline">{filtered.length} mission{filtered.length > 1 ? 's' : ''}</Badge>
+              <span>dans un rayon de {rayonKm} km</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground"
+              onClick={() => {
+                setProfession(soignant?.profession || '');
+                setRayonKm(soignant?.rayon_deplacement_km || 50);
+                setTauxMin(0);
+                setTypeContrat('TOUS');
+                setUrgentesOnly(false);
+                setHoraire('TOUS');
+                setVilleRecherche('');
+              }}
+            >
+              Réinitialiser
+            </Button>
           </div>
         </div>
+
+        {/* Active filter chips — visible even when filters are collapsed on mobile */}
+        {!showFilters && (villeRecherche || tauxMin > 0 || urgentesOnly || horaire !== 'TOUS' || typeContrat !== 'TOUS') && (
+          <div className="flex flex-wrap gap-1.5 md:hidden">
+            <Badge variant="outline" className="text-[10px]">{filtered.length} résultat{filtered.length > 1 ? 's' : ''}</Badge>
+            {villeRecherche && <Badge variant="secondary" className="text-[10px]">📍 {villeRecherche}</Badge>}
+            {tauxMin > 0 && <Badge variant="secondary" className="text-[10px]">≥ {tauxMin} €/h</Badge>}
+            {urgentesOnly && <Badge variant="secondary" className="text-[10px]">🔥 Urgentes</Badge>}
+            {horaire !== 'TOUS' && <Badge variant="secondary" className="text-[10px]">{horaire === 'NUIT' ? '🌙 Nuit' : horaire === 'WEEKEND' ? '📅 Weekend' : '☀️ Jour'}</Badge>}
+            {typeContrat !== 'TOUS' && <Badge variant="secondary" className="text-[10px]">{typeContrat}</Badge>}
+          </div>
+        )}
 
         {/* Tabs Liste / Carte */}
         <Tabs defaultValue="liste" onValueChange={initMap}>
@@ -387,7 +417,7 @@ export default function RechercheMissions() {
             <div
               ref={mapRef}
               className="w-full rounded-xl border border-border overflow-hidden"
-              style={{ height: '500px' }}
+              style={{ height: 'calc(100vh - 280px)', minHeight: '300px', maxHeight: '600px' }}
             />
             {filtered.length === 0 && !loading && (
               <p className="text-sm text-muted-foreground text-center mt-3">Aucune mission à afficher sur la carte.</p>

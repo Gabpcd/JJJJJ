@@ -71,7 +71,8 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
         <span className={`text-[10px] ${temps.couleur}`}>{temps.texte}</span>
       </div>
 
-      <h3 className="font-semibold text-sm text-foreground mb-1">{m.intitule}</h3>
+      <h3 className="font-semibold text-sm text-foreground mb-0.5">{m.intitule}</h3>
+      {m.service && <p className="text-[10px] text-muted-foreground mb-1">Service : {m.service}</p>}
       <div className="flex items-center gap-2 mb-1">
         {m.etablissements?.logo_url && (
           <img src={m.etablissements.logo_url} alt="" className="h-5 w-5 rounded object-cover shrink-0" />
@@ -91,12 +92,15 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
 
       <div className="mt-2 flex items-center justify-between">
         <span className="text-primary font-bold text-sm">💰 {m.taux_horaire_base?.toFixed(2)} €/h</span>
-        {(m.net_estime || m.net_a_payer) && (m.net_estime || m.net_a_payer) > 0 ? (
-          <span className="text-xs text-muted-foreground">Net estimé* : ~{fmt(m.net_estime || m.net_a_payer * 0.78)}</span>
+        {(m.net_estime ?? m.net_a_payer ?? 0) > 0 ? (
+          <span className="text-xs text-muted-foreground">Net estimé* : ~{fmt(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : null))}</span>
         ) : (
           <span className="text-xs text-muted-foreground/50">Calculé après assignation</span>
         )}
       </div>
+      {m.rist_plafond_applique && (
+        <p className="text-[10px] text-warning font-medium mt-1">⚠️ Taux plafonné Loi Rist</p>
+      )}
 
       <div className="mt-2">
         {profilComplet ? (
