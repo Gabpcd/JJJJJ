@@ -28,9 +28,9 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onEr
     if (actif !== undefined) return; // props-driven, skip
     if (!user) return;
     supabase.from('soignants').select('pool_urgence_actif, rayon_deplacement_km').eq('id', user.id).single()
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         if (data) {
-          setLocalActif((data as any).pool_urgence_actif ?? false);
+          setLocalActif(data.pool_urgence_actif ?? false);
           setLocalRayon(data.rayon_deplacement_km ?? 15);
         }
       });

@@ -192,7 +192,7 @@ export default function DocumentsSoignant() {
       issues.push('Votre assurance RCP est expirée');
     }
     // Check AI name coherence via RPC
-    supabase.rpc('fn_verifier_coherence_documents' as any).then(({ data }: any) => {
+    (supabase.rpc('fn_verifier_coherence_documents' as any) as any).then(({ data }: any) => {
       if (data && !data.coherent && data.problemes?.length > 0) {
         const nameIssues = (data.problemes as string[]).join('. ');
         setIncoherenceMessage([...issues, nameIssues].filter(Boolean).join('. ') || null);
