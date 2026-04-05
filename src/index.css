@@ -306,6 +306,15 @@
     @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
   }
 
+  /* Prevent double-click on all buttons and links during submission */
+  button:disabled, a:disabled, [aria-disabled="true"] {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+  .btn-primary:active, .btn-secondary:active, .btn-danger:active {
+    pointer-events: none;
+  }
+
   .bottom-nav {
     @apply fixed bottom-0 left-0 right-0 bg-card border-t shadow-lg z-50 flex items-center justify-around px-2;
     height: calc(4rem + env(safe-area-inset-bottom));
