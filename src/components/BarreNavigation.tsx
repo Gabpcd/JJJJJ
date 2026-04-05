@@ -272,7 +272,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   return (
     <>
       {/* ── Mobile bottom tab bar ── */}
-      <nav className="fixed bottom-0 left-0 right-0 flex md:hidden z-50 bg-card dark:bg-accent-foreground/5 border-t border-border shadow-lg no-print" style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }} role="navigation" aria-label="Navigation mobile">
+      <nav className="fixed bottom-0 left-0 right-0 flex md:hidden z-50 bg-card dark:bg-accent-foreground/5 border-t-2 border-primary/30 shadow-lg no-print" style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }} role="navigation" aria-label="Navigation mobile">
         {mobileItems.map((item) => {
           const actif = location.pathname === item.route;
           const isMsg = item.label === 'Messages';
@@ -298,7 +298,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       </nav>
 
       {/* ── Desktop sidebar ── */}
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] bg-sidebar flex-col z-40 no-print" style={{ paddingTop: 'env(safe-area-inset-top)' }} role="navigation" aria-label="Sidebar">
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40 no-print" style={{ paddingTop: 'env(safe-area-inset-top)', background: 'linear-gradient(180deg, hsl(185 85% 42%) 0%, hsl(210 75% 30%) 100%)' }} role="navigation" aria-label="Sidebar">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <HeartPulse className="h-7 w-7 text-rose" />
