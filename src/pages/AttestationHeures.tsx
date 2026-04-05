@@ -142,7 +142,7 @@ export default function AttestationHeures() {
             <tbody>
               {missions.map((m, i) => (
                 <tr key={i} className={i % 2 === 0 ? '' : 'bg-gray-50'}>
-                  <td className="border border-gray-300 px-2 py-1">{format(new Date(m.debut_le), 'dd/MM/yyyy')}</td>
+                  <td className="border border-gray-300 px-2 py-1">{m.debut_le ? format(new Date(m.debut_le), 'dd/MM/yyyy') : '—'}</td>
                   <td className="border border-gray-300 px-2 py-1">{m.etablissements?.nom || '—'}</td>
                   <td className="border border-gray-300 px-2 py-1">{m.etablissements?.finess || '—'}</td>
                   <td className="border border-gray-300 px-2 py-1">{m.service || '—'}</td>
