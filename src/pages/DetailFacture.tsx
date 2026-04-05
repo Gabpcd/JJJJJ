@@ -141,8 +141,8 @@ export default function DetailFacture() {
       doc.text(etab.nom, pw - 80, y + 5);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text(etab.adresse_rue, pw - 80, y + 10);
-      doc.text(`${etab.adresse_code_postal} ${etab.adresse_ville}`, pw - 80, y + 15);
+      doc.text(etab.adresse_rue || '', pw - 80, y + 10);
+      doc.text(`${etab.adresse_code_postal || ''} ${etab.adresse_ville || ''}`, pw - 80, y + 15);
       doc.text(`SIRET : ${etab.siret}`, pw - 80, y + 20);
 
       y += 32;

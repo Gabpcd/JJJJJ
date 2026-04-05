@@ -31,17 +31,58 @@ export default function DashboardEtablissement() {
   const navigate = useNavigate();
   const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
-  const [etab, setEtab] = useState<any>(null);
-  const [missions, setMissions] = useState<any[]>([]);
+  interface EtabInfo {
+    nom: string;
+    paliers_commission?: { nom: string } | null;
+    taux_commission_negocie?: number | null;
+    groupes_sante?: { nom: string } | null;
+    groupe_sante_id?: string | null;
+    peut_publier_missions?: boolean;
+  }
+  interface MissionSummary {
+    id: string;
+    intitule: string;
+    statut: string;
+    soignant_assigne_id?: string | null;
+    soignants?: Record<string, unknown> | null;
+    [key: string]: unknown;
+  }
+  interface DashboardStats {
+    missions_ouvertes: number;
+    missions_assignees: number;
+    missions_en_cours: number;
+    missions_terminees: number;
+    candidatures_en_attente: number;
+    candidatures_recentes: Array<{ candidature_id: string; mission_id: string; soignant_nom: string; mission_intitule: string }>;
+    missions_assignees_detail: Array<{ mission_id: string; intitule: string; soignant_nom: string; debut_le?: string }>;
+    pool_urgence_count: number;
+    messages_non_lus: number;
+    missions_a_payer: number;
+    missions_terminees_ce_mois: number;
+    soignants_ce_mois: number;
+    commissions_impayees: number;
+    nb_factures_impayees: number;
+    litiges_ouverts: number;
+  }
+  interface PalierCommission {
+    id: string;
+    nom: string;
+    missions_min: number;
+    missions_max: number;
+    ordre: number;
+  }
+
+  const [etab, setEtab] = useState<EtabInfo | null>(null);
+  const [missions, setMissions] = useState<MissionSummary[]>([]);
   const [aDejaPublie, setADejaPublie] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [erreurPartielle, setErreurPartielle] = useState(false);
-  const [modalDupliquer, setModalDupliquer] = useState<any>(null);
-  const [modalAnnuler, setModalAnnuler] = useState<any>(null);
-  const [paliers, setPaliers] = useState<any[]>([]);
+  const [modalDupliquer, setModalDupliquer] = useState<MissionSummary | null>(null);
+  const [modalAnnuler, setModalAnnuler] = useState<MissionSummary | null>(null);
+  const [paliers, setPaliers] = useState<PalierCommission[]>([]);
 
   // All stats from RPC
-  const [stats, setStats] = useState<any>({
+  const [stats, setStats] = useState<DashboardStats>({
     missions_ouvertes: 0,
     missions_assignees: 0,
     missions_en_cours: 0,
@@ -172,7 +213,9 @@ export default function DashboardEtablissement() {
               : null,
           })));
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[DashboardEtab] Erreur secondaire (top soignants / prochaines)', err);
+      }
 
     } catch (err) {
       handleErrorSilent(err, '[DashboardEtab] Erreur critique');
@@ -219,7 +262,7 @@ export default function DashboardEtablissement() {
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold text-foreground">Bienvenue, <span className="text-primary">{etab.nom}</span></h1>
             {etab.paliers_commission && (
-              <BadgePalier palierNom={etab.paliers_commission.nom} taux={etab.taux_commission_negocie ?? 15} />
+              <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={etab.taux_commission_negocie ?? 15} />
             )}
           </div>
           {etab.groupes_sante && (
