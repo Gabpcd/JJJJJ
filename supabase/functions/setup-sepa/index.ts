@@ -129,11 +129,13 @@ serve(async (req) => {
       const pm = await stripe.paymentMethods.retrieve(payment_method_id);
       const last4 = pm.sepa_debit?.last4 || "****";
 
-      // Update mode_paiement_commission to SEPA_DEBIT
+      // Update mode_paiement_commission + store PM ID and IBAN last4
       await supabaseAdmin
         .from("etablissements")
         .update({
           mode_paiement_commission: "SEPA_DEBIT",
+          stripe_sepa_payment_method_id: payment_method_id,
+          iban_last4: last4,
           modifie_le: new Date().toISOString(),
         })
         .eq("id", etab.id);
