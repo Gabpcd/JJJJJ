@@ -43,39 +43,52 @@ serve(async (req) => {
       .select("token")
       .eq("utilisateur_id", destinataire_id);
 
-    if (!tokens || tokens.length === 0) {
-      return new Response(JSON.stringify({ sent: false, message: "Aucun token push" }), { headers: corsHeaders });
-    }
-
-    if (!FCM_SERVER_KEY) {
-      return new Response(JSON.stringify({ sent: false, message: "FCM non configuré" }), { headers: corsHeaders });
-    }
-
     let sent = 0;
-    for (const t of tokens) {
-      const res = await fetch("https://fcm.googleapis.com/fcm/send", {
-        method: "POST",
-        headers: {
-          "Authorization": `key=${FCM_SERVER_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          to: t.token,
-          notification: {
-            title: titre,
-            body: corps || "",
-            click_action: lien || "https://app.jolene.app",
-            icon: "/favicon.svg",
-          },
-          data: {
-            lien: lien || "/",
-          },
-        }),
-      });
-      if (res.ok) sent++;
+    const totalTokens = tokens?.length || 0;
+
+    // Try push notifications if tokens and FCM are available
+    if (totalTokens > 0 && FCM_SERVER_KEY) {
+      for (const t of tokens!) {
+        try {
+          const res = await fetch("https://fcm.googleapis.com/fcm/send", {
+            method: "POST",
+            headers: {
+              "Authorization": `key=${FCM_SERVER_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              to: t.token,
+              notification: {
+                title: titre,
+                body: corps || "",
+                click_action: lien || "https://app.jolene.app",
+                icon: "/favicon.svg",
+              },
+              data: { lien: lien || "/" },
+            }),
+          });
+          if (res.ok) sent++;
+        } catch { /* individual push failure, continue */ }
+      }
     }
 
-    return new Response(JSON.stringify({ sent: sent, total: tokens.length }), { headers: corsHeaders });
+    // Fallback: send email if no push was delivered
+    if (sent === 0) {
+      try {
+        const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceRoleKey}` },
+          body: JSON.stringify({
+            type: "NOTIFICATION_PUSH_FALLBACK",
+            destinataire_id: destinataire_id,
+            data: { titre, corps: corps || "", lien: lien || "https://app.jolene.app" },
+          }),
+        });
+      } catch { /* email fallback failed silently */ }
+    }
+
+    return new Response(JSON.stringify({ sent, total: totalTokens, email_fallback: sent === 0 }), { headers: corsHeaders });
   } catch {
     return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: corsHeaders });
   }
