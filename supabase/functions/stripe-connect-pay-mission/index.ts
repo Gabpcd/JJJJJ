@@ -146,19 +146,25 @@ serve(async (req) => {
       );
     }
 
-    // Check soignant is LIBERAL
+    // Check soignant is LIBERAL or MIXTE
     const soignantId = mission.soignant_assigne_id;
     const { data: soignant } = await supabaseAdmin
       .from("soignants")
-      .select("type_exercice")
+      .select("type_exercice, statut_liberal")
       .eq("id", soignantId)
       .single();
 
-    if (!soignant || soignant.type_exercice !== "LIBERAL") {
+    const soignantEligible = soignant && (
+      soignant.type_exercice === "LIBERAL"
+      || soignant.type_exercice === "MIXTE"
+      || (soignant as any).statut_liberal === "ACTIF"
+    );
+
+    if (!soignantEligible) {
       return new Response(
         JSON.stringify({
           error:
-            "Le paiement Connect est réservé aux soignants en exercice libéral",
+            "Le paiement Connect est réservé aux soignants en exercice libéral ou mixte",
         }),
         {
           status: 403,
