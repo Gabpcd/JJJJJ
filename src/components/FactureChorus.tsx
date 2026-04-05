@@ -161,40 +161,28 @@ export function FactureChorus({ facture, onUpdate }: Props) {
       <p className="text-sm font-semibold text-foreground flex items-center gap-1">
         <Landmark className="h-4 w-4 text-primary" /> Facture secteur public — Chorus Pro
       </p>
-      <p className="text-xs text-muted-foreground">
-        Renseignez les informations Chorus puis déposez via l'API. Délai de paiement estimé : 30-60 jours.
-      </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <div>
-          <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">N° engagement</label>
-          <input value={numEngagement} onChange={e => setNumEngagement(e.target.value)} className="input-base w-full text-xs" placeholder="EJ-2026-..." />
-        </div>
-        <div>
-          <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Code service</label>
-          <input value={codeService} onChange={e => setCodeService(e.target.value)} className="input-base w-full text-xs" placeholder="SRV001" />
-        </div>
-        <div>
-          <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">N° structure Chorus</label>
-          <input value={numStructure} onChange={e => setNumStructure(e.target.value)} className="input-base w-full text-xs" placeholder="12345678" />
-        </div>
+      <div className="rounded-lg bg-warning/10 border border-warning/30 p-3">
+        <p className="text-xs text-warning font-medium">
+          ⚠️ L'intégration API Chorus Pro est en cours de certification. En attendant, déposez votre facture manuellement sur le portail Chorus Pro.
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button onClick={deposer} disabled={loading} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50">
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Landmark className="h-3.5 w-3.5" />}
-          📤 Déposer sur Chorus Pro
-        </button>
         <a
           href="https://chorus-pro.gouv.fr"
           target="_blank"
           rel="noopener noreferrer"
-          className="btn-secondary text-xs flex items-center gap-1"
+          className="btn-primary text-xs flex items-center gap-1"
         >
-          <ExternalLink className="h-3.5 w-3.5" /> Déposer manuellement →
+          <ExternalLink className="h-3.5 w-3.5" /> Déposer sur Chorus Pro →
         </a>
-        <button onClick={() => setOpen(false)} className="btn-secondary text-xs">Annuler</button>
+        <button onClick={() => setOpen(false)} className="btn-secondary text-xs">Fermer</button>
       </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        Délai de paiement estimé : 30-60 jours après acceptation par l'ordonnateur.
+      </p>
     </div>
   );
 }
