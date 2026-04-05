@@ -63,8 +63,8 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
       <header className="border-b border-border bg-card sticky top-0 z-40 no-print">
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <HeartPulse className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold text-foreground">Jolene</span>
+            <HeartPulse className="h-6 w-6 text-rose" />
+            <span className="text-lg font-bold text-rose">Jolene</span>
           </Link>
           <button
             onClick={() => window.print()}
