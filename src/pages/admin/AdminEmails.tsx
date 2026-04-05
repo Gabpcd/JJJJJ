@@ -30,22 +30,22 @@ const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
 const TEMPLATES = Object.keys(DONNEES_FICTIVES);
 
 function genererHtmlPreview(type: string, data: Record<string, string>): string {
-  const vars = Object.entries(data).map(([k, v]) => `<tr><td style="padding:4px 12px;color:#64748b;font-size:13px">${k}</td><td style="padding:4px 12px;font-size:13px">${v}</td></tr>`).join('');
+  const vars = Object.entries(data).map(([k, v]) => `<tr><td style="padding:6px 14px;color:#64748b;font-size:13px">${k}</td><td style="padding:6px 14px;font-size:13px;color:#333">${v}</td></tr>`).join('');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
-    body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:32px;background:#f8fafc;color:#0f172a}
-    .card{max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)}
-    .header{background:#0f172a;padding:24px;text-align:center}
-    .logo{color:#17a2b8;font-size:20px;font-weight:700}
+    body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:32px;background:#faf7fc;color:#1a1a2e}
+    .card{max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(224,69,144,.12)}
+    .header{background:linear-gradient(135deg,#E04590 0%,#9333EA 50%,#3B82F6 100%);padding:28px;text-align:center}
+    .logo{color:#fff;font-size:22px;font-weight:800;letter-spacing:-0.5px}
     .body{padding:32px}
-    h1{font-size:18px;margin:0 0 16px;color:#0f172a}
-    p{font-size:14px;line-height:1.6;color:#334155;margin:0 0 12px}
-    .vars{width:100%;border-collapse:collapse;margin:16px 0;background:#f1f5f9;border-radius:8px;overflow:hidden}
-    .vars td{border-bottom:1px solid #e2e8f0}
-    .footer{text-align:center;padding:16px;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0}
-    .badge{display:inline-block;background:#17a2b8;color:#fff;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600}
+    h1{font-size:18px;margin:0 0 16px;color:#1a1a2e}
+    p{font-size:14px;line-height:1.6;color:#555;margin:0 0 12px}
+    .vars{width:100%;border-collapse:collapse;margin:16px 0;background:linear-gradient(135deg,rgba(224,69,144,.04),rgba(147,51,234,.06));border-radius:12px;overflow:hidden}
+    .vars td{border-bottom:1px solid rgba(224,69,144,.1);padding:6px 14px}
+    .footer{text-align:center;padding:16px;font-size:12px;color:#94a3b8;border-top:1px solid #f0e6f6}
+    .badge{display:inline-block;background:linear-gradient(135deg,#E04590,#9333EA);color:#fff;padding:5px 14px;border-radius:99px;font-size:12px;font-weight:700}
   </style></head><body>
     <div class="card">
-      <div class="header"><span class="logo">♥ Jolene</span></div>
+      <div class="header"><span class="logo">💜 Jolene</span></div>
       <div class="body">
         <span class="badge">${type.replace(/_/g, ' ')}</span>
         <h1 style="margin-top:16px">Prévisualisation du template</h1>
@@ -53,7 +53,7 @@ function genererHtmlPreview(type: string, data: Record<string, string>): string 
         <table class="vars">${vars}</table>
         <p style="color:#94a3b8;font-size:12px;margin-top:24px">Ceci est un aperçu de développement. L'email réel utilise le template serveur complet.</p>
       </div>
-      <div class="footer">© 2026 Jolene — contact@jolene.app</div>
+      <div class="footer">© 2026 Jolene — contact@jolene.app 💜</div>
     </div>
   </body></html>`;
 }
