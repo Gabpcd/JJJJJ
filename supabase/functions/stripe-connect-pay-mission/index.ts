@@ -279,19 +279,20 @@ serve(async (req) => {
         type: "CONNECT_MISSION_PAYMENT",
         mission_id,
       },
-      return_url: `${origin}/etablissement/missions?paiement=succes`,
+      return_url: `${origin}/etablissement/facturation?paiement=succes`,
     });
 
     // Upsert stripe_transfers record
+    const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || null;
     if (existingTransfer) {
       await supabaseAdmin
         .from("stripe_transfers")
         .update({
-          stripe_checkout_session_id: session.id,
+          stripe_payment_intent_id: paymentIntentId,
           montant_soignant: soignantCents / 100,
           montant_commission: commissionCents / 100,
+          montant_total: totalCents / 100,
           statut: "EN_ATTENTE",
-          modifie_le: new Date().toISOString(),
         })
         .eq("id", existingTransfer.id);
     } else {
@@ -299,11 +300,11 @@ serve(async (req) => {
         mission_id,
         soignant_id: soignantId,
         etablissement_id: mission.etablissement_id,
-        stripe_account_id: connectOnboarding.stripe_account_id,
         montant_soignant: soignantCents / 100,
         montant_commission: commissionCents / 100,
+        montant_total: totalCents / 100,
+        stripe_payment_intent_id: paymentIntentId,
         statut: "EN_ATTENTE",
-        stripe_checkout_session_id: session.id,
       });
     }
 
