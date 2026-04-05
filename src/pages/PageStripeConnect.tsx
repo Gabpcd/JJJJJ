@@ -133,7 +133,7 @@ export default function PageStripeConnect() {
         {/* ── SALARIÉ : pas de Stripe Connect ── */}
         {!isLiberal && (
           <>
-            <div className="card-base space-y-4">
+            <div className="card-base space-y-4 min-h-[200px]">
               <div className="flex items-start gap-3">
                 <Building2 className="h-6 w-6 text-primary shrink-0 mt-0.5" />
                 <div>

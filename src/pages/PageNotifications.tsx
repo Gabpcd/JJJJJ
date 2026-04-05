@@ -98,7 +98,7 @@ export default function PageNotifications({ role }: { role: UserRole }) {
 
       <div className="flex gap-2 mb-4 flex-wrap">
         {FILTRES.map(f => (
-          <button key={f} onClick={() => setFiltre(f)} className={`badge-base transition-colors ${filtre === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+          <button key={f} onClick={() => setFiltre(f)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filtre === f ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-muted/50'}`}>
             {f}
           </button>
         ))}

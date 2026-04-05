@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeScoreFiabilite } from '@/components/JaugeScoreFiabilite';
@@ -9,11 +10,12 @@ import { ModalReclamationScore } from '@/components/ModalReclamationScore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft } from 'lucide-react';
 
 export default function FiabiliteSoignant() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
+  const navigate = useNavigate();
   const [soignant, setSoignant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showReclamation, setShowReclamation] = useState(false);
@@ -42,6 +44,9 @@ export default function FiabiliteSoignant() {
   return (
     <LayoutApp role="SOIGNANT">
       <div className="mb-6">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary hover:underline mb-2">
+          <ArrowLeft className="h-4 w-4" /> Retour
+        </button>
         <h1 className="text-xl font-bold text-foreground">⭐ Score de fiabilité</h1>
         <div className="mt-2"><BadgeNiveau score={score} /></div>
       </div>

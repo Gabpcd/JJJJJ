@@ -494,14 +494,14 @@ export default function ContratMission() {
                   <p className="text-sm font-medium text-foreground">Choisissez votre mode de signature :</p>
                   <RadioGroup value={modeSignature} onValueChange={(v) => setModeSignature(v as 'CANVAS' | 'YOUSIGN')}>
                     <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors">
-                      <RadioGroupItem value="CANVAS" />
+                      <RadioGroupItem value="CANVAS" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
                       <div>
                         <span className="text-sm font-medium text-foreground">✍️ Signature manuscrite (canvas)</span>
                         <p className="text-xs text-muted-foreground">Signez directement sur votre écran</p>
                       </div>
                     </label>
                     <label className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
-                      <RadioGroupItem value="YOUSIGN" />
+                      <RadioGroupItem value="YOUSIGN" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-foreground">🔒 Signature électronique Yousign</span>
@@ -584,6 +584,7 @@ export default function ContratMission() {
         <p className="text-[10px] text-muted-foreground/60 italic text-center mt-4">
           Art. L.1242-12 du Code du travail — Ce contrat est obligatoire pour toute mission.
           Signature électronique simple. Signature qualifiée eIDAS prochainement disponible.
+          Les montants affichés sont des simulations indicatives et ne constituent pas un engagement contractuel sur le net perçu.
         </p>
       </div>
     </LayoutApp>
