@@ -31,12 +31,13 @@ export default function MonGroupe() {
 
       if (e?.groupe_sante_id) {
         setGroupe((e as any).groupes_sante);
-        const { data: etabs } = await supabase
+        const { data: etabs, error: errEtabs } = await supabase
           .from('etablissements')
           .select('id, nom, adresse_ville, adresse_departement, type, finess')
           .eq('groupe_sante_id', e.groupe_sante_id)
           .is('supprime_le', null)
           .order('adresse_departement', { ascending: true });
+        if (errEtabs) toast.error('Erreur lors du chargement des établissements du groupe.');
         setEtablissements(etabs || []);
       }
       setLoading(false);

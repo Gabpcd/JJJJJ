@@ -87,14 +87,13 @@ export default function PresencesEtablissement() {
     setLoading(false);
   }, [user, etablissementId]);
 
-  useEffect(() => { charger(); }, [charger]);
-
-  // Sync tab from URL param (combined with data loading to avoid race conditions)
+  // Combined data loading + tab sync to avoid race conditions between URL param and state
   useEffect(() => {
+    charger();
     if (tabParam && ['a_valider', 'en_cours', 'validees', 'alertes'].includes(tabParam) && tabParam !== activeTab) {
       setActiveTab(tabParam);
     }
-  }, [tabParam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [charger, tabParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const aValider = presences.filter(p => !p.valide_par_etablissement && p.pointage_depart_le);
   const validees = presences.filter(p => p.valide_par_etablissement);
@@ -208,16 +207,16 @@ export default function PresencesEtablissement() {
         }}
       >
         <TabsList className="w-full grid grid-cols-4 mb-4">
-          <TabsTrigger value="a_valider" className="text-xs">
+          <TabsTrigger value="a_valider" className="text-xs min-h-[44px]" aria-label={`À valider: ${aValider.length} présences`}>
             À valider ({aValider.length})
           </TabsTrigger>
-          <TabsTrigger value="en_cours" className="text-xs">
+          <TabsTrigger value="en_cours" className="text-xs min-h-[44px]" aria-label={`En cours: ${enCours.length} présences`}>
             En cours ({enCours.length})
           </TabsTrigger>
-          <TabsTrigger value="validees" className="text-xs">
+          <TabsTrigger value="validees" className="text-xs min-h-[44px]" aria-label={`Validées: ${validees.length} présences`}>
             Validées ({validees.length})
           </TabsTrigger>
-          <TabsTrigger value="alertes" className="text-xs">
+          <TabsTrigger value="alertes" className="text-xs min-h-[44px]" aria-label={`Alertes: ${alertes.length} présences`}>
             Alertes ({alertes.length})
           </TabsTrigger>
         </TabsList>

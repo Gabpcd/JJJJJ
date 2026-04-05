@@ -18,7 +18,8 @@ function fmt(v: number | null): string {
 
 export function extraireSerieId(description: string | null): string | null {
   if (!description) return null;
-  const match = description.match(/\[SERIE_ID:([^\]]+)\]/);
+  // Only match valid serie IDs: SERIE_ followed by timestamp and alphanumeric suffix
+  const match = description.match(/\[SERIE_ID:(SERIE_\d{10,15}_[a-z0-9]{4,8})\]/);
   return match ? match[1] : null;
 }
 

@@ -70,9 +70,10 @@ export default function PremiumEtablissement() {
                 </li>
               ))}
             </ul>
-            <Button disabled className="w-full opacity-60">
+            <Button disabled className="w-full opacity-60" aria-label="Offre Pro non disponible pour le moment">
               🚀 Bientôt disponible
             </Button>
+            <p className="text-xs text-muted-foreground text-center">Disponible prochainement — inscrivez-vous ci-dessous pour être informé(e)</p>
           </CardContent>
         </Card>
 
