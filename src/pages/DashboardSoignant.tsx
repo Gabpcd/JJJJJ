@@ -262,7 +262,7 @@ export default function DashboardSoignant() {
             <h2 className="text-base font-bold text-foreground flex items-center gap-2">
               <CalendarDays className="h-4.5 w-4.5 text-primary" /> Mes prochaines missions
             </h2>
-            <button onClick={() => navigate('/soignant/planning')} className="text-xs text-primary font-medium hover:underline">Voir le planning →</button>
+            <button onClick={() => navigate('/soignant/missions?onglet=mes_missions')} className="text-xs text-primary font-medium hover:underline">Voir tout →</button>
           </div>
           <div className="space-y-2">
             {mesMissions.map((m: any) => (
