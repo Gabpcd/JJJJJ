@@ -7,6 +7,7 @@ import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ExternalLink, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { IllustrationCloche } from '@/components/EtatVide';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -74,8 +75,11 @@ export default function PageNotifications({ role }: { role: UserRole }) {
   const supprimerLues = async () => {
     const ids = notifications.filter(n => n.lue).map(n => n.id);
     if (ids.length === 0) return;
-    // Suppression locale uniquement — les notifications lues sont masquées côté client
-    // La purge définitive est gérée par un job serveur (admin only via RLS)
+    const { error } = await supabase.from('notifications').delete().in('id', ids);
+    if (error) {
+      toast.error('Impossible de supprimer les notifications.');
+      return;
+    }
     setNotifications(prev => prev.filter(n => !n.lue));
   };
 

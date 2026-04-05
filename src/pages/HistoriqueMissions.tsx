@@ -11,6 +11,7 @@ import { enrichirEtablissements } from '@/lib/etablissements';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ClipboardList, MessageCircle, AlertTriangle, Download } from 'lucide-react';
+import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 
@@ -76,7 +77,7 @@ export default function HistoriqueMissions() {
     try {
       const { data } = await supabase.rpc('fn_user_id_pour_etablissement' as any, { p_etablissement_id: etablissementId });
       if (data) navigate(`/soignant/messagerie?dest=${data}`);
-    } catch { /* fallback */ }
+    } catch { toast.error('Impossible d\'ouvrir la conversation.'); }
   };
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
