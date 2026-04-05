@@ -76,7 +76,7 @@ const contacterDepuisLitige = async (userId: string, navigate: ReturnType<typeof
   const { data, error } = await supabase.rpc('fn_obtenir_conversation', { p_autre_id: resolvedId, p_mission_id: null });
   logger.debug('contacterDepuisLitige result:', { data, error });
   if (error) {
-    console.error('fn_obtenir_conversation error:', error);
+    logger.error('fn_obtenir_conversation error:', error);
     toast.error('Impossible d\'ouvrir la conversation. Veuillez réessayer.');
     return;
   }
