@@ -139,17 +139,18 @@ export default function AdminFinances() {
 
   const exporterCSV = () => {
     const headers = ['Date émission', 'N° Facture', 'Établissement', 'Type', 'Montant HT', 'TVA', 'Montant TTC', 'Statut'];
+    const escapeCSV = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const rows = factures.map(f => [
-      f.date_emission ? formatDate(f.date_emission) : '',
-      f.numero_facture || '',
-      (f.etablissements as any)?.nom || '',
-      (f.etablissements as any)?.type || '',
+      escapeCSV(f.date_emission ? formatDate(f.date_emission) : ''),
+      escapeCSV(f.numero_facture || ''),
+      escapeCSV((f.etablissements as any)?.nom || ''),
+      escapeCSV((f.etablissements as any)?.type || ''),
       (f.montant_ht || 0).toFixed(2),
       (f.montant_tva || 0).toFixed(2),
       (f.montant_ttc || 0).toFixed(2),
-      f.statut || '',
+      escapeCSV(f.statut || ''),
     ]);
-    const csv = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const csv = '\uFEFF' + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `recap_comptable_${new Date().toISOString().slice(0, 7)}.csv`; a.click();
@@ -200,7 +201,7 @@ export default function AdminFinances() {
               <p className="text-2xl font-bold text-foreground">{formatEur(tvaMois)}</p>
             </CardContent>
           </Card>
-          <Card className={`${nbImpayees > 0 ? 'border-destructive/50' : ''}`} onClick={() => navigate('/admin/facturation?statut=EMISE')} role="button">
+          <Card className={`${nbImpayees > 0 ? 'border-destructive/50' : ''}`} onClick={() => navigate('/admin/facturation?statut=EMISE')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/admin/facturation?statut=EMISE'); } }} role="button" tabIndex={0}>
             <CardContent className="pt-5 pb-4 cursor-pointer">
               <p className="text-xs text-muted-foreground">⚠️ Factures impayées</p>
               <p className={`text-2xl font-bold ${nbImpayees > 0 ? 'text-destructive' : 'text-foreground'}`}>{nbImpayees}</p>

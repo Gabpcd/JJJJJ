@@ -3,12 +3,14 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { CheckCircle, XCircle, Download, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 export default function AdminReclamations() {
+  usePageTitle('Reclamations scoring');
   const { afficherNotification } = useNotification();
   const [reclamations, setReclamations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +82,7 @@ export default function AdminReclamations() {
 
   return (
     <LayoutAdmin>
-      <h1 className="text-xl font-bold text-foreground mb-6">⚖️ Réclamations scoring</h1>
+      <h1 className="text-xl font-bold text-foreground mb-6">Réclamations scoring</h1>
 
       {enAttente.length === 0 && traitees.length === 0 && (
         <div className="text-center py-12">
@@ -120,7 +122,7 @@ export default function AdminReclamations() {
 
               <div className="flex items-center gap-3 pt-2">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-muted-foreground">Points à accorder :</label>
+                  <label className="text-xs text-muted-foreground">Points à accorder (0-100) :</label>
                   <input
                     type="number"
                     min={1}
