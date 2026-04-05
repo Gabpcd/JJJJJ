@@ -328,9 +328,24 @@ Analyse ce document et vérifie sa conformité.`;
     const nomExtraitIa = analysis.nom_extrait || null;
     const prenomExtraitIa = analysis.prenom_extrait || null;
     const scoreConfianceIa = typeof analysis.score_confiance === "number" ? analysis.score_confiance : null;
-    const coherenceNom = nomExtraitIa && soignant?.nom
-      ? nomExtraitIa.toUpperCase() === soignant.nom.toUpperCase()
+
+    // Normalize for accent-insensitive, composite-name-tolerant comparison
+    // Same logic as verify-rpps: NFD decompose + strip diacriticals + lowercase + trim
+    const normalize = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const nomDocNorm = normalize(nomExtraitIa || "");
+    const nomProfilNorm = normalize(soignant?.nom || "");
+    const prenomDocNorm = normalize(prenomExtraitIa || "");
+    const prenomProfilNorm = normalize(soignant?.prenom || "");
+
+    // Bidirectional containment (handles composite names: "DUPONT-MARTIN" matches "DUPONT")
+    const nomMatch = nomDocNorm && nomProfilNorm
+      ? nomDocNorm.includes(nomProfilNorm) || nomProfilNorm.includes(nomDocNorm)
       : null;
+    // First 3 chars for first name (handles "Jean-Pierre" vs "Jean")
+    const prenomMatch = prenomDocNorm && prenomProfilNorm
+      ? prenomDocNorm.slice(0, 3) === prenomProfilNorm.slice(0, 3)
+      : null;
+    const coherenceNom = nomMatch !== null ? (nomMatch && (prenomMatch === null || prenomMatch)) : null;
 
     await supabase.from("documents_soignants").update({
       resultat_ia: analysis,
