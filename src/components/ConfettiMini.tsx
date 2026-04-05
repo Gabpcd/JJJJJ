@@ -19,6 +19,15 @@ export function ConfettiMini({ active, duration = 1500, count = 6 }: ConfettiMin
 
   if (!show) return null;
 
+  // Mix of brand colors: rose + teal + success
+  const CONFETTI_COLORS = [
+    'hsl(var(--rose))',
+    'hsl(var(--primary))',
+    'hsl(var(--rose) / 0.7)',
+    'hsl(var(--success))',
+    'hsl(var(--primary) / 0.7)',
+  ];
+
   return (
     <div className="confetti-mini-container" aria-hidden="true">
       {Array.from({ length: count }).map((_, i) => (
@@ -29,7 +38,7 @@ export function ConfettiMini({ active, duration = 1500, count = 6 }: ConfettiMin
             left: `${30 + Math.random() * 40}%`,
             animationDelay: `${Math.random() * 0.4}s`,
             animationDuration: `${1 + Math.random() * 0.5}s`,
-            backgroundColor: `hsl(var(--primary) / ${0.6 + Math.random() * 0.4})`,
+            backgroundColor: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
             width: `${4 + Math.random() * 4}px`,
             height: `${4 + Math.random() * 4}px`,
           }}

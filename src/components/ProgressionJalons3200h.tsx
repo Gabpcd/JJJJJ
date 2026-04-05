@@ -38,9 +38,9 @@ export function ProgressionJalons3200h({ heures, suivi, missions, compact }: Pro
   if (compact) {
     return (
       <div>
-        <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-purple-500 to-purple-600" couleurFond="bg-purple-100" />
+        <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-rose to-primary" couleurFond="bg-rose-light" />
         <div className="flex justify-between text-[10px] text-muted-foreground mt-1"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
-        <p className="text-sm font-semibold text-foreground mt-2"><span className="text-purple-600">{heures}h</span> / 3 200h</p>
+        <p className="text-sm font-semibold text-foreground mt-2"><span className="text-rose">{heures}h</span> / 3 200h</p>
       </div>
     );
   }
@@ -48,21 +48,21 @@ export function ProgressionJalons3200h({ heures, suivi, missions, compact }: Pro
   return (
     <div className="space-y-6">
       {/* Jauge principale */}
-      <div className="card-base bg-gradient-to-r from-purple-50 to-purple-100/50 border-purple-200">
+      <div className="card-base bg-gradient-to-r from-rose-light to-rose/5 border-rose/20">
         <h2 className="text-lg font-bold text-foreground mb-1">🎯 Mon parcours vers le libéral</h2>
         <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
-        <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-purple-500 to-emerald-500" couleurFond="bg-purple-100" />
+        <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-rose to-success" couleurFond="bg-rose-light" />
         <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
         <p className="text-xl font-bold text-foreground mt-3 text-center">
-          <span className="text-purple-600">{Math.round(heures)}</span> / 3 200h
+          <span className="text-rose">{Math.round(heures)}</span> / 3 200h
           <span className="text-sm text-muted-foreground ml-2">({progression.toFixed(1)}%)</span>
         </p>
       </div>
 
       {/* Estimation rythme */}
       {estimation && (
-        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
-          <p className="text-sm text-violet-800">🏃 {estimation}</p>
+        <div className="bg-rose-light border border-rose/20 rounded-xl p-4">
+          <p className="text-sm text-rose">🏃 {estimation}</p>
         </div>
       )}
 

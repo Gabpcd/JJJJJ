@@ -421,7 +421,7 @@ export default function PasserEnLiberal() {
       </div>
 
       {/* Free Transition section */}
-      <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-primary/5 dark:from-purple-950/20 dark:to-primary/5 border border-purple-200 dark:border-purple-800 p-5 mt-8">
+      <div className="rounded-2xl bg-gradient-to-r from-rose-light to-primary/5 dark:from-rose/10 dark:to-primary/5 border border-rose/20 p-5 mt-8">
         <h2 className="text-base font-bold text-foreground mb-3">🎁 Votre Free Transition</h2>
         <div className="space-y-2 text-sm">
           <p className="text-muted-foreground">Heures sur Jolene : <span className="font-bold text-foreground">{heuresPlat}h</span></p>
@@ -443,7 +443,7 @@ export default function PasserEnLiberal() {
             valeur={heuresPlat}
             max={3200}
             marqueurs={[800, 1600, 2400, 3200]}
-            couleurBarre="bg-gradient-to-r from-primary to-primary-dark"
+            couleurBarre="bg-gradient-to-r from-rose to-primary"
             couleurFond="bg-primary/10"
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
