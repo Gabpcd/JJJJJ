@@ -89,11 +89,12 @@ export default function PresencesEtablissement() {
 
   useEffect(() => { charger(); }, [charger]);
 
+  // Sync tab from URL param (combined with data loading to avoid race conditions)
   useEffect(() => {
     if (tabParam && ['a_valider', 'en_cours', 'validees', 'alertes'].includes(tabParam) && tabParam !== activeTab) {
       setActiveTab(tabParam);
     }
-  }, [tabParam]);
+  }, [tabParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const aValider = presences.filter(p => !p.valide_par_etablissement && p.pointage_depart_le);
   const validees = presences.filter(p => p.valide_par_etablissement);
@@ -193,7 +194,7 @@ export default function PresencesEtablissement() {
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <ClipboardCheck className="h-5 w-5 text-primary" /> Présences à valider
+          <ClipboardCheck className="h-5 w-5 text-primary" aria-hidden="true" /> Présences à valider
         </h1>
         <p className="text-sm text-muted-foreground mt-1">Vérifiez et validez les pointages de vos soignants</p>
       </div>

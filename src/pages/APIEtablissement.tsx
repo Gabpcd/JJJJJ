@@ -5,6 +5,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Key, Copy, Plus, Eye, EyeOff, Code2, CheckCircle } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -137,42 +138,40 @@ export default function APIEtablissement() {
       </div>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl p-6 max-w-md w-full shadow-xl">
-            {generatedKey ? (
-              <>
-                <div className="flex items-center gap-2 mb-4"><CheckCircle className="h-5 w-5 text-success" /><h3 className="font-bold text-foreground">Clé générée !</h3></div>
-                <p className="text-xs text-muted-foreground mb-2">Copiez cette clé maintenant.</p>
-                <div className="flex items-center gap-2 bg-muted rounded-lg p-3 mb-4">
-                  <code className="text-xs flex-1 break-all">{generatedKey}</code>
-                  <button onClick={() => copier(generatedKey)} className="p-1 hover:bg-background rounded"><Copy className="h-4 w-4 text-primary" /></button>
-                </div>
-                <button onClick={() => setShowModal(false)} className="btn-primary w-full text-sm">Fermer</button>
-              </>
-            ) : (
-              <>
-                <h3 className="font-bold text-foreground mb-4">Générer une clé API</h3>
-                <label className="block text-sm font-medium text-foreground mb-1">Nom</label>
-                <input value={newName} onChange={e => setNewName(e.target.value)} className="input-base w-full mb-4" placeholder="Ex: SIRH Integration" />
-                <label className="block text-sm font-medium text-foreground mb-2">Permissions</label>
-                <div className="space-y-2 mb-6">
-                  {PERMISSIONS.map(p => (
-                    <label key={p.value} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={newPerms.includes(p.value)} onChange={e => setNewPerms(prev => e.target.checked ? [...prev, p.value] : prev.filter(x => x !== p.value))} className="rounded border-border" />
-                      <span className="text-foreground">{p.label}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={genererCle} disabled={!newName.trim()} className="btn-primary flex-1 text-sm disabled:opacity-50">Générer</button>
-                  <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 text-sm">Annuler</button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent>
+          {generatedKey ? (
+            <>
+              <div className="flex items-center gap-2 mb-4"><CheckCircle className="h-5 w-5 text-success" /><h3 className="font-bold text-foreground">Clé générée !</h3></div>
+              <p className="text-xs text-muted-foreground mb-2">Copiez cette clé maintenant.</p>
+              <div className="flex items-center gap-2 bg-muted rounded-lg p-3 mb-4">
+                <code className="text-xs flex-1 break-all">{generatedKey}</code>
+                <button onClick={() => copier(generatedKey)} className="p-1 hover:bg-background rounded"><Copy className="h-4 w-4 text-primary" /></button>
+              </div>
+              <button onClick={() => setShowModal(false)} className="btn-primary w-full text-sm">Fermer</button>
+            </>
+          ) : (
+            <>
+              <h3 className="font-bold text-foreground mb-4">Générer une clé API</h3>
+              <label className="block text-sm font-medium text-foreground mb-1">Nom</label>
+              <input value={newName} onChange={e => setNewName(e.target.value)} className="input-base w-full mb-4" placeholder="Ex: SIRH Integration" />
+              <label className="block text-sm font-medium text-foreground mb-2">Permissions</label>
+              <div className="space-y-2 mb-6">
+                {PERMISSIONS.map(p => (
+                  <label key={p.value} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={newPerms.includes(p.value)} onChange={e => setNewPerms(prev => e.target.checked ? [...prev, p.value] : prev.filter(x => x !== p.value))} className="rounded border-border" />
+                    <span className="text-foreground">{p.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={genererCle} disabled={!newName.trim()} className="btn-primary flex-1 text-sm disabled:opacity-50">Générer</button>
+                <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 text-sm">Annuler</button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </LayoutApp>
   );
 }

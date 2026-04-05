@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
+import { toast } from 'sonner';
 
 export default function MonGroupe() {
   const { user } = useAuth();
@@ -24,7 +25,7 @@ export default function MonGroupe() {
         .select('groupe_sante_id, groupes_sante(id, nom, siren, raison_sociale_facturation, remise_groupe_pourcent, formule_abonnement)')
         .eq('id', user.id)
         .single();
-      if (errE) { setLoading(false); return; }
+      if (errE) { toast.error('Impossible de charger les informations du groupe.'); setLoading(false); return; }
 
       setEtab(e);
 

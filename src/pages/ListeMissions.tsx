@@ -39,7 +39,7 @@ export default function ListeMissions() {
   const { afficherNotification } = useNotification();
   const [missions, setMissions] = useState<any[]>([]);
   const statutParam = searchParams.get('statut') ?? '';
-  const periodeParam = searchParams.get('periode') === 'mois' ? 'mois' : '';
+  const periodeParam = searchParams.get('periode') === 'mois' ? 'mois' : ''; // 'mois' = missions du mois calendaire en cours
   const [filtreStatut, setFiltreStatut] = useState(STATUTS_FILTRES.some((s) => s.valeur === statutParam) ? statutParam : '');
   const [filtrePeriode, setFiltrePeriode] = useState(periodeParam);
   const [recherche, setRecherche] = useState('');
