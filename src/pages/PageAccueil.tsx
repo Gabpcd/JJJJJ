@@ -265,33 +265,40 @@ export default function PageAccueil() {
 
       {/* ═══ Section 1 — Hero ═══ */}
       <section className="relative overflow-hidden">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-rose/6 dark:from-primary/5 dark:to-rose/3" />
-        {/* Decorative SVGs */}
-        <svg className="absolute top-10 right-[10%] w-64 h-64 opacity-[0.06] dark:opacity-[0.04]" viewBox="0 0 200 200"><circle cx="100" cy="100" r="90" stroke="currentColor" className="text-primary" strokeWidth="2" fill="none" /><circle cx="100" cy="100" r="50" stroke="currentColor" className="text-primary" strokeWidth="1.5" fill="none" /></svg>
-        <svg className="absolute bottom-10 left-[5%] w-48 h-48 opacity-[0.06] dark:opacity-[0.04]" viewBox="0 0 100 100"><rect x="20" y="40" width="60" height="20" rx="3" fill="currentColor" className="text-primary" /><rect x="40" y="20" width="20" height="60" rx="3" fill="currentColor" className="text-primary" /></svg>
-        <svg className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] opacity-[0.03]" viewBox="0 0 400 400"><circle cx="200" cy="200" r="180" stroke="currentColor" className="text-primary" strokeWidth="1" fill="none" /><circle cx="200" cy="200" r="120" stroke="currentColor" className="text-primary" strokeWidth="0.5" fill="none" /></svg>
+        {/* Vibrant gradient background */}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.12) 0%, hsl(270 60% 50% / 0.1) 30%, hsl(215 80% 55% / 0.08) 60%, hsl(174 72% 48% / 0.06) 100%)' }} />
+        {/* Fun decorative blobs */}
+        <div className="absolute top-20 right-[15%] w-72 h-72 rounded-full opacity-[0.08]" style={{ background: 'radial-gradient(circle, hsl(330 85% 60%), transparent 70%)' }} />
+        <div className="absolute bottom-10 left-[10%] w-56 h-56 rounded-full opacity-[0.06]" style={{ background: 'radial-gradient(circle, hsl(215 80% 55%), transparent 70%)' }} />
+        <div className="absolute top-1/3 left-1/2 w-96 h-96 rounded-full opacity-[0.04]" style={{ background: 'radial-gradient(circle, hsl(270 60% 50%), transparent 70%)' }} />
 
         <div className={`relative max-w-3xl mx-auto px-4 pt-20 pb-24 md:pt-28 md:pb-32 text-center transition-all duration-1000 ease-out ${heroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-6">
+            ✨ La plateforme qui change tout
+          </div>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.1] tracking-tight mb-6">
             Trouvez le bon soignant.{' '}
-            <span className="text-primary">En quelques clics.</span>
+            <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%), hsl(215 80% 55%))' }}>
+              En quelques clics.
+            </span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            La plateforme qui connecte les établissements de santé avec des soignants qualifiés et vérifiés.
+            🏥 Établissements et 👩‍⚕️ soignants connectés pour des missions de remplacement simple, rapide et fun !
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={() => navigate('/inscription/soignant')}
-              className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+              className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
             >
-              Je suis soignant <ArrowRight className="h-4 w-4" />
+              🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
             </button>
             <button
               onClick={() => navigate('/inscription/etablissement')}
-              className="inline-flex items-center justify-center gap-2 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200"
+              className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
             >
-              Je suis un établissement <ArrowRight className="h-4 w-4" />
+              🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -304,21 +311,21 @@ export default function PageAccueil() {
       <section className="py-20 md:py-28 bg-card">
         <div className="max-w-5xl mx-auto px-4">
           <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold text-center mb-4">Comment ça marche</h2>
-            <p className="text-muted-foreground text-center mb-14 max-w-lg mx-auto">Trois étapes pour pourvoir un poste en toute sérénité.</p>
+            <h2 className="text-2xl md:text-4xl font-bold text-center mb-4">Comment ça marche 🚀</h2>
+            <p className="text-muted-foreground text-center mb-14 max-w-lg mx-auto">Trois étapes ultra-simples pour trouver votre mission de rêve ☀️</p>
           </RevealOnScroll>
           <div className="grid md:grid-cols-3 gap-8 md:gap-12">
             {[
-              { icon: ClipboardList, num: '1', titre: 'Publiez une mission', desc: 'Décrivez le poste, les horaires et le taux. La mission est visible en temps réel.' },
-              { icon: Users, num: '2', titre: 'Recevez des candidatures', desc: 'Les soignants qualifiés postulent. Consultez leurs profils vérifiés et choisissez.' },
-              { icon: CheckCircle, num: '3', titre: 'Gérez tout en ligne', desc: 'Contrat, pointage, facturation : tout est automatisé et conforme.' },
+              { icon: ClipboardList, num: '1', emoji: '📝', titre: 'Publiez une mission', desc: 'Décrivez le poste, les horaires et le taux. La mission est visible instantanément !' },
+              { icon: Users, num: '2', emoji: '🙋‍♀️', titre: 'Recevez des candidatures', desc: 'Les soignants qualifiés postulent. Consultez leurs profils vérifiés et choisissez.' },
+              { icon: CheckCircle, num: '3', emoji: '🎉', titre: 'Gérez tout en ligne', desc: 'Contrat, pointage, facturation : tout est automatisé et conforme.' },
             ].map((step, i) => (
               <RevealOnScroll key={i} delay={i * 150}>
                 <div className="flex flex-col items-center text-center group">
-                  <div className="w-20 h-20 rounded-2xl bg-primary/10 dark:bg-primary/15 flex items-center justify-center mb-5 group-hover:bg-primary/20 transition-colors duration-300">
-                    <step.icon className="h-9 w-9 text-primary" strokeWidth={1.5} />
+                  <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-105 transition-transform duration-300" style={{ background: i === 0 ? 'linear-gradient(135deg, hsl(330 85% 60% / 0.15), hsl(330 85% 60% / 0.05))' : i === 1 ? 'linear-gradient(135deg, hsl(270 60% 50% / 0.15), hsl(270 60% 50% / 0.05))' : 'linear-gradient(135deg, hsl(174 72% 48% / 0.15), hsl(174 72% 48% / 0.05))' }}>
+                    <span className="text-3xl">{step.emoji}</span>
                   </div>
-                  <span className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Étape {step.num}</span>
+                  <span className="text-xs font-bold uppercase tracking-widest mb-2 bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}>Étape {step.num}</span>
                   <h3 className="text-lg font-bold text-foreground mb-2">{step.titre}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
                 </div>
@@ -329,17 +336,18 @@ export default function PageAccueil() {
       </section>
 
       {/* ═══ Section 3 — Chiffres clés ═══ */}
-      <section className="py-20 md:py-24 bg-background">
-        <div className="max-w-5xl mx-auto px-4">
+      <section className="py-20 md:py-24 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-[0.04]" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60%), hsl(270 60% 50%), hsl(215 80% 55%))' }} />
+        <div className="relative max-w-5xl mx-auto px-4">
           <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">En chiffres</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">En chiffres 📊</h2>
           </RevealOnScroll>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-6">
             {[
-              { cible: 15, suffixe: '+', label: 'professions' },
-              { cible: 24, suffixe: '/7', label: 'missions jour et nuit' },
-              { cible: 100, suffixe: '%', label: 'conforme Code du travail' },
-              { cible: 0, suffixe: '€', label: "d'abonnement" },
+              { cible: 15, suffixe: '+', label: '👩‍⚕️ professions', emoji: '💼' },
+              { cible: 24, suffixe: '/7', label: '🌙 missions jour et nuit', emoji: '⏰' },
+              { cible: 100, suffixe: '%', label: '✅ conforme Code du travail', emoji: '⚖️' },
+              { cible: 0, suffixe: '€', label: "💸 d'abonnement", emoji: '🆓' },
             ].map((c, i) => (
               <RevealOnScroll key={i} delay={i * 100}>
                 <div className="text-center">
@@ -356,61 +364,59 @@ export default function PageAccueil() {
       <section className="py-20 md:py-28 bg-card">
         <div className="max-w-5xl mx-auto px-4">
           <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">Une plateforme, deux expériences</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">Une plateforme, deux expériences 🤝</h2>
           </RevealOnScroll>
           <div className="grid md:grid-cols-2 gap-6 md:gap-8">
             {/* Soignants */}
             <RevealOnScroll delay={0}>
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 dark:bg-primary/10 p-8 md:p-10 h-full">
-                <h3 className="text-xl font-bold text-foreground mb-6">Pour les soignants</h3>
+              <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.08), hsl(270 60% 50% / 0.05))' }}>
+                <h3 className="text-xl font-bold text-foreground mb-6">🩺 Pour les soignants</h3>
                 <ul className="space-y-4">
                   {[
-                    { icon: MapPin, text: 'Missions près de chez vous' },
-                    { icon: FileText, text: 'Contrats générés automatiquement' },
-                    { icon: Navigation, text: 'Pointage GPS sécurisé' },
-                    { icon: TrendingUp, text: 'Parcours vers le libéral' },
+                    { emoji: '📍', text: 'Missions près de chez vous' },
+                    { emoji: '📄', text: 'Contrats générés automatiquement' },
+                    { emoji: '📲', text: 'Pointage GPS sécurisé' },
+                    { emoji: '🚀', text: 'Parcours vers le libéral' },
                   ].map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
-                      <div className="mt-0.5 w-8 h-8 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0">
-                        <item.icon className="h-4 w-4 text-primary" />
-                      </div>
+                      <span className="text-xl mt-0.5">{item.emoji}</span>
                       <span className="text-foreground font-medium">{item.text}</span>
                     </li>
                   ))}
                 </ul>
                 <button
                   onClick={() => navigate('/inscription/soignant')}
-                  className="mt-8 inline-flex items-center gap-2 text-primary font-semibold text-sm hover:underline underline-offset-4"
+                  className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
+                  style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
                 >
-                  Créer mon profil <ArrowRight className="h-4 w-4" />
+                  Créer mon profil ✨ <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             </RevealOnScroll>
 
             {/* Établissements */}
             <RevealOnScroll delay={150}>
-              <div className="rounded-2xl border border-teal/20 bg-teal/5 dark:bg-teal/10 p-8 md:p-10 h-full">
-                <h3 className="text-xl font-bold text-foreground mb-6">Pour les établissements</h3>
+              <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(215 80% 55% / 0.08), hsl(174 72% 48% / 0.05))' }}>
+                <h3 className="text-xl font-bold text-foreground mb-6">🏥 Pour les établissements</h3>
                 <ul className="space-y-4">
                   {[
-                    { icon: UserCheck, text: 'Soignants vérifiés (RPPS)' },
-                    { icon: PercentCircle, text: 'Commission dégressive' },
-                    { icon: Scale, text: 'Conformité Code du travail' },
-                    { icon: Receipt, text: 'Facturation automatisée' },
+                    { emoji: '✅', text: 'Soignants vérifiés (RPPS)' },
+                    { emoji: '💰', text: 'Commission dégressive' },
+                    { emoji: '⚖️', text: 'Conformité Code du travail' },
+                    { emoji: '🧾', text: 'Facturation automatisée' },
                   ].map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
-                      <div className="mt-0.5 w-8 h-8 rounded-lg bg-teal/10 dark:bg-teal/20 flex items-center justify-center shrink-0">
-                        <item.icon className="h-4 w-4 text-teal" />
-                      </div>
+                      <span className="text-xl mt-0.5">{item.emoji}</span>
                       <span className="text-foreground font-medium">{item.text}</span>
                     </li>
                   ))}
                 </ul>
                 <button
                   onClick={() => navigate('/inscription/etablissement')}
-                  className="mt-8 inline-flex items-center gap-2 text-teal font-semibold text-sm hover:underline underline-offset-4"
+                  className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
+                  style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
                 >
-                  Publier une mission <ArrowRight className="h-4 w-4" />
+                  Publier une mission 🎯 <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             </RevealOnScroll>
@@ -486,23 +492,25 @@ export default function PageAccueil() {
 
       {/* ═══ Section 7 — CTA final ═══ */}
       <section className="relative py-20 md:py-28 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-rose/6" />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.08) 0%, hsl(270 60% 50% / 0.06) 50%, hsl(215 80% 55% / 0.04) 100%)' }} />
         <div className="relative max-w-3xl mx-auto px-4 text-center">
           <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier votre staffing médical ?</h2>
-            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Rejoignez des centaines d'établissements et de soignants qui utilisent Jolene au quotidien.</p>
+            <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier votre staffing ? 🎉</h2>
+            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Rejoignez des centaines d'établissements et de soignants qui utilisent Jolene au quotidien 💜</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={() => navigate('/inscription/soignant')}
-                className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
               >
-                Je suis soignant <ArrowRight className="h-4 w-4" />
+                🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
               </button>
               <button
                 onClick={() => navigate('/inscription/etablissement')}
-                className="inline-flex items-center justify-center gap-2 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200"
+                className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
               >
-                Je suis un établissement <ArrowRight className="h-4 w-4" />
+                🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           </RevealOnScroll>

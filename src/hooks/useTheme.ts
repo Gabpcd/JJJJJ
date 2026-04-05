@@ -20,7 +20,7 @@ export function useTheme() {
     // Update theme-color meta tag for browser chrome (Android Chrome, Safari)
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', isDark ? '#1A6080' : '#12A5B8');
+      meta.setAttribute('content', isDark ? '#6B3FA0' : '#E04590');
     }
 
     // Update Android status bar color if native
