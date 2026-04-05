@@ -288,8 +288,8 @@ serve(async (req) => {
         .from("stripe_transfers")
         .update({
           stripe_checkout_session_id: session.id,
-          montant_soignant_cents: soignantCents,
-          montant_commission_cents: commissionCents,
+          montant_soignant: soignantCents / 100,
+          montant_commission: commissionCents / 100,
           statut: "EN_ATTENTE",
           modifie_le: new Date().toISOString(),
         })
@@ -300,8 +300,8 @@ serve(async (req) => {
         soignant_id: soignantId,
         etablissement_id: mission.etablissement_id,
         stripe_account_id: connectOnboarding.stripe_account_id,
-        montant_soignant_cents: soignantCents,
-        montant_commission_cents: commissionCents,
+        montant_soignant: soignantCents / 100,
+        montant_commission: commissionCents / 100,
         statut: "EN_ATTENTE",
         stripe_checkout_session_id: session.id,
       });
