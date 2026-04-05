@@ -331,9 +331,9 @@ export default function FacturationEtablissement() {
         </TabsList>
 
         {/* ===== ONGLET 1 : PAIEMENTS SOIGNANTS ===== */}
-        <TabsContent value="paiements">
+        <TabsContent value="paiements" className="flex flex-col">
           {/* Encart informatif collapsible */}
-          <Collapsible className="mb-6">
+          <Collapsible className="mb-6 order-0">
             <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-primary hover:underline w-full">
               <Info className="h-4 w-4" />
               <span>Comment fonctionne le paiement ?</span>
@@ -360,7 +360,16 @@ export default function FacturationEtablissement() {
             </CollapsibleContent>
           </Collapsible>
 
-          {/* KPI */}
+          {/* KPI — total à payer en priorité */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            {missionsAPayer.length > 0 && (
+              <div className="p-4 rounded-xl border-2 border-destructive/40 bg-destructive/5">
+                <p className="text-2xl font-bold text-destructive">{fmt(missionsAPayer.reduce((s: number, m: any) => s + (m.net_a_payer || 0), 0))}</p>
+                <p className="text-sm font-medium text-destructive">À payer</p>
+                <p className="text-xs text-destructive/70 mt-1">{missionsAPayer.length} mission{missionsAPayer.length > 1 ? 's' : ''}</p>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-3 gap-3 mb-6">
             <button
               onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE'); scrollToHistorique(); }}
@@ -394,8 +403,8 @@ export default function FacturationEtablissement() {
             </button>
           </div>
 
-          {/* Historique paiements — affiché en premier pour visibilité après clic KPI */}
-          <div className="card-base mb-6" id="historique-paiements">
+          {/* Historique paiements */}
+          <div className="card-base mb-6 order-2" id="historique-paiements">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-foreground">{titreHistorique}</h2>
               {filtreStatutPaiement && (
@@ -487,8 +496,8 @@ export default function FacturationEtablissement() {
             )}
           </div>
 
-          {/* Missions à payer */}
-          <div className="card-base">
+          {/* Missions à payer — PRIORITÉ : en haut */}
+          <div className="card-base mb-6 order-1">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-foreground flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-warning" /> Missions à payer
