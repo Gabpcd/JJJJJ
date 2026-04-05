@@ -298,7 +298,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       </nav>
 
       {/* ── Desktop sidebar ── */}
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40 no-print" style={{ paddingTop: 'env(safe-area-inset-top)', background: 'linear-gradient(180deg, hsl(185 85% 42%) 0%, hsl(210 75% 30%) 100%)' }} role="navigation" aria-label="Sidebar">
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40 no-print" style={{ paddingTop: 'env(safe-area-inset-top)', background: 'linear-gradient(165deg, hsl(330 85% 60%) 0%, hsl(270 60% 50%) 50%, hsl(215 80% 55%) 100%)' }} role="navigation" aria-label="Sidebar">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <HeartPulse className="h-7 w-7 text-rose" />
