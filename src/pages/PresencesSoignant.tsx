@@ -8,6 +8,7 @@ import { SaisieCodePointage } from '@/components/SaisieCodePointage';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { PanneauContestation } from '@/components/PanneauContestation';
 import { EtatVide } from '@/components/EtatVide';
+import { BadgeStatut } from '@/components/BadgeStatut';
 import { ConsentementGPS } from '@/components/ConsentementGPS';
 import { BandeauSansGPS } from '@/components/BandeauSansGPS';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,6 +31,7 @@ export default function PresencesSoignant() {
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [missions, setMissions] = useState<any[]>([]);
+  const [missionsAVenir, setMissionsAVenir] = useState<any[]>([]);
   const [missionsEnCours, setMissionsEnCours] = useState<any[]>([]);
   const [presencesValidees, setPresencesValidees] = useState<any[]>([]);
   const [historiquePresences, setHistoriquePresences] = useState<any[]>([]);
@@ -118,6 +120,23 @@ export default function PresencesSoignant() {
       missionsList = missionsList.map((m: any) => ({ ...m, etablissements: etabMap[m.etablissement_id] || null }));
     }
     setMissions(missionsList);
+
+    // Missions à venir (ASSIGNEE, après aujourd'hui)
+    const { data: aVenirData } = await supabase
+      .from('missions')
+      .select('id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id')
+      .eq('soignant_assigne_id', user.id)
+      .in('statut', ['ASSIGNEE', 'EN_COURS'])
+      .gte('debut_le', demain.toISOString())
+      .order('debut_le', { ascending: true })
+      .limit(20);
+
+    let aVenirList = aVenirData || [];
+    if (aVenirList.length > 0) {
+      const etabMapAV = await fetchEtablissementsSafe(aVenirList.map((m: any) => m.etablissement_id));
+      aVenirList = aVenirList.map((m: any) => ({ ...m, etablissements: etabMapAV[m.etablissement_id] || null }));
+    }
+    setMissionsAVenir(aVenirList);
 
     // Missions EN_COURS avec arrivée pointée mais pas de départ
     const { data: enCoursData } = await supabase
@@ -380,12 +399,48 @@ export default function PresencesSoignant() {
         <p className="text-sm text-muted-foreground mt-1">Pointez vos arrivées et départs pour chaque mission</p>
       </div>
 
-      <Tabs defaultValue="encours">
-        <TabsList className="w-full max-w-md mb-4">
+      <Tabs defaultValue="avenir">
+        <TabsList className="w-full max-w-lg mb-4">
+          <TabsTrigger value="avenir" className="flex-1 gap-1.5"><CalendarDays className="h-4 w-4" />À venir{missionsAVenir.length > 0 && <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] px-1 text-[10px]">{missionsAVenir.length}</Badge>}</TabsTrigger>
           <TabsTrigger value="encours" className="flex-1 gap-1.5"><Activity className="h-4 w-4" />En cours</TabsTrigger>
           <TabsTrigger value="aujourdhui" className="flex-1 gap-1.5"><Clock className="h-4 w-4" />Aujourd'hui</TabsTrigger>
           <TabsTrigger value="historique" className="flex-1 gap-1.5"><History className="h-4 w-4" />Historique</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="avenir">
+          {missionsAVenir.length > 0 ? (
+            <div className="space-y-3">
+              {missionsAVenir.map((m: any) => (
+                <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
+                  <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
+                    <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
+                    <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
+                    <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <BadgeStatut statut={m.statut} />
+                    <h3 className="font-semibold text-sm text-foreground truncate mt-1">{m.intitule}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                      {m.duree_heures ? ` (${m.duree_heures}h)` : ''}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EtatVide
+              icone={CalendarDays}
+              titre="Aucune mission à venir"
+              sousTitre="Vos prochaines missions assignées apparaîtront ici."
+              boutonLabel="Chercher des missions"
+              boutonRoute="/soignant/missions"
+            />
+          )}
+        </TabsContent>
 
         <TabsContent value="encours">
           {missionsEnCours.length > 0 ? (

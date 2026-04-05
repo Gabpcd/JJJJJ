@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { Briefcase, History, AlertTriangle } from 'lucide-react';
@@ -38,8 +38,12 @@ type GroupeItem = { type: 'single'; mission: any } | { type: 'serie'; serieId: s
 export default function MissionsSoignant() {
   usePageTitle('Missions');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const [onglet, setOnglet] = useState<Onglet>('disponibles');
+  const ongletParam = searchParams.get('onglet');
+  const [onglet, setOnglet] = useState<Onglet>(
+    ongletParam === 'mes_missions' || ongletParam === 'historique' ? ongletParam : 'disponibles'
+  );
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
