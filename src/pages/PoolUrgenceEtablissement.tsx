@@ -177,12 +177,29 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   }, [historique, filtreHistorique]);
 
   const alerterSoignant = async (s: SoignantPool) => {
-    toast.success(`🚨 Alerte envoyée à ${s.prenom} ${s.nom}`);
+    const { error } = await supabase.functions.invoke('send-push', {
+      body: {
+        destinataire_id: s.id,
+        titre: '🚨 Mission urgente disponible',
+        corps: 'Un établissement a besoin de vous en urgence.',
+        lien: '/soignant/missions',
+      },
+    });
+    if (error) toast.error("Erreur lors de l'envoi de l'alerte");
+    else toast.success(`🚨 Alerte envoyée à ${s.prenom} ${s.nom}`);
   };
 
   const alerterTous = async () => {
     setAlerterTousOpen(false);
-    toast.success(`🚨 Alerte envoyée à ${filtered.filter(s => !s.en_mission_maintenant).length} soignants du pool`);
+    const disponibles = filtered.filter(s => !s.en_mission_maintenant);
+    let sent = 0;
+    for (const s of disponibles) {
+      const { error } = await supabase.functions.invoke('send-push', {
+        body: { destinataire_id: s.id, titre: '🚨 Mission urgente', corps: 'Remplacement urgent disponible.', lien: '/soignant/missions' },
+      });
+      if (!error) sent++;
+    }
+    toast.success(`🚨 Alerte envoyée à ${sent}/${disponibles.length} soignants`);
   };
 
   const ouvrirProposerMission = async (s: SoignantPool) => {
