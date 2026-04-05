@@ -129,7 +129,9 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
       setConfirming(true);
       setError(null);
 
-      for (let attempt = 0; attempt < 4; attempt += 1) {
+      // Poll up to 8 times with increasing delays (total ~25s) to wait for webhook
+      const delays = [1500, 2000, 2500, 3000, 3000, 3500, 4000, 5000];
+      for (let attempt = 0; attempt < delays.length; attempt += 1) {
         const { data, error: fnError } = await supabase.functions.invoke('confirm-invoice-payment', {
           body: { facture_id: factureId },
         });
@@ -142,13 +144,16 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
           return;
         }
 
-        if (attempt < 3) {
-          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        if (attempt < delays.length - 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, delays[attempt]));
         }
       }
 
       setConfirming(false);
-      setError('Le paiement est bien parti, mais la synchronisation est encore en cours. Réessayez dans quelques secondes.');
+      // Payment went through on Stripe but webhook hasn't synced yet
+      toast.info('Paiement envoyé ! La confirmation peut prendre quelques instants.');
+      onComplete?.();
+      onClose();
     };
 
     void confirmPayment();
