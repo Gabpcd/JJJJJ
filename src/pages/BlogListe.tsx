@@ -129,12 +129,12 @@ export default function BlogListe() {
                   <p className="text-3xl mb-2">🩷</p>
                   <h3 className="text-xl font-bold text-foreground mb-2">Vous avez une idée d'article ?</h3>
                   <p className="text-sm text-muted-foreground mb-5">On adore écrire sur les sujets qui vous intéressent. Dites-nous ce que vous aimeriez lire !</p>
-                  <button
-                    onClick={() => navigate('/inscription/soignant')}
+                  <a
+                    href="mailto:contact@jolene.app?subject=Idée d'article pour le blog Jolene"
                     className="inline-flex items-center gap-2 bg-gradient-to-r from-primary to-rose-500 text-white font-semibold px-6 py-3 rounded-xl hover:shadow-lg hover:scale-105 transition-all"
                   >
-                    <Sparkles className="h-4 w-4" /> Rejoindre Jolene
-                  </button>
+                    ✉️ Nous écrire
+                  </a>
                 </div>
               </div>
             </FadeInView>
