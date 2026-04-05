@@ -242,7 +242,7 @@
 
   /* WCAG: Focus visible on all interactive elements */
   :focus-visible {
-    outline: 2px solid hsl(187 75% 40%);
+    outline: 2px solid hsl(338 52% 49%);
     outline-offset: 2px;
   }
 
