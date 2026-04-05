@@ -298,11 +298,11 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       </nav>
 
       {/* ── Desktop sidebar ── */}
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40 no-print" style={{ paddingTop: 'env(safe-area-inset-top)', background: 'linear-gradient(180deg, hsl(270 30% 22%) 0%, hsl(260 25% 16%) 100%)' }} role="navigation" aria-label="Sidebar">
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40 no-print" style={{ paddingTop: 'env(safe-area-inset-top)', background: 'linear-gradient(180deg, hsl(270 40% 97%) 0%, hsl(330 50% 96%) 100%)' }} role="navigation" aria-label="Sidebar">
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HeartPulse className="h-7 w-7 text-rose" />
-            <span className="text-xl font-bold text-rose">Jolene</span>
+            <HeartPulse className="h-7 w-7 text-primary" />
+            <span className="text-xl font-bold text-primary">Jolene</span>
           </div>
           <BadgeNotification />
           <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
