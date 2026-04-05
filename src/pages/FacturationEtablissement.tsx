@@ -12,6 +12,9 @@ import { BadgePalier } from '@/components/BadgePalier';
 import { FactureChorus, ChorusStatutBadge } from '@/components/FactureChorus';
 import { PaiementVirement } from '@/components/PaiementVirement';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
+import { stripePromise } from '@/lib/stripe';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -211,6 +214,8 @@ export default function FacturationEtablissement() {
     }
   };
 
+  const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
+
   const lancerPaiementStripeConnect = async (missionId: string) => {
     setConnectPayingId(missionId);
     try {
@@ -221,6 +226,10 @@ export default function FacturationEtablissement() {
       if (data?.error) throw new Error(data.error);
       if (data?.url) {
         window.location.href = data.url;
+        return;
+      }
+      if (data?.client_secret) {
+        setConnectClientSecret(data.client_secret);
         return;
       }
       toast.error('Aucune URL de paiement reçue');
@@ -935,6 +944,21 @@ export default function FacturationEtablissement() {
           onClose={() => setCheckoutFactureId(null)}
           onComplete={() => { setCheckoutFactureId(null); charger(); }}
         />
+      )}
+
+      {/* Stripe Connect embedded checkout for mission payments */}
+      {connectClientSecret && (
+        <Dialog open={!!connectClientSecret} onOpenChange={(v) => { if (!v) { setConnectClientSecret(null); charger(); } }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Paiement mission</DialogTitle>
+              <DialogDescription>Réglez les honoraires du soignant et la commission Jolene.</DialogDescription>
+            </DialogHeader>
+            <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: connectClientSecret }}>
+              <EmbeddedCheckout />
+            </EmbeddedCheckoutProvider>
+          </DialogContent>
+        </Dialog>
       )}
     </LayoutApp>
   );

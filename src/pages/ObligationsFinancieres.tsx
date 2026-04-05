@@ -121,6 +121,8 @@ export default function ObligationsFinancieres() {
     }
   };
 
+  const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
+
   const payerStripeConnect = async (missionId: string) => {
     setConnectPayingId(missionId);
     try {
@@ -128,7 +130,10 @@ export default function ObligationsFinancieres() {
         body: { mission_id: missionId },
       });
       if (error) throw error;
-      if (result?.url) window.location.href = result.url;
+      if (result?.error) throw new Error(result.error);
+      if (result?.url) { window.location.href = result.url; return; }
+      if (result?.client_secret) { setConnectClientSecret(result.client_secret); return; }
+      toast.error('Aucune URL de paiement reçue');
     } catch (e: any) {
       toast.error(extraireMessageErreur(e));
     } finally {
