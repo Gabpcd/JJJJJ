@@ -23,8 +23,8 @@ function fmt(v: number | null | undefined) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
-function netEstime(m: any): number {
-  return m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : (m.total_brut != null ? m.total_brut * 0.78 : 0));
+function netEstime(m: any): number | null {
+  return m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : (m.total_brut != null ? m.total_brut * 0.78 : null));
 }
 
 export default function MesGains() {
@@ -254,6 +254,7 @@ export default function MesGains() {
                     <button
                       className="text-primary font-bold text-sm hover:underline"
                       onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}
+                      aria-label="Voir le détail des cotisations"
                     >
                       {fmt(net)}
                     </button>
