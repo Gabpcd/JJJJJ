@@ -364,7 +364,7 @@ export default function PresencesSoignant() {
           },
           destinataire_id: user.id,
         },
-      }).catch(() => {});
+      }).catch(() => { afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi de l\'email de confirmation.' }); });
     }
 
     afficherNotification({ type: 'succes', message: '🏁 Départ pointé ! Mission terminée.' });
