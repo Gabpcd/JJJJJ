@@ -131,14 +131,14 @@ export default function AdminMissions() {
                           <TableCell>
                             {m.etablissement_id ? (
                               <Link to={`/admin/utilisateurs/${m.etablissement_id}`} className="text-primary hover:underline text-sm">
-                                {etabNom ?? m.etablissement_id.slice(0, 8)}
+                                {etabNom ?? 'Établissement'}
                               </Link>
                             ) : '—'}
                           </TableCell>
                           <TableCell>
                             {m.soignant_assigne_id ? (
                               <Link to={`/admin/utilisateurs/${m.soignant_assigne_id}`} className="text-primary hover:underline text-sm">
-                                {soignantNom || m.soignant_assigne_id.slice(0, 8)}
+                                {soignantNom || 'Soignant'}
                               </Link>
                             ) : <span className="text-muted-foreground">Non assigné</span>}
                           </TableCell>

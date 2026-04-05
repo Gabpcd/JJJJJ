@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Key, Copy, Plus, Eye, EyeOff, Code2, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { logger } from '@/lib/logger';
 
 const ENDPOINTS = [
   { method: 'GET', path: '/api-v1/missions', desc: 'Lister les missions de l\'établissement', example: '{ "data": [{ "id": "uuid", "intitule": "IDE Nuit", "debut_le": "2026-03-15T20:00:00Z", "statut": "OUVERTE" }] }' },
@@ -59,7 +60,7 @@ export default function AdminAPI() {
         permissions: newPerms,
       } as any);
       if (error) {
-        console.error('Erreur génération clé API:', JSON.stringify(error));
+        logger.error('Erreur génération clé API:', error);
         const { toast } = await import('sonner');
         toast.error('Erreur lors de la génération de la clé API.');
       } else {

@@ -153,7 +153,7 @@ export default function AdminDetailUtilisateur() {
         });
         if (error) throw error;
         if (fetchError?.message && fetchError.message !== 'Failed to fetch') {
-          console.warn('send-email fetch fallback used:', fetchError.message);
+          logger.warn('send-email fetch fallback used:', fetchError.message);
         }
       }
 
