@@ -127,7 +127,6 @@ function getEtablissementSidebar(): SidebarEntry[] {
 const NAV_GROUPE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/groupe/tableau-de-bord' },
   { icone: List, label: 'Établissements', route: '/groupe/etablissements' },
-  { icone: Settings, label: 'Paramètres', route: '/groupe/parametres' },
 ];
 
 function getMobileNavItems(role: UserRole): NavItem[] {
