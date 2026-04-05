@@ -173,7 +173,7 @@ export default function AdminCalendrier() {
 
         {/* Navigation */}
         <div className="flex items-center justify-between">
-          <button onClick={() => setMoisCourant(addMonths(moisCourant, -1))} className="p-2 hover:bg-muted rounded-lg transition-colors">
+          <button onClick={() => setMoisCourant(addMonths(moisCourant, -1))} className="p-2 hover:bg-muted rounded-lg transition-colors" aria-label="Mois précédent">
             <ChevronLeft className="h-5 w-5 text-muted-foreground" />
           </button>
           <div className="text-center">
@@ -184,7 +184,7 @@ export default function AdminCalendrier() {
               Aujourd'hui
             </button>
           </div>
-          <button onClick={() => setMoisCourant(addMonths(moisCourant, 1))} className="p-2 hover:bg-muted rounded-lg transition-colors">
+          <button onClick={() => setMoisCourant(addMonths(moisCourant, 1))} className="p-2 hover:bg-muted rounded-lg transition-colors" aria-label="Mois suivant">
             <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </button>
         </div>

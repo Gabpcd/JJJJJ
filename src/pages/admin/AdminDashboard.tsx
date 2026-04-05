@@ -18,15 +18,19 @@ const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'curren
 const formatEurPrecis = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 
+// Monthly fixed costs in EUR — update when subscription plans change
 const CHARGES_FIXES = [
-  { label: 'Supabase', montant: 25 },
-  { label: 'Resend', montant: 20 },
-  { label: 'Yousign', montant: 50 },
-  { label: 'Lovable', montant: 20 },
-  { label: 'Apple Developer', montant: 8 },
+  { label: 'Supabase', montant: 25 },   // Pro plan (database + auth + storage)
+  { label: 'Resend', montant: 20 },      // Transactional email service
+  { label: 'Yousign', montant: 50 },     // E-signature platform for contracts
+  { label: 'Lovable', montant: 20 },     // AI dev tool subscription
+  { label: 'Apple Developer', montant: 8 }, // ~99 USD/year ÷ 12 months
 ];
 const TOTAL_CHARGES_FIXES_HORS_STRIPE = CHARGES_FIXES.reduce((s, c) => s + c.montant, 0);
 
+// French corporate tax (IS) rates for SASU — 2024-2026 schedule
+// - 15% reduced rate on first 42 500 EUR of profit (PME benefit)
+// - 25% standard rate on profit above 42 500 EUR
 function calculerIS(resultat: number): number {
   if (resultat <= 0) return 0;
   if (resultat <= 42500) return resultat * 0.15;

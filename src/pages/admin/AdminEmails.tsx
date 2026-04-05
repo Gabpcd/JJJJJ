@@ -10,21 +10,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
+// [DEV] Dummy data for email template previews — not sent to real users
 const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
-  BIENVENUE_SOIGNANT: { prenom: 'Marie', lien_profil: 'https://app.jolene.app/soignant/profil' },
-  BIENVENUE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', lien_profil: 'https://app.jolene.app/etablissement/profil' },
-  MISSION_ACCEPTEE_SOIGNANT: { prenom: 'Marie', mission: 'Remplacement IDE — Jour', etablissement: 'EHPAD Les Oliviers', date: '15 mars 2026', heure: '07h00 – 19h00' },
-  MISSION_ACCEPTEE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', mission: 'Remplacement IDE — Jour', soignant: 'Marie Dupont', date: '15 mars 2026' },
-  MISSION_ANNULEE_SOIGNANT: { prenom: 'Marie', mission: 'Remplacement AS — Nuit', motif: 'Annulation par l\'établissement' },
-  MISSION_ANNULEE_ETABLISSEMENT: { nom_etablissement: 'EHPAD Les Oliviers', mission: 'Remplacement AS — Nuit', soignant: 'Marie Dupont' },
-  CONTRAT_SIGNE: { prenom: 'Marie', numero_contrat: 'CTR-2026-0042', mission: 'Remplacement IDE — Jour' },
-  RAPPEL_POINTAGE: { prenom: 'Marie', mission: 'Remplacement IDE — Jour', heure_debut: '07h00', etablissement: 'EHPAD Les Oliviers' },
-  FACTURE_EMISE: { nom_etablissement: 'EHPAD Les Oliviers', numero_facture: 'FA-2026-0018', montant_ttc: '1 250,00 €' },
-  PAIEMENT_RECU: { nom_etablissement: 'EHPAD Les Oliviers', numero_facture: 'FA-2026-0018', montant: '1 250,00 €' },
-  DOCUMENT_EXPIRE: { prenom: 'Marie', type_document: 'Attestation vaccinale', date_expiration: '20 avril 2026' },
-  EVALUATION_RECUE: { prenom: 'Marie', note: '5/5', commentaire: 'Excellente professionnelle, ponctuelle et compétente.', mission: 'Remplacement IDE — Jour' },
-  RAPPEL_DPAE: { nom_etablissement: 'EHPAD Les Oliviers', soignant: 'Marie Dupont', numero_contrat: 'CTR-2026-0042' },
-  LITIGE_OUVERT: { prenom: 'Marie', mission: 'Remplacement IDE — Jour', motif: 'Heures contestées', reference: 'LIT-2026-007' },
+  BIENVENUE_SOIGNANT: { prenom: '[DEV] Marie', lien_profil: 'https://app.jolene.app/soignant/profil' },
+  BIENVENUE_ETABLISSEMENT: { nom_etablissement: '[DEV] EHPAD Les Oliviers', lien_profil: 'https://app.jolene.app/etablissement/profil' },
+  MISSION_ACCEPTEE_SOIGNANT: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement IDE — Jour', etablissement: '[DEV] EHPAD Les Oliviers', date: '15 mars 2026', heure: '07h00 – 19h00' },
+  MISSION_ACCEPTEE_ETABLISSEMENT: { nom_etablissement: '[DEV] EHPAD Les Oliviers', mission: '[DEV] Remplacement IDE — Jour', soignant: '[DEV] Marie Dupont', date: '15 mars 2026' },
+  MISSION_ANNULEE_SOIGNANT: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement AS — Nuit', motif: 'Annulation par l\'établissement' },
+  MISSION_ANNULEE_ETABLISSEMENT: { nom_etablissement: '[DEV] EHPAD Les Oliviers', mission: '[DEV] Remplacement AS — Nuit', soignant: '[DEV] Marie Dupont' },
+  CONTRAT_SIGNE: { prenom: '[DEV] Marie', numero_contrat: '[DEV] CTR-2026-0042', mission: '[DEV] Remplacement IDE — Jour' },
+  RAPPEL_POINTAGE: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement IDE — Jour', heure_debut: '07h00', etablissement: '[DEV] EHPAD Les Oliviers' },
+  FACTURE_EMISE: { nom_etablissement: '[DEV] EHPAD Les Oliviers', numero_facture: '[DEV] FA-2026-0018', montant_ttc: '1 250,00 €' },
+  PAIEMENT_RECU: { nom_etablissement: '[DEV] EHPAD Les Oliviers', numero_facture: '[DEV] FA-2026-0018', montant: '1 250,00 €' },
+  DOCUMENT_EXPIRE: { prenom: '[DEV] Marie', type_document: 'Attestation vaccinale', date_expiration: '20 avril 2026' },
+  EVALUATION_RECUE: { prenom: '[DEV] Marie', note: '5/5', commentaire: 'Excellente professionnelle, ponctuelle et compétente.', mission: '[DEV] Remplacement IDE — Jour' },
+  RAPPEL_DPAE: { nom_etablissement: '[DEV] EHPAD Les Oliviers', soignant: '[DEV] Marie Dupont', numero_contrat: '[DEV] CTR-2026-0042' },
+  LITIGE_OUVERT: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement IDE — Jour', motif: 'Heures contestées', reference: '[DEV] LIT-2026-007' },
 };
 
 const TEMPLATES = Object.keys(DONNEES_FICTIVES);
@@ -138,6 +139,7 @@ export default function AdminEmails() {
                       size="sm"
                       onClick={() => setPreviewType(previewType === t ? null : t)}
                       className="gap-1.5"
+                      aria-label={previewType === t ? `Masquer l'aperçu de ${t}` : `Prévisualiser ${t}`}
                     >
                       <Eye className="h-4 w-4" />
                       {previewType === t ? 'Masquer' : 'Prévisualiser'}
@@ -150,6 +152,7 @@ export default function AdminEmails() {
                       onClick={() => envoyerTest(t)}
                       disabled={sending !== null}
                       className="gap-1.5"
+                      aria-label={`Envoyer un email test pour ${t}`}
                     >
                       {sending === t ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                       Envoyer

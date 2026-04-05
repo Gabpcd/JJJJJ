@@ -133,6 +133,8 @@ export default function AdminDetailUtilisateur() {
       try {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
           method: 'POST',
           headers: {
@@ -141,7 +143,9 @@ export default function AdminDetailUtilisateur() {
             apikey: publishableKey,
           },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         const data = await res.json().catch(() => null);
         if (!res.ok) {

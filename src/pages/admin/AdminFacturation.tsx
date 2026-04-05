@@ -59,7 +59,8 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
         }
         setMissions(mList.map(m => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
         setLoading(false);
-      });
+      })
+      .catch((err) => { console.warn('FactureDetailRow fetch error:', err); setLoading(false); });
   }, [factureId]);
 
   if (loading) return (
@@ -138,12 +139,15 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
   );
 }
 
+// Jolene brand teal — used in PDF generation where CSS vars are unavailable
+const PDF_BRAND_COLOR = { r: 23, g: 162, b: 184 } as const;
+
 function genererFacturePDF(facture: any) {
   const doc = new jsPDF();
   const etab = (facture.etablissements as any)?.nom ?? 'Établissement';
 
   // Header
-  doc.setFillColor(23, 162, 184);
+  doc.setFillColor(PDF_BRAND_COLOR.r, PDF_BRAND_COLOR.g, PDF_BRAND_COLOR.b);
   doc.rect(0, 0, 210, 35, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
@@ -219,7 +223,9 @@ export default function AdminFacturation() {
     const { data } = await supabase.from('factures')
       .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
       .order('date_emission', { ascending: false })
-      .limit(500);
+      .limit(500)
+      .then(res => res)
+      .catch(err => { console.warn('charger factures error:', err); return { data: null }; });
     if (data) setFactures(data);
     setLoading(false);
   };
@@ -266,7 +272,8 @@ export default function AdminFacturation() {
 
   const exporterFEC = async () => {
     const annee = new Date().getFullYear();
-    const { data, error } = await supabase.rpc('fn_export_fec' as any, { p_annee: annee });
+    const result = await supabase.rpc('fn_export_fec' as any, { p_annee: annee }).catch(err => { console.warn('exporterFEC error:', err); return { data: null, error: err }; });
+    const { data, error } = result;
     if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     const lignes = Array.isArray(data) ? data : [];
     if (lignes.length === 0) { toast.info('Aucune donnée FEC pour ' + annee); return; }
@@ -281,7 +288,7 @@ export default function AdminFacturation() {
 
   const genererRapportPDF = async () => {
     const doc = new jsPDF();
-    doc.setFillColor(23, 162, 184);
+    doc.setFillColor(PDF_BRAND_COLOR.r, PDF_BRAND_COLOR.g, PDF_BRAND_COLOR.b);
     doc.rect(0, 0, 210, 30, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
