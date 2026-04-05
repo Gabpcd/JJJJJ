@@ -97,7 +97,6 @@ export default function DetailFacture() {
     if (Array.isArray(detail) && detail.length === 1) {
       detail = detail[0];
     }
-    console.log('[DetailFacture] RPC response:', JSON.stringify(detail)?.substring(0, 500));
     if (detail?.facture) setFacture(detail.facture);
     if (Array.isArray(detail?.missions)) {
       setMissions(detail.missions);

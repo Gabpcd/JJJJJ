@@ -197,7 +197,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       return;
     }
     toast.success('Litige ouvert avec succès');
-    window.location.reload();
+    navigate(0);
   };
 
   // Stripe Connect
@@ -373,7 +373,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           <ListeCandidatures
             missionId={m.id}
             modePaiement={(m.etablissements as any)?.mode_paiement_commission}
-            onAccepted={() => window.location.reload()}
+            onAccepted={() => navigate(0)}
             onError={(msg) => toast.error(msg)}
             onSuccess={(msg) => toast.success(msg)}
           />
@@ -549,7 +549,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         resolution: litigeExistant.resolution,
                         missions: { intitule: m.intitule },
                       }}
-                      onUpdate={() => window.location.reload()}
+                      onUpdate={() => navigate(0)}
                     />
                   </div>
                 ) : (
@@ -768,7 +768,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             afficherNotification({ type: 'erreur', message: (data as any).error || 'Erreur lors de la terminaison.' });
           } else {
             afficherNotification({ type: 'succes', message: 'Mission terminée ✅' });
-            window.location.reload();
+            navigate(0);
           }
           setTerminating(false);
         }}
@@ -795,7 +795,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           onComplete={() => {
             setShowConnectCheckout(false);
             toast.success('Paiement effectué ! Le soignant recevra son salaire via Stripe.');
-            window.location.reload();
+            navigate(0);
           }}
         />
       )}
