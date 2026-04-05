@@ -100,6 +100,26 @@ serve(async (req) => {
       );
     }
 
+    // Idempotency: check if payment already exists for this mission
+    const { data: existingPayment } = await supabaseAdmin
+      .from("paiements_mission")
+      .select("id, statut")
+      .eq("mission_id", mission.id)
+      .maybeSingle();
+
+    if (existingPayment) {
+      if (existingPayment.statut === "CAPTURE" || existingPayment.statut === "AUTORISE") {
+        return new Response(
+          JSON.stringify({ skipped: true, reason: "Paiement déjà enregistré", statut: existingPayment.statut }),
+          { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+        );
+      }
+      // If EN_ATTENTE or ECHOUE, allow retry — delete the old record
+      if (existingPayment.statut === "EN_ATTENTE" || existingPayment.statut === "ECHOUE") {
+        await supabaseAdmin.from("paiements_mission").delete().eq("id", existingPayment.id);
+      }
+    }
+
     // Initialize Stripe
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2025-08-27.basil",
