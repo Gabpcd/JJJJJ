@@ -113,9 +113,14 @@ serve(async (req) => {
               })
               .eq("mission_id", missionId);
 
+            // Mark mission: soignant paid via Connect + commission included in same payment
             await supabaseAdmin
               .from("missions")
-              .update({ mode_paiement_soignant: "STRIPE_CONNECT", modifie_le: new Date().toISOString() })
+              .update({
+                mode_paiement_soignant: "STRIPE_CONNECT",
+                commission_facturee: true,
+                modifie_le: new Date().toISOString(),
+              })
               .eq("id", missionId);
 
             console.log(`Connect transfer ${transfer.id} created for mission ${missionId}`);
