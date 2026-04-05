@@ -255,6 +255,42 @@ export default function DashboardSoignant() {
         )}
       </div>
 
+      {/* Missions à venir (planning) */}
+      {mesMissions.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <CalendarDays className="h-4.5 w-4.5 text-primary" /> Mes prochaines missions
+            </h2>
+            <button onClick={() => navigate('/soignant/planning')} className="text-xs text-primary font-medium hover:underline">Voir le planning →</button>
+          </div>
+          <div className="space-y-2">
+            {mesMissions.map((m: any) => (
+              <div key={m.id} onClick={() => navigate(`/soignant/missions/${m.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all flex items-center gap-3 py-3">
+                <div className="flex flex-col items-center justify-center rounded-xl bg-primary/10 px-3 py-1.5 min-w-[52px]">
+                  <span className="text-[10px] font-semibold text-primary uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
+                  <span className="text-lg font-bold text-primary leading-tight">{format(new Date(m.debut_le), 'd')}</span>
+                  <span className="text-[10px] text-primary">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <BadgeStatut statut={m.statut} />
+                    {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
+                  </div>
+                  <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 48h banner: hidden for LIBERAL, shown for SALARIE & MIXTE */}
       {soignant.type_exercice !== 'LIBERAL' && <BandeauAlerte48h heuresSemaine={heuresSemaine} />}
 
