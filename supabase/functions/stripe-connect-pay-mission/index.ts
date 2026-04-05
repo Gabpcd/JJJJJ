@@ -265,6 +265,7 @@ serve(async (req) => {
       ],
       payment_intent_data: {
         transfer_group: `mission_${mission_id}`,
+        statement_descriptor: "JOLENE",
         metadata: {
           type: "CONNECT_MISSION_PAYMENT",
           mission_id,

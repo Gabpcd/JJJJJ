@@ -145,6 +145,7 @@ serve(async (req) => {
         confirm: true,
         off_session: true,
         description: `Commission mission: ${(mission as any).intitule}`,
+        statement_descriptor: "JOLENE",
         metadata: {
           mission_id: mission.id,
           etablissement_id: mission.etablissement_id,
@@ -175,6 +176,7 @@ serve(async (req) => {
         customer: customerId,
         capture_method: "manual",
         description: `Commission mission: ${(mission as any).intitule}`,
+        statement_descriptor: "JOLENE",
         metadata: {
           mission_id: mission.id,
           etablissement_id: mission.etablissement_id,

@@ -221,6 +221,8 @@ serve(async (req) => {
       payment_intent_data: {
         metadata: { facture_id: facture.id },
         description: `Facture ${facture.numero_facture}`,
+        statement_descriptor: "JOLENE",
+        statement_descriptor_suffix: facture.numero_facture?.slice(-10) || undefined,
       },
     };
 
