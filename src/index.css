@@ -21,9 +21,9 @@
     --primary-dark: 187 75% 33%;
     --primary-light: 187 71% 94%;
 
-    --rose: 338 50% 65%;
+    --rose: 340 42% 57%;
     --rose-foreground: 0 0% 100%;
-    --rose-light: 338 50% 93%;
+    --rose-light: 340 40% 95%;
 
     --secondary: 210 40% 96%;
     --secondary-foreground: 215 28% 17%;
@@ -39,13 +39,13 @@
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 160 84% 39%;
+    --success: 153 43% 49%;
     --success-foreground: 0 0% 100%;
 
     --warning: 37 85% 50%;
     --warning-foreground: 37 85% 15%;
 
-    --info: 217 91% 60%;
+    --info: 220 80% 65%;
     --info-foreground: 0 0% 100%;
 
     --border: 214 32% 91%;
@@ -82,9 +82,9 @@
     --primary-dark: 187 75% 50%;
     --primary-light: 187 71% 15%;
 
-    --rose: 338 50% 60%;
+    --rose: 340 42% 62%;
     --rose-foreground: 0 0% 100%;
-    --rose-light: 338 40% 20%;
+    --rose-light: 340 30% 18%;
 
     --secondary: 217 33% 22%;
     --secondary-foreground: 214 32% 91%;
@@ -100,13 +100,13 @@
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 160 84% 39%;
+    --success: 153 43% 49%;
     --success-foreground: 0 0% 100%;
 
     --warning: 37 85% 50%;
     --warning-foreground: 37 85% 15%;
 
-    --info: 217 91% 60%;
+    --info: 220 80% 65%;
     --info-foreground: 0 0% 100%;
 
     --border: 217 33% 25%;
@@ -127,6 +127,12 @@
 
   * {
     @apply border-border;
+  }
+
+  /* Text selection in rose — brand identity touch */
+  ::selection {
+    background-color: hsl(var(--rose) / 0.25);
+    color: inherit;
   }
 
   html, body {

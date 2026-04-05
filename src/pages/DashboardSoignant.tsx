@@ -557,19 +557,19 @@ export default function DashboardSoignant() {
         <TabsContent value="parcours">
           {!PROFESSIONS_NON_LIBERAL.includes(soignant.profession) ? (
             <div className="space-y-4">
-              <div className="rounded-2xl bg-gradient-to-r from-purple-50 to-purple-100/50 dark:from-purple-950/20 dark:to-purple-900/10 border border-purple-200 dark:border-purple-800 p-4 md:p-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
+              <div className="rounded-2xl bg-gradient-to-r from-rose-light to-rose/5 dark:from-rose/10 dark:to-rose/5 border border-rose/20 p-4 md:p-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-base font-bold text-foreground">Mon parcours vers le libéral</h2>
-                  <span className="text-xs text-primary font-medium">Détails →</span>
+                  <span className="text-xs text-rose font-medium">Détails →</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-4">Objectif : 3 200 heures d'exercice</p>
-                <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-primary to-primary-dark" couleurFond="bg-primary/10" />
+                <JaugeProgression valeur={heures} max={3200} marqueurs={[800, 1600, 2400, 3200]} couleurBarre="bg-gradient-to-r from-rose to-primary" couleurFond="bg-rose/10" />
                 <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5"><span>0h</span><span>800h</span><span>1600h</span><span>2400h</span><span>3200h</span></div>
-                <p className="text-sm font-semibold text-foreground mt-3"><span className="text-primary">{heures}h</span> / 3 200h</p>
+                <p className="text-sm font-semibold text-foreground mt-3"><span className="text-rose">{heures}h</span> / 3 200h</p>
               </div>
 
               {heures >= 800 && (soignant as any).statut_liberal !== 'ACTIF' && (
-                <div className="rounded-2xl bg-gradient-to-r from-primary/5 to-purple-50 dark:to-purple-900/10 border border-primary/20 p-4 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/passer-en-liberal')}>
+                <div className="rounded-2xl bg-gradient-to-r from-rose/5 to-rose-light dark:to-rose/10 border border-rose/20 p-4 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/passer-en-liberal')}>
                   <div className="flex items-center gap-3">
                     <div className="rounded-xl p-2.5 bg-primary/10"><Rocket className="h-5 w-5 text-primary" /></div>
                     <div>
@@ -583,7 +583,7 @@ export default function DashboardSoignant() {
 
               {/* Prévoyance CTA */}
               {!(soignant as any).prevoyance_inscrit && (
-                <div className="rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/20 dark:to-purple-900/10 border border-violet-200 dark:border-violet-800 p-4 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
+                <div className="rounded-2xl bg-gradient-to-r from-rose-light to-rose/5 dark:from-rose/10 dark:to-rose/5 border border-rose/20 p-4 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
                   <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protégez-vous avec la Prévoyance Jolene</h3>
                   <p className="text-xs text-muted-foreground mb-2">Assurance santé subventionnée jusqu'à 30%. Bonus : +3 points de fiabilité.</p>
                   <span className="text-xs text-primary font-medium">Découvrir les plans →</span>
