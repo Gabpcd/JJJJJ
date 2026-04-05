@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Scale, PlusCircle } from 'lucide-react';
+import { Scale, PlusCircle, ChevronRight, Clock, CheckCircle, AlertTriangle, MessageCircle, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,11 +17,25 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
 
+type FiltreStatut = 'TOUS' | 'OUVERT' | 'MEDIATION' | 'FERME';
+
+function statutBadge(statut: string) {
+  switch (statut) {
+    case 'OUVERT': return { label: 'Ouvert', icon: Clock, classes: 'bg-warning/10 text-warning border-warning/30' };
+    case 'MEDIATION': return { label: 'Médiation', icon: AlertTriangle, classes: 'bg-info/10 text-info border-info/30' };
+    case 'FERME': return { label: 'Fermé', icon: CheckCircle, classes: 'bg-success/10 text-success border-success/30' };
+    default: return { label: statut, icon: Scale, classes: 'bg-muted text-muted-foreground border-border' };
+  }
+}
+
 export default function LitigesSoignant() {
   usePageTitle('Mes litiges');
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filtre, setFiltre] = useState<FiltreStatut>('TOUS');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // New dispute modal
   const [showNew, setShowNew] = useState(false);
@@ -32,7 +48,7 @@ export default function LitigesSoignant() {
     if (!user) return;
     const { data } = await supabase
       .from('litiges')
-      .select('*, missions(intitule, debut_le)')
+      .select('*, missions(id, intitule, debut_le, fin_le, etablissement_id, etablissements(nom))')
       .eq('soignant_id', user.id)
       .order('cree_le', { ascending: false });
     setLitiges(data || []);
@@ -41,11 +57,23 @@ export default function LitigesSoignant() {
 
   useEffect(() => { charger(); }, [user]);
 
+  const filteredLitiges = useMemo(() => {
+    if (filtre === 'TOUS') return litiges;
+    return litiges.filter(l => l.statut === filtre);
+  }, [litiges, filtre]);
+
+  const counts = useMemo(() => ({
+    total: litiges.length,
+    ouvert: litiges.filter(l => l.statut === 'OUVERT').length,
+    mediation: litiges.filter(l => l.statut === 'MEDIATION').length,
+    ferme: litiges.filter(l => l.statut === 'FERME').length,
+  }), [litiges]);
+
   const openNewLitige = async () => {
     if (!user) return;
     const [{ data: missions }, { data: existingLitiges }] = await Promise.all([
       supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, etablissement_id')
+        .select('id, intitule, debut_le, fin_le, etablissement_id, etablissements(nom)')
         .eq('soignant_assigne_id', user.id)
         .in('statut', ['TERMINEE', 'EN_COURS'])
         .order('fin_le', { ascending: false })
@@ -87,7 +115,7 @@ export default function LitigesSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             <Scale className="h-6 w-6 text-primary" /> Mes litiges
@@ -99,15 +127,93 @@ export default function LitigesSoignant() {
         </Button>
       </div>
 
-      {litiges.length === 0 ? (
-        <EtatVide icone={Scale} titre="Aucun litige" sousTitre="Vous n'avez aucun litige en cours." />
-      ) : (
-        <div className="space-y-4">
-          {litiges.map(l => (
-            <div key={l.id} className="card-base">
-              <FilDiscussionLitige litige={l} onUpdate={charger} />
-            </div>
+      {/* Counters */}
+      {litiges.length > 0 && (
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+          {[
+            { id: 'TOUS' as FiltreStatut, label: 'Tous', count: counts.total },
+            { id: 'OUVERT' as FiltreStatut, label: 'Ouverts', count: counts.ouvert },
+            { id: 'MEDIATION' as FiltreStatut, label: 'Médiation', count: counts.mediation },
+            { id: 'FERME' as FiltreStatut, label: 'Fermés', count: counts.ferme },
+          ].filter(f => f.id === 'TOUS' || f.count > 0).map(f => (
+            <button
+              key={f.id}
+              onClick={() => setFiltre(f.id)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${
+                filtre === f.id
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-card text-muted-foreground border-border hover:bg-muted/50'
+              }`}
+            >
+              {f.label}
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                filtre === f.id ? 'bg-primary-foreground/20' : 'bg-muted'
+              }`}>{f.count}</span>
+            </button>
           ))}
+        </div>
+      )}
+
+      {/* Litiges list */}
+      {filteredLitiges.length === 0 ? (
+        <EtatVide icone={Scale} titre={filtre === 'TOUS' ? 'Aucun litige' : `Aucun litige ${filtre.toLowerCase()}`} sousTitre="Vous n'avez aucun litige en cours." />
+      ) : (
+        <div className="space-y-3">
+          {filteredLitiges.map(l => {
+            const badge = statutBadge(l.statut);
+            const isExpanded = expandedId === l.id;
+            const mission = l.missions;
+            return (
+              <div key={l.id} className="card-base overflow-hidden">
+                {/* Litige header — always visible, clickable */}
+                <div
+                  className="flex items-center gap-3 cursor-pointer"
+                  onClick={() => setExpandedId(isExpanded ? null : l.id)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline" className={`text-[10px] ${badge.classes}`}>
+                        <badge.icon className="h-3 w-3 mr-1" />
+                        {badge.label}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">
+                        {format(new Date(l.cree_le), "d MMM yyyy", { locale: fr })}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {mission?.intitule || 'Mission'}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      🏥 {mission?.etablissements?.nom || '—'}
+                      {mission?.debut_le && ` · ${format(new Date(mission.debut_le), 'd MMM yyyy', { locale: fr })}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                      Motif : {l.motif}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {mission?.id && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/soignant/missions/${mission.id}`); }}
+                        className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                        title="Voir la mission"
+                      >
+                        Détail <ChevronRight className="h-3 w-3" />
+                      </button>
+                    )}
+                    <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                  </div>
+                </div>
+
+                {/* Expanded: full discussion thread */}
+                {isExpanded && (
+                  <div className="border-t border-border mt-3 pt-3">
+                    <FilDiscussionLitige litige={l} onUpdate={charger} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -118,17 +224,22 @@ export default function LitigesSoignant() {
             <DialogTitle>Ouvrir un nouveau litige</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
+            <div className="rounded-xl bg-warning/5 border border-warning/20 p-3">
+              <p className="text-xs text-warning font-medium">
+                ⚠️ Un litige déclenche une procédure de résolution entre vous et l'établissement. Privilégiez d'abord la messagerie pour résoudre le problème.
+              </p>
+            </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Mission concernée</label>
               {missionsTerminees.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune mission éligible (missions sans litige existant)</p>
+                <p className="text-sm text-muted-foreground">Aucune mission éligible</p>
               ) : (
                 <Select value={selectedMissionId} onValueChange={setSelectedMissionId}>
                   <SelectTrigger><SelectValue placeholder="Sélectionner une mission" /></SelectTrigger>
                   <SelectContent>
                     {missionsTerminees.map(m => (
                       <SelectItem key={m.id} value={m.id}>
-                        {m.intitule} — {m.debut_le ? format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr }) : ''}
+                        {m.intitule} — {m.etablissements?.nom || ''} — {m.debut_le ? format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr }) : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -137,11 +248,12 @@ export default function LitigesSoignant() {
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Motif du litige</label>
-              <Textarea value={newMotif} onChange={e => setNewMotif(e.target.value)} placeholder="Décrivez le problème rencontré..." rows={4} />
+              <Textarea value={newMotif} onChange={e => setNewMotif(e.target.value)} placeholder="Décrivez le problème rencontré (minimum 10 caractères)..." rows={4} maxLength={1000} />
+              <p className="text-[10px] text-muted-foreground mt-1 text-right">{newMotif.length}/1000</p>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setShowNew(false)}>Annuler</Button>
-              <Button onClick={creerLitige} disabled={creating || !selectedMissionId || !newMotif.trim()}>
+              <Button onClick={creerLitige} disabled={creating || !selectedMissionId || newMotif.trim().length < 10}>
                 {creating ? 'Création…' : '⚠️ Ouvrir le litige'}
               </Button>
             </div>
