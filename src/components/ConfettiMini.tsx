@@ -21,11 +21,12 @@ export function ConfettiMini({ active, duration = 1500, count = 6 }: ConfettiMin
 
   // Mix of brand colors: rose + teal + success
   const CONFETTI_COLORS = [
-    'hsl(var(--rose))',
     'hsl(var(--primary))',
-    'hsl(var(--rose) / 0.7)',
+    'hsl(var(--teal))',
     'hsl(var(--success))',
-    'hsl(var(--primary) / 0.7)',
+    'hsl(var(--warning))',
+    'hsl(var(--info))',
+    '#FFD700',
   ];
 
   return (

@@ -33,6 +33,10 @@ export default {
           foreground: "hsl(var(--rose-foreground))",
           light: "hsl(var(--rose-light))",
         },
+        teal: {
+          DEFAULT: "hsl(var(--teal))",
+          foreground: "hsl(var(--teal-foreground))",
+        },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
