@@ -40,7 +40,7 @@ const NAV_SOIGNANT_BASE: NavItem[] = [
   { icone: GraduationCap, label: 'Parcours libéral', route: '/soignant/parcours-3200h' },
   { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
   { icone: Scale, label: 'Litiges', route: '/soignant/litiges' },
-  { icone: CreditCard, label: 'Mon compte', route: '/soignant/stripe-connect' },
+  { icone: CreditCard, label: 'Paiements', route: '/soignant/stripe-connect' },
   { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
   { icone: Crown, label: 'Premium', route: '/soignant/premium' },
   { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
