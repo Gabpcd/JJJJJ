@@ -13,8 +13,24 @@ export function useTheme() {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.toggle('dark', theme === 'dark');
+    const isDark = theme === 'dark';
+    root.classList.toggle('dark', isDark);
     localStorage.setItem('theme', theme);
+
+    // Update theme-color meta tag for browser chrome (Android Chrome, Safari)
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute('content', isDark ? '#151B2B' : '#17A2B8');
+    }
+
+    // Update Android status bar color if native
+    import('@/lib/platform').then(({ isAndroid }) => {
+      if (!isAndroid()) return;
+      import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+        StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark });
+        StatusBar.setBackgroundColor({ color: isDark ? '#151B2B' : '#FFFFFF' });
+      }).catch(() => {});
+    });
   }, [theme]);
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));

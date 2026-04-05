@@ -27,6 +27,11 @@ if (stored === 'dark' || (!stored && prefersDark)) {
   document.documentElement.classList.add('dark');
 }
 
+// Apply platform class on body for platform-specific CSS
+import { getPlatform } from './lib/platform';
+const platform = getPlatform();
+document.body.classList.add(`platform-${platform}`);
+
 // ─── Service Worker Registration ───
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
@@ -170,12 +175,13 @@ async function initNativePlugins() {
     }
   });
 
-  // StatusBar configuration
+  // StatusBar configuration — adapt to current theme
   try {
     const { StatusBar, Style } = await import("@capacitor/status-bar");
-    await StatusBar.setStyle({ style: Style.Dark });
+    const isDark = document.documentElement.classList.contains('dark');
+    await StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark });
     if (Capacitor.getPlatform() === 'android') {
-      await StatusBar.setBackgroundColor({ color: '#FFFFFF' });
+      await StatusBar.setBackgroundColor({ color: isDark ? '#151B2B' : '#FFFFFF' });
     }
   } catch {}
 

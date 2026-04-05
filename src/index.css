@@ -136,7 +136,73 @@
     -webkit-overflow-scrolling: touch; /* iOS elastic bounce */
   }
 
-  /* Safe area spacer: navy background extends under the status bar / Dynamic Island */
+  /* ── iOS-specific fixes ── */
+  body.platform-ios {
+    -webkit-touch-callout: none; /* Prevent long-press context menu on links/images */
+    -webkit-tap-highlight-color: transparent; /* Remove blue tap highlight */
+  }
+  body.platform-ios input,
+  body.platform-ios textarea,
+  body.platform-ios select {
+    font-size: 16px !important; /* Prevent auto-zoom on focus (iOS zooms < 16px inputs) */
+  }
+  body.platform-ios .user-selectable {
+    -webkit-touch-callout: default; /* Allow long-press on text content that should be selectable */
+    -webkit-user-select: text;
+  }
+
+  /* ── Android-specific fixes ── */
+  body.platform-android {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body.platform-android input,
+  body.platform-android textarea {
+    caret-color: hsl(var(--primary)); /* Teal cursor matching theme */
+  }
+
+  /* ── Web: scrollbar styling ── */
+  body.platform-web ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  body.platform-web ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  body.platform-web ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.2);
+    border-radius: 3px;
+  }
+  body.platform-web ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+
+  /* ── Web: hover effects only on non-touch devices ── */
+  @media (hover: hover) and (pointer: fine) {
+    .card-base:hover {
+      box-shadow: 0 4px 12px hsl(var(--foreground) / 0.08);
+    }
+    .btn-primary:hover {
+      filter: brightness(1.05);
+    }
+    .btn-secondary:hover {
+      background-color: hsl(var(--primary) / 0.05);
+    }
+  }
+
+  /* ── Touch devices: active press feedback ── */
+  @media (hover: none) {
+    .card-base:active {
+      transform: scale(0.98);
+      transition: transform 0.1s ease;
+    }
+    .btn-primary:active,
+    .btn-secondary:active {
+      transform: scale(0.96);
+      transition: transform 0.1s ease;
+    }
+  }
+
+  /* Safe area spacer: background extends under the status bar / Dynamic Island */
   #root::before {
     content: '';
     display: block;
@@ -148,6 +214,7 @@
     right: 0;
     z-index: 100;
     pointer-events: none;
+    transition: background-color 0.2s ease;
   }
 
   #root {
