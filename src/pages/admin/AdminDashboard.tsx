@@ -200,7 +200,7 @@ export default function AdminDashboard() {
         {/* Alertes et actions urgentes */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {litiges.length > 0 && (
-            <div className="rounded-xl border-2 border-warning/40 bg-warning/5 p-4 cursor-pointer hover:border-warning/60 transition-colors" onClick={() => navigate('/admin/reclamations')}>
+            <div className="rounded-xl border-2 border-warning/40 bg-warning/5 p-4 cursor-pointer hover:border-warning/60 transition-colors" onClick={() => navigate('/admin/moderation')}>
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle className="h-5 w-5 text-warning" />
                 <span className="font-bold text-foreground">{litiges.length} litige{litiges.length > 1 ? 's' : ''} ouvert{litiges.length > 1 ? 's' : ''}</span>
