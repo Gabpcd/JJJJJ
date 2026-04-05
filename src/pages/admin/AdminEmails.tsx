@@ -45,7 +45,7 @@ function genererHtmlPreview(type: string, data: Record<string, string>): string 
     .badge{display:inline-block;background:linear-gradient(135deg,#E04590,#9333EA);color:#fff;padding:5px 14px;border-radius:99px;font-size:12px;font-weight:700}
   </style></head><body>
     <div class="card">
-      <div class="header"><span class="logo">💜 Jolene</span></div>
+      <div class="header"><span class="logo">💗 Jolene</span></div>
       <div class="body">
         <span class="badge">${type.replace(/_/g, ' ')}</span>
         <h1 style="margin-top:16px">Prévisualisation du template</h1>
@@ -53,7 +53,7 @@ function genererHtmlPreview(type: string, data: Record<string, string>): string 
         <table class="vars">${vars}</table>
         <p style="color:#94a3b8;font-size:12px;margin-top:24px">Ceci est un aperçu de développement. L'email réel utilise le template serveur complet.</p>
       </div>
-      <div class="footer">© 2026 Jolene — contact@jolene.app 💜</div>
+      <div class="footer">© 2026 Jolene — contact@jolene.app 💗</div>
     </div>
   </body></html>`;
 }
