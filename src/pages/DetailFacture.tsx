@@ -270,8 +270,8 @@ export default function DetailFacture() {
             <p className="text-xs text-muted-foreground">Plateforme de mise en relation</p>
             <p className="text-xs text-muted-foreground mt-2">Facturé à :</p>
             <p className="text-sm font-semibold text-foreground">{etab?.nom}</p>
-            <p className="text-xs text-muted-foreground">{etab?.adresse_rue}</p>
-            <p className="text-xs text-muted-foreground">{etab?.adresse_code_postal} {etab?.adresse_ville}</p>
+            <p className="text-xs text-muted-foreground">{etab?.adresse_rue || ''}</p>
+            <p className="text-xs text-muted-foreground">{etab?.adresse_code_postal || ''} {etab?.adresse_ville || ''}</p>
             <p className="text-xs text-muted-foreground">SIRET : {etab?.siret}</p>
           </div>
         </div>

@@ -229,7 +229,9 @@ export default function DashboardEtablissement() {
         p_type_ressource: 'etablissement', p_id_ressource: user.id, p_cle_s3: null,
         p_details: { page: 'dashboard_etablissement' }, p_ip: null, p_navigateur: navigator.userAgent,
       });
-    } catch {}
+    } catch (err) {
+      console.warn('[DashboardEtab] Erreur audit HDS', err);
+    }
 
     setErreurPartielle(partialError);
     setLoading(false);

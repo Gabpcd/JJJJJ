@@ -34,7 +34,7 @@ function generateStandardCSV(missions: any[], sgMap: Record<string, any>): strin
     const cotis = brut * 0.22;
     const net = brut - cotis;
     return [
-      sg?.nom || '', sg?.prenom || '', sg?.numero_rpps || sg?.id?.substring(0, 8) || '',
+      sg?.nom || 'Soignant inconnu', sg?.prenom || '', sg?.numero_rpps || sg?.id?.substring(0, 8) || '',
       m.intitule || '', format(new Date(m.debut_le), 'dd/MM/yyyy'), format(new Date(m.fin_le), 'dd/MM/yyyy'),
       m.duree_heures || 0, m.taux_horaire_base || 0,
       (m.montant_majoration_nuit || 0).toFixed(2), (m.montant_majoration_dimanche || 0).toFixed(2), (m.montant_majoration_ferie || 0).toFixed(2),
