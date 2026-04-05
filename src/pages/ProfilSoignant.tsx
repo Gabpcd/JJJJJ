@@ -356,9 +356,21 @@ export default function ProfilSoignant() {
       .then(({ data }: any) => {
         if (Array.isArray(data)) setEvaluations(data);
       });
-    // Load badge stats
+    // Load badge stats — map RPC response fields to BadgeStats interface
     supabase.rpc('fn_badge_stats' as any).then(({ data }: any) => {
-      if (data) setBadgeStats(data as BadgeStats);
+      if (data) {
+        setBadgeStats({
+          missionsTerminees: data.total_missions ?? data.missionsTerminees ?? 0,
+          scoreFiabilite: data.score_fiabilite ?? data.scoreFiabilite ?? 0,
+          heuresCumulees: data.heures_cumulees ?? data.heuresCumulees ?? 0,
+          annulations: data.annulations ?? 0,
+          missionsNuit: data.missions_nuit ?? data.missionsNuit ?? 0,
+          missionsWeekend: data.missions_weekend ?? data.missionsWeekend ?? 0,
+          maxMissionsMemeEtab: data.max_missions_meme_etab ?? data.maxMissionsMemeEtab ?? 0,
+          retards: data.retards ?? 0,
+          totalMissions: data.total_missions ?? data.missionsTerminees ?? 0,
+        });
+      }
     });
   }, [user]);
 

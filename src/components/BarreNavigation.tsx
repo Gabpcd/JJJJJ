@@ -50,6 +50,7 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
         { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
         { icone: FileText, label: 'Contrats', route: '/soignant/contrats' },
         { icone: FileText, label: 'Documents', route: '/soignant/documents' },
+        { icone: Flame, label: 'Urgences & exclusions', route: '/soignant/exclusions' },
         { icone: Scale, label: 'Litiges', route: '/soignant/litiges' },
       ],
     },

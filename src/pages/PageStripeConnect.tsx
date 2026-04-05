@@ -84,16 +84,27 @@ export default function PageStripeConnect() {
   }, [searchParams, chargerStatut]);
 
   const lancerOnboarding = async () => {
-    setActionLoading(true);
-    const { data, error } = await supabase.functions.invoke('stripe-connect-onboard');
-    if (error || !data?.url) {
-      capturerErreurSentry(error || new Error('No onboard URL'), 'PageStripeConnect', 'stripe_onboard');
-      toast.error('Erreur lors de la connexion à Stripe. Veuillez réessayer.');
-      setActionLoading(false);
+    if (!isLiberal) {
+      toast.info('Stripe Connect est disponible pour les soignants en exercice libéral.');
       return;
     }
-    window.open(data.url, '_blank');
-    setActionLoading(false);
+    setActionLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('stripe-connect-onboard');
+      if (error || !data?.url) {
+        // 403 = not LIBERAL — show friendly message
+        if (error?.message?.includes('403') || data?.error?.includes('libéral')) {
+          toast.info('Passez en exercice libéral pour activer Stripe Connect.');
+        } else {
+          capturerErreurSentry(error || new Error('No onboard URL'), 'PageStripeConnect', 'stripe_onboard');
+          toast.error('Erreur lors de la connexion à Stripe. Veuillez réessayer.');
+        }
+        return;
+      }
+      window.open(data.url, '_blank');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const rafraichirStatut = async () => {

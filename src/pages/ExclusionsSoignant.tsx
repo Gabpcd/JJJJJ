@@ -7,7 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
-import { Ban, Trash2, ShieldAlert } from 'lucide-react';
+import { Ban, Trash2, ShieldAlert, Flame } from 'lucide-react';
+import { PoolUrgenceToggle } from '@/components/PoolUrgenceToggle';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { fetchEtablissementsSafe } from '@/lib/etablissements';
@@ -76,9 +77,18 @@ export default function ExclusionsSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <h1 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
-        <Ban className="h-5 w-5 text-destructive" /> Mes exclusions
+      <h1 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+        <Flame className="h-5 w-5 text-rose" /> Urgences & exclusions
       </h1>
+
+      {/* Pool urgence toggle */}
+      <div className="mb-6">
+        <PoolUrgenceToggle />
+      </div>
+
+      <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
+        <Ban className="h-5 w-5 text-destructive" /> Mes exclusions
+      </h2>
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-muted rounded-lg p-1">

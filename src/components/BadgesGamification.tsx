@@ -100,7 +100,8 @@ export function BadgesGamification({ stats, compact }: BadgesGamificationProps) 
       <div className={`grid ${compact ? 'grid-cols-3' : 'grid-cols-3 md:grid-cols-5'} gap-3`}>
         {BADGES.map((badge) => {
           const debloque = badge.condition(stats);
-          const pct = Math.round(badge.progression(stats));
+          const rawPct = badge.progression(stats);
+          const pct = Number.isFinite(rawPct) ? Math.round(rawPct) : 0;
           const Icone = badge.icone;
 
           return (
