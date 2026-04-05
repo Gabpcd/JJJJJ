@@ -195,10 +195,43 @@ export default function AdminDashboard() {
           <CarteKPI icone={Building2} valeur={kpi?.etablissements_total ?? '—'} label="Établissements" sousLabel={`+${kpi?.etablissements_semaine ?? 0} cette semaine`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/admin/utilisateurs" />
           <CarteKPI icone={CheckCircle} valeur={kpi?.missions_terminees_total ?? '—'} label="Missions terminées" sousLabel={`${kpi?.missions_terminees_mois ?? 0} ce mois`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/admin/missions?filtre=TERMINEE" />
           <CarteKPI icone={Clock} valeur={kpi?.missions_ouvertes ?? '—'} label="Missions ouvertes" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/admin/missions?filtre=OUVERTE" />
-          <CarteKPI icone={Banknote} valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)} label="CA commissions (contrats signés)" sousLabel={`Potentiel : ${formatEur(kpi?.ca_potentiel_mois ?? 0)} ce mois`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/admin/facturation" />
-          <CarteKPI icone={TrendingUp} valeur={formatEur(kpi?.ca_encaisse_total ?? 0)} label="CA encaissé (factures payées)" sousLabel={`Total potentiel : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`} couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/admin/facturation" />
-          <CarteKPI icone={Target} valeur={`${kpi?.taux_acceptation_mois ?? 0}%`} label="Taux acceptation ce mois" couleurIcone="text-info" couleurFond="bg-info/10" />
-          <CarteKPI icone={Star} valeur={kpi?.score_fiabilite_moyen ? `${kpi.score_fiabilite_moyen}/100` : 'Pas encore d\'évaluation'} label="Score fiabilité moyen" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/admin/conformite" />
+        </div>
+
+        {/* Alertes et actions urgentes */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {litiges.length > 0 && (
+            <div className="rounded-xl border-2 border-warning/40 bg-warning/5 p-4 cursor-pointer hover:border-warning/60 transition-colors" onClick={() => navigate('/admin/reclamations')}>
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="h-5 w-5 text-warning" />
+                <span className="font-bold text-foreground">{litiges.length} litige{litiges.length > 1 ? 's' : ''} ouvert{litiges.length > 1 ? 's' : ''}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Requiert votre attention →</p>
+            </div>
+          )}
+          {facturesImpayees.length > 0 && (
+            <div className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-4 cursor-pointer hover:border-destructive/60 transition-colors" onClick={() => navigate('/admin/facturation')}>
+              <div className="flex items-center gap-2 mb-2">
+                <CreditCard className="h-5 w-5 text-destructive" />
+                <span className="font-bold text-foreground">{facturesImpayees.length} facture{facturesImpayees.length > 1 ? 's' : ''} impayée{facturesImpayees.length > 1 ? 's' : ''}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">En retard de paiement →</p>
+            </div>
+          )}
+          <div className="rounded-xl border border-border bg-card p-4 cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/conformite')}>
+            <div className="flex items-center gap-2 mb-2">
+              <Target className="h-5 w-5 text-primary" />
+              <span className="font-bold text-foreground">{kpi?.taux_acceptation_mois ?? 0}% d'acceptation</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Taux ce mois · Conformité →</p>
+          </div>
+        </div>
+
+        {/* CA */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <CarteKPI icone={Banknote} valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)} label="CA commissions ce mois" sousLabel={`Potentiel : ${formatEur(kpi?.ca_potentiel_mois ?? 0)}`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/admin/facturation" />
+          <CarteKPI icone={TrendingUp} valeur={formatEur(kpi?.ca_encaisse_total ?? 0)} label="CA encaissé total" sousLabel={`Potentiel : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`} couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/admin/facturation" />
+          <CarteKPI icone={FileText} valeur={String(nbTransactions)} label="Missions facturables" couleurIcone="text-info" couleurFond="bg-info/10" lien="/admin/missions" />
+          <CarteKPI icone={UserPlus} valeur={`${(kpi?.soignants_semaine ?? 0) + (kpi?.etablissements_semaine ?? 0)}`} label="Nouveaux cette semaine" couleurIcone="text-rose" couleurFond="bg-rose/10" lien="/admin/utilisateurs" />
         </div>
 
         {/* Charts */}
