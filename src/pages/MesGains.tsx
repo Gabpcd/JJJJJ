@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, Calendar, FileText } from 'lucide-react';
+import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -37,11 +37,13 @@ export default function MesGains() {
   const [modalAttestation, setModalAttestation] = useState(false);
   const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
   const [soignant, setSoignant] = useState<any>(null);
+  const [paiementsMap, setPaiementsMap] = useState<Record<string, any>>({});
+  const [recherche, setRecherche] = useState('');
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: ms }, { data: sg }] = await Promise.all([
+      const [{ data: ms }, { data: sg }, { data: paiements }] = await Promise.all([
         supabase
           .from('missions')
           .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service')
@@ -50,10 +52,19 @@ export default function MesGains() {
           .order('debut_le', { ascending: false })
           .limit(1000),
         supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).single(),
+        supabase.from('paiements_soignant' as any)
+          .select('mission_id, statut, montant_net, methode, reference_virement, date_paiement')
+          .eq('soignant_id', user.id) as any,
       ]);
       const enriched = ms ? await enrichirEtablissements(ms as any) : [];
       setAllMissions(enriched as any[]);
       setSoignant(sg);
+
+      // Index paiements by mission_id
+      const map: Record<string, any> = {};
+      (paiements || []).forEach((p: any) => { if (p.mission_id) map[p.mission_id] = p; });
+      setPaiementsMap(map);
+
       setLoading(false);
 
       supabase.rpc('fn_ecrire_audit_safe', {
@@ -190,10 +201,30 @@ export default function MesGains() {
         * Estimation après cotisations salariales (~22%). Seuls les montants calculés par le moteur de paie font foi.
       </p>
 
+      {/* Recherche */}
+      {allMissions.length > 5 && (
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={recherche}
+            onChange={e => setRecherche(e.target.value)}
+            placeholder="Rechercher une mission, un établissement..."
+            className="input-base pl-9 text-sm py-2"
+          />
+        </div>
+      )}
+
       {/* Liste missions */}
       {missions.length > 0 ? (
         <div className="space-y-2">
-          {missions.map(m => {
+          {missions.filter(m => {
+            if (!recherche.trim()) return true;
+            const q = recherche.toLowerCase();
+            return (m.intitule || '').toLowerCase().includes(q)
+              || (m.etablissements?.nom || '').toLowerCase().includes(q)
+              || (m.service || '').toLowerCase().includes(q);
+          }).map(m => {
             const net = netEstime(m);
             const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
             return (
@@ -218,7 +249,7 @@ export default function MesGains() {
                       <span>{m.taux_horaire_base} €/h</span>
                     </div>
                   </div>
-                  {/* Net amount */}
+                  {/* Net amount + payment status */}
                   <div className="text-right shrink-0 ml-2">
                     <button
                       className="text-primary font-bold text-sm hover:underline"
@@ -229,7 +260,14 @@ export default function MesGains() {
                     {m.total_brut != null && (
                       <p className="text-[10px] text-muted-foreground">brut : {fmt(m.total_brut)}</p>
                     )}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground inline-block ml-1" />
+                    {(() => {
+                      const p = paiementsMap[m.id];
+                      if (!p) return <p className="text-[10px] text-muted-foreground/50">En attente</p>;
+                      if (p.statut === 'CONFIRME') return <p className="text-[10px] text-success flex items-center justify-end gap-0.5"><CheckCircle className="h-3 w-3" />Payé</p>;
+                      if (p.statut === 'DECLARE') return <p className="text-[10px] text-warning flex items-center justify-end gap-0.5"><AlertTriangle className="h-3 w-3" />À confirmer</p>;
+                      if (p.statut === 'CONTESTE') return <p className="text-[10px] text-destructive flex items-center justify-end gap-0.5"><AlertTriangle className="h-3 w-3" />Contesté</p>;
+                      return <p className="text-[10px] text-muted-foreground">{p.statut}</p>;
+                    })()}
                   </div>
                 </div>
               </div>
