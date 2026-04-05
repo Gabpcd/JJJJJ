@@ -195,7 +195,6 @@ export default function MissionsSoignant() {
 
   if (!soignant) return <LayoutApp role="SOIGNANT"><SkeletonList count={4} /></LayoutApp>;
 
-  const mesMissionsCount = missions.filter(() => onglet === 'mes_missions').length || missionsAvecDistance.length;
   const onglets: { id: Onglet; label: string; count?: number }[] = [
     { id: 'disponibles', label: 'Disponibles' },
     { id: 'mes_missions', label: 'Mes missions' },

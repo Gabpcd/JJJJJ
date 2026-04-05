@@ -294,7 +294,7 @@ export default function PasserEnLiberal() {
                 {/* Step 1: Eligibility */}
                 {idx === 0 && (
                   <div className="space-y-2 mt-2">
-                    <DocBadge label={`Heures cumulées ≥ 3 200h (${heures}h)`} ok={hasEnoughHours} lien="/soignant/passer-en-liberal" />
+                    <DocBadge label={`Heures cumulées ≥ 3 200h (${heures}h)`} ok={hasEnoughHours} lien="/soignant/parcours-3200h" />
                     <DocBadge label="Documents critiques valides (diplôme, identité)" ok={hasDocsCritiques} lien="/soignant/documents" />
                     <DocBadge label={`Profession éligible (${soignant?.profession || ''})`} ok={professionEligible} lien="/soignant/profil" />
                     {step1Done && <p className="text-xs font-semibold text-success mt-1">Éligible ✅</p>}
