@@ -265,33 +265,40 @@ export default function PageAccueil() {
 
       {/* ═══ Section 1 — Hero ═══ */}
       <section className="relative overflow-hidden">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-rose/6 dark:from-primary/5 dark:to-rose/3" />
-        {/* Decorative SVGs */}
-        <svg className="absolute top-10 right-[10%] w-64 h-64 opacity-[0.06] dark:opacity-[0.04]" viewBox="0 0 200 200"><circle cx="100" cy="100" r="90" stroke="currentColor" className="text-primary" strokeWidth="2" fill="none" /><circle cx="100" cy="100" r="50" stroke="currentColor" className="text-primary" strokeWidth="1.5" fill="none" /></svg>
-        <svg className="absolute bottom-10 left-[5%] w-48 h-48 opacity-[0.06] dark:opacity-[0.04]" viewBox="0 0 100 100"><rect x="20" y="40" width="60" height="20" rx="3" fill="currentColor" className="text-primary" /><rect x="40" y="20" width="20" height="60" rx="3" fill="currentColor" className="text-primary" /></svg>
-        <svg className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] opacity-[0.03]" viewBox="0 0 400 400"><circle cx="200" cy="200" r="180" stroke="currentColor" className="text-primary" strokeWidth="1" fill="none" /><circle cx="200" cy="200" r="120" stroke="currentColor" className="text-primary" strokeWidth="0.5" fill="none" /></svg>
+        {/* Vibrant gradient background */}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.12) 0%, hsl(270 60% 50% / 0.1) 30%, hsl(215 80% 55% / 0.08) 60%, hsl(174 72% 48% / 0.06) 100%)' }} />
+        {/* Fun decorative blobs */}
+        <div className="absolute top-20 right-[15%] w-72 h-72 rounded-full opacity-[0.08]" style={{ background: 'radial-gradient(circle, hsl(330 85% 60%), transparent 70%)' }} />
+        <div className="absolute bottom-10 left-[10%] w-56 h-56 rounded-full opacity-[0.06]" style={{ background: 'radial-gradient(circle, hsl(215 80% 55%), transparent 70%)' }} />
+        <div className="absolute top-1/3 left-1/2 w-96 h-96 rounded-full opacity-[0.04]" style={{ background: 'radial-gradient(circle, hsl(270 60% 50%), transparent 70%)' }} />
 
         <div className={`relative max-w-3xl mx-auto px-4 pt-20 pb-24 md:pt-28 md:pb-32 text-center transition-all duration-1000 ease-out ${heroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-6">
+            ✨ La plateforme qui change tout
+          </div>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.1] tracking-tight mb-6">
             Trouvez le bon soignant.{' '}
-            <span className="text-primary">En quelques clics.</span>
+            <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%), hsl(215 80% 55%))' }}>
+              En quelques clics.
+            </span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            La plateforme qui connecte les établissements de santé avec des soignants qualifiés et vérifiés.
+            🏥 Établissements et 👩‍⚕️ soignants connectés pour des missions de remplacement simple, rapide et fun !
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={() => navigate('/inscription/soignant')}
-              className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+              className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
             >
-              Je suis soignant <ArrowRight className="h-4 w-4" />
+              🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
             </button>
             <button
               onClick={() => navigate('/inscription/etablissement')}
-              className="inline-flex items-center justify-center gap-2 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200"
+              className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
             >
-              Je suis un établissement <ArrowRight className="h-4 w-4" />
+              🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         </div>
