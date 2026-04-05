@@ -20,7 +20,7 @@ export function FooterLegal() {
           <span className="text-primary/30">•</span>
           <a href="mailto:contact@jolene.app" className="hover:text-primary hover:underline transition-colors">✉️ Contact</a>
         </div>
-        <p className="text-[10px] text-muted-foreground/60 mt-2">© {new Date().getFullYear()} Jolene SASU — Tous droits réservés 💗</p>
+        <p className="text-[10px] text-muted-foreground/60 mt-2">© {new Date().getFullYear()} Jolene SASU — Tous droits réservés ❤️</p>
       </div>
     </footer>
   );
