@@ -29,6 +29,7 @@ import { ProgressionCirculaire3200h } from '@/components/ProgressionCirculaire32
 import { ProchainBadgeWidget } from '@/components/ProchainBadgeWidget';
 import { CalendrierMiniSemaine } from '@/components/CalendrierMiniSemaine';
 import { JaugeSpeedometer } from '@/components/JaugeSpeedometer';
+import { BoutonAjouterCalendrier } from '@/components/SyncCalendrier';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
@@ -281,9 +282,12 @@ export default function DashboardSoignant() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     🏥 {m.etablissements?.nom}{m.etablissements?.adresse_ville ? ` · ${m.etablissements.adresse_ville}` : ''}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
-                  </p>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <p className="text-xs text-muted-foreground">
+                      🕐 {format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                    </p>
+                    <BoutonAjouterCalendrier mission={m} />
+                  </div>
                 </div>
               </div>
             ))}
