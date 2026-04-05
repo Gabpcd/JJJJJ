@@ -57,16 +57,16 @@
 
     --radius: 1rem;
 
-    --sidebar-bg: 270 60% 40%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 330 85% 60%;
+    --sidebar-bg: 270 40% 97%;
+    --sidebar-foreground: 260 30% 30%;
+    --sidebar-primary: 330 85% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 270 50% 35%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 270 40% 38%;
+    --sidebar-accent: 270 50% 93%;
+    --sidebar-accent-foreground: 260 30% 25%;
+    --sidebar-border: 270 30% 90%;
     --sidebar-ring: 330 85% 60%;
 
-    --sidebar-background: 270 60% 40%;
+    --sidebar-background: 270 40% 97%;
   }
 
   .dark {
