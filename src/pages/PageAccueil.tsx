@@ -336,17 +336,18 @@ export default function PageAccueil() {
       </section>
 
       {/* ═══ Section 3 — Chiffres clés ═══ */}
-      <section className="py-20 md:py-24 bg-background">
-        <div className="max-w-5xl mx-auto px-4">
+      <section className="py-20 md:py-24 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-[0.04]" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60%), hsl(270 60% 50%), hsl(215 80% 55%))' }} />
+        <div className="relative max-w-5xl mx-auto px-4">
           <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">En chiffres</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">En chiffres 📊</h2>
           </RevealOnScroll>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-6">
             {[
-              { cible: 15, suffixe: '+', label: 'professions' },
-              { cible: 24, suffixe: '/7', label: 'missions jour et nuit' },
-              { cible: 100, suffixe: '%', label: 'conforme Code du travail' },
-              { cible: 0, suffixe: '€', label: "d'abonnement" },
+              { cible: 15, suffixe: '+', label: '👩‍⚕️ professions', emoji: '💼' },
+              { cible: 24, suffixe: '/7', label: '🌙 missions jour et nuit', emoji: '⏰' },
+              { cible: 100, suffixe: '%', label: '✅ conforme Code du travail', emoji: '⚖️' },
+              { cible: 0, suffixe: '€', label: "💸 d'abonnement", emoji: '🆓' },
             ].map((c, i) => (
               <RevealOnScroll key={i} delay={i * 100}>
                 <div className="text-center">
@@ -363,61 +364,59 @@ export default function PageAccueil() {
       <section className="py-20 md:py-28 bg-card">
         <div className="max-w-5xl mx-auto px-4">
           <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">Une plateforme, deux expériences</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-center mb-14">Une plateforme, deux expériences 🤝</h2>
           </RevealOnScroll>
           <div className="grid md:grid-cols-2 gap-6 md:gap-8">
             {/* Soignants */}
             <RevealOnScroll delay={0}>
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 dark:bg-primary/10 p-8 md:p-10 h-full">
-                <h3 className="text-xl font-bold text-foreground mb-6">Pour les soignants</h3>
+              <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.08), hsl(270 60% 50% / 0.05))' }}>
+                <h3 className="text-xl font-bold text-foreground mb-6">🩺 Pour les soignants</h3>
                 <ul className="space-y-4">
                   {[
-                    { icon: MapPin, text: 'Missions près de chez vous' },
-                    { icon: FileText, text: 'Contrats générés automatiquement' },
-                    { icon: Navigation, text: 'Pointage GPS sécurisé' },
-                    { icon: TrendingUp, text: 'Parcours vers le libéral' },
+                    { emoji: '📍', text: 'Missions près de chez vous' },
+                    { emoji: '📄', text: 'Contrats générés automatiquement' },
+                    { emoji: '📲', text: 'Pointage GPS sécurisé' },
+                    { emoji: '🚀', text: 'Parcours vers le libéral' },
                   ].map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
-                      <div className="mt-0.5 w-8 h-8 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0">
-                        <item.icon className="h-4 w-4 text-primary" />
-                      </div>
+                      <span className="text-xl mt-0.5">{item.emoji}</span>
                       <span className="text-foreground font-medium">{item.text}</span>
                     </li>
                   ))}
                 </ul>
                 <button
                   onClick={() => navigate('/inscription/soignant')}
-                  className="mt-8 inline-flex items-center gap-2 text-primary font-semibold text-sm hover:underline underline-offset-4"
+                  className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
+                  style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
                 >
-                  Créer mon profil <ArrowRight className="h-4 w-4" />
+                  Créer mon profil ✨ <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             </RevealOnScroll>
 
             {/* Établissements */}
             <RevealOnScroll delay={150}>
-              <div className="rounded-2xl border border-teal/20 bg-teal/5 dark:bg-teal/10 p-8 md:p-10 h-full">
-                <h3 className="text-xl font-bold text-foreground mb-6">Pour les établissements</h3>
+              <div className="rounded-2xl p-8 md:p-10 h-full border-0 shadow-lg" style={{ background: 'linear-gradient(135deg, hsl(215 80% 55% / 0.08), hsl(174 72% 48% / 0.05))' }}>
+                <h3 className="text-xl font-bold text-foreground mb-6">🏥 Pour les établissements</h3>
                 <ul className="space-y-4">
                   {[
-                    { icon: UserCheck, text: 'Soignants vérifiés (RPPS)' },
-                    { icon: PercentCircle, text: 'Commission dégressive' },
-                    { icon: Scale, text: 'Conformité Code du travail' },
-                    { icon: Receipt, text: 'Facturation automatisée' },
+                    { emoji: '✅', text: 'Soignants vérifiés (RPPS)' },
+                    { emoji: '💰', text: 'Commission dégressive' },
+                    { emoji: '⚖️', text: 'Conformité Code du travail' },
+                    { emoji: '🧾', text: 'Facturation automatisée' },
                   ].map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
-                      <div className="mt-0.5 w-8 h-8 rounded-lg bg-teal/10 dark:bg-teal/20 flex items-center justify-center shrink-0">
-                        <item.icon className="h-4 w-4 text-teal" />
-                      </div>
+                      <span className="text-xl mt-0.5">{item.emoji}</span>
                       <span className="text-foreground font-medium">{item.text}</span>
                     </li>
                   ))}
                 </ul>
                 <button
                   onClick={() => navigate('/inscription/etablissement')}
-                  className="mt-8 inline-flex items-center gap-2 text-teal font-semibold text-sm hover:underline underline-offset-4"
+                  className="mt-8 inline-flex items-center gap-2 text-white font-semibold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 shadow-md"
+                  style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
                 >
-                  Publier une mission <ArrowRight className="h-4 w-4" />
+                  Publier une mission 🎯 <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             </RevealOnScroll>
@@ -493,23 +492,25 @@ export default function PageAccueil() {
 
       {/* ═══ Section 7 — CTA final ═══ */}
       <section className="relative py-20 md:py-28 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-rose/6" />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.08) 0%, hsl(270 60% 50% / 0.06) 50%, hsl(215 80% 55% / 0.04) 100%)' }} />
         <div className="relative max-w-3xl mx-auto px-4 text-center">
           <RevealOnScroll>
-            <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier votre staffing médical ?</h2>
-            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Rejoignez des centaines d'établissements et de soignants qui utilisent Jolene au quotidien.</p>
+            <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier votre staffing ? 🎉</h2>
+            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Rejoignez des centaines d'établissements et de soignants qui utilisent Jolene au quotidien 💜</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={() => navigate('/inscription/soignant')}
-                className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
               >
-                Je suis soignant <ArrowRight className="h-4 w-4" />
+                🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
               </button>
               <button
                 onClick={() => navigate('/inscription/etablissement')}
-                className="inline-flex items-center justify-center gap-2 border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-xl px-8 py-4 font-semibold text-base transition-all duration-200"
+                className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
               >
-                Je suis un établissement <ArrowRight className="h-4 w-4" />
+                🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           </RevealOnScroll>
