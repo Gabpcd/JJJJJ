@@ -103,7 +103,7 @@ export default function AttestationHeures() {
           <h1 className="text-xl font-bold uppercase tracking-wide">Attestation d'heures travaillées</h1>
         </div>
 
-        <hr className="border-gray-300 mb-6" />
+        <div className="border-t border-gray-300 mb-6" />
 
         {/* Soignant */}
         <div className="mb-6">
@@ -124,7 +124,7 @@ export default function AttestationHeures() {
           <p className="text-sm">Du {format(new Date(debut), 'dd/MM/yyyy')} au {format(new Date(fin), 'dd/MM/yyyy')}</p>
         </div>
 
-        <hr className="border-gray-300 mb-6" />
+        <div className="border-t border-gray-300 mb-6" />
 
         {/* Détail des missions */}
         <div className="mb-6">
@@ -157,7 +157,7 @@ export default function AttestationHeures() {
           </table>
         </div>
 
-        <hr className="border-gray-300 mb-6" />
+        <div className="border-t border-gray-300 mb-6" />
 
         {/* Synthèse */}
         <div className="mb-6">
@@ -169,7 +169,7 @@ export default function AttestationHeures() {
           </ul>
         </div>
 
-        <hr className="border-gray-300 mb-6" />
+        <div className="border-t border-gray-300 mb-6" />
 
         {/* Footer légal */}
         <div className="text-xs text-gray-500 space-y-2">

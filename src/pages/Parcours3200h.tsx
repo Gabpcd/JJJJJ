@@ -103,7 +103,7 @@ export default function Parcours3200h() {
             <Button variant="outline" onClick={() => navigate('/soignant/documents')}>
               <FileText className="h-4 w-4 mr-2" /> Mes documents libéraux
             </Button>
-            <Button onClick={() => navigate('/soignant/missions')}>
+            <Button onClick={() => navigate('/soignant/missions')} aria-label="Voir les missions">
               Voir les missions →
             </Button>
           </div>

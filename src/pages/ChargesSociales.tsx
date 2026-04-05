@@ -158,6 +158,9 @@ export default function ChargesSociales() {
       {/* CA banner — clickable to show missions */}
       <div
         className="card-base mb-6 cursor-pointer hover:border-primary/30 transition-colors"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowMissions(!showMissions); } }}
         onClick={() => setShowMissions(!showMissions)}
       >
         <div className="text-center">
