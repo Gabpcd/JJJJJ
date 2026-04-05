@@ -83,7 +83,7 @@ export default function ExclusionsSoignant() {
 
       {/* Pool urgence toggle */}
       <div className="mb-6">
-        <PoolUrgenceToggle />
+        <PoolUrgenceToggle actif={false} rayonKm={30} onUpdate={() => {}} onError={() => {}} onSuccess={() => {}} />
       </div>
 
       <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
