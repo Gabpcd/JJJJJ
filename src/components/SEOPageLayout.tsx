@@ -20,8 +20,8 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2">
-            <HeartPulse className="h-7 w-7 text-primary" />
-            <span className="text-xl font-bold text-foreground">Jolene</span>
+            <HeartPulse className="h-7 w-7 text-rose" />
+            <span className="text-xl font-bold text-rose">Jolene</span>
           </a>
           <div className="flex items-center gap-4">
             <a href="/blog" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Blog</a>
@@ -64,8 +64,8 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-3">
-                <HeartPulse className="h-5 w-5 text-primary" />
-                <span className="font-bold text-foreground">Jolene</span>
+                <HeartPulse className="h-5 w-5 text-rose" />
+                <span className="font-bold text-rose">Jolene</span>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">La plateforme de confiance pour le remplacement et le staffing en santé.</p>
             </div>

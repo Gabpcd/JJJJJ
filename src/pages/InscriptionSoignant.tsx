@@ -204,8 +204,8 @@ export default function InscriptionSoignant() {
       <div className="flex-1 flex items-center justify-center px-4 py-8">
       <div className="card-base max-w-lg w-full">
         <div className="flex items-center justify-center gap-2 mb-6">
-          <HeartPulse className="h-7 w-7 text-primary" />
-          <span className="text-xl font-bold text-primary-dark">Jolene</span>
+          <HeartPulse className="h-7 w-7 text-rose" />
+          <span className="text-xl font-bold text-rose">Jolene</span>
         </div>
         <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Soignant</h1>
 
