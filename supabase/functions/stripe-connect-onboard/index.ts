@@ -66,7 +66,7 @@ serve(async (req) => {
     // Get soignant info
     const { data: soignant } = await supabaseAdmin
       .from("soignants")
-      .select("prenom, nom, email, type_exercice")
+      .select("prenom, nom, email, type_exercice, statut_liberal")
       .eq("id", soignantId)
       .single();
 
@@ -77,12 +77,16 @@ serve(async (req) => {
       });
     }
 
-    // Block non-LIBERAL
-    if (soignant.type_exercice !== "LIBERAL") {
+    // Block non-LIBERAL — allow LIBERAL, MIXTE, or anyone with statut_liberal ACTIF
+    const isEligible = soignant.type_exercice === "LIBERAL"
+      || soignant.type_exercice === "MIXTE"
+      || soignant.statut_liberal === "ACTIF";
+
+    if (!isEligible) {
       return new Response(
         JSON.stringify({
           error:
-            "Stripe Connect est réservé aux soignants en exercice libéral",
+            "Stripe Connect est réservé aux soignants en exercice libéral ou mixte",
         }),
         {
           status: 403,
