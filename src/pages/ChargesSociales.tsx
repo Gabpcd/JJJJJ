@@ -53,7 +53,7 @@ function Countdown({ date }: { date: Date }) {
   );
 }
 
-const PIE_COLORS = ['#17A2B8', '#64748b', '#ef4444', '#22c55e'];
+const PIE_COLORS = ['#C83B67', '#1AA8A0', '#ef4444', '#2CB67D'];
 
 export default function ChargesSociales() {
   usePageTitle('Mes charges');

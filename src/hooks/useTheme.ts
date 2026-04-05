@@ -20,7 +20,7 @@ export function useTheme() {
     // Update theme-color meta tag for browser chrome (Android Chrome, Safari)
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', isDark ? '#151B2B' : '#17A2B8');
+      meta.setAttribute('content', isDark ? '#0D1321' : '#C83B67');
     }
 
     // Update Android status bar color if native
@@ -28,7 +28,7 @@ export function useTheme() {
       if (!isAndroid()) return;
       import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
         StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark });
-        StatusBar.setBackgroundColor({ color: isDark ? '#151B2B' : '#FFFFFF' });
+        StatusBar.setBackgroundColor({ color: isDark ? '#0D1321' : '#FFFFFF' });
       }).catch(() => {});
     });
   }, [theme]);

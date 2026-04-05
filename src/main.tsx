@@ -181,7 +181,7 @@ async function initNativePlugins() {
     const isDark = document.documentElement.classList.contains('dark');
     await StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark });
     if (Capacitor.getPlatform() === 'android') {
-      await StatusBar.setBackgroundColor({ color: isDark ? '#151B2B' : '#FFFFFF' });
+      await StatusBar.setBackgroundColor({ color: isDark ? '#0D1321' : '#FFFFFF' });
     }
   } catch {}
 
