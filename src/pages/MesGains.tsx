@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Banknote, Clock, Download, TrendingUp, ChevronRight } from 'lucide-react';
+import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, Calendar, FileText } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -15,11 +15,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-function fmt(v: number) {
+function fmt(v: number | null | undefined) {
+  if (v == null) return '—';
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
+}
+
+function netEstime(m: any): number {
+  return m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : (m.total_brut != null ? m.total_brut * 0.78 : 0));
 }
 
 export default function MesGains() {
@@ -31,20 +36,24 @@ export default function MesGains() {
   const [moisFiltre, setMoisFiltre] = useState('CE_MOIS');
   const [modalAttestation, setModalAttestation] = useState(false);
   const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
+  const [soignant, setSoignant] = useState<any>(null);
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const { data: ms } = await supabase
-        .from('missions')
-        .select(`id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base,
-          net_a_payer, net_estime, total_brut, statut, etablissement_id`)
-        .eq('soignant_assigne_id', user.id)
-        .eq('statut', 'TERMINEE')
-        .order('debut_le', { ascending: false })
-        .limit(1000);
+      const [{ data: ms }, { data: sg }] = await Promise.all([
+        supabase
+          .from('missions')
+          .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id, service')
+          .eq('soignant_assigne_id', user.id)
+          .eq('statut', 'TERMINEE')
+          .order('debut_le', { ascending: false })
+          .limit(1000),
+        supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).single(),
+      ]);
       const enriched = ms ? await enrichirEtablissements(ms as any) : [];
       setAllMissions(enriched as any[]);
+      setSoignant(sg);
       setLoading(false);
 
       supabase.rpc('fn_ecrire_audit_safe', {
@@ -73,28 +82,33 @@ export default function MesGains() {
     return allMissions.filter(m => m.debut_le.startsWith(moisFiltre));
   }, [allMissions, moisFiltre]);
 
-  const totalToutTemps = useMemo(() =>
-    allMissions.reduce((s, m) => s + (m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0)), 0),
-  [allMissions]);
+  const totalNetFiltre = useMemo(() => missions.reduce((s, m) => s + netEstime(m), 0), [missions]);
+  const totalBrutFiltre = useMemo(() => missions.reduce((s, m) => s + (m.total_brut || 0), 0), [missions]);
+  const totalNetToutTemps = useMemo(() => allMissions.reduce((s, m) => s + netEstime(m), 0), [allMissions]);
+  const totalHeures = useMemo(() => missions.reduce((s, m) => s + (m.duree_heures || 0), 0), [missions]);
+  const tauxMoyen = useMemo(() => {
+    if (totalHeures === 0) return 0;
+    return totalBrutFiltre / totalHeures;
+  }, [totalBrutFiltre, totalHeures]);
 
-  const totalFiltre = useMemo(() =>
-    missions.reduce((s, m) => s + (m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0)), 0),
-  [missions]);
+  const labelPeriode = moisFiltre === 'CE_MOIS'
+    ? format(new Date(), 'MMMM yyyy', { locale: fr })
+    : moisFiltre === 'TOUS'
+      ? 'Tout temps'
+      : format(new Date(moisFiltre + '-01'), 'MMMM yyyy', { locale: fr });
 
-  const totalHeures = useMemo(() =>
-    missions.reduce((s, m) => s + (m.duree_heures || 0), 0),
-  [missions]);
+  const isLiberal = soignant?.type_exercice === 'LIBERAL' || soignant?.statut_liberal === 'ACTIF';
 
   const exporterCSV = () => {
-    const header = 'Date,Mission,Établissement,Heures,Net estimé\n';
+    const header = 'Date,Mission,Service,Établissement,Heures,Taux horaire,Brut,Net estimé\n';
     const rows = missions.map(m => {
-      const net = m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
-      return `${format(new Date(m.debut_le), 'dd/MM/yyyy')},${m.intitule},${m.etablissements?.nom || ''},${m.duree_heures || 0},${net.toFixed(2)}`;
+      const net = netEstime(m);
+      return `${format(new Date(m.debut_le), 'dd/MM/yyyy')},"${m.intitule}","${m.service || ''}","${m.etablissements?.nom || ''}",${m.duree_heures || 0},${m.taux_horaire_base || 0},${(m.total_brut || 0).toFixed(2)},${net.toFixed(2)}`;
     }).join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv' });
+    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `gains-jolene-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    a.href = url; a.download = `gains-jolene-${moisFiltre === 'CE_MOIS' ? new Date().toISOString().slice(0, 7) : moisFiltre}-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -109,17 +123,19 @@ export default function MesGains() {
 
       <BandeauPaiementDeclare />
 
-      {/* KPIs en haut */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <CarteKPI icone={Banknote} valeur={fmt(totalFiltre)} label="Ce mois (net estimé*)" couleurIcone="text-primary" couleurFond="bg-primary/10" />
-        <CarteKPI icone={TrendingUp} valeur={fmt(totalToutTemps)} label="Total tout temps" couleurIcone="text-success" couleurFond="bg-success/10" />
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <CarteKPI icone={Banknote} valeur={fmt(totalNetFiltre)} label={`Net estimé* · ${labelPeriode}`} couleurIcone="text-primary" couleurFond="bg-primary/10" />
+        <CarteKPI icone={TrendingUp} valeur={fmt(totalBrutFiltre)} label={`Brut · ${labelPeriode}`} couleurIcone="text-foreground" couleurFond="bg-muted" />
+        <CarteKPI icone={Clock} valeur={`${totalHeures}h`} label={`${missions.length} mission${missions.length > 1 ? 's' : ''}`} couleurIcone="text-info" couleurFond="bg-info/10" />
+        <CarteKPI icone={TrendingUp} valeur={fmt(totalNetToutTemps)} label="Total tout temps" couleurIcone="text-success" couleurFond="bg-success/10" />
       </div>
 
-      {/* Graphique barres 6 mois */}
-      <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0) }))} />
+      {/* Graphique 6 mois */}
+      <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: netEstime(m) }))} />
 
-      {/* Filtre + Export */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
+      {/* Filtre + Actions */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <Select value={moisFiltre} onValueChange={setMoisFiltre}>
           <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -131,33 +147,90 @@ export default function MesGains() {
           </SelectContent>
         </Select>
         <Button variant="outline" size="sm" onClick={exporterCSV} className="gap-1.5">
-          <Download className="h-4 w-4" /> Exporter CSV
+          <Download className="h-4 w-4" /> CSV
         </Button>
         <Button variant="outline" size="sm" onClick={() => setModalAttestation(true)} className="gap-1.5">
-          📜 Attestation d'heures
+          <FileText className="h-4 w-4" /> Attestation
         </Button>
+        {isLiberal && (
+          <Button variant="outline" size="sm" onClick={() => navigate('/soignant/charges')} className="gap-1.5">
+            <Calculator className="h-4 w-4" /> Mes charges
+          </Button>
+        )}
       </div>
 
-      <p className="text-xs text-muted-foreground italic mb-4">
+      {/* Récap période */}
+      {missions.length > 0 && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 mb-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Récapitulatif · <strong className="text-foreground">{labelPeriode}</strong></span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-xs">
+            <div>
+              <span className="text-muted-foreground">Missions</span>
+              <p className="font-bold text-foreground">{missions.length}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Heures</span>
+              <p className="font-bold text-foreground">{totalHeures}h</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Taux moyen</span>
+              <p className="font-bold text-foreground">{tauxMoyen.toFixed(2)} €/h</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Cotisations estimées</span>
+              <p className="font-bold text-foreground">~{fmt(totalBrutFiltre - totalNetFiltre)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground italic mb-3">
         * Estimation après cotisations salariales (~22%). Seuls les montants calculés par le moteur de paie font foi.
       </p>
 
-      {/* Liste simplifiée des missions payées */}
+      {/* Liste missions */}
       {missions.length > 0 ? (
         <div className="space-y-2">
           {missions.map(m => {
-            const net = m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
+            const net = netEstime(m);
+            const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
             return (
-              <div key={m.id} className="flex items-center justify-between py-3 px-4 rounded-xl border border-border hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/soignant/presences/mission/${m.id}`)}>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground truncate">{m.intitule}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })} · {m.etablissements?.nom || '—'} · {m.duree_heures}h
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 ml-3">
-                  <span className="font-bold text-primary text-sm cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}>{fmt(net)}</span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              <div key={m.id} className="rounded-xl border border-border hover:border-primary/30 hover:bg-muted/20 transition-all cursor-pointer overflow-hidden" onClick={() => navigate(`/soignant/presences/mission/${m.id}`)}>
+                <div className="flex items-center gap-3 py-3 px-4">
+                  {/* Date compact */}
+                  <div className="flex flex-col items-center justify-center rounded-lg bg-muted/50 px-2.5 py-1 min-w-[44px]">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase">{format(new Date(m.debut_le), 'EEE', { locale: fr })}</span>
+                    <span className="text-base font-bold text-foreground leading-tight">{format(new Date(m.debut_le), 'd')}</span>
+                    <span className="text-[10px] text-muted-foreground">{format(new Date(m.debut_le), 'MMM', { locale: fr })}</span>
+                  </div>
+                  {/* Mission info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{m.intitule}</p>
+                    <p className="text-xs text-muted-foreground">
+                      🏥 {m.etablissements?.nom || '—'}
+                      {m.service && ` · ${m.service}`}
+                    </p>
+                    <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+                      <span>{format(new Date(m.debut_le), "HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}</span>
+                      <span>{Math.round(duree * 10) / 10}h</span>
+                      <span>{m.taux_horaire_base} €/h</span>
+                    </div>
+                  </div>
+                  {/* Net amount */}
+                  <div className="text-right shrink-0 ml-2">
+                    <button
+                      className="text-primary font-bold text-sm hover:underline"
+                      onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}
+                    >
+                      {fmt(net)}
+                    </button>
+                    {m.total_brut != null && (
+                      <p className="text-[10px] text-muted-foreground">brut : {fmt(m.total_brut)}</p>
+                    )}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground inline-block ml-1" />
+                  </div>
                 </div>
               </div>
             );

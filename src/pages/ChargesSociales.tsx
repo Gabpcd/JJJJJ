@@ -1,29 +1,34 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Calculator, Calendar, Shield, Building2, PieChart } from 'lucide-react';
+import { Calculator, Calendar, Shield, Building2, PieChart, Banknote, ChevronRight, Download, ExternalLink, ArrowLeft } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { enrichirEtablissements } from '@/lib/etablissements';
+import { ouvrirLienExterne } from '@/lib/platform';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
-const TAUX_URSSAF = 0.212; // 21.2% for regulated health professionals
-const CARPIMKO_FORFAIT = 1800; // approximate annual fixed contribution
-const CARPIMKO_PROPORTIONNEL_TAUX = 0.016; // 1.6% proportional
+const TAUX_URSSAF = 0.212;
+const CARPIMKO_FORFAIT = 1800;
+const CARPIMKO_PROPORTIONNEL_TAUX = 0.016;
+
+function fmt(v: number | null | undefined) {
+  if (v == null) return '—';
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
+}
 
 function getProchainTrimestreURSSAF(): Date {
   const now = new Date();
   const y = now.getFullYear();
   const echeances = [
-    new Date(y, 0, 5), // 5 Jan (Q4 previous)
-    new Date(y, 3, 5), // 5 Apr (Q1)
-    new Date(y, 6, 5), // 5 Jul (Q2)
-    new Date(y, 9, 5), // 5 Oct (Q3)
+    new Date(y, 0, 5), new Date(y, 3, 5), new Date(y, 6, 5), new Date(y, 9, 5),
   ];
-  const prochaine = echeances.find(d => d > now) || new Date(y + 1, 0, 5);
-  return prochaine;
+  return echeances.find(d => d > now) || new Date(y + 1, 0, 5);
 }
 
 function getEcheanceCARPIMKO(): Date {
@@ -43,20 +48,23 @@ function Countdown({ date }: { date: Date }) {
   const color = jours <= 14 ? 'text-destructive' : jours <= 30 ? 'text-warning' : 'text-muted-foreground';
   return (
     <span className={`text-xs font-medium ${color}`}>
-      {jours <= 0 ? 'Échue' : `dans ${jours} jour${jours > 1 ? 's' : ''}`}
+      {jours <= 0 ? 'Échue' : `dans ${jours}j`}
     </span>
   );
 }
 
-const PIE_COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--destructive))', 'hsl(var(--muted))'];
+const PIE_COLORS = ['#17A2B8', '#64748b', '#ef4444', '#22c55e'];
 
 export default function ChargesSociales() {
   usePageTitle('Mes charges');
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [caCumule, setCaCumule] = useState(0);
   const [rcpExpiration, setRcpExpiration] = useState<string | null>(null);
   const [soignant, setSoignant] = useState<any>(null);
+  const [missions, setMissions] = useState<any[]>([]);
+  const [showMissions, setShowMissions] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -64,13 +72,14 @@ export default function ChargesSociales() {
       const annee = new Date().getFullYear();
       const debutAnnee = new Date(annee, 0, 1).toISOString();
 
-      const [{ data: missions }, { data: docs }, { data: sg }] = await Promise.all([
+      const [{ data: missionData }, { data: docs }, { data: sg }] = await Promise.all([
         supabase
           .from('missions')
-          .select('total_brut')
+          .select('id, intitule, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, etablissement_id, service')
           .eq('soignant_assigne_id', user.id)
           .eq('statut', 'TERMINEE')
-          .gte('fin_le', debutAnnee),
+          .gte('fin_le', debutAnnee)
+          .order('debut_le', { ascending: false }),
         supabase
           .from('documents_soignants')
           .select('valide_jusqua')
@@ -83,7 +92,9 @@ export default function ChargesSociales() {
         supabase.from('soignants').select('prenom, nom, profession, statut_liberal, assujetti_tva').eq('id', user.id).single(),
       ]);
 
-      const ca = (missions || []).reduce((s: number, m: any) => s + (m.total_brut || 0), 0);
+      const enriched = missionData ? await enrichirEtablissements(missionData as any) : [];
+      setMissions(enriched as any[]);
+      const ca = (enriched as any[]).reduce((s: number, m: any) => s + (m.total_brut || 0), 0);
       setCaCumule(ca);
       if (docs && docs.length > 0) setRcpExpiration(docs[0].valide_jusqua);
       setSoignant(sg);
@@ -95,9 +106,10 @@ export default function ChargesSociales() {
   const urssaf = useMemo(() => caCumule * TAUX_URSSAF, [caCumule]);
   const carpimkoProportionnel = useMemo(() => caCumule * CARPIMKO_PROPORTIONNEL_TAUX, [caCumule]);
   const carpimkoTotal = useMemo(() => CARPIMKO_FORFAIT + carpimkoProportionnel, [carpimkoProportionnel]);
-  const rcpEstime = 400; // Estimated annual RCP cost
+  const rcpEstime = 400;
   const totalCharges = urssaf + carpimkoTotal + rcpEstime;
   const revenuNet = caCumule - totalCharges;
+  const totalHeures = useMemo(() => missions.reduce((s, m) => s + (m.duree_heures || 0), 0), [missions]);
 
   const pieData = useMemo(() => [
     { name: 'URSSAF', value: Math.round(urssaf) },
@@ -110,168 +122,222 @@ export default function ChargesSociales() {
   const echeanceCARPIMKO = getEcheanceCARPIMKO();
   const echeanceCFE = getEcheanceCFE();
 
+  const exporterCSV = () => {
+    const header = 'Poste,Montant annuel estimé,Échéance\n';
+    const rows = [
+      `URSSAF (21.2%),${urssaf.toFixed(2)},${format(prochainURSSAF, 'dd/MM/yyyy')}`,
+      `CARPIMKO forfait,${CARPIMKO_FORFAIT},${format(echeanceCARPIMKO, 'dd/MM/yyyy')}`,
+      `CARPIMKO proportionnel (1.6%),${carpimkoProportionnel.toFixed(2)},`,
+      `RCP (estimé),${rcpEstime},`,
+      `Total charges,${totalCharges.toFixed(2)},`,
+      `CA cumulé,${caCumule.toFixed(2)},`,
+      `Revenu net estimé,${revenuNet.toFixed(2)},`,
+    ].join('\n');
+    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `charges-jolene-${new Date().getFullYear()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
   return (
     <LayoutApp role="SOIGNANT">
+      {/* Header with back link */}
       <div className="mb-6">
+        <button onClick={() => navigate('/soignant/mes-gains')} className="flex items-center gap-1 text-sm text-primary hover:underline mb-2">
+          <ArrowLeft className="h-4 w-4" /> Retour aux gains
+        </button>
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Calculator className="h-6 w-6 text-primary" /> Mes charges sociales
         </h1>
         <p className="text-sm text-muted-foreground mt-1">Estimations basées sur votre CA libéral {new Date().getFullYear()}</p>
       </div>
 
-      {/* CA banner */}
-      <div className="card-base mb-6 text-center">
-        <p className="text-sm text-muted-foreground">Chiffre d'affaires libéral cumulé {new Date().getFullYear()}</p>
-        <p className="text-3xl font-bold text-primary mt-1">{caCumule.toFixed(0)} €</p>
+      {/* CA banner — clickable to show missions */}
+      <div
+        className="card-base mb-6 cursor-pointer hover:border-primary/30 transition-colors"
+        onClick={() => setShowMissions(!showMissions)}
+      >
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">Chiffre d'affaires libéral cumulé {new Date().getFullYear()}</p>
+          <p className="text-3xl font-bold text-primary mt-1">{fmt(caCumule)}</p>
+          <div className="flex justify-center gap-4 mt-2 text-xs text-muted-foreground">
+            <span>{missions.length} mission{missions.length > 1 ? 's' : ''}</span>
+            <span>{totalHeures}h travaillées</span>
+          </div>
+        </div>
+        <p className="text-[10px] text-primary text-center mt-2">
+          {showMissions ? '▲ Masquer le détail' : '▼ Voir le détail des missions'}
+        </p>
+      </div>
+
+      {/* Mission breakdown */}
+      {showMissions && missions.length > 0 && (
+        <div className="space-y-1.5 mb-6">
+          {missions.map(m => (
+            <div
+              key={m.id}
+              onClick={() => navigate(`/soignant/presences/mission/${m.id}`)}
+              className="flex items-center justify-between py-2 px-3 rounded-lg border border-border hover:bg-muted/20 cursor-pointer transition-colors text-xs"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground truncate">{m.intitule}</p>
+                <p className="text-muted-foreground">
+                  {format(new Date(m.debut_le), 'd MMM', { locale: fr })} · {m.etablissements?.nom} · {m.duree_heures}h
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                <span className="font-bold text-foreground">{fmt(m.total_brut)}</span>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Échéancier compact */}
+      <div className="card-base mb-6">
+        <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+          <Calendar className="h-4.5 w-4.5 text-primary" /> Prochaines échéances
+        </h2>
+        <div className="space-y-2">
+          {[
+            { nom: 'URSSAF trimestriel', date: prochainURSSAF, montant: urssaf / 4, lien: 'https://www.autoentrepreneur.urssaf.fr' },
+            { nom: 'CARPIMKO annuel', date: echeanceCARPIMKO, montant: carpimkoTotal, lien: 'https://www.carpimko.com' },
+            { nom: 'CFE', date: echeanceCFE, montant: null, lien: 'https://www.impots.gouv.fr/professionnel' },
+          ].map(e => (
+            <div key={e.nom} className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{e.nom}</p>
+                  <p className="text-[10px] text-muted-foreground">{format(e.date, 'd MMMM yyyy', { locale: fr })}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                {e.montant != null && <span className="text-sm font-bold text-foreground">~{fmt(e.montant)}</span>}
+                <Countdown date={e.date} />
+                <button
+                  onClick={() => ouvrirLienExterne(e.lien)}
+                  className="text-primary hover:underline"
+                  title={`Ouvrir ${e.nom}`}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Charges cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* URSSAF */}
-        <div className="card-base">
+        <div className="card-base cursor-pointer hover:border-primary/30 transition-colors" onClick={() => ouvrirLienExterne('https://www.autoentrepreneur.urssaf.fr')}>
           <div className="flex items-center gap-2 mb-3">
             <div className="rounded-xl p-2 bg-primary/10"><Building2 className="h-5 w-5 text-primary" /></div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-semibold text-foreground">URSSAF</h3>
-              <p className="text-xs text-muted-foreground">Cotisations sociales trimestrielles</p>
+              <p className="text-xs text-muted-foreground">Cotisations sociales · 21,2%</p>
             </div>
+            <ExternalLink className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Taux applicable</span>
-              <span className="font-medium text-foreground">21,2%</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Estimation annuelle</span>
-              <span className="font-bold text-foreground">{urssaf.toFixed(0)} €</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Par trimestre (~)</span>
-              <span className="font-medium text-foreground">{(urssaf / 4).toFixed(0)} €</span>
-            </div>
-            <div className="bg-muted/30 rounded-lg p-2 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Prochaine échéance : {format(prochainURSSAF, 'd MMM yyyy', { locale: fr })}</span>
-              </div>
-              <Countdown date={prochainURSSAF} />
-            </div>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Estimation annuelle</span><span className="font-bold text-foreground">{fmt(urssaf)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Par trimestre</span><span className="font-medium text-foreground">~{fmt(urssaf / 4)}</span></div>
           </div>
         </div>
 
         {/* CARPIMKO */}
-        <div className="card-base">
+        <div className="card-base cursor-pointer hover:border-primary/30 transition-colors" onClick={() => ouvrirLienExterne('https://www.carpimko.com')}>
           <div className="flex items-center gap-2 mb-3">
             <div className="rounded-xl p-2 bg-accent/10"><Shield className="h-5 w-5 text-accent-foreground" /></div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-semibold text-foreground">CARPIMKO</h3>
-              <p className="text-xs text-muted-foreground">Caisse de retraite complémentaire</p>
+              <p className="text-xs text-muted-foreground">Retraite complémentaire</p>
             </div>
+            <ExternalLink className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Forfait annuel</span>
-              <span className="font-medium text-foreground">{CARPIMKO_FORFAIT} €</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Part proportionnelle (1,6%)</span>
-              <span className="font-medium text-foreground">{carpimkoProportionnel.toFixed(0)} €</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total estimé</span>
-              <span className="font-bold text-foreground">{carpimkoTotal.toFixed(0)} €</span>
-            </div>
-            <div className="bg-muted/30 rounded-lg p-2 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Échéance : {format(echeanceCARPIMKO, 'd MMM yyyy', { locale: fr })}</span>
-              </div>
-              <Countdown date={echeanceCARPIMKO} />
-            </div>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Forfait annuel</span><span className="font-medium text-foreground">{fmt(CARPIMKO_FORFAIT)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Part proportionnelle (1,6%)</span><span className="font-medium text-foreground">{fmt(carpimkoProportionnel)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Total estimé</span><span className="font-bold text-foreground">{fmt(carpimkoTotal)}</span></div>
           </div>
         </div>
 
         {/* RCP */}
-        <div className="card-base">
+        <div className="card-base cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/soignant/documents')}>
           <div className="flex items-center gap-2 mb-3">
             <div className="rounded-xl p-2 bg-destructive/10"><Shield className="h-5 w-5 text-destructive" /></div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-semibold text-foreground">Assurance RCP</h3>
-              <p className="text-xs text-muted-foreground">Responsabilité civile professionnelle</p>
+              <p className="text-xs text-muted-foreground">Responsabilité civile pro.</p>
             </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="space-y-2">
-            {rcpExpiration ? (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Expiration</span>
-                  <span className="font-medium text-foreground">{format(new Date(rcpExpiration), 'd MMM yyyy', { locale: fr })}</span>
-                </div>
-                <div className="bg-muted/30 rounded-lg p-2 flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Statut</span>
-                  {new Date(rcpExpiration) > new Date() ? (
-                    <span className="text-xs font-medium text-primary">✅ Valide</span>
-                  ) : (
-                    <span className="text-xs font-medium text-destructive">❌ Expirée — à renouveler</span>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-destructive">⚠️ Aucune RCP vérifiée. Téléversez votre attestation dans Documents.</p>
-            )}
-          </div>
+          {rcpExpiration ? (
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Expiration</span>
+                <span className="font-medium text-foreground">{format(new Date(rcpExpiration), 'd MMM yyyy', { locale: fr })}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Statut</span>
+                {new Date(rcpExpiration) > new Date() ? (
+                  <span className="text-xs font-medium text-success">✅ Valide</span>
+                ) : (
+                  <span className="text-xs font-medium text-destructive">❌ Expirée</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-destructive">⚠️ Aucune RCP vérifiée. Voir Documents →</p>
+          )}
         </div>
 
         {/* CFE */}
-        <div className="card-base">
+        <div className="card-base cursor-pointer hover:border-primary/30 transition-colors" onClick={() => ouvrirLienExterne('https://www.impots.gouv.fr/professionnel')}>
           <div className="flex items-center gap-2 mb-3">
             <div className="rounded-xl p-2 bg-muted"><Building2 className="h-5 w-5 text-muted-foreground" /></div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-semibold text-foreground">CFE</h3>
               <p className="text-xs text-muted-foreground">Cotisation foncière des entreprises</p>
             </div>
+            <ExternalLink className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">Montant variable selon votre commune. Exonérée la 1ère année.</p>
-            <div className="bg-muted/30 rounded-lg p-2 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Échéance : {format(echeanceCFE, 'd MMM yyyy', { locale: fr })}</span>
-              </div>
-              <Countdown date={echeanceCFE} />
-            </div>
-          </div>
+          <p className="text-sm text-muted-foreground">Variable selon commune. Exonérée la 1ère année.</p>
         </div>
       </div>
 
       {/* Pie chart */}
       {caCumule > 0 && (
         <div className="card-base mb-6">
-          <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-            <PieChart className="h-5 w-5 text-primary" /> Répartition de votre CA
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <PieChart className="h-5 w-5 text-primary" /> Répartition
+            </h2>
+            <Button variant="outline" size="sm" onClick={exporterCSV} className="gap-1.5 text-xs">
+              <Download className="h-3.5 w-3.5" /> Exporter
+            </Button>
+          </div>
           <div className="flex flex-col md:flex-row items-center gap-6">
-            <ResponsiveContainer width={220} height={220}>
+            <ResponsiveContainer width={200} height={200}>
               <RechartsPie>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}>
+                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={85} paddingAngle={2}>
                   {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                 </Pie>
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-                  formatter={(value: number) => [`${value} €`]}
-                />
+                <Tooltip formatter={(value: number) => [`${value} €`]} />
               </RechartsPie>
             </ResponsiveContainer>
-            <div className="space-y-2 flex-1">
+            <div className="space-y-2 flex-1 w-full">
               {pieData.map((d, i) => (
                 <div key={d.name} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i] }} />
                     <span className="text-foreground">{d.name}</span>
                   </div>
-                  <span className="font-medium text-foreground">{d.value} € ({caCumule > 0 ? Math.round((d.value / caCumule) * 100) : 0}%)</span>
+                  <span className="font-medium text-foreground tabular-nums">{fmt(d.value)} ({caCumule > 0 ? Math.round((d.value / caCumule) * 100) : 0}%)</span>
                 </div>
               ))}
             </div>
@@ -279,10 +345,22 @@ export default function ChargesSociales() {
         </div>
       )}
 
-      <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
-        <p className="text-sm text-muted-foreground">
-          ⚠️ Ces estimations sont indicatives. Consultez votre comptable pour les montants exacts.
+      {/* Disclaimer + links */}
+      <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
+        <p className="text-sm text-muted-foreground text-center">
+          ⚠️ Estimations indicatives. Consultez votre comptable pour les montants exacts.
         </p>
+        <div className="flex flex-wrap gap-2 justify-center">
+          <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.autoentrepreneur.urssaf.fr')}>
+            URSSAF <ExternalLink className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.carpimko.com')}>
+            CARPIMKO <ExternalLink className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.impots.gouv.fr/professionnel')}>
+            Impôts.gouv <ExternalLink className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
     </LayoutApp>
   );
