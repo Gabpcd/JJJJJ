@@ -145,7 +145,7 @@ export function ListeCandidatures({ missionId, modePaiement, onAccepted, onError
                   <p className="font-semibold text-sm text-foreground flex items-center gap-1.5 flex-wrap">
                     👤 {c.soignant?.prenom} {c.soignant?.nom}
                     {c.soignant?.type_exercice && (
-                      <span className={`badge-base text-[10px] ${c.soignant.type_exercice === 'LIBERAL' ? 'bg-info/10 text-info' : c.soignant.type_exercice === 'MIXTE' ? 'bg-purple-100 text-purple-700' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`badge-base text-[10px] ${c.soignant.type_exercice === 'LIBERAL' ? 'bg-info/10 text-info' : c.soignant.type_exercice === 'MIXTE' ? 'bg-rose/10 text-rose' : 'bg-muted text-muted-foreground'}`}>
                         {c.soignant.type_exercice === 'MIXTE' ? 'Salarié + Libéral' : c.soignant.type_exercice === 'LIBERAL' ? 'Libéral' : 'Salarié'}
                       </span>
                     )}

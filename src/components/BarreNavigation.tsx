@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -11,85 +11,123 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { useMessagesNonLus } from '@/hooks/useMessagesNonLus';
 
 interface NavItem { icone: LucideIcon; label: string; route: string; }
+interface NavGroup { icone: LucideIcon; label: string; items: NavItem[]; }
+type SidebarEntry = NavItem | NavGroup;
 
+function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
+
+/* ── Mobile bottom bars (5 items max) ── */
 const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
-  { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
-  { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
+  { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
+  { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
   { icone: ClipboardList, label: 'Missions', route: '/etablissement/missions' },
-  { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
+  { icone: MessageCircle, label: 'Messages', route: '/etablissement/messagerie' },
   { icone: Users, label: 'Pool', route: '/etablissement/pool-urgence' },
   { icone: Building2, label: 'Profil', route: '/etablissement/profil' },
 ];
 
-const NAV_SOIGNANT_BASE: NavItem[] = [
-  { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
-  { icone: Search, label: 'Missions', route: '/soignant/missions' },
-  { icone: MapPinned, label: 'Recherche', route: '/soignant/recherche-missions' },
-  { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
-  { icone: FileText, label: 'Mes contrats', route: '/soignant/contrats' },
-  { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
-  { icone: Banknote, label: 'Gains', route: '/soignant/mes-gains' },
-  { icone: FileText, label: 'Documents', route: '/soignant/documents' },
-  { icone: GraduationCap, label: 'Parcours libéral', route: '/soignant/parcours-3200h' },
-  { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
-  { icone: Scale, label: 'Litiges', route: '/soignant/litiges' },
-  { icone: CreditCard, label: 'Paiements', route: '/soignant/stripe-connect' },
-  { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
-  { icone: Crown, label: 'Premium', route: '/soignant/premium' },
-  { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
-  { icone: User, label: 'Profil', route: '/soignant/profil' },
-];
+/* ── Desktop sidebars (grouped) ── */
+function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): SidebarEntry[] {
+  const entries: SidebarEntry[] = [
+    { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
+    {
+      icone: Search, label: 'Missions', items: [
+        { icone: Search, label: 'Missions disponibles', route: '/soignant/missions' },
+        { icone: MapPinned, label: 'Recherche avancée', route: '/soignant/recherche-missions' },
+        { icone: CalendarDays, label: 'Mon planning', route: '/soignant/planning' },
+      ],
+    },
+    {
+      icone: Activity, label: 'Mon activité', items: [
+        { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
+        { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
+        { icone: FileText, label: 'Contrats', route: '/soignant/contrats' },
+        { icone: FileText, label: 'Documents', route: '/soignant/documents' },
+        { icone: Scale, label: 'Litiges', route: '/soignant/litiges' },
+      ],
+    },
+    { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
+  ];
 
-const NAV_ETABLISSEMENT: NavItem[] = [
-  { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
-  { icone: PlusCircle, label: 'Publier', route: '/etablissement/missions/creer' },
-  { icone: List, label: 'Missions', route: '/etablissement/missions' },
-  { icone: Flame, label: 'Pool urgence 🚨', route: '/etablissement/pool-urgence' },
-  { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
-  { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
-  { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
-  { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
-  { icone: BarChart3, label: 'Gestion RH', route: '/etablissement/rh' },
-  { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
-  { icone: FileText, label: 'Contrat plateforme', route: '/etablissement/contrat-plateforme' },
-  { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
-  { icone: Code2, label: 'API', route: '/etablissement/api' },
-  { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
-  { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
-  { icone: Crown, label: 'Premium', route: '/etablissement/premium' },
-  { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
-  { icone: User, label: 'Profil', route: '/etablissement/profil' },
-];
+  // Carrière (only for eligible professions)
+  const carriereItems: NavItem[] = [
+    { icone: GraduationCap, label: 'Parcours 3 200h', route: '/soignant/parcours-3200h' },
+  ];
+  if (showLiberalPath) {
+    carriereItems.push({ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' });
+  }
+  if (isLiberal) {
+    carriereItems.push({ icone: Calculator, label: 'Mes charges', route: '/soignant/charges' });
+  }
+  carriereItems.push({ icone: CreditCard, label: 'Paiements', route: '/soignant/stripe-connect' });
+  entries.push({ icone: Briefcase, label: 'Carrière & Finances', items: carriereItems });
+
+  // Profil & Réglages
+  entries.push({
+    icone: User, label: 'Profil & Réglages', items: [
+      { icone: User, label: 'Mon profil', route: '/soignant/profil' },
+      { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
+      { icone: Crown, label: 'Premium', route: '/soignant/premium' },
+      { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
+      { icone: Ban, label: 'Exclusions', route: '/soignant/exclusions' },
+    ],
+  });
+
+  return entries;
+}
+
+function getEtablissementSidebar(): SidebarEntry[] {
+  return [
+    { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
+    {
+      icone: ClipboardList, label: 'Missions', items: [
+        { icone: PlusCircle, label: 'Publier une mission', route: '/etablissement/missions/creer' },
+        { icone: List, label: 'Liste des missions', route: '/etablissement/missions' },
+        { icone: Flame, label: 'Pool urgence', route: '/etablissement/pool-urgence' },
+      ],
+    },
+    {
+      icone: ClipboardCheck, label: 'Gestion', items: [
+        { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
+        { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
+        { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
+        { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
+        { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
+      ],
+    },
+    {
+      icone: Banknote, label: 'Finances', items: [
+        { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+        { icone: FileText, label: 'Obligations', route: '/etablissement/obligations' },
+        { icone: FileText, label: 'Contrat plateforme', route: '/etablissement/contrat-plateforme' },
+      ],
+    },
+    { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
+    {
+      icone: Settings, label: 'Paramètres', items: [
+        { icone: Building2, label: 'Profil établissement', route: '/etablissement/profil' },
+        { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
+        { icone: Code2, label: 'API', route: '/etablissement/api' },
+        { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
+        { icone: Crown, label: 'Premium', route: '/etablissement/premium' },
+        { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
+      ],
+    },
+  ];
+}
 
 const NAV_GROUPE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/groupe/tableau-de-bord' },
   { icone: List, label: 'Établissements', route: '/groupe/etablissements' },
   { icone: Settings, label: 'Paramètres', route: '/groupe/parametres' },
 ];
-
-function getNavItems(role: UserRole, isLiberal?: boolean): NavItem[] {
-  switch (role) {
-    case 'SOIGNANT': {
-      const items = [...NAV_SOIGNANT_BASE];
-      if (isLiberal) {
-        const gainsIdx = items.findIndex(i => i.label === 'Gains');
-        items.splice(gainsIdx + 1, 0, { icone: Calculator, label: 'Mes charges', route: '/soignant/charges' });
-      }
-      return items;
-    }
-    case 'ADMIN_ETABLISSEMENT': return NAV_ETABLISSEMENT;
-    case 'ADMIN_GROUPE': return NAV_GROUPE;
-    case 'ADMIN_PLATEFORME': return [];
-    default: return [];
-  }
-}
 
 function getMobileNavItems(role: UserRole): NavItem[] {
   switch (role) {
@@ -101,15 +139,99 @@ function getMobileNavItems(role: UserRole): NavItem[] {
   }
 }
 
+/* ── Collapsible sidebar group ── */
+function SidebarGroup({ group, location, navigate, openGroups, toggleGroup, messagesNonLus, contratNonValide }: {
+  group: NavGroup;
+  location: ReturnType<typeof useLocation>;
+  navigate: ReturnType<typeof useNavigate>;
+  openGroups: Set<string>;
+  toggleGroup: (label: string) => void;
+  messagesNonLus: number;
+  contratNonValide: boolean;
+}) {
+  const isOpen = openGroups.has(group.label);
+  const hasActiveChild = group.items.some(i => location.pathname === i.route);
+
+  return (
+    <div>
+      <button
+        onClick={() => toggleGroup(group.label)}
+        className={`sidebar-item w-full text-left justify-between ${hasActiveChild ? 'text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
+      >
+        <div className="flex items-center gap-3">
+          <group.icone className="h-5 w-5" />
+          <span>{group.label}</span>
+        </div>
+        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && (
+        <div className="ml-4 pl-4 border-l border-sidebar-border space-y-0.5 mt-0.5">
+          {group.items.map(item => {
+            const actif = location.pathname === item.route;
+            const isMsg = item.label === 'Messagerie';
+            const isContrat = item.route === '/etablissement/contrat-plateforme';
+            return (
+              <button
+                key={item.route}
+                onClick={() => navigate(item.route)}
+                aria-current={actif ? 'page' : undefined}
+                className={`sidebar-item w-full text-left text-sm py-2 ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
+              >
+                <item.icone className="h-4 w-4" />
+                <span className="flex-1">{item.label}</span>
+                {isMsg && messagesNonLus > 0 && (
+                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold px-1">
+                    {messagesNonLus > 9 ? '9+' : messagesNonLus}
+                  </span>
+                )}
+                {isContrat && contratNonValide && (
+                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-warning text-warning-foreground text-[11px] font-bold px-1">!</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BarreNavigation({ role }: { role: UserRole }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { deconnexion, user } = useAuth();
-  const [showLiberal, setShowLiberal] = useState(false);
   const [isLiberal, setIsLiberal] = useState(false);
+  const [showLiberalPath, setShowLiberalPath] = useState(false);
   const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
   const [contratNonValide, setContratNonValide] = useState(false);
   const { count: messagesNonLus } = useMessagesNonLus();
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+
+  // Auto-open the group containing the active route
+  useEffect(() => {
+    const sidebar = role === 'SOIGNANT'
+      ? getSoignantSidebar(isLiberal, showLiberalPath)
+      : role === 'ADMIN_ETABLISSEMENT'
+        ? getEtablissementSidebar()
+        : [];
+
+    for (const entry of sidebar) {
+      if (isGroup(entry) && entry.items.some(i => location.pathname === i.route || location.pathname.startsWith(i.route + '/'))) {
+        setOpenGroups(prev => {
+          if (prev.has(entry.label)) return prev;
+          return new Set([...prev, entry.label]);
+        });
+      }
+    }
+  }, [location.pathname, role, isLiberal, showLiberalPath]);
+
+  const toggleGroup = (label: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label); else next.add(label);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -118,11 +240,9 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         .then(({ data }) => {
           if (!data) return;
           setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
-          if (data.statut_liberal === 'ACTIF') {
-            setIsLiberal(true);
-          }
+          if (data.statut_liberal === 'ACTIF') setIsLiberal(true);
           if (!PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
-            setShowLiberal(true);
+            setShowLiberalPath(true);
           }
         });
     } else if (role === 'ADMIN_ETABLISSEMENT') {
@@ -136,14 +256,12 @@ export function BarreNavigation({ role }: { role: UserRole }) {
     }
   }, [role, user]);
 
-  const baseItems = getNavItems(role, isLiberal);
-  let items = baseItems;
-  if (role === 'SOIGNANT' && showLiberal) {
-    const notifIdx = items.findIndex(i => i.label === 'Notifications');
-    const liberalItem = { icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' };
-    items = [...items.slice(0, notifIdx), liberalItem, ...items.slice(notifIdx)];
-  }
   const mobileItems = getMobileNavItems(role);
+  const sidebarEntries = role === 'SOIGNANT'
+    ? getSoignantSidebar(isLiberal, showLiberalPath)
+    : role === 'ADMIN_ETABLISSEMENT'
+      ? getEtablissementSidebar()
+      : NAV_GROUPE.map(i => i as SidebarEntry);
 
   const handleDeconnexion = async () => {
     await deconnexion();
@@ -156,7 +274,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       <nav className="fixed bottom-0 left-0 right-0 flex md:hidden z-50 bg-card dark:bg-accent-foreground/5 border-t border-border shadow-lg no-print" style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }} role="navigation" aria-label="Navigation mobile">
         {mobileItems.map((item) => {
           const actif = location.pathname === item.route;
-          const isMsg = item.label === 'Messagerie';
+          const isMsg = item.label === 'Messages';
           return (
             <button
               key={item.route}
@@ -168,11 +286,11 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             >
               <item.icone className="h-6 w-6" />
               {isMsg && messagesNonLus > 0 && (
-                <span className="absolute top-1 right-1/2 translate-x-4 h-4 min-w-[16px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold px-1">
+                <span className="absolute top-1 right-1/2 translate-x-4 h-4 min-w-[16px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold px-1">
                   {messagesNonLus > 9 ? '9+' : messagesNonLus}
                 </span>
               )}
-              <span className="text-[10px] leading-tight">{item.label}</span>
+              <span className="text-[11px] leading-tight">{item.label}</span>
             </button>
           );
         })}
@@ -188,24 +306,38 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           <BadgeNotification />
           <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
-        <nav className="flex-1 px-3 space-y-1 overflow-y-auto" aria-label="Menu principal">
-          {items.map((item) => {
+        <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto" aria-label="Menu principal">
+          {sidebarEntries.map((entry) => {
+            if (isGroup(entry)) {
+              return (
+                <SidebarGroup
+                  key={entry.label}
+                  group={entry}
+                  location={location}
+                  navigate={navigate}
+                  openGroups={openGroups}
+                  toggleGroup={toggleGroup}
+                  messagesNonLus={messagesNonLus}
+                  contratNonValide={contratNonValide}
+                />
+              );
+            }
+            const item = entry;
             const actif = location.pathname === item.route;
-            const isMsgRoute = item.label === 'Messagerie';
-            const isContratPlateforme = item.route === '/etablissement/contrat-plateforme';
-            const isLitigesRoute = item.route === '/etablissement/litiges';
+            const isMsg = item.label === 'Messagerie';
             return (
-              <button key={item.route} onClick={() => navigate(item.route)} aria-label={item.label} aria-current={actif ? 'page' : undefined} className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}>
+              <button
+                key={item.route}
+                onClick={() => navigate(item.route)}
+                aria-label={item.label}
+                aria-current={actif ? 'page' : undefined}
+                className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
+              >
                 <item.icone className="h-5 w-5" />
                 <span className="flex-1">{item.label}</span>
-                {isMsgRoute && messagesNonLus > 0 && (
-                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                {isMsg && messagesNonLus > 0 && (
+                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold px-1">
                     {messagesNonLus > 9 ? '9+' : messagesNonLus}
-                  </span>
-                )}
-                {isContratPlateforme && contratNonValide && (
-                  <span className="h-5 min-w-[20px] flex items-center justify-center rounded-full bg-warning text-warning-foreground text-[10px] font-bold px-1">
-                    !
                   </span>
                 )}
               </button>

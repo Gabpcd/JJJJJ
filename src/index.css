@@ -21,6 +21,10 @@
     --primary-dark: 187 75% 33%;
     --primary-light: 187 71% 94%;
 
+    --rose: 338 50% 65%;
+    --rose-foreground: 0 0% 100%;
+    --rose-light: 338 50% 93%;
+
     --secondary: 210 40% 96%;
     --secondary-foreground: 215 28% 17%;
 
@@ -38,8 +42,8 @@
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 32 95% 44%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 37 85% 50%;
+    --warning-foreground: 37 85% 15%;
 
     --info: 217 91% 60%;
     --info-foreground: 0 0% 100%;
@@ -78,6 +82,10 @@
     --primary-dark: 187 75% 50%;
     --primary-light: 187 71% 15%;
 
+    --rose: 338 50% 60%;
+    --rose-foreground: 0 0% 100%;
+    --rose-light: 338 40% 20%;
+
     --secondary: 217 33% 22%;
     --secondary-foreground: 214 32% 91%;
 
@@ -95,8 +103,8 @@
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 32 95% 44%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 37 85% 50%;
+    --warning-foreground: 37 85% 15%;
 
     --info: 217 91% 60%;
     --info-foreground: 0 0% 100%;
@@ -126,6 +134,8 @@
     margin: 0;
     padding: 0;
     overscroll-behavior-y: none; /* Disable Android overscroll glow in WebView */
+    /* Minimum readable text size for mobile healthcare professionals */
+    font-size: clamp(14px, 1rem, 18px);
   }
 
   body {

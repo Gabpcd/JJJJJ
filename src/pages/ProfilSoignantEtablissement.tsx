@@ -103,7 +103,7 @@ export default function ProfilSoignantEtablissement() {
                   <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Briefcase className="h-4 w-4 text-primary" /> {getLabelProfession(soignant.profession)}</span>
                     {soignant.type_exercice && (
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${soignant.type_exercice === 'LIBERAL' ? 'bg-info/10 text-info' : soignant.type_exercice === 'MIXTE' ? 'bg-purple-100 text-purple-700' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${soignant.type_exercice === 'LIBERAL' ? 'bg-info/10 text-info' : soignant.type_exercice === 'MIXTE' ? 'bg-rose/10 text-rose' : 'bg-muted text-muted-foreground'}`}>
                         {soignant.type_exercice === 'MIXTE' ? 'Salarié + Libéral' : soignant.type_exercice === 'LIBERAL' ? 'Libéral' : 'Salarié'}
                       </span>
                     )}

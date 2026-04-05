@@ -54,7 +54,7 @@ export const BADGES_STATUT: Record<string, { label: string; classes: string }> =
   'ANNULEE_PAR_ETABLISSEMENT': { label: 'Annulée', classes: 'bg-muted text-muted-foreground' },
   'ANNULEE_PAR_SOIGNANT': { label: 'Annulée (soignant)', classes: 'bg-destructive/10 text-destructive' },
   'ABSENCE': { label: 'Absence', classes: 'bg-destructive/20 text-destructive' },
-  'LITIGE': { label: 'Litige', classes: 'bg-purple-100 text-purple-700' },
+  'LITIGE': { label: 'Litige', classes: 'bg-warning/10 text-warning' },
 };
 
 export function getLabelProfession(valeur: string): string {
@@ -87,7 +87,7 @@ export function injecterContratTag(description: string, pref: ContratPreference)
 
 export function getContratBadge(pref: ContratPreference): { label: string; classes: string } {
   switch (pref) {
-    case 'LIBERAL': return { label: '🏥 Libéral', classes: 'bg-purple-100 text-purple-700' };
+    case 'LIBERAL': return { label: '🏥 Libéral', classes: 'bg-rose/10 text-rose' };
     case 'SALARIE': return { label: '💼 Salarié', classes: 'bg-primary/10 text-primary' };
     default: return { label: '👥 Tous profils', classes: 'bg-muted text-muted-foreground' };
   }
@@ -95,7 +95,7 @@ export function getContratBadge(pref: ContratPreference): { label: string; class
 
 export function getTypeContratRechercheBadge(type: string): { label: string; classes: string } {
   switch (type) {
-    case 'LIBERAL': return { label: '🏥 Libéral', classes: 'bg-purple-100 text-purple-700' };
+    case 'LIBERAL': return { label: '🏥 Libéral', classes: 'bg-rose/10 text-rose' };
     case 'SALARIE': return { label: '💼 Salarié', classes: 'bg-primary/10 text-primary' };
     default: return { label: '👥 Tous profils', classes: 'bg-muted text-muted-foreground' };
   }

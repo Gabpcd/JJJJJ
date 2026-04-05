@@ -639,7 +639,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {r.est_favori && <Star className="h-3.5 w-3.5 text-warning fill-warning" />}
                               <span>{r.prenom} {r.nom}</span>
-                              <span className={`badge-base text-[10px] ${typeExo === 'LIBERAL' ? 'bg-info/10 text-info' : typeExo === 'MIXTE' ? 'bg-purple-100 text-purple-700' : 'bg-muted text-muted-foreground'}`}>
+                              <span className={`badge-base text-[10px] ${typeExo === 'LIBERAL' ? 'bg-info/10 text-info' : typeExo === 'MIXTE' ? 'bg-rose/10 text-rose' : 'bg-muted text-muted-foreground'}`}>
                                 {typeExo === 'MIXTE' ? 'Salarié + Libéral' : typeExo === 'LIBERAL' ? 'Libéral' : 'Salarié'}
                               </span>
                             </div>
