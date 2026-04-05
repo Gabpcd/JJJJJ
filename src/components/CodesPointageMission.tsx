@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Hash, Copy, Check, RefreshCw, Loader2 } from 'lucide-react';
+import { Hash, Copy, Check, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -12,6 +13,7 @@ export function CodesPointageMission({ missionId }: CodesPointageMissionProps) {
   const [loading, setLoading] = useState(true);
   const [copiedArrivee, setCopiedArrivee] = useState(false);
   const [copiedDepart, setCopiedDepart] = useState(false);
+  const [showQR, setShowQR] = useState<'arrivee' | 'depart' | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -48,7 +50,7 @@ export function CodesPointageMission({ missionId }: CodesPointageMissionProps) {
         <h2 className="font-semibold text-foreground">Codes de pointage</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
-        Communiquez ces codes à 6 chiffres au soignant à son arrivée et à son départ. Le soignant les saisira dans l'application pour valider son pointage.
+        Communiquez ces codes au soignant ou montrez-lui le QR code à scanner depuis l'application.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -58,12 +60,27 @@ export function CodesPointageMission({ missionId }: CodesPointageMissionProps) {
           <p className="text-3xl font-mono font-black text-foreground tracking-[0.3em]">
             {formatCode(codes.code_arrivee)}
           </p>
-          <button
-            onClick={() => copier(codes.code_arrivee, 'arrivee')}
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            {copiedArrivee ? <><Check className="h-3 w-3" /> Copié</> : <><Copy className="h-3 w-3" /> Copier le code</>}
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => copier(codes.code_arrivee, 'arrivee')}
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              {copiedArrivee ? <><Check className="h-3 w-3" /> Copié</> : <><Copy className="h-3 w-3" /> Copier</>}
+            </button>
+            <button
+              onClick={() => setShowQR(showQR === 'arrivee' ? null : 'arrivee')}
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              <QrCode className="h-3 w-3" /> {showQR === 'arrivee' ? 'Masquer QR' : 'QR Code'}
+            </button>
+          </div>
+          {showQR === 'arrivee' && (
+            <div className="flex justify-center pt-2">
+              <div className="bg-white p-3 rounded-xl inline-block">
+                <QRCodeSVG value={codes.code_arrivee} size={160} level="M" />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Code départ */}
@@ -72,12 +89,27 @@ export function CodesPointageMission({ missionId }: CodesPointageMissionProps) {
           <p className="text-3xl font-mono font-black text-foreground tracking-[0.3em]">
             {formatCode(codes.code_depart)}
           </p>
-          <button
-            onClick={() => copier(codes.code_depart, 'depart')}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
-          >
-            {copiedDepart ? <><Check className="h-3 w-3" /> Copié</> : <><Copy className="h-3 w-3" /> Copier le code</>}
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => copier(codes.code_depart, 'depart')}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+            >
+              {copiedDepart ? <><Check className="h-3 w-3" /> Copié</> : <><Copy className="h-3 w-3" /> Copier</>}
+            </button>
+            <button
+              onClick={() => setShowQR(showQR === 'depart' ? null : 'depart')}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+            >
+              <QrCode className="h-3 w-3" /> {showQR === 'depart' ? 'Masquer QR' : 'QR Code'}
+            </button>
+          </div>
+          {showQR === 'depart' && (
+            <div className="flex justify-center pt-2">
+              <div className="bg-white p-3 rounded-xl inline-block">
+                <QRCodeSVG value={codes.code_depart} size={160} level="M" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
