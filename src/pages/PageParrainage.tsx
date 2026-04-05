@@ -152,7 +152,7 @@ export default function PageParrainage() {
 
           <div className="flex flex-col sm:flex-row gap-5 items-center">
             <div className="shrink-0 bg-background p-3 rounded-xl">
-              <QRCodeSVG value={lienRef} size={140} level="M" bgColor="transparent" fgColor="currentColor" className="text-foreground" />
+              <QRCodeSVG value={lienRef} size={140} level="M" bgColor="transparent" fgColor="currentColor" className="text-foreground" aria-label="QR code de votre lien de parrainage" role="img" />
             </div>
             <div className="flex-1 space-y-3 w-full">
               <div className="bg-background rounded-lg px-3 py-2.5 text-xs font-mono text-muted-foreground break-all border border-border">

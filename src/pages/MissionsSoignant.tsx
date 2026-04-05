@@ -5,7 +5,6 @@ import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { Briefcase, History } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';

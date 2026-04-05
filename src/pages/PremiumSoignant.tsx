@@ -79,7 +79,7 @@ export default function PremiumSoignant() {
                   </li>
                 ))}
               </ul>
-              <Button disabled className="w-full opacity-60">
+              <Button disabled className="w-full opacity-60 cursor-not-allowed">
                 🚀 Bientôt disponible
               </Button>
             </CardContent>
@@ -105,7 +105,7 @@ export default function PremiumSoignant() {
                   </li>
                 ))}
               </ul>
-              <Button disabled className="w-full opacity-60">
+              <Button disabled className="w-full opacity-60 cursor-not-allowed">
                 🚀 Bientôt disponible
               </Button>
             </CardContent>
