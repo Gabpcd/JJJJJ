@@ -25,7 +25,8 @@ function formatHours(value: number): string {
   return value.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-function computeRealHoursFromPresences(presences: any[]): number | null {
+function computeRealHoursFromPresences(presences: any[] | null | undefined): number | null {
+  if (!presences || presences.length === 0) return null;
   const totalMinutes = presences.reduce((sum, presence) => {
     const dureeNette = toNumberOrNull(presence.duree_nette_min);
     if (dureeNette !== null) return sum + dureeNette;
