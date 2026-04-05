@@ -507,7 +507,7 @@ export default function DocumentsSoignant() {
                       <p className="text-[10px] text-muted-foreground mt-1">Valide jusqu'au {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}</p>
                     )}
                     <div className="flex gap-2 mt-2">
-                      <button onClick={() => voirDocument(doc)} className="text-xs text-primary font-medium hover:underline">Voir</button>
+                      <button onClick={() => voirDocument(doc)} className="text-xs text-primary font-medium hover:underline">Voir le document</button>
                       {doc.statut_verification !== 'VERIFIE' && (
                         <button
                           onClick={() => reverifier(doc.id)}
