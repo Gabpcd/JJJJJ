@@ -281,10 +281,10 @@ Le libéral n'a jamais été aussi accessible. Lancez-vous.`,
 ];
 
 const tagColors: Record<string, string> = {
-  'Libéral': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-  'Réglementation': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  'Guide': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-  'Pharmacie': 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',
+  'Libéral': 'bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-800 dark:from-emerald-900/40 dark:to-teal-900/40 dark:text-emerald-300',
+  'Réglementation': 'bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 dark:from-amber-900/40 dark:to-orange-900/40 dark:text-amber-300',
+  'Guide': 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 dark:from-blue-900/40 dark:to-indigo-900/40 dark:text-blue-300',
+  'Pharmacie': 'bg-gradient-to-r from-violet-100 to-purple-100 text-violet-800 dark:from-violet-900/40 dark:to-purple-900/40 dark:text-violet-300',
 };
 
 export function getTagClasses(tag: string): string {
@@ -293,11 +293,11 @@ export function getTagClasses(tag: string): string {
 
 // Slug-based gradients with distinct colors per article
 const articleGradients: Record<string, string> = {
-  'comment-devenir-idel': 'from-teal-500 to-cyan-400',
-  'loi-rist-2025-expliquee': 'from-[hsl(222,47%,11%)] to-indigo-700',
-  'remplacement-pharmacie-guide': 'from-emerald-600 to-teal-400',
-  'cddu-contrat-usage-sante': 'from-violet-600 to-purple-500',
-  'free-transition-liberal': 'from-amber-500 to-orange-400',
+  'comment-devenir-idel': 'from-teal-400 via-cyan-400 to-emerald-400',
+  'loi-rist-2025-expliquee': 'from-indigo-500 via-purple-500 to-pink-400',
+  'remplacement-pharmacie-guide': 'from-emerald-400 via-teal-400 to-cyan-300',
+  'cddu-contrat-usage-sante': 'from-violet-500 via-fuchsia-500 to-pink-400',
+  'free-transition-liberal': 'from-amber-400 via-orange-400 to-rose-400',
 };
 
 const articleIcons: Record<string, string> = {
