@@ -1666,7 +1666,8 @@ export type Database = {
           initie_par: string
           mission_id: string
           motif: string
-          presence_id: string
+          paiement_soignant_id: string | null
+          presence_id: string | null
           reponse: string | null
           resolu_le: string | null
           resolu_par: string | null
@@ -1685,7 +1686,8 @@ export type Database = {
           initie_par: string
           mission_id: string
           motif: string
-          presence_id: string
+          paiement_soignant_id?: string | null
+          presence_id?: string | null
           reponse?: string | null
           resolu_le?: string | null
           resolu_par?: string | null
@@ -1704,7 +1706,8 @@ export type Database = {
           initie_par?: string
           mission_id?: string
           motif?: string
-          presence_id?: string
+          paiement_soignant_id?: string | null
+          presence_id?: string | null
           reponse?: string | null
           resolu_le?: string | null
           resolu_par?: string | null
@@ -1718,6 +1721,13 @@ export type Database = {
             columns: ["mission_id"]
             isOneToOne: false
             referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "litiges_paiement_soignant_id_fkey"
+            columns: ["paiement_soignant_id"]
+            isOneToOne: false
+            referencedRelation: "paiements_soignant"
             referencedColumns: ["id"]
           },
           {
@@ -4393,6 +4403,15 @@ export type Database = {
         Returns: Json
       }
       fn_relancer_signatures_contrats: { Args: never; Returns: number }
+      fn_repondre_contestation_paiement: {
+        Args: {
+          p_action: string
+          p_nouvelle_reference?: string
+          p_paiement_id: string
+          p_reponse?: string
+        }
+        Returns: Json
+      }
       fn_repondre_litige: {
         Args: { p_litige_id: string; p_reponse: string }
         Returns: Json
