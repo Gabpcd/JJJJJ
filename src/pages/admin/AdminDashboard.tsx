@@ -214,7 +214,7 @@ export default function AdminDashboard() {
             </div>
           )}
           {facturesImpayees.length > 0 && (
-            <div className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-4 cursor-pointer hover:border-destructive/60 transition-colors" onClick={() => navigate('/admin/facturation')}>
+            <div className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-4 cursor-pointer hover:border-destructive/60 transition-colors" onClick={() => navigate('/admin/impayees')}>
               <div className="flex items-center gap-2 mb-2">
                 <CreditCard className="h-5 w-5 text-destructive" />
                 <span className="font-bold text-foreground">{facturesImpayees.length} facture{facturesImpayees.length > 1 ? 's' : ''} impayée{facturesImpayees.length > 1 ? 's' : ''}</span>
@@ -517,7 +517,7 @@ export default function AdminDashboard() {
             <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><FileText className="h-4 w-4 text-destructive" /> Factures impayées</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {facturesImpayees.map((f: any) => (
-                <div key={f.id} className="text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/facturation')}>
+                <div key={f.id} className="text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/impayees')}>
                   <div className="flex justify-between">
                     <span className="font-medium text-foreground">{f.numero_facture}</span>
                     <span className="font-semibold text-destructive">{formatEur(f.montant_ttc)}</span>
