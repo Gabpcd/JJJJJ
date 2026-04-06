@@ -331,6 +331,19 @@ export default function AdminFacturation() {
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
               Générer les factures du mois
             </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                const { data, error } = await supabase.functions.invoke('sepa-auto-charge');
+                if (error) { toast.error('Erreur prélèvement SEPA'); return; }
+                if (data?.charged > 0) toast.success(`${data.charged} facture(s) prélevée(s) par SEPA`);
+                else toast.info('Aucune facture SEPA à prélever');
+                charger();
+              }}
+              className="gap-2"
+            >
+              <CreditCard className="h-4 w-4" /> Prélever SEPA
+            </Button>
           </div>
         </div>
 
