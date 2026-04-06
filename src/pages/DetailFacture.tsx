@@ -97,7 +97,6 @@ export default function DetailFacture() {
     if (Array.isArray(detail) && detail.length === 1) {
       detail = detail[0];
     }
-    console.log('[DetailFacture] RPC response:', JSON.stringify(detail)?.substring(0, 500));
     if (detail?.facture) setFacture(detail.facture);
     if (Array.isArray(detail?.missions)) {
       setMissions(detail.missions);
@@ -142,8 +141,8 @@ export default function DetailFacture() {
       doc.text(etab.nom, pw - 80, y + 5);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text(etab.adresse_rue, pw - 80, y + 10);
-      doc.text(`${etab.adresse_code_postal} ${etab.adresse_ville}`, pw - 80, y + 15);
+      doc.text(etab.adresse_rue || '', pw - 80, y + 10);
+      doc.text(`${etab.adresse_code_postal || ''} ${etab.adresse_ville || ''}`, pw - 80, y + 15);
       doc.text(`SIRET : ${etab.siret}`, pw - 80, y + 20);
 
       y += 32;
@@ -271,8 +270,8 @@ export default function DetailFacture() {
             <p className="text-xs text-muted-foreground">Plateforme de mise en relation</p>
             <p className="text-xs text-muted-foreground mt-2">Facturé à :</p>
             <p className="text-sm font-semibold text-foreground">{etab?.nom}</p>
-            <p className="text-xs text-muted-foreground">{etab?.adresse_rue}</p>
-            <p className="text-xs text-muted-foreground">{etab?.adresse_code_postal} {etab?.adresse_ville}</p>
+            <p className="text-xs text-muted-foreground">{etab?.adresse_rue || ''}</p>
+            <p className="text-xs text-muted-foreground">{etab?.adresse_code_postal || ''} {etab?.adresse_ville || ''}</p>
             <p className="text-xs text-muted-foreground">SIRET : {etab?.siret}</p>
           </div>
         </div>

@@ -71,22 +71,27 @@ export default function LitigesSoignant() {
 
   const openNewLitige = async () => {
     if (!user) return;
-    const [{ data: missions }, { data: existingLitiges }] = await Promise.all([
-      supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, etablissement_id, etablissements(nom)')
-        .eq('soignant_assigne_id', user.id)
-        .in('statut', ['TERMINEE', 'EN_COURS'])
-        .order('fin_le', { ascending: false })
-        .limit(50),
-      supabase.from('litiges')
-        .select('mission_id')
-        .eq('soignant_id', user.id),
-    ]);
-    const litigesMissionIds = new Set((existingLitiges || []).map((l: any) => l.mission_id));
-    setMissionsTerminees((missions || []).filter((m: any) => !litigesMissionIds.has(m.id)));
-    setSelectedMissionId('');
-    setNewMotif('');
-    setShowNew(true);
+    try {
+      const [{ data: missions, error: e1 }, { data: existingLitiges, error: e2 }] = await Promise.all([
+        supabase.from('missions')
+          .select('id, intitule, debut_le, fin_le, etablissement_id, etablissements(nom)')
+          .eq('soignant_assigne_id', user.id)
+          .in('statut', ['TERMINEE', 'EN_COURS'])
+          .order('fin_le', { ascending: false })
+          .limit(50),
+        supabase.from('litiges')
+          .select('mission_id')
+          .eq('soignant_id', user.id),
+      ]);
+      if (e1 || e2) { toast.error('Impossible de charger les missions.'); return; }
+      const litigesMissionIds = new Set((existingLitiges || []).map((l: any) => l.mission_id));
+      setMissionsTerminees((missions || []).filter((m: any) => !litigesMissionIds.has(m.id)));
+      setSelectedMissionId('');
+      setNewMotif('');
+      setShowNew(true);
+    } catch {
+      toast.error('Erreur lors du chargement des missions.');
+    }
   };
 
   const creerLitige = async () => {

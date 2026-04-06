@@ -18,15 +18,19 @@ const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'curren
 const formatEurPrecis = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 
+// Monthly fixed costs in EUR — update when subscription plans change
 const CHARGES_FIXES = [
-  { label: 'Supabase', montant: 25 },
-  { label: 'Resend', montant: 20 },
-  { label: 'Yousign', montant: 50 },
-  { label: 'Lovable', montant: 20 },
-  { label: 'Apple Developer', montant: 8 },
+  { label: 'Supabase', montant: 25 },   // Pro plan (database + auth + storage)
+  { label: 'Resend', montant: 20 },      // Transactional email service
+  { label: 'Yousign', montant: 50 },     // E-signature platform for contracts
+  { label: 'Lovable', montant: 20 },     // AI dev tool subscription
+  { label: 'Apple Developer', montant: 8 }, // ~99 USD/year ÷ 12 months
 ];
 const TOTAL_CHARGES_FIXES_HORS_STRIPE = CHARGES_FIXES.reduce((s, c) => s + c.montant, 0);
 
+// French corporate tax (IS) rates for SASU — 2024-2026 schedule
+// - 15% reduced rate on first 42 500 EUR of profit (PME benefit)
+// - 25% standard rate on profit above 42 500 EUR
 function calculerIS(resultat: number): number {
   if (resultat <= 0) return 0;
   if (resultat <= 42500) return resultat * 0.15;
@@ -200,7 +204,8 @@ export default function AdminDashboard() {
         {/* Alertes et actions urgentes */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {litiges.length > 0 && (
-            <div className="rounded-xl border-2 border-warning/40 bg-warning/5 p-4 cursor-pointer hover:border-warning/60 transition-colors" onClick={() => navigate('/admin/reclamations')}>
+            <div className="rounded-xl border-2 border-warning/40 bg-warning/5 p-4 cursor-pointer hover:border-warning/60 transition-colors" onClick={() => navigate('/admin/moderation')}>
+
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle className="h-5 w-5 text-warning" />
                 <span className="font-bold text-foreground">{litiges.length} litige{litiges.length > 1 ? 's' : ''} ouvert{litiges.length > 1 ? 's' : ''}</span>

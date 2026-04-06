@@ -30,7 +30,7 @@ function genererPDFNote(m: any, soignant: any, etab: any) {
   doc.setTextColor(100);
   doc.text('NOTE D\'HONORAIRES', 105, 20, { align: 'center' });
   doc.setFontSize(12);
-  doc.setTextColor(23, 162, 184);
+  doc.setTextColor(224, 69, 144);
   doc.text(`N° ${m.numero_note_honoraires || 'NH-XXXX-XXXX'}`, 105, 28, { align: 'center' });
   doc.setDrawColor(200);
   doc.line(14, 32, 196, 32);

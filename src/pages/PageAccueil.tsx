@@ -496,7 +496,7 @@ export default function PageAccueil() {
         <div className="relative max-w-3xl mx-auto px-4 text-center">
           <RevealOnScroll>
             <h2 className="text-2xl md:text-4xl font-bold mb-4">Prêt à simplifier votre staffing ? 🎉</h2>
-            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Rejoignez des centaines d'établissements et de soignants qui utilisent Jolene au quotidien 💜</p>
+            <p className="text-muted-foreground mb-10 max-w-lg mx-auto">Rejoignez des centaines d'établissements et de soignants qui utilisent Jolene au quotidien 🩷</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={() => navigate('/inscription/soignant')}

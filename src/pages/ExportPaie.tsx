@@ -30,10 +30,11 @@ function generateStandardCSV(missions: any[], sgMap: Record<string, any>): strin
   const rows = missions.map((m: any) => {
     const sg = sgMap[m.soignant_assigne_id];
     const brut = m.total_brut || 0;
+    // Taux de cotisations salariales estimé à 22% — source : barème URSSAF 2025, profils soignants intérimaires
     const cotis = brut * 0.22;
     const net = brut - cotis;
     return [
-      sg?.nom || '', sg?.prenom || '', sg?.numero_rpps || sg?.id?.substring(0, 8) || '',
+      sg?.nom || 'Soignant inconnu', sg?.prenom || '', sg?.numero_rpps || sg?.id?.substring(0, 8) || '',
       m.intitule || '', format(new Date(m.debut_le), 'dd/MM/yyyy'), format(new Date(m.fin_le), 'dd/MM/yyyy'),
       m.duree_heures || 0, m.taux_horaire_base || 0,
       (m.montant_majoration_nuit || 0).toFixed(2), (m.montant_majoration_dimanche || 0).toFixed(2), (m.montant_majoration_ferie || 0).toFixed(2),
@@ -259,7 +260,7 @@ export default function ExportPaie() {
                 const net = brut * 0.78;
                 return (
                   <tr key={m.id} className="border-b border-border/50 hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/etablissement/presences/mission/${m.id}`)}>
-                    <td className="py-2 px-3 text-xs font-medium">{sg?.prenom && sg?.nom ? `${sg.prenom} ${sg.nom}` : 'Soignant non identifié'}</td>
+                    <td className="py-2 px-3 text-xs font-medium">{sg?.prenom && sg?.nom ? `${sg.prenom} ${sg.nom}` : 'Soignant inconnu'}</td>
                     <td className="py-2 px-3 text-xs text-muted-foreground">{m.intitule}</td>
                     <td className="py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">
                       <div>{format(new Date(m.debut_le), 'dd/MM/yyyy HH:mm')} → {format(new Date(m.fin_le), 'dd/MM/yyyy HH:mm')}</div>

@@ -14,6 +14,7 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 
+// Coût moyen horaire intérim soignant en France — source : DREES / DGOS, actualisé avril 2025
 const COUT_MOYEN_SECTEUR = 28;
 const fmtEur = (v: number, decimals = 0) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: decimals }).format(v);
 

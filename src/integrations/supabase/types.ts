@@ -966,6 +966,7 @@ export type Database = {
           statut_verification: string | null
           stripe_account_id: string | null
           stripe_customer_id: string | null
+          stripe_sepa_payment_method_id: string | null
           supprime_le: string | null
           taux_commission_negocie: number | null
           taux_majoration_dimanche_pourcent: number | null
@@ -1026,6 +1027,7 @@ export type Database = {
           statut_verification?: string | null
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
+          stripe_sepa_payment_method_id?: string | null
           supprime_le?: string | null
           taux_commission_negocie?: number | null
           taux_majoration_dimanche_pourcent?: number | null
@@ -1086,6 +1088,7 @@ export type Database = {
           statut_verification?: string | null
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
+          stripe_sepa_payment_method_id?: string | null
           supprime_le?: string | null
           taux_commission_negocie?: number | null
           taux_majoration_dimanche_pourcent?: number | null
@@ -2134,7 +2137,7 @@ export type Database = {
           {
             foreignKeyName: "paiements_mission_mission_id_fkey"
             columns: ["mission_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "missions"
             referencedColumns: ["id"]
           },
@@ -4528,6 +4531,10 @@ export type Database = {
       fn_valider_presences_lot: { Args: { p_ids: string[] }; Returns: Json }
       fn_verifier_api_key: {
         Args: { p_cle_api: string; p_cle_secret: string }
+        Returns: Json
+      }
+      fn_verifier_coherence_documents: {
+        Args: { p_soignant_id?: string }
         Returns: Json
       }
       fn_verifier_coherence_identite: {

@@ -20,10 +20,10 @@ interface LayoutLegalProps {
 }
 
 const PAGES_LEGALES = [
-  { path: '/cgu', label: 'CGU' },
-  { path: '/cgv', label: 'CGV' },
-  { path: '/confidentialite', label: 'Confidentialité' },
-  { path: '/mentions-legales', label: 'Mentions légales' },
+  { path: '/cgu', label: '📋 CGU' },
+  { path: '/cgv', label: '💰 CGV' },
+  { path: '/confidentialite', label: '🔒 Confidentialité' },
+  { path: '/mentions-legales', label: '📄 Mentions légales' },
 ];
 
 export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescription }: LayoutLegalProps) {
@@ -42,7 +42,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
         <li key={item.id}>
           <a
             href={`#${item.id}`}
-            className="text-base sm:text-sm text-primary underline hover:text-primary/80 transition-colors"
+            className="text-base sm:text-sm font-medium text-primary hover:text-primary/70 transition-colors"
           >
             {item.label}
           </a>
@@ -52,23 +52,27 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
   );
 
   return (
-    <div className="min-h-screen bg-card flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       <SEOHead
         title={`${titre} — Jolene`}
         description={seoDescription || `${titre} de la plateforme Jolene — Staffing médical simplifié.`}
         url={`https://jolene.app${window.location.pathname}`}
       />
 
-      {/* Header — hidden in print */}
+      {/* Header with gradient accent */}
       <header className="border-b border-border bg-card sticky top-0 z-40 no-print">
+        <div
+          className="h-1 w-full"
+          style={{ background: 'linear-gradient(90deg, hsl(330 85% 60%) 0%, hsl(270 60% 50%) 50%, hsl(215 80% 55%) 100%)' }}
+        />
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <HeartPulse className="h-6 w-6 text-rose" />
-            <span className="text-lg font-bold text-rose">Jolene</span>
+            <HeartPulse className="h-6 w-6 text-primary" />
+            <span className="text-lg font-bold text-primary">Jolene</span>
           </Link>
           <button
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
             aria-label="Imprimer ou télécharger en PDF"
           >
             <Printer className="h-4 w-4" />
@@ -78,16 +82,25 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
       </header>
 
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-8 py-8 sm:py-12">
-        {/* Title */}
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground mb-1">{titre}</h1>
-        <p className="text-sm text-muted-foreground mb-8">Dernière mise à jour : {dateMaj}</p>
+        {/* Title with gradient */}
+        <h1
+          className="text-2xl sm:text-3xl font-extrabold mb-1 bg-clip-text text-transparent"
+          style={{ backgroundImage: 'linear-gradient(135deg, hsl(330 85% 60%) 0%, hsl(270 60% 50%) 100%)' }}
+        >
+          {titre}
+        </h1>
+        <p className="text-sm text-muted-foreground mb-8">📅 Dernière mise à jour : {dateMaj}</p>
 
-        {/* Table of contents — accordion on mobile, open on desktop */}
-        <nav className="bg-muted/50 border border-border rounded-2xl p-5 mb-10 no-print" aria-label="Sommaire">
+        {/* Table of contents */}
+        <nav
+          className="rounded-2xl p-5 mb-10 no-print border border-primary/10"
+          style={{ background: 'linear-gradient(135deg, hsl(330 85% 60% / 0.05) 0%, hsl(270 60% 50% / 0.08) 100%)' }}
+          aria-label="Sommaire"
+        >
           {isMobile ? (
             <Collapsible>
               <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-foreground">
-                Sommaire
+                📑 Sommaire
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-3">
@@ -96,7 +109,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
             </Collapsible>
           ) : (
             <>
-              <p className="text-sm font-semibold text-foreground mb-3">Sommaire</p>
+              <p className="text-sm font-semibold text-foreground mb-3">📑 Sommaire</p>
               {tocList}
             </>
           )}
@@ -107,7 +120,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
           {children}
         </div>
 
-        {/* Cross-nav — hidden in print */}
+        {/* Cross-nav */}
         <div className="mt-16 pt-6 border-t border-border no-print">
           <p className="text-xs text-muted-foreground mb-3">Autres pages légales</p>
           <div className="flex flex-wrap gap-3">
@@ -115,7 +128,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
               <Link
                 key={p.path}
                 to={p.path}
-                className="text-sm text-primary underline font-medium"
+                className="text-sm text-primary font-medium hover:text-primary/70 transition-colors px-3 py-1.5 rounded-full border border-primary/20 hover:bg-primary/5"
               >
                 {p.label}
               </Link>
@@ -126,11 +139,12 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
 
       <FooterLegal />
 
-      {/* Back to top — hidden in print */}
+      {/* Back to top */}
       {showTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-6 right-6 z-50 bg-primary text-primary-foreground rounded-full p-3 shadow-lg hover:bg-primary/90 transition-all no-print"
+          className="fixed bottom-6 right-6 z-50 rounded-full p-3 shadow-lg hover:shadow-xl transition-all no-print text-white"
+          style={{ background: 'linear-gradient(135deg, hsl(330 85% 60%) 0%, hsl(270 60% 50%) 100%)' }}
           aria-label="Retour en haut"
         >
           <ArrowUp className="h-5 w-5" />

@@ -8,17 +8,22 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Building2, Save, Loader2, HeartPulse } from 'lucide-react';
+import { Building2, Save, Loader2, HeartPulse, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 export default function AdminGroupes() {
   usePageTitle('White Label — Groupes');
+  const navigate = useNavigate();
   const [groupes, setGroupes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [cliniques, setCliniques] = useState<any[]>([]);
+  const [mounted, setMounted] = useState(true);
+
+  useEffect(() => { return () => { setMounted(false); }; }, []);
 
   const charger = async () => {
     const { data } = await supabase.from('groupes_sante').select('*').is('supprime_le', null).order('nom');
@@ -32,13 +37,13 @@ export default function AdminGroupes() {
     setEditingId(g.id);
     setForm({
       nom_marque: g.nom_marque || '',
-      couleur_primaire: g.couleur_primaire || '#17A2B8',
-      couleur_secondaire: g.couleur_secondaire || '#0F172A',
+      couleur_primaire: g.couleur_primaire || '#17A2B8', // default Jolene teal (brand primary)
+      couleur_secondaire: g.couleur_secondaire || '#0F172A', // default Jolene dark (Tailwind slate-900)
       domaine_custom: g.domaine_custom || '',
       logo_url: g.logo_url || '',
     });
     const { data } = await supabase.from('etablissements').select('id, nom, adresse_ville, type').eq('groupe_sante_id', g.id).is('supprime_le', null);
-    setCliniques(data || []);
+    if (mounted) setCliniques(data || []);
   };
 
   const sauvegarder = async () => {
@@ -64,9 +69,14 @@ export default function AdminGroupes() {
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Groupes" />
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <Building2 className="h-6 w-6 text-primary" /> Groupes de santé
-        </h1>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/admin')} aria-label="Retour au tableau de bord">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Building2 className="h-6 w-6 text-primary" /> Groupes de santé
+          </h1>
+        </div>
 
         <div className="space-y-4">
           {groupes.map(g => (

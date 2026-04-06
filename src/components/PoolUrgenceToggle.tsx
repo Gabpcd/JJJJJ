@@ -1,24 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Flame, Shield, Star, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { toast } from 'sonner';
 import type { RpcSuccessOrError } from '@/lib/supabase-rpc-types';
 
 interface PoolUrgenceToggleProps {
-  actif: boolean;
-  rayonKm: number;
+  actif?: boolean;
+  rayonKm?: number;
   villeUrgence?: string;
-  onUpdate: (actif: boolean, rayonKm: number, villeUrgence?: string) => void;
-  onError: (msg: string) => void;
-  onSuccess: (msg: string) => void;
+  onUpdate?: (actif: boolean, rayonKm: number, villeUrgence?: string) => void;
+  onError?: (msg: string) => void;
+  onSuccess?: (msg: string) => void;
 }
 
 export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onError, onSuccess }: PoolUrgenceToggleProps) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [localActif, setLocalActif] = useState(actif);
-  const [localRayon, setLocalRayon] = useState(rayonKm);
+  const [localActif, setLocalActif] = useState(actif ?? false);
+  const [localRayon, setLocalRayon] = useState(rayonKm ?? 15);
+
+  // Auto-load state from DB if no props provided (standalone mode)
+  useEffect(() => {
+    if (actif !== undefined) return; // props-driven, skip
+    if (!user) return;
+    supabase.from('soignants').select('pool_urgence_actif, rayon_deplacement_km').eq('id', user.id).single()
+      .then(({ data }: any) => {
+        if (data) {
+          setLocalActif(data.pool_urgence_actif ?? false);
+          setLocalRayon(data.rayon_deplacement_km ?? 15);
+        }
+      });
+  }, [user, actif]);
   const [modeZone, setModeZone] = useState<'position' | 'ville'>(villeUrgence ? 'ville' : 'position');
   const [localVille, setLocalVille] = useState(villeUrgence || '');
 
@@ -31,12 +47,12 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onEr
     });
     const result = data as unknown as RpcSuccessOrError | null;
     if (error) {
-      onError(extraireMessageErreur(error));
+      (onError ?? ((m: string) => toast.error(m)))(extraireMessageErreur(error));
     } else if (result?.error) {
-      onError(result.error);
+      (onError ?? ((m: string) => toast.error(m)))(result.error);
     } else {
-      onUpdate(newActif, newRayon, modeZone === 'ville' ? localVille : undefined);
-      onSuccess(newActif ? 'Pool urgence activé !' : 'Pool urgence désactivé.');
+      onUpdate?.(newActif, newRayon, modeZone === 'ville' ? localVille : undefined);
+      (onSuccess ?? ((m: string) => toast.success(m)))(newActif ? 'Pool urgence activé !' : 'Pool urgence désactivé.');
     }
     setLoading(false);
   };

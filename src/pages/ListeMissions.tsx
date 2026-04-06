@@ -39,6 +39,7 @@ export default function ListeMissions() {
   const { afficherNotification } = useNotification();
   const [missions, setMissions] = useState<any[]>([]);
   const statutParam = searchParams.get('statut') ?? '';
+  // Filter by period: 'mois' restricts to missions ending within the current calendar month (fin_le between 1st and last day)
   const periodeParam = searchParams.get('periode') === 'mois' ? 'mois' : '';
   const [filtreStatut, setFiltreStatut] = useState(STATUTS_FILTRES.some((s) => s.valeur === statutParam) ? statutParam : '');
   const [filtrePeriode, setFiltrePeriode] = useState(periodeParam);

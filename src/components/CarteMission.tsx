@@ -61,7 +61,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2 flex-wrap">
            {m.est_urgente && (
-            <span className="badge-base bg-destructive/10 text-destructive text-[10px]">
+            <span className="badge-base bg-destructive/10 text-destructive text-[10px]" aria-label={`Urgence niveau ${m.niveau_urgence === 3 ? 'critique' : m.niveau_urgence === 2 ? 'élevé' : 'standard'}`}>
               {m.niveau_urgence === 3 ? '🚨 URGENT Critique' : m.niveau_urgence === 2 ? '🔥 URGENT Élevé' : '⚡ URGENT'}
             </span>
           )}

@@ -195,11 +195,13 @@ export default function AdminConformite() {
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   useEffect(() => {
-    supabase.rpc('fn_admin_conformite' as any).then(({ data: d }: any) => {
-      if (d && typeof d === 'object' && !Array.isArray(d)) setData(d);
-      else if (Array.isArray(d) && d[0]) setData(d[0]);
+    supabase.rpc('fn_admin_conformite' as any).then(({ data: d, error: e }: any) => {
+      if (e) { console.warn('fn_admin_conformite error:', e); }
+      else if (d && typeof d === 'object' && !Array.isArray(d)) setData(d);
+      else if (Array.isArray(d) && d.length > 0 && typeof d[0] === 'object') setData(d[0]);
+      else { console.warn('fn_admin_conformite: unexpected response shape', d); }
       setLoading(false);
-    });
+    }).catch((err: any) => { console.warn('fn_admin_conformite exception:', err); setLoading(false); });
   }, []);
 
   async function toggleDetail(cle: string) {
@@ -283,7 +285,7 @@ export default function AdminConformite() {
                     </TableHeader>
                     <TableBody>
                       {detail.map((item: any, i: number) => (
-                        <TableRow key={item.id ?? i} className="text-sm">
+                        <TableRow key={item.id ? `${item.id}-${i}` : i} className="text-sm">
                           {selectedInd.renderRow(item)}
                         </TableRow>
                       ))}

@@ -211,9 +211,16 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       setMessages((data as Message[]) || []);
       setLoadingMessages(false);
 
+      // Focus input when conversation loads
+      setTimeout(() => inputRef.current?.focus(), 100);
+
       // Mark as read
       supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId }).then(({ error }) => {
-        if (error) logger.error('fn_marquer_messages_lus error', error);
+        if (error) {
+          logger.error('fn_marquer_messages_lus error', error);
+          toast.error('Erreur lors du marquage des messages comme lus.');
+          return;
+        }
         setConversations(prev => prev.map(c => c.id === selectedConvId ? { ...c, non_lus: 0 } : c));
       });
     };

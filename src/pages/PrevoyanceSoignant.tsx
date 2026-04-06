@@ -94,7 +94,7 @@ export default function PrevoyanceSoignant() {
             return (
               <div key={plan.id} className="card-base">
                 <h3 className="text-base font-bold text-foreground mb-1">🛡️ {plan.nom} — {plan.fournisseur}</h3>
-                {plan.description && <p className="text-sm text-muted-foreground mb-3">{plan.description}</p>}
+                {(plan.description || '') !== '' && <p className="text-sm text-muted-foreground mb-3">{plan.description}</p>}
                 <div className="space-y-1 text-sm mb-4">
                   <p>💰 Prime : <span className="font-semibold">{fmt(plan.prime_mensuelle)}/mois</span></p>
                   {subvention > 0 && (

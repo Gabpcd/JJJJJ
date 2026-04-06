@@ -181,24 +181,28 @@ export default function DocumentsSoignant() {
     differenceInDays(new Date(d.valide_jusqua), new Date()) < 30
   ), [mesDocuments]);
 
-  // Cross-validation: check coherence when all critical docs are present
-  const incoherenceMessage = useMemo(() => {
-    const criticalTypes = ['CARTE_IDENTITE', 'DIPLOME', 'RCP_ASSURANCE', 'RPPS_ADELI'];
-    const criticalDocs = criticalTypes.map(t => mesDocuments.find(d => d.type_document === t && d.statut_verification === 'VERIFIE'));
-    const allPresent = criticalDocs.every(Boolean);
-    if (!allPresent) return null;
-
+  // Cross-validation: check name coherence across documents + expiry
+  const [incoherenceMessage, setIncoherenceMessage] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user || mesDocuments.length === 0) return;
+    // Check expiry locally
     const issues: string[] = [];
-    const rcpDoc = criticalDocs[2];
+    const rcpDoc = mesDocuments.find(d => d.type_document === 'RCP_ASSURANCE' && d.statut_verification === 'VERIFIE');
     if (rcpDoc?.valide_jusqua && new Date(rcpDoc.valide_jusqua) < new Date()) {
       issues.push('Votre assurance RCP est expirée');
     }
-    const diplomeDoc = criticalDocs[1];
-    if (diplomeDoc?.valide_jusqua && new Date(diplomeDoc.valide_jusqua) < new Date()) {
-      issues.push('Votre diplôme est expiré');
-    }
-    return issues.length > 0 ? issues.join('. ') + '.' : null;
-  }, [mesDocuments]);
+    // Check AI name coherence via RPC
+    (supabase.rpc('fn_verifier_coherence_documents' as any) as any).then(({ data }: any) => {
+      if (data && !data.coherent && data.problemes?.length > 0) {
+        const nameIssues = (data.problemes as string[]).join('. ');
+        setIncoherenceMessage([...issues, nameIssues].filter(Boolean).join('. ') || null);
+      } else {
+        setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
+      }
+    }).catch(() => {
+      setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
+    });
+  }, [user, mesDocuments]);
 
   const reverifier = async (docId: string) => {
     setReverifyingId(docId);
@@ -503,7 +507,7 @@ export default function DocumentsSoignant() {
                       <p className="text-[10px] text-muted-foreground mt-1">Valide jusqu'au {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}</p>
                     )}
                     <div className="flex gap-2 mt-2">
-                      <button onClick={() => voirDocument(doc)} className="text-xs text-primary font-medium hover:underline">Voir</button>
+                      <button onClick={() => voirDocument(doc)} className="text-xs text-primary font-medium hover:underline">Voir le document</button>
                       {doc.statut_verification !== 'VERIFIE' && (
                         <button
                           onClick={() => reverifier(doc.id)}

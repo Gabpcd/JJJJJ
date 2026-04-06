@@ -81,7 +81,7 @@ export default function ListeContrats({ role }: { role: UserRole }) {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold text-foreground">{c.numero_contrat}</span>
+                  <span className="text-sm font-semibold text-foreground">{c.numero_contrat || '—'}</span>
                 </div>
                 <span className={`badge-base text-[10px] ${c.statut === 'SIGNE_COMPLET' ? 'bg-success/10 text-success' : c.statut === 'ANNULE' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'}`}>
                   {c.statut === 'SIGNE_COMPLET' ? '✅ Signé' : c.statut === 'ANNULE' ? '❌ Annulé' : '⏳ En attente'}

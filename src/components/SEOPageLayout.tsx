@@ -48,13 +48,21 @@ export function SEOPageLayout({ children, heroTitle, heroSubtitle, ctaText, ctaH
       {/* CTA final */}
       <section className="py-16 md:py-20 bg-gradient-to-r from-primary to-primary-dark text-primary-foreground">
         <div className="max-w-3xl mx-auto px-4 text-center">
-          <h2 className="text-2xl md:text-3xl font-bold mb-4">Prêt à commencer ?</h2>
-          <button
-            onClick={() => navigate(ctaHref)}
-            className="inline-flex items-center gap-2 bg-primary-foreground text-primary font-semibold px-8 py-3 rounded-lg hover:bg-primary-foreground/90 transition-colors text-base"
-          >
-            {ctaText} <ArrowRight className="h-4 w-4" />
-          </button>
+          <h2 className="text-2xl md:text-3xl font-bold mb-6">Prêt à commencer ?</h2>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button
+              onClick={() => navigate('/inscription/soignant')}
+              className="inline-flex items-center gap-2 bg-primary-foreground text-primary font-semibold px-8 py-3 rounded-lg hover:bg-primary-foreground/90 transition-colors text-base"
+            >
+              🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => navigate('/inscription/etablissement')}
+              className="inline-flex items-center gap-2 bg-white/20 text-white border border-white/40 font-semibold px-8 py-3 rounded-lg hover:bg-white/30 transition-colors text-base"
+            >
+              🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </section>
 

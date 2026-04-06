@@ -102,14 +102,24 @@ serve(async (req) => {
               metadata: { mission_id: missionId, soignant_id: soignantId || "" },
             });
 
+            // Get the actual charge ID from the payment intent
+            const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : null;
+            let chargeId: string | null = null;
+            if (paymentIntentId) {
+              try {
+                const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+                chargeId = pi.latest_charge ? (typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge.id) : null;
+              } catch { /* fallback to payment_intent id */ }
+            }
+
             await supabaseAdmin
               .from("stripe_transfers")
               .update({
                 statut: "TRANSFERE",
                 stripe_transfer_id: transfer.id,
-                stripe_charge_id: session.payment_intent as string,
+                stripe_charge_id: chargeId || paymentIntentId,
+                stripe_payment_intent_id: paymentIntentId,
                 transfere_le: new Date().toISOString(),
-                modifie_le: new Date().toISOString(),
               })
               .eq("mission_id", missionId);
 
@@ -307,6 +317,30 @@ serve(async (req) => {
 
       if (failErr) {
         console.error("Erreur mise à jour facture en retard:", failErr);
+      }
+    }
+
+    // Handle checkout.session.expired — clean up EN_ATTENTE transfers
+    if (event.type === "checkout.session.expired") {
+      const expiredSession = event.data.object as Stripe.Checkout.Session;
+      const expiredMissionId = expiredSession.metadata?.mission_id;
+      const expiredType = expiredSession.metadata?.type;
+
+      if (expiredType === "CONNECT_MISSION_PAYMENT" && expiredMissionId) {
+        // Reset the transfer so user can retry
+        await supabaseAdmin
+          .from("stripe_transfers")
+          .update({ statut: "ECHOUE", erreur: "Checkout expiré", modifie_le: new Date().toISOString() })
+          .eq("mission_id", expiredMissionId)
+          .eq("statut", "EN_ATTENTE");
+
+        console.log(`Connect checkout expired for mission ${expiredMissionId}, transfer reset to ECHOUE`);
+      }
+
+      // For facture payments, just log — the facture stays EMISE
+      const expiredFactureId = expiredSession.metadata?.facture_id;
+      if (expiredFactureId) {
+        console.log(`Facture checkout expired for ${expiredFactureId}`);
       }
     }
 

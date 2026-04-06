@@ -193,7 +193,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     setProgression(0);
     setProgressionActuel(0);
 
-    const serieId = `SERIE_${Date.now()}`;
+    const serieId = `SERIE_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     // C6: Sanitize description — strip any injected tags before sending to server
     const cleanDesc = (description || '').replace(/\[SERIE_ID:[^\]]*\]/g, '').replace(/\[CONTRAT:[^\]]*\]/g, '').trim();
     const descWithContrat = injecterContratTag(cleanDesc, contratPreference);

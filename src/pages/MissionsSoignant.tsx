@@ -3,9 +3,8 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { Briefcase, History, AlertTriangle } from 'lucide-react';
+import { Briefcase, History } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
@@ -195,7 +194,6 @@ export default function MissionsSoignant() {
 
   if (!soignant) return <LayoutApp role="SOIGNANT"><SkeletonList count={4} /></LayoutApp>;
 
-  const mesMissionsCount = missions.filter(() => onglet === 'mes_missions').length || missionsAvecDistance.length;
   const onglets: { id: Onglet; label: string; count?: number }[] = [
     { id: 'disponibles', label: 'Disponibles' },
     { id: 'mes_missions', label: 'Mes missions' },
@@ -273,7 +271,7 @@ export default function MissionsSoignant() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <BadgeStatut statut={m.statut} />
-                          {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]">🔥 Urgent</span>}
+                          {m.est_urgente && <span className="badge-base bg-destructive/10 text-destructive text-[10px]" aria-label="Urgent">🔥 Urgent</span>}
                         </div>
                         <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">

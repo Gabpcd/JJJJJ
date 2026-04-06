@@ -103,7 +103,7 @@ export default function AttestationHeures() {
           <h1 className="text-xl font-bold uppercase tracking-wide">Attestation d'heures travaillées</h1>
         </div>
 
-        <hr className="border-gray-300 mb-6" />
+        <div className="border-t border-gray-300 mb-6" />
 
         {/* Soignant */}
         <div className="mb-6">
@@ -124,7 +124,7 @@ export default function AttestationHeures() {
           <p className="text-sm">Du {format(new Date(debut), 'dd/MM/yyyy')} au {format(new Date(fin), 'dd/MM/yyyy')}</p>
         </div>
 
-        <hr className="border-gray-300 mb-6" />
+        <div className="border-t border-gray-300 mb-6" />
 
         {/* Détail des missions */}
         <div className="mb-6">
@@ -142,7 +142,7 @@ export default function AttestationHeures() {
             <tbody>
               {missions.map((m, i) => (
                 <tr key={i} className={i % 2 === 0 ? '' : 'bg-gray-50'}>
-                  <td className="border border-gray-300 px-2 py-1">{format(new Date(m.debut_le), 'dd/MM/yyyy')}</td>
+                  <td className="border border-gray-300 px-2 py-1">{m.debut_le ? format(new Date(m.debut_le), 'dd/MM/yyyy') : '—'}</td>
                   <td className="border border-gray-300 px-2 py-1">{m.etablissements?.nom || '—'}</td>
                   <td className="border border-gray-300 px-2 py-1">{m.etablissements?.finess || '—'}</td>
                   <td className="border border-gray-300 px-2 py-1">{m.service || '—'}</td>
@@ -157,7 +157,7 @@ export default function AttestationHeures() {
           </table>
         </div>
 
-        <hr className="border-gray-300 mb-6" />
+        <div className="border-t border-gray-300 mb-6" />
 
         {/* Synthèse */}
         <div className="mb-6">
@@ -169,18 +169,15 @@ export default function AttestationHeures() {
           </ul>
         </div>
 
-        <hr className="border-gray-300 mb-6" />
+        <div className="border-t border-gray-300 mb-6" />
 
         {/* Footer légal */}
         <div className="text-xs text-gray-500 space-y-2">
-          <p>Ce document est généré automatiquement par la plateforme {ENTREPRISE.nom}. Il peut être présenté à l'Ordre professionnel, à la CPAM ou à tout organisme compétent.</p>
-          <p>Généré le : {format(new Date(), 'dd/MM/yyyy')}</p>
-          <p>Identifiant : {identifiant}</p>
-          <p className="font-medium">{ENTREPRISE.nom} — SIRET {ENTREPRISE.siret}</p>
-          <p>{ENTREPRISE.adresse} · {ENTREPRISE.email}</p>
-          <p>Hébergement sécurisé : {ENTREPRISE.hebergeur}</p>
-          <p>Conforme RGPD · Code du Travail</p>
-          <p className="italic mt-3">⚠️ Les montants financiers ne figurent pas sur cette attestation. Pour les justificatifs de rémunération, consultez vos bulletins de paie.</p>
+          <p>Document généré automatiquement par {ENTREPRISE.nom}. Présentable à l'Ordre professionnel, la CPAM ou tout organisme compétent.</p>
+          <p>Généré le : {format(new Date(), 'dd/MM/yyyy')} · Identifiant : {identifiant}</p>
+          <p className="font-medium">{ENTREPRISE.nom} — SIRET {ENTREPRISE.siret} · {ENTREPRISE.adresse}</p>
+          <p>Hébergement HDS : {ENTREPRISE.hebergeur} · Conforme RGPD</p>
+          <p className="italic mt-2">Les montants financiers ne figurent pas sur cette attestation. Pour les justificatifs de rémunération, consultez vos bulletins de paie.</p>
         </div>
       </div>
     </div>

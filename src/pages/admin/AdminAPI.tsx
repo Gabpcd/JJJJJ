@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Key, Copy, Plus, Eye, EyeOff, Code2, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { logger } from '@/lib/logger';
 
 const ENDPOINTS = [
   { method: 'GET', path: '/api-v1/missions', desc: 'Lister les missions de l\'établissement', example: '{ "data": [{ "id": "uuid", "intitule": "IDE Nuit", "debut_le": "2026-03-15T20:00:00Z", "statut": "OUVERTE" }] }' },
@@ -50,8 +51,17 @@ export default function AdminAPI() {
     if (!newName.trim() || generating) return;
     setGenerating(true);
     try {
-      const cleApi = `sd_live_${crypto.randomUUID().replace(/-/g, '')}`;
-      const cleSecret = crypto.randomUUID();
+      let cleApi: string;
+      let cleSecret: string;
+      try {
+        cleApi = `sd_live_${crypto.randomUUID().replace(/-/g, '')}`;
+        cleSecret = crypto.randomUUID();
+      } catch {
+        // Fallback if crypto.randomUUID() is unavailable (e.g. non-secure context)
+        const fallback = () => Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
+        cleApi = `sd_live_${fallback()}`;
+        cleSecret = fallback();
+      }
       const { error } = await supabase.from('api_keys').insert({
         nom: newName.trim(),
         cle_api: cleApi,
@@ -59,7 +69,7 @@ export default function AdminAPI() {
         permissions: newPerms,
       } as any);
       if (error) {
-        console.error('Erreur génération clé API:', JSON.stringify(error));
+        logger.error('Erreur génération clé API:', error);
         const { toast } = await import('sonner');
         toast.error('Erreur lors de la génération de la clé API.');
       } else {
@@ -87,7 +97,7 @@ export default function AdminAPI() {
 
   const masquer = (cle: string, revealed: boolean) => {
     if (revealed) return cle;
-    return cle.slice(0, 12) + '••••••••••••';
+    return cle.slice(0, 8) + '••••••••••••••••';
   };
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
@@ -154,10 +164,10 @@ export default function AdminAPI() {
                     <td className="py-3">
                       <div className="flex items-center gap-1">
                         <code className="text-xs bg-muted px-2 py-0.5 rounded">{masquer(k.cle_api, revealedKeys.has(k.id))}</code>
-                        <button onClick={() => toggleReveal(k.id)} className="p-1 hover:bg-muted rounded" title="Afficher/Masquer">
+                        <button onClick={() => toggleReveal(k.id)} className="p-1 hover:bg-muted rounded min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label={revealedKeys.has(k.id) ? 'Masquer la clé API' : 'Afficher la clé API'}>
                           {revealedKeys.has(k.id) ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
                         </button>
-                        <button onClick={() => copier(k.cle_api)} className="p-1 hover:bg-muted rounded" title="Copier">
+                        <button onClick={() => copier(k.cle_api)} className="p-1 hover:bg-muted rounded min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Copier la clé API">
                           <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
                       </div>

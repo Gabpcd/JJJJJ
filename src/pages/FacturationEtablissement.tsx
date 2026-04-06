@@ -657,8 +657,8 @@ export default function FacturationEtablissement() {
             <div className="mb-6 flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
               <Building2 className="h-5 w-5 text-primary shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-foreground">Prélèvement automatique activé 🏦</p>
-                <p className="text-xs text-muted-foreground">Les commissions sont prélevées automatiquement après chaque mission terminée.</p>
+                <p className="text-sm font-semibold text-foreground">Mandat SEPA enregistré 🏦</p>
+                <p className="text-xs text-muted-foreground">Votre mandat SEPA est actif. Les commissions seront prélevées automatiquement lors de la facturation mensuelle.</p>
               </div>
             </div>
           )}

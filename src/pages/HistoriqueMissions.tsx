@@ -11,6 +11,7 @@ import { enrichirEtablissements } from '@/lib/etablissements';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ClipboardList, MessageCircle, AlertTriangle, Download } from 'lucide-react';
+import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 
@@ -76,7 +77,7 @@ export default function HistoriqueMissions() {
     try {
       const { data } = await supabase.rpc('fn_user_id_pour_etablissement' as any, { p_etablissement_id: etablissementId });
       if (data) navigate(`/soignant/messagerie?dest=${data}`);
-    } catch { /* fallback */ }
+    } catch { toast.error('Impossible d\'ouvrir la conversation.'); }
   };
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
@@ -135,11 +136,9 @@ export default function HistoriqueMissions() {
                   <Button variant="ghost" size="sm" className="gap-1.5 text-xs h-8" onClick={() => ouvrirConversation(m.etablissement_id)}>
                     <MessageCircle className="h-3.5 w-3.5" /> Contacter
                   </Button>
-                  {!aLitige && (
-                    <Button variant="ghost" size="sm" className="gap-1.5 text-xs h-8 text-warning hover:text-warning" onClick={() => navigate(`/soignant/missions/${m.id}`)}>
-                      <AlertTriangle className="h-3.5 w-3.5" /> Ouvrir un litige
-                    </Button>
-                  )}
+                  <Button variant="ghost" size="sm" className={`gap-1.5 text-xs h-8 text-warning hover:text-warning ${aLitige ? 'invisible' : ''}`} onClick={() => navigate(`/soignant/missions/${m.id}`)}>
+                    <AlertTriangle className="h-3.5 w-3.5" /> Ouvrir un litige
+                  </Button>
                   {aLitige && (
                     <span className="text-[10px] text-destructive font-medium">⚠️ Litige en cours</span>
                   )}

@@ -364,7 +364,7 @@ export default function PresencesSoignant() {
           },
           destinataire_id: user.id,
         },
-      }).catch(() => {});
+      }).catch(() => { afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi de l\'email de confirmation.' }); });
     }
 
     afficherNotification({ type: 'succes', message: '🏁 Départ pointé ! Mission terminée.' });
@@ -401,7 +401,7 @@ export default function PresencesSoignant() {
 
       <Tabs defaultValue="avenir">
         <TabsList className="w-full max-w-lg mb-4">
-          <TabsTrigger value="avenir" className="flex-1 gap-1.5"><CalendarDays className="h-4 w-4" />À venir{missionsAVenir.length > 0 && <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] px-1 text-[10px]">{missionsAVenir.length}</Badge>}</TabsTrigger>
+          <TabsTrigger value="avenir" className="flex-1 gap-1.5"><CalendarDays className="h-4 w-4" />À venir{missionsAVenir.length > 0 && <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] px-1 text-[10px]" aria-label={`${missionsAVenir.length} mission${missionsAVenir.length > 1 ? 's' : ''} à venir`}>{missionsAVenir.length}</Badge>}</TabsTrigger>
           <TabsTrigger value="encours" className="flex-1 gap-1.5"><Activity className="h-4 w-4" />En cours</TabsTrigger>
           <TabsTrigger value="aujourdhui" className="flex-1 gap-1.5"><Clock className="h-4 w-4" />Aujourd'hui</TabsTrigger>
           <TabsTrigger value="historique" className="flex-1 gap-1.5"><History className="h-4 w-4" />Historique</TabsTrigger>

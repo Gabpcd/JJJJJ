@@ -28,8 +28,14 @@ export default function ModifierMission() {
     return (
       <LayoutApp role="ADMIN_ETABLISSEMENT">
         <div className="text-center py-12">
-          <p className="text-lg font-semibold text-foreground mb-2">Cette mission ne peut plus être modifiée</p>
-          <p className="text-sm text-muted-foreground mb-4">Seules les missions ouvertes peuvent être éditées.</p>
+          <p className="text-lg font-semibold text-foreground mb-2">
+            {!mission ? 'Mission introuvable' : 'Modification impossible'}
+          </p>
+          <p className="text-sm text-muted-foreground mb-4">
+            {!mission
+              ? 'Cette mission n\'existe pas ou vous n\'avez pas les droits pour y accéder.'
+              : `Cette mission ne peut pas être modifiée car elle est au statut « ${mission.statut} ». Seules les missions au statut « OUVERTE » sont modifiables.`}
+          </p>
           <button onClick={() => navigate('/etablissement/missions')} className="btn-primary">Retour aux missions</button>
         </div>
       </LayoutApp>

@@ -10,6 +10,8 @@ import { CheckCircle, Upload, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
+const OBJECTIF_HEURES_LIBERAL = 3200;
+
 export default function Parcours3200h() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
@@ -101,7 +103,7 @@ export default function Parcours3200h() {
             <Button variant="outline" onClick={() => navigate('/soignant/documents')}>
               <FileText className="h-4 w-4 mr-2" /> Mes documents libéraux
             </Button>
-            <Button onClick={() => navigate('/soignant/missions')}>
+            <Button onClick={() => navigate('/soignant/missions')} aria-label="Voir les missions">
               Voir les missions →
             </Button>
           </div>
@@ -118,7 +120,7 @@ export default function Parcours3200h() {
       </div>
 
       {/* CAS B : Upload attestation "J'ai déjà mes 3200h" */}
-      {heures < 3200 && (
+      {heures < OBJECTIF_HEURES_LIBERAL && (
         <div className="card-base mb-6 border-2 border-dashed border-primary/30">
           <h3 className="text-sm font-bold text-foreground mb-2">📄 J'ai déjà mes 3 200h hors plateforme</h3>
           <p className="text-xs text-muted-foreground mb-3">
