@@ -521,15 +521,14 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     const { data, error: fnErr } = await supabase.functions.invoke('stripe-connect-pay-mission', {
                       body: { mission_id: m.id },
                     });
+                    if (data?.already_paid) {
+                      toast.info(data.message || 'Ce paiement a déjà été effectué');
+                      navigate(0);
+                      setConnectPayLoading(false);
+                      return;
+                    }
                     if (fnErr || !data?.client_secret) {
-                      const msg = data?.error || fnErr?.message || 'Erreur lors du paiement';
-                      // Si déjà payé, recharger pour afficher le bon état
-                      if (msg.includes('déjà été effectué') || msg.includes('déjà en cours')) {
-                        toast.info(msg);
-                        navigate(0);
-                      } else {
-                        toast.error(msg);
-                      }
+                      toast.error(data?.error || fnErr?.message || 'Erreur lors du paiement');
                       setConnectPayLoading(false);
                       return;
                     }

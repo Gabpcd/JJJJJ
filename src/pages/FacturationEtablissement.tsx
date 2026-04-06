@@ -222,15 +222,13 @@ export default function FacturationEtablissement() {
       const { data, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
         body: { mission_id: missionId },
       });
+      if (data?.already_paid) {
+        toast.info(data.message || 'Ce paiement a déjà été effectué');
+        charger();
+        return;
+      }
       if (error) {
-        // supabase.functions.invoke met le body JSON dans data même en cas d'erreur HTTP
-        const msg = data?.error || error.message || 'Erreur lors du paiement';
-        if (msg.includes('déjà été effectué') || msg.includes('déjà en cours')) {
-          toast.info(msg);
-          charger();
-        } else {
-          toast.error(msg);
-        }
+        toast.error(data?.error || error.message || 'Erreur lors du paiement');
         return;
       }
       if (data?.error) throw new Error(data.error);
