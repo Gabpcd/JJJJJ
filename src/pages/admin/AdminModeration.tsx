@@ -109,7 +109,7 @@ export default function AdminModeration() {
       supabase
         .from('litiges')
         .select('id, motif, reponse, statut, cree_le, soignant_id, etablissement_id, mission_id, initie_par, resolution, resolu_le')
-        .in('statut', ['OUVERT', 'EN_DISCUSSION'])
+        .in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'CONTESTEE'])
         .order('cree_le', { ascending: false }),
       supabase
         .from('evaluations')
@@ -283,7 +283,14 @@ export default function AdminModeration() {
                           <span>Litige initié par {litige.initie_par === 'SOIGNANT' ? 'le soignant' : 'l\'établissement'}</span>
                         </div>
                       </div>
-                      <Badge variant={litige.statut === 'OUVERT' ? 'destructive' : 'secondary'}>{formatStatutLitige(litige.statut)}</Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant={litige.statut === 'OUVERT' ? 'destructive' : litige.statut === 'EN_MEDIATION' ? 'default' : 'secondary'}>
+                          {formatStatutLitige(litige.statut)}
+                        </Badge>
+                        {litige.statut === 'EN_MEDIATION' && (
+                          <span className="text-[10px] text-success font-medium">Les deux parties sont d'accord</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
@@ -298,7 +305,7 @@ export default function AdminModeration() {
                           <p className="mt-2 text-sm leading-6 text-foreground">{litige.reponse || 'Aucune réponse enregistrée pour le moment.'}</p>
                         </div>
 
-                        {litige.resolution && (
+                        {litige.resolution && litige.resolu_le && (
                           <div className="rounded-lg border bg-background p-4">
                             <p className="text-xs uppercase tracking-wide text-muted-foreground">Résolution actuelle</p>
                             <p className="mt-2 text-sm leading-6 text-foreground">{litige.resolution}</p>
