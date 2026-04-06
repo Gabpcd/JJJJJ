@@ -113,7 +113,7 @@ export default function AdminModeration() {
         .order('cree_le', { ascending: false }),
       supabase
         .from('evaluations')
-        .select('id, note, commentaire, type_evaluateur, mission_id, cree_le')
+        .select('id, note, commentaire, type_evaluateur, mission_id, evaluateur_id, evalue_id, cree_le')
         .eq('visible', false)
         .order('cree_le', { ascending: true })
         .limit(50),
@@ -167,7 +167,36 @@ export default function AdminModeration() {
       setLitiges([]);
     }
 
-    if (resEvals.data) setEvaluations(resEvals.data);
+    // Enrichir les évaluations avec noms
+    if (resEvals.data && resEvals.data.length > 0) {
+      const evalsBruts = resEvals.data as any[];
+      const allUserIds = [...new Set([
+        ...evalsBruts.map(e => e.evaluateur_id).filter(Boolean),
+        ...evalsBruts.map(e => e.evalue_id).filter(Boolean),
+      ])];
+      const evalMissionIds = [...new Set(evalsBruts.map(e => e.mission_id).filter(Boolean))];
+
+      const [resSg, resEt, resM] = await Promise.all([
+        allUserIds.length ? supabase.from('soignants').select('id, prenom, nom').in('id', allUserIds) : Promise.resolve({ data: [] } as any),
+        allUserIds.length ? supabase.from('etablissements').select('id, nom').in('id', allUserIds) : Promise.resolve({ data: [] } as any),
+        evalMissionIds.length ? supabase.from('missions').select('id, intitule').in('id', evalMissionIds) : Promise.resolve({ data: [] } as any),
+      ]);
+
+      const nameMap: Record<string, string> = {};
+      for (const s of (resSg.data ?? [])) nameMap[s.id] = `${s.prenom || ''} ${s.nom || ''}`.trim();
+      for (const e of (resEt.data ?? [])) nameMap[e.id] = e.nom;
+      const missionMap: Record<string, string> = {};
+      for (const m of (resM.data ?? [])) missionMap[m.id] = m.intitule;
+
+      setEvaluations(evalsBruts.map(e => ({
+        ...e,
+        evaluateur_nom: nameMap[e.evaluateur_id] || '—',
+        evalue_nom: nameMap[e.evalue_id] || '—',
+        mission_intitule: missionMap[e.mission_id] || '—',
+      })));
+    } else {
+      setEvaluations([]);
+    }
     if (resDocs.data) setDocuments(resDocs.data);
     setLoading(false);
   };
@@ -455,34 +484,49 @@ export default function AdminModeration() {
           </TabsContent>
 
           <TabsContent value="evaluations">
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Note</TableHead>
-                    <TableHead>Commentaire</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {evaluations.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell><Badge variant="outline">{e.note}/5</Badge></TableCell>
-                      <TableCell className="max-w-[300px] truncate">{e.commentaire || '—'}</TableCell>
-                      <TableCell>{e.type_evaluateur}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{formatDate(e.cree_le)}</TableCell>
-                      <TableCell className="space-x-1 text-right">
-                        <Button size="sm" variant="outline" onClick={() => publierEvaluation(e.id)}><Check className="mr-1 h-3.5 w-3.5" />Publier</Button>
-                        <Button size="sm" variant="destructive" onClick={() => supprimerEvaluation(e.id)}><X className="mr-1 h-3.5 w-3.5" />Supprimer</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {evaluations.length === 0 && <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Aucune évaluation en attente</TableCell></TableRow>}
-                </TableBody>
-              </Table>
-            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Les évaluations positives (4-5 étoiles) sans commentaire sont publiées automatiquement. Seules les évaluations nécessitant une vérification apparaissent ici.
+            </p>
+            {evaluations.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Aucune évaluation en attente de modération 🎉</p>
+            ) : (
+              <div className="space-y-3">
+                {evaluations.map((e) => (
+                  <Card key={e.id}>
+                    <CardContent className="pt-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={e.note <= 2 ? 'destructive' : e.note === 3 ? 'secondary' : 'outline'}>
+                              {'★'.repeat(e.note)}{'☆'.repeat(5 - e.note)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{formatDate(e.cree_le)}</span>
+                          </div>
+                          <p className="text-sm text-foreground">
+                            <span className="font-medium">{e.evaluateur_nom}</span>
+                            <span className="text-muted-foreground"> ({e.type_evaluateur === 'SOIGNANT' ? 'Soignant' : 'Établissement'}) a évalué </span>
+                            <span className="font-medium">{e.evalue_nom}</span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">Mission : {e.mission_intitule}</p>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          <Button size="sm" variant="outline" onClick={() => publierEvaluation(e.id)}><Check className="mr-1 h-3.5 w-3.5" />Publier</Button>
+                          <Button size="sm" variant="destructive" onClick={() => supprimerEvaluation(e.id)}><X className="mr-1 h-3.5 w-3.5" />Supprimer</Button>
+                        </div>
+                      </div>
+                      {e.commentaire && (
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <p className="text-sm text-foreground italic">"{e.commentaire}"</p>
+                        </div>
+                      )}
+                      {!e.commentaire && e.note <= 3 && (
+                        <p className="text-xs text-warning">Note basse sans commentaire — vérification recommandée</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="documents">
