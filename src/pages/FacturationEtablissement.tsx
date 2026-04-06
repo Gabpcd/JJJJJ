@@ -222,7 +222,17 @@ export default function FacturationEtablissement() {
       const { data, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
         body: { mission_id: missionId },
       });
-      if (error) throw error;
+      if (error) {
+        // supabase.functions.invoke met le body JSON dans data même en cas d'erreur HTTP
+        const msg = data?.error || error.message || 'Erreur lors du paiement';
+        if (msg.includes('déjà été effectué') || msg.includes('déjà en cours')) {
+          toast.info(msg);
+          charger();
+        } else {
+          toast.error(msg);
+        }
+        return;
+      }
       if (data?.error) throw new Error(data.error);
       if (data?.url) {
         window.location.href = data.url;
@@ -234,7 +244,13 @@ export default function FacturationEtablissement() {
       }
       toast.error('Aucune URL de paiement reçue');
     } catch (e: any) {
-      toast.error(e?.message || 'Erreur lors du paiement Stripe Connect');
+      const msg = e?.message || 'Erreur lors du paiement Stripe Connect';
+      if (msg.includes('déjà été effectué') || msg.includes('déjà en cours')) {
+        toast.info(msg);
+        charger();
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setConnectPayingId(null);
     }

@@ -38,15 +38,22 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   const [showModifRef, setShowModifRef] = useState(false);
   const [newRef, setNewRef] = useState('');
   const [modifLoading, setModifLoading] = useState(false);
+  const [stripeTransfer, setStripeTransfer] = useState<any>(null);
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: modeData, error: modeErr }, { data: paiementData }] = await Promise.all([
+      const [{ data: modeData, error: modeErr }, { data: paiementData }, { data: transferData }] = await Promise.all([
         supabase.rpc('fn_mode_paiement_mission' as any, { p_mission_id: missionId }),
         supabase.from('paiements_soignant')
           .select('*')
           .eq('mission_id', missionId)
           .in('statut', ['DECLARE', 'CONFIRME', 'CONTESTE'])
+          .order('cree_le', { ascending: false })
+          .limit(1),
+        supabase.from('stripe_transfers')
+          .select('id, statut, montant_total, montant_soignant, montant_commission, charge_le')
+          .eq('mission_id', missionId)
+          .in('statut', ['EN_ATTENTE', 'TRANSFERE'])
           .order('cree_le', { ascending: false })
           .limit(1),
       ]);
@@ -55,6 +62,9 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       }
       if (paiementData && paiementData.length > 0) {
         setPaiementExistant(paiementData[0]);
+      }
+      if (transferData && transferData.length > 0) {
+        setStripeTransfer(transferData[0]);
       }
       setLoading(false);
     };
@@ -187,6 +197,33 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
             </div>
           </DialogContent>
         </Dialog>
+      </div>
+    );
+  }
+
+  // Stripe transfer already exists (paid or in progress)
+  if (stripeTransfer) {
+    const isTransfere = stripeTransfer.statut === 'TRANSFERE';
+    return (
+      <div className={`card-base space-y-2 ${isTransfere ? 'border-success/20' : 'border-primary/20'}`}>
+        <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+          {isTransfere ? (
+            <><CheckCircle className="h-4 w-4 text-success" /> Paiement Stripe effectué</>
+          ) : (
+            <><Loader2 className="h-4 w-4 animate-spin text-primary" /> Paiement Stripe en cours</>
+          )}
+        </p>
+        <div className="text-xs space-y-1">
+          <p className="text-muted-foreground">Commission Jolene : <span className="text-foreground font-medium">{fmt(stripeTransfer.montant_commission)}</span></p>
+          <p className="text-muted-foreground">Honoraires soignant : <span className="text-foreground font-medium">{fmt(stripeTransfer.montant_soignant)}</span></p>
+          <p className="text-muted-foreground">Total : <span className="text-foreground font-semibold">{fmt(stripeTransfer.montant_total)}</span></p>
+          {stripeTransfer.charge_le && (
+            <p className="text-muted-foreground">Date : <span className="text-foreground font-medium">{new Date(stripeTransfer.charge_le).toLocaleDateString('fr-FR')}</span></p>
+          )}
+        </div>
+        {!isTransfere && (
+          <p className="text-[10px] text-muted-foreground">Le transfert vers le soignant sera effectué automatiquement après confirmation du paiement.</p>
+        )}
       </div>
     );
   }

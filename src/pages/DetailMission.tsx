@@ -522,7 +522,14 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       body: { mission_id: m.id },
                     });
                     if (fnErr || !data?.client_secret) {
-                      toast.error(data?.error || 'Erreur lors du paiement');
+                      const msg = data?.error || fnErr?.message || 'Erreur lors du paiement';
+                      // Si déjà payé, recharger pour afficher le bon état
+                      if (msg.includes('déjà été effectué') || msg.includes('déjà en cours')) {
+                        toast.info(msg);
+                        navigate(0);
+                      } else {
+                        toast.error(msg);
+                      }
                       setConnectPayLoading(false);
                       return;
                     }
