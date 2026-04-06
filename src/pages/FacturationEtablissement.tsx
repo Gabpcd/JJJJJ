@@ -4,7 +4,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, Building2, AlertTriangle, Download, Banknote, Info, Eye, ChevronDown } from 'lucide-react';
+import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, Building2, AlertTriangle, Download, Banknote, Info, Eye, ChevronDown, Edit2, X } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
@@ -90,6 +90,13 @@ export default function FacturationEtablissement() {
   // Paiements soignants state
   const [paiementsData, setPaiementsData] = useState<any>(null);
   const [missionsPaidByStripe, setMissionsPaidByStripe] = useState<Set<string>>(new Set());
+
+  // Contestation response state
+  const [contestationOpen, setContestationOpen] = useState<string | null>(null);
+  const [contestationAction, setContestationAction] = useState<string | null>(null);
+  const [contestationRef, setContestationRef] = useState('');
+  const [contestationReponse, setContestationReponse] = useState('');
+  const [contestationLoading, setContestationLoading] = useState(false);
 
   useEffect(() => {
     if (searchParams.get('paiement') === 'succes') {
@@ -284,6 +291,34 @@ export default function FacturationEtablissement() {
       toast.error(e?.message || 'Impossible de consulter le RIB');
     }
     setRibLoadingId(null);
+  };
+
+  const repondreContestation = async (paiementId: string, action: string) => {
+    setContestationLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_repondre_contestation_paiement' as any, {
+        p_paiement_id: paiementId,
+        p_action: action,
+        p_nouvelle_reference: action === 'MODIFIER_REF' ? contestationRef.trim() : null,
+        p_reponse: action === 'CONTESTER' ? (contestationReponse.trim() || null) : null,
+      });
+      if (error) throw error;
+      const result = data as any;
+      if (result?.error) throw new Error(result.error);
+      if (result?.action === 'reference_modifiee') toast.success('Référence corrigée — le soignant sera notifié pour re-confirmer');
+      else if (result?.action === 'paiement_annule') toast.success('Paiement annulé — vous devrez effectuer un nouveau paiement');
+      else if (result?.action === 'escalade_admin') toast.info('Litige transmis à l\'administrateur Jolene');
+      setContestationOpen(null);
+      setContestationAction(null);
+      setContestationRef('');
+      setContestationReponse('');
+      charger();
+    } catch (err: any) {
+      capturerErreurSentry(err, 'FacturationEtablissement', 'repondre_contestation');
+      toast.error(err?.message || 'Erreur');
+    } finally {
+      setContestationLoading(false);
+    }
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
@@ -493,10 +528,73 @@ export default function FacturationEtablissement() {
                               )}
                             </td>
                           </tr>
-                          {p.statut === 'CONTESTE' && p.motif_contestation && (
+                          {p.statut === 'CONTESTE' && (
                             <tr>
-                              <td colSpan={7} className="py-1 px-2 text-xs text-destructive">
-                                ⚠️ Motif : {p.motif_contestation}
+                              <td colSpan={7} className="py-2 px-2">
+                                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 space-y-3">
+                                  {p.motif_contestation && (
+                                    <p className="text-xs text-destructive font-medium">
+                                      ⚠️ Motif du soignant : {p.motif_contestation}
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-foreground font-semibold">Comment souhaitez-vous répondre ?</p>
+                                  {contestationOpen !== p.paiement_id ? (
+                                    <div className="flex flex-wrap gap-2">
+                                      <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => { setContestationOpen(p.paiement_id); setContestationAction('MODIFIER_REF'); }}>
+                                        <Edit2 className="h-3 w-3" /> Corriger la référence
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="text-xs gap-1 border-destructive/30 text-destructive" onClick={() => { setContestationOpen(p.paiement_id); setContestationAction('ACCEPTER'); }}>
+                                        <X className="h-3 w-3" /> Annuler ce paiement
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => { setContestationOpen(p.paiement_id); setContestationAction('CONTESTER'); }}>
+                                        <AlertTriangle className="h-3 w-3" /> Maintenir — escalader
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {contestationAction === 'MODIFIER_REF' && (
+                                        <>
+                                          <p className="text-xs text-muted-foreground">Saisissez la bonne référence de paiement :</p>
+                                          <div className="flex gap-2">
+                                            <Input value={contestationRef} onChange={e => setContestationRef(e.target.value)} placeholder="Ex: VIR-2026-04-001" className="text-xs h-8" />
+                                            <Button size="sm" onClick={() => repondreContestation(p.paiement_id, 'MODIFIER_REF')} disabled={contestationLoading || !isRefValid(contestationRef)} className="text-xs shrink-0">
+                                              {contestationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Envoyer
+                                            </Button>
+                                          </div>
+                                          <p className="text-[10px] text-muted-foreground">Le soignant sera notifié et devra re-confirmer.</p>
+                                        </>
+                                      )}
+                                      {contestationAction === 'ACCEPTER' && (
+                                        <>
+                                          <p className="text-xs text-destructive">Vous confirmez l'annulation de ce paiement ? Il faudra refaire un paiement au soignant.</p>
+                                          <div className="flex gap-2">
+                                            <Button size="sm" variant="destructive" onClick={() => repondreContestation(p.paiement_id, 'ACCEPTER')} disabled={contestationLoading} className="text-xs">
+                                              {contestationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Confirmer l'annulation
+                                            </Button>
+                                          </div>
+                                        </>
+                                      )}
+                                      {contestationAction === 'CONTESTER' && (
+                                        <>
+                                          <p className="text-xs text-muted-foreground">Expliquez votre position (le litige sera transmis à l'admin Jolene) :</p>
+                                          <textarea
+                                            value={contestationReponse}
+                                            onChange={e => setContestationReponse(e.target.value.slice(0, 500))}
+                                            placeholder="Le virement a bien été effectué le..."
+                                            rows={2}
+                                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                          />
+                                          <div className="flex gap-2">
+                                            <Button size="sm" onClick={() => repondreContestation(p.paiement_id, 'CONTESTER')} disabled={contestationLoading || !contestationReponse.trim()} className="text-xs">
+                                              {contestationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Envoyer à l'admin
+                                            </Button>
+                                          </div>
+                                        </>
+                                      )}
+                                      <Button size="sm" variant="ghost" onClick={() => { setContestationOpen(null); setContestationAction(null); }} className="text-xs">Annuler</Button>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           )}
