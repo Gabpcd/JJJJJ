@@ -556,7 +556,7 @@ export default function FacturationEtablissement() {
                                         <>
                                           <p className="text-xs text-muted-foreground">Saisissez la bonne référence de paiement :</p>
                                           <div className="flex gap-2">
-                                            <Input value={contestationRef} onChange={e => setContestationRef(e.target.value)} placeholder="Ex: VIR-2026-04-001" className="text-xs h-8" />
+                                            <input value={contestationRef} onChange={e => setContestationRef(e.target.value)} placeholder="Ex: VIR-2026-04-001" className="input-base text-xs h-8" />
                                             <Button size="sm" onClick={() => repondreContestation(p.paiement_id, 'MODIFIER_REF')} disabled={contestationLoading || !isRefValid(contestationRef)} className="text-xs shrink-0">
                                               {contestationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Envoyer
                                             </Button>

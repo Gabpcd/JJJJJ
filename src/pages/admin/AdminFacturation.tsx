@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 
@@ -43,24 +43,23 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase
+    (supabase
       .from('missions')
       .select('id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_commission_ht, montant_commission_ttc, soignant_assigne_id')
       .eq('facture_id', factureId)
-      .order('debut_le', { ascending: true })
-      .then(async ({ data }) => {
+      .order('debut_le', { ascending: true }) as any)
+      .then(async ({ data }: any) => {
         const mList = (data as any[]) || [];
-        // Fetch soignant names separately (no FK on missions)
-        const sgIds = [...new Set(mList.map(m => m.soignant_assigne_id).filter(Boolean))];
+        const sgIds = [...new Set(mList.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
         let sgMap: Record<string, any> = {};
         if (sgIds.length > 0) {
           const { data: sgData } = await supabase.from('soignants').select('id, prenom, nom').in('id', sgIds);
           if (sgData) for (const s of sgData) sgMap[s.id] = s;
         }
-        setMissions(mList.map(m => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
+        setMissions(mList.map((m: any) => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
         setLoading(false);
       })
-      .catch((err) => { console.warn('FactureDetailRow fetch error:', err); setLoading(false); });
+      .catch((err: any) => { console.warn('FactureDetailRow fetch error:', err); setLoading(false); });
   }, [factureId]);
 
   if (loading) return (
@@ -220,13 +219,13 @@ export default function AdminFacturation() {
 
   const charger = async () => {
     setLoading(true);
-    const { data } = await supabase.from('factures')
-      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
-      .order('date_emission', { ascending: false })
-      .limit(500)
-      .then(res => res)
-      .catch(err => { console.warn('charger factures error:', err); return { data: null }; });
-    if (data) setFactures(data);
+    try {
+      const { data } = await supabase.from('factures')
+        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
+        .order('date_emission', { ascending: false })
+        .limit(500);
+      if (data) setFactures(data);
+    } catch (err) { console.warn('charger factures error:', err); }
     setLoading(false);
   };
 
@@ -272,7 +271,7 @@ export default function AdminFacturation() {
 
   const exporterFEC = async () => {
     const annee = new Date().getFullYear();
-    const result = await supabase.rpc('fn_export_fec' as any, { p_annee: annee }).catch(err => { console.warn('exporterFEC error:', err); return { data: null, error: err }; });
+    const result = await (supabase.rpc('fn_export_fec' as any, { p_annee: annee }) as any).catch((err: any) => { console.warn('exporterFEC error:', err); return { data: null, error: err }; });
     const { data, error } = result;
     if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     const lignes = Array.isArray(data) ? data : [];
