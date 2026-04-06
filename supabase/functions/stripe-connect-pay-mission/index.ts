@@ -205,9 +205,13 @@ serve(async (req) => {
 
     if (existingTransfer?.statut === "TRANSFERE" || existingTransfer?.statut === "EN_ATTENTE") {
       return new Response(
-        JSON.stringify({ error: existingTransfer.statut === "TRANSFERE" ? "Ce paiement a déjà été effectué" : "Un paiement est déjà en cours pour cette mission" }),
+        JSON.stringify({
+          already_paid: true,
+          statut: existingTransfer.statut,
+          message: existingTransfer.statut === "TRANSFERE" ? "Ce paiement a déjà été effectué" : "Un paiement est déjà en cours pour cette mission",
+        }),
         {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         }
       );

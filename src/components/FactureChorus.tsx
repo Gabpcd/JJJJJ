@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { Landmark, Loader2, ExternalLink, RefreshCw } from 'lucide-react';
+import { Landmark, Loader2, ExternalLink, RefreshCw, Copy, CheckCircle, ChevronDown, ChevronUp, FileText, Clock, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 interface Props {
   facture: any;
@@ -21,27 +24,39 @@ const CHORUS_STATUT_STYLES: Record<string, string> = {
 
 const CHORUS_STATUT_LABELS: Record<string, string> = {
   NON_APPLICABLE: '—',
-  A_DEPOSER: '🟠 À déposer',
-  DEPOSEE: '🔵 Déposée',
-  ACCEPTEE: '🟢 Acceptée',
-  REJETEE: '🔴 Rejetée',
-  MISE_EN_PAIEMENT: '🟢 Mise en paiement',
+  A_DEPOSER: 'À déposer',
+  DEPOSEE: 'Déposée',
+  ACCEPTEE: 'Acceptée',
+  REJETEE: 'Rejetée',
+  MISE_EN_PAIEMENT: 'Mise en paiement',
 };
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://flripxtsyegjshnhzjkz.supabase.co';
+const ETAPES_DEPOT = [
+  {
+    num: 1,
+    titre: 'Connectez-vous à Chorus Pro',
+    desc: 'Rendez-vous sur chorus-pro.gouv.fr avec vos identifiants.',
+  },
+  {
+    num: 2,
+    titre: 'Créez une facture',
+    desc: 'Menu "Factures émises" → "Déposer facture" → Saisissez les informations ci-dessous.',
+  },
+  {
+    num: 3,
+    titre: 'Renseignez les références',
+    desc: 'Copiez le numéro de facture et le montant TTC indiqués ci-dessous.',
+  },
+  {
+    num: 4,
+    titre: 'Déposez et notez le numéro de flux',
+    desc: 'Après validation, Chorus Pro vous attribue un numéro de flux. Saisissez-le ici pour le suivi.',
+  },
+];
 
-async function callChorusEdge(accessToken: string, factureId: string, action: 'deposer' | 'statut', extra: Record<string, string> = {}) {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/chorus-pro-deposit`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ facture_id: factureId, action, ...extra }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Erreur Chorus Pro');
-  return data;
+function copier(texte: string, label: string) {
+  navigator.clipboard.writeText(texte);
+  toast.success(`${label} copié`);
 }
 
 export function FactureChorus({ facture, onUpdate }: Props) {
@@ -50,139 +65,292 @@ export function FactureChorus({ facture, onUpdate }: Props) {
   const [loading, setLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [open, setOpen] = useState(false);
-  const [numEngagement, setNumEngagement] = useState('');
-  const [codeService, setCodeService] = useState('');
-  const [numStructure, setNumStructure] = useState('');
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [numeroFlux, setNumeroFlux] = useState('');
+  const [confirmRejet, setConfirmRejet] = useState(false);
 
-  const getAccessToken = async (): Promise<string | null> => {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
-  };
+  const statut = facture.chorus_pro_statut || 'A_DEPOSER';
 
-  const deposer = async () => {
-    const token = await getAccessToken();
-    if (!token) return;
+  const marquerDeposee = async () => {
+    if (!numeroFlux.trim()) {
+      toast.error('Saisissez le numéro de flux Chorus Pro');
+      return;
+    }
     setLoading(true);
     try {
-      const result = await callChorusEdge(token, facture.id, 'deposer', {
-        num_engagement: numEngagement,
-        code_service: codeService,
-        num_structure: numStructure,
-      });
-      const msg = result.simulation
-        ? `🧪 Simulation : ${result.message}`
-        : `✅ ${result.message}`;
-      afficherNotification({ type: 'succes', message: msg });
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('factures')
+        .update({
+          chorus_pro_statut: 'DEPOSEE',
+          chorus_pro_deposee_le: now,
+          chorus_pro_date_depot: now,
+          chorus_pro_numero_flux: numeroFlux.trim(),
+        } as any)
+        .eq('id', facture.id);
+      if (error) throw error;
+      afficherNotification({ type: 'succes', message: 'Facture marquée comme déposée sur Chorus Pro' });
       setOpen(false);
+      setNumeroFlux('');
       onUpdate();
     } catch (err: any) {
-      capturerErreurSentry(err, 'FactureChorus', 'deposer_chorus');
-      afficherNotification({ type: 'erreur', message: 'Erreur lors du dépôt Chorus. Veuillez réessayer.' });
+      capturerErreurSentry(err, 'FactureChorus', 'marquer_deposee');
+      afficherNotification({ type: 'erreur', message: 'Erreur lors de la mise à jour' });
     } finally {
       setLoading(false);
     }
   };
 
-  const verifierStatut = async () => {
-    const token = await getAccessToken();
-    if (!token) return;
+  const mettreAJourStatut = async (nouveauStatut: string) => {
     setCheckingStatus(true);
     try {
-      const result = await callChorusEdge(token, facture.id, 'statut');
-      const prefix = result.simulation ? '🧪 Simulation — ' : '';
+      const updates: Record<string, any> = { chorus_pro_statut: nouveauStatut };
+      if (nouveauStatut === 'ACCEPTEE') {
+        updates.chorus_pro_date_acceptation = new Date().toISOString();
+      }
+      if (nouveauStatut === 'MISE_EN_PAIEMENT') {
+        updates.statut = 'PAYEE';
+        updates.date_paiement = new Date().toISOString();
+        updates.methode_paiement = 'CHORUS_PRO';
+      }
+      const { error } = await supabase
+        .from('factures')
+        .update(updates as any)
+        .eq('id', facture.id);
+      if (error) throw error;
       afficherNotification({
-        type: 'info',
-        message: `${prefix}Statut Chorus : ${CHORUS_STATUT_LABELS[result.statut] ?? result.statut}`,
+        type: 'succes',
+        message: `Statut mis à jour : ${CHORUS_STATUT_LABELS[nouveauStatut]}`,
       });
+      setConfirmRejet(false);
       onUpdate();
     } catch (err: any) {
-      capturerErreurSentry(err, 'FactureChorus', 'verifier_statut');
-      afficherNotification({ type: 'erreur', message: 'Erreur lors de la vérification du statut.' });
+      capturerErreurSentry(err, 'FactureChorus', 'maj_statut');
+      afficherNotification({ type: 'erreur', message: 'Erreur lors de la mise à jour' });
     } finally {
       setCheckingStatus(false);
     }
   };
 
-  const statut = facture.chorus_pro_statut || 'A_DEPOSER';
+  // --- Statuts finaux ou en cours ---
 
-  // Already processed statuses — show badge + check status button
-  if (['DEPOSEE', 'ACCEPTEE', 'MISE_EN_PAIEMENT'].includes(statut)) {
+  if (statut === 'MISE_EN_PAIEMENT') {
     return (
       <div className="flex items-center gap-2 flex-wrap">
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${CHORUS_STATUT_STYLES[statut] ?? ''}`}>
+        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${CHORUS_STATUT_STYLES.MISE_EN_PAIEMENT}`}>
           <Landmark className="h-3 w-3 inline mr-1" />
-          {CHORUS_STATUT_LABELS[statut]}
+          Mise en paiement
         </span>
-        <button
-          onClick={verifierStatut}
-          disabled={checkingStatus}
-          className="btn-secondary text-xs flex items-center gap-1 disabled:opacity-50"
-          title="Vérifier le statut Chorus Pro"
-        >
-          <RefreshCw className={`h-3 w-3 ${checkingStatus ? 'animate-spin' : ''}`} />
-          Vérifier
-        </button>
+        <span className="text-xs text-muted-foreground">Paiement en cours de traitement par le Trésor public</span>
+      </div>
+    );
+  }
+
+  if (statut === 'ACCEPTEE') {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${CHORUS_STATUT_STYLES.ACCEPTEE}`}>
+            <CheckCircle className="h-3 w-3 inline mr-1" />
+            Acceptée par l'ordonnateur
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          La facture a été validée. Le paiement interviendra sous 30 jours (délai légal).
+        </p>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => mettreAJourStatut('MISE_EN_PAIEMENT')} disabled={checkingStatus} className="text-xs gap-1">
+            {checkingStatus ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+            Marquer "Mise en paiement"
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (statut === 'DEPOSEE') {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${CHORUS_STATUT_STYLES.DEPOSEE}`}>
+            <Landmark className="h-3 w-3 inline mr-1" />
+            Déposée sur Chorus Pro
+          </span>
+          {facture.chorus_pro_numero_flux && (
+            <span className="text-xs text-muted-foreground">
+              Flux : {facture.chorus_pro_numero_flux}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Vérifiez le statut sur Chorus Pro et mettez à jour ci-dessous.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => mettreAJourStatut('ACCEPTEE')} disabled={checkingStatus} className="text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50">
+            <CheckCircle className="h-3 w-3" /> Acceptée
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setConfirmRejet(true)} disabled={checkingStatus} className="text-xs gap-1 border-destructive/30 text-destructive hover:bg-destructive/5">
+            <AlertTriangle className="h-3 w-3" /> Rejetée
+          </Button>
+          <a href="https://chorus-pro.gouv.fr" target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="ghost" className="text-xs gap-1">
+              <ExternalLink className="h-3 w-3" /> Vérifier sur Chorus
+            </Button>
+          </a>
+        </div>
+        {confirmRejet && (
+          <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 space-y-2">
+            <p className="text-xs text-destructive font-medium">Confirmer le rejet ? La facture pourra être redéposée.</p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="destructive" onClick={() => mettreAJourStatut('REJETEE')} disabled={checkingStatus} className="text-xs">
+                {checkingStatus ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Confirmer le rejet
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmRejet(false)} className="text-xs">Annuler</Button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   if (statut === 'REJETEE') {
     return (
-      <div className="flex flex-col gap-1">
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${CHORUS_STATUT_STYLES.REJETEE}`}>
-          {CHORUS_STATUT_LABELS.REJETEE}
+      <div className="space-y-2">
+        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${CHORUS_STATUT_STYLES.REJETEE}`}>
+          <AlertTriangle className="h-3 w-3 inline mr-1" />
+          Rejetée
         </span>
-        <div className="flex gap-1 flex-wrap">
-          <button onClick={() => setOpen(true)} className="btn-secondary text-xs flex items-center gap-1">
-            <Landmark className="h-3.5 w-3.5" /> Redéposer
-          </button>
-          <button
-            onClick={verifierStatut}
-            disabled={checkingStatus}
-            className="btn-secondary text-xs flex items-center gap-1 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3 w-3 ${checkingStatus ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          La facture a été rejetée par Chorus Pro. Vous pouvez la redéposer après correction.
+        </p>
+        <Button size="sm" variant="outline" onClick={() => setOpen(true)} className="text-xs gap-1">
+          <Landmark className="h-3.5 w-3.5" /> Redéposer
+        </Button>
       </div>
     );
   }
 
+  // --- Statut A_DEPOSER : parcours de dépôt manuel ---
+
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="btn-secondary text-xs flex items-center gap-1">
-        <Landmark className="h-3.5 w-3.5" /> Chorus Pro
-      </button>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)} className="text-xs gap-1">
+        <Landmark className="h-3.5 w-3.5" /> Déposer sur Chorus Pro
+      </Button>
     );
   }
 
   return (
-    <div className="card-base p-3 space-y-3 mt-2 w-full">
-      <p className="text-sm font-semibold text-foreground flex items-center gap-1">
-        <Landmark className="h-4 w-4 text-primary" /> Facture secteur public — Chorus Pro
-      </p>
-
-      <div className="rounded-lg bg-warning/10 border border-warning/30 p-3">
-        <p className="text-xs text-warning font-medium">
-          ⚠️ L'intégration API Chorus Pro est en cours de certification. En attendant, déposez votre facture manuellement sur le portail Chorus Pro.
+    <div className="w-full space-y-4 mt-2">
+      {/* Bannière info */}
+      <div className="rounded-lg bg-primary/5 border border-primary/20 p-3">
+        <p className="text-xs text-primary font-medium flex items-center gap-1.5">
+          <Landmark className="h-4 w-4 shrink-0" />
+          Dépôt manuel sur Chorus Pro — en attendant l'intégration API
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <a
-          href="https://chorus-pro.gouv.fr"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-primary text-xs flex items-center gap-1"
-        >
-          <ExternalLink className="h-3.5 w-3.5" /> Déposer sur Chorus Pro →
-        </a>
-        <button onClick={() => setOpen(false)} className="btn-secondary text-xs">Fermer</button>
+      {/* Informations à copier */}
+      <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+        <p className="text-xs font-semibold text-foreground">Informations à reporter sur Chorus Pro :</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="flex items-center justify-between bg-background rounded-md px-3 py-2 border border-border">
+            <div>
+              <p className="text-[10px] text-muted-foreground">N° facture</p>
+              <p className="text-sm font-mono font-bold text-foreground">{facture.numero_facture}</p>
+            </div>
+            <button onClick={() => copier(facture.numero_facture, 'N° facture')} className="p-1 rounded hover:bg-muted" title="Copier">
+              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          </div>
+          <div className="flex items-center justify-between bg-background rounded-md px-3 py-2 border border-border">
+            <div>
+              <p className="text-[10px] text-muted-foreground">Montant TTC</p>
+              <p className="text-sm font-mono font-bold text-foreground">{facture.montant_ttc?.toFixed(2)} €</p>
+            </div>
+            <button onClick={() => copier(facture.montant_ttc?.toFixed(2) ?? '', 'Montant')} className="p-1 rounded hover:bg-muted" title="Copier">
+              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+        {facture.date_emission && (
+          <p className="text-[10px] text-muted-foreground">
+            Date d'émission : {new Date(facture.date_emission).toLocaleDateString('fr-FR')}
+          </p>
+        )}
       </div>
 
-      <p className="text-[11px] text-muted-foreground">
-        Délai de paiement estimé : 30-60 jours après acceptation par l'ordonnateur.
-      </p>
+      {/* Guide pas-à-pas */}
+      <div className="rounded-lg border border-border">
+        <button
+          onClick={() => setGuideOpen(!guideOpen)}
+          className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold text-foreground hover:bg-muted/50 transition-colors rounded-lg"
+        >
+          <span className="flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5 text-primary" />
+            Guide de dépôt pas-à-pas
+          </span>
+          {guideOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+        {guideOpen && (
+          <div className="px-3 pb-3 space-y-2">
+            {ETAPES_DEPOT.map((e) => (
+              <div key={e.num} className="flex gap-3 items-start">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                  {e.num}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-foreground">{e.titre}</p>
+                  <p className="text-[11px] text-muted-foreground">{e.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Lien direct Chorus Pro */}
+      <a href="https://chorus-pro.gouv.fr" target="_blank" rel="noopener noreferrer" className="block">
+        <Button variant="default" size="sm" className="w-full gap-2 text-xs">
+          <ExternalLink className="h-3.5 w-3.5" />
+          Ouvrir Chorus Pro
+        </Button>
+      </a>
+
+      {/* Saisie numéro de flux */}
+      <div className="rounded-lg border border-border bg-background p-3 space-y-2">
+        <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5 text-primary" />
+          J'ai déposé la facture — saisir le numéro de flux
+        </p>
+        <div className="flex gap-2">
+          <Input
+            value={numeroFlux}
+            onChange={(e) => setNumeroFlux(e.target.value)}
+            placeholder="Ex: 2026-FL-001234"
+            className="text-xs h-8"
+          />
+          <Button size="sm" onClick={marquerDeposee} disabled={loading || !numeroFlux.trim()} className="text-xs gap-1 shrink-0">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+            Valider
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          Le numéro de flux est attribué par Chorus Pro après le dépôt. Il permet le suivi.
+        </p>
+      </div>
+
+      {/* Délai estimé */}
+      <div className="flex items-start gap-2 p-2 rounded-lg bg-muted/30">
+        <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+        <p className="text-[11px] text-muted-foreground">
+          <strong>Délai estimé :</strong> 30 à 60 jours après acceptation par l'ordonnateur (délai légal secteur public).
+        </p>
+      </div>
+
+      <Button size="sm" variant="ghost" onClick={() => setOpen(false)} className="text-xs w-full">
+        Fermer
+      </Button>
     </div>
   );
 }
