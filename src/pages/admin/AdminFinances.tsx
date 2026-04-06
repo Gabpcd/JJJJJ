@@ -4,21 +4,20 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { CarteKPI } from '@/components/CarteKPI';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, TrendingDown, Download, Coins, Receipt, AlertTriangle, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, AlertTriangle, ExternalLink, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 
-type SortKey = 'nom' | 'type' | 'nb_missions' | 'commissions_ht' | 'commissions_ttc' | 'impayes';
+type SortKey = 'nom' | 'type' | 'nb_missions' | 'commissions_ht' | 'commissions_ttc' | 'impayes' | 'taux_com';
 type SortDir = 'asc' | 'desc';
 
 export default function AdminFinances() {
@@ -37,7 +36,7 @@ export default function AdminFinances() {
         .order('date_emission', { ascending: false })
         .limit(1000),
       supabase.from('missions')
-        .select('id, total_brut, montant_commission_ht, montant_commission_ttc, statut, debut_le, etablissement_id, etablissements(nom, type)')
+        .select('id, total_brut, montant_commission_ht, montant_commission_ttc, statut, debut_le, etablissement_id, soignant_assigne_id, etablissements(nom, type, taux_commission_negocie)')
         .in('statut', ['TERMINEE', 'EN_COURS', 'ASSIGNEE'])
         .limit(1000),
     ]).then(([fRes, mRes]) => {
@@ -81,52 +80,78 @@ export default function AdminFinances() {
   const totalHT = factures.reduce((s, f) => s + (f.montant_ht || 0), 0);
   const totalTVA = factures.reduce((s, f) => s + (f.montant_tva || 0), 0);
   const totalTTC = factures.reduce((s, f) => s + (f.montant_ttc || 0), 0);
+  const payesTTC = factures.filter(f => f.statut === 'PAYEE').reduce((s, f) => s + (f.montant_ttc || 0), 0);
   const volumeBrut = missions.reduce((s, m) => s + (m.total_brut || 0), 0);
-  const tauxCommMoyen = volumeBrut > 0 ? (totalHT / volumeBrut) * 100 : 0;
 
-  // Chart data: 6 last months
+  // Taux commission moyen = moyenne des taux de chaque établissement (pas HT/volume)
+  const tauxParEtab = useMemo(() => {
+    const map = new Map<string, number>();
+    missions.forEach((m: any) => {
+      const taux = (m.etablissements as any)?.taux_commission_negocie;
+      if (taux != null && m.etablissement_id) map.set(m.etablissement_id, Number(taux));
+    });
+    const vals = [...map.values()];
+    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 15;
+  }, [missions]);
+
+  // Chart data
   const chartData = useMemo(() => {
-    const months: { label: string; ht: number }[] = [];
+    const months: { label: string; ht: number; ttc: number }[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(anneeCourante, moisCourant - i, 1);
       const m = d.getMonth();
       const y = d.getFullYear();
       const label = d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
-      const ht = factures
-        .filter(f => { if (!f.date_emission) return false; const fd = new Date(f.date_emission); return fd.getMonth() === m && fd.getFullYear() === y; })
-        .reduce((s, f) => s + (f.montant_ht || 0), 0);
-      months.push({ label, ht });
+      const moisFactures = factures.filter(f => {
+        if (!f.date_emission) return false;
+        const fd = new Date(f.date_emission);
+        return fd.getMonth() === m && fd.getFullYear() === y;
+      });
+      months.push({
+        label,
+        ht: moisFactures.reduce((s, f) => s + (f.montant_ht || 0), 0),
+        ttc: moisFactures.reduce((s, f) => s + (f.montant_ttc || 0), 0),
+      });
     }
     return months;
   }, [factures, moisCourant, anneeCourante]);
 
   // Per-establishment table
   const etabData = useMemo(() => {
-    const map = new Map<string, { nom: string; type: string; nb_missions: number; commissions_ht: number; commissions_ttc: number; impayes: number; derniere_mission: string }>();
+    const map = new Map<string, {
+      id: string; nom: string; type: string; nb_missions: number; soignants: Set<string>;
+      commissions_ht: number; commissions_ttc: number; impayes: number; taux_com: number; derniere_mission: string;
+    }>();
     missions.forEach((m: any) => {
       const eid = m.etablissement_id;
       if (!eid) return;
-      const existing = map.get(eid) || { nom: (m.etablissements as any)?.nom || '—', type: (m.etablissements as any)?.type || '—', nb_missions: 0, commissions_ht: 0, commissions_ttc: 0, impayes: 0, derniere_mission: '' };
+      const existing = map.get(eid) || {
+        id: eid,
+        nom: (m.etablissements as any)?.nom || '—',
+        type: (m.etablissements as any)?.type || '—',
+        taux_com: Number((m.etablissements as any)?.taux_commission_negocie) || 15,
+        nb_missions: 0, soignants: new Set<string>(),
+        commissions_ht: 0, commissions_ttc: 0, impayes: 0, derniere_mission: '',
+      };
       existing.nb_missions++;
       existing.commissions_ht += m.montant_commission_ht || 0;
       existing.commissions_ttc += m.montant_commission_ttc || 0;
+      if (m.soignant_assigne_id) existing.soignants.add(m.soignant_assigne_id);
       if (!existing.derniere_mission || (m.debut_le && m.debut_le > existing.derniere_mission)) existing.derniere_mission = m.debut_le;
       map.set(eid, existing);
     });
-    // Add unpaid amounts
     factures.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD').forEach(f => {
       const eid = f.etablissement_id;
       if (!eid || !map.has(eid)) return;
-      const e = map.get(eid)!;
-      e.impayes += f.montant_ttc || 0;
+      map.get(eid)!.impayes += f.montant_ttc || 0;
     });
-    return Array.from(map.entries()).map(([id, d]) => ({ id, ...d }));
+    return Array.from(map.values()).map(e => ({ ...e, nb_soignants: e.soignants.size }));
   }, [missions, factures]);
 
   const sortedEtab = useMemo(() => {
     return [...etabData].sort((a, b) => {
-      const va = a[sortKey];
-      const vb = b[sortKey];
+      const va = (a as any)[sortKey];
+      const vb = (b as any)[sortKey];
       if (typeof va === 'number' && typeof vb === 'number') return sortDir === 'asc' ? va - vb : vb - va;
       return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
     });
@@ -158,82 +183,101 @@ export default function AdminFinances() {
     toast.success('Export CSV téléchargé');
   };
 
-  const chartConfig = { ht: { label: 'Commissions HT', color: 'hsl(var(--primary))' } };
+  const chartConfig = {
+    ht: { label: 'HT', color: 'hsl(var(--primary))' },
+    ttc: { label: 'TTC', color: 'hsl(195 70% 65%)' },
+  };
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+
+  const nbSoignantsTotal = new Set(missions.map((m: any) => m.soignant_assigne_id).filter(Boolean)).size;
 
   return (
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Finances" />
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">💰 Finances Jolene</h1>
-          <Button variant="outline" onClick={exporterCSV} className="gap-2">
-            <Download className="h-4 w-4" /> Exporter le récap comptable
-          </Button>
+          <h1 className="text-2xl font-bold text-foreground">Finances Jolene</h1>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={exporterCSV} className="gap-2">
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/admin/facturation')} className="gap-2">
+              Facturation
+            </Button>
+          </div>
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-5 pb-4">
+        {/* KPIs du mois */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
+            <CardContent className="pt-4 pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground">Commissions du mois (HT)</p>
-                  <p className="text-2xl font-bold text-foreground">{formatEur(commHTMois)}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase">Commissions HT du mois</p>
+                  <p className="text-xl font-bold text-foreground">{formatEur(commHTMois)}</p>
                 </div>
-                <div className={`flex items-center gap-1 text-xs font-medium ${variationPositive ? 'text-green-600' : 'text-destructive'}`}>
-                  {variationPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                  {variationPct !== 0 ? `${variationPositive ? '+' : ''}${variationPct.toFixed(1)}%` : '—'}
+                <div className={`flex items-center gap-1 text-xs font-medium ${variationPositive ? 'text-success' : 'text-destructive'}`}>
+                  {variationPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                  {variationPct !== 0 ? `${variationPositive ? '+' : ''}${variationPct.toFixed(0)}%` : '—'}
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-5 pb-4">
-              <p className="text-xs text-muted-foreground">Commissions du mois (TTC)</p>
-              <p className="text-2xl font-bold text-foreground">{formatEur(commTTCMois)}</p>
+          <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-[10px] text-muted-foreground uppercase">TTC du mois</p>
+              <p className="text-xl font-bold text-foreground">{formatEur(commTTCMois)}</p>
+            </CardContent>
+          </Card>
+          <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-[10px] text-muted-foreground uppercase">TVA collectée du mois</p>
+              <p className="text-xl font-bold text-foreground">{formatEur(tvaMois)}</p>
+            </CardContent>
+          </Card>
+          <Card
+            className={`cursor-pointer hover:border-destructive/50 transition-colors ${nbImpayees > 0 ? 'border-destructive/30 bg-destructive/5' : ''}`}
+            onClick={() => navigate('/admin/impayees')}
+          >
+            <CardContent className="pt-4 pb-3">
+              <p className="text-[10px] text-muted-foreground uppercase">Factures impayées</p>
+              <p className={`text-xl font-bold ${nbImpayees > 0 ? 'text-destructive' : 'text-foreground'}`}>{nbImpayees}</p>
+              {nbImpayees > 0 && <p className="text-[10px] text-destructive">{formatEur(montantImpayees)} en attente</p>}
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-5 pb-4">
-              <p className="text-xs text-muted-foreground">📊 TVA collectée du mois</p>
-              <p className="text-2xl font-bold text-foreground">{formatEur(tvaMois)}</p>
-            </CardContent>
-          </Card>
-          <Card className={`${nbImpayees > 0 ? 'border-destructive/50' : ''}`} onClick={() => navigate('/admin/facturation?statut=EMISE')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/admin/facturation?statut=EMISE'); } }} role="button" tabIndex={0}>
-            <CardContent className="pt-5 pb-4 cursor-pointer">
-              <p className="text-xs text-muted-foreground">⚠️ Factures impayées</p>
-              <p className={`text-2xl font-bold ${nbImpayees > 0 ? 'text-destructive' : 'text-foreground'}`}>{nbImpayees}</p>
-              {nbImpayees > 0 && <p className="text-xs text-destructive mt-0.5">{formatEur(montantImpayees)} en attente</p>}
+            <CardContent className="pt-4 pb-3">
+              <p className="text-[10px] text-muted-foreground uppercase">Taux com. moyen</p>
+              <p className="text-xl font-bold text-foreground">{tauxParEtab.toFixed(1)}%</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Recap comptable */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">Récapitulatif comptable</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {[
-                { label: 'Commissions HT (tout temps)', value: formatEur(totalHT) },
-                { label: 'TVA collectée (tout temps)', value: formatEur(totalTVA) },
-                { label: 'Commissions TTC (tout temps)', value: formatEur(totalTTC) },
-                { label: 'Volume brut transité', value: formatEur(volumeBrut) },
-                { label: 'Taux de commission moyen', value: `${tauxCommMoyen.toFixed(1)}%` },
-              ].map(item => (
-                <div key={item.label}>
-                  <p className="text-xs text-muted-foreground">{item.label}</p>
-                  <p className="text-lg font-semibold text-foreground">{item.value}</p>
-                </div>
-              ))}
+        {/* Récap tout temps */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[
+            { label: 'CA HT total', value: formatEur(totalHT), click: () => navigate('/admin/facturation') },
+            { label: 'TVA total', value: formatEur(totalTVA) },
+            { label: 'CA TTC total', value: formatEur(totalTTC) },
+            { label: 'Encaissé TTC', value: formatEur(payesTTC), color: 'text-success' },
+            { label: 'Volume brut soignants', value: formatEur(volumeBrut) },
+            { label: 'Soignants mobilisés', value: String(nbSoignantsTotal) },
+          ].map(item => (
+            <div
+              key={item.label}
+              className={`p-3 rounded-xl border border-border bg-card ${item.click ? 'cursor-pointer hover:border-primary/30' : ''}`}
+              onClick={item.click}
+            >
+              <p className="text-[10px] text-muted-foreground">{item.label}</p>
+              <p className={`text-lg font-bold ${item.color || 'text-foreground'}`}>{item.value}</p>
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
 
         {/* Chart */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Commissions HT — 6 derniers mois</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Commissions — 6 derniers mois</CardTitle></CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[280px] w-full">
               <BarChart data={chartData}>
@@ -242,6 +286,7 @@ export default function AdminFinances() {
                 <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} className="fill-muted-foreground" />
                 <ChartTooltip content={<ChartTooltipContent formatter={(value) => formatEur(Number(value))} />} />
                 <Bar dataKey="ht" fill="var(--color-ht)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="ttc" fill="var(--color-ttc)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartContainer>
           </CardContent>
@@ -250,7 +295,7 @@ export default function AdminFinances() {
         {/* Table par établissement */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Par établissement</CardTitle>
+            <CardTitle className="text-base">Détail par établissement</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -260,29 +305,47 @@ export default function AdminFinances() {
                     {([
                       ['nom', 'Établissement'],
                       ['type', 'Type'],
-                      ['nb_missions', 'Nb missions'],
-                      ['commissions_ht', 'Commissions HT'],
-                      ['commissions_ttc', 'Commissions TTC'],
+                      ['nb_missions', 'Missions'],
+                      ['taux_com', 'Taux'],
+                      ['commissions_ht', 'Com. HT'],
+                      ['commissions_ttc', 'Com. TTC'],
                       ['impayes', 'Impayés'],
                     ] as [SortKey, string][]).map(([key, label]) => (
-                      <TableHead key={key} className="cursor-pointer select-none hover:bg-muted/50" onClick={() => toggleSort(key)}>
+                      <TableHead key={key} className="cursor-pointer select-none hover:bg-muted/50 text-xs" onClick={() => toggleSort(key)}>
                         {label} {sortKey === key ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                       </TableHead>
                     ))}
-                    <TableHead>Dernière mission</TableHead>
+                    <TableHead className="text-xs">Soignants</TableHead>
+                    <TableHead className="text-xs">Dernière mission</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedEtab.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Aucune donnée</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Aucune donnée</TableCell></TableRow>
                   ) : sortedEtab.map(e => (
-                    <TableRow key={e.id} className={e.impayes > 0 ? 'bg-destructive/5' : ''}>
-                      <TableCell className="font-medium">{e.nom}</TableCell>
+                    <TableRow key={e.id} className={`hover:bg-muted/30 ${e.impayes > 0 ? 'bg-destructive/5' : ''}`}>
+                      <TableCell>
+                        <button onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="text-primary hover:underline font-medium inline-flex items-center gap-1 text-sm">
+                          {e.nom}
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                        </button>
+                      </TableCell>
                       <TableCell><Badge variant="secondary" className="text-[10px]">{e.type}</Badge></TableCell>
-                      <TableCell>{e.nb_missions}</TableCell>
-                      <TableCell>{formatEur(e.commissions_ht)}</TableCell>
+                      <TableCell className="font-medium">{e.nb_missions}</TableCell>
+                      <TableCell className="font-medium text-primary">{e.taux_com}%</TableCell>
+                      <TableCell className="font-medium">{formatEur(e.commissions_ht)}</TableCell>
                       <TableCell>{formatEur(e.commissions_ttc)}</TableCell>
-                      <TableCell className={e.impayes > 0 ? 'text-destructive font-semibold' : ''}>{formatEur(e.impayes)}</TableCell>
+                      <TableCell>
+                        {e.impayes > 0 ? (
+                          <button onClick={() => navigate('/admin/impayees')} className="text-destructive font-bold hover:underline inline-flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            {formatEur(e.impayes)}
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">{e.nb_soignants}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{e.derniere_mission ? formatDate(e.derniere_mission) : '—'}</TableCell>
                     </TableRow>
                   ))}
