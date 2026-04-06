@@ -89,6 +89,7 @@ export default function FacturationEtablissement() {
 
   // Paiements soignants state
   const [paiementsData, setPaiementsData] = useState<any>(null);
+  const [missionsPaidByStripe, setMissionsPaidByStripe] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (searchParams.get('paiement') === 'succes') {
@@ -103,7 +104,7 @@ export default function FacturationEtablissement() {
   const charger = async () => {
     if (!user) return;
 
-    const [resEtab, resFact, resMNF, resPrelev, resPaiements] = await Promise.all([
+    const [resEtab, resFact, resMNF, resPrelev, resPaiements, resTransfers] = await Promise.all([
       supabase.rpc('fn_mon_etablissement_complet' as any),
       supabase.rpc('fn_mes_factures' as any),
       supabase.from('missions')
@@ -118,6 +119,10 @@ export default function FacturationEtablissement() {
         .order('capture_le', { ascending: false })
         .limit(20),
       supabase.rpc('fn_paiements_etablissement' as any),
+      supabase.from('stripe_transfers')
+        .select('mission_id, statut')
+        .eq('etablissement_id', user.id)
+        .in('statut', ['EN_ATTENTE', 'TRANSFERE']),
     ]);
 
     if (resEtab.data) setEtab(resEtab.data);
@@ -127,6 +132,9 @@ export default function FacturationEtablissement() {
     if (resPrelev.data) setPrelevements(resPrelev.data);
     if (resPaiements.data && !(resPaiements.data as any).error) {
       setPaiementsData(resPaiements.data);
+    }
+    if (resTransfers.data) {
+      setMissionsPaidByStripe(new Set(resTransfers.data.map((t: any) => t.mission_id)));
     }
 
     const nonFacture = (resMNF.data ?? []).reduce((s: number, m: any) => s + (m.montant_commission_ttc ?? 0), 0);
@@ -280,7 +288,7 @@ export default function FacturationEtablissement() {
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
 
-  const missionsAPayer = paiementsData?.missions_a_payer ?? [];
+  const missionsAPayer = (paiementsData?.missions_a_payer ?? []).filter((m: any) => !missionsPaidByStripe.has(m.mission_id));
   const paiementsRecents = paiementsData?.paiements_recents ?? [];
   const paiementsFiltres = filtreStatutPaiement === 'PAYE'
     ? paiementsRecents.filter((p: any) => p.statut === 'DECLARE' || p.statut === 'CONFIRME')
