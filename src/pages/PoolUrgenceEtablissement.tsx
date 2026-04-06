@@ -26,6 +26,7 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { logger } from '@/lib/logger';
 
 interface SoignantPool {
+  id: string;
   soignant_id: string;
   prenom: string;
   nom: string;

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 

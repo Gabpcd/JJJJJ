@@ -195,7 +195,7 @@ export default function AdminConformite() {
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   useEffect(() => {
-    supabase.rpc('fn_admin_conformite' as any).then(({ data: d, error: e }: any) => {
+    (supabase.rpc('fn_admin_conformite' as any) as any).then(({ data: d, error: e }: any) => {
       if (e) { console.warn('fn_admin_conformite error:', e); }
       else if (d && typeof d === 'object' && !Array.isArray(d)) setData(d);
       else if (Array.isArray(d) && d.length > 0 && typeof d[0] === 'object') setData(d[0]);
