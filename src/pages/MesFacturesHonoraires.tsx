@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Download, ArrowLeft, Loader2, CheckCircle, Clock, AlertTriangle, Info } from 'lucide-react';
+import { FileText, Download, ArrowLeft, Loader2, CheckCircle, Clock, AlertTriangle, Info, Zap } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import jsPDF from 'jspdf';
+import { toast } from 'sonner';
+import { MANDAT_FACTURATION_VERSION } from '@/constantes/mandatFacturation';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
 
@@ -41,6 +44,180 @@ export default function MesFacturesHonoraires() {
       setLoading(false);
     })();
   }, [user]);
+
+  const [requestingAdvance, setRequestingAdvance] = useState<string | null>(null);
+
+  const demanderAvance = async (factureId: string, montant: number) => {
+    if (!confirm(`Demander le paiement rapide pour cette facture de ${fmt(montant)} ?\n\nVous serez crédité(e) sous 24 à 48h. Des frais d'affacturage (2-3%) seront retenus.`)) return;
+    setRequestingAdvance(factureId);
+    try {
+      const { data, error } = await supabase.functions.invoke('factor-request-advance', {
+        body: { facture_honoraire_id: factureId },
+      });
+      if (error) {
+        toast.error(data?.error || error.message || 'Erreur');
+        return;
+      }
+      if (data?.configured === false) {
+        toast.info(data.message || 'Demande enregistrée. Le paiement rapide sera bientôt disponible.');
+      } else if (data?.success) {
+        toast.success(data.message || 'Demande envoyée');
+      } else {
+        toast.error(data?.message || 'Demande refusée');
+      }
+      navigate('/soignant/mes-avances');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erreur');
+    } finally {
+      setRequestingAdvance(null);
+    }
+  };
+
+  const telechargerFacturePDF = async (factureId: string) => {
+    try {
+      // Récupérer la facture complète + soignant + établissement
+      const { data: f } = await supabase
+        .from('factures_honoraires')
+        .select('*')
+        .eq('id', factureId)
+        .maybeSingle();
+      if (!f) { toast.error('Facture introuvable'); return; }
+
+      const [{ data: sg }, { data: etab }, { data: mission }] = await Promise.all([
+        supabase.from('soignants').select('prenom, nom, profession, numero_rpps, numero_adeli, email, telephone, adresse_ligne1, adresse_code_postal, adresse_ville').eq('id', f.soignant_id).maybeSingle(),
+        supabase.from('etablissements').select('nom, type, adresse_ligne1, adresse_code_postal, adresse_ville, siret, email_contact').eq('id', f.etablissement_id).maybeSingle(),
+        f.mission_id ? supabase.from('missions').select('intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base').eq('id', f.mission_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+
+      const doc = new jsPDF();
+      const TEAL = { r: 23, g: 162, b: 184 };
+
+      // Header bandeau
+      doc.setFillColor(TEAL.r, TEAL.g, TEAL.b);
+      doc.rect(0, 0, 210, 28, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text("FACTURE D'HONORAIRES", 14, 17);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(f.numero_facture, 14, 24);
+
+      // Mention mandataire
+      doc.setTextColor(80, 80, 80);
+      doc.setFontSize(7);
+      doc.text("Émise par Jolene en qualité de mandataire (Article 289 I-2 CGI)", 110, 17);
+      doc.text(`Mandat version ${f.mandat_version || MANDAT_FACTURATION_VERSION}`, 110, 22);
+
+      let y = 40;
+
+      // Émetteur (soignant — légalement le vendeur)
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ÉMETTEUR (vendeur légal)', 14, y);
+      doc.setFont('helvetica', 'normal');
+      y += 5;
+      if (sg) {
+        doc.text(`${sg.prenom || ''} ${sg.nom || ''}`.trim(), 14, y); y += 4;
+        doc.text(sg.profession || '', 14, y); y += 4;
+        if (sg.numero_rpps) { doc.text(`RPPS : ${sg.numero_rpps}`, 14, y); y += 4; }
+        if (sg.numero_adeli) { doc.text(`ADELI : ${sg.numero_adeli}`, 14, y); y += 4; }
+        if (sg.adresse_ligne1) { doc.text(sg.adresse_ligne1, 14, y); y += 4; }
+        if (sg.adresse_code_postal) { doc.text(`${sg.adresse_code_postal} ${sg.adresse_ville || ''}`, 14, y); y += 4; }
+        if (sg.email) { doc.text(sg.email, 14, y); y += 4; }
+      }
+
+      // Destinataire (établissement)
+      let yClient = 45;
+      doc.setFont('helvetica', 'bold');
+      doc.text('FACTURÉ À', 120, yClient);
+      doc.setFont('helvetica', 'normal');
+      yClient += 5;
+      if (etab) {
+        doc.text(etab.nom || '', 120, yClient); yClient += 4;
+        if (etab.adresse_ligne1) { doc.text(etab.adresse_ligne1, 120, yClient); yClient += 4; }
+        if (etab.adresse_code_postal) { doc.text(`${etab.adresse_code_postal} ${etab.adresse_ville || ''}`, 120, yClient); yClient += 4; }
+        if (etab.siret) { doc.text(`SIRET : ${etab.siret}`, 120, yClient); yClient += 4; }
+      }
+
+      // Détails facture
+      y = Math.max(y, yClient) + 8;
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, y, 196, y);
+      y += 6;
+
+      doc.setFontSize(9);
+      const addInfo = (label: string, value: string) => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(label, 14, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(value, 60, y);
+        y += 5;
+      };
+      addInfo('Date d\'émission :', format(new Date(f.date_emission), 'dd/MM/yyyy', { locale: fr }));
+      if (f.date_echeance) addInfo('Date d\'échéance :', format(new Date(f.date_echeance), 'dd/MM/yyyy', { locale: fr }));
+
+      if (mission) {
+        addInfo('Mission :', mission.intitule || '—');
+        addInfo('Profession :', mission.profession_requise || '—');
+        if (mission.debut_le && mission.fin_le) {
+          addInfo('Période :', `${format(new Date(mission.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })} → ${format(new Date(mission.fin_le), 'dd/MM/yyyy HH:mm', { locale: fr })}`);
+        }
+        if (mission.duree_heures) addInfo('Heures :', `${mission.duree_heures} h`);
+        if (mission.taux_horaire_base) addInfo('Taux horaire :', `${Number(mission.taux_horaire_base).toFixed(2)} €`);
+      }
+
+      // Montants
+      y += 5;
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, y, 196, y);
+      y += 8;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Montant HT', 14, y);
+      doc.text(fmt(Number(f.montant_ht)), 196, y, { align: 'right' });
+      y += 6;
+
+      if (f.exoneration_tva) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.text("TVA non applicable — Article 261-4 du CGI (actes médicaux et paramédicaux)", 14, y);
+        y += 6;
+      } else {
+        doc.setFont('helvetica', 'normal');
+        doc.text(`TVA (${f.taux_tva}%)`, 14, y);
+        doc.text(fmt(Number(f.montant_tva)), 196, y, { align: 'right' });
+        y += 6;
+      }
+
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TOTAL TTC', 14, y);
+      doc.text(fmt(Number(f.montant_ttc)), 196, y, { align: 'right' });
+      y += 12;
+
+      // Modalités paiement
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text("Conditions de paiement : 30 jours date de facture.", 14, y); y += 4;
+      doc.text("Pénalités de retard : 3× le taux d'intérêt légal. Indemnité forfaitaire : 40 €.", 14, y); y += 4;
+
+      // Footer
+      y = 280;
+      doc.setFontSize(7);
+      doc.setTextColor(120, 120, 120);
+      doc.text("Facture émise par Jolene SAS pour le compte du professionnel ci-dessus, en qualité de mandataire (Article 289 I-2 du CGI).", 14, y);
+      y += 3;
+      doc.text("Le professionnel demeure le vendeur légal de la prestation.", 14, y);
+
+      doc.save(`${f.numero_facture}.pdf`);
+      toast.success('Facture téléchargée');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erreur génération PDF');
+    }
+  };
 
   if (loading) {
     return (
@@ -135,10 +312,26 @@ export default function MesFacturesHonoraires() {
                         {f.date_paiement && ` · Payée le ${format(new Date(f.date_paiement), 'dd/MM/yyyy', { locale: fr })}`}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className="text-lg font-bold text-foreground">{fmt(f.montant_ttc)}</p>
                         <p className="text-[10px] text-muted-foreground">Exonéré TVA (art. 261-4 CGI)</p>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => telechargerFacturePDF(f.id)}>
+                          <Download className="h-3.5 w-3.5" /> PDF
+                        </Button>
+                        {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
+                          <Button
+                            size="sm"
+                            className="gap-1 text-xs"
+                            onClick={() => demanderAvance(f.id, Number(f.montant_ttc))}
+                            disabled={requestingAdvance === f.id}
+                          >
+                            {requestingAdvance === f.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                            Recevoir maintenant
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
