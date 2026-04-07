@@ -163,7 +163,7 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
           <div className="flex items-center gap-2">
             <CheckCircle className="h-4 w-4 text-primary shrink-0" />
             <p className="text-sm text-primary font-medium">
-              Vous avez accepté la clôture — en attente de l'{iAmSoignant ? 'établissement' : 'soignant(e)'}
+              Vous avez accepté la clôture — en attente {iAmSoignant ? "de l'établissement" : 'du soignant(e)'}
             </p>
           </div>
         </div>
