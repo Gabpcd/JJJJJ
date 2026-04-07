@@ -230,11 +230,46 @@ export default function AdminDashboard() {
         </div>
 
         {/* CA */}
+        <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
+          <strong className="text-foreground">Commission Jolene</strong> = ce que tu gardes (commission facturée aux établissements).
+          <strong className="text-foreground"> GMV</strong> = volume brut des missions (argent qui passe par la plateforme mais va aux soignants — tu ne le touches pas).
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <CarteKPI icone={Banknote} valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)} label="CA commissions ce mois" sousLabel={`Potentiel : ${formatEur(kpi?.ca_potentiel_mois ?? 0)}`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/admin/facturation" />
-          <CarteKPI icone={TrendingUp} valeur={formatEur(kpi?.ca_encaisse_total ?? 0)} label="CA encaissé total" sousLabel={`Potentiel : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`} couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/admin/facturation" />
-          <CarteKPI icone={FileText} valeur={String(nbTransactions)} label="Missions facturables" couleurIcone="text-info" couleurFond="bg-info/10" lien="/admin/missions" />
-          <CarteKPI icone={UserPlus} valeur={`${(kpi?.soignants_semaine ?? 0) + (kpi?.etablissements_semaine ?? 0)}`} label="Nouveaux cette semaine" couleurIcone="text-rose" couleurFond="bg-rose/10" lien="/admin/utilisateurs" />
+          <CarteKPI
+            icone={Banknote}
+            valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)}
+            label="Commission Jolene ce mois"
+            sousLabel={`Potentiel si tout se termine : ${formatEur(kpi?.ca_potentiel_mois ?? 0)}`}
+            couleurIcone="text-success"
+            couleurFond="bg-success/10"
+            lien="/admin/finances"
+          />
+          <CarteKPI
+            icone={TrendingUp}
+            valeur={formatEur(kpi?.ca_encaisse_total ?? 0)}
+            label="Encaissé total (sur compte)"
+            sousLabel={`Facturable : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`}
+            couleurIcone="text-primary"
+            couleurFond="bg-primary/10"
+            lien="/admin/facturation"
+          />
+          <CarteKPI
+            icone={FileText}
+            valeur={formatEur(kpi?.gmv_total ?? 0)}
+            label="GMV (volume transité)"
+            sousLabel={`Ce mois : ${formatEur(kpi?.gmv_mois ?? 0)}`}
+            couleurIcone="text-info"
+            couleurFond="bg-info/10"
+            lien="/admin/missions"
+          />
+          <CarteKPI
+            icone={UserPlus}
+            valeur={`${(kpi?.soignants_semaine ?? 0) + (kpi?.etablissements_semaine ?? 0)}`}
+            label="Nouveaux cette semaine"
+            couleurIcone="text-rose"
+            couleurFond="bg-rose/10"
+            lien="/admin/utilisateurs"
+          />
         </div>
 
         {/* Charts */}
