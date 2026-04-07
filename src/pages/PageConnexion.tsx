@@ -17,6 +17,7 @@ import {
   getBiometricLabel,
 } from '@/lib/biometric';
 import { hapticNotification } from '@/lib/haptics';
+import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 
 export default function PageConnexion() {
   const navigate = useNavigate();
@@ -177,6 +178,14 @@ export default function PageConnexion() {
             <div className="flex-1 h-px bg-border" />
             <span className="text-xs text-muted-foreground">ou</span>
             <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Pro Santé Connect — soignants avec carte CPS/e-CPS */}
+          <div className="mb-4">
+            <BoutonProSanteConnect intention="login" />
+            <p className="text-[10px] text-muted-foreground text-center mt-1.5">
+              Réservé aux professionnels de santé disposant d'une carte CPS ou e-CPS
+            </p>
           </div>
 
           <div className="space-y-3">

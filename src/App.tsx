@@ -14,6 +14,7 @@ import { Toaster } from "sonner";
 /* ─── Public pages ─── */
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
 const PageConnexion = lazy(() => import("./pages/PageConnexion"));
+const PscCallback = lazy(() => import("./pages/PscCallback"));
 const ConfirmerEmail = lazy(() => import("./pages/ConfirmerEmail"));
 const InscriptionSoignant = lazy(() => import("./pages/InscriptionSoignant"));
 const InscriptionEtablissement = lazy(() => import("./pages/InscriptionEtablissement"));
@@ -125,6 +126,7 @@ function AppRoutes() {
           <Route path="/a-propos" element={<APropos />} />
           <Route path="/telecharger" element={<Telecharger />} />
           <Route path="/connexion" element={<PageConnexion />} />
+          <Route path="/auth/psc/callback" element={<PscCallback />} />
           <Route path="/confirmer-email" element={<ConfirmerEmail />} />
           <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
           <Route path="/inscription/etablissement" element={<InscriptionEtablissement />} />

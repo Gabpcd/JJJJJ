@@ -12,6 +12,7 @@ import { FooterLegal } from '@/components/FooterLegal';
 import { CONTRATS, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
 import { logger } from '@/lib/logger';
+import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 
 
 function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => void }) {
@@ -217,6 +218,21 @@ export default function InscriptionSoignant() {
           <div className={`h-1 w-16 mx-1 rounded-full ${etape > 1 ? 'bg-primary' : 'bg-muted'}`} />
           <div className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${etape >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>2</div>
         </div>
+
+        {/* Pro Santé Connect — inscription rapide avec carte CPS/e-CPS */}
+        {etape === 1 && (
+          <div className="mb-6">
+            <BoutonProSanteConnect intention="signup" />
+            <p className="text-[10px] text-muted-foreground text-center mt-1.5">
+              Avec une carte CPS/e-CPS, votre inscription est automatique et votre RPPS vérifié instantanément
+            </p>
+            <div className="my-4 flex items-center gap-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">ou inscription manuelle</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           {etape === 1 && (
