@@ -15,6 +15,9 @@ import { Toaster } from "sonner";
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
 const PageConnexion = lazy(() => import("./pages/PageConnexion"));
 const PscCallback = lazy(() => import("./pages/PscCallback"));
+const MandatFacturation = lazy(() => import("./pages/MandatFacturation"));
+const MesFacturesHonoraires = lazy(() => import("./pages/MesFacturesHonoraires"));
+const AdminMandatsFacturation = lazy(() => import("./pages/admin/AdminMandatsFacturation"));
 const ConfirmerEmail = lazy(() => import("./pages/ConfirmerEmail"));
 const InscriptionSoignant = lazy(() => import("./pages/InscriptionSoignant"));
 const InscriptionEtablissement = lazy(() => import("./pages/InscriptionEtablissement"));
@@ -151,6 +154,8 @@ function AppRoutes() {
           <Route path="/soignant/presences" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PresencesSoignant /></RouteProtegee>} />
           <Route path="/soignant/presences/mission/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailPresencesMission role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/mes-gains" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesGains /></RouteProtegee>} />
+          <Route path="/soignant/mandat-facturation" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MandatFacturation /></RouteProtegee>} />
+          <Route path="/soignant/mes-factures-honoraires" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesFacturesHonoraires /></RouteProtegee>} />
           <Route path="/soignant/historique-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><HistoriqueMissions /></RouteProtegee>} />
           <Route path="/soignant/fiabilite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><FiabiliteSoignant /></RouteProtegee>} />
           <Route path="/soignant/parcours-3200h" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><Parcours3200h /></RouteProtegee>} />
@@ -216,6 +221,7 @@ function AppRoutes() {
           <Route path="/admin/emails" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEmails /></RouteProtegee>} />
           <Route path="/admin/api" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAPI /></RouteProtegee>} />
           <Route path="/admin/groupes" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminGroupes /></RouteProtegee>} />
+          <Route path="/admin/mandats-facturation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMandatsFacturation /></RouteProtegee>} />
           <Route path="/admin/missions" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMissions /></RouteProtegee>} />
           <Route path="/admin/calendrier" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCalendrier /></RouteProtegee>} />
           <Route path="/admin/reclamations" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminReclamations /></RouteProtegee>} />
