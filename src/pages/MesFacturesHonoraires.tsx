@@ -12,6 +12,7 @@ import { fr } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { MANDAT_FACTURATION_VERSION } from '@/constantes/mandatFacturation';
+import { ModalCessionCreance } from '@/components/ModalCessionCreance';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
 
@@ -45,32 +46,18 @@ export default function MesFacturesHonoraires() {
     })();
   }, [user]);
 
-  const [requestingAdvance, setRequestingAdvance] = useState<string | null>(null);
+  const [cessionModal, setCessionModal] = useState<{ id: string; numero: string; montant: number } | null>(null);
 
-  const demanderAvance = async (factureId: string, montant: number) => {
-    if (!confirm(`Demander le paiement rapide pour cette facture de ${fmt(montant)} ?\n\nVous serez crédité(e) sous 24 à 48h. Des frais d'affacturage (2-3%) seront retenus.`)) return;
-    setRequestingAdvance(factureId);
-    try {
-      const { data, error } = await supabase.functions.invoke('factor-request-advance', {
-        body: { facture_honoraire_id: factureId },
-      });
-      if (error) {
-        toast.error(data?.error || error.message || 'Erreur');
-        return;
-      }
-      if (data?.configured === false) {
-        toast.info(data.message || 'Demande enregistrée. Le paiement rapide sera bientôt disponible.');
-      } else if (data?.success) {
-        toast.success(data.message || 'Demande envoyée');
-      } else {
-        toast.error(data?.message || 'Demande refusée');
-      }
-      navigate('/soignant/mes-avances');
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur');
-    } finally {
-      setRequestingAdvance(null);
-    }
+  const ouvrirCession = (facture: any) => {
+    setCessionModal({
+      id: facture.id,
+      numero: facture.numero_facture,
+      montant: Number(facture.montant_ttc),
+    });
+  };
+
+  const onCessionSuccess = () => {
+    navigate('/soignant/mes-avances');
   };
 
   const telechargerFacturePDF = async (factureId: string) => {
@@ -325,10 +312,9 @@ export default function MesFacturesHonoraires() {
                           <Button
                             size="sm"
                             className="gap-1 text-xs"
-                            onClick={() => demanderAvance(f.id, Number(f.montant_ttc))}
-                            disabled={requestingAdvance === f.id}
+                            onClick={() => ouvrirCession(f)}
                           >
-                            {requestingAdvance === f.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                            <Zap className="h-3 w-3" />
                             Recevoir maintenant
                           </Button>
                         )}
@@ -341,6 +327,17 @@ export default function MesFacturesHonoraires() {
           </div>
         )}
       </div>
+
+      {cessionModal && (
+        <ModalCessionCreance
+          open={!!cessionModal}
+          onClose={() => setCessionModal(null)}
+          factureId={cessionModal.id}
+          numeroFacture={cessionModal.numero}
+          montant={cessionModal.montant}
+          onSuccess={onCessionSuccess}
+        />
+      )}
     </LayoutApp>
   );
 }
