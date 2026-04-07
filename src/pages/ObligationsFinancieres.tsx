@@ -16,6 +16,9 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
+import { stripePromise } from '@/lib/stripe';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const isRefValid = (ref: string) => ref.trim().length >= 5 && /\d/.test(ref);
@@ -129,7 +132,15 @@ export default function ObligationsFinancieres() {
       const { data: result, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
         body: { mission_id: missionId },
       });
-      if (error) throw error;
+      if (result?.already_paid) {
+        toast.info(result.message || 'Ce paiement a déjà été effectué');
+        if (typeof charger === 'function') charger();
+        return;
+      }
+      if (error) {
+        toast.error(result?.error || error.message || 'Erreur lors du paiement');
+        return;
+      }
       if (result?.error) throw new Error(result.error);
       if (result?.url) { window.location.href = result.url; return; }
       if (result?.client_secret) { setConnectClientSecret(result.client_secret); return; }
@@ -454,6 +465,21 @@ export default function ObligationsFinancieres() {
           </FadeInView>
         )}
       </div>
+
+      {/* Embedded Stripe Checkout pour paiement mission */}
+      {connectClientSecret && (
+        <Dialog open={!!connectClientSecret} onOpenChange={(v) => { if (!v) { setConnectClientSecret(null); charger(); } }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Paiement mission</DialogTitle>
+              <DialogDescription>Réglez les honoraires du soignant et la commission Jolene.</DialogDescription>
+            </DialogHeader>
+            <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: connectClientSecret }}>
+              <EmbeddedCheckout />
+            </EmbeddedCheckoutProvider>
+          </DialogContent>
+        </Dialog>
+      )}
     </LayoutApp>
   );
 }
