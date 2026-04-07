@@ -258,6 +258,60 @@ export type Database = {
           },
         ]
       }
+      cessions_creance: {
+        Row: {
+          contenu_hash: string | null
+          cree_le: string
+          facture_honoraire_id: string
+          id: string
+          ip_address: string | null
+          montant: number
+          signed_at: string
+          soignant_id: string
+          user_agent: string | null
+          version_texte: string
+        }
+        Insert: {
+          contenu_hash?: string | null
+          cree_le?: string
+          facture_honoraire_id: string
+          id?: string
+          ip_address?: string | null
+          montant: number
+          signed_at?: string
+          soignant_id: string
+          user_agent?: string | null
+          version_texte: string
+        }
+        Update: {
+          contenu_hash?: string | null
+          cree_le?: string
+          facture_honoraire_id?: string
+          id?: string
+          ip_address?: string | null
+          montant?: number
+          signed_at?: string
+          soignant_id?: string
+          user_agent?: string | null
+          version_texte?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cessions_creance_facture_honoraire_id_fkey"
+            columns: ["facture_honoraire_id"]
+            isOneToOne: false
+            referencedRelation: "factures_honoraires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cessions_creance_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chorus_pro_config: {
         Row: {
           actif: boolean | null
@@ -1187,6 +1241,104 @@ export type Database = {
         }
         Relationships: []
       }
+      factor_advances: {
+        Row: {
+          approuvee_le: string | null
+          cree_le: string
+          etablissement_id: string
+          facture_honoraire_id: string
+          financee_le: string | null
+          frais_factor: number | null
+          frais_jolene: number | null
+          id: string
+          mission_id: string | null
+          modifie_le: string
+          montant_facture_ttc: number
+          montant_net_soignant: number | null
+          motif_rejet: string | null
+          provider: string
+          provider_advance_id: string | null
+          provider_invoice_id: string | null
+          raw_response: Json | null
+          recouvree_le: string | null
+          soignant_id: string
+          statut: string
+        }
+        Insert: {
+          approuvee_le?: string | null
+          cree_le?: string
+          etablissement_id: string
+          facture_honoraire_id: string
+          financee_le?: string | null
+          frais_factor?: number | null
+          frais_jolene?: number | null
+          id?: string
+          mission_id?: string | null
+          modifie_le?: string
+          montant_facture_ttc: number
+          montant_net_soignant?: number | null
+          motif_rejet?: string | null
+          provider?: string
+          provider_advance_id?: string | null
+          provider_invoice_id?: string | null
+          raw_response?: Json | null
+          recouvree_le?: string | null
+          soignant_id: string
+          statut?: string
+        }
+        Update: {
+          approuvee_le?: string | null
+          cree_le?: string
+          etablissement_id?: string
+          facture_honoraire_id?: string
+          financee_le?: string | null
+          frais_factor?: number | null
+          frais_jolene?: number | null
+          id?: string
+          mission_id?: string | null
+          modifie_le?: string
+          montant_facture_ttc?: number
+          montant_net_soignant?: number | null
+          motif_rejet?: string | null
+          provider?: string
+          provider_advance_id?: string | null
+          provider_invoice_id?: string | null
+          raw_response?: Json | null
+          recouvree_le?: string | null
+          soignant_id?: string
+          statut?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "factor_advances_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factor_advances_facture_honoraire_id_fkey"
+            columns: ["facture_honoraire_id"]
+            isOneToOne: false
+            referencedRelation: "factures_honoraires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factor_advances_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factor_advances_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       factures: {
         Row: {
           chorus_pro_date_acceptation: string | null
@@ -1300,6 +1452,91 @@ export type Database = {
             columns: ["mission_id"]
             isOneToOne: false
             referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      factures_honoraires: {
+        Row: {
+          cree_le: string
+          date_echeance: string | null
+          date_emission: string
+          date_paiement: string | null
+          etablissement_id: string
+          exoneration_tva: boolean | null
+          id: string
+          mandat_version: string | null
+          mission_id: string | null
+          modifie_le: string
+          montant_ht: number
+          montant_ttc: number
+          montant_tva: number
+          numero_facture: string
+          pdf_s3_key: string | null
+          soignant_id: string
+          statut: string
+          taux_tva: number | null
+        }
+        Insert: {
+          cree_le?: string
+          date_echeance?: string | null
+          date_emission?: string
+          date_paiement?: string | null
+          etablissement_id: string
+          exoneration_tva?: boolean | null
+          id?: string
+          mandat_version?: string | null
+          mission_id?: string | null
+          modifie_le?: string
+          montant_ht: number
+          montant_ttc: number
+          montant_tva?: number
+          numero_facture: string
+          pdf_s3_key?: string | null
+          soignant_id: string
+          statut?: string
+          taux_tva?: number | null
+        }
+        Update: {
+          cree_le?: string
+          date_echeance?: string | null
+          date_emission?: string
+          date_paiement?: string | null
+          etablissement_id?: string
+          exoneration_tva?: boolean | null
+          id?: string
+          mandat_version?: string | null
+          mission_id?: string | null
+          modifie_le?: string
+          montant_ht?: number
+          montant_ttc?: number
+          montant_tva?: number
+          numero_facture?: string
+          pdf_s3_key?: string | null
+          soignant_id?: string
+          statut?: string
+          taux_tva?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "factures_honoraires_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factures_honoraires_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factures_honoraires_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
             referencedColumns: ["id"]
           },
         ]
@@ -1735,6 +1972,47 @@ export type Database = {
             columns: ["presence_id"]
             isOneToOne: false
             referencedRelation: "presences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mandats_facturation_signatures: {
+        Row: {
+          contenu_hash: string | null
+          cree_le: string
+          id: string
+          ip_address: string | null
+          signed_at: string
+          soignant_id: string
+          user_agent: string | null
+          version: string
+        }
+        Insert: {
+          contenu_hash?: string | null
+          cree_le?: string
+          id?: string
+          ip_address?: string | null
+          signed_at?: string
+          soignant_id: string
+          user_agent?: string | null
+          version: string
+        }
+        Update: {
+          contenu_hash?: string | null
+          cree_le?: string
+          id?: string
+          ip_address?: string | null
+          signed_at?: string
+          soignant_id?: string
+          user_agent?: string | null
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mandats_facturation_signatures_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
             referencedColumns: ["id"]
           },
         ]
@@ -2676,6 +2954,33 @@ export type Database = {
         }
         Relationships: []
       }
+      psc_auth_sessions: {
+        Row: {
+          code_verifier: string
+          cree_le: string
+          expire_le: string
+          intention: string
+          nonce: string
+          state: string
+        }
+        Insert: {
+          code_verifier: string
+          cree_le?: string
+          expire_le?: string
+          intention?: string
+          nonce: string
+          state: string
+        }
+        Update: {
+          code_verifier?: string
+          cree_le?: string
+          expire_le?: string
+          intention?: string
+          nonce?: string
+          state?: string
+        }
+        Relationships: []
+      }
       rate_limits: {
         Row: {
           action: string
@@ -2923,6 +3228,9 @@ export type Database = {
           iban_last4: string | null
           id: string
           identite_verifiee: boolean | null
+          mandat_facturation_signe: boolean | null
+          mandat_facturation_signe_le: string | null
+          mandat_facturation_version: string | null
           modifie_le: string | null
           nb_evaluations: number | null
           nom: string
@@ -2939,6 +3247,9 @@ export type Database = {
           prevoyance_numero_contrat: string | null
           priorite_missions_urgentes: boolean
           profession: Database["public"]["Enums"]["type_profession"]
+          psc_last_login: string | null
+          psc_linked_le: string | null
+          psc_sub: string | null
           rayon_deplacement_km: number | null
           rib_partage_le: string | null
           rpps_nom_api: string | null
@@ -3014,6 +3325,9 @@ export type Database = {
           iban_last4?: string | null
           id?: string
           identite_verifiee?: boolean | null
+          mandat_facturation_signe?: boolean | null
+          mandat_facturation_signe_le?: string | null
+          mandat_facturation_version?: string | null
           modifie_le?: string | null
           nb_evaluations?: number | null
           nom: string
@@ -3030,6 +3344,9 @@ export type Database = {
           prevoyance_numero_contrat?: string | null
           priorite_missions_urgentes?: boolean
           profession: Database["public"]["Enums"]["type_profession"]
+          psc_last_login?: string | null
+          psc_linked_le?: string | null
+          psc_sub?: string | null
           rayon_deplacement_km?: number | null
           rib_partage_le?: string | null
           rpps_nom_api?: string | null
@@ -3105,6 +3422,9 @@ export type Database = {
           iban_last4?: string | null
           id?: string
           identite_verifiee?: boolean | null
+          mandat_facturation_signe?: boolean | null
+          mandat_facturation_signe_le?: string | null
+          mandat_facturation_version?: string | null
           modifie_le?: string | null
           nb_evaluations?: number | null
           nom?: string
@@ -3121,6 +3441,9 @@ export type Database = {
           prevoyance_numero_contrat?: string | null
           priorite_missions_urgentes?: boolean
           profession?: Database["public"]["Enums"]["type_profession"]
+          psc_last_login?: string | null
+          psc_linked_le?: string | null
+          psc_sub?: string | null
           rayon_deplacement_km?: number | null
           rib_partage_le?: string | null
           rpps_nom_api?: string | null
@@ -3575,6 +3898,7 @@ export type Database = {
       fn_activer_liberal: { Args: never; Returns: Json }
       fn_admin_conformite: { Args: never; Returns: Json }
       fn_admin_conformite_detail: { Args: { p_type: string }; Returns: Json }
+      fn_admin_factor_stats: { Args: never; Returns: Json }
       fn_admin_finances: { Args: never; Returns: Json }
       fn_admin_finances_par_etablissement: { Args: never; Returns: Json }
       fn_admin_graphiques: { Args: never; Returns: Json }
@@ -3591,6 +3915,7 @@ export type Database = {
         }[]
       }
       fn_admin_kpi: { Args: never; Returns: Json }
+      fn_admin_mandats_stats: { Args: never; Returns: Json }
       fn_admin_moderer_document: {
         Args: { p_action: string; p_document_id: string; p_motif?: string }
         Returns: Json
@@ -3707,6 +4032,10 @@ export type Database = {
       fn_calculer_taux_free_transition_safe: {
         Args: { p_soignant_id: string }
         Returns: Json
+      }
+      fn_cession_existe: {
+        Args: { p_facture_honoraire_id: string }
+        Returns: boolean
       }
       fn_charger_demo_investisseur: { Args: never; Returns: Json }
       fn_cloturer_litige: {
@@ -4007,6 +4336,10 @@ export type Database = {
       fn_exporter_rgpd_etablissement: { Args: never; Returns: Json }
       fn_generer_code_parrainage: { Args: never; Returns: string }
       fn_generer_facture: { Args: { p_mission_id: string }; Returns: Json }
+      fn_generer_facture_honoraires_mission: {
+        Args: { p_mission_id: string }
+        Returns: Json
+      }
       fn_generer_facture_mensuelle: {
         Args: { p_etablissement_id: string }
         Returns: Json
@@ -4049,6 +4382,22 @@ export type Database = {
           soignant_id: string
         }[]
       }
+      fn_mes_avances_factor: {
+        Args: never
+        Returns: {
+          cree_le: string
+          etablissement_nom: string
+          financee_le: string
+          frais_factor: number
+          frais_jolene: number
+          id: string
+          mission_intitule: string
+          montant_facture_ttc: number
+          montant_net_soignant: number
+          numero_facture: string
+          statut: string
+        }[]
+      }
       fn_mes_etablissements_soignant: {
         Args: never
         Returns: {
@@ -4080,6 +4429,20 @@ export type Database = {
       }
       fn_mes_exclusions_recues: { Args: never; Returns: Json }
       fn_mes_factures: { Args: never; Returns: Json }
+      fn_mes_factures_honoraires: {
+        Args: never
+        Returns: {
+          date_echeance: string
+          date_emission: string
+          date_paiement: string
+          etablissement_nom: string
+          id: string
+          mission_intitule: string
+          montant_ttc: number
+          numero_facture: string
+          statut: string
+        }[]
+      }
       fn_mes_filleuls: { Args: never; Returns: Json }
       fn_mes_missions_soignant: {
         Args: never
@@ -4267,6 +4630,7 @@ export type Database = {
       fn_mon_token_calendrier: { Args: never; Returns: string }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
       fn_nettoyer_partages_rib_expires: { Args: never; Returns: undefined }
+      fn_nettoyer_psc_sessions_expirees: { Args: never; Returns: undefined }
       fn_nettoyer_tokens_push: { Args: never; Returns: number }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
@@ -4445,12 +4809,31 @@ export type Database = {
         Returns: undefined
       }
       fn_signer_attestation_sante: { Args: never; Returns: Json }
+      fn_signer_cession_creance: {
+        Args: {
+          p_contenu_hash?: string
+          p_facture_honoraire_id: string
+          p_ip?: string
+          p_user_agent?: string
+          p_version: string
+        }
+        Returns: Json
+      }
       fn_signer_contrat_etablissement: {
         Args: { p_contrat_id: string; p_signature_image: string }
         Returns: Json
       }
       fn_signer_contrat_soignant: {
         Args: { p_contrat_id: string; p_signature_image: string }
+        Returns: Json
+      }
+      fn_signer_mandat_facturation: {
+        Args: {
+          p_contenu_hash?: string
+          p_ip?: string
+          p_user_agent?: string
+          p_version: string
+        }
         Returns: Json
       }
       fn_soignant_pour_etablissement: {
