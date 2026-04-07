@@ -71,9 +71,9 @@ export default function MesFacturesHonoraires() {
       if (!f) { toast.error('Facture introuvable'); return; }
 
       const [{ data: sg }, { data: etab }, { data: mission }] = await Promise.all([
-        supabase.from('soignants').select('prenom, nom, profession, numero_rpps, numero_adeli, email, telephone, adresse_ligne1, adresse_code_postal, adresse_ville').eq('id', f.soignant_id).maybeSingle(),
-        supabase.from('etablissements').select('nom, type, adresse_ligne1, adresse_code_postal, adresse_ville, siret, email_contact').eq('id', f.etablissement_id).maybeSingle(),
-        f.mission_id ? supabase.from('missions').select('intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base').eq('id', f.mission_id).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from('soignants').select('prenom, nom, profession, numero_rpps, numero_adeli, email, telephone, adresse_rue, adresse_code_postal, adresse_ville').eq('id', (f as any).soignant_id).maybeSingle(),
+        supabase.from('etablissements').select('nom, type, adresse_rue, adresse_code_postal, adresse_ville, siret, email_contact').eq('id', (f as any).etablissement_id).maybeSingle(),
+        (f as any).mission_id ? supabase.from('missions').select('intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base').eq('id', (f as any).mission_id).maybeSingle() : Promise.resolve({ data: null }),
       ]);
 
       const doc = new jsPDF();
