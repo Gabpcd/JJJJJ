@@ -79,13 +79,11 @@ export default function AdminDashboard() {
         supabase.rpc('fn_admin_graphiques' as any),
         supabase.from('soignants').select('id, prenom, nom, profession, cree_le').order('cree_le', { ascending: false }).limit(5),
         supabase.from('etablissements').select('id, nom, type, cree_le').is('supprime_le', null).order('cree_le', { ascending: false }).limit(5),
-        supabase.from('litiges').select('id, motif, statut, cree_le, soignant_id, etablissement_id').in('statut', ['OUVERT', 'EN_DISCUSSION']).order('cree_le', { ascending: false }).limit(10),
+        supabase.from('litiges').select('id, motif, statut, cree_le, soignant_id, etablissement_id').in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'CONTESTEE']).order('cree_le', { ascending: false }).limit(10),
         supabase
           .from('factures')
           .select('id, numero_facture, montant_ttc, statut, date_echeance, etablissement_id, etablissements(nom)')
           .in('statut', ['EMISE', 'EN_RETARD'])
-          .not('date_echeance', 'is', null)
-          .lt('date_echeance', today)
           .order('date_echeance', { ascending: true })
           .limit(10),
         supabase
