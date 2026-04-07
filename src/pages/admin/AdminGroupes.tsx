@@ -99,30 +99,29 @@ export default function AdminGroupes() {
       if (etabIds.length > 0) {
         // Stats par clinique
         for (const etab of (etabs ?? [])) {
-          const [resMissions, resFactures, resSoignants] = await Promise.all([
+          const [resMissions, resFactures] = await Promise.all([
             supabase.from('missions')
-              .select('id, statut, soignant_assigne_id')
+              .select('id, statut, soignant_assigne_id, montant_commission_ht, montant_commission_ttc')
               .eq('etablissement_id', etab.id),
             supabase.from('factures')
               .select('montant_ttc, statut')
               .eq('etablissement_id', etab.id),
-            supabase.from('missions')
-              .select('soignant_assigne_id')
-              .eq('etablissement_id', etab.id)
-              .not('soignant_assigne_id', 'is', null),
           ]);
 
           const missions = resMissions.data ?? [];
           const factures = resFactures.data ?? [];
-          const soignants = resSoignants.data ?? [];
 
           const nbMissions = missions.length;
-          const nbEnCours = missions.filter(m => ['PUBLIEE', 'ATTRIBUEE', 'EN_COURS'].includes(m.statut)).length;
+          // Enum réel : OUVERTE, ASSIGNEE, EN_COURS, TERMINEE, ANNULEE_*, ABSENCE, LITIGE
+          const nbEnCours = missions.filter(m => ['OUVERTE', 'ASSIGNEE', 'EN_COURS'].includes(m.statut)).length;
           const nbTerminees = missions.filter(m => m.statut === 'TERMINEE').length;
-          const caCommissions = factures.reduce((s, f) => s + (f.montant_ttc || 0), 0);
-          const caPayees = factures.filter(f => f.statut === 'PAYEE').reduce((s, f) => s + (f.montant_ttc || 0), 0);
-          const caImpayees = factures.filter(f => ['EMISE', 'EN_RETARD'].includes(f.statut)).reduce((s, f) => s + (f.montant_ttc || 0), 0);
-          const soignantIds = new Set(soignants.map(s => s.soignant_assigne_id).filter(Boolean));
+          // CA commissions = somme des commissions des missions terminées (valeur réelle, pas juste factures)
+          const caCommissions = missions
+            .filter(m => m.statut === 'TERMINEE')
+            .reduce((s, m) => s + (Number(m.montant_commission_ttc) || 0), 0);
+          const caPayees = factures.filter(f => f.statut === 'PAYEE').reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0);
+          const caImpayees = factures.filter(f => ['EMISE', 'EN_RETARD'].includes(f.statut)).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0);
+          const soignantIds = new Set(missions.map(m => m.soignant_assigne_id).filter(Boolean));
 
           cliniques.push({
             id: etab.id,
@@ -191,6 +190,36 @@ export default function AdminGroupes() {
     charger();
   };
 
+  const [editingTauxGroupe, setEditingTauxGroupe] = useState<{ groupeId: string; taux: string } | null>(null);
+
+  const modifierTauxGroupe = async (groupeId: string) => {
+    if (!editingTauxGroupe) return;
+    const taux = parseFloat(editingTauxGroupe.taux);
+    if (isNaN(taux) || taux < 0 || taux > 50) {
+      toast.error('Le taux doit être entre 0% et 50%');
+      return;
+    }
+    setSavingTaux(true);
+    // Récupérer les cliniques du groupe
+    const { data: etabs } = await supabase
+      .from('etablissements')
+      .select('id')
+      .eq('groupe_sante_id', groupeId)
+      .is('supprime_le', null);
+
+    if (etabs && etabs.length > 0) {
+      const { error } = await supabase
+        .from('etablissements')
+        .update({ taux_commission_negocie: taux } as any)
+        .in('id', etabs.map(e => e.id));
+      if (error) { toast.error('Erreur mise à jour groupe'); setSavingTaux(false); return; }
+      toast.success(`Taux de ${taux}% appliqué à ${etabs.length} clinique(s) du groupe`);
+    }
+    setSavingTaux(false);
+    setEditingTauxGroupe(null);
+    charger();
+  };
+
   const envoyerEmail = async (destinataires: string[], groupeNom: string) => {
     if (!emailSubject.trim() || !emailBody.trim()) {
       toast.error('Sujet et contenu requis');
@@ -246,7 +275,28 @@ export default function AdminGroupes() {
                     <span>{g.cliniques.length} clinique{g.cliniques.length > 1 ? 's' : ''}</span>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {editingTauxGroupe?.groupeId === g.id ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground">Taux groupe :</span>
+                      <Input
+                        type="number" step="0.5" min="0" max="50"
+                        value={editingTauxGroupe.taux}
+                        onChange={e => setEditingTauxGroupe({ ...editingTauxGroupe, taux: e.target.value })}
+                        className="w-20 h-8 text-xs text-center"
+                      />
+                      <span className="text-xs">%</span>
+                      <Button size="sm" onClick={() => modifierTauxGroupe(g.id)} disabled={savingTaux} className="h-8 text-xs gap-1">
+                        {savingTaux ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                        Appliquer au groupe
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditingTauxGroupe(null)}>Annuler</Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setEditingTauxGroupe({ groupeId: g.id, taux: String(g.cliniques[0]?.taux_commission_negocie ?? 15) })}>
+                      <Percent className="h-3.5 w-3.5" /> Modifier taux du groupe
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => {
                     setEmailGroupeId(g.id);
                     setEmailClinicId(null);
@@ -256,36 +306,64 @@ export default function AdminGroupes() {
                 </div>
               </div>
 
-              {/* KPIs groupe */}
+              {/* KPIs groupe — cliquables */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                <div className="p-3 rounded-xl bg-primary/5 border border-primary/20">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/admin/missions?groupe=${g.id}`)}
+                  className="text-left p-3 rounded-xl bg-primary/5 border border-primary/20 hover:border-primary/50 transition-colors cursor-pointer"
+                >
                   <p className="text-lg font-bold text-foreground">{g.totals.missions}</p>
-                  <p className="text-[10px] text-muted-foreground">Missions total</p>
-                </div>
-                <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                  <p className="text-[10px] text-muted-foreground">Missions</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/admin/missions?groupe=${g.id}&statut=EN_COURS`)}
+                  className="text-left p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 hover:border-blue-400 transition-colors cursor-pointer"
+                >
                   <p className="text-lg font-bold text-foreground">{g.totals.missions_en_cours}</p>
                   <p className="text-[10px] text-muted-foreground">En cours</p>
-                </div>
-                <div className="p-3 rounded-xl bg-success/5 border border-success/20">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/admin/missions?groupe=${g.id}&statut=TERMINEE`)}
+                  className="text-left p-3 rounded-xl bg-success/5 border border-success/20 hover:border-success/50 transition-colors cursor-pointer"
+                >
                   <p className="text-lg font-bold text-foreground">{g.totals.missions_terminees}</p>
                   <p className="text-[10px] text-muted-foreground">Terminées</p>
-                </div>
-                <div className="p-3 rounded-xl bg-primary/5 border border-primary/20">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/finances')}
+                  className="text-left p-3 rounded-xl bg-primary/5 border border-primary/20 hover:border-primary/50 transition-colors cursor-pointer"
+                >
                   <p className="text-lg font-bold text-foreground">{fmt(g.totals.ca_commissions)}</p>
                   <p className="text-[10px] text-muted-foreground">CA commissions</p>
-                </div>
-                <div className="p-3 rounded-xl bg-success/5 border border-success/20">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/facturation')}
+                  className="text-left p-3 rounded-xl bg-success/5 border border-success/20 hover:border-success/50 transition-colors cursor-pointer"
+                >
                   <p className="text-lg font-bold text-success">{fmt(g.totals.ca_commissions_payees)}</p>
                   <p className="text-[10px] text-muted-foreground">Payées</p>
-                </div>
-                <div className="p-3 rounded-xl bg-destructive/5 border border-destructive/20">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/impayees')}
+                  className="text-left p-3 rounded-xl bg-destructive/5 border border-destructive/20 hover:border-destructive/50 transition-colors cursor-pointer"
+                >
                   <p className="text-lg font-bold text-destructive">{fmt(g.totals.ca_commissions_impayees)}</p>
                   <p className="text-[10px] text-muted-foreground">Impayées</p>
-                </div>
-                <div className="p-3 rounded-xl bg-muted/50 border border-border">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/utilisateurs')}
+                  className="text-left p-3 rounded-xl bg-muted/50 border border-border hover:border-muted-foreground/30 transition-colors cursor-pointer"
+                >
                   <p className="text-lg font-bold text-foreground">{g.totals.soignants_uniques}</p>
                   <p className="text-[10px] text-muted-foreground">Soignants</p>
-                </div>
+                </button>
               </div>
 
               {/* BFA projection */}
