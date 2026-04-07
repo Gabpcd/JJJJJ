@@ -110,7 +110,7 @@ export default function MesFacturesHonoraires() {
         doc.text(sg.profession || '', 14, y); y += 4;
         if (sg.numero_rpps) { doc.text(`RPPS : ${sg.numero_rpps}`, 14, y); y += 4; }
         if (sg.numero_adeli) { doc.text(`ADELI : ${sg.numero_adeli}`, 14, y); y += 4; }
-        if (sg.adresse_ligne1) { doc.text(sg.adresse_ligne1, 14, y); y += 4; }
+        if (sg.adresse_rue) { doc.text(sg.adresse_rue, 14, y); y += 4; }
         if (sg.adresse_code_postal) { doc.text(`${sg.adresse_code_postal} ${sg.adresse_ville || ''}`, 14, y); y += 4; }
         if (sg.email) { doc.text(sg.email, 14, y); y += 4; }
       }
@@ -123,7 +123,7 @@ export default function MesFacturesHonoraires() {
       yClient += 5;
       if (etab) {
         doc.text(etab.nom || '', 120, yClient); yClient += 4;
-        if (etab.adresse_ligne1) { doc.text(etab.adresse_ligne1, 120, yClient); yClient += 4; }
+        if (etab.adresse_rue) { doc.text(etab.adresse_rue, 120, yClient); yClient += 4; }
         if (etab.adresse_code_postal) { doc.text(`${etab.adresse_code_postal} ${etab.adresse_ville || ''}`, 120, yClient); yClient += 4; }
         if (etab.siret) { doc.text(`SIRET : ${etab.siret}`, 120, yClient); yClient += 4; }
       }
