@@ -134,6 +134,10 @@ export default function DetailFacture() {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.text('Plateforme de mise en relation soignants', 14, y + 5);
+      doc.text(ENTREPRISE.adresse_ligne1, 14, y + 10);
+      doc.text(`${ENTREPRISE.adresse_code_postal} ${ENTREPRISE.adresse_ville}`, 14, y + 15);
+      doc.text(`SIRET : ${ENTREPRISE.siret_formate}`, 14, y + 20);
+      doc.text(`TVA intra : ${ENTREPRISE.tva_intra}`, 14, y + 25);
 
       doc.setFontSize(9);
       doc.text('Facturé à :', pw - 80, y);
@@ -200,7 +204,18 @@ export default function DetailFacture() {
       doc.setFontSize(6.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(140, 140, 140);
-      doc.text(`${ENTREPRISE.nom} — Facture générée le ${format(new Date(), 'dd/MM/yyyy à HH:mm')}`, pw / 2, ph - 8, { align: 'center' });
+      doc.text(
+        `${ENTREPRISE.nom} · ${ENTREPRISE.forme_juridique} · Capital ${ENTREPRISE.capital_social} · ${ENTREPRISE.rcs} · SIRET ${ENTREPRISE.siret_formate} · TVA ${ENTREPRISE.tva_intra}`,
+        pw / 2,
+        ph - 12,
+        { align: 'center' },
+      );
+      doc.text(
+        `${ENTREPRISE.adresse} — Facture générée le ${format(new Date(), 'dd/MM/yyyy à HH:mm')}`,
+        pw / 2,
+        ph - 8,
+        { align: 'center' },
+      );
 
       doc.save(`facture_${facture.numero_facture}.pdf`);
       afficherNotification({ type: 'succes', message: 'PDF téléchargé' });

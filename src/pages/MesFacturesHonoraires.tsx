@@ -13,6 +13,7 @@ import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { MANDAT_FACTURATION_VERSION } from '@/constantes/mandatFacturation';
 import { ModalCessionCreance } from '@/components/ModalCessionCreance';
+import { ENTREPRISE } from '@/constantes/entreprise';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
 
@@ -191,13 +192,25 @@ export default function MesFacturesHonoraires() {
       doc.text("Conditions de paiement : 30 jours date de facture.", 14, y); y += 4;
       doc.text("Pénalités de retard : 3× le taux d'intérêt légal. Indemnité forfaitaire : 40 €.", 14, y); y += 4;
 
-      // Footer
-      y = 280;
+      // Footer avec infos Jolene (mandataire)
+      y = 272;
       doc.setFontSize(7);
       doc.setTextColor(120, 120, 120);
-      doc.text("Facture émise par Jolene SAS pour le compte du professionnel ci-dessus, en qualité de mandataire (Article 289 I-2 du CGI).", 14, y);
+      doc.text("Facture émise par " + ENTREPRISE.nom + " en qualité de mandataire (Article 289 I-2 du CGI).", 14, y);
       y += 3;
-      doc.text("Le professionnel demeure le vendeur légal de la prestation.", 14, y);
+      doc.text("Le professionnel ci-dessus demeure le vendeur légal de la prestation.", 14, y);
+      y += 4;
+      doc.text(
+        `${ENTREPRISE.nom} · ${ENTREPRISE.forme_juridique} · Capital ${ENTREPRISE.capital_social} · SIRET ${ENTREPRISE.siret_formate} · ${ENTREPRISE.rcs}`,
+        14,
+        y,
+      );
+      y += 3;
+      doc.text(
+        `TVA intra : ${ENTREPRISE.tva_intra} · Siège : ${ENTREPRISE.adresse} · ${ENTREPRISE.email}`,
+        14,
+        y,
+      );
 
       doc.save(`${f.numero_facture}.pdf`);
       toast.success('Facture téléchargée');
