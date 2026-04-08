@@ -13,7 +13,7 @@ export default function PageMentionsLegales() {
   return (
     <LayoutLegal
       titre="Mentions Légales"
-      dateMaj="12 mars 2026"
+      dateMaj="7 avril 2026"
       toc={TOC}
       seoDescription="Mentions légales de Jolene SAS. Éditeur, hébergeur, propriété intellectuelle et coordonnées de contact."
     >
@@ -21,13 +21,15 @@ export default function PageMentionsLegales() {
       <section id="editeur">
         <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">1. Éditeur du site</h2>
         <div className="bg-muted/50 border border-border rounded-xl p-5 space-y-2">
-          <p><strong className="text-foreground">Raison sociale :</strong> Jolene SAS</p>
-          <p><strong className="text-foreground">Forme juridique :</strong> Société par Actions Simplifiée (SAS)</p>
+          <p><strong className="text-foreground">Raison sociale :</strong> Jolene</p>
+          <p><strong className="text-foreground">Forme juridique :</strong> Société par Actions Simplifiée (SAS) à associé unique</p>
           <p><strong className="text-foreground">Présidente :</strong> Gabrielle Picard</p>
-          <p><strong className="text-foreground">Siège social :</strong> XX rue XXXX, 75006 Paris, France</p>
-          <p><strong className="text-foreground">SIRET :</strong> XXX XXX XXX XXXXX</p>
-          <p><strong className="text-foreground">Capital social :</strong> en cours de constitution</p>
-          <p><strong className="text-foreground">Numéro TVA intracommunautaire :</strong> en cours d'attribution</p>
+          <p><strong className="text-foreground">Siège social :</strong> 103 rue de Vaugirard, 75006 Paris, France</p>
+          <p><strong className="text-foreground">RCS :</strong> 103 305 744 R.C.S. Paris</p>
+          <p><strong className="text-foreground">SIREN :</strong> 103 305 744</p>
+          <p><strong className="text-foreground">Capital social :</strong> 1 000 €</p>
+          <p><strong className="text-foreground">Numéro TVA intracommunautaire :</strong> FR75 01103305744</p>
+          <p><strong className="text-foreground">Date d'immatriculation :</strong> 7 avril 2026</p>
           <p><strong className="text-foreground">Directrice de la publication :</strong> Gabrielle Picard</p>
         </div>
       </section>
