@@ -46,7 +46,7 @@ export default function AdminCohortEconomics() {
         </div>
         <div className="flex gap-2">
           {[6, 12, 24].map(m => (
-            <button key={m} onClick={() => setPeriode(m)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${periode === m ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+            <button key={m} onClick={() => setPeriode(m)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${periode === m ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
               {m}m
             </button>
           ))}

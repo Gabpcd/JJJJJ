@@ -22,6 +22,8 @@ const NAV_ADMIN = [
   { icone: Mail, label: 'Emails', route: '/admin/emails' },
   { icone: Code2, label: 'API', route: '/admin/api' },
   { icone: TrendingUp, label: 'Cohort & Economics', route: '/admin/cohort' },
+  { icone: Shield, label: 'Audit Logs', route: '/admin/audit' },
+  { icone: FileCheck, label: 'DPIA', route: '/admin/dpia' },
   { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
   { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie' },
 ];

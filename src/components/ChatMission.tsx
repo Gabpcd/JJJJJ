@@ -163,7 +163,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdm
                 {!mine && (
                   <div className="flex items-center gap-1.5 mb-0.5">
                     {msg.type_auteur === 'ADMIN' && (
-                      <span className="inline-flex items-center gap-1 bg-[hsl(222,47%,11%)] text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">🛡️ Admin Jolene</span>
+                      <span className="inline-flex items-center gap-1 bg-foreground text-background text-[10px] font-semibold px-2 py-0.5 rounded-full">🛡️ Admin Jolene</span>
                     )}
                     {msg.type_auteur === 'SOIGNANT' && (
                       <span className="text-[10px] font-semibold text-muted-foreground">👤 Soignant</span>

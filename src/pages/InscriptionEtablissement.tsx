@@ -156,18 +156,19 @@ export default function InscriptionEtablissement() {
           {etape === 1 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label><input type="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required /></div>
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label><input type="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" autoComplete="email" required /></div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</label>
                 <div className="relative">
-                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required />
+                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" autoComplete="new-password" aria-describedby="etab-password-help" required />
                   <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <p id="etab-password-help" className="text-xs text-muted-foreground mt-1">Minimum 8 caractères</p>
               </div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Confirmer *</label><input type="password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required />
-                {form.confirmMdp && form.confirmMdp !== form.motDePasse && <p className="text-xs text-destructive mt-1">Les mots de passe ne correspondent pas</p>}
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Confirmer *</label><input type="password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" autoComplete="new-password" aria-describedby="etab-confirm-password-help" required />
+                {form.confirmMdp && form.confirmMdp !== form.motDePasse && <p id="etab-confirm-password-help" className="text-xs text-destructive mt-1">Les mots de passe ne correspondent pas</p>}
               </div>
               <label className="flex items-start gap-2 cursor-pointer">
                 <input type="checkbox" checked={cgu} onChange={e => setCgu(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
@@ -244,8 +245,8 @@ export default function InscriptionEtablissement() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email contact</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
+                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email contact</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" autoComplete="email" /></div>
+                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" autoComplete="tel" /></div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>

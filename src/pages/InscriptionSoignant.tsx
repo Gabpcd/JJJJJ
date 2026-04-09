@@ -240,23 +240,23 @@ export default function InscriptionSoignant() {
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label>
-                <input type="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required />
+                <input type="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" autoComplete="email" required />
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</label>
                 <div className="relative">
-                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required />
+                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" autoComplete="new-password" aria-describedby="password-strength" required />
                   <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <JaugeForce motDePasse={form.motDePasse} />
+                <div id="password-strength"><JaugeForce motDePasse={form.motDePasse} /></div>
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Confirmer le mot de passe *</label>
-                <input type="password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required />
+                <input type="password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" autoComplete="new-password" aria-describedby="confirm-password-help" required />
                 {form.confirmMdp && form.confirmMdp !== form.motDePasse && (
-                  <p className="text-xs text-destructive mt-1">Les mots de passe ne correspondent pas</p>
+                  <p id="confirm-password-help" className="text-xs text-destructive mt-1">Les mots de passe ne correspondent pas</p>
                 )}
               </div>
               <label className="flex items-start gap-2 cursor-pointer">
@@ -272,10 +272,10 @@ export default function InscriptionSoignant() {
               <GeoAutoRequest onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre profil professionnel</p>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Prénom *</label><input value={form.prenom} onChange={e => maj('prenom', e.target.value)} className="input-base" required /></div>
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required /></div>
+                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Prénom *</label><input value={form.prenom} onChange={e => maj('prenom', e.target.value)} className="input-base" autoComplete="given-name" required /></div>
+                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" autoComplete="family-name" required /></div>
               </div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} placeholder="+33 6 ..." className="input-base" /></div>
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} placeholder="+33 6 ..." className="input-base" autoComplete="tel" /></div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</label><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className="input-base" max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required />
                 {dateNaissanceRequise && <p className="text-xs text-destructive mt-1">La date de naissance est obligatoire</p>}
               </div>

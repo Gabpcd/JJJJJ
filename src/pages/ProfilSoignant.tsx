@@ -727,6 +727,36 @@ export default function ProfilSoignant() {
           </div>
         </div>
 
+        {/* Notifications push opt-out */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">Notifications push</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm text-foreground font-medium">Recevoir les notifications push</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Missions urgentes, nouvelles candidatures, rappels de pointage.
+              </p>
+            </div>
+            <Switch
+              checked={typeof Notification !== 'undefined' && Notification.permission === 'granted'}
+              onCheckedChange={async (checked) => {
+                if (checked) {
+                  const perm = await Notification.requestPermission();
+                  if (perm === 'granted') {
+                    afficherNotification({ type: 'succes', message: 'Notifications push activées.' });
+                  } else {
+                    afficherNotification({ type: 'avertissement', message: 'Notifications refusées par le navigateur. Vérifiez les paramètres.' });
+                  }
+                } else {
+                  // Delete push tokens to stop receiving
+                  await supabase.from('tokens_push').delete().eq('utilisateur_id', user!.id);
+                  afficherNotification({ type: 'avertissement', message: 'Notifications push désactivées. Vos tokens ont été supprimés.' });
+                }
+              }}
+            />
+          </div>
+        </div>
+
         <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50">
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>

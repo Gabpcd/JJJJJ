@@ -118,6 +118,8 @@ const AdminMissions = lazy(() => import("./pages/admin/AdminMissions"));
 const AdminReclamations = lazy(() => import("./pages/admin/AdminReclamations"));
 const AdminFinances = lazy(() => import("./pages/admin/AdminFinances"));
 const AdminCohortEconomics = lazy(() => import("./pages/admin/AdminCohortEconomics"));
+const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
+const AdminDPIA = lazy(() => import("./pages/admin/AdminDPIA"));
 const GestionShifts = lazy(() => import("./pages/GestionShifts"));
 
 const queryClient = new QueryClient();
@@ -247,6 +249,8 @@ function AppRoutes() {
           <Route path="/admin/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><PageMessagerie role="ADMIN_PLATEFORME" /></RouteProtegee>} />
           <Route path="/admin/finances" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminFinances /></RouteProtegee>} />
           <Route path="/admin/cohort" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCohortEconomics /></RouteProtegee>} />
+          <Route path="/admin/audit" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAuditLogs /></RouteProtegee>} />
+          <Route path="/admin/dpia" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDPIA /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
