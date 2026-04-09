@@ -251,7 +251,7 @@ const App = () => (
           <NotificationProvider>
             <BrowserRouter>
               <AppRoutes />
-              <Toaster position="top-right" richColors closeButton />
+              <Toaster position="top-center" richColors closeButton toastOptions={{ style: { marginTop: 'env(safe-area-inset-top, 0px)' } }} />
             </BrowserRouter>
           </NotificationProvider>
         </AuthProvider>

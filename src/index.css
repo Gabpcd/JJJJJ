@@ -229,7 +229,7 @@
     content: '';
     display: block;
     height: env(safe-area-inset-top);
-    background-color: hsl(var(--sidebar-bg));
+    background-color: hsl(var(--background));
     position: fixed;
     top: 0;
     left: 0;
@@ -242,6 +242,7 @@
   #root {
     min-height: 100%;
     display: flex;
+    padding-top: env(safe-area-inset-top);
     flex-direction: column;
     padding-top: env(safe-area-inset-top);
   }
