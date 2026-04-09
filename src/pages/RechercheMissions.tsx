@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/lib/logger';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -140,6 +141,7 @@ export default function RechercheMissions() {
       const { data, error } = await query;
       if (error) {
         logger.warn('[RechercheMissions] Erreur requête missions:', error.message);
+        toast.error('Impossible de charger les missions. Vérifiez votre connexion.');
       }
       const enriched = data ? await enrichirEtablissements(data as any) : [];
       setMissions(enriched);
