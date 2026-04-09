@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { capturerErreurSentry } from '@/lib/sentry';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -45,7 +45,7 @@ function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
     const { data: session } = await supabase.auth.getSession();
     const token = session?.session?.access_token;
     const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-sepa`,
+      `${SUPABASE_URL}/functions/v1/setup-sepa`,
       {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -80,8 +80,9 @@ function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
         disabled={submitting || !stripe}
         className="btn-primary text-sm w-full disabled:opacity-50"
       >
-        {submitting ? 'Validation…' : '🏦 Valider le mandat SEPA'}
+        {submitting ? 'Validation…' : !stripe ? '⏳ Chargement Stripe…' : '🏦 Valider le mandat SEPA'}
       </button>
+      {!stripe && <p className="text-[10px] text-warning">Le module de paiement charge. Patientez quelques secondes…</p>}
       <p className="text-[10px] text-muted-foreground">
         En fournissant votre IBAN, vous autorisez Jolene à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA.
       </p>
@@ -102,7 +103,7 @@ function SepaSetupSection({ userId }: { userId?: string }) {
       const token = session?.session?.access_token;
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-sepa`,
+          `${SUPABASE_URL}/functions/v1/setup-sepa`,
           {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
