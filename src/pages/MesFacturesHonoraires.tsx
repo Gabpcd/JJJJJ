@@ -265,7 +265,7 @@ export default function MesFacturesHonoraires() {
         )}
 
         {/* KPIs */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="card-base">
             <p className="text-xs text-muted-foreground">Total facturé</p>
             <p className="text-xl font-bold text-foreground">{fmt(totalFacture)}</p>

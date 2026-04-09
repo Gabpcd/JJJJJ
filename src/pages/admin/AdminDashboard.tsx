@@ -444,7 +444,7 @@ export default function AdminDashboard() {
           <CardContent>
             {stripeMoisNb > 0 ? (
               <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="rounded-lg bg-muted/50 p-3 text-center">
                     <p className="text-xs text-muted-foreground">Paiements ce mois</p>
                     <p className="text-xl font-bold text-foreground">{stripeMoisNb}</p>
@@ -482,7 +482,7 @@ export default function AdminDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-lg bg-muted/50 p-3 text-center">
                   <p className="text-xs text-muted-foreground">Comptes</p>
                   <p className="text-xl font-bold text-foreground">{connectStats.total_comptes}</p>

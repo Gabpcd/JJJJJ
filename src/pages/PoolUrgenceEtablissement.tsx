@@ -360,7 +360,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
           </h1>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             {isAdmin && (
-              <div className="min-w-[240px]">
+              <div className="w-full sm:min-w-[240px] sm:w-auto">
                 <Select value={selectedEtablissementId} onValueChange={setSelectedEtablissementId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choisir un établissement" />

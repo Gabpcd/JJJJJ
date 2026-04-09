@@ -384,7 +384,7 @@ export default function ProfilEtablissement() {
           <h2 className="text-base font-semibold text-foreground mb-4">Adresse</h2>
           <div className="space-y-3">
             <input value={form.rue} onChange={e => maj('rue', e.target.value)} placeholder="Rue" className="input-base" />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville" className="input-base" />
               <input value={form.codePostal} onChange={e => maj('codePostal', e.target.value)} placeholder="Code postal" className="input-base" />
               <input value={form.departement} onChange={e => maj('departement', e.target.value)} placeholder="Département" className="input-base" />

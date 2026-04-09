@@ -236,7 +236,7 @@ export default function InscriptionEtablissement() {
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Adresse</label>
                 <input value={form.rue} onChange={e => maj('rue', e.target.value)} placeholder="Rue" className="input-base mb-2" />
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville *" className="input-base" required />
                   <input value={form.codePostal} onChange={e => maj('codePostal', e.target.value.replace(/\D/g, '').slice(0, 5))} placeholder="Code postal" className="input-base" />
                   <input value={form.departement} onChange={e => maj('departement', e.target.value)} placeholder="Dép." className="input-base" />

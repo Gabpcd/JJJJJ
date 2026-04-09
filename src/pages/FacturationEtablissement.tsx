@@ -430,7 +430,7 @@ export default function FacturationEtablissement() {
               </div>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <button
               onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE'); scrollToHistorique(); }}
               className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
@@ -787,7 +787,7 @@ export default function FacturationEtablissement() {
           )}
 
           {/* KPI commissions */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <button
               onClick={() => {
                 setFiltreStatut(filtreStatut === 'EN_ATTENTE' ? null : 'EN_ATTENTE');
