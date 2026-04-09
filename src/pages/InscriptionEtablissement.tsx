@@ -157,7 +157,7 @@ export default function InscriptionEtablissement() {
           {etape === 1 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label><input type="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required /></div>
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label><input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required /></div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</label>
                 <div className="relative">

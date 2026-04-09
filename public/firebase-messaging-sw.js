@@ -1,7 +1,7 @@
 /* eslint-disable no-undef */
 
 // ─── Cache Configuration ───
-const CACHE_VERSION = 'jolene-v2';
+const CACHE_VERSION = 'jolene-v3';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 
