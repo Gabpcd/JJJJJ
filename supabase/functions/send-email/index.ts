@@ -81,6 +81,8 @@ const ALLOWED_TYPES = new Set([
   'DOCUMENT_EXPIRANT', 'RAPPEL_FACTURE',
   'ELIGIBLE_LIBERAL', 'RECAP_HEBDO',
   'RAPPEL_DOCUMENTS', 'MISSION_URGENTE', 'MISSION_PROPOSEE',
+  'EVALUATION_RECUE', 'PAIEMENT_CONFIRME', 'ADMIN_BROADCAST',
+  'MISSION_NON_POURVUE', 'RELANCE_FACTURE', 'PAIEMENT_RAPIDE_RECU',
 ]);
 
 interface TemplateResult { subject: string; html: string }
@@ -364,6 +366,67 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           `)}
           ${INFO_BOX('Vous avez <strong>2 heures</strong> pour accepter ou refuser cette proposition.')}
           ${BUTTON('Accepter ou refuser →', `${APP_URL}/soignant/dashboard`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'EVALUATION_RECUE':
+      return {
+        subject: `Nouvelle évaluation reçue${data.note ? ` — ${data.note}/5` : ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⭐ Vous avez reçu une évaluation</h2>
+          <p style="color:#334155;">Un ${data.type_evaluateur === 'SOIGNANT' ? 'soignant' : 'établissement'} vous a évalué${data.mission ? ` pour la mission <strong>${data.mission}</strong>` : ''}.</p>
+          ${data.note ? CARD_BOX(`<strong style="color:#0F172A;font-size:24px;">${'⭐'.repeat(Number(data.note))}</strong><br/><span style="color:#334155;">${data.note}/5</span>`) : ''}
+          ${data.commentaire ? INFO_BOX(`<em style="color:#334155;">"${data.commentaire}"</em>`) : ''}
+          ${BUTTON('Voir mon profil →', `${APP_URL}/soignant/profil`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'PAIEMENT_CONFIRME':
+      return {
+        subject: `Paiement confirmé — ${data.montant ? data.montant + ' €' : ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">✅ Paiement confirmé</h2>
+          <p style="color:#334155;">Le soignant <strong>${data.soignant || ''}</strong> a confirmé la réception du paiement${data.mission ? ` pour la mission <strong>${data.mission}</strong>` : ''}.</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Montant :</strong> ${data.montant || '—'} €<br/>
+            <strong style="color:#0F172A;">Référence :</strong> ${data.reference || '—'}
+          `)}
+          <p style="color:#334155;">Aucune action requise de votre part.</p>
+          ${BUTTON('Voir la facturation →', `${APP_URL}/etablissement/facturation`)}
+        `),
+      };
+
+    case 'ADMIN_BROADCAST':
+      return {
+        subject: data.subject || 'Message de Jolene',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📢 ${escapeHtml(data.subject || 'Message de Jolene')}</h2>
+          <div style="color:#334155;white-space:pre-wrap;">${escapeHtml(data.body || '')}</div>
+          ${data.groupe ? `<p style="color:#94A3B8;font-size:12px;margin-top:16px;">Envoyé au groupe : ${data.groupe}</p>` : ''}
+          ${BUTTON('Accéder à Jolene →', APP_URL)}
+        `),
+      };
+
+    case 'MISSION_NON_POURVUE':
+      return {
+        subject: `Mission non pourvue — ${data.mission || ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⚠️ Mission annulée automatiquement</h2>
+          <p style="color:#334155;">Votre mission <strong>${data.mission || ''}</strong> n'a trouvé aucun soignant et a été automatiquement annulée.</p>
+          ${INFO_BOX('Vous pouvez la republier depuis votre espace missions.')}
+          ${BUTTON('Republier la mission →', `${APP_URL}/etablissement/missions`)}
+        `),
+      };
+
+    case 'PAIEMENT_RAPIDE_RECU':
+      return {
+        subject: `Paiement rapide reçu 💸`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">💸 Votre paiement rapide a été versé</h2>
+          <p style="color:#334155;">Votre demande d'avance a été traitée. Le montant a été crédité sur votre compte bancaire sous 24-48h.</p>
+          ${BUTTON('Voir mes avances →', `${APP_URL}/soignant/mes-avances`)}
           ${SECURITY_NOTE}
         `),
       };

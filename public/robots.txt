@@ -1,14 +1,26 @@
 User-agent: Googlebot
 Allow: /
+Disallow: /admin/
+Disallow: /soignant/
+Disallow: /etablissement/
+Disallow: /groupe/
+Disallow: /auth/
+Disallow: /connexion
+Disallow: /confirmer-email
 
 User-agent: Bingbot
 Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
+Disallow: /admin/
+Disallow: /soignant/
+Disallow: /etablissement/
+Disallow: /groupe/
 
 User-agent: *
 Allow: /
+Disallow: /admin/
+Disallow: /soignant/
+Disallow: /etablissement/
+Disallow: /groupe/
+Disallow: /auth/
+
+Sitemap: https://jolene.app/sitemap.xml
