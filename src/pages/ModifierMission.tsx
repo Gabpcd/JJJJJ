@@ -34,7 +34,7 @@ export default function ModifierMission() {
           <p className="text-sm text-muted-foreground mb-4">
             {!mission
               ? 'Cette mission n\'existe pas ou vous n\'avez pas les droits pour y accéder.'
-              : `Cette mission ne peut pas être modifiée car elle est au statut « ${mission.statut} ». Seules les missions au statut « OUVERTE » sont modifiables.`}
+              : `Cette mission ne peut pas être modifiée car elle est au statut actuel. Seules les missions au statut « Ouverte » sont modifiables.`}
           </p>
           <button onClick={() => navigate('/etablissement/missions')} className="btn-primary">Retour aux missions</button>
         </div>

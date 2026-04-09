@@ -225,20 +225,20 @@ export default function ObligationsFinancieres() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <ResumeCard
               value={fmt(data.total_du)}
-              label="🔴 Total impayé"
+              label="Total impayé"
               detail="Voir tout le détail"
               onClick={() => allerSection(sectionTotal)}
               accent={data.total_du > 0 ? 'destructive' : 'success'}
             />
             <ResumeCard
               value={fmt(data.total_soignants_du)}
-              label={`👩‍⚕️ Soignants à régler · ${data.nb_missions_non_payees} mission(s)`}
+              label={`Soignants à régler · ${data.nb_missions_non_payees} mission(s)`}
               detail="Voir les paiements soignants"
               onClick={sectionSoignants ? () => allerSection(sectionSoignants) : undefined}
             />
             <ResumeCard
               value={fmt(data.total_commissions_du)}
-              label={`📄 Commissions Jolene · ${data.nb_factures_impayees} facture(s)`}
+              label={`Commissions Jolene · ${data.nb_factures_impayees} facture(s)`}
               detail="Voir les commissions impayées"
               onClick={sectionCommissions ? () => allerSection(sectionCommissions) : undefined}
             />

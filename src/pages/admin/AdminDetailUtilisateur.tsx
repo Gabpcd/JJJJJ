@@ -416,7 +416,7 @@ export default function AdminDetailUtilisateur() {
                           <TableCell className="text-xs">{new Date(m.debut_le).toLocaleDateString('fr-FR')}</TableCell>
                           <TableCell className="text-xs">{m.duree_heures ? `${m.duree_heures}h` : '—'}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-[10px]">{m.statut}</Badge>
+                            <Badge variant="outline" className="text-[10px]">{m.statut === "OUVERTE" ? "Ouverte" : m.statut === "ASSIGNEE" ? "Assignée" : m.statut === "EN_COURS" ? "En cours" : m.statut === "TERMINEE" ? "Terminée" : m.statut}</Badge>
                           </TableCell>
                           {type === 'soignant' && <TableCell className="text-xs font-mono">{m.net_a_payer ? `${Number(m.net_a_payer).toFixed(2)} €` : '—'}</TableCell>}
                         </TableRow>
