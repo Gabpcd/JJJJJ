@@ -118,6 +118,7 @@ function getEtablissementSidebar(): SidebarEntry[] {
       icone: Banknote, label: 'Finances', items: [
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
         { icone: FileText, label: 'Obligations', route: '/etablissement/obligations' },
+        { icone: Shield, label: 'Assurance', route: '/etablissement/assurance' },
         { icone: FileText, label: 'Contrat plateforme', route: '/etablissement/contrat-plateforme' },
         { icone: Building2, label: 'Chorus Pro', route: '/etablissement/chorus-config' },
       ],
