@@ -14,7 +14,9 @@
     "build:mobile": "npm run build && npx cap sync",
     "open:ios": "npx cap open ios",
     "open:android": "npx cap open android",
-    "resources": "npx @capacitor/assets generate"
+    "resources": "npx @capacitor/assets generate",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",

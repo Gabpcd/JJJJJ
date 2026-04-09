@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap } from 'lucide-react';
+import { BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -21,6 +21,7 @@ const NAV_ADMIN = [
   { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
   { icone: Mail, label: 'Emails', route: '/admin/emails' },
   { icone: Code2, label: 'API', route: '/admin/api' },
+  { icone: TrendingUp, label: 'Cohort & Economics', route: '/admin/cohort' },
   { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
   { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie' },
 ];
