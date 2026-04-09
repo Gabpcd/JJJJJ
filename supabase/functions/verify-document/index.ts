@@ -7,8 +7,7 @@ function getCorsOrigin(req: Request): string {
     origin === "https://app.jolene.app" ||
     origin === "https://jolene.app" ||
     origin === "http://localhost:5173" ||
-    origin.endsWith(".lovable.app") ||
-    origin.endsWith(".lovableproject.com")
+    origin === "http://localhost:8080"
   ) {
     return origin;
   }
@@ -81,8 +80,8 @@ serve(async (req) => {
     const { document_id } = await req.json();
     if (!document_id) throw new Error("document_id requis");
 
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableApiKey) throw new Error("LOVABLE_API_KEY non configurée");
+    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY non configurée — nécessaire pour la vérification IA des documents");
 
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
@@ -205,33 +204,11 @@ Analyse ce document et vérifie sa conformité.`;
       messages.push({ role: "user", content: userMessage });
     }
 
-    // Try Lovable AI gateway first, fallback to Anthropic
+    // Anthropic Claude API pour la vérification IA
     let aiResponse: Response | null = null;
-    let aiSource = "lovable";
+    let aiSource = "anthropic";
 
-    try {
-      aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${lovableApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages,
-          temperature: 0.1,
-        }),
-      });
-      if (!aiResponse.ok) {
-        console.warn("Lovable AI gateway failed:", aiResponse.status);
-        aiResponse = null;
-      }
-    } catch (lovableErr) {
-      console.warn("Lovable AI gateway error:", lovableErr);
-    }
-
-    // Fallback: Anthropic Claude API
-    if (!aiResponse) {
+    {
       const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
       if (anthropicKey) {
         aiSource = "anthropic";

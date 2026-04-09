@@ -24,7 +24,7 @@ export default function PageParrainage() {
   const [badgeAmbassadeur, setBadgeAmbassadeur] = useState(false);
   const [prioriteMissionsUrgentes, setPrioriteMissionsUrgentes] = useState(false);
 
-  const lienRef = `https://jolene-app.lovable.app?ref=${codeParrainage}`;
+  const lienRef = `https://jolene.app?ref=${codeParrainage}`;
 
   useEffect(() => {
     if (!user) return;

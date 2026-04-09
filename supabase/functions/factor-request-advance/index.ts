@@ -14,8 +14,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  const allowed = ["https://app.jolene.app", "https://jolene.app", "http://localhost:5173", "http://localhost:8080"];
-  const ok = allowed.includes(origin) || origin.endsWith(".lovable.app") || origin.endsWith(".lovableproject.com");
+  const allowed = [
+    "https://app.jolene.app",
+    "https://jolene.app",
+    "http://localhost:5173",
+    "http://localhost:8080",
+  ];
   return {
     "Access-Control-Allow-Origin": ok ? origin : "https://app.jolene.app",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
