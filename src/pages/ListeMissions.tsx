@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -37,67 +38,17 @@ export default function ListeMissions() {
   const { user } = useAuth();
   const { etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
-  const [missions, setMissions] = useState<any[]>([]);
+  const queryClient = useQueryClient();
   const statutParam = searchParams.get('statut') ?? '';
   // Filter by period: 'mois' restricts to missions ending within the current calendar month (fin_le between 1st and last day)
   const periodeParam = searchParams.get('periode') === 'mois' ? 'mois' : '';
   const [filtreStatut, setFiltreStatut] = useState(STATUTS_FILTRES.some((s) => s.valeur === statutParam) ? statutParam : '');
   const [filtrePeriode, setFiltrePeriode] = useState(periodeParam);
   const [recherche, setRecherche] = useState('');
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
   const [modalDupliquer, setModalDupliquer] = useState<any>(null);
   const [modalAnnuler, setModalAnnuler] = useState<any>(null);
   const [modalAnnulerSerie, setModalAnnulerSerie] = useState<any[] | null>(null);
   const [nbAffiche, setNbAffiche] = useState(20);
-
-  const charger = async () => {
-    if (!user) return;
-    setLoading(true);
-    const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-    const finMois = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString();
-
-    const etabId = etablissementId || user.id;
-    let query = supabase
-      .from('missions')
-      .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
-      .eq('etablissement_id', etabId)
-      .order('debut_le', { ascending: false });
-
-    if (filtreStatut) query = query.eq('statut', filtreStatut as any);
-    if (filtrePeriode === 'mois') query = query.gte('fin_le', debutMois).lt('fin_le', finMois);
-    if (debouncedRecherche) query = query.ilike('intitule', `%${debouncedRecherche}%`);
-
-    const [{ data }, { data: sgData }, { data: litigesData }] = await Promise.all([
-      query,
-      supabase.rpc('fn_mes_soignants_etablissement'),
-      supabase.from('litiges').select('mission_id').eq('etablissement_id', etabId),
-    ]);
-
-    // Map soignant data by ID
-    const sgMap: Record<string, any> = {};
-    if (Array.isArray(sgData)) {
-      for (const s of sgData) sgMap[s.id] = s;
-    }
-
-    const litigesMissionIds = new Set((litigesData || []).map((l: any) => l.mission_id));
-
-    setMissions((data || []).map((m: any) => ({
-      ...m,
-      soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
-      has_litige: litigesMissionIds.has(m.id),
-    })));
-
-    // M2: Single count query with status grouping instead of 7 parallel queries
-    const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', etabId);
-    const c: Record<string, number> = { '': allData?.length ?? 0 };
-    const statuts = ['OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
-    for (const s of statuts) {
-      c[s] = allData?.filter((m: any) => m.statut === s).length ?? 0;
-    }
-    setCounts(c);
-    setLoading(false);
-  };
 
   const debouncedRecherche = useDebounce(recherche, 300);
 
@@ -107,7 +58,62 @@ export default function ListeMissions() {
     if (periodeParam !== filtrePeriode) setFiltrePeriode(periodeParam);
   }, [statutParam, periodeParam]);
 
-  useEffect(() => { charger(); setNbAffiche(20); }, [user, etablissementId, filtreStatut, filtrePeriode, debouncedRecherche]);
+  // Reset pagination when filters change
+  useEffect(() => { setNbAffiche(20); }, [filtreStatut, filtrePeriode, debouncedRecherche]);
+
+  const { data: listData, isLoading: loading } = useQuery({
+    queryKey: ['liste-missions', user?.id, etablissementId, filtreStatut, filtrePeriode, debouncedRecherche],
+    queryFn: async () => {
+      const debutMois = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const finMois = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString();
+
+      const etabId = etablissementId || user!.id;
+      let query = supabase
+        .from('missions')
+        .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
+        .eq('etablissement_id', etabId)
+        .order('debut_le', { ascending: false });
+
+      if (filtreStatut) query = query.eq('statut', filtreStatut as any);
+      if (filtrePeriode === 'mois') query = query.gte('fin_le', debutMois).lt('fin_le', finMois);
+      if (debouncedRecherche) query = query.ilike('intitule', `%${debouncedRecherche}%`);
+
+      const [{ data }, { data: sgData }, { data: litigesData }] = await Promise.all([
+        query,
+        supabase.rpc('fn_mes_soignants_etablissement'),
+        supabase.from('litiges').select('mission_id').eq('etablissement_id', etabId),
+      ]);
+
+      // Map soignant data by ID
+      const sgMap: Record<string, any> = {};
+      if (Array.isArray(sgData)) {
+        for (const s of sgData) sgMap[s.id] = s;
+      }
+
+      const litigesMissionIds = new Set((litigesData || []).map((l: any) => l.mission_id));
+
+      const missions = (data || []).map((m: any) => ({
+        ...m,
+        soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
+        has_litige: litigesMissionIds.has(m.id),
+      }));
+
+      // M2: Single count query with status grouping instead of 7 parallel queries
+      const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', etabId);
+      const c: Record<string, number> = { '': allData?.length ?? 0 };
+      const statuts = ['OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
+      for (const s of statuts) {
+        c[s] = allData?.filter((m: any) => m.statut === s).length ?? 0;
+      }
+
+      return { missions, counts: c };
+    },
+    staleTime: 60_000,
+    enabled: !!user,
+  });
+
+  const missions = useMemo(() => listData?.missions ?? [], [listData]);
+  const counts = useMemo(() => listData?.counts ?? {}, [listData]);
 
   const appliquerFiltres = (statut: string, periode: string) => {
     const params = new URLSearchParams();
@@ -151,7 +157,7 @@ export default function ListeMissions() {
       afficherNotification({ type: 'erreur', message: (data as any).error });
     } else {
       afficherNotification({ type: 'succes', message: 'Mission annulée.' });
-      charger();
+      queryClient.invalidateQueries({ queryKey: ['liste-missions'] });
     }
   };
 
@@ -164,7 +170,7 @@ export default function ListeMissions() {
     } else {
       const reussies = (data as any)?.nb_annulees ?? ids.length;
       afficherNotification({ type: 'succes', message: `${reussies} mission(s) annulée(s).` });
-      charger();
+      queryClient.invalidateQueries({ queryKey: ['liste-missions'] });
     }
   };
 

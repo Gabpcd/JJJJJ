@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { logger } from '@/lib/logger';
@@ -72,179 +73,191 @@ export default function DashboardEtablissement() {
     ordre: number;
   }
 
-  const [etab, setEtab] = useState<EtabInfo | null>(null);
-  const [missions, setMissions] = useState<MissionSummary[]>([]);
-  const [aDejaPublie, setADejaPublie] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [erreurPartielle, setErreurPartielle] = useState(false);
   const [modalDupliquer, setModalDupliquer] = useState<MissionSummary | null>(null);
   const [modalAnnuler, setModalAnnuler] = useState<MissionSummary | null>(null);
-  const [paliers, setPaliers] = useState<PalierCommission[]>([]);
 
-  // All stats from RPC
-  const [stats, setStats] = useState<DashboardStats>({
-    missions_ouvertes: 0,
-    missions_assignees: 0,
-    missions_en_cours: 0,
-    missions_terminees: 0,
-    candidatures_en_attente: 0,
-    candidatures_recentes: [],
-    missions_assignees_detail: [],
-    pool_urgence_count: 0,
-    messages_non_lus: 0,
-    missions_a_payer: 0,
-    missions_terminees_ce_mois: 0,
-    soignants_ce_mois: 0,
-    commissions_impayees: 0,
-    nb_factures_impayees: 0,
-    litiges_ouverts: 0,
-  });
+  const { data: dashData, isLoading: loading } = useQuery({
+    queryKey: ['dashboard-etablissement', user?.id, etablissementId],
+    queryFn: async () => {
+      let partialError = false;
+      const now = new Date();
+      const debutMois = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  const [topSoignants, setTopSoignants] = useState<any[]>([]);
-  const [prochaines, setProchaines] = useState<any[]>([]);
+      let etabResult: EtabInfo | null = null;
+      let missionsResult: MissionSummary[] = [];
+      let aDejaPublieResult: boolean | null = null;
+      let paliersResult: PalierCommission[] = [];
+      let statsResult: DashboardStats = {
+        missions_ouvertes: 0, missions_assignees: 0, missions_en_cours: 0, missions_terminees: 0,
+        candidatures_en_attente: 0, candidatures_recentes: [], missions_assignees_detail: [],
+        pool_urgence_count: 0, messages_non_lus: 0, missions_a_payer: 0,
+        missions_terminees_ce_mois: 0, soignants_ce_mois: 0, commissions_impayees: 0,
+        nb_factures_impayees: 0, litiges_ouverts: 0,
+      };
+      let topSoignantsResult: any[] = [];
+      let prochainesResult: any[] = [];
 
-  const charger = async () => {
-    if (!user || !etablissementId) return;
-    let partialError = false;
-    const now = new Date();
-    const debutMois = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      try {
+        // Primary data: RPC stats + etab + recent missions + paliers
+        const [resEtab, resMissions, resPaliers, resDashStats, resSoignants] = await Promise.all([
+          supabase.rpc('fn_mon_etablissement_complet' as any),
+          supabase.from('missions')
+            .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
+            .eq('etablissement_id', etablissementId)
+            .order('cree_le', { ascending: false })
+            .limit(5),
+          supabase.from('paliers_commission').select('id, nom, missions_min, missions_max, ordre').eq('est_actif', true).order('ordre', { ascending: true }),
+          supabase.rpc('fn_stats_dashboard_etablissement' as any),
+          supabase.rpc('fn_mes_soignants_etablissement'),
+        ]);
 
-    try {
-      // Primary data: RPC stats + etab + recent missions + paliers
-      const [resEtab, resMissions, resPaliers, resDashStats, resSoignants] = await Promise.all([
-        supabase.rpc('fn_mon_etablissement_complet' as any),
-        supabase.from('missions')
-          .select('id, intitule, description, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique, total_brut, net_a_payer, statut, est_urgente, niveau_urgence, soignant_assigne_id, cree_le')
-          .eq('etablissement_id', etablissementId)
-          .order('cree_le', { ascending: false })
-          .limit(5),
-        supabase.from('paliers_commission').select('id, nom, missions_min, missions_max, ordre').eq('est_actif', true).order('ordre', { ascending: true }),
-        supabase.rpc('fn_stats_dashboard_etablissement' as any),
-        supabase.rpc('fn_mes_soignants_etablissement'),
-      ]);
+        if (resEtab.error) { logger.error('[DashboardEtab] Erreur établissement', resEtab.error); partialError = true; }
+        else if (resEtab.data) etabResult = resEtab.data;
 
-      if (resEtab.error) { logger.error('[DashboardEtab] Erreur établissement', resEtab.error); partialError = true; }
-      else if (resEtab.data) setEtab(resEtab.data);
-
-      // Build soignant map
-      const sgMap: Record<string, any> = {};
-      if (Array.isArray(resSoignants.data)) {
-        for (const s of resSoignants.data) sgMap[s.id] = s;
-      }
-      if (Object.keys(sgMap).length === 0 && resMissions.data) {
-        const sgIds = [...new Set((resMissions.data as any[]).map((m: any) => m.soignant_assigne_id).filter(Boolean))];
-        if (sgIds.length > 0) {
-          const { data: sgDirect } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite, numero_rpps').in('id', sgIds);
-          if (sgDirect) for (const s of sgDirect) sgMap[s.id] = s;
+        // Build soignant map
+        const sgMap: Record<string, any> = {};
+        if (Array.isArray(resSoignants.data)) {
+          for (const s of resSoignants.data) sgMap[s.id] = s;
         }
-      }
+        if (Object.keys(sgMap).length === 0 && resMissions.data) {
+          const sgIds = [...new Set((resMissions.data as any[]).map((m: any) => m.soignant_assigne_id).filter(Boolean))];
+          if (sgIds.length > 0) {
+            const { data: sgDirect } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite, numero_rpps').in('id', sgIds);
+            if (sgDirect) for (const s of sgDirect) sgMap[s.id] = s;
+          }
+        }
 
-      if (resMissions.error) { logger.error('[DashboardEtab] Erreur missions', resMissions.error); partialError = true; }
-      if (resMissions.data) {
-        setMissions(resMissions.data.map((m: any) => ({
-          ...m,
-          soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
-        })));
-        setADejaPublie(resMissions.data.length > 0);
-      }
+        if (resMissions.error) { logger.error('[DashboardEtab] Erreur missions', resMissions.error); partialError = true; }
+        if (resMissions.data) {
+          missionsResult = resMissions.data.map((m: any) => ({
+            ...m,
+            soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null,
+          }));
+          aDejaPublieResult = resMissions.data.length > 0;
+        }
 
-      if (resPaliers.data) setPaliers(resPaliers.data);
+        if (resPaliers.data) paliersResult = resPaliers.data;
 
-      // Dashboard stats RPC — single source of truth for all KPIs
-      if (resDashStats.data) {
-        const d = resDashStats.data;
-        setStats({
-          missions_ouvertes: d.missions_ouvertes ?? 0,
-          missions_assignees: d.missions_assignees ?? 0,
-          missions_en_cours: d.missions_en_cours ?? 0,
-          missions_terminees: d.missions_terminees ?? 0,
-          candidatures_en_attente: d.candidatures_en_attente ?? 0,
-          candidatures_recentes: d.candidatures_recentes ?? [],
-          missions_assignees_detail: d.missions_assignees_detail ?? [],
-          pool_urgence_count: d.pool_urgence_count ?? 0,
-          messages_non_lus: d.messages_non_lus ?? 0,
-          missions_a_payer: d.missions_a_payer ?? 0,
-          missions_terminees_ce_mois: d.missions_terminees_ce_mois ?? 0,
-          soignants_ce_mois: d.soignants_ce_mois ?? 0,
-          commissions_impayees: d.commissions_impayees ?? 0,
-          nb_factures_impayees: d.nb_factures_impayees ?? 0,
-          litiges_ouverts: d.litiges_ouverts ?? 0,
-        });
-      } else if (resDashStats.error) {
-        logger.error('[DashboardEtab] Erreur stats RPC', resDashStats.error);
+        // Dashboard stats RPC — single source of truth for all KPIs
+        if (resDashStats.data) {
+          const d = resDashStats.data;
+          statsResult = {
+            missions_ouvertes: d.missions_ouvertes ?? 0,
+            missions_assignees: d.missions_assignees ?? 0,
+            missions_en_cours: d.missions_en_cours ?? 0,
+            missions_terminees: d.missions_terminees ?? 0,
+            candidatures_en_attente: d.candidatures_en_attente ?? 0,
+            candidatures_recentes: d.candidatures_recentes ?? [],
+            missions_assignees_detail: d.missions_assignees_detail ?? [],
+            pool_urgence_count: d.pool_urgence_count ?? 0,
+            messages_non_lus: d.messages_non_lus ?? 0,
+            missions_a_payer: d.missions_a_payer ?? 0,
+            missions_terminees_ce_mois: d.missions_terminees_ce_mois ?? 0,
+            soignants_ce_mois: d.soignants_ce_mois ?? 0,
+            commissions_impayees: d.commissions_impayees ?? 0,
+            nb_factures_impayees: d.nb_factures_impayees ?? 0,
+            litiges_ouverts: d.litiges_ouverts ?? 0,
+          };
+        } else if (resDashStats.error) {
+          logger.error('[DashboardEtab] Erreur stats RPC', resDashStats.error);
+          partialError = true;
+        }
+
+        // --- Minimal secondary queries (top soignants + prochaines missions) ---
+        try {
+          const [resCout, resProchaines] = await Promise.all([
+            supabase.from('missions').select('total_brut, duree_heures, soignant_assigne_id')
+              .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
+            supabase.from('missions')
+              .select('id, intitule, debut_le, statut, soignant_assigne_id')
+              .eq('etablissement_id', etablissementId).gte('debut_le', now.toISOString())
+              .in('statut', ['OUVERTE', 'ASSIGNEE', 'EN_COURS'])
+              .order('debut_le', { ascending: true }).limit(5),
+          ]);
+
+          if (resCout.data) {
+            const counts: Record<string, number> = {};
+            for (const m of resCout.data) {
+              if (m.soignant_assigne_id) counts[m.soignant_assigne_id] = (counts[m.soignant_assigne_id] || 0) + 1;
+            }
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            const missingIds = sorted.map(([id]) => id).filter(id => !sgMap[id]);
+            if (missingIds.length > 0) {
+              const { data: sgExtra } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite').in('id', missingIds);
+              if (sgExtra) for (const s of sgExtra) sgMap[s.id] = s;
+            }
+            topSoignantsResult = sorted.map(([id, count]) => {
+              const sg = sgMap[id];
+              return { id, prenom: sg?.prenom || 'Soignant', nom: sg?.nom || '', score_fiabilite: sg?.score_fiabilite ?? 0, count };
+            });
+          }
+
+          if (resProchaines.data) {
+            prochainesResult = resProchaines.data.map((m: any) => ({
+              ...m,
+              soignant_nom: m.soignant_assigne_id && sgMap[m.soignant_assigne_id]
+                ? `${sgMap[m.soignant_assigne_id].prenom} ${sgMap[m.soignant_assigne_id].nom}`
+                : null,
+            }));
+          }
+        } catch (err) {
+          logger.warn('[DashboardEtab] Erreur secondaire (top soignants / prochaines)', err);
+        }
+
+      } catch (err) {
+        handleErrorSilent(err, '[DashboardEtab] Erreur critique');
         partialError = true;
       }
 
-      // --- HR QUERIES (non-blocking) ---
-      // --- Minimal secondary queries (top soignants + prochaines missions) ---
+      // Audit HDS
       try {
-        const [resCout, resProchaines] = await Promise.all([
-          supabase.from('missions').select('total_brut, duree_heures, soignant_assigne_id')
-            .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
-          supabase.from('missions')
-            .select('id, intitule, debut_le, statut, soignant_assigne_id')
-            .eq('etablissement_id', etablissementId).gte('debut_le', now.toISOString())
-            .in('statut', ['OUVERTE', 'ASSIGNEE', 'EN_COURS'])
-            .order('debut_le', { ascending: true }).limit(5),
-        ]);
-
-        if (resCout.data) {
-          const counts: Record<string, number> = {};
-          for (const m of resCout.data) {
-            if (m.soignant_assigne_id) counts[m.soignant_assigne_id] = (counts[m.soignant_assigne_id] || 0) + 1;
-          }
-          const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
-          const missingIds = sorted.map(([id]) => id).filter(id => !sgMap[id]);
-          if (missingIds.length > 0) {
-            const { data: sgExtra } = await supabase.from('soignants').select('id, prenom, nom, profession, score_fiabilite').in('id', missingIds);
-            if (sgExtra) for (const s of sgExtra) sgMap[s.id] = s;
-          }
-          setTopSoignants(sorted.map(([id, count]) => {
-            const sg = sgMap[id];
-            return { id, prenom: sg?.prenom || 'Soignant', nom: sg?.nom || '', score_fiabilite: sg?.score_fiabilite ?? 0, count };
-          }));
-        }
-
-        if (resProchaines.data) {
-          setProchaines(resProchaines.data.map((m: any) => ({
-            ...m,
-            soignant_nom: m.soignant_assigne_id && sgMap[m.soignant_assigne_id]
-              ? `${sgMap[m.soignant_assigne_id].prenom} ${sgMap[m.soignant_assigne_id].nom}`
-              : null,
-          })));
-        }
+        await supabase.rpc('fn_ecrire_audit_safe', {
+          p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'DONNEES_PERSO_CONSULTATION',
+          p_type_ressource: 'etablissement', p_id_ressource: user!.id, p_cle_s3: null,
+          p_details: { page: 'dashboard_etablissement' }, p_ip: null, p_navigateur: navigator.userAgent,
+        });
       } catch (err) {
-        logger.warn('[DashboardEtab] Erreur secondaire (top soignants / prochaines)', err);
+        logger.warn('[DashboardEtab] Erreur audit HDS', err);
       }
 
-    } catch (err) {
-      handleErrorSilent(err, '[DashboardEtab] Erreur critique');
-      partialError = true;
-    }
+      return {
+        etab: etabResult,
+        missions: missionsResult,
+        aDejaPublie: aDejaPublieResult,
+        paliers: paliersResult,
+        stats: statsResult,
+        topSoignants: topSoignantsResult,
+        prochaines: prochainesResult,
+        erreurPartielle: partialError,
+      };
+    },
+    staleTime: 60_000,
+    enabled: !!user && !!etablissementId,
+  });
 
-    // Audit HDS
-    try {
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user.id, p_type_acteur: 'ADMIN_ETABLISSEMENT', p_action: 'DONNEES_PERSO_CONSULTATION',
-        p_type_ressource: 'etablissement', p_id_ressource: user.id, p_cle_s3: null,
-        p_details: { page: 'dashboard_etablissement' }, p_ip: null, p_navigateur: navigator.userAgent,
-      });
-    } catch (err) {
-      logger.warn('[DashboardEtab] Erreur audit HDS', err);
-    }
+  const etab = useMemo(() => dashData?.etab ?? null, [dashData]);
+  const missions = useMemo(() => dashData?.missions ?? [], [dashData]);
+  const aDejaPublie = useMemo(() => dashData?.aDejaPublie ?? null, [dashData]);
+  const paliers = useMemo(() => dashData?.paliers ?? [], [dashData]);
+  const stats = useMemo<DashboardStats>(() => dashData?.stats ?? {
+    missions_ouvertes: 0, missions_assignees: 0, missions_en_cours: 0, missions_terminees: 0,
+    candidatures_en_attente: 0, candidatures_recentes: [], missions_assignees_detail: [],
+    pool_urgence_count: 0, messages_non_lus: 0, missions_a_payer: 0,
+    missions_terminees_ce_mois: 0, soignants_ce_mois: 0, commissions_impayees: 0,
+    nb_factures_impayees: 0, litiges_ouverts: 0,
+  }, [dashData]);
+  const topSoignants = useMemo(() => dashData?.topSoignants ?? [], [dashData]);
+  const prochaines = useMemo(() => dashData?.prochaines ?? [], [dashData]);
+  const erreurPartielle = useMemo(() => dashData?.erreurPartielle ?? false, [dashData]);
 
-    setErreurPartielle(partialError);
-    setLoading(false);
-  };
-
-  useEffect(() => { charger(); }, [user, etablissementId]);
+  const queryClient = useQueryClient();
 
   const handleAnnuler = async (mission: Record<string, unknown>) => {
     const { data, error } = await supabase.rpc('fn_annuler_mission_etablissement' as any, { p_mission_id: mission.id });
     const result = data as unknown as { success?: boolean; error?: string } | null;
     if (error) afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
     else if (result?.success === false) afficherNotification({ type: 'erreur', message: result.error || 'Erreur' });
-    else { afficherNotification({ type: 'succes', message: 'Mission annulée.' }); charger(); }
+    else { afficherNotification({ type: 'succes', message: 'Mission annulée.' }); queryClient.invalidateQueries({ queryKey: ['dashboard-etablissement'] }); }
   };
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;

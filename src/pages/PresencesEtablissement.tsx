@@ -105,10 +105,17 @@ export default function PresencesEtablissement() {
   );
 
   const validerUne = async (presenceId: string) => {
+    // Optimistic: immediately move presence to "validées"
+    const prevPresences = presences;
+    setPresences(prev =>
+      prev.map(p => p.id === presenceId ? { ...p, valide_par_etablissement: true, valide_le: new Date().toISOString() } : p)
+    );
+
     const { data, error } = await supabase.rpc('fn_valider_presence', { p_presence_id: presenceId });
     const result = data as unknown as RpcSuccessOrError | null;
 
     if (error || (result && !result.success)) {
+      setPresences(prevPresences); // Revert on error
       afficherNotification({ type: 'erreur', message: result?.error || extraireMessageErreur(error) });
     } else {
       await supabase.rpc('fn_ecrire_audit_safe', {
@@ -119,7 +126,7 @@ export default function PresencesEtablissement() {
         p_ip: null, p_navigateur: navigator.userAgent,
       });
       afficherNotification({ type: 'succes', message: '✅ Présence validée !' });
-      charger();
+      charger(); // Refresh from server to ensure consistency
     }
   };
 

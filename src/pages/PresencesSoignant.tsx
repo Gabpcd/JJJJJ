@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -30,13 +31,7 @@ export default function PresencesSoignant() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
-  const [missions, setMissions] = useState<any[]>([]);
-  const [missionsAVenir, setMissionsAVenir] = useState<any[]>([]);
-  const [missionsEnCours, setMissionsEnCours] = useState<any[]>([]);
-  const [presencesValidees, setPresencesValidees] = useState<any[]>([]);
-  const [historiquePresences, setHistoriquePresences] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [contrats, setContrats] = useState<Record<string, any>>({});
+  const queryClient = useQueryClient();
 
   // GPS consent state
   const [consentementGPS, setConsentementGPS] = useState<boolean | null>(null);
@@ -92,140 +87,155 @@ export default function PresencesSoignant() {
     afficherNotification({ type: 'info', message: 'Pointage sans GPS activé. Vérification manuelle requise.' });
   };
 
-  const charger = useCallback(async () => {
-    if (!user) return;
-    const aujourdhui = new Date();
-    aujourdhui.setHours(0, 0, 0, 0);
-    const demain = new Date(aujourdhui);
-    demain.setDate(demain.getDate() + 1);
+  const { data: presencesData, isLoading: loading } = useQuery({
+    queryKey: ['presences-soignant', user?.id],
+    queryFn: async () => {
+      const aujourdhui = new Date();
+      aujourdhui.setHours(0, 0, 0, 0);
+      const demain = new Date(aujourdhui);
+      demain.setDate(demain.getDate() + 1);
 
-    const { data } = await supabase
-      .from('missions')
-      .select(`
-        id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id,
-        presences(id, pointage_arrivee_le, pointage_depart_le,
-          perimetre_gps_valide, alerte_teleportation, distance_etablissement_m,
-          arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le,
-          methode_pointage_arrivee, methode_pointage_depart)
-      `)
-      .eq('soignant_assigne_id', user.id)
-      .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
-      .gte('debut_le', aujourdhui.toISOString())
-      .lt('debut_le', demain.toISOString())
-      .order('debut_le', { ascending: true });
+      const { data } = await supabase
+        .from('missions')
+        .select(`
+          id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id,
+          presences(id, pointage_arrivee_le, pointage_depart_le,
+            perimetre_gps_valide, alerte_teleportation, distance_etablissement_m,
+            arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le,
+            methode_pointage_arrivee, methode_pointage_depart)
+        `)
+        .eq('soignant_assigne_id', user!.id)
+        .in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE'])
+        .gte('debut_le', aujourdhui.toISOString())
+        .lt('debut_le', demain.toISOString())
+        .order('debut_le', { ascending: true });
 
-    let missionsList = data || [];
-    if (missionsList.length > 0) {
-      const etabMap = await fetchEtablissementsSafe(missionsList.map((m: any) => m.etablissement_id));
-      missionsList = missionsList.map((m: any) => ({ ...m, etablissements: etabMap[m.etablissement_id] || null }));
-    }
-    setMissions(missionsList);
+      let missionsList = data || [];
+      if (missionsList.length > 0) {
+        const etabMap = await fetchEtablissementsSafe(missionsList.map((m: any) => m.etablissement_id));
+        missionsList = missionsList.map((m: any) => ({ ...m, etablissements: etabMap[m.etablissement_id] || null }));
+      }
 
-    // Missions à venir (ASSIGNEE, après aujourd'hui)
-    const { data: aVenirData } = await supabase
-      .from('missions')
-      .select('id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id')
-      .eq('soignant_assigne_id', user.id)
-      .in('statut', ['ASSIGNEE', 'EN_COURS'])
-      .gte('debut_le', demain.toISOString())
-      .order('debut_le', { ascending: true })
-      .limit(20);
+      // Missions à venir (ASSIGNEE, après aujourd'hui)
+      const { data: aVenirData } = await supabase
+        .from('missions')
+        .select('id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id')
+        .eq('soignant_assigne_id', user!.id)
+        .in('statut', ['ASSIGNEE', 'EN_COURS'])
+        .gte('debut_le', demain.toISOString())
+        .order('debut_le', { ascending: true })
+        .limit(20);
 
-    let aVenirList = aVenirData || [];
-    if (aVenirList.length > 0) {
-      const etabMapAV = await fetchEtablissementsSafe(aVenirList.map((m: any) => m.etablissement_id));
-      aVenirList = aVenirList.map((m: any) => ({ ...m, etablissements: etabMapAV[m.etablissement_id] || null }));
-    }
-    setMissionsAVenir(aVenirList);
+      let aVenirList = aVenirData || [];
+      if (aVenirList.length > 0) {
+        const etabMapAV = await fetchEtablissementsSafe(aVenirList.map((m: any) => m.etablissement_id));
+        aVenirList = aVenirList.map((m: any) => ({ ...m, etablissements: etabMapAV[m.etablissement_id] || null }));
+      }
 
-    // Missions EN_COURS avec arrivée pointée mais pas de départ
-    const { data: enCoursData } = await supabase
-      .from('missions')
-      .select(`
-        id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id,
-        presences(id, pointage_arrivee_le, pointage_depart_le,
-          perimetre_gps_valide, alerte_teleportation, distance_etablissement_m,
-          arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le,
-          methode_pointage_arrivee, methode_pointage_depart)
-      `)
-      .eq('soignant_assigne_id', user.id)
-      .eq('statut', 'EN_COURS')
-      .order('debut_le', { ascending: false });
+      // Missions EN_COURS avec arrivée pointée mais pas de départ
+      const { data: enCoursData } = await supabase
+        .from('missions')
+        .select(`
+          id, intitule, service, debut_le, fin_le, duree_heures, statut, etablissement_id,
+          presences(id, pointage_arrivee_le, pointage_depart_le,
+            perimetre_gps_valide, alerte_teleportation, distance_etablissement_m,
+            arrivee_precision_gps_m, depart_precision_gps_m, valide_par_etablissement, valide_le,
+            methode_pointage_arrivee, methode_pointage_depart)
+        `)
+        .eq('soignant_assigne_id', user!.id)
+        .eq('statut', 'EN_COURS')
+        .order('debut_le', { ascending: false });
 
-    let enCoursList = (enCoursData || []).filter((m: any) => {
-      const p = m.presences?.[0];
-      return p?.pointage_arrivee_le && !p?.pointage_depart_le;
-    });
-    if (enCoursList.length > 0) {
-      const etabMapEC = await fetchEtablissementsSafe(enCoursList.map((m: any) => m.etablissement_id));
-      enCoursList = enCoursList.map((m: any) => ({ ...m, etablissements: etabMapEC[m.etablissement_id] || null }));
-    }
-    setMissionsEnCours(enCoursList);
+      let enCoursList = (enCoursData || []).filter((m: any) => {
+        const p = m.presences?.[0];
+        return p?.pointage_arrivee_le && !p?.pointage_depart_le;
+      });
+      if (enCoursList.length > 0) {
+        const etabMapEC = await fetchEtablissementsSafe(enCoursList.map((m: any) => m.etablissement_id));
+        enCoursList = enCoursList.map((m: any) => ({ ...m, etablissements: etabMapEC[m.etablissement_id] || null }));
+      }
 
-    if (missionsList.length > 0) {
-      const missionIds = missionsList.map((m: any) => m.id);
-      const { data: contratsData } = await supabase
-        .from('contrats_mission')
-        .select('id, mission_id, statut')
-        .in('mission_id', missionIds);
-      const map: Record<string, any> = {};
-      (contratsData || []).forEach((c: any) => { map[c.mission_id] = c; });
-      setContrats(map);
-    }
+      let contratsMap: Record<string, any> = {};
+      if (missionsList.length > 0) {
+        const missionIds = missionsList.map((m: any) => m.id);
+        const { data: contratsData } = await supabase
+          .from('contrats_mission')
+          .select('id, mission_id, statut')
+          .in('mission_id', missionIds);
+        (contratsData || []).forEach((c: any) => { contratsMap[c.mission_id] = c; });
+      }
 
-    const il7jours = new Date();
-    il7jours.setDate(il7jours.getDate() - 7);
-    const { data: validees } = await supabase
-      .from('presences')
-      .select(`
-        id, mission_id, soignant_id, pointage_arrivee_le, pointage_depart_le,
-        valide_par_etablissement, valide_le,
-        methode_pointage_arrivee, methode_pointage_depart,
-        missions!inner(id, intitule, etablissement_id, debut_le, fin_le)
-      `)
-      .eq('soignant_id', user!.id)
-      .eq('valide_par_etablissement', true)
-      .gte('valide_le', il7jours.toISOString())
-      .order('valide_le', { ascending: false });
+      const il7jours = new Date();
+      il7jours.setDate(il7jours.getDate() - 7);
+      const { data: validees } = await supabase
+        .from('presences')
+        .select(`
+          id, mission_id, soignant_id, pointage_arrivee_le, pointage_depart_le,
+          valide_par_etablissement, valide_le,
+          methode_pointage_arrivee, methode_pointage_depart,
+          missions!inner(id, intitule, etablissement_id, debut_le, fin_le)
+        `)
+        .eq('soignant_id', user!.id)
+        .eq('valide_par_etablissement', true)
+        .gte('valide_le', il7jours.toISOString())
+        .order('valide_le', { ascending: false });
 
-    let presencesList = validees || [];
-    if (presencesList.length > 0) {
-      const etabIds = presencesList.map((p: any) => p.missions?.etablissement_id).filter(Boolean);
-      const etabMap = await fetchEtablissementsSafe(etabIds);
-      presencesList = presencesList.map((p: any) => ({
-        ...p,
-        missions: { ...p.missions, etablissements: etabMap[p.missions?.etablissement_id] || null },
-      }));
-    }
-    setPresencesValidees(presencesList);
+      let presencesList = validees || [];
+      if (presencesList.length > 0) {
+        const etabIds = presencesList.map((p: any) => p.missions?.etablissement_id).filter(Boolean);
+        const etabMap = await fetchEtablissementsSafe(etabIds);
+        presencesList = presencesList.map((p: any) => ({
+          ...p,
+          missions: { ...p.missions, etablissements: etabMap[p.missions?.etablissement_id] || null },
+        }));
+      }
 
-    // Load full historique — show all presences regardless of mission status
-    const { data: allPresences } = await supabase
-      .from('presences')
-      .select(`
-        id, mission_id, soignant_id, pointage_arrivee_le, pointage_depart_le,
-        valide_par_etablissement, valide_le,
-        methode_pointage_arrivee, methode_pointage_depart,
-        missions(id, intitule, etablissement_id, debut_le, fin_le, statut)
-      `)
-      .eq('soignant_id', user!.id)
-      .order('cree_le', { ascending: false })
-      .limit(100);
+      // Load full historique — show all presences regardless of mission status
+      const { data: allPresences } = await supabase
+        .from('presences')
+        .select(`
+          id, mission_id, soignant_id, pointage_arrivee_le, pointage_depart_le,
+          valide_par_etablissement, valide_le,
+          methode_pointage_arrivee, methode_pointage_depart,
+          missions(id, intitule, etablissement_id, debut_le, fin_le, statut)
+        `)
+        .eq('soignant_id', user!.id)
+        .order('cree_le', { ascending: false })
+        .limit(100);
 
-    let allList = allPresences || [];
-    if (allList.length > 0) {
-      const etabIds2 = allList.map((p: any) => p.missions?.etablissement_id).filter(Boolean);
-      const etabMap2 = await fetchEtablissementsSafe(etabIds2);
-      allList = allList.map((p: any) => ({
-        ...p,
-        missions: { ...p.missions, etablissements: etabMap2[p.missions?.etablissement_id] || null },
-      }));
-    }
-    setHistoriquePresences(allList);
-    setLoading(false);
-  }, [user]);
+      let allList = allPresences || [];
+      if (allList.length > 0) {
+        const etabIds2 = allList.map((p: any) => p.missions?.etablissement_id).filter(Boolean);
+        const etabMap2 = await fetchEtablissementsSafe(etabIds2);
+        allList = allList.map((p: any) => ({
+          ...p,
+          missions: { ...p.missions, etablissements: etabMap2[p.missions?.etablissement_id] || null },
+        }));
+      }
 
-  useEffect(() => { charger(); }, [charger]);
+      return {
+        missions: missionsList,
+        missionsAVenir: aVenirList,
+        missionsEnCours: enCoursList,
+        contrats: contratsMap,
+        presencesValidees: presencesList,
+        historiquePresences: allList,
+      };
+    },
+    staleTime: 60_000,
+    enabled: !!user,
+  });
+
+  const missions = useMemo(() => presencesData?.missions ?? [], [presencesData]);
+  const missionsAVenir = useMemo(() => presencesData?.missionsAVenir ?? [], [presencesData]);
+  const missionsEnCours = useMemo(() => presencesData?.missionsEnCours ?? [], [presencesData]);
+  const contrats = useMemo(() => presencesData?.contrats ?? {}, [presencesData]);
+  const presencesValidees = useMemo(() => presencesData?.presencesValidees ?? [], [presencesData]);
+  const historiquePresences = useMemo(() => presencesData?.historiquePresences ?? [], [presencesData]);
+
+  const charger = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['presences-soignant'] });
+  }, [queryClient]);
 
   const obtenirPosition = async (): Promise<GeolocationPosition> => {
     return new Promise((resolve, reject) => {

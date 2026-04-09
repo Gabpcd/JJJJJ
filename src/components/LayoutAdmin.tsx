@@ -24,6 +24,7 @@ const NAV_ADMIN = [
   { icone: TrendingUp, label: 'Cohort & Economics', route: '/admin/cohort' },
   { icone: Shield, label: 'Audit Logs', route: '/admin/audit' },
   { icone: FileCheck, label: 'DPIA', route: '/admin/dpia' },
+  { icone: HeartPulse, label: 'Healthcheck', route: '/admin/healthcheck' },
   { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
   { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie' },
 ];

@@ -171,19 +171,22 @@ export default function DetailMissionSoignant() {
 
   const postulerMission = async (choixContrat?: string) => {
     setPostulationEnCours(true);
+    setCandidatureEnvoyee(true); // Optimistic: show success immediately
     try {
       const params: any = { p_mission_id: id!, p_message: messageCandidature || null };
       if (choixContrat) params.p_choix_contrat = choixContrat;
       const { data, error } = await supabase.rpc('fn_postuler_mission' as any, params);
-      if (error) { toast.error(extraireMessageErreur(error)); return; }
+      if (error) { setCandidatureEnvoyee(false); toast.error(extraireMessageErreur(error)); return; }
       if (data?.choix_requis) {
+        setCandidatureEnvoyee(false); // Revert — need user choice first
         setChoixContratDialog({ open: true, options: data.options || [], action: 'postuler' });
         return;
       }
-      if (data?.error) { toast.error(data.error); return; }
-      setCandidatureEnvoyee(true);
+      if (data?.error) { setCandidatureEnvoyee(false); toast.error(data.error); return; }
+      // Success — keep optimistic state
       toast.success('Candidature envoyée ! L\'établissement examinera votre profil.');
     } catch (err: any) {
+      setCandidatureEnvoyee(false); // Revert on error
       capturerErreurSentry(err, 'DetailMissionSoignant', 'candidature');
       toast.error(extraireMessageErreur(err));
     }
