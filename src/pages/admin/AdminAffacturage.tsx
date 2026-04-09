@@ -43,7 +43,8 @@ export default function AdminAffacturage() {
       if (sRes.data) setStats(sRes.data);
       if (aRes.data) setAdvances(aRes.data);
       setLoading(false);
-    });
+    })
+      .catch(() => {});
   }, []);
 
   const filtered = filtre === 'TOUS' ? advances : advances.filter(a => a.statut === filtre);

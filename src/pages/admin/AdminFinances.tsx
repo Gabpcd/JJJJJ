@@ -43,7 +43,8 @@ export default function AdminFinances() {
       setFactures(fRes.data || []);
       setMissions(mRes.data || []);
       setLoading(false);
-    });
+    })
+      .catch(() => {});
   }, []);
 
   const now = new Date();

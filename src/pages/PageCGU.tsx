@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React from 'react';
 import LayoutLegal from '@/components/LayoutLegal';
 
@@ -14,6 +15,7 @@ const TOC = [
 ];
 
 export default function PageCGU() {
+  usePageTitle('CGU');
   return (
     <LayoutLegal
       titre="Conditions Générales d'Utilisation"

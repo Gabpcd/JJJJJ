@@ -34,7 +34,8 @@ export default function AdminMandatsFacturation() {
       if (sRes.data) setStats(sRes.data);
       if (uRes.data) setSoignants(uRes.data);
       setLoading(false);
-    });
+    })
+      .catch(() => {});
   }, []);
 
   const filteredSoignants = soignants.filter((s) => {

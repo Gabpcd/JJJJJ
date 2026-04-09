@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
@@ -37,6 +38,7 @@ interface SiretInseeResult {
 }
 
 export default function InscriptionEtablissement() {
+  usePageTitle('Inscription Établissement');
   const navigate = useNavigate();
   const { inscriptionEtablissement } = useAuth();
   const { afficherNotification } = useNotification();

@@ -49,7 +49,8 @@ export default function PresencesSoignant() {
     supabase.from('soignants').select('consentement_gps').eq('id', user.id).single().then(({ data }) => {
       setConsentementGPS(data?.consentement_gps ?? null);
       setConsentementCharge(true);
-    });
+    })
+      .catch(() => {});
   }, [user]);
 
   const handleAccepterGPS = async () => {

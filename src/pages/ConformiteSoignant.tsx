@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -12,6 +13,7 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 
 export default function ConformiteSoignant() {
+  usePageTitle('Conformité');
   const { user } = useAuth();
   const [controles, setControles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

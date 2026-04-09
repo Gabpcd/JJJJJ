@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart3, Users, TrendingUp, Download, Loader2, Target, Coins, Calendar, Briefcase, CheckCircle } from 'lucide-react';
@@ -19,6 +20,7 @@ const COUT_MOYEN_SECTEUR = 28;
 const fmtEur = (v: number, decimals = 0) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: decimals }).format(v);
 
 export default function DashboardRH() {
+  usePageTitle('Tableau RH');
   const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();

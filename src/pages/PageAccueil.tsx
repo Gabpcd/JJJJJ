@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
@@ -230,6 +231,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
 }
 
 export default function PageAccueil() {
+  usePageTitle('Jolene');
   const navigate = useNavigate();
   const [heroVisible, setHeroVisible] = useState(false);
 

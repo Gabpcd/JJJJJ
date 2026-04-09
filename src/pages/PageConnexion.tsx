@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Mail, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
@@ -20,6 +21,7 @@ import { hapticNotification } from '@/lib/haptics';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 
 export default function PageConnexion() {
+  usePageTitle('Connexion');
   const navigate = useNavigate();
   const { connexion, loading } = useAuth();
   const { afficherNotification } = useNotification();
@@ -34,7 +36,8 @@ export default function PageConnexion() {
     if (isNative()) {
       isBiometricAvailable().then((ok) => {
         setBioAvailable(ok && isBiometricEnabled());
-      });
+      })
+      .catch(() => {});
     }
   }, []);
 

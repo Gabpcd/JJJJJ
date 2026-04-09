@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { Building2, Mail } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -9,6 +10,7 @@ import { getLabelTypeEtablissement } from '@/lib/constantes';
 import { toast } from 'sonner';
 
 export default function MonGroupe() {
+  usePageTitle('Mon Groupe');
   const { user } = useAuth();
   const [etab, setEtab] = useState<any>(null);
   const [groupe, setGroupe] = useState<any>(null);

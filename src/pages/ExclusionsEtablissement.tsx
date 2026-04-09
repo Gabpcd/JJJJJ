@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -12,6 +13,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 export default function ExclusionsEtablissement() {
+  usePageTitle('Exclusions');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [exclusions, setExclusions] = useState<any[]>([]);

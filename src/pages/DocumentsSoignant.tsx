@@ -34,7 +34,8 @@ function AttestationSante({ userId }: { userId: string }) {
           setCheckVaccin(true);
           setCheckMedecine(true);
         }
-      });
+      })
+      .catch(() => {});
   }, [userId]);
 
   const signer = async () => {

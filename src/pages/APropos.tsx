@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
@@ -13,6 +14,7 @@ const chiffres = [
 ];
 
 export default function APropos() {
+  usePageTitle('À propos');
   const navigate = useNavigate();
 
   return (

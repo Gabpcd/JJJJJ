@@ -133,7 +133,8 @@ export default function DetailMissionSoignant() {
       .gt('fin_le', mission.debut_le)
       .then(({ data }) => {
         setChevauchement((data || []).length > 0);
-      });
+      })
+      .catch(() => {});
   }, [mission, user]);
 
   // Fetch average rating for the establishment
@@ -143,7 +144,8 @@ export default function DetailMissionSoignant() {
       .then(({ data }: any) => {
         if (data && typeof data === 'object') setNoteMoyenne(data);
         else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
-      });
+      })
+      .catch(() => {});
   }, [mission?.etablissement_id]);
 
   if (loading || !mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;

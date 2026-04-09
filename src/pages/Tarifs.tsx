@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useEffect, useState } from 'react';
 import { SEOHead } from '@/components/SEOHead';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +8,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Tarifs() {
+  usePageTitle('Tarifs');
   const navigate = useNavigate();
   const [paliers, setPaliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

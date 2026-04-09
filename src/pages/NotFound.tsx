@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link } from "react-router-dom";
 import { HeartPulse, Home } from "lucide-react";
 

@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React from 'react';
 import LayoutLegal from '@/components/LayoutLegal';
 import { ENTREPRISE } from '@/constantes/entreprise';
@@ -12,6 +13,7 @@ const TOC = [
 ];
 
 export default function PageConfidentialite() {
+  usePageTitle('Confidentialité');
   return (
     <LayoutLegal
       titre="Politique de Confidentialité"

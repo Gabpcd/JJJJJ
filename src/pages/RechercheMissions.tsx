@@ -98,7 +98,8 @@ export default function RechercheMissions() {
           setProfession(s.profession);
           setRayonKm(s.rayon_deplacement_km || 50);
         }
-      });
+      })
+      .catch(() => {});
 
     // Vérifier si la RCP est expirée
     supabase.from('documents_soignants')

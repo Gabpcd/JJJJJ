@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { Briefcase, PlayCircle, CheckCircle, Building2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -9,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
 
 export default function DashboardGroupe() {
+  usePageTitle('Dashboard Groupe');
   const { user } = useAuth();
   const [etabSelectionne, setEtabSelectionne] = useState('tous');
   const [etablissements, setEtablissements] = useState<any[]>([]);

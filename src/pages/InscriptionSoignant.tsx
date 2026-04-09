@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
@@ -83,6 +84,7 @@ function ExerciceTypeSection({ profession, estSalarieEtablissement, onChangeSala
 }
 
 export default function InscriptionSoignant() {
+  usePageTitle('Inscription Soignant');
   const navigate = useNavigate();
   const { inscriptionSoignant } = useAuth();
   const { afficherNotification } = useNotification();

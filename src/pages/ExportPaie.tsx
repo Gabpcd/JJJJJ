@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileSpreadsheet, Download, Loader2 } from 'lucide-react';
@@ -82,6 +83,7 @@ function fmt(v: number) {
 }
 
 export default function ExportPaie() {
+  usePageTitle('Export Paie');
   const navigate = useNavigate();
   const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
