@@ -430,7 +430,9 @@ export default function ProfilEtablissement() {
               { value: 'STRIPE_RESERVATION', icon: '💳', label: 'Carte bancaire', desc: 'Commission prélevée à chaque mission (autorisée à la réservation, capturée à la fin)' },
               { value: 'SEPA_DEBIT', icon: '🏦', label: 'Prélèvement SEPA (recommandé)', desc: '', isSEPA: true },
               { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle', desc: 'Paiement à 30 jours par virement ou carte' },
-              { value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' },
+              ...(['HOPITAL_PUBLIC', 'CHU', 'CENTRE_SANTE', 'HAD'].includes(type)
+                ? [{ value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' }]
+                : []),
             ].map(opt => (
               <label
                 key={opt.value}
