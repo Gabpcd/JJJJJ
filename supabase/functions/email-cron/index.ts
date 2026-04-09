@@ -27,6 +27,28 @@ serve(async (req) => {
     results.purge_gps = v4 || 0;
     const { data: v5 } = await sb.rpc("fn_nettoyer_tokens_push");
     results.tokens_push = v5 || 0;
+
+    // Traiter la queue d'emails (notifications automatiques des triggers DB)
+    let emailQueueCount = 0;
+    const { data: pendingEmails } = await sb.from('email_queue').select('*').eq('envoye', false).order('cree_le').limit(50);
+    for (const email of (pendingEmails || [])) {
+      try {
+        await sb.functions.invoke('send-email', {
+          body: {
+            type: email.type,
+            destinataire_id: email.destinataire_id,
+            destinataire_email: email.destinataire_email,
+            data: email.data,
+          },
+        });
+        await sb.from('email_queue').update({ envoye: true, envoye_le: new Date().toISOString() }).eq('id', email.id);
+        emailQueueCount++;
+      } catch (err: any) {
+        await sb.from('email_queue').update({ erreur: err?.message || 'Erreur envoi' }).eq('id', email.id);
+      }
+    }
+    results.email_queue = emailQueueCount;
+
     return new Response(JSON.stringify({ success: true, results }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": (Deno.env.get("APP_URL") || "https://app.jolene.app") } });
   } catch (err) {
     console.error("email-cron error:", err);
