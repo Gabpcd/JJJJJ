@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -6,7 +6,9 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
-import { GraphiqueGains6Mois } from '@/components/GraphiqueGains6Mois';
+const GraphiqueGains6Mois = lazy(() =>
+  import('@/components/GraphiqueGains6Mois').then(m => ({ default: m.GraphiqueGains6Mois }))
+);
 import { ModalAttestation } from '@/components/ModalAttestation';
 import { ModalCotisations } from '@/components/ModalCotisations';
 import { useAuth } from '@/contexts/AuthContext';
@@ -143,7 +145,9 @@ export default function MesGains() {
       </div>
 
       {/* Graphique 6 mois */}
-      <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: netEstime(m) }))} />
+      <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
+        <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: netEstime(m) }))} />
+      </Suspense>
 
       {/* Filtre + Actions */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">

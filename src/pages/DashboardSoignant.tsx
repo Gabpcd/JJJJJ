@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
@@ -24,7 +24,9 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
-import { GraphiqueGains6Mois } from '@/components/GraphiqueGains6Mois';
+const GraphiqueGains6Mois = lazy(() =>
+  import('@/components/GraphiqueGains6Mois').then(m => ({ default: m.GraphiqueGains6Mois }))
+);
 import { ProgressionCirculaire3200h } from '@/components/ProgressionCirculaire3200h';
 import { ProchainBadgeWidget } from '@/components/ProchainBadgeWidget';
 import { CalendrierMiniSemaine } from '@/components/CalendrierMiniSemaine';
@@ -559,7 +561,9 @@ export default function DashboardSoignant() {
           {/* Graphique gains 6 mois */}
           <FadeInView>
             {gains6Mois.length > 0 ? (
-              <GraphiqueGains6Mois missions={gains6Mois} />
+              <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
+                <GraphiqueGains6Mois missions={gains6Mois} />
+              </Suspense>
             ) : (
               <div className="mb-6">
                 <EtatVide illustration={<IllustrationTirelire />} titre="Pas encore de gains" sousTitre="Vos gains apparaîtront ici après votre première mission terminée." />

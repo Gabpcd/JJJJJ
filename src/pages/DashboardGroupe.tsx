@@ -72,26 +72,30 @@ export default function DashboardGroupe() {
       ]);
       setKpi({ ouvertes: o ?? 0, enCours: ec ?? 0, terminees: t ?? 0, actifs: etabsFiltres.length });
 
-      // Performance par établissement
-      const perfs = await Promise.all(
-        etabsFiltres.map(async (e) => {
-          const [{ count: ouv }, { count: ass }, { count: term }, { count: tot }] = await Promise.all([
-            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'OUVERTE'),
-            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'ASSIGNEE'),
-            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id).eq('statut', 'TERMINEE'),
-            supabase.from('missions').select('id', { count: 'exact', head: true }).eq('etablissement_id', e.id),
-          ]);
-          const totalN = tot ?? 0;
-          const assigned = (ass ?? 0) + (term ?? 0);
-          return {
-            ...e,
-            ouvertes: ouv ?? 0,
-            assignees: ass ?? 0,
-            terminees: term ?? 0,
-            taux: totalN > 0 ? Math.round((assigned / totalN) * 100) : 0,
-          };
-        })
-      );
+      // Performance par établissement — batch query (1 query instead of 4N)
+      const { data: allMissions } = await supabase
+        .from('missions')
+        .select('etablissement_id, statut')
+        .in('etablissement_id', etabIds);
+      const missionsByEtab: Record<string, any[]> = {};
+      for (const m of allMissions || []) {
+        (missionsByEtab[m.etablissement_id] ??= []).push(m);
+      }
+      const perfs = etabsFiltres.map((e) => {
+        const ms = missionsByEtab[e.id] || [];
+        const ouv = ms.filter(m => m.statut === 'OUVERTE').length;
+        const ass = ms.filter(m => m.statut === 'ASSIGNEE').length;
+        const term = ms.filter(m => m.statut === 'TERMINEE').length;
+        const totalN = ms.length;
+        const assigned = ass + term;
+        return {
+          ...e,
+          ouvertes: ouv,
+          assignees: ass,
+          terminees: term,
+          taux: totalN > 0 ? Math.round((assigned / totalN) * 100) : 0,
+        };
+      });
       setPerfParEtab(perfs);
     };
     loadKpi();

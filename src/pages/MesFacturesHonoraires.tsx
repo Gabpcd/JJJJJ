@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import jsPDF from 'jspdf';
+import type jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { MANDAT_FACTURATION_VERSION } from '@/constantes/mandatFacturation';
 import { ModalCessionCreance } from '@/components/ModalCessionCreance';
@@ -77,6 +77,7 @@ export default function MesFacturesHonoraires() {
         f.mission_id ? supabase.from('missions').select('intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base').eq('id', f.mission_id).maybeSingle() : Promise.resolve({ data: null }),
       ]);
 
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF();
       const TEAL = { r: 23, g: 162, b: 184 };
 

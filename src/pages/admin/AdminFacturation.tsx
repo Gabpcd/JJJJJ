@@ -13,7 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import jsPDF from 'jspdf';
+import type jsPDF from 'jspdf';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -142,7 +142,8 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
 // Jolene brand teal — used in PDF generation where CSS vars are unavailable
 const PDF_BRAND_COLOR = { r: 23, g: 162, b: 184 } as const;
 
-function genererFacturePDF(facture: any) {
+async function genererFacturePDF(facture: any) {
+  const { default: jsPDF } = await import('jspdf');
   const doc = new jsPDF();
   const etab = (facture.etablissements as any)?.nom ?? 'Établissement';
 
@@ -287,6 +288,7 @@ export default function AdminFacturation() {
   };
 
   const genererRapportPDF = async () => {
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     doc.setFillColor(PDF_BRAND_COLOR.r, PDF_BRAND_COLOR.g, PDF_BRAND_COLOR.b);
     doc.rect(0, 0, 210, 30, 'F');
@@ -472,7 +474,7 @@ export default function AdminFacturation() {
                             size="icon"
                             className="h-8 w-8"
                             title="Télécharger la facture PDF"
-                            onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
+                            onClick={async (e) => { e.stopPropagation(); await genererFacturePDF(f); }}
                           >
                             <Download className="h-4 w-4" />
                           </Button>

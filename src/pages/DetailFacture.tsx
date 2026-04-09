@@ -14,8 +14,7 @@ import { fr } from 'date-fns/locale';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { toast } from 'sonner';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import type jsPDF from 'jspdf';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 
 const STATUT_COLORS: Record<string, string> = {
@@ -109,10 +108,12 @@ export default function DetailFacture() {
 
   useEffect(() => { charger(); }, [user, id, etablissementId]);
 
-  const genererPDF = () => {
+  const genererPDF = async () => {
     if (!facture || !etab) return;
     setGeneratingPdf(true);
     try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
       const doc = new jsPDF();
       const pw = doc.internal.pageSize.getWidth();
 
@@ -244,7 +245,7 @@ export default function DetailFacture() {
           <ArrowLeft className="h-4 w-4" /> Retour
         </button>
         <div className="flex flex-wrap gap-2">
-          <button onClick={genererPDF} disabled={generatingPdf} className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50">
+          <button onClick={async () => { await genererPDF(); }} disabled={generatingPdf} className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50">
             {generatingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             PDF
           </button>

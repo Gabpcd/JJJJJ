@@ -16,7 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ConfettiMini } from '@/components/ConfettiMini';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { capturerErreurSentry } from '@/lib/sentry';
-import jsPDF from 'jspdf';
+import type jsPDF from 'jspdf';
 
 const STORAGE_KEY = 'liberal_parcours_checks';
 
@@ -173,7 +173,8 @@ export default function PasserEnLiberal() {
     } finally { setSaving(false); }
   };
 
-  const genererLettreBanque = () => {
+  const genererLettreBanque = async () => {
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
@@ -403,7 +404,7 @@ export default function PasserEnLiberal() {
                   <div className="space-y-3 mt-2">
                     <p className="text-sm text-muted-foreground">Ouvrez un compte dédié à votre activité libérale.</p>
                     <button
-                      onClick={genererLettreBanque}
+                      onClick={async () => { await genererLettreBanque(); }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border border-border text-foreground hover:bg-muted transition-colors"
                     >
                       📄 Télécharger la lettre type (PDF)
