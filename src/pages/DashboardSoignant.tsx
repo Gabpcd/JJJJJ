@@ -3,7 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell, TrendingUp, Activity, GraduationCap, Home, CalendarDays } from 'lucide-react';
+import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell, TrendingUp, Activity, GraduationCap, Home, CalendarDays, CreditCard, FileText } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CarteProposition } from '@/components/CarteProposition';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -79,6 +79,8 @@ export default function DashboardSoignant() {
   const [gains6Mois, setGains6Mois] = useState<{ debut_le: string; net_a_payer: number | null }[]>([]);
   const [missionsSemaine, setMissionsSemaine] = useState<{ debut_le: string; statut: string }[]>([]);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
+  const [hasStripeConnect, setHasStripeConnect] = useState(true);
+  const [hasMandatFacturation, setHasMandatFacturation] = useState(true);
 
   useEffect(() => {
     if (!user) return;
@@ -131,7 +133,14 @@ export default function DashboardSoignant() {
         if (ms) setMissions(ms as any);
         if (mm) setMesMissions(mm as any);
       }
-      if (sg) setSoignant(sg as any);
+      if (sg) {
+        setSoignant(sg as any);
+        // Vérifier Stripe Connect
+        const { data: connectData } = await supabase.from('stripe_connect_onboarding').select('statut').eq('soignant_id', user.id).maybeSingle();
+        setHasStripeConnect(connectData?.statut === 'COMPLET');
+        // Vérifier mandat facturation
+        setHasMandatFacturation(!!(sg as any).mandat_facturation_signe);
+      }
       if (msSemaine) {
         setHeuresSemaine(msSemaine.reduce((t: number, m: any) => t + (m.duree_heures || 0), 0));
       }
@@ -243,6 +252,26 @@ export default function DashboardSoignant() {
         adresseRenseignee={!!(soignant.adresse_lat && soignant.adresse_lng)}
         telephoneRenseigne={!!soignant.telephone}
       />
+
+      {/* Bannières d'action urgentes */}
+      {!hasStripeConnect && (soignant as any)?.type_exercice !== 'SALARIE' && (
+        <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/stripe-connect')}>
+          <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-foreground">Activez votre compte de paiement</p>
+            <p className="text-sm text-muted-foreground">Liez votre compte Stripe Connect pour recevoir vos paiements directement. Cela prend 5 minutes.</p>
+          </div>
+        </div>
+      )}
+      {!hasMandatFacturation && (
+        <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => navigate('/soignant/mandat-facturation')}>
+          <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-foreground">Signez votre mandat de facturation</p>
+            <p className="text-sm text-muted-foreground">Jolene pourra générer automatiquement vos factures d'honoraires et vous donner accès au paiement rapide (24-48h).</p>
+          </div>
+        </div>
+      )}
 
       <div className="mb-6">
         <div className="flex items-center gap-2 flex-wrap">

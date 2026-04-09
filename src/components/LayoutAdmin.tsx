@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins } from 'lucide-react';
+import { BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -9,14 +9,17 @@ const NAV_ADMIN = [
   { icone: BarChart3, label: 'Dashboard', route: '/admin' },
   { icone: Users, label: 'Utilisateurs', route: '/admin/utilisateurs' },
   { icone: Shield, label: 'Modération', route: '/admin/moderation' },
-  { icone: CreditCard, label: 'Facturation', route: '/admin/facturation' },
   { icone: ClipboardList, label: 'Missions', route: '/admin/missions' },
+  { icone: Coins, label: 'Finances', route: '/admin/finances' },
+  { icone: CreditCard, label: 'Facturation', route: '/admin/facturation' },
+  { icone: AlertTriangle, label: 'Impayées', route: '/admin/impayees' },
+  { icone: FileCheck, label: 'Mandats', route: '/admin/mandats-facturation' },
+  { icone: Zap, label: 'Affacturage', route: '/admin/affacturage' },
+  { icone: Building2, label: 'Groupes', route: '/admin/groupes' },
   { icone: ShieldCheck, label: 'Conformité', route: '/admin/conformite' },
+  { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
   { icone: Mail, label: 'Emails', route: '/admin/emails' },
   { icone: Code2, label: 'API', route: '/admin/api' },
-  { icone: Building2, label: 'Groupes', route: '/admin/groupes' },
-  { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
-  { icone: Coins, label: 'Finances', route: '/admin/finances' },
   { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
   { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie' },
 ];

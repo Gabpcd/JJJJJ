@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -57,17 +57,19 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
     { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
   ];
 
-  // Carrière (only for eligible professions)
-  const carriereItems: NavItem[] = [
-    { icone: GraduationCap, label: 'Parcours 3 200h', route: '/soignant/parcours-3200h' },
-  ];
-  if (showLiberalPath) {
-    carriereItems.push({ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' });
-  }
+  // Carrière & Finances
+  const carriereItems: NavItem[] = [];
   if (isLiberal) {
     carriereItems.push({ icone: Calculator, label: 'Mes charges', route: '/soignant/charges' });
   }
-  carriereItems.push({ icone: CreditCard, label: 'Paiements', route: '/soignant/stripe-connect' });
+  carriereItems.push({ icone: CreditCard, label: 'Paiements Stripe', route: '/soignant/stripe-connect' });
+  carriereItems.push({ icone: FileText, label: 'Factures honoraires', route: '/soignant/mes-factures-honoraires' });
+  carriereItems.push({ icone: Zap, label: 'Paiement rapide', route: '/soignant/mes-avances' });
+  carriereItems.push({ icone: FileText, label: 'Mandat facturation', route: '/soignant/mandat-facturation' });
+  if (showLiberalPath) {
+    carriereItems.push({ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' });
+  }
+  carriereItems.push({ icone: GraduationCap, label: 'Parcours 3 200h', route: '/soignant/parcours-3200h' });
   entries.push({ icone: Briefcase, label: 'Carrière & Finances', items: carriereItems });
 
   // Profil & Réglages
@@ -75,7 +77,6 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
     icone: User, label: 'Profil & Réglages', items: [
       { icone: User, label: 'Mon profil', route: '/soignant/profil' },
       { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
-      { icone: Crown, label: 'Premium', route: '/soignant/premium' },
       { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
       { icone: Ban, label: 'Exclusions', route: '/soignant/exclusions' },
     ],
@@ -117,7 +118,6 @@ function getEtablissementSidebar(): SidebarEntry[] {
         { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
         { icone: Code2, label: 'API', route: '/etablissement/api' },
         { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
-        { icone: Crown, label: 'Premium', route: '/etablissement/premium' },
         { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
       ],
     },
