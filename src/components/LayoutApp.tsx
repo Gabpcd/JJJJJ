@@ -48,7 +48,6 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
           : "flex-1 md:ml-[260px]"
         }
         style={{
-          paddingTop: isNative ? 'env(safe-area-inset-top)' : undefined,
           paddingBottom: isNative
             ? 'calc(5rem + env(safe-area-inset-bottom))'
             : '5rem',

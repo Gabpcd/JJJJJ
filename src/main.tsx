@@ -32,6 +32,30 @@ import { getPlatform } from './lib/platform';
 const platform = getPlatform();
 document.body.classList.add(`platform-${platform}`);
 
+// Capacitor keyboard: add/remove class when keyboard opens/closes
+if (Capacitor.isNativePlatform()) {
+  import('@capacitor/keyboard').then(({ Keyboard }) => {
+    Keyboard.addListener('keyboardWillShow', () => {
+      document.body.classList.add('keyboard-is-open');
+    });
+    Keyboard.addListener('keyboardWillHide', () => {
+      document.body.classList.remove('keyboard-is-open');
+    });
+  }).catch(() => {});
+
+  // Capacitor status bar: style adapté
+  import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+    const isDark = document.documentElement.classList.contains('dark');
+    StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(() => {});
+    StatusBar.setBackgroundColor({ color: isDark ? '#1a1a2e' : '#ffffff' }).catch(() => {});
+  }).catch(() => {});
+
+  // iOS: hide splash when ready
+  import('@capacitor/splash-screen').then(({ SplashScreen }) => {
+    SplashScreen.hide().catch(() => {});
+  }).catch(() => {});
+}
+
 // ─── Service Worker Registration ───
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {

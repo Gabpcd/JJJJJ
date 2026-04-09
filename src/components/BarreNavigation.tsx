@@ -280,7 +280,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   return (
     <>
       {/* ── Mobile bottom tab bar ── */}
-      <nav className="fixed bottom-0 left-0 right-0 flex md:hidden z-50 bg-card dark:bg-accent-foreground/5 shadow-lg no-print" style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)', borderTop: '2px solid', borderImage: 'linear-gradient(90deg, hsl(330 85% 60%), hsl(270 60% 50%), hsl(215 80% 55%)) 1' }} role="navigation" aria-label="Navigation mobile">
+      <nav className="fixed bottom-0 left-0 right-0 flex md:hidden z-50 bg-card dark:bg-accent-foreground/5 shadow-lg no-print mobile-nav-bottom" style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)', borderTop: '2px solid', borderImage: 'linear-gradient(90deg, hsl(330 85% 60%), hsl(270 60% 50%), hsl(215 80% 55%)) 1' }} role="navigation" aria-label="Navigation mobile">
         {mobileItems.map((item) => {
           const actif = location.pathname === item.route;
           const isMsg = item.label === 'Messages';

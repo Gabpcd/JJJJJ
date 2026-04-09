@@ -224,7 +224,7 @@
     }
   }
 
-  /* Safe area spacer: background extends under the status bar / Dynamic Island */
+  /* ── Safe area: iOS notch / Dynamic Island / Android cutout ── */
   #root::before {
     content: '';
     display: block;
@@ -242,9 +242,82 @@
   #root {
     min-height: 100%;
     display: flex;
-    padding-top: env(safe-area-inset-top);
     flex-direction: column;
     padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* ── Mobile Capacitor: global fixes ── */
+
+  /* Empêcher le scroll horizontal accidentel (tableaux, cartes) */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modals/Dialogs: respecter le safe area */
+  [role="dialog"] {
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  /* Fixed bottom elements: respecter le safe area bottom */
+  .fixed-bottom-bar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Formulaires mobile: éviter le zoom auto iOS (déjà géré par 16px) */
+  /* + padding suffisant pour les doigts */
+  @media (max-width: 768px) {
+    .input-base {
+      min-height: 48px;
+      font-size: 16px;
+    }
+
+    .btn-primary, .btn-secondary, .btn-danger,
+    button[type="submit"], button[type="button"] {
+      min-height: 48px;
+    }
+
+    /* Cartes KPI: 2 colonnes max sur mobile, pas de texte tronqué */
+    .card-kpi {
+      min-height: 72px;
+    }
+
+    /* Tables: scroll horizontal fluide */
+    table {
+      font-size: 13px;
+    }
+
+    /* Sidebar mobile: pleine hauteur avec safe area */
+    .sidebar-mobile {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      height: 100vh;
+      height: 100dvh; /* Dynamic viewport height (iOS Safari) */
+    }
+
+    /* Pages publiques (login/inscription): centrage vertical correct */
+    .gradient-hero {
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding-top: env(safe-area-inset-top);
+    }
+  }
+
+  /* ── Capacitor-specific: keyboard resize ── */
+  /* Quand le clavier s'ouvre sur iOS, le viewport se réduit */
+  /* body.keyboard-open ajouté par Capacitor Keyboard plugin */
+  body.keyboard-is-open {
+    /* Réduire le padding bottom quand le clavier est ouvert */
+    padding-bottom: 0 !important;
+  }
+  body.keyboard-is-open #root {
+    padding-bottom: 0;
+  }
+  /* Cacher le bottom nav quand le clavier est ouvert */
+  body.keyboard-is-open .mobile-nav-bottom {
+    display: none;
   }
 
   /* WCAG: Focus visible on all interactive elements */
