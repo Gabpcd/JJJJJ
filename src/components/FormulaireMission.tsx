@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -75,7 +76,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     if (!user) return;
     supabase.rpc('fn_mon_etablissement_complet' as any).then(({ data, error }: any) => {
       if (error) {
-        console.error('FormulaireMission: fn_mon_etablissement_complet error', error);
+        logger.error('[FormulaireMission] fn_mon_etablissement_complet error', error);
         return;
       }
       if (data) {
@@ -108,7 +109,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     if (dupId && !missionSource) {
       supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche').eq('id', dupId).single().then(({ data, error }) => {
         if (error) {
-          console.error('FormulaireMission: mission duplication fetch error', error);
+          logger.error('[FormulaireMission] mission duplication fetch error', error);
           return;
         }
         if (data) {

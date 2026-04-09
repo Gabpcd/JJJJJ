@@ -13,6 +13,7 @@ import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
 import type jsPDF from 'jspdf';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
@@ -100,7 +101,7 @@ export default function DetailFacture() {
     if (Array.isArray(detail?.missions)) {
       setMissions(detail.missions);
     } else {
-      console.warn('[DetailFacture] missions not found in response, keys:', detail ? Object.keys(detail) : 'null');
+      logger.warn('[DetailFacture] missions not found in response, keys:', detail ? Object.keys(detail) : 'null');
     }
     if (resE.data) setEtab(resE.data);
     setLoading(false);
