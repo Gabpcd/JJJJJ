@@ -90,16 +90,18 @@ Deno.serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    await supabaseAdmin.from("sms_envoyes").insert({
-      destinataire_id: destinataire_id || null,
-      telephone: to,
-      type: type || "CUSTOM",
-      contenu: fullBody,
-      provider_id: twilioData.sid || null,
-      statut: twilioRes.ok ? "ENVOYE" : "ERREUR",
-      erreur: twilioRes.ok ? null : (twilioData.message || JSON.stringify(twilioData)),
-      cout_eur: twilioData.price ? Math.abs(parseFloat(twilioData.price)) : 0.07, // ~0.07€/SMS France
-    } as any).catch(() => {});
+    try {
+      await supabaseAdmin.from("sms_envoyes").insert({
+        destinataire_id: destinataire_id || null,
+        telephone: to,
+        type: type || "CUSTOM",
+        contenu: fullBody,
+        provider_id: twilioData.sid || null,
+        statut: twilioRes.ok ? "ENVOYE" : "ERREUR",
+        erreur: twilioRes.ok ? null : (twilioData.message || JSON.stringify(twilioData)),
+        cout_eur: twilioData.price ? Math.abs(parseFloat(twilioData.price)) : 0.07,
+      } as any);
+    } catch (_) { /* audit log best-effort */ }
 
     if (!twilioRes.ok) {
       console.error("Twilio error:", twilioData);
