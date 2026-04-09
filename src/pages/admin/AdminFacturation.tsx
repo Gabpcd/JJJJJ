@@ -212,6 +212,8 @@ export default function AdminFacturation() {
   const [factures, setFactures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 100;
   const [actionId, setActionId] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState('TOUS');
   const [recherche, setRecherche] = useState('');
@@ -224,14 +226,17 @@ export default function AdminFacturation() {
     const { data } = await supabase.from('factures')
       .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
       .order('date_emission', { ascending: false })
-      .limit(500)
+      .range(0, (page + 1) * PAGE_SIZE - 1)
       .then(res => res)
       .catch(err => { console.warn('charger factures error:', err); return { data: null }; });
-    if (data) setFactures(data);
+    if (data) {
+      if (page === 0) setFactures(data);
+      else setFactures(prev => [...prev, ...data]);
+    }
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, []);
+  useEffect(() => { charger(); }, [page]);
 
   const filtered = useMemo(() => {
     let f = factures;
@@ -489,6 +494,10 @@ export default function AdminFacturation() {
             </TableBody>
           </Table>
         </div>
+
+        {factures.length === (page + 1) * PAGE_SIZE && (
+          <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de factures</button>
+        )}
       </div>
     </LayoutAdmin>
   );

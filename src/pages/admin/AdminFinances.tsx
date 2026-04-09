@@ -34,11 +34,11 @@ export default function AdminFinances() {
       supabase.from('factures')
         .select('id, montant_ht, montant_tva, montant_ttc, statut, date_emission, etablissement_id, etablissements(nom, type)')
         .order('date_emission', { ascending: false })
-        .limit(1000),
+        .limit(200),
       supabase.from('missions')
         .select('id, total_brut, montant_commission_ht, montant_commission_ttc, statut, debut_le, etablissement_id, soignant_assigne_id, etablissements(nom, type, taux_commission_negocie)')
         .in('statut', ['TERMINEE', 'EN_COURS', 'ASSIGNEE'])
-        .limit(1000),
+        .limit(200),
     ]).then(([fRes, mRes]) => {
       setFactures(fRes.data || []);
       setMissions(mRes.data || []);

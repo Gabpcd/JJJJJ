@@ -26,6 +26,8 @@ export default function HistoriqueMissions() {
   const [missions, setMissions] = useState<any[]>([]);
   const [litiges, setLitiges] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
   const [moisFiltre, setMoisFiltre] = useState('TOUS');
   const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
 
@@ -38,16 +40,17 @@ export default function HistoriqueMissions() {
           taux_horaire_base, net_a_payer, net_estime, total_brut, statut, etablissement_id,
           presences(pointage_arrivee_le, pointage_depart_le)
         `).eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE')
-          .order('debut_le', { ascending: false }).limit(500),
+          .order('debut_le', { ascending: false }).range(0, (page + 1) * PAGE_SIZE - 1),
         supabase.from('litiges').select('mission_id').eq('soignant_id', user.id),
       ]);
       const enriched = ms ? await enrichirEtablissements(ms as any) : [];
-      setMissions(enriched);
+      if (page === 0) setMissions(enriched);
+      else setMissions(prev => [...prev, ...enriched]);
       setLitiges(new Set((lits || []).map((l: any) => l.mission_id)));
       setLoading(false);
     };
     load();
-  }, [user]);
+  }, [user, page]);
 
   const moisDisponibles = useMemo(() => {
     const set = new Set<string>();
@@ -146,6 +149,9 @@ export default function HistoriqueMissions() {
               </div>
             );
           })}
+          {missions.length === (page + 1) * PAGE_SIZE && (
+            <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
+          )}
         </div>
       ) : (
         <EtatVide icone={ClipboardList} titre="Aucune mission terminée" sousTitre="Vos missions terminées apparaîtront ici." />

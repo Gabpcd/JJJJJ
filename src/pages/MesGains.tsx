@@ -35,6 +35,8 @@ export default function MesGains() {
   const { user } = useAuth();
   const [allMissions, setAllMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
   const [moisFiltre, setMoisFiltre] = useState('CE_MOIS');
   const [modalAttestation, setModalAttestation] = useState(false);
   const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
@@ -52,14 +54,15 @@ export default function MesGains() {
           .eq('soignant_assigne_id', user.id)
           .eq('statut', 'TERMINEE')
           .order('debut_le', { ascending: false })
-          .limit(1000),
+          .range(0, (page + 1) * PAGE_SIZE - 1),
         supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).single(),
         supabase.from('paiements_soignant' as any)
           .select('mission_id, statut, montant_net, methode, reference_virement, date_paiement')
           .eq('soignant_id', user.id) as any,
       ]);
       const enriched = ms ? await enrichirEtablissements(ms as any) : [];
-      setAllMissions(enriched as any[]);
+      if (page === 0) setAllMissions(enriched as any[]);
+      else setAllMissions(prev => [...prev, ...enriched as any[]]);
       setSoignant(sg);
 
       // Index paiements by mission_id
@@ -78,7 +81,7 @@ export default function MesGains() {
       });
     };
     load();
-  }, [user]);
+  }, [user, page]);
 
   const moisDisponibles = useMemo(() => {
     const set = new Set<string>();
@@ -278,6 +281,9 @@ export default function MesGains() {
               </div>
             );
           })}
+          {allMissions.length === (page + 1) * PAGE_SIZE && (
+            <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
+          )}
         </div>
       ) : (
         <EtatVide illustration={<IllustrationTirelire />} titre="Pas encore de gains" sousTitre="Vos gains apparaîtront ici après votre première mission terminée." />
