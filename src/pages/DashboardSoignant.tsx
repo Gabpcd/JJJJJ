@@ -1,4 +1,4 @@
-import React, { useState, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
@@ -21,7 +21,6 @@ import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { OnboardingGuide } from '@/components/OnboardingGuide';
 import { BarreCompletionProfil } from '@/components/BarreCompletionProfil';
-import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
@@ -37,7 +36,7 @@ import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
-import { format, differenceInDays, startOfWeek, addDays } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { BadgeStats } from '@/components/BadgesGamification';
 
@@ -69,180 +68,113 @@ export default function DashboardSoignant() {
   usePageTitle('Dashboard');
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [soignant, setSoignant] = useState<SoignantData | null>(null);
-  const [missions, setMissions] = useState<any[]>([]);
-  const [mesMissions, setMesMissions] = useState<any[]>([]);
-  const [docsExpirant, setDocsExpirant] = useState<any[]>([]);
   const [propositions, setPropositions] = useState<any[]>([]);
-  const [heuresSemaine, setHeuresSemaine] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [missionProchaine, setMissionProchaine] = useState<any>(null);
-  const [missionsOubliDepart, setMissionsOubliDepart] = useState<any[]>([]);
-  const [gainsCeMois, setGainsCeMois] = useState({ net: 0, nb: 0 });
-  const [missionsWeekend, setMissionsWeekend] = useState<any[]>([]);
-  const [gains6Mois, setGains6Mois] = useState<{ debut_le: string; net_a_payer: number | null }[]>([]);
-  const [missionsSemaine, setMissionsSemaine] = useState<{ debut_le: string; statut: string }[]>([]);
-  const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
-  const [hasStripeConnect, setHasStripeConnect] = useState(true);
-  const [hasMandatFacturation, setHasMandatFacturation] = useState(true);
 
+  const { data: dashboard, isLoading } = useQuery({
+    queryKey: ['dashboard-soignant', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.rpc('fn_dashboard_soignant_complet' as any);
+      if (!data) return null;
+
+      // Vérifier Stripe Connect
+      const { data: connectData } = await supabase.from('stripe_connect_onboarding').select('statut').eq('soignant_id', user!.id).maybeSingle();
+
+      return { ...data, hasStripeConnect: connectData?.statut === 'COMPLET' };
+    },
+    staleTime: 60_000,
+    enabled: !!user,
+  });
+
+  // Keep propositions in local state so they can be removed on action
+  const dashboardPropositions = dashboard?.propositions;
   useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      const now = new Date();
-      const jour = now.getDay();
-      const lundi = new Date(now);
-      lundi.setDate(now.getDate() - (jour === 0 ? 6 : jour - 1));
-      lundi.setHours(0, 0, 0, 0);
-      const dimanche = new Date(lundi);
-      dimanche.setDate(lundi.getDate() + 7);
+    if (dashboardPropositions) setPropositions(dashboardPropositions);
+  }, [dashboardPropositions]);
 
-      const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
-      const finMois = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  // Derive all values from the dashboard RPC response
+  const soignant = dashboard?.profil as SoignantData | undefined ?? null;
+  const missions = (dashboard?.missions_ouvertes ?? []) as any[];
+  const mesMissions = (dashboard?.mes_missions ?? []) as any[];
+  const gains6Mois = (dashboard?.gains_6mois ?? []) as { debut_le: string; net_a_payer: number | null }[];
+  const missionsSemaine = (dashboard?.missions_semaine_cal ?? []) as { debut_le: string; statut: string }[];
+  const heuresSemaine = (dashboard?.heures_semaine ?? 0) as number;
+  const hasStripeConnect = dashboard?.hasStripeConnect ?? true;
+  const hasMandatFacturation = !!(soignant as any)?.mandat_facturation_signe;
+  const missionsWeekend = (dashboard?.missions_weekend ?? []) as any[];
 
-      // 6 months ago for gains chart
-      const sixMoisAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const docsExpirant = useMemo(() => {
+    const docs = (dashboard?.documents ?? []) as any[];
+    return docs.filter((d: any) =>
+      d.valide_jusqua && d.statut_verification === 'VERIFIE' &&
+      new Date(d.valide_jusqua) > new Date() &&
+      differenceInDays(new Date(d.valide_jusqua), new Date()) < 30
+    );
+  }, [dashboard?.documents]);
 
-      const { data: sg } = await supabase.from('soignants').select('prenom, nom, telephone, date_naissance, profession, type_contrat, numero_rpps, numero_adeli, rpps_verifie, adresse_lat, adresse_lng, tous_documents_valides, identite_verifiee, score_fiabilite, total_missions_terminees, heures_cumulees, eligible_conversion_3200h, type_exercice').eq('id', user.id).single();
+  const missionProchaine = useMemo(() => {
+    return (mesMissions as any[]).find((m: any) => {
+      const mins = (new Date(m.debut_le).getTime() - Date.now()) / 60000;
+      return mins > -30 && mins <= 60;
+    }) || null;
+  }, [mesMissions]);
 
-      const profession = sg?.profession;
+  const missionsOubliDepart = useMemo(() => {
+    const count = (dashboard?.missions_oubliees_count ?? 0) as number;
+    // The RPC returns a count; if we need full mission objects, fall back to empty
+    // For BandeauOubliDepart we need mission objects - kept as empty when only count available
+    return count > 0 ? [{ id: 'oubli', count }] : [];
+  }, [dashboard?.missions_oubliees_count]);
 
-      let missionsQuery = supabase.from('missions').select('id, intitule, service, debut_le, fin_le, taux_horaire_base, est_urgente, etablissement_id').eq('statut', 'OUVERTE').order('debut_le', { ascending: true }).limit(3);
-      if (profession) missionsQuery = missionsQuery.eq('profession_requise', profession);
+  const gainsCeMois = useMemo(() => {
+    const gainsMois = (dashboard?.gains_mois ?? []) as any[];
+    const net = gainsMois.reduce((s: number, m: any) => s + (m.net_estime || (m.total_brut ? m.total_brut * 0.78 : 0)), 0);
+    return { net, nb: gainsMois.length };
+  }, [dashboard?.gains_mois]);
 
-      const [{ data: ms }, { data: mm }, { data: docs }, { data: msSemaine }, { data: missionsOubliees }, { data: gainsMois }, { data: gains6m }, { data: msSemaineCal }, { data: props }, { data: missionsTermineesData }] = await Promise.all([
-        missionsQuery,
-        supabase.from('missions').select('id, intitule, debut_le, fin_le, statut, etablissement_id').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).order('debut_le', { ascending: true }).limit(3),
-        supabase.from('documents_soignants').select('id, type_document, valide_jusqua, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
-        supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
-        supabase.from('missions').select('id, intitule, fin_le, presences(id, pointage_arrivee_le, pointage_depart_le)').eq('soignant_assigne_id', user.id).eq('statut', 'EN_COURS').lt('fin_le', new Date(Date.now() - 30 * 60000).toISOString()),
-        supabase.from('missions').select('net_a_payer, net_estime, total_brut').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', debutMois.toISOString()).lte('debut_le', finMois.toISOString()),
-        supabase.from('missions').select('debut_le, net_a_payer').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE').gte('debut_le', sixMoisAgo.toISOString()).order('debut_le', { ascending: true }),
-        supabase.from('missions').select('debut_le, statut').eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS']).gte('debut_le', lundi.toISOString()).lt('debut_le', dimanche.toISOString()),
-        // Propositions from pool
-        supabase.from('candidatures').select('id, mission_id, cree_le, missions(id, intitule, debut_le, fin_le, taux_horaire_base, etablissement_id, est_urgente)').eq('soignant_id', user.id).eq('statut', 'PROPOSEE').order('cree_le', { ascending: false }).limit(5),
-        // Missions terminées réelles (pour compteur fiable)
-        supabase.from('missions').select('duree_heures').eq('soignant_assigne_id', user.id).eq('statut', 'TERMINEE'),
-      ]);
-
-      // Enrich missions with safe establishment data
-      const allMissionItems = [...(ms || []), ...(mm || [])];
-      if (allMissionItems.length > 0) {
-        const { fetchEtablissementsSafe } = await import('@/lib/etablissements');
-        const etabMap = await fetchEtablissementsSafe(allMissionItems.map((m: any) => m.etablissement_id));
-        const enrichMission = (m: any) => ({ ...m, etablissements: etabMap[m.etablissement_id] || null });
-        if (ms) setMissions(ms.map(enrichMission) as any);
-        if (mm) setMesMissions(mm.map(enrichMission) as any);
-      } else {
-        if (ms) setMissions(ms as any);
-        if (mm) setMesMissions(mm as any);
-      }
-      if (sg) {
-        setSoignant(sg as any);
-        // Vérifier Stripe Connect
-        const { data: connectData } = await supabase.from('stripe_connect_onboarding').select('statut').eq('soignant_id', user.id).maybeSingle();
-        setHasStripeConnect(connectData?.statut === 'COMPLET');
-        // Vérifier mandat facturation
-        setHasMandatFacturation(!!(sg as any).mandat_facturation_signe);
-      }
-      if (msSemaine) {
-        setHeuresSemaine(msSemaine.reduce((t: number, m: any) => t + (m.duree_heures || 0), 0));
-      }
-      if (docs) {
-        setDocsExpirant((docs as any[]).filter(d =>
-          d.valide_jusqua && d.statut_verification === 'VERIFIE' &&
-          new Date(d.valide_jusqua) > new Date() &&
-          differenceInDays(new Date(d.valide_jusqua), new Date()) < 30
-        ));
-      }
-      if (mm) {
-        const prochaine = (mm as any[]).find(m => {
-          const mins = (new Date(m.debut_le).getTime() - Date.now()) / 60000;
-          return mins > -30 && mins <= 60;
-        });
-        if (prochaine) setMissionProchaine(prochaine);
-      }
-      if (missionsOubliees) {
-        const oublis = (missionsOubliees as any[]).filter(m =>
-          m.presences?.length > 0 && m.presences[0].pointage_arrivee_le && !m.presences[0].pointage_depart_le
-        );
-        setMissionsOubliDepart(oublis);
-      }
-      if (gainsMois) {
-        const net = (gainsMois as any[]).reduce((s: number, m: any) => s + (m.net_estime || (m.total_brut ? m.total_brut * 0.78 : 0)), 0);
-        setGainsCeMois({ net, nb: (gainsMois as any[]).length });
-      }
-      if (gains6m) setGains6Mois(gains6m as any);
-      if (msSemaineCal) setMissionsSemaine(msSemaineCal as any);
-      if (props) setPropositions(props as any);
-
-      // Compute real counts from mission data
-      const realMissionsTerminees = missionsTermineesData?.length || 0;
-      const realHeuresCumulees = missionsTermineesData?.reduce((t: number, m: any) => t + (m.duree_heures || 0), 0) || 0;
-
-      // Override soignant data with real counts if higher
-      if (sg) {
-        sg.total_missions_terminees = Math.max(sg.total_missions_terminees || 0, realMissionsTerminees);
-        sg.heures_cumulees = Math.max(sg.heures_cumulees || 0, realHeuresCumulees);
-      }
-
-      // Badge stats (simple computation from soignant data)
-      if (sg) {
-        setBadgeStats({
-          missionsTerminees: sg.total_missions_terminees || 0,
-          scoreFiabilite: sg.score_fiabilite || 0,
-          heuresCumulees: sg.heures_cumulees || 0,
-          annulations: 0,
-          missionsNuit: 0,
-          missionsWeekend: 0,
-          maxMissionsMemeEtab: 0,
-          retards: 0,
-          totalMissions: sg.total_missions_terminees || 0,
-        });
-      }
-
-      // Missions weekend
-      if (profession) {
-        const today = new Date();
-        const dayOfWeek = today.getDay();
-        const daysToSat = dayOfWeek === 0 ? 6 : (6 - dayOfWeek);
-        const samedi = new Date(today);
-        samedi.setDate(today.getDate() + daysToSat);
-        samedi.setHours(0, 0, 0, 0);
-        const lundiProchain = new Date(samedi);
-        lundiProchain.setDate(samedi.getDate() + 2);
-        lundiProchain.setHours(23, 59, 59);
-
-        const { data: wkData } = await supabase.from('missions')
-          .select('id, intitule, debut_le, fin_le, taux_horaire_base, est_urgente, etablissement_id')
-          .eq('statut', 'OUVERTE')
-          .eq('profession_requise', profession)
-          .gte('debut_le', samedi.toISOString())
-          .lte('debut_le', lundiProchain.toISOString())
-          .order('debut_le', { ascending: true })
-          .limit(3);
-
-        if (wkData && wkData.length > 0) {
-          const { fetchEtablissementsSafe } = await import('@/lib/etablissements');
-          const etabMap2 = await fetchEtablissementsSafe(wkData.map((m: any) => m.etablissement_id));
-          setMissionsWeekend(wkData.map((m: any) => ({ ...m, etablissements: etabMap2[m.etablissement_id] || null })));
-        }
-      }
-
-      setLoading(false);
+  const { missionsTermineesCount, heuresCumuleesTotal } = useMemo(() => {
+    const totalTerminees = (dashboard?.heures_totales_terminees ?? []) as any[];
+    const realMissionsTerminees = totalTerminees.length;
+    const realHeuresCumulees = totalTerminees.reduce((t: number, m: any) => t + (m.duree_heures || 0), 0);
+    return {
+      missionsTermineesCount: Math.max(soignant?.total_missions_terminees || 0, realMissionsTerminees),
+      heuresCumuleesTotal: Math.max(soignant?.heures_cumulees || 0, realHeuresCumulees),
     };
-    load();
-  }, [user]);
+  }, [dashboard?.heures_totales_terminees, soignant]);
 
-  if (loading || !soignant) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
+  const badgeStats = useMemo<BadgeStats | null>(() => {
+    if (!soignant) return null;
+    return {
+      missionsTerminees: missionsTermineesCount,
+      scoreFiabilite: soignant.score_fiabilite || 0,
+      heuresCumulees: heuresCumuleesTotal,
+      annulations: 0,
+      missionsNuit: 0,
+      missionsWeekend: 0,
+      maxMissionsMemeEtab: 0,
+      retards: 0,
+      totalMissions: missionsTermineesCount,
+    };
+  }, [soignant, missionsTermineesCount, heuresCumuleesTotal]);
 
-  const profil = calculerCompletionProfil(soignant);
-  const missionsTerminees = soignant.total_missions_terminees ?? 0;
-  const score = soignant.score_fiabilite;
+  // Override soignant counts with real computed values
+  const soignantWithCounts = useMemo(() => {
+    if (!soignant) return null;
+    return {
+      ...soignant,
+      total_missions_terminees: missionsTermineesCount,
+      heures_cumulees: heuresCumuleesTotal,
+    } as SoignantData;
+  }, [soignant, missionsTermineesCount, heuresCumuleesTotal]);
+
+  if (isLoading || !soignantWithCounts) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
+
+  const profil = calculerCompletionProfil(soignantWithCounts);
+  const missionsTerminees = soignantWithCounts.total_missions_terminees ?? 0;
+  const score = soignantWithCounts.score_fiabilite;
   const hasEvaluations = missionsTerminees > 0;
-  const heures = soignant.heures_cumulees ?? 0;
+  const heures = soignantWithCounts.heures_cumulees ?? 0;
 
-  const aDocuments = !!(soignant as any).tous_documents_valides || missions.length > 0;
+  const aDocuments = !!(soignantWithCounts as any).tous_documents_valides || missions.length > 0;
 
   return (
     <LayoutApp role="SOIGNANT">
@@ -250,15 +182,15 @@ export default function DashboardSoignant() {
       <OnboardingGuide role="SOIGNANT" userId={user!.id} />
 
       <BarreCompletionProfil
-        nom={!!soignant.nom}
-        rppsVerifie={!!(soignant as any).rpps_verifie}
+        nom={!!soignantWithCounts.nom}
+        rppsVerifie={!!(soignantWithCounts as any).rpps_verifie}
         auMoinsUnDocument={aDocuments}
-        adresseRenseignee={!!(soignant.adresse_lat && soignant.adresse_lng)}
-        telephoneRenseigne={!!soignant.telephone}
+        adresseRenseignee={!!(soignantWithCounts.adresse_lat && soignantWithCounts.adresse_lng)}
+        telephoneRenseigne={!!soignantWithCounts.telephone}
       />
 
       {/* Bannières d'action urgentes */}
-      {!hasStripeConnect && (soignant as any)?.type_exercice !== 'SALARIE' && (
+      {!hasStripeConnect && (soignantWithCounts as any)?.type_exercice !== 'SALARIE' && (
         <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/soignant/stripe-connect')}>
           <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <div>
@@ -279,10 +211,10 @@ export default function DashboardSoignant() {
 
       <div className="mb-6">
         <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-xl font-bold text-foreground">Bonjour, <span className="text-primary">{soignant.prenom}</span> 👋</h1>
-          <BadgeRPPS rppsVerifie={(soignant as any).rpps_verifie} rpps={(soignant as any).numero_rpps} profession={soignant.profession} />
+          <h1 className="text-xl font-bold text-foreground">Bonjour, <span className="text-primary">{soignantWithCounts.prenom}</span> 👋</h1>
+          <BadgeRPPS rppsVerifie={(soignantWithCounts as any).rpps_verifie} rpps={(soignantWithCounts as any).numero_rpps} profession={soignantWithCounts.profession} />
         </div>
-        {!soignant.tous_documents_valides ? (
+        {!soignantWithCounts.tous_documents_valides ? (
           <p className="text-sm text-warning mt-1">⚠️ Complétez votre profil pour postuler aux missions</p>
         ) : (
           <p className="text-sm text-muted-foreground mt-1">Voici votre activité</p>
@@ -290,6 +222,7 @@ export default function DashboardSoignant() {
       </div>
 
       {/* Missions à venir (planning) */}
+      <SectionErrorBoundary section="missions-a-venir">
       {mesMissions.length > 0 && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
@@ -327,12 +260,13 @@ export default function DashboardSoignant() {
           </div>
         </div>
       )}
+      </SectionErrorBoundary>
 
       {/* 48h banner: hidden for LIBERAL, shown for SALARIE & MIXTE */}
-      {soignant.type_exercice !== 'LIBERAL' && <BandeauAlerte48h heuresSemaine={heuresSemaine} />}
+      {soignantWithCounts.type_exercice !== 'LIBERAL' && <BandeauAlerte48h heuresSemaine={heuresSemaine} />}
 
       {/* Cumul d'activité warning for MIXTE */}
-      {soignant.type_exercice === 'MIXTE' && (
+      {soignantWithCounts.type_exercice === 'MIXTE' && (
         <div className="bg-warning/5 border-l-4 border-warning p-4 rounded-r-xl mb-4">
           <p className="text-sm text-warning font-medium">
             ⚠️ Cumul d'activité : pensez à vérifier que vos heures sur Jolene sont compatibles avec votre contrat salarié.
@@ -341,6 +275,7 @@ export default function DashboardSoignant() {
       )}
 
       {/* Missions proposées depuis le pool */}
+      <SectionErrorBoundary section="propositions">
       {propositions.length > 0 && (
         <div className="mb-6 rounded-xl border-2 border-orange-400 bg-orange-50/50 dark:bg-orange-950/10 dark:border-orange-600 p-4">
           <h2 className="text-base font-bold text-foreground flex items-center gap-2 mb-3">
@@ -357,6 +292,7 @@ export default function DashboardSoignant() {
           </div>
         </div>
       )}
+      </SectionErrorBoundary>
 
       {missionsOubliDepart.map(m => (
         <BandeauOubliDepart key={m.id} mission={m} onPointer={() => navigate('/soignant/presences')} />
@@ -406,6 +342,7 @@ export default function DashboardSoignant() {
 
         {/* ─── ONGLET ACCUEIL ─── */}
         <TabsContent value="accueil">
+          <SectionErrorBoundary section="accueil">
           {/* KPI */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <FadeInView delay={0}>
@@ -500,10 +437,12 @@ export default function DashboardSoignant() {
               </div>
             </div>
           )}
+          </SectionErrorBoundary>
         </TabsContent>
 
         {/* ─── ONGLET ACTIVITÉ ─── */}
         <TabsContent value="activite">
+          <SectionErrorBoundary section="activite">
           {/* Calendrier mini semaine */}
           <FadeInView>
             <CalendrierMiniSemaine missions={missionsSemaine} />
@@ -515,7 +454,7 @@ export default function DashboardSoignant() {
           </div>
 
           {/* Progression 3200h + Prochain badge */}
-          {!PROFESSIONS_NON_LIBERAL.includes(soignant.profession) && (
+          {!PROFESSIONS_NON_LIBERAL.includes(soignantWithCounts.profession) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               <FadeInView delay={0}>
                 <ProgressionCirculaire3200h heures={heures} />
@@ -556,10 +495,12 @@ export default function DashboardSoignant() {
               </div>
             </div>
           )}
+          </SectionErrorBoundary>
         </TabsContent>
 
         {/* ─── ONGLET GAINS ─── */}
         <TabsContent value="gains">
+          <SectionErrorBoundary section="gains">
           {/* Graphique gains 6 mois */}
           <FadeInView>
             {gains6Mois.length > 0 ? (
@@ -587,14 +528,16 @@ export default function DashboardSoignant() {
           )}
 
           {/* Rappels fiscaux libéral */}
-          {soignant.type_contrat === 'LIBERAL' && (
+          {soignantWithCounts.type_contrat === 'LIBERAL' && (
             <RappelsFiscaux />
           )}
+          </SectionErrorBoundary>
         </TabsContent>
 
         {/* ─── ONGLET PARCOURS ─── */}
         <TabsContent value="parcours">
-          {!PROFESSIONS_NON_LIBERAL.includes(soignant.profession) ? (
+          <SectionErrorBoundary section="parcours">
+          {!PROFESSIONS_NON_LIBERAL.includes(soignantWithCounts.profession) ? (
             <div className="space-y-4">
               <div className="rounded-2xl bg-gradient-to-r from-rose-light to-rose/5 dark:from-rose/10 dark:to-rose/5 border border-rose/20 p-4 md:p-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
                 <div className="flex items-center justify-between mb-1">
@@ -607,7 +550,7 @@ export default function DashboardSoignant() {
                 <p className="text-sm font-semibold text-foreground mt-3"><span className="text-rose">{heures}h</span> / 3 200h</p>
               </div>
 
-              {heures >= 800 && (soignant as any).statut_liberal !== 'ACTIF' && (
+              {heures >= 800 && (soignantWithCounts as any).statut_liberal !== 'ACTIF' && (
                 <div className="rounded-2xl bg-gradient-to-r from-rose/5 to-rose-light dark:to-rose/10 border border-rose/20 p-4 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/passer-en-liberal')}>
                   <div className="flex items-center gap-3">
                     <div className="rounded-xl p-2.5 bg-primary/10"><Rocket className="h-5 w-5 text-primary" /></div>
@@ -621,7 +564,7 @@ export default function DashboardSoignant() {
               )}
 
               {/* Prévoyance CTA */}
-              {!(soignant as any).prevoyance_inscrit && (
+              {!(soignantWithCounts as any).prevoyance_inscrit && (
                 <div className="rounded-2xl bg-gradient-to-r from-rose-light to-rose/5 dark:from-rose/10 dark:to-rose/5 border border-rose/20 p-4 cursor-pointer" onClick={() => navigate('/soignant/prevoyance')}>
                   <h3 className="text-sm font-bold text-foreground mb-1">🛡️ Protégez-vous avec la Prévoyance Jolene</h3>
                   <p className="text-xs text-muted-foreground mb-2">Assurance santé subventionnée jusqu'à 30%. Bonus : +3 points de fiabilité.</p>
@@ -635,6 +578,7 @@ export default function DashboardSoignant() {
               <p className="text-xs text-muted-foreground mt-1">Les missions sont en CDD de remplacement.</p>
             </div>
           )}
+          </SectionErrorBoundary>
         </TabsContent>
       </Tabs>
     </LayoutApp>
