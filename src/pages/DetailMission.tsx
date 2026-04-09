@@ -108,7 +108,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
                   mission_id: missionId,
                 },
               }),
-            }).catch(() => {});
+            }).catch((err) => { logger.warn('[DetailMission] send-email alert failed', err); });
           }
         })
       );

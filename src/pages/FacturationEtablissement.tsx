@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
@@ -167,7 +168,7 @@ export default function FacturationEtablissement() {
       if (!result?.success) throw new Error(result?.error || 'Erreur de génération');
       supabase.functions.invoke('send-email', {
         body: { type: 'FACTURE_EMISE', data: { numero: result.numero_facture, montant_ttc: Number(result.montant_ttc).toFixed(2), facture_id: result.facture_id }, destinataire_id: user!.id },
-      }).catch(() => {});
+      }).catch((err) => { logger.warn('[FacturationEtablissement] send-email facture failed', err); });
       afficherNotification({ type: 'succes', message: `Facture ${result.numero_facture} générée avec succès !` });
       charger();
     } catch (err: any) {

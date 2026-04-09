@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type jsPDF from 'jspdf';
@@ -60,7 +61,7 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
         setMissions(mList.map(m => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
         setLoading(false);
       })
-      .catch((err) => { console.warn('FactureDetailRow fetch error:', err); setLoading(false); });
+      .catch((err) => { logger.warn('[AdminFacturation] FactureDetailRow fetch error', err); setLoading(false); });
   }, [factureId]);
 
   if (loading) return (
@@ -228,7 +229,7 @@ export default function AdminFacturation() {
       .order('date_emission', { ascending: false })
       .range(0, (page + 1) * PAGE_SIZE - 1)
       .then(res => res)
-      .catch(err => { console.warn('charger factures error:', err); return { data: null }; });
+      .catch(err => { logger.warn('[AdminFacturation] charger factures error', err); return { data: null }; });
     if (data) {
       if (page === 0) setFactures(data);
       else setFactures(prev => [...prev, ...data]);
@@ -278,7 +279,7 @@ export default function AdminFacturation() {
 
   const exporterFEC = async () => {
     const annee = new Date().getFullYear();
-    const result = await supabase.rpc('fn_export_fec' as any, { p_annee: annee }).catch(err => { console.warn('exporterFEC error:', err); return { data: null, error: err }; });
+    const result = await supabase.rpc('fn_export_fec' as any, { p_annee: annee }).catch(err => { logger.warn('[AdminFacturation] exporterFEC error', err); return { data: null, error: err }; });
     const { data, error } = result;
     if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     const lignes = Array.isArray(data) ? data : [];

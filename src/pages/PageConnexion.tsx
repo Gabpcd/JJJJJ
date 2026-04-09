@@ -73,7 +73,7 @@ export default function PageConnexion() {
     else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
     else if (role === 'SOIGNANT') navigate('/soignant/tableau-de-bord');
     else {
-      console.warn('[CONNEXION] Rôle non reconnu, roleData brut:', roleData);
+      logger.warn('[CONNEXION] Rôle non reconnu, roleData brut:', roleData);
       afficherNotification({ type: 'erreur', message: 'Votre inscription n\'est pas complète. Veuillez vous réinscrire.' });
       const { supabase: sb } = await import('@/integrations/supabase/client');
       await sb.auth.signOut();

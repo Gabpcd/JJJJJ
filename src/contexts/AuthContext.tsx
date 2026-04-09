@@ -127,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userId = authData.user!.id;
     let accessToken = authData.session?.access_token;
     if (!accessToken) {
-      console.warn('[INSCRIPTION] 3b. Aucun token dans signUp, tentative via getSession...');
+      logger.warn('[INSCRIPTION] 3b. Aucun token dans signUp, tentative via getSession...');
       const { data: sessionData } = await supabase.auth.getSession();
       accessToken = sessionData.session?.access_token;
       logger.debug('[INSCRIPTION] 3c. Token via getSession:', !!accessToken);
@@ -190,7 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
       },
       body: JSON.stringify({ type: 'BIENVENUE_SOIGNANT', data: { prenom: data.prenom }, destinataire_id: userId }),
-    }).catch((e) => console.warn('[INSCRIPTION] Email bienvenue échoué (ignoré):', e));
+    }).catch((e) => logger.warn('[INSCRIPTION] Email bienvenue échoué (ignoré)', e));
   }, []);
 
   const inscriptionEtablissement = useCallback(async (data: any) => {
@@ -239,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: { nom: data.nom },
         destinataire_id: authData.user!.id,
       },
-    }).catch(() => {});
+    }).catch((err) => { logger.warn('[AuthContext] send-email bienvenue établissement failed', err); });
   }, []);
 
   return (

@@ -5,6 +5,7 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -196,12 +197,12 @@ export default function AdminConformite() {
 
   useEffect(() => {
     supabase.rpc('fn_admin_conformite' as any).then(({ data: d, error: e }: any) => {
-      if (e) { console.warn('fn_admin_conformite error:', e); }
+      if (e) { logger.warn('[AdminConformite] fn_admin_conformite error', e); }
       else if (d && typeof d === 'object' && !Array.isArray(d)) setData(d);
       else if (Array.isArray(d) && d.length > 0 && typeof d[0] === 'object') setData(d[0]);
-      else { console.warn('fn_admin_conformite: unexpected response shape', d); }
+      else { logger.warn('[AdminConformite] fn_admin_conformite: unexpected response shape', d); }
       setLoading(false);
-    }).catch((err: any) => { console.warn('fn_admin_conformite exception:', err); setLoading(false); });
+    }).catch((err: any) => { logger.warn('[AdminConformite] fn_admin_conformite exception', err); setLoading(false); });
   }, []);
 
   async function toggleDetail(cle: string) {

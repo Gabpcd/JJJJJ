@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { hapticNotification } from '@/lib/haptics';
@@ -259,7 +260,7 @@ export default function DetailMissionSoignant() {
           },
           destinataire_id: user!.id,
         },
-      }).catch(() => {});
+      }).catch((err) => { logger.warn('[DetailMissionSoignant] send-email soignant failed', err); });
 
       // Email à l'établissement (établissement role can send to other addresses)
       {
@@ -275,7 +276,7 @@ export default function DetailMissionSoignant() {
             },
             destinataire_id: mission.etablissement_id,
           },
-        }).catch(() => {});
+        }).catch((err) => { logger.warn('[DetailMissionSoignant] send-email etablissement failed', err); });
       }
     } finally {
       setAcceptationEnCours(false);

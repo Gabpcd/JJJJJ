@@ -21,7 +21,7 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
   { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
-  { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
+  { icone: FileText, label: 'Documents', route: '/soignant/documents' },
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 

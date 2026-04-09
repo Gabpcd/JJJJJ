@@ -8,6 +8,7 @@ import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { FooterLegal } from '@/components/FooterLegal';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
@@ -82,7 +83,7 @@ export default function InscriptionEtablissement() {
         maj('nom', data.raison_sociale);
       }
     } catch (err) {
-      console.warn('Vérification INSEE échouée:', err);
+      logger.warn('[InscriptionEtablissement] Vérification INSEE échouée', err);
       setInseeCheck({
         statut: 'ALERTE',
         raison_sociale: null,

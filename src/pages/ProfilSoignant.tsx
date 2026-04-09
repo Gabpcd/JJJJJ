@@ -293,28 +293,48 @@ export default function ProfilSoignant() {
     setSaving(false);
   };
 
-  // B2: Export RGPD
-  const handleExportRGPD = async () => {
+  // B2: Export RGPD (JSON + CSV)
+  const handleExportRGPD = async (format: 'json' | 'csv' = 'json') => {
     setExportLoading(true);
     try {
       const { data, error } = await supabase.rpc('fn_rgpd_exporter_rate_limited' as any);
       if (error) throw error;
-      // L3: Audit RGPD export
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
         p_action: 'RGPD_EXPORT_DONNEES',
         p_type_ressource: 'soignant', p_id_ressource: user!.id,
-        p_cle_s3: null, p_details: { format: 'json' },
+        p_cle_s3: null, p_details: { format },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+
+      let blob: Blob;
+      let filename: string;
+      if (format === 'csv') {
+        // Flatten data to CSV
+        const rows: string[][] = [];
+        const flatten = (obj: any, prefix = '') => {
+          for (const [k, v] of Object.entries(obj || {})) {
+            const key = prefix ? `${prefix}.${k}` : k;
+            if (Array.isArray(v)) rows.push([key, JSON.stringify(v)]);
+            else if (typeof v === 'object' && v !== null) flatten(v, key);
+            else rows.push([key, String(v ?? '')]);
+          }
+        };
+        flatten(data);
+        const csv = 'Champ,Valeur\n' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        filename = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.csv`;
+      } else {
+        blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        filename = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-      afficherNotification({ type: 'succes', message: 'Données exportées avec succès.' });
+      afficherNotification({ type: 'succes', message: `Données exportées en ${format.toUpperCase()}.` });
     } catch (err: any) {
       capturerErreurSentry(err, 'ProfilSoignant', 'export_rgpd');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
@@ -813,14 +833,24 @@ export default function ProfilSoignant() {
       <div className="max-w-2xl mt-12 space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
 
-        <button
-          onClick={handleExportRGPD}
-          disabled={exportLoading}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
-        >
-          <Download className="h-4 w-4" />
-          {exportLoading ? 'Export en cours…' : '📥 Télécharger mes données (RGPD)'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => handleExportRGPD('json')}
+            disabled={exportLoading}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {exportLoading ? 'Export…' : 'Exporter JSON'}
+          </button>
+          <button
+            onClick={() => handleExportRGPD('csv')}
+            disabled={exportLoading}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {exportLoading ? 'Export…' : 'Exporter CSV'}
+          </button>
+        </div>
 
         <button
           onClick={() => setShowDeleteModal(true)}

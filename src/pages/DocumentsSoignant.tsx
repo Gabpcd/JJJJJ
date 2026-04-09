@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
+import { logger } from '@/lib/logger';
 import { useNavigate } from 'react-router-dom';
 import { FolderOpen, AlertCircle, Clock, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -199,7 +200,8 @@ export default function DocumentsSoignant() {
       } else {
         setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
       }
-    }).catch(() => {
+    }).catch((err) => {
+      logger.warn('[DocumentsSoignant] coherence check failed', err);
       setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
     });
   }, [user, mesDocuments]);

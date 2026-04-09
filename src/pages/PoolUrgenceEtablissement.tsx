@@ -225,7 +225,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!UUID_REGEX.test(proposerSoignant.soignant_id)) {
-      console.warn('assignation pool error: soignant_id invalide', proposerSoignant.soignant_id);
+      logger.warn('[PoolUrgence] assignation pool error: soignant_id invalide', proposerSoignant.soignant_id);
       toast.error(`ID soignant invalide : ${proposerSoignant.soignant_id}`);
       return;
     }
@@ -241,7 +241,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
       .maybeSingle();
 
     if (checkError) {
-      console.warn('assignation pool check error:', checkError);
+      logger.warn('[PoolUrgence] assignation pool check error', checkError);
       toast.error('Impossible de proposer cette mission. Veuillez réessayer.');
       setAssigningMissionId(null);
       return;
