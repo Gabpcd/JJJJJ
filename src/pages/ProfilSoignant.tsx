@@ -134,6 +134,8 @@ export default function ProfilSoignant() {
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
   const [consentementGPS, setConsentementGPS] = useState(true);
   const [gpsToggling, setGpsToggling] = useState(false);
+  const [consentementSMS, setConsentementSMS] = useState(false);
+  const [smsToggling, setSmsToggling] = useState(false);
 
   // RGPD states
   const [exportLoading, setExportLoading] = useState(false);
@@ -200,6 +202,7 @@ export default function ProfilSoignant() {
         setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
         setTypesContrat(getTypesContratSoignant(data as any));
         setConsentementGPS(data.consentement_gps !== false);
+        setConsentementSMS(data.sms_actif === true);
         setPoolUrgenceActif(data.disponible_urgence || false);
         setPoolUrgenceRayon(data.urgence_rayon_km || 15);
       }
@@ -660,6 +663,50 @@ export default function ProfilSoignant() {
             />
           </div>
         </div>
+
+        {/* Consentement SMS */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">Notifications SMS</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm text-foreground font-medium">Recevoir les alertes par SMS</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {consentementSMS
+                  ? 'Vous recevrez un SMS pour les missions urgentes et les annulations tardives.'
+                  : 'Activez pour recevoir les notifications critiques par SMS (missions urgentes, annulations).'}
+              </p>
+            </div>
+            <Switch
+              checked={consentementSMS}
+              disabled={smsToggling}
+              onCheckedChange={async (checked) => {
+                setSmsToggling(true);
+                const { error } = await supabase
+                  .from('soignants')
+                  .update({ sms_actif: checked, sms_consent_le: checked ? new Date().toISOString() : null })
+                  .eq('id', user!.id);
+                if (error) {
+                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+                } else {
+                  setConsentementSMS(checked);
+                  await supabase.rpc('fn_ecrire_audit_safe', {
+                    p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
+                    p_action: checked ? 'SMS_CONSENTEMENT_ACTIVE' : 'SMS_CONSENTEMENT_RETIRE',
+                    p_type_ressource: 'soignant', p_id_ressource: user!.id,
+                    p_cle_s3: null, p_details: { sms_actif: checked },
+                    p_ip: null, p_navigateur: navigator.userAgent,
+                  });
+                  afficherNotification({
+                    type: checked ? 'succes' : 'avertissement',
+                    message: checked ? 'Notifications SMS activées.' : 'Notifications SMS désactivées.',
+                  });
+                }
+                setSmsToggling(false);
+              }}
+            />
+          </div>
+        </div>
+
         <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50">
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>
