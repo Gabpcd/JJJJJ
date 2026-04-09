@@ -20,6 +20,7 @@ function corsHeaders(req: Request) {
     "http://localhost:5173",
     "http://localhost:8080",
   ];
+  const ok = allowed.includes(origin);
   return {
     "Access-Control-Allow-Origin": ok ? origin : "https://app.jolene.app",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
