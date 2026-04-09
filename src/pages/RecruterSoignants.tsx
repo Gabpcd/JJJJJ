@@ -37,7 +37,7 @@ export default function RecruterSoignants() {
         <section className="py-16 md:py-20">
           <div className="max-w-4xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Le staffing médical simplifié</h2>
-            <div className="grid md:grid-cols-2 gap-8">
+            <div className="grid md:grid-cols-2 gap-4 md:gap-8">
               <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-6">
                 <h3 className="font-semibold text-destructive mb-3">😤 Le problème</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
@@ -64,7 +64,7 @@ export default function RecruterSoignants() {
         <section className="py-16 md:py-20 bg-muted/50">
           <div className="max-w-6xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Nos garanties</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
               {garanties.map((g) => (
                 <div key={g.titre} className="text-center">
                   <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">

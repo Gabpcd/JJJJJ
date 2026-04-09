@@ -42,7 +42,7 @@ export default function APropos() {
         <section className="py-16 md:py-20 bg-muted/50">
           <div className="max-w-3xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">La fondatrice</h2>
-            <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
               {/* Avatar placeholder */}
               <div className="w-28 h-28 rounded-full bg-primary flex items-center justify-center shrink-0">
                 <span className="text-3xl font-bold text-primary-foreground">GP</span>

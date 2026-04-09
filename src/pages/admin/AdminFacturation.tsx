@@ -364,7 +364,7 @@ export default function AdminFacturation() {
             <Input placeholder="Rechercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10" />
           </div>
           <Select value={filtreStatut} onValueChange={setFiltreStatut}>
-            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {STATUTS.map(s => <SelectItem key={s} value={s}>{s === 'TOUS' ? 'Tous statuts' : s}</SelectItem>)}
             </SelectContent>

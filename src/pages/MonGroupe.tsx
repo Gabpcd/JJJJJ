@@ -92,11 +92,11 @@ export default function MonGroupe() {
 
       {/* Filtres */}
       <div className="flex gap-2 flex-wrap mb-4">
-        <select value={filtreDepartement} onChange={(e) => setFiltreDepartement(e.target.value)} className="input-base text-sm flex-1 min-w-[150px]">
+        <select value={filtreDepartement} onChange={(e) => setFiltreDepartement(e.target.value)} className="input-base text-sm flex-1 flex-1 min-w-0 sm:min-w-[150px]">
           <option value="">Tous les départements</option>
           {departements.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
-        <select value={filtreType} onChange={(e) => setFiltreType(e.target.value)} className="input-base text-sm flex-1 min-w-[150px]">
+        <select value={filtreType} onChange={(e) => setFiltreType(e.target.value)} className="input-base text-sm flex-1 flex-1 min-w-0 sm:min-w-[150px]">
           <option value="">Tous les types</option>
           {types.map(t => <option key={t} value={t}>{getLabelTypeEtablissement(t)}</option>)}
         </select>

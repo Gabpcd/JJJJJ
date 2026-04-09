@@ -39,7 +39,7 @@ export function SelecteurEtablissement({
           <select
             value={filtreDepartement || ''}
             onChange={(e) => onChangeDepartement?.(e.target.value)}
-            className="input-base text-sm flex-1 min-w-[150px]"
+            className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]"
           >
             <option value="">Tous les départements</option>
             {departements.map(d => (
@@ -49,7 +49,7 @@ export function SelecteurEtablissement({
           <select
             value={filtreType || ''}
             onChange={(e) => onChangeType?.(e.target.value)}
-            className="input-base text-sm flex-1 min-w-[150px]"
+            className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]"
           >
             <option value="">Tous les types</option>
             {types.map(t => (
