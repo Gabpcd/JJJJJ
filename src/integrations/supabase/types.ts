@@ -933,6 +933,42 @@ export type Database = {
           },
         ]
       }
+      email_queue: {
+        Row: {
+          cree_le: string
+          data: Json | null
+          destinataire_email: string | null
+          destinataire_id: string | null
+          envoye: boolean | null
+          envoye_le: string | null
+          erreur: string | null
+          id: string
+          type: string
+        }
+        Insert: {
+          cree_le?: string
+          data?: Json | null
+          destinataire_email?: string | null
+          destinataire_id?: string | null
+          envoye?: boolean | null
+          envoye_le?: string | null
+          erreur?: string | null
+          id?: string
+          type: string
+        }
+        Update: {
+          cree_le?: string
+          data?: Json | null
+          destinataire_email?: string | null
+          destinataire_id?: string | null
+          envoye?: boolean | null
+          envoye_le?: string | null
+          erreur?: string | null
+          id?: string
+          type?: string
+        }
+        Relationships: []
+      }
       emails_envoyes: {
         Row: {
           cree_le: string | null
@@ -3856,27 +3892,36 @@ export type Database = {
       tokens_push: {
         Row: {
           actif: boolean | null
+          auth_key: string | null
           cree_le: string | null
           derniere_utilisation: string | null
+          endpoint: string | null
           id: string
+          p256dh: string | null
           plateforme: string | null
           token: string
           utilisateur_id: string
         }
         Insert: {
           actif?: boolean | null
+          auth_key?: string | null
           cree_le?: string | null
           derniere_utilisation?: string | null
+          endpoint?: string | null
           id?: string
+          p256dh?: string | null
           plateforme?: string | null
           token: string
           utilisateur_id: string
         }
         Update: {
           actif?: boolean | null
+          auth_key?: string | null
           cree_le?: string | null
           derniere_utilisation?: string | null
+          endpoint?: string | null
           id?: string
+          p256dh?: string | null
           plateforme?: string | null
           token?: string
           utilisateur_id?: string
@@ -3990,6 +4035,8 @@ export type Database = {
       }
       fn_audit_connexion: { Args: { p_action: string }; Returns: Json }
       fn_auto_facturation_mensuelle: { Args: never; Returns: Json }
+      fn_auto_terminer_missions: { Args: never; Returns: Json }
+      fn_auto_transitions_missions: { Args: never; Returns: Json }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_badge_stats: { Args: never; Returns: Json }
       fn_bfa_info: { Args: { p_annee?: number }; Returns: Json }
@@ -4011,6 +4058,14 @@ export type Database = {
       }
       fn_calculer_bfa_tous: { Args: never; Returns: Json }
       fn_calculer_cotisations: { Args: { p_mission_id: string }; Returns: Json }
+      fn_calculer_heures_majorees: {
+        Args: { p_debut: string; p_fin: string }
+        Returns: {
+          heures_dimanche: number
+          heures_ferie: number
+          heures_nuit: number
+        }[]
+      }
       fn_calculer_heures_totales: {
         Args: { p_soignant_id: string }
         Returns: Json
@@ -4038,6 +4093,10 @@ export type Database = {
         Returns: boolean
       }
       fn_charger_demo_investisseur: { Args: never; Returns: Json }
+      fn_check_rate_limit: {
+        Args: { p_action: string; p_max_per_minute?: number }
+        Returns: boolean
+      }
       fn_cloturer_litige: {
         Args: { p_litige_id: string; p_resolution?: string }
         Returns: Json
@@ -4914,7 +4973,7 @@ export type Database = {
         Returns: Json
       }
       fn_upsert_token_push: {
-        Args: { p_plateforme: string; p_token: string }
+        Args: { p_plateforme?: string; p_token: string }
         Returns: undefined
       }
       fn_user_id_pour_etablissement: {
