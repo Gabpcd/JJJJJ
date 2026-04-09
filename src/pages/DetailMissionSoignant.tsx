@@ -149,7 +149,9 @@ export default function DetailMissionSoignant() {
       .catch(() => {});
   }, [mission?.etablissement_id]);
 
-  if (loading || !mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (!loading && !mission) return <LayoutApp role="SOIGNANT"><div className="text-center py-20"><p className="text-lg font-semibold text-foreground">Mission introuvable</p><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate('/soignant/missions')} className="btn-primary mt-4">Retour aux missions</button></div></LayoutApp>;
+  if (!mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
   const distance = calculerDistanceKm(
     soignant.adresse_lat, soignant.adresse_lng,

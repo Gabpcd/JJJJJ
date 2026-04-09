@@ -344,7 +344,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const backUrl = isAdmin ? '/admin/calendrier' : '/etablissement/missions';
   const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour aux missions';
 
-  if (loading || !mission) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
+  if (!loading && !mission) return <LayoutApp role={role}><div className="text-center py-20"><p className="text-lg font-semibold text-foreground">Mission introuvable</p><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate(-1)} className="btn-primary mt-4">Retour</button></div></LayoutApp>;
 
   const m = mission;
   const debut = new Date(m.debut_le);
