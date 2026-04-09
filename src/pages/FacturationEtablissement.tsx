@@ -833,78 +833,23 @@ export default function FacturationEtablissement() {
             </div>
           )}
 
-          {/* RIB Jolene pour paiement par virement */}
-          <div className="card-base mb-6 bg-muted/30">
-            <div className="flex items-start gap-3">
-              <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">🏦 Coordonnées bancaires Jolene SASU</p>
-                {ENTREPRISE.iban && ENTREPRISE.iban !== 'FR76 XXXX XXXX XXXX XXXX XXXX XXX' ? (
-                  <>
-                    <p className="text-xs text-muted-foreground"><strong>IBAN :</strong> {ENTREPRISE.iban}</p>
-                    <p className="text-xs text-muted-foreground"><strong>BIC :</strong> {ENTREPRISE.bic}</p>
-                  </>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">Coordonnées bancaires disponibles prochainement</p>
-                )}
-                <p className="text-xs text-muted-foreground"><strong>Référence à indiquer :</strong> le numéro de facture</p>
+          {/* RIB Jolene — masqué si pas encore d'IBAN */}
+          {ENTREPRISE.iban && ENTREPRISE.iban !== 'FR76 XXXX XXXX XXXX XXXX XXXX XXX' && (
+            <div className="card-base mb-6 bg-muted/30">
+              <div className="flex items-start gap-3">
+                <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">🏦 Coordonnées bancaires Jolene</p>
+                  <p className="text-xs text-muted-foreground"><strong>IBAN :</strong> {ENTREPRISE.iban}</p>
+                  <p className="text-xs text-muted-foreground"><strong>BIC :</strong> {ENTREPRISE.bic}</p>
+                  <p className="text-xs text-muted-foreground"><strong>Référence à indiquer :</strong> le numéro de facture</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Missions non facturées */}
-          <div id="missions-non-facturees" className="card-base mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-foreground">Missions terminées non facturées</h2>
-              <span className="badge-base bg-warning/10 text-warning">{missionsNonFacturees.length} mission{missionsNonFacturees.length > 1 ? 's' : ''}</span>
-            </div>
-
-            {missionsNonFacturees.length > 0 ? (
-              <>
-                <div className="overflow-x-auto mb-4">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left text-muted-foreground">
-                        <th className="pb-2 font-medium">Date</th>
-                        <th className="pb-2 font-medium">Intitulé</th>
-                        <th className="pb-2 font-medium text-right">Commission HT</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {missionsNonFacturees.map(m => (
-                        <tr key={m.id} className="border-b border-border/50">
-                          <td className="py-2 text-muted-foreground">{m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
-                          <td className="py-2">
-                            <button onClick={() => navigate(`/etablissement/missions/${m.id}`)} className="text-primary hover:underline text-left">
-                              {m.intitule}
-                            </button>
-                          </td>
-                          <td className="py-2 text-right font-medium">{(m.montant_commission_ht ?? 0).toFixed(2)} €</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="font-bold">
-                        <td colSpan={2} className="pt-3 text-right text-foreground">Total TTC</td>
-                        <td className="pt-3 text-right text-primary">
-                          {missionsNonFacturees.reduce((s, m) => s + (m.montant_commission_ttc ?? 0), 0).toFixed(2)} €
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-                <button onClick={genererFactureMois} disabled={generating} className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50">
-                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                  Générer la facture du mois
-                </button>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">✅ Toutes les missions terminées ont été facturées.</p>
-            )}
-          </div>
-
-          {/* Liste des factures */}
-          <div id="liste-factures">
+          {/* Liste des factures — EN PREMIER pour payer immédiatement */}
+          <div id="liste-factures" className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-bold text-foreground">
                 {filtreStatut === 'EN_COURS' ? 'Factures en cours' : filtreStatut === 'PAYEE' ? 'Factures payées' : 'Factures'}
@@ -1019,6 +964,42 @@ export default function FacturationEtablissement() {
               );
             })()}
           </div>
+
+          {/* Missions non facturées — en bas car moins urgent que payer */}
+          {missionsNonFacturees.length > 0 && (
+            <div id="missions-non-facturees" className="card-base mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-foreground">Missions à facturer</h2>
+                <span className="badge-base bg-warning/10 text-warning">{missionsNonFacturees.length} mission{missionsNonFacturees.length > 1 ? 's' : ''}</span>
+              </div>
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="pb-2 font-medium">Date</th>
+                      <th className="pb-2 font-medium">Intitulé</th>
+                      <th className="pb-2 font-medium text-right">Commission HT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missionsNonFacturees.map(m => (
+                      <tr key={m.id} className="border-b border-border/50">
+                        <td className="py-2 text-muted-foreground">{m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
+                        <td className="py-2">
+                          <button onClick={() => navigate(`/etablissement/missions/${m.id}`)} className="text-primary hover:underline text-left">{m.intitule}</button>
+                        </td>
+                        <td className="py-2 text-right font-medium">{(m.montant_commission_ht ?? 0).toFixed(2)} €</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button onClick={genererFactureMois} disabled={generating} className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50">
+                {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                Générer la facture du mois
+              </button>
+            </div>
+          )}
 
           {/* Historique SEPA */}
           {etab?.mode_paiement_commission === 'SEPA_DEBIT' && prelevements.length > 0 && (
