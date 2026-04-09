@@ -25,7 +25,10 @@ interface InfoPaiement {
   type_exercice?: string;
 }
 
-const isRefValid = (ref: string) => ref.trim().length >= 5 && /\d/.test(ref);
+const isRefValid = (ref: string) => {
+  const t = ref.trim();
+  return t.length >= 6 && /\d{2,}/.test(t) && /[A-Za-z]/.test(t);
+};
 
 export function WorkflowPaiementMission({ missionId, soignantAssigneId, etablissementId, onStartConnectPay, soignantHasConnect }: Props) {
   const [info, setInfo] = useState<InfoPaiement | null>(null);

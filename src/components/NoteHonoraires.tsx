@@ -15,6 +15,13 @@ function fmt(v: number | null | undefined): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
+function genererNumeroNote(missionId: string): string {
+  // Génère un numéro lisible à partir de l'ID mission si aucun numéro officiel n'existe
+  const hash = missionId.replace(/-/g, '').substring(0, 8).toUpperCase();
+  const date = new Date();
+  return `NH-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${hash}`;
+}
+
 function genererPDFNote(m: any, soignant: any, etab: any) {
   const doc = new jsPDF();
   const duree = m.duree_heures ?? 0;
@@ -24,6 +31,7 @@ function genererPDFNote(m: any, soignant: any, etab: any) {
   const assujettiTVA = soignant?.assujetti_tva === true;
   const tva = assujettiTVA ? totalHT * 0.2 : 0;
   const totalTTC = totalHT + tva;
+  const numNote = m.numero_note_honoraires || genererNumeroNote(m.id);
 
   // Header
   doc.setFontSize(10);
@@ -31,7 +39,7 @@ function genererPDFNote(m: any, soignant: any, etab: any) {
   doc.text('NOTE D\'HONORAIRES', 105, 20, { align: 'center' });
   doc.setFontSize(12);
   doc.setTextColor(224, 69, 144);
-  doc.text(`N° ${m.numero_note_honoraires || 'NH-XXXX-XXXX'}`, 105, 28, { align: 'center' });
+  doc.text(`N° ${numNote}`, 105, 28, { align: 'center' });
   doc.setDrawColor(200);
   doc.line(14, 32, 196, 32);
 
@@ -130,7 +138,7 @@ function genererPDFNote(m: any, soignant: any, etab: any) {
   const pageH = doc.internal.pageSize.height;
   doc.setFontSize(7);
   doc.setTextColor(150);
-  doc.text('Document généré par Jolene — Valeur indicative', 105, pageH - 10, { align: 'center' });
+  doc.text('Document généré via Jolene · SASU · SIRET 103 305 744 00015 · 103 rue de Vaugirard, 75006 Paris', 105, pageH - 10, { align: 'center' });
 
   doc.save(`note_honoraires_${m.numero_note_honoraires || m.id}.pdf`);
 }
@@ -160,7 +168,7 @@ export function NoteHonoraires({ mission, soignant, etablissement, onAudit }: No
       {/* Header */}
       <div className="text-center mb-6 print:mb-4">
         <h2 className="text-lg font-bold text-foreground">NOTE D'HONORAIRES</h2>
-        <p className="text-sm text-primary font-semibold mt-1">N° {m.numero_note_honoraires || 'NH-XXXX-XXXX'}</p>
+        <p className="text-sm text-primary font-semibold mt-1">N° {m.numero_note_honoraires || genererNumeroNote(m.id)}</p>
       </div>
 
       {/* De / À */}

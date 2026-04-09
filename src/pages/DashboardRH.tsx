@@ -34,7 +34,7 @@ export default function DashboardRH() {
       setLoading(true);
       const { data, error } = await supabase.rpc('fn_stats_rh_etablissement' as any);
       if (error) {
-        console.error('[DashboardRH] RPC error', error);
+        console.warn('[DashboardRH] RPC error', error);
       } else {
         setStats(data);
       }

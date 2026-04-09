@@ -60,7 +60,10 @@ const PAIEMENT_STATUT_LABELS: Record<string, string> = {
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 
-const isRefValid = (ref: string) => ref.trim().length >= 5 && /\d/.test(ref);
+const isRefValid = (ref: string) => {
+  const t = ref.trim();
+  return t.length >= 6 && /\d{2,}/.test(t) && /[A-Za-z]/.test(t);
+};
 
 export default function FacturationEtablissement() {
   usePageTitle('Facturation');
