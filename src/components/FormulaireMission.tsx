@@ -142,7 +142,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     }
   }, [missionSource]);
 
-  const taux = parseFloat(tauxHoraire) || 0;
+  const tauxBrut = parseFloat(tauxHoraire) || 0;
+  const taux = Math.min(10000, Math.max(0, tauxBrut));
 
   const { dureeEstimee, heuresNuitEstimees } = useMemo(() => {
     if (modeRecurrent || !debutLe || !finLe) return { dureeEstimee: 0, heuresNuitEstimees: 0 };

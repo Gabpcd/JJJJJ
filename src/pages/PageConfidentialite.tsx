@@ -69,7 +69,24 @@ export default function PageConfidentialite() {
           <p><strong>Jolene ne stocke aucune donnée de santé à caractère personnel</strong> au sens de l'article L.1111-8 du Code de la santé publique. Les vaccinations et aptitudes médicales sont déclarées sur l'honneur par le Soignant et vérifiées en présentiel par l'Établissement lors de la première mission.</p>
         </div>
         <p className="mb-3">L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne (France). Les sauvegardes sont chiffrées (AES-256) et répliquées sur un site secondaire au sein de l'UE.</p>
-        <p>Les transferts de données hors UE, s'ils devaient avoir lieu dans le cadre de prestations techniques de sous-traitants, sont encadrés par des clauses contractuelles types approuvées par la Commission européenne (décision 2021/914).</p>
+        <p className="mb-3">Les transferts de données hors UE, s'ils devaient avoir lieu dans le cadre de prestations techniques de sous-traitants, sont encadrés par des clauses contractuelles types approuvées par la Commission européenne (décision 2021/914).</p>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">3.2 — Sous-traitants et processeurs de données</h3>
+        <p className="mb-3">Les données personnelles peuvent être transmises aux sous-traitants suivants, dans le strict cadre de leurs prestations :</p>
+        <div className="overflow-x-auto mb-3">
+          <table className="w-full text-sm border border-border rounded-xl overflow-hidden">
+            <thead><tr className="bg-muted/50"><th className="px-4 py-2 text-left font-semibold text-foreground">Sous-traitant</th><th className="px-4 py-2 text-left font-semibold text-foreground">Finalité</th><th className="px-4 py-2 text-left font-semibold text-foreground">Données concernées</th><th className="px-4 py-2 text-left font-semibold text-foreground">Localisation</th></tr></thead>
+            <tbody className="divide-y divide-border">
+              <tr><td className="px-4 py-2 text-foreground">Supabase Inc.</td><td className="px-4 py-2 text-muted-foreground">Hébergement, base de données, stockage</td><td className="px-4 py-2 text-muted-foreground">Toutes données</td><td className="px-4 py-2 text-muted-foreground">UE (AWS Paris)</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Stripe Inc.</td><td className="px-4 py-2 text-muted-foreground">Paiements, SEPA, Connect</td><td className="px-4 py-2 text-muted-foreground">IBAN, identité, facturation</td><td className="px-4 py-2 text-muted-foreground">UE (Ireland)</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Anthropic PBC</td><td className="px-4 py-2 text-muted-foreground">Vérification IA de documents</td><td className="px-4 py-2 text-muted-foreground">Documents téléversés, nom du soignant</td><td className="px-4 py-2 text-muted-foreground">USA (SCC)</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Twilio Inc.</td><td className="px-4 py-2 text-muted-foreground">Envoi de SMS</td><td className="px-4 py-2 text-muted-foreground">Numéro de téléphone, contenu SMS</td><td className="px-4 py-2 text-muted-foreground">USA (SCC)</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Yousign SAS</td><td className="px-4 py-2 text-muted-foreground">Signature électronique des contrats</td><td className="px-4 py-2 text-muted-foreground">Nom, prénom, contrat de mission</td><td className="px-4 py-2 text-muted-foreground">France</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Resend Inc.</td><td className="px-4 py-2 text-muted-foreground">Envoi d'emails transactionnels</td><td className="px-4 py-2 text-muted-foreground">Adresse email, contenu email</td><td className="px-4 py-2 text-muted-foreground">USA (SCC)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-muted-foreground italic">SCC = Standard Contractual Clauses (clauses contractuelles types, décision 2021/914). Les documents transmis à Anthropic pour vérification ne sont pas conservés par le prestataire au-delà du traitement.</p>
       </section>
 
       {/* Article 4 */}
