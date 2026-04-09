@@ -131,25 +131,21 @@ const WHITE = '#FFFFFF';
   const ctx = c.getContext('2d');
   const s = 1024;
 
-  // Fond rose uni
   ctx.fillStyle = ROSE;
   ctx.fillRect(0, 0, s, s);
 
-  // Subtile texture : cercle plus clair en haut à droite
   const radGrad = ctx.createRadialGradient(s*0.7, s*0.2, 0, s*0.7, s*0.2, s*0.6);
   radGrad.addColorStop(0, 'rgba(255,255,255,0.12)');
   radGrad.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = radGrad;
   ctx.fillRect(0, 0, s, s);
 
-  // Lettre J
   ctx.font = '800 420px Inter, system-ui, sans-serif';
   ctx.fillStyle = WHITE;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('J', s/2, s/2 - 60);
 
-  // Ligne ECG sous le J
   ctx.beginPath();
   ctx.moveTo(200, 680);
   ctx.lineTo(380, 680);
@@ -165,11 +161,114 @@ const WHITE = '#FFFFFF';
   ctx.lineJoin = 'round';
   ctx.stroke();
 
-  // "olene" à droite du pulse
   ctx.font = '600 72px Inter, system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.textAlign = 'center';
   ctx.fillText('olene', s/2 + 50, s - 120);
+})();
+
+// === OPTION 4 : Style Lovable amélioré — plus contrasté ===
+(function() {
+  const c4 = document.createElement('canvas');
+  c4.id = 'icon4';
+  c4.width = 1024;
+  c4.height = 1024;
+  c4.style.borderRadius = '20px';
+  c4.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+  document.body.insertBefore(c4, document.querySelector('p'));
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = 'Option 4 — Style Lovable contrasté (recommandé)';
+  document.body.insertBefore(label, document.querySelector('p'));
+
+  const ctx = c4.getContext('2d');
+  const s = 1024;
+
+  // Fond dégradé rose vif → violet profond (plus contrasté que Lovable)
+  const grad = ctx.createLinearGradient(0, 0, s, s);
+  grad.addColorStop(0, '#E04590');
+  grad.addColorStop(0.5, '#C2185B');
+  grad.addColorStop(1, '#7B1FA2');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, s, s);
+
+  // Texte "Jolene" — plus gros, centré
+  ctx.font = '700 180px Inter, system-ui, sans-serif';
+  ctx.fillStyle = WHITE;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.letterSpacing = '4px';
+  ctx.fillText('Jolene', s/2, s/2 - 30);
+
+  // Ligne ECG sous le texte — signature visuelle
+  const y = s/2 + 90;
+  ctx.beginPath();
+  ctx.moveTo(180, y);
+  ctx.lineTo(350, y);
+  ctx.lineTo(400, y - 50);
+  ctx.lineTo(450, y + 60);
+  ctx.lineTo(500, y - 30);
+  ctx.lineTo(540, y + 15);
+  ctx.lineTo(580, y);
+  ctx.lineTo(844, y);
+  ctx.strokeStyle = WHITE;
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+})();
+
+// === OPTION 5 : J bold seul sur rose foncé (ultra lisible en petit) ===
+(function() {
+  const c5 = document.createElement('canvas');
+  c5.id = 'icon5';
+  c5.width = 1024;
+  c5.height = 1024;
+  c5.style.borderRadius = '20px';
+  c5.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+  document.body.insertBefore(c5, document.querySelector('p'));
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = 'Option 5 — J seul (lisible même en 29px)';
+  document.body.insertBefore(label, document.querySelector('p'));
+
+  const ctx = c5.getContext('2d');
+  const s = 1024;
+
+  // Fond rose foncé uni
+  ctx.fillStyle = '#C2185B';
+  ctx.fillRect(0, 0, s, s);
+
+  // Subtil halo lumineux
+  const radGrad = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s*0.5);
+  radGrad.addColorStop(0, 'rgba(255,255,255,0.08)');
+  radGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = radGrad;
+  ctx.fillRect(0, 0, s, s);
+
+  // J massif
+  ctx.font = '900 620px Inter, system-ui, sans-serif';
+  ctx.fillStyle = WHITE;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('J', s/2 + 5, s/2 + 10);
+
+  // Micro pulse en bas du J
+  const y = s/2 + 250;
+  ctx.beginPath();
+  ctx.moveTo(340, y);
+  ctx.lineTo(430, y);
+  ctx.lineTo(460, y - 30);
+  ctx.lineTo(490, y + 35);
+  ctx.lineTo(520, y - 15);
+  ctx.lineTo(545, y + 8);
+  ctx.lineTo(570, y);
+  ctx.lineTo(684, y);
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
 })();
 </script>
 </body>
