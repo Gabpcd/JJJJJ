@@ -8,6 +8,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RouteProtegee } from "@/components/RouteProtegee";
 import { PageTransition } from "@/components/PageTransition";
 import { ChargementPage } from "@/components/ChargementPage";
+import { BandeauCookies } from "@/components/BandeauCookies";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { Toaster } from "sonner";
 
@@ -266,6 +267,7 @@ const App = () => (
             <BrowserRouter>
               <AppRoutes />
               <Toaster position="top-right" richColors closeButton />
+              <BandeauCookies />
             </BrowserRouter>
           </NotificationProvider>
         </AuthProvider>

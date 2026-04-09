@@ -25,7 +25,7 @@ export function CalendrierMiniSemaine({ missions }: Props) {
         <h2 className="text-base font-semibold text-foreground">📅 Cette semaine</h2>
         <button onClick={() => navigate('/soignant/planning')} className="text-xs text-primary font-medium hover:underline">Planning →</button>
       </div>
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1 min-w-[320px]">
         {jours.map(j => (
           <button
             key={j.label}
