@@ -97,25 +97,26 @@ export default function AdminGroupes() {
       let allSoignantIds = new Set<string>();
 
       if (etabIds.length > 0) {
-        // Stats par clinique
-        for (const etab of (etabs ?? [])) {
-          const [resMissions, resFactures] = await Promise.all([
-            supabase.from('missions')
-              .select('id, statut, soignant_assigne_id, montant_commission_ht, montant_commission_ttc')
-              .eq('etablissement_id', etab.id),
-            supabase.from('factures')
-              .select('montant_ttc, statut')
-              .eq('etablissement_id', etab.id),
-          ]);
+        // 2 requêtes batch au lieu de N×2 requêtes par clinique
+        const [resMissions, resFactures] = await Promise.all([
+          supabase.from('missions')
+            .select('id, statut, soignant_assigne_id, montant_commission_ht, montant_commission_ttc, etablissement_id')
+            .in('etablissement_id', etabIds),
+          supabase.from('factures')
+            .select('montant_ttc, statut, etablissement_id')
+            .in('etablissement_id', etabIds),
+        ]);
 
-          const missions = resMissions.data ?? [];
-          const factures = resFactures.data ?? [];
+        const allMissions = resMissions.data ?? [];
+        const allFactures = resFactures.data ?? [];
+
+        for (const etab of (etabs ?? [])) {
+          const missions = allMissions.filter(m => m.etablissement_id === etab.id);
+          const factures = allFactures.filter(f => f.etablissement_id === etab.id);
 
           const nbMissions = missions.length;
-          // Enum réel : OUVERTE, ASSIGNEE, EN_COURS, TERMINEE, ANNULEE_*, ABSENCE, LITIGE
           const nbEnCours = missions.filter(m => ['OUVERTE', 'ASSIGNEE', 'EN_COURS'].includes(m.statut)).length;
           const nbTerminees = missions.filter(m => m.statut === 'TERMINEE').length;
-          // CA commissions = somme des commissions des missions terminées (valeur réelle, pas juste factures)
           const caCommissions = missions
             .filter(m => m.statut === 'TERMINEE')
             .reduce((s, m) => s + (Number(m.montant_commission_ttc) || 0), 0);
