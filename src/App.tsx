@@ -10,6 +10,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { ChargementPage } from "@/components/ChargementPage";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { Toaster } from "sonner";
+import { BandeauCookies } from "@/components/BandeauCookies";
 
 /* ─── Public pages ─── */
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
@@ -252,6 +253,7 @@ const App = () => (
             <BrowserRouter>
               <AppRoutes />
               <Toaster position="top-center" richColors closeButton toastOptions={{ style: { marginTop: 'env(safe-area-inset-top, 0px)' } }} />
+              <BandeauCookies />
             </BrowserRouter>
           </NotificationProvider>
         </AuthProvider>
