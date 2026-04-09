@@ -65,6 +65,7 @@ const PremiumSoignant = lazy(() => import("./pages/PremiumSoignant"));
 const ChargesSociales = lazy(() => import("./pages/ChargesSociales"));
 const PageParrainage = lazy(() => import("./pages/PageParrainage"));
 const PageMessagerie = lazy(() => import("./pages/PageMessagerie"));
+const SyncCalendrierPage = lazy(() => import("./pages/SyncCalendrier"));
 const LitigesSoignant = lazy(() => import("./pages/LitigesSoignant"));
 const LitigesEtablissement = lazy(() => import("./pages/LitigesEtablissement"));
 const PageStripeConnect = lazy(() => import("./pages/PageStripeConnect"));
@@ -182,6 +183,7 @@ function AppRoutes() {
           <Route path="/soignant/messagerie" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageMessagerie role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/litiges" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><LitigesSoignant /></RouteProtegee>} />
           <Route path="/soignant/stripe-connect" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageStripeConnect /></RouteProtegee>} />
+          <Route path="/soignant/calendrier-sync" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><SyncCalendrierPage /></RouteProtegee>} />
 
           {/* Établissement */}
           <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />

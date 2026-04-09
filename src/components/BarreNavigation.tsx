@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap, Shield } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap, Shield, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -42,6 +42,7 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
         { icone: Search, label: 'Missions disponibles', route: '/soignant/missions' },
         { icone: MapPinned, label: 'Recherche avancée', route: '/soignant/recherche-missions' },
         { icone: CalendarDays, label: 'Mon planning', route: '/soignant/planning' },
+        { icone: RefreshCw, label: 'Sync Calendrier', route: '/soignant/calendrier-sync' },
         { icone: Clock, label: 'Historique', route: '/soignant/historique-missions' },
       ],
     },
