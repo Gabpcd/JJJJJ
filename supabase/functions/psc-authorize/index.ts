@@ -40,7 +40,7 @@ function corsHeaders(req: Request) {
     "http://localhost:5173",
     "http://localhost:8080",
   ];
-  const allowedOrigin = allowed.includes(origin) || origin.endsWith(".lovable.app") || origin.endsWith(".lovableproject.com")
+  const allowedOrigin = allowed.includes(origin)
     ? origin
     : "https://app.jolene.app";
   return {
