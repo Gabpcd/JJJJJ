@@ -152,11 +152,16 @@ export default function PageConfidentialite() {
         <ul className="list-disc pl-6 space-y-3 mb-4">
           <li><strong>Droit d'accès</strong> (article 15) : obtenir la confirmation que des données vous concernant sont traitées et en recevoir une copie.</li>
           <li><strong>Droit de rectification</strong> (article 16) : demander la correction de données inexactes ou incomplètes.</li>
-          <li><strong>Droit à l'effacement</strong> (article 17) : demander la suppression de vos données, sous réserve des obligations légales de conservation.</li>
+          <li><strong>Droit à l'effacement</strong> (article 17) : demander la suppression de vos données, sous réserve des obligations légales de conservation. La suppression entraîne l'anonymisation irréversible de votre profil et le nettoyage de vos données personnelles dans l'ensemble des 34 tables concernées (messages, documents, presences GPS, tokens, candidatures, évaluations, paiements, etc.). Les données comptables sont conservées conformément aux obligations fiscales (10 ans).</li>
           <li><strong>Droit à la limitation du traitement</strong> (article 18) : demander la suspension du traitement de vos données dans certains cas.</li>
           <li><strong>Droit à la portabilité</strong> (article 20) : recevoir vos données dans un format structuré, couramment utilisé et lisible par machine (JSON ou CSV).</li>
           <li><strong>Droit d'opposition</strong> (article 21) : vous opposer au traitement de vos données pour des motifs légitimes.</li>
+          <li><strong>Droit de ne pas faire l'objet d'une décision automatisée</strong> (article 22) : la vérification de documents par intelligence artificielle n'entraîne aucune décision automatisée sans possibilité de recours. En cas de rejet automatique d'un document, vous pouvez demander une revue manuelle à tout moment.</li>
         </ul>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">6.2 — Traitement par intelligence artificielle</h3>
+        <p className="mb-3">Certains documents téléversés (pièce d'identité, diplômes, attestations RCP) sont analysés par un système d'intelligence artificielle (Anthropic Claude) pour vérifier leur authenticité et leur concordance avec les informations déclarées. Ce traitement est fondé sur l'intérêt légitime de l'Éditeur (sécurité de la plateforme et protection des Établissements). Les documents sont transmis via une connexion chiffrée (TLS 1.3) et ne sont pas conservés par le prestataire d'IA au-delà du temps de traitement.</p>
+
         <p className="mb-3">Pour exercer vos droits, adressez votre demande à : <a href="mailto:dpo@jolene.app" className="text-primary underline font-medium">dpo@jolene.app</a></p>
         <p className="mb-3">L'Éditeur s'engage à répondre dans un délai d'un mois. Ce délai peut être prolongé de deux mois en cas de complexité ou de nombre élevé de demandes.</p>
         <p>En cas de difficulté dans l'exercice de vos droits, vous pouvez introduire une réclamation auprès de la Commission Nationale de l'Informatique et des Libertés (CNIL) : <a href="https://www.cnil.fr" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">www.cnil.fr</a></p>

@@ -35,6 +35,12 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Warm ping
+    const bodyRaw = await req.clone().json().catch(() => ({}));
+    if (bodyRaw?.warm === true) {
+      return new Response(JSON.stringify({ warm: true }), { headers: corsHeaders(req) });
+    }
+
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
     const fromNumber = Deno.env.get("TWILIO_PHONE_NUMBER");
