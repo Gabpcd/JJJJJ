@@ -140,7 +140,7 @@ export default function PageParrainage() {
           <div className="text-center">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Votre code parrainage</p>
             <div className="flex items-center justify-center gap-3">
-              <span className="text-3xl font-extrabold text-primary tracking-widest">{codeParrainage || '...'}</span>
+              <span className="text-xl sm:text-3xl font-extrabold text-primary tracking-widest">{codeParrainage || '...'}</span>
               <button
                 onClick={() => copier('code', codeParrainage)}
                 className="h-9 w-9 rounded-lg bg-primary/10 hover:bg-primary/20 flex items-center justify-center transition-colors"
@@ -190,11 +190,11 @@ export default function PageParrainage() {
         {/* Compteur */}
         <div className="grid grid-cols-2 gap-4">
           <div className="rounded-xl border border-border bg-card p-5 text-center">
-            <p className="text-3xl font-extrabold text-primary">{filleulsInscrits}</p>
+            <p className="text-xl sm:text-3xl font-extrabold text-primary">{filleulsInscrits}</p>
             <p className="text-xs text-muted-foreground mt-1">filleul{filleulsInscrits > 1 ? 's' : ''} inscrit{filleulsInscrits > 1 ? 's' : ''}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-5 text-center">
-            <p className="text-3xl font-extrabold text-primary">{filleulsValides}</p>
+            <p className="text-xl sm:text-3xl font-extrabold text-primary">{filleulsValides}</p>
             <p className="text-xs text-muted-foreground mt-1">mission{filleulsValides > 1 ? 's' : ''} terminée{filleulsValides > 1 ? 's' : ''}</p>
           </div>
         </div>

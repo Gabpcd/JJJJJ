@@ -437,7 +437,7 @@ export default function ProfilSoignant() {
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Identité</h2>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Prénom <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
                 <input value={form.prenom} readOnly className="input-base bg-muted cursor-not-allowed" />
@@ -480,7 +480,7 @@ export default function ProfilSoignant() {
               </div>
               {typesContrat.length === 0 && <p className="text-xs text-destructive mt-1">Sélectionnez au moins un type de contrat</p>}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">RPPS <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
                 <input value={form.rpps} readOnly className="input-base bg-muted cursor-not-allowed" />
@@ -600,7 +600,7 @@ export default function ProfilSoignant() {
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
               {geoLoading ? 'Récupération en cours…' : '📍 Utiliser ma position actuelle'}
             </button>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Latitude</label><input type="number" step="any" value={form.lat} onChange={e => maj('lat', e.target.value)} className="input-base" /></div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Longitude</label><input type="number" step="any" value={form.lng} onChange={e => maj('lng', e.target.value)} className="input-base" /></div>
             </div>

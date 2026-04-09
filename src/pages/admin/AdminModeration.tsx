@@ -453,7 +453,7 @@ export default function AdminModeration() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <Label className="mb-1.5 block">Ajuster les heures</Label>
                             <Input type="number" step="0.25" min="0" value={ajusterHeures} onChange={e => setAjusterHeures(e.target.value)} placeholder="Heures réelles" />

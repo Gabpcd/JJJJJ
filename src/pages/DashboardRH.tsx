@@ -265,7 +265,7 @@ export default function DashboardRH() {
             <Target className="h-5 w-5 text-primary" />
             <span className="font-semibold text-foreground">Taux de remplissage</span>
           </div>
-          <p className="text-3xl font-bold text-foreground mb-2">{stats.taux_remplissage}%</p>
+          <p className="text-xl sm:text-3xl font-bold text-foreground mb-2">{stats.taux_remplissage}%</p>
           <Progress value={stats.taux_remplissage} className="h-2" />
         </div>
         <div className="card-base cursor-pointer hover:shadow-md transition-shadow" onClick={() => {
@@ -275,7 +275,7 @@ export default function DashboardRH() {
             <Users className="h-5 w-5 text-info" />
             <span className="font-semibold text-foreground">Soignants mobilisés</span>
           </div>
-          <p className="text-3xl font-bold text-foreground">{stats.soignants_total}</p>
+          <p className="text-xl sm:text-3xl font-bold text-foreground">{stats.soignants_total}</p>
           <p className="text-xs text-muted-foreground">{stats.soignants_ce_mois} ce mois</p>
         </div>
         <div className="card-base cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}>
@@ -283,7 +283,7 @@ export default function DashboardRH() {
             <CheckCircle className="h-5 w-5 text-success" />
             <span className="font-semibold text-foreground">Missions terminées</span>
           </div>
-          <p className="text-3xl font-bold text-foreground">{stats.terminees_total}</p>
+          <p className="text-xl sm:text-3xl font-bold text-foreground">{stats.terminees_total}</p>
           <p className="text-xs text-muted-foreground">{stats.terminees_mois_prec} le mois précédent</p>
         </div>
       </div>

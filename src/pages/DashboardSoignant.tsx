@@ -393,7 +393,7 @@ export default function DashboardSoignant() {
 
       {/* Tabs */}
       <Tabs defaultValue="accueil" className="mb-6">
-        <TabsList className="w-full grid grid-cols-4 mb-4">
+        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 mb-4">
           <TabsTrigger value="accueil" className="text-xs gap-1"><Home className="h-3.5 w-3.5 hidden sm:block" />Accueil</TabsTrigger>
           <TabsTrigger value="activite" className="text-xs gap-1"><Activity className="h-3.5 w-3.5 hidden sm:block" />Activité</TabsTrigger>
           <TabsTrigger value="gains" className="text-xs gap-1"><TrendingUp className="h-3.5 w-3.5 hidden sm:block" />Gains</TabsTrigger>

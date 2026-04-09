@@ -206,7 +206,7 @@ export default function PresencesEtablissement() {
           else setSearchParams({ tab: value }, { replace: true });
         }}
       >
-        <TabsList className="w-full grid grid-cols-4 mb-4">
+        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 mb-4">
           <TabsTrigger value="a_valider" className="text-xs min-h-[44px]" aria-label={`À valider: ${aValider.length} présences`}>
             À valider ({aValider.length})
           </TabsTrigger>

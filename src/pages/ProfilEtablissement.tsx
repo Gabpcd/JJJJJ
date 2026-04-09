@@ -359,7 +359,7 @@ export default function ProfilEtablissement() {
           <h2 className="text-base font-semibold text-foreground mb-4">Informations générales</h2>
           <div className="space-y-3">
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" /></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">SIRET</label><input value={siret} disabled className="input-base bg-muted cursor-not-allowed" /></div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">FINESS</label><input value={form.finess} onChange={e => maj('finess', e.target.value)} className="input-base" /></div>
             </div>
@@ -393,7 +393,7 @@ export default function ProfilEtablissement() {
         </div>
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Contact</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
           </div>
@@ -405,7 +405,7 @@ export default function ProfilEtablissement() {
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
               {geoLoading ? 'Récupération en cours…' : '📍 Localiser mon établissement'}
             </button>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Latitude</label><input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className="input-base" /></div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Longitude</label><input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className="input-base" /></div>
             </div>

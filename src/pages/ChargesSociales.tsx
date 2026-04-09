@@ -165,7 +165,7 @@ export default function ChargesSociales() {
       >
         <div className="text-center">
           <p className="text-sm text-muted-foreground">Chiffre d'affaires libéral cumulé {new Date().getFullYear()}</p>
-          <p className="text-3xl font-bold text-primary mt-1">{fmt(caCumule)}</p>
+          <p className="text-xl sm:text-3xl font-bold text-primary mt-1">{fmt(caCumule)}</p>
           <div className="flex justify-center gap-4 mt-2 text-xs text-muted-foreground">
             <span>{missions.length} mission{missions.length > 1 ? 's' : ''}</span>
             <span>{totalHeures}h travaillées</span>

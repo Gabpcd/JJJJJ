@@ -418,7 +418,7 @@ export default function RechercheMissions() {
             <div
               ref={mapRef}
               className="w-full rounded-xl border border-border overflow-hidden"
-              style={{ height: 'calc(100vh - 280px)', minHeight: '300px', maxHeight: '600px' }}
+              style={{ height: 'min(calc(100vh - 280px), 600px)', minHeight: '250px' }}
             />
             {filtered.length === 0 && !loading && (
               <p className="text-sm text-muted-foreground text-center mt-3">Aucune mission à afficher sur la carte.</p>
