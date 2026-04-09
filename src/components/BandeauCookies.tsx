@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 
 export function BandeauCookies() {
   const [visible, setVisible] = useState(false);
@@ -6,7 +7,6 @@ export function BandeauCookies() {
   useEffect(() => {
     const consent = localStorage.getItem('cookie-consent');
     if (!consent) {
-      // Délai pour ne pas bloquer le premier rendu
       const timer = setTimeout(() => setVisible(true), 1500);
       return () => clearTimeout(timer);
     }
@@ -27,24 +27,27 @@ export function BandeauCookies() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[9997] p-4 sm:p-6" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
-      <div className="max-w-2xl mx-auto bg-card border border-border rounded-2xl shadow-xl p-4 sm:p-5">
+    <div
+      className="fixed inset-0 z-[99999] flex items-end justify-center pointer-events-none"
+      style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px) + 1rem)' }}
+    >
+      <div className="pointer-events-auto max-w-2xl w-full mx-4 bg-card border-2 border-primary/20 rounded-2xl shadow-2xl p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex-1">
             <p className="text-sm font-semibold text-foreground">Cookies et données personnelles</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Jolene utilise des cookies essentiels au fonctionnement de l'application (authentification, préférences).
-              Aucun cookie publicitaire ni de tracking n'est utilisé.{' '}
+              Jolene utilise des cookies essentiels au fonctionnement (authentification, préférences).
+              Aucun cookie publicitaire ni de tracking.{' '}
               <a href="/confidentialite" className="text-primary hover:underline">En savoir plus</a>
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <button onClick={refuser} className="btn-secondary text-xs px-3 py-2">
+            <Button variant="outline" size="sm" onClick={refuser} className="text-xs">
               Refuser
-            </button>
-            <button onClick={accepter} className="btn-primary text-xs px-3 py-2">
+            </Button>
+            <Button size="sm" onClick={accepter} className="text-xs">
               Accepter
-            </button>
+            </Button>
           </div>
         </div>
       </div>

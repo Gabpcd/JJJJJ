@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { ouvrirNavigation } from '@/lib/platform';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { hapticNotification } from '@/lib/haptics';
@@ -385,8 +386,30 @@ export default function DetailMissionSoignant() {
                   {etablissement?.adresse_rue}, {etablissement?.adresse_code_postal} {etablissement?.adresse_ville}
                   {etablissement?.adresse_departement && ` (${etablissement.adresse_departement})`}
                 </p>
-                <div className="mt-1">
+                <div className="mt-1 flex items-center gap-2 flex-wrap">
                   <BadgeDistance distanceKm={distance} />
+                  {etablissement?.adresse_lat && etablissement?.adresse_lng && (
+                    <>
+                      <button
+                        onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).plans()}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        📍 Plans
+                      </button>
+                      <button
+                        onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).googleMaps()}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        🗺️ Google Maps
+                      </button>
+                      <button
+                        onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).waze()}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        🚗 Waze
+                      </button>
+                    </>
+                  )}
                 </div>
                 {/* L4: Contact info only visible after assignment */}
                 {estAssigne && (

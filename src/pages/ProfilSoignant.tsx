@@ -57,7 +57,7 @@ function StripeConnectBanner({ userId }: { userId?: string }) {
       setActionLoading(false);
       return;
     }
-    window.open(data.url, '_blank');
+    import('@/lib/platform').then(m => m.ouvrirLienExterne(data.url));
     setActionLoading(false);
   };
 

@@ -101,7 +101,7 @@ export default function PageStripeConnect() {
         }
         return;
       }
-      window.open(data.url, '_blank');
+      import('@/lib/platform').then(m => m.ouvrirLienExterne(data.url));
     } finally {
       setActionLoading(false);
     }
