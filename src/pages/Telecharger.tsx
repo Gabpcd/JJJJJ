@@ -208,7 +208,7 @@ export default function Telecharger() {
         <section className="py-16 md:py-20 bg-muted/50">
           <div className="max-w-md mx-auto px-4 text-center">
             <h2 className="text-xl font-bold text-foreground mb-6">Scannez pour accéder à Jolene</h2>
-            <div className="bg-white p-6 rounded-2xl inline-block shadow-sm border border-border">
+            <div className="bg-card p-6 rounded-2xl inline-block shadow-sm border border-border">
               <QRCode />
             </div>
             <p className="text-sm text-muted-foreground mt-4">Ouvrez l'appareil photo de votre téléphone et scannez ce code</p>

@@ -76,7 +76,7 @@ export function CodesPointageMission({ missionId }: CodesPointageMissionProps) {
           </div>
           {showQR === 'arrivee' && (
             <div className="flex justify-center pt-2">
-              <div className="bg-white p-3 rounded-xl inline-block">
+              <div className="bg-card p-3 rounded-xl inline-block">
                 <QRCodeSVG value={codes.code_arrivee} size={160} level="M" />
               </div>
             </div>
@@ -105,7 +105,7 @@ export function CodesPointageMission({ missionId }: CodesPointageMissionProps) {
           </div>
           {showQR === 'depart' && (
             <div className="flex justify-center pt-2">
-              <div className="bg-white p-3 rounded-xl inline-block">
+              <div className="bg-card p-3 rounded-xl inline-block">
                 <QRCodeSVG value={codes.code_depart} size={160} level="M" />
               </div>
             </div>
