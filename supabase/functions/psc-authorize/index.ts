@@ -62,9 +62,9 @@ Deno.serve(async (req) => {
 
     if (!clientId || !redirectUri) {
       return new Response(JSON.stringify({
-        error: "PSC_CLIENT_ID et PSC_REDIRECT_URI doivent être configurés. Pour le moment, Pro Santé Connect n'est pas encore activé côté serveur.",
         configured: false,
-      }), { status: 503, headers: corsHeaders(req) });
+        message: "Pro Santé Connect sera disponible très prochainement.",
+      }), { status: 200, headers: corsHeaders(req) });
     }
 
     const body = await req.json().catch(() => ({}));
