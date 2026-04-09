@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import {
   Calendar,
   Copy,
@@ -134,7 +135,7 @@ export default function SyncCalendrier() {
         .reverse();
       setLastSync(syncTimes[0] || null);
     } catch (err) {
-      console.error('Erreur chargement sync calendrier:', err);
+      logger.error('Erreur chargement sync calendrier', err);
     } finally {
       setLoading(false);
     }
@@ -207,7 +208,7 @@ export default function SyncCalendrier() {
       toast.success(`Synchronisation terminée — ${data?.synced || 0} mission(s) synchronisée(s)`);
       chargerDonnees();
     } catch (err) {
-      console.error('Erreur sync:', err);
+      logger.error('Erreur sync', err);
       toast.error('Erreur lors de la synchronisation');
     } finally {
       setSyncing(false);

@@ -6,6 +6,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type jsPDF from 'jspdf';
@@ -33,7 +34,7 @@ export default function DashboardRH() {
       setLoading(true);
       const { data, error } = await supabase.rpc('fn_stats_rh_etablissement' as any);
       if (error) {
-        console.warn('[DashboardRH] RPC error', error);
+        logger.warn('[DashboardRH] RPC error', error);
       } else {
         setStats(data);
       }

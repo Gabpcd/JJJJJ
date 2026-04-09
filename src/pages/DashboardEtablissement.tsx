@@ -214,7 +214,7 @@ export default function DashboardEtablissement() {
           })));
         }
       } catch (err) {
-        console.warn('[DashboardEtab] Erreur secondaire (top soignants / prochaines)', err);
+        logger.warn('[DashboardEtab] Erreur secondaire (top soignants / prochaines)', err);
       }
 
     } catch (err) {
@@ -230,7 +230,7 @@ export default function DashboardEtablissement() {
         p_details: { page: 'dashboard_etablissement' }, p_ip: null, p_navigateur: navigator.userAgent,
       });
     } catch (err) {
-      console.warn('[DashboardEtab] Erreur audit HDS', err);
+      logger.warn('[DashboardEtab] Erreur audit HDS', err);
     }
 
     setErreurPartielle(partialError);
