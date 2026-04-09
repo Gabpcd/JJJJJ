@@ -5,11 +5,12 @@ interface SEOHeadProps {
   description: string;
   url?: string;
   image?: string;
+  jsonLd?: Record<string, any>;
 }
 
 const DEFAULT_OG_IMAGE = 'https://app.jolene.app/og-default.png';
 
-export function SEOHead({ title, description, url, image }: SEOHeadProps) {
+export function SEOHead({ title, description, url, image, jsonLd }: SEOHeadProps) {
   useEffect(() => {
     document.title = title;
 
@@ -36,10 +37,24 @@ export function SEOHead({ title, description, url, image }: SEOHeadProps) {
     setMeta('name', 'twitter:description', description);
     setMeta('name', 'twitter:image', ogImage);
 
+    // JSON-LD structured data
+    let ldScript: HTMLScriptElement | null = null;
+    if (jsonLd) {
+      ldScript = document.querySelector('script[data-jolene-ld]') as HTMLScriptElement | null;
+      if (!ldScript) {
+        ldScript = document.createElement('script');
+        ldScript.type = 'application/ld+json';
+        ldScript.setAttribute('data-jolene-ld', 'true');
+        document.head.appendChild(ldScript);
+      }
+      ldScript.textContent = JSON.stringify(jsonLd);
+    }
+
     return () => {
       document.title = 'Jolene — Staffing médical simplifié';
+      if (ldScript) ldScript.remove();
     };
-  }, [title, description, url, image]);
+  }, [title, description, url, image, jsonLd]);
 
   return null;
 }

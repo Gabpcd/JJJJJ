@@ -1,4 +1,5 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useMemo, lazy, Suspense } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
@@ -32,6 +33,7 @@ import { ProchainBadgeWidget } from '@/components/ProchainBadgeWidget';
 import { CalendrierMiniSemaine } from '@/components/CalendrierMiniSemaine';
 import { JaugeSpeedometer } from '@/components/JaugeSpeedometer';
 import { BoutonAjouterCalendrier } from '@/components/SyncCalendrier';
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
