@@ -288,14 +288,14 @@ export default function PageAccueil() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={() => navigate('/inscription/soignant')}
-              className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
               style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
             >
               🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
             </button>
             <button
               onClick={() => navigate('/inscription/etablissement')}
-              className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
               style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
             >
               🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
@@ -500,14 +500,14 @@ export default function PageAccueil() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={() => navigate('/inscription/soignant')}
-                className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
               >
                 🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
               </button>
               <button
                 onClick={() => navigate('/inscription/etablissement')}
-                className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-8 py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
               >
                 🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />

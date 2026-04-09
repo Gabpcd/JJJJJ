@@ -1062,7 +1062,7 @@ export default function FacturationEtablissement() {
       {/* Stripe Connect embedded checkout for mission payments */}
       {connectClientSecret && (
         <Dialog open={!!connectClientSecret} onOpenChange={(v) => { if (!v) { setConnectClientSecret(null); charger(); } }}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Paiement mission</DialogTitle>
               <DialogDescription>Réglez les honoraires du soignant et la commission Jolene.</DialogDescription>

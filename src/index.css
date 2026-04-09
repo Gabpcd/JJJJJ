@@ -266,6 +266,12 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
+  /* Texte mono (IBAN, SIRET, numéros facture) : éviter overflow */
+  .font-mono, [class*="font-mono"] {
+    word-break: break-all;
+    overflow-wrap: break-word;
+  }
+
   /* Formulaires mobile: éviter le zoom auto iOS (déjà géré par 16px) */
   /* + padding suffisant pour les doigts */
   @media (max-width: 768px) {
