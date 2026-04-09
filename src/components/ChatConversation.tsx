@@ -158,7 +158,7 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
 
   if (loading) {
     return (
-      <div className="card-base flex items-center justify-center" style={{ height: '400px' }}>
+      <div className="card-base flex items-center justify-center" style={{ height: 'min(400px, 60vh)' }}>
         <p className="text-sm text-muted-foreground">Chargement de la conversation…</p>
       </div>
     );
@@ -166,14 +166,14 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
 
   if (!convId) {
     return (
-      <div className="card-base flex items-center justify-center" style={{ height: '400px' }}>
+      <div className="card-base flex items-center justify-center" style={{ height: 'min(400px, 60vh)' }}>
         <p className="text-sm text-muted-foreground">Impossible de charger la conversation.</p>
       </div>
     );
   }
 
   return (
-    <div className="card-base flex flex-col" style={{ height: '400px' }}>
+    <div className="card-base flex flex-col" style={{ height: 'min(400px, 60vh)' }}>
       <div className="flex items-center justify-between pb-3 border-b border-border mb-3">
         <h3 className="font-semibold text-sm text-foreground">💬 Messagerie</h3>
         <span className="text-[10px] text-muted-foreground">{messages.length} message{messages.length !== 1 ? 's' : ''}</span>

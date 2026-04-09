@@ -184,7 +184,7 @@ export function PlanningHebdomadaire({ missionCandidate }: PlanningHebdomadaireP
             ))}
           </div>
 
-          <div className="grid grid-cols-8 gap-px" style={{ height: '500px' }}>
+          <div className="grid grid-cols-8 gap-px" style={{ height: 'min(500px, 70vh)' }}>
             <div className="relative">
               {Array.from({ length: TOTAL_HEURES }, (_, i) => (
                 <div key={i} className="absolute text-[9px] text-muted-foreground right-1"

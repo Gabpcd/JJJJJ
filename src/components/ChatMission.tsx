@@ -134,7 +134,7 @@ export function ChatMission({ missionId, role, prenomUtilisateur, isAdmin: isAdm
   const estMonMessage = (msg: Message) => msg.auteur_id === user?.id;
 
   return (
-    <div className="card-base flex flex-col" style={{ height: '400px' }}>
+    <div className="card-base flex flex-col" style={{ height: 'min(400px, 60vh)' }}>
       <div className="flex items-center justify-between pb-3 border-b border-border mb-3">
         <h3 className="font-semibold text-sm text-foreground">💬 Messagerie</h3>
         <span className="text-[10px] text-muted-foreground">{messages.length} message{messages.length !== 1 ? 's' : ''}</span>
