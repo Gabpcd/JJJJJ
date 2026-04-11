@@ -36,8 +36,7 @@ export default function PageConnexion() {
     if (isNative()) {
       isBiometricAvailable().then((ok) => {
         setBioAvailable(ok && isBiometricEnabled());
-      })
-      .catch(() => {});
+      }).then(undefined, () => {});
     }
   }, []);
 
