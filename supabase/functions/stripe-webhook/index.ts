@@ -132,6 +132,28 @@ serve(async (req) => {
               })
               .eq("id", missionId);
 
+            // RGPD Art. 32 : audit du transfert financier (Stripe Connect mission payment)
+            await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+              p_acteur_id: soignantId || "00000000-0000-0000-0000-000000000000",
+              p_type_acteur: "SYSTEME",
+              p_action: "FINANCE_TRANSFER_CONNECT",
+              p_type_ressource: "mission",
+              p_id_ressource: missionId,
+              p_cle_s3: null,
+              p_details: {
+                stripe_transfer_id: transfer.id,
+                stripe_charge_id: chargeId,
+                stripe_payment_intent_id: paymentIntentId,
+                stripe_session_id: session.id,
+                soignant_id: soignantId,
+                connected_account_id: connectedAccountId,
+                montant_cents: soignantCents,
+                devise: "eur",
+              },
+              p_ip: null,
+              p_navigateur: "stripe-webhook",
+            });
+
             console.log(`Connect transfer ${transfer.id} created for mission ${missionId}`);
           } catch (transferErr) {
             console.error("Connect transfer failed:", transferErr);
@@ -280,6 +302,13 @@ serve(async (req) => {
       if (charge.payment_method_details?.type === "sepa_debit") {
         const missionId = charge.metadata?.mission_id;
         if (missionId) {
+          // Fetch the etablissement before updating to capture it in audit
+          const { data: mission } = await supabaseAdmin
+            .from("missions")
+            .select("etablissement_id")
+            .eq("id", missionId)
+            .single();
+
           await supabaseAdmin
             .from("paiements_mission")
             .update({
@@ -295,6 +324,26 @@ serve(async (req) => {
             .from("missions")
             .update({ commission_facturee: true, modifie_le: new Date().toISOString() })
             .eq("id", missionId);
+
+          // RGPD Art. 32 : audit du prélèvement SEPA
+          if (mission?.etablissement_id) {
+            await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+              p_acteur_id: mission.etablissement_id,
+              p_type_acteur: "SYSTEME",
+              p_action: "FINANCE_SEPA_CAPTURE",
+              p_type_ressource: "mission",
+              p_id_ressource: missionId,
+              p_cle_s3: null,
+              p_details: {
+                stripe_charge_id: charge.id,
+                montant_cents: charge.amount,
+                devise: charge.currency,
+                payment_method: "sepa_debit",
+              },
+              p_ip: null,
+              p_navigateur: "stripe-webhook",
+            });
+          }
 
           console.log(`SEPA charge captured for mission ${missionId}`);
         }
