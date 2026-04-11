@@ -65,3 +65,27 @@ verify_jwt = false
 
 [functions.email-cron]
 verify_jwt = false
+
+[functions.confirm-dpae]
+verify_jwt = false
+
+[functions.psc-authorize]
+verify_jwt = false
+
+[functions.psc-callback]
+verify_jwt = false
+
+[functions.factor-request-advance]
+verify_jwt = false
+
+[functions.factor-webhook]
+verify_jwt = false
+
+[functions.sepa-auto-charge]
+verify_jwt = false
+
+[functions.send-sms]
+verify_jwt = false
+
+[functions.calendar-sync]
+verify_jwt = false

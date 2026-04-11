@@ -1,0 +1,68 @@
+name: Schema snapshot (weekly)
+
+# Dump le schéma public de Supabase toutes les semaines pour garder une
+# trace versionnée de l'état réel de la base. Permet de détecter les
+# modifications manuelles faites via le dashboard Supabase qui ne passent
+# pas par les migrations.
+#
+# Si le schéma a changé, le workflow crée une PR avec le nouveau dump.
+
+on:
+  schedule:
+    # Tous les lundis à 6h UTC (8h heure de Paris)
+    - cron: '0 6 * * 1'
+  workflow_dispatch: # Permet un déclenchement manuel
+
+jobs:
+  snapshot:
+    name: Dump schema + create PR if changed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Dump public schema
+        run: |
+          set -euo pipefail
+          mkdir -p supabase/schema
+          supabase db dump \
+            --schema public \
+            --db-url "postgresql://postgres.${SUPABASE_PROJECT_REF}:${SUPABASE_DB_PASSWORD}@aws-0-eu-west-1.pooler.supabase.com:6543/postgres" \
+            > supabase/schema/public.sql
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Check if schema changed
+        id: diff
+        run: |
+          if git diff --quiet supabase/schema/public.sql; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create PR with updated schema
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: 'chore(schema): weekly snapshot of Supabase public schema'
+          title: 'Schema snapshot — weekly update'
+          body: |
+            Automated weekly dump of the Supabase public schema.
+
+            If this PR contains changes, it means the schema on prod
+            differs from the last snapshot. Investigate whether these
+            changes came from migrations (expected) or from manual
+            dashboard edits (⚠️ should be documented).
+          branch: schema-snapshot-${{ github.run_number }}
+          delete-branch: true
+          labels: schema, automated
