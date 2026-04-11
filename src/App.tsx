@@ -79,6 +79,9 @@ const DetailMission = lazy(() => import("./pages/DetailMission"));
 const ModifierMission = lazy(() => import("./pages/ModifierMission"));
 const PresencesEtablissement = lazy(() => import("./pages/PresencesEtablissement"));
 const FacturationEtablissement = lazy(() => import("./pages/FacturationEtablissement"));
+const AnalyticsEtablissement = lazy(() => import("./pages/AnalyticsEtablissement"));
+const GestionShifts = lazy(() => import("./pages/GestionShifts"));
+const AssuranceMission = lazy(() => import("./pages/AssuranceMission"));
 const DetailFacture = lazy(() => import("./pages/DetailFacture"));
 const ExportPaie = lazy(() => import("./pages/ExportPaie"));
 const DashboardRH = lazy(() => import("./pages/DashboardRH"));
@@ -190,6 +193,9 @@ function AppRoutes() {
           <Route path="/etablissement/contrats" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ListeContrats role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
+          <Route path="/etablissement/analytics" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><AnalyticsEtablissement /></RouteProtegee>} />
+          <Route path="/etablissement/shifts" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><GestionShifts /></RouteProtegee>} />
+          <Route path="/etablissement/assurance" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><AssuranceMission /></RouteProtegee>} />
           <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
           <Route path="/etablissement/rh" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardRH /></RouteProtegee>} />
           <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
