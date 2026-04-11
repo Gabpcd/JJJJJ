@@ -297,7 +297,7 @@ export default function PageAccueil() {
             </span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            Établissements et soignants connectés pour des missions de remplacement simples, rapides et humaines.
+            Établissements et soignants connectés pour des missions de remplacement simples, rapides et fiables.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
