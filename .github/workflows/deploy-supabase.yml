@@ -37,6 +37,9 @@ jobs:
         with:
           version: latest
 
+      - name: Show CLI version (debug)
+        run: supabase --version
+
       - name: Link to Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
         env:
@@ -45,7 +48,11 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
       - name: Push pending migrations
-        run: supabase db push --include-all
+        # Pas de --include-all : on laisse le CLI ignorer ce qui est déjà
+        # appliqué. La table schema_migrations contient déjà les versions
+        # appliquées donc db push est quasiment un no-op s'il n'y a rien
+        # de nouveau dans le repo depuis le dernier run.
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -71,11 +78,11 @@ jobs:
           for dir in */; do
             fn="${dir%/}"
             if [ -f "$fn/index.ts" ]; then
-              echo "Deploying $fn..."
+              echo "::group::Deploying $fn"
               supabase functions deploy "$fn" \
                 --project-ref "$SUPABASE_PROJECT_REF" \
-                --no-verify-jwt \
                 --use-api
+              echo "::endgroup::"
             fi
           done
         env:
@@ -85,7 +92,7 @@ jobs:
       - name: Summary
         run: |
           echo "### Deploy Supabase ✅" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Migrations SQL appliquées" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Migrations SQL appliquées (ou already-applied skip)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Edge functions redéployées depuis le repo" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Projet : \`${{ secrets.SUPABASE_PROJECT_REF }}\`" >> "$GITHUB_STEP_SUMMARY"
