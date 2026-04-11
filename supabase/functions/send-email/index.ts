@@ -45,13 +45,13 @@ const WRAPPER = (content: string) => `
 <body style="margin:0;padding:0;background:#F8FAFC;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;background:white;border-radius:0 0 12px 12px;overflow:hidden;">
     <div style="background:#0F172A;padding:28px 24px;text-align:center;">
-      <span style="color:#17A2B8;font-size:30px;font-weight:bold;letter-spacing:-0.5px;">❤️ Jolene</span>
+      <span style="color:#E04590;font-size:30px;font-weight:bold;letter-spacing:-0.5px;">❤️ Jolene</span>
     </div>
     <div style="padding:36px 28px 24px;">
       ${content}
     </div>
     <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;">
-      <p style="margin:0 0 6px;">Jolene SAS — <a href="${APP_URL}" style="color:#17A2B8;text-decoration:none;">jolene.app</a></p>
+      <p style="margin:0 0 6px;">Jolene SAS — <a href="${APP_URL}" style="color:#E04590;text-decoration:none;">jolene.app</a></p>
       <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> · 
          <a href="${APP_URL}/confidentialite" style="color:#94A3B8;text-decoration:none;">Confidentialité</a></p>
       <p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>
@@ -61,13 +61,13 @@ const WRAPPER = (content: string) => `
 </html>`;
 
 const BUTTON = (text: string, url: string) =>
-  `<div style="text-align:center;margin:24px 0;"><a href="${url}" style="display:inline-block;background:#17A2B8;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">${text}</a></div>`;
+  `<div style="text-align:center;margin:24px 0;"><a href="${url}" style="display:inline-block;background:#E04590;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">${text}</a></div>`;
 
 const INFO_BOX = (content: string) =>
-  `<div style="background:#F0FDFA;border-left:4px solid #17A2B8;padding:16px 18px;margin:16px 0;border-radius:0 8px 8px 0;">${content}</div>`;
+  `<div style="background:#FDF2F8;border-left:4px solid #E04590;padding:16px 18px;margin:16px 0;border-radius:0 8px 8px 0;">${content}</div>`;
 
 const CARD_BOX = (content: string) =>
-  `<div style="background:#F0FDFA;border:1px solid #17A2B8;border-radius:8px;padding:16px 18px;margin:16px 0;">${content}</div>`;
+  `<div style="background:#FDF2F8;border:1px solid #E04590;border-radius:8px;padding:16px 18px;margin:16px 0;">${content}</div>`;
 
 const SECURITY_NOTE = `<p style="font-size:12px;color:#94A3B8;text-align:center;margin-top:20px;">🔒 Pour votre sécurité, connectez-vous à l'app pour consulter les détails.</p>`;
 

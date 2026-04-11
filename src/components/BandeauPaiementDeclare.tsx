@@ -41,7 +41,7 @@ function MotifContestationModal({ onConfirm, onCancel }: { onConfirm: (motif: st
         value={motif}
         onChange={e => setMotif(e.target.value)}
         placeholder="Décrivez pourquoi vous contestez ce paiement..."
-        className="input-base text-xs py-2"
+        className="input-base text-sm py-2"
         rows={2}
         maxLength={500}
       />
