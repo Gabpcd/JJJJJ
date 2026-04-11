@@ -335,13 +335,23 @@ export function BarreNavigation({ role }: { role: UserRole }) {
 
       {/* ── Desktop sidebar ── */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col z-40 no-print" style={{ paddingTop: 'env(safe-area-inset-top)', background: 'linear-gradient(180deg, hsl(270 40% 97%) 0%, hsl(330 50% 96%) 100%)' }} role="navigation" aria-label="Sidebar">
-        <div className="p-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <HeartPulse className="h-7 w-7 text-primary" />
-            <span className="text-xl font-bold text-primary">Jolene</span>
+        <div className="p-4 flex items-center justify-between gap-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <HeartPulse className="h-7 w-7 text-primary flex-shrink-0" />
+            <span className="text-xl font-bold text-primary truncate">Jolene</span>
           </div>
-          <BadgeNotification />
-          <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <BadgeNotification />
+            <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
+            <button
+              onClick={handleDeconnexion}
+              aria-label="Se déconnecter"
+              title="Se déconnecter"
+              className="p-2 rounded-lg text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
         </div>
         <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto" aria-label="Menu principal">
           {sidebarEntries.map((entry) => {
@@ -381,8 +391,8 @@ export function BarreNavigation({ role }: { role: UserRole }) {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-sidebar-border space-y-2">
-          {userInfo && (
+        {userInfo && (
+          <div className="p-3 border-t border-sidebar-border">
             <div className="flex items-center gap-2 px-3 py-2">
               <AvatarDisplay
                 src={userInfo.avatarUrl}
@@ -395,11 +405,8 @@ export function BarreNavigation({ role }: { role: UserRole }) {
                 {userInfo.prenom} {userInfo.nom}
               </span>
             </div>
-          )}
-          <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="sidebar-item w-full text-left text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent">
-            <LogOut className="h-5 w-5" /><span>Déconnexion</span>
-          </button>
-        </div>
+          </div>
+        )}
       </aside>
     </>
   );
