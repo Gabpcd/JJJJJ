@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap, Shield, RefreshCw } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap, Shield, RefreshCw, Menu, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -219,6 +219,12 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const [contratNonValide, setContratNonValide] = useState(false);
   const { count: messagesNonLus } = useMessagesNonLus();
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   // Auto-open the group containing the active route
   useEffect(() => {
@@ -285,11 +291,20 @@ export function BarreNavigation({ role }: { role: UserRole }) {
     <>
       {/* ── Mobile top header (logo + notifs + logout) ── */}
       <header className="sticky top-0 left-0 right-0 flex md:hidden z-40 bg-card/95 backdrop-blur-sm border-b border-border px-4 items-center justify-between no-print" style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }} role="banner">
-        <button onClick={() => navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord')} className="flex items-center gap-2" aria-label="Accueil">
-          <HeartPulse className="h-6 w-6 text-primary" />
-          <span className="text-lg font-bold text-primary">Jolene</span>
-        </button>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Ouvrir le menu"
+            className="p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          <button onClick={() => navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord')} className="flex items-center gap-2" aria-label="Accueil">
+            <HeartPulse className="h-6 w-6 text-primary" />
+            <span className="text-lg font-bold text-primary">Jolene</span>
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
           <BadgeNotification />
           <ThemeToggle className="text-foreground hover:bg-muted" />
           <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
@@ -297,6 +312,87 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           </button>
         </div>
       </header>
+
+      {/* ── Mobile drawer (full sidebar on mobile) ── */}
+      {mobileMenuOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[60] bg-foreground/50 md:hidden no-print"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            className="fixed left-0 top-0 bottom-0 z-[61] w-[280px] max-w-[85vw] flex md:hidden flex-col no-print animate-in slide-in-from-left duration-200"
+            style={{
+              paddingTop: 'env(safe-area-inset-top)',
+              background: 'linear-gradient(180deg, hsl(270 40% 97%) 0%, hsl(330 50% 96%) 100%)',
+            }}
+            role="navigation"
+            aria-label="Menu principal"
+          >
+            <div className="p-4 flex items-center justify-between border-b border-sidebar-border">
+              <div className="flex items-center gap-2">
+                <HeartPulse className="h-6 w-6 text-primary" />
+                <span className="text-lg font-bold text-primary">Jolene</span>
+              </div>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Fermer le menu"
+                className="p-2 rounded-lg text-foreground hover:bg-muted"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto" aria-label="Menu mobile">
+              {sidebarEntries.map((entry) => {
+                if (isGroup(entry)) {
+                  return (
+                    <SidebarGroup
+                      key={entry.label}
+                      group={entry}
+                      location={location}
+                      navigate={(p) => { navigate(p); setMobileMenuOpen(false); }}
+                      openGroups={openGroups}
+                      toggleGroup={toggleGroup}
+                      messagesNonLus={messagesNonLus}
+                      contratNonValide={contratNonValide}
+                    />
+                  );
+                }
+                const item = entry;
+                const actif = location.pathname === item.route;
+                return (
+                  <button
+                    key={item.route}
+                    onClick={() => { navigate(item.route); setMobileMenuOpen(false); }}
+                    aria-current={actif ? 'page' : undefined}
+                    className={`sidebar-item w-full text-left ${actif ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'}`}
+                  >
+                    <item.icone className="h-5 w-5" />
+                    <span className="flex-1">{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+            {userInfo && (
+              <div className="p-3 border-t border-sidebar-border">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <AvatarDisplay
+                    src={userInfo.avatarUrl}
+                    prenom={userInfo.prenom}
+                    nom={userInfo.nom}
+                    size={32}
+                    rounded={role === 'ADMIN_ETABLISSEMENT' ? 'lg' : 'full'}
+                  />
+                  <span className="text-sm font-medium text-sidebar-foreground truncate">
+                    {userInfo.prenom} {userInfo.nom}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* ── Mobile bottom tab bar ── */}
       <nav
