@@ -85,7 +85,11 @@ export default function MesGains() {
 
   const moisDisponibles = useMemo(() => {
     const set = new Set<string>();
-    allMissions.forEach(m => set.add(m.debut_le.substring(0, 7)));
+    allMissions.forEach(m => {
+      if (typeof m.debut_le === 'string' && m.debut_le.length >= 7) {
+        set.add(m.debut_le.substring(0, 7));
+      }
+    });
     return Array.from(set).sort().reverse();
   }, [allMissions]);
 
@@ -93,15 +97,15 @@ export default function MesGains() {
     if (moisFiltre === 'TOUS') return allMissions;
     if (moisFiltre === 'CE_MOIS') {
       const prefix = new Date().toISOString().substring(0, 7);
-      return allMissions.filter(m => m.debut_le.startsWith(prefix));
+      return allMissions.filter(m => typeof m.debut_le === 'string' && m.debut_le.startsWith(prefix));
     }
-    return allMissions.filter(m => m.debut_le.startsWith(moisFiltre));
+    return allMissions.filter(m => typeof m.debut_le === 'string' && m.debut_le.startsWith(moisFiltre));
   }, [allMissions, moisFiltre]);
 
-  const totalNetFiltre = useMemo(() => missions.reduce((s, m) => s + netEstime(m), 0), [missions]);
-  const totalBrutFiltre = useMemo(() => missions.reduce((s, m) => s + (m.total_brut || 0), 0), [missions]);
-  const totalNetToutTemps = useMemo(() => allMissions.reduce((s, m) => s + netEstime(m), 0), [allMissions]);
-  const totalHeures = useMemo(() => missions.reduce((s, m) => s + (m.duree_heures || 0), 0), [missions]);
+  const totalNetFiltre = useMemo(() => missions.reduce((s, m) => s + (netEstime(m) ?? 0), 0), [missions]);
+  const totalBrutFiltre = useMemo(() => missions.reduce((s, m) => s + (Number(m.total_brut) || 0), 0), [missions]);
+  const totalNetToutTemps = useMemo(() => allMissions.reduce((s, m) => s + (netEstime(m) ?? 0), 0), [allMissions]);
+  const totalHeures = useMemo(() => missions.reduce((s, m) => s + (Number(m.duree_heures) || 0), 0), [missions]);
   const tauxMoyen = useMemo(() => {
     if (totalHeures === 0) return 0;
     return totalBrutFiltre / totalHeures;
@@ -118,8 +122,10 @@ export default function MesGains() {
   const exporterCSV = () => {
     const header = 'Date,Mission,Service,Établissement,Heures,Taux horaire,Brut,Net estimé\n';
     const rows = missions.map(m => {
-      const net = netEstime(m);
-      return `${format(new Date(m.debut_le), 'dd/MM/yyyy')},"${m.intitule}","${m.service || ''}","${m.etablissements?.nom || ''}",${m.duree_heures || 0},${m.taux_horaire_base || 0},${(m.total_brut || 0).toFixed(2)},${net.toFixed(2)}`;
+      const net = netEstime(m) ?? 0;
+      const dateStr = m.debut_le ? format(new Date(m.debut_le), 'dd/MM/yyyy') : '—';
+      const brut = Number(m.total_brut) || 0;
+      return `${dateStr},"${(m.intitule || '').replace(/"/g, '""')}","${(m.service || '').replace(/"/g, '""')}","${(m.etablissements?.nom || '').replace(/"/g, '""')}",${Number(m.duree_heures) || 0},${Number(m.taux_horaire_base) || 0},${brut.toFixed(2)},${net.toFixed(2)}`;
     }).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

@@ -54,6 +54,22 @@ export default function AdminDetailUtilisateur() {
       setSoignant(s);
       setType('soignant');
 
+      // RGPD — tracer la consultation d'un soignant par un admin (Art. 32 + droit d'accès)
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        supabase.rpc('fn_ecrire_audit_safe', {
+          p_acteur_id: currentUser.id,
+          p_type_acteur: 'ADMIN_PLATEFORME',
+          p_action: 'ADMIN_CONSULTATION_SOIGNANT',
+          p_type_ressource: 'soignant',
+          p_id_ressource: id!,
+          p_cle_s3: null,
+          p_details: { contexte: 'page_detail_utilisateur', profession: s.profession },
+          p_ip: null,
+          p_navigateur: navigator.userAgent,
+        }).then(() => {});
+      }
+
       const [docRes, missRes, reqRes] = await Promise.all([
         supabase.from('documents_soignants').select('*').eq('soignant_id', id!).is('supprime_le', null).order('televerse_le', { ascending: false }),
         supabase.from('missions').select('id, intitule, statut, debut_le, fin_le, taux_horaire_base, duree_heures, net_a_payer, etablissement_id, etablissements(nom)').eq('soignant_assigne_id', id!).order('debut_le', { ascending: false }).limit(100),
@@ -94,6 +110,22 @@ export default function AdminDetailUtilisateur() {
       if (e) {
         setEtablissement(e);
         setType('etablissement');
+
+        // RGPD — tracer la consultation d'un établissement par un admin
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          supabase.rpc('fn_ecrire_audit_safe', {
+            p_acteur_id: currentUser.id,
+            p_type_acteur: 'ADMIN_PLATEFORME',
+            p_action: 'ADMIN_CONSULTATION_ETABLISSEMENT',
+            p_type_ressource: 'etablissement',
+            p_id_ressource: id!,
+            p_cle_s3: null,
+            p_details: { contexte: 'page_detail_utilisateur', nom: e.nom },
+            p_ip: null,
+            p_navigateur: navigator.userAgent,
+          }).then(() => {});
+        }
 
         const { data: missData } = await supabase
           .from('missions')

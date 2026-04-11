@@ -113,11 +113,11 @@ export default function AdminDashboard() {
       if (resLitiges.data) setLitiges(resLitiges.data);
       if (resFactures.data) setFacturesImpayees(resFactures.data);
 
-      if (resRentabilite.data) {
+      if (Array.isArray(resRentabilite.data)) {
         setCaCommissionsHT(resRentabilite.data.reduce((s: number, m: any) => s + (Number(m.montant_commission_ht) || 0), 0));
         setTvaCollectee(resRentabilite.data.reduce((s: number, m: any) => s + (Number(m.montant_commission_tva) || 0), 0));
       }
-      if (resEncaisse.data) {
+      if (Array.isArray(resEncaisse.data)) {
         setCaEncaisse(resEncaisse.data.reduce((s: number, m: any) => s + (Number(m.montant_commission_ht) || 0), 0));
       }
       if (resTransactions.count != null) setNbTransactions(resTransactions.count);
