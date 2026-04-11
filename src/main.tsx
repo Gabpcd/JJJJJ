@@ -32,6 +32,23 @@ import { getPlatform } from './lib/platform';
 const platform = getPlatform();
 document.body.classList.add(`platform-${platform}`);
 
+// Keep mobile Safari aligned to the visible viewport (not the full web page viewport)
+const updateViewportMetrics = () => {
+  const visualViewport = window.visualViewport;
+  const visibleHeight = visualViewport?.height ?? window.innerHeight;
+  const offsetTop = visualViewport?.offsetTop ?? 0;
+  const offsetBottom = Math.max(0, window.innerHeight - visibleHeight - offsetTop);
+
+  document.documentElement.style.setProperty('--app-height', `${visibleHeight}px`);
+  document.documentElement.style.setProperty('--viewport-offset-bottom', `${offsetBottom}px`);
+};
+
+updateViewportMetrics();
+window.addEventListener('resize', updateViewportMetrics);
+window.addEventListener('orientationchange', updateViewportMetrics);
+window.visualViewport?.addEventListener('resize', updateViewportMetrics);
+window.visualViewport?.addEventListener('scroll', updateViewportMetrics);
+
 // Capacitor keyboard: add/remove class when keyboard opens/closes
 if (Capacitor.isNativePlatform()) {
   import('@capacitor/keyboard').then(({ Keyboard }) => {
