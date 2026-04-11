@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap, Shield } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap, Shield, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -21,7 +21,7 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
   { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
-  { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
+  { icone: FileText, label: 'Documents', route: '/soignant/documents' },
   { icone: User, label: 'Profil', route: '/soignant/profil' },
 ];
 
@@ -42,6 +42,7 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
         { icone: Search, label: 'Missions disponibles', route: '/soignant/missions' },
         { icone: MapPinned, label: 'Recherche avancée', route: '/soignant/recherche-missions' },
         { icone: CalendarDays, label: 'Mon planning', route: '/soignant/planning' },
+        { icone: RefreshCw, label: 'Sync Calendrier', route: '/soignant/calendrier-sync' },
         { icone: Clock, label: 'Historique', route: '/soignant/historique-missions' },
       ],
     },
@@ -110,12 +111,15 @@ function getEtablissementSidebar(): SidebarEntry[] {
         { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
         { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
         { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
+        { icone: Activity, label: 'Analytics', route: '/etablissement/analytics' },
+        { icone: Clock, label: 'Shifts', route: '/etablissement/shifts' },
       ],
     },
     {
       icone: Banknote, label: 'Finances', items: [
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
         { icone: FileText, label: 'Obligations', route: '/etablissement/obligations' },
+        { icone: Shield, label: 'Assurance', route: '/etablissement/assurance' },
         { icone: FileText, label: 'Contrat plateforme', route: '/etablissement/contrat-plateforme' },
         { icone: Building2, label: 'Chorus Pro', route: '/etablissement/chorus-config' },
       ],
@@ -279,6 +283,21 @@ export function BarreNavigation({ role }: { role: UserRole }) {
 
   return (
     <>
+      {/* ── Mobile top header (logo + notifs + logout) ── */}
+      <header className="sticky top-0 left-0 right-0 flex md:hidden z-40 bg-card/95 backdrop-blur-sm border-b border-border px-4 items-center justify-between no-print" style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }} role="banner">
+        <button onClick={() => navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord')} className="flex items-center gap-2" aria-label="Accueil">
+          <HeartPulse className="h-6 w-6 text-primary" />
+          <span className="text-lg font-bold text-primary">Jolene</span>
+        </button>
+        <div className="flex items-center gap-2">
+          <BadgeNotification />
+          <ThemeToggle className="text-foreground hover:bg-muted" />
+          <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
+            <LogOut className="h-5 w-5" />
+          </button>
+        </div>
+      </header>
+
       {/* ── Mobile bottom tab bar ── */}
       <nav
         className="fixed left-0 right-0 flex md:hidden z-50 no-print mobile-nav-bottom border-t border-border/80 bg-card/95 backdrop-blur-xl supports-[backdrop-filter]:bg-card/80 shadow-lg"

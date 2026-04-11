@@ -9,7 +9,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  */
 serve(async (req) => {
   const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": "https://app.jolene.app",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Content-Type": "application/json",
   };

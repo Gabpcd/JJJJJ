@@ -4,7 +4,7 @@ export interface ArticleBlog {
   extrait: string;
   date: string;
   tempsLecture: number;
-  tag: 'Libéral' | 'Réglementation' | 'Guide' | 'Pharmacie';
+  tag: 'Libéral' | 'Réglementation' | 'Guide' | 'Pharmacie' | 'Intérim' | 'EHPAD';
   contenu: string;
 }
 
@@ -278,6 +278,189 @@ Vous pouvez suivre votre progression en temps réel dans la section **Parcours 3
 
 Le libéral n'a jamais été aussi accessible. Lancez-vous.`,
   },
+  {
+    slug: 'aide-soignante-interim-guide',
+    titre: 'Aide-soignante en intérim : le guide complet pour 2026',
+    extrait: 'Rémunération, conditions, avantages et démarches : tout ce qu\'il faut savoir pour exercer comme aide-soignant(e) intérimaire.',
+    date: '2026-03-15',
+    tempsLecture: 7,
+    tag: 'Guide',
+    contenu: `## Pourquoi l'intérim séduit de plus en plus d'aides-soignants
+
+Le métier d'aide-soignant(e) est l'un des plus demandés dans le secteur de la santé en France. Avec plus de **400 000 AS en exercice** et une pénurie structurelle estimée à 30 000 postes vacants, l'intérim s'impose comme une solution attractive tant pour les établissements que pour les professionnels.
+
+En 2026, près de **15% des aides-soignants** choisissent l'intérim ou le remplacement comme mode d'exercice principal ou complémentaire. Les raisons ? Une rémunération souvent supérieure au CDI, la liberté de choisir ses missions et la découverte de différents environnements de travail.
+
+## Combien gagne un(e) aide-soignant(e) intérimaire ?
+
+La rémunération d'un(e) AS intérimaire varie en fonction de plusieurs facteurs :
+
+**Taux horaire de base :** entre 16 et 22\u20AC brut de l'heure, selon l'établissement et la zone géographique. Les missions en Île-de-France et dans les zones sous-dotées offrent généralement les taux les plus élevés.
+
+**Majorations légales :** nuit (+25%), dimanche (+40%), jour férié (+100%). Ces majorations s'appliquent sur le taux horaire de base et peuvent significativement augmenter la rémunération.
+
+**Indemnités :** en CDDU, l'aide-soignant(e) perçoit une Indemnité de Fin de Mission (IFM) de 10% et une Indemnité Compensatrice de Congés Payés (ICP) de 10%, ce qui porte la rémunération totale à environ **120% du taux de base**.
+
+## Quels établissements recrutent des AS en intérim ?
+
+Les principaux recruteurs d'aides-soignants intérimaires sont :
+
+- **EHPAD** : c'est le premier pourvoyeur de missions AS, avec des besoins constants liés au turn-over et à l'absentéisme.
+- **Hôpitaux publics** : services de médecine, chirurgie, SSR, et urgences recrutent régulièrement des AS en remplacement.
+- **Cliniques privées** : les besoins sont croissants, notamment dans les services de soins de suite.
+- **SSIAD et HAD** : pour les soins à domicile, les AS interviennent au domicile des patients.
+- **Établissements médico-sociaux** : IME, MAS, FAM pour l'accompagnement de personnes en situation de handicap.
+
+## Comment s'inscrire sur Jolene en tant qu'aide-soignant(e)
+
+L'inscription sur Jolene est gratuite et prend moins de 5 minutes :
+
+**Étape 1 — Créez votre compte.** Renseignez vos informations personnelles, votre profession (aide-soignant) et votre zone géographique de recherche.
+
+**Étape 2 — Téléversez vos documents.** Diplôme d'État d'Aide-Soignant (DEAS), pièce d'identité et attestation d'assurance RCP. Votre numéro ADELI sera vérifié par notre équipe.
+
+**Étape 3 — Postulez aux missions.** Dès la validation de votre profil (sous 24h), vous accédez à toutes les missions AS disponibles dans votre zone. Postulez en un clic.
+
+## Les avantages spécifiques pour les AS sur Jolene
+
+- **Paiement rapide** : vos heures validées sont payées sous 7 jours.
+- **Planning en temps réel** : visualisez vos missions, vos repos obligatoires et vos disponibilités dans un calendrier intégré.
+- **Assurance complémentaire** : Jolene propose une couverture prévoyance optionnelle pour les soignants en mission.
+- **Pas de frais** : l'inscription et l'utilisation de la plateforme sont 100% gratuites pour les soignants.
+
+L'intérim est une opportunité pour les aides-soignants qui souhaitent diversifier leur expérience, améliorer leur rémunération ou simplement retrouver de la flexibilité dans leur vie professionnelle. Lancez-vous.`,
+  },
+  {
+    slug: 'taux-horaire-infirmier-2026',
+    titre: 'Taux horaire infirmier intérimaire en 2026 : grille complète',
+    extrait: 'Combien gagne un(e) IDE en intérim ? Grille de taux horaires par type d\'établissement, spécialité et zone géographique.',
+    date: '2026-03-28',
+    tempsLecture: 6,
+    tag: 'Intérim',
+    contenu: `## Taux horaire IDE intérimaire : ce qu'il faut savoir en 2026
+
+La rémunération des infirmiers intérimaires est un sujet central pour les soignants qui choisissent le remplacement ou l'intérim comme mode d'exercice. En 2026, le marché reste très favorable aux IDE, avec une demande qui dépasse largement l'offre dans la plupart des régions françaises.
+
+Ce guide détaille les taux horaires moyens constatés sur Jolene, par type d'établissement, par spécialité et par zone géographique.
+
+## Grille de taux horaires par type d'établissement
+
+**Hôpital public :** le taux horaire brut se situe entre **25 et 30\u20AC/h** pour un poste en service de médecine ou chirurgie. Les plafonds de la loi Rist s'appliquent et limitent la rémunération à environ 1,3 fois le taux conventionnel. Les majorations (nuit, week-end, férié) s'ajoutent au taux de base.
+
+**Clinique privée :** les taux sont généralement plus élevés, entre **27 et 35\u20AC/h**, car les cliniques ne sont pas soumises aux plafonds Rist. La concurrence entre établissements privés pousse les rémunérations à la hausse, notamment pour les spécialités en tension.
+
+**EHPAD :** le taux moyen se situe entre **24 et 30\u20AC/h**. Les EHPAD publics sont soumis à la loi Rist, tandis que les EHPAD privés peuvent proposer des taux plus attractifs.
+
+**HAD et SSIAD :** les missions à domicile sont rémunérées entre **26 et 32\u20AC/h**, avec parfois des indemnités kilométriques en supplément.
+
+## Majorations et indemnités
+
+Au taux horaire de base s'ajoutent plusieurs éléments de rémunération :
+
+- **Majoration de nuit** : +25% entre 21h et 6h (soit environ +6 à 8\u20AC/h)
+- **Majoration dimanche** : +40% (soit environ +10 à 14\u20AC/h)
+- **Majoration jour férié** : +100% (doublement du taux horaire)
+- **IFM** (Indemnité de Fin de Mission) : +10% sur le brut total en CDDU
+- **ICP** (Indemnité Compensatrice de Congés Payés) : +10% sur le brut total (IFM incluse)
+
+**Exemple concret :** un IDE en mission de nuit un dimanche, avec un taux de base de 28\u20AC/h, perçoit : 28 + 7 (nuit) + 11,20 (dimanche) = **46,20\u20AC/h brut**, auxquels s'ajoutent IFM et ICP.
+
+## Variations géographiques
+
+Les taux horaires varient significativement selon les régions :
+
+**Île-de-France :** taux les plus élevés du marché, entre 28 et 35\u20AC/h en moyenne. La densité d'établissements et la concurrence salariale expliquent ces niveaux.
+
+**Grandes métropoles (Lyon, Marseille, Toulouse, Bordeaux) :** taux entre 25 et 32\u20AC/h, avec des pics pour les spécialités en tension (bloc opératoire, réanimation).
+
+**Zones rurales et sous-dotées :** paradoxalement, certaines zones rurales proposent des taux élevés (jusqu'à 35\u20AC/h) pour attirer les soignants. Les aides à l'installation (CAII) peuvent compléter la rémunération.
+
+## Spécialités les mieux rémunérées
+
+Toutes les spécialités IDE ne sont pas rémunérées de la même manière :
+
+- **IADE (Infirmier Anesthésiste)** : 32-48\u20AC/h — la spécialité la mieux payée
+- **IBODE (Infirmier de Bloc)** : 30-42\u20AC/h — forte demande au bloc opératoire
+- **IDE de réanimation** : 28-38\u20AC/h — compétences critiques très recherchées
+- **IDE de soins généraux** : 25-32\u20AC/h — le plus grand volume de missions
+
+## Ce que Jolene affiche sur chaque mission
+
+Sur Jolene, chaque mission affiche clairement :
+- Le **taux horaire brut** de base
+- Les **majorations applicables** (nuit, week-end, férié)
+- Le **montant estimé** des IFM et ICP
+- Le **revenu net estimé** après cotisations
+
+Aucune surprise à l'arrivée. La transparence est notre engagement.`,
+  },
+  {
+    slug: 'ehpad-recrutement-soignants',
+    titre: 'EHPAD : comment recruter des soignants face à la pénurie',
+    extrait: 'Stratégies de recrutement, fidélisation et solutions digitales pour les EHPAD confrontés à la pénurie de soignants.',
+    date: '2026-04-05',
+    tempsLecture: 7,
+    tag: 'EHPAD',
+    contenu: `## La crise du recrutement en EHPAD
+
+Les EHPAD français traversent une crise de recrutement sans précédent. Selon la DREES, **plus de 60% des EHPAD** déclarent rencontrer des difficultés pour recruter des aides-soignants, et **45% pour recruter des infirmiers**. Cette pénurie a des conséquences directes sur la qualité de la prise en charge des résidents.
+
+Les causes sont multiples : vieillissement de la population soignante, manque d'attractivité du secteur, concurrence du secteur hospitalier et des cliniques privées, conditions de travail jugées difficiles et rémunérations perçues comme insuffisantes.
+
+## Les professions les plus en tension
+
+En EHPAD, les professions les plus difficiles à recruter sont :
+
+**Aides-soignant(e)s** : c'est la profession la plus touchée par la pénurie. Un EHPAD de 80 lits a besoin en moyenne de 25 à 30 AS pour assurer la continuité des soins. Le turn-over annuel peut atteindre 30% dans certains établissements.
+
+**Infirmier(ère)s** : les IDE en EHPAD sont responsables de la coordination des soins, de l'administration des traitements et de la surveillance clinique. Un ratio d'un(e) IDE pour 30 résidents est la norme, mais il est rarement atteint.
+
+**Médecins coordonnateurs** : la fonction de médecin coordonnateur est essentielle mais de plus en plus difficile à pourvoir. Beaucoup d'EHPAD fonctionnent avec un temps partiel, voire sans médecin coordonnateur.
+
+**Kinésithérapeutes et ergothérapeutes** : ces professionnels interviennent dans la prévention des chutes et le maintien de l'autonomie. Leur recrutement est rendu difficile par l'attractivité de l'exercice libéral.
+
+## Stratégies pour améliorer le recrutement
+
+### 1. Revaloriser les conditions de travail
+
+Au-delà de la rémunération, les conditions de travail sont le premier facteur d'attractivité :
+- **Plannings prévisibles** : publier les plannings au moins 3 semaines à l'avance
+- **Ratio soignants/résidents** : viser un ratio supérieur aux minimums réglementaires
+- **Formation continue** : proposer des formations qualifiantes et des perspectives d'évolution
+- **Bien-être au travail** : salle de repos, repas offerts, moments de convivialité
+
+### 2. Proposer des rémunérations compétitives
+
+Le Ségur de la Santé a permis une revalorisation salariale, mais les écarts avec le secteur privé persistent. Les EHPAD peuvent :
+- Proposer des **primes d'attractivité** pour les zones sous-dotées
+- Offrir des **avantages en nature** (logement, repas, mutuelle renforcée)
+- Mettre en place des **primes de fidélisation** pour réduire le turn-over
+
+### 3. Utiliser le digital pour recruter
+
+Les plateformes digitales de staffing médical transforment le recrutement en EHPAD :
+- **Publication instantanée** : une mission peut être publiée en 5 minutes et visible par des milliers de soignants
+- **Soignants vérifiés** : diplômes, RPPS/ADELI et RCP contrôlés avant toute candidature
+- **Flexibilité** : recrutement ponctuel (remplacement) ou régulier (pool de soignants fidélisés)
+
+## Comment Jolene aide les EHPAD
+
+Jolene a été conçu pour répondre aux besoins spécifiques des EHPAD :
+
+**Publication rapide** : décrivez votre mission (dates, horaires, profession, service) et publiez-la en quelques clics. Votre annonce est visible immédiatement par les soignants qualifiés de votre zone.
+
+**Matching intelligent** : notre algorithme propose votre mission en priorité aux soignants qui correspondent à votre besoin (profession, distance, disponibilité, évaluations).
+
+**Pool de soignants fidélisés** : les soignants qui ont déjà travaillé dans votre EHPAD peuvent être ajoutés à votre pool. Ils seront notifiés en priorité de vos nouvelles missions.
+
+**Gestion administrative simplifiée** : contrats CDDU générés automatiquement, pointage digital, facturation consolidée. Vous gagnez du temps sur l'administratif pour vous concentrer sur le soin.
+
+**Tarification adaptée** : Jolene propose des tarifs préférentiels aux EHPAD, avec une commission transparente et sans frais cachés.
+
+## En résumé
+
+La pénurie de soignants en EHPAD est un défi structurel qui nécessite des réponses multiples : revalorisation des conditions de travail, rémunération compétitive et utilisation des outils digitaux. Jolene s'inscrit dans cette démarche en simplifiant le recrutement et en connectant les EHPAD aux soignants qualifiés de leur territoire.`,
+  },
 ];
 
 const tagColors: Record<string, string> = {
@@ -285,6 +468,8 @@ const tagColors: Record<string, string> = {
   'Réglementation': 'bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 dark:from-amber-900/40 dark:to-orange-900/40 dark:text-amber-300',
   'Guide': 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 dark:from-blue-900/40 dark:to-indigo-900/40 dark:text-blue-300',
   'Pharmacie': 'bg-gradient-to-r from-violet-100 to-purple-100 text-violet-800 dark:from-violet-900/40 dark:to-purple-900/40 dark:text-violet-300',
+  'Intérim': 'bg-gradient-to-r from-cyan-100 to-sky-100 text-cyan-800 dark:from-cyan-900/40 dark:to-sky-900/40 dark:text-cyan-300',
+  'EHPAD': 'bg-gradient-to-r from-rose-100 to-pink-100 text-rose-800 dark:from-rose-900/40 dark:to-pink-900/40 dark:text-rose-300',
 };
 
 export function getTagClasses(tag: string): string {
@@ -298,6 +483,9 @@ const articleGradients: Record<string, string> = {
   'remplacement-pharmacie-guide': 'from-emerald-400 via-teal-400 to-cyan-300',
   'cddu-contrat-usage-sante': 'from-violet-500 via-fuchsia-500 to-pink-400',
   'free-transition-liberal': 'from-amber-400 via-orange-400 to-rose-400',
+  'aide-soignante-interim-guide': 'from-cyan-400 via-sky-400 to-blue-400',
+  'taux-horaire-infirmier-2026': 'from-teal-500 via-emerald-400 to-green-400',
+  'ehpad-recrutement-soignants': 'from-rose-400 via-pink-400 to-fuchsia-400',
 };
 
 const articleIcons: Record<string, string> = {
@@ -306,6 +494,9 @@ const articleIcons: Record<string, string> = {
   'remplacement-pharmacie-guide': 'Pill',
   'cddu-contrat-usage-sante': 'FileText',
   'free-transition-liberal': 'Rocket',
+  'aide-soignante-interim-guide': 'HeartHandshake',
+  'taux-horaire-infirmier-2026': 'Euro',
+  'ehpad-recrutement-soignants': 'Building2',
 };
 
 const fallbackGradients = [

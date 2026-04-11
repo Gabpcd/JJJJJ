@@ -28,26 +28,48 @@ serve(async (req) => {
     const { data: v5 } = await sb.rpc("fn_nettoyer_tokens_push");
     results.tokens_push = v5 || 0;
 
-    // Traiter la queue d'emails (notifications automatiques des triggers DB)
+    // Traiter la queue d'emails ET SMS (notifications automatiques des triggers DB)
     let emailQueueCount = 0;
+    let smsQueueCount = 0;
     const { data: pendingEmails } = await sb.from('email_queue').select('*').eq('envoye', false).order('cree_le').limit(50);
     for (const email of (pendingEmails || [])) {
       try {
-        await sb.functions.invoke('send-email', {
-          body: {
-            type: email.type,
-            destinataire_id: email.destinataire_id,
-            destinataire_email: email.destinataire_email,
-            data: email.data,
-          },
-        });
+        // Si c'est un SMS (type commence par SMS_), envoyer via send-sms
+        if (email.type?.startsWith('SMS_') && email.data?.telephone) {
+          const smsContenu = email.type === 'SMS_MISSION_URGENTE'
+            ? `${email.data.prenom}, mission urgente dispo : ${email.data.mission}. Postulez sur jolene.app`
+            : email.type === 'SMS_ANNULATION_TARDIVE'
+            ? `Annulation tardive sur "${email.data.mission}". Trouvez un remplaçant sur jolene.app`
+            : `Notification Jolene: ${email.data.mission || 'Voir l\'app'}`;
+
+          await sb.functions.invoke('send-sms', {
+            body: {
+              telephone: email.data.telephone,
+              type: email.type,
+              contenu: smsContenu,
+              destinataire_id: email.destinataire_id,
+            },
+          });
+          smsQueueCount++;
+        } else {
+          // Email classique
+          await sb.functions.invoke('send-email', {
+            body: {
+              type: email.type,
+              destinataire_id: email.destinataire_id,
+              destinataire_email: email.destinataire_email,
+              data: email.data,
+            },
+          });
+          emailQueueCount++;
+        }
         await sb.from('email_queue').update({ envoye: true, envoye_le: new Date().toISOString() }).eq('id', email.id);
-        emailQueueCount++;
       } catch (err: any) {
         await sb.from('email_queue').update({ erreur: err?.message || 'Erreur envoi' }).eq('id', email.id);
       }
     }
     results.email_queue = emailQueueCount;
+    results.sms_queue = smsQueueCount;
 
     return new Response(JSON.stringify({ success: true, results }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": (Deno.env.get("APP_URL") || "https://app.jolene.app") } });
   } catch (err) {

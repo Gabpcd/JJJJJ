@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { logger } from '@/lib/logger';
 
 type Theme = 'light' | 'dark';
 
@@ -29,7 +30,7 @@ export function useTheme() {
       import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
         StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark });
         StatusBar.setBackgroundColor({ color: isDark ? '#151B2B' : '#FFFFFF' });
-      }).catch(() => {});
+      }).catch((err) => { logger.warn('[useTheme] StatusBar update failed', err); });
     });
   }, [theme]);
 

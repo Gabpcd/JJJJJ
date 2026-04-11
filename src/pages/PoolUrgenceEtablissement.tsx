@@ -226,7 +226,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!UUID_REGEX.test(proposerSoignant.soignant_id)) {
-      console.warn('assignation pool error: soignant_id invalide', proposerSoignant.soignant_id);
+      logger.warn('[PoolUrgence] assignation pool error: soignant_id invalide', proposerSoignant.soignant_id);
       toast.error(`ID soignant invalide : ${proposerSoignant.soignant_id}`);
       return;
     }
@@ -242,7 +242,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
       .maybeSingle();
 
     if (checkError) {
-      console.warn('assignation pool check error:', checkError);
+      logger.warn('[PoolUrgence] assignation pool check error', checkError);
       toast.error('Impossible de proposer cette mission. Veuillez réessayer.');
       setAssigningMissionId(null);
       return;
@@ -272,7 +272,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         } as any);
 
     if (candError) {
-      console.warn('assignation pool error:', candError);
+      logger.warn('[PoolUrgence] assignation pool error', candError);
       toast.error('Impossible de proposer cette mission. Veuillez réessayer.');
       setAssigningMissionId(null);
       return;
@@ -312,10 +312,10 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
               mission_id: mission.id,
             },
           }),
-        }).catch(err => console.warn('email send error:', err));
+        }).catch(err => logger.warn('[PoolUrgence] email send error', err));
       }
     } catch (notifErr) {
-      console.warn('notification error (non-bloquant):', notifErr);
+      logger.warn('[PoolUrgence] notification error (non-bloquant)', notifErr);
     }
 
     toast.success(`Mission proposée à ${proposerSoignant.prenom} 📩 — en attente de réponse`);

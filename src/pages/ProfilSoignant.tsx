@@ -134,6 +134,8 @@ export default function ProfilSoignant() {
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
   const [consentementGPS, setConsentementGPS] = useState(true);
   const [gpsToggling, setGpsToggling] = useState(false);
+  const [consentementSMS, setConsentementSMS] = useState(false);
+  const [smsToggling, setSmsToggling] = useState(false);
 
   // RGPD states
   const [exportLoading, setExportLoading] = useState(false);
@@ -200,6 +202,7 @@ export default function ProfilSoignant() {
         setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
         setTypesContrat(getTypesContratSoignant(data as any));
         setConsentementGPS(data.consentement_gps !== false);
+        setConsentementSMS(data.sms_actif === true);
         setPoolUrgenceActif(data.disponible_urgence || false);
         setPoolUrgenceRayon(data.urgence_rayon_km || 15);
       }
@@ -290,28 +293,48 @@ export default function ProfilSoignant() {
     setSaving(false);
   };
 
-  // B2: Export RGPD
-  const handleExportRGPD = async () => {
+  // B2: Export RGPD (JSON + CSV)
+  const handleExportRGPD = async (format: 'json' | 'csv' = 'json') => {
     setExportLoading(true);
     try {
       const { data, error } = await supabase.rpc('fn_rgpd_exporter_rate_limited' as any);
       if (error) throw error;
-      // L3: Audit RGPD export
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
         p_action: 'RGPD_EXPORT_DONNEES',
         p_type_ressource: 'soignant', p_id_ressource: user!.id,
-        p_cle_s3: null, p_details: { format: 'json' },
+        p_cle_s3: null, p_details: { format },
         p_ip: null, p_navigateur: navigator.userAgent,
       });
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+
+      let blob: Blob;
+      let filename: string;
+      if (format === 'csv') {
+        // Flatten data to CSV
+        const rows: string[][] = [];
+        const flatten = (obj: any, prefix = '') => {
+          for (const [k, v] of Object.entries(obj || {})) {
+            const key = prefix ? `${prefix}.${k}` : k;
+            if (Array.isArray(v)) rows.push([key, JSON.stringify(v)]);
+            else if (typeof v === 'object' && v !== null) flatten(v, key);
+            else rows.push([key, String(v ?? '')]);
+          }
+        };
+        flatten(data);
+        const csv = 'Champ,Valeur\n' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        filename = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.csv`;
+      } else {
+        blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        filename = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-      afficherNotification({ type: 'succes', message: 'Données exportées avec succès.' });
+      afficherNotification({ type: 'succes', message: `Données exportées en ${format.toUpperCase()}.` });
     } catch (err: any) {
       capturerErreurSentry(err, 'ProfilSoignant', 'export_rgpd');
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
@@ -660,6 +683,80 @@ export default function ProfilSoignant() {
             />
           </div>
         </div>
+
+        {/* Consentement SMS */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">Notifications SMS</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm text-foreground font-medium">Recevoir les alertes par SMS</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {consentementSMS
+                  ? 'Vous recevrez un SMS pour les missions urgentes et les annulations tardives.'
+                  : 'Activez pour recevoir les notifications critiques par SMS (missions urgentes, annulations).'}
+              </p>
+            </div>
+            <Switch
+              checked={consentementSMS}
+              disabled={smsToggling}
+              onCheckedChange={async (checked) => {
+                setSmsToggling(true);
+                const { error } = await supabase
+                  .from('soignants')
+                  .update({ sms_actif: checked, sms_consent_le: checked ? new Date().toISOString() : null })
+                  .eq('id', user!.id);
+                if (error) {
+                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+                } else {
+                  setConsentementSMS(checked);
+                  await supabase.rpc('fn_ecrire_audit_safe', {
+                    p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
+                    p_action: checked ? 'SMS_CONSENTEMENT_ACTIVE' : 'SMS_CONSENTEMENT_RETIRE',
+                    p_type_ressource: 'soignant', p_id_ressource: user!.id,
+                    p_cle_s3: null, p_details: { sms_actif: checked },
+                    p_ip: null, p_navigateur: navigator.userAgent,
+                  });
+                  afficherNotification({
+                    type: checked ? 'succes' : 'avertissement',
+                    message: checked ? 'Notifications SMS activées.' : 'Notifications SMS désactivées.',
+                  });
+                }
+                setSmsToggling(false);
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Notifications push opt-out */}
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-4">Notifications push</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm text-foreground font-medium">Recevoir les notifications push</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Missions urgentes, nouvelles candidatures, rappels de pointage.
+              </p>
+            </div>
+            <Switch
+              checked={typeof Notification !== 'undefined' && Notification.permission === 'granted'}
+              onCheckedChange={async (checked) => {
+                if (checked) {
+                  const perm = await Notification.requestPermission();
+                  if (perm === 'granted') {
+                    afficherNotification({ type: 'succes', message: 'Notifications push activées.' });
+                  } else {
+                    afficherNotification({ type: 'avertissement', message: 'Notifications refusées par le navigateur. Vérifiez les paramètres.' });
+                  }
+                } else {
+                  // Delete push tokens to stop receiving
+                  await supabase.from('tokens_push').delete().eq('utilisateur_id', user!.id);
+                  afficherNotification({ type: 'avertissement', message: 'Notifications push désactivées. Vos tokens ont été supprimés.' });
+                }
+              }}
+            />
+          </div>
+        </div>
+
         <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50">
           {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
         </button>
@@ -766,14 +863,24 @@ export default function ProfilSoignant() {
       <div className="max-w-2xl mt-12 space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
 
-        <button
-          onClick={handleExportRGPD}
-          disabled={exportLoading}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
-        >
-          <Download className="h-4 w-4" />
-          {exportLoading ? 'Export en cours…' : '📥 Télécharger mes données (RGPD)'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => handleExportRGPD('json')}
+            disabled={exportLoading}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {exportLoading ? 'Export…' : 'Exporter JSON'}
+          </button>
+          <button
+            onClick={() => handleExportRGPD('csv')}
+            disabled={exportLoading}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {exportLoading ? 'Export…' : 'Exporter CSV'}
+          </button>
+        </div>
 
         <button
           onClick={() => setShowDeleteModal(true)}

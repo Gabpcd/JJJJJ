@@ -107,6 +107,12 @@ export default function ProfilSoignantEtablissement() {
                         {soignant.type_exercice === 'MIXTE' ? 'Salarié + Libéral' : soignant.type_exercice === 'LIBERAL' ? 'Libéral' : 'Salarié'}
                       </span>
                     )}
+                    {soignant.rpps_verifie && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success/10 text-success px-2 py-0.5 text-xs font-semibold">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Vérifié
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1"><Star className="h-4 w-4 text-primary" /> {soignant.score_fiabilite != null && soignant.total_missions_terminees > 0 ? `${soignant.score_fiabilite}/100` : 'Pas encore d\'évaluation'}</span>
                     {soignant.note_moyenne != null && soignant.nb_evaluations > 0 && (
                       <span className="inline-flex items-center gap-1">⭐ {Number(soignant.note_moyenne).toFixed(1)}/5 ({soignant.nb_evaluations} avis)</span>
@@ -133,7 +139,19 @@ export default function ProfilSoignantEtablissement() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Vérification RPPS</p>
-                  <p className="font-medium text-foreground">{soignant.rpps_verifie ? 'Vérifié' : 'Non vérifié'}</p>
+                  <div className="flex items-center gap-1.5">
+                    {soignant.rpps_verifie ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success/10 text-success px-2.5 py-1 text-xs font-semibold">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Vérifié
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 text-warning px-2.5 py-1 text-xs font-semibold">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                        Non vérifié
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Missions terminées</p>

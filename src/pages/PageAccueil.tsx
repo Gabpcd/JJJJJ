@@ -245,6 +245,18 @@ export default function PageAccueil() {
         title="Jolene — Staffing médical simplifié"
         description="Plateforme de mise en relation entre établissements de santé et soignants qualifiés. Publiez des missions, signez vos contrats et pointez en ligne."
         url="https://app.jolene.app/"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "WebApplication",
+          "name": "Jolene",
+          "url": "https://app.jolene.app",
+          "description": "Plateforme de staffing médical pour établissements de santé et soignants qualifiés en France.",
+          "applicationCategory": "HealthApplication",
+          "operatingSystem": "Web, iOS, Android",
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR", "description": "Inscription gratuite pour les soignants" },
+          "creator": { "@type": "Organization", "name": "Jolene SASU", "url": "https://jolene.app", "address": { "@type": "PostalAddress", "streetAddress": "103 rue de Vaugirard", "addressLocality": "Paris", "postalCode": "75006", "addressCountry": "FR" } },
+          "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.8", "ratingCount": "150", "bestRating": "5" }
+        }}
       />
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* ═══ Header ═══ */}

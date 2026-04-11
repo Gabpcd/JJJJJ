@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -6,7 +6,9 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
-import { GraphiqueGains6Mois } from '@/components/GraphiqueGains6Mois';
+const GraphiqueGains6Mois = lazy(() =>
+  import('@/components/GraphiqueGains6Mois').then(m => ({ default: m.GraphiqueGains6Mois }))
+);
 import { ModalAttestation } from '@/components/ModalAttestation';
 import { ModalCotisations } from '@/components/ModalCotisations';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,6 +35,8 @@ export default function MesGains() {
   const { user } = useAuth();
   const [allMissions, setAllMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
   const [moisFiltre, setMoisFiltre] = useState('CE_MOIS');
   const [modalAttestation, setModalAttestation] = useState(false);
   const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
@@ -50,14 +54,15 @@ export default function MesGains() {
           .eq('soignant_assigne_id', user.id)
           .eq('statut', 'TERMINEE')
           .order('debut_le', { ascending: false })
-          .limit(1000),
+          .range(0, (page + 1) * PAGE_SIZE - 1),
         supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).single(),
         supabase.from('paiements_soignant' as any)
           .select('mission_id, statut, montant_net, methode, reference_virement, date_paiement')
           .eq('soignant_id', user.id) as any,
       ]);
       const enriched = ms ? await enrichirEtablissements(ms as any) : [];
-      setAllMissions(enriched as any[]);
+      if (page === 0) setAllMissions(enriched as any[]);
+      else setAllMissions(prev => [...prev, ...enriched as any[]]);
       setSoignant(sg);
 
       // Index paiements by mission_id
@@ -76,7 +81,7 @@ export default function MesGains() {
       });
     };
     load();
-  }, [user]);
+  }, [user, page]);
 
   const moisDisponibles = useMemo(() => {
     const set = new Set<string>();
@@ -143,7 +148,9 @@ export default function MesGains() {
       </div>
 
       {/* Graphique 6 mois */}
-      <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: netEstime(m) }))} />
+      <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
+        <GraphiqueGains6Mois missions={allMissions.map(m => ({ debut_le: m.debut_le, net_a_payer: netEstime(m) }))} />
+      </Suspense>
 
       {/* Filtre + Actions */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -274,6 +281,9 @@ export default function MesGains() {
               </div>
             );
           })}
+          {allMissions.length === (page + 1) * PAGE_SIZE && (
+            <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
+          )}
         </div>
       ) : (
         <EtatVide illustration={<IllustrationTirelire />} titre="Pas encore de gains" sousTitre="Vos gains apparaîtront ici après votre première mission terminée." />

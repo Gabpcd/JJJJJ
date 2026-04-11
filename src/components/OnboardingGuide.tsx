@@ -80,21 +80,23 @@ export function OnboardingGuide({ role, userId }: OnboardingGuideProps) {
   const isLast = etapeCourante === etapes.length - 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-      <div className="bg-card rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 overflow-y-auto" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+      <div className="bg-card rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300 my-auto">
         {/* Header */}
         <div className="px-6 pt-6 pb-3">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-primary">
               Étape {etapeCourante + 1} / {etapes.length}
             </span>
-            <button
-              onClick={fermer}
-              className="text-muted-foreground hover:text-foreground transition-colors rounded-full p-1"
-              aria-label="Passer l'introduction"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            {etapeCourante >= 3 && (
+              <button
+                onClick={fermer}
+                className="text-muted-foreground hover:text-foreground transition-colors rounded-full p-1"
+                aria-label="Passer l'introduction"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
           </div>
           <Progress value={progression} className="h-1.5" />
         </div>
@@ -137,12 +139,14 @@ export function OnboardingGuide({ role, userId }: OnboardingGuideProps) {
                 Précédent
               </button>
             )}
-            <button
-              onClick={fermer}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Passer
-            </button>
+            {etapeCourante >= 3 && (
+              <button
+                onClick={fermer}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Passer
+              </button>
+            )}
           </div>
           <button
             onClick={suivant}

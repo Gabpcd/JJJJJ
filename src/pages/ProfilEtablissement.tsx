@@ -12,6 +12,7 @@ import { capturerErreurSentry } from '@/lib/sentry';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, LogOut } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
+import { Switch } from '@/components/ui/switch';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/lib/stripe';
 
@@ -216,6 +217,7 @@ export default function ProfilEtablissement() {
         setLat(data.adresse_lat?.toString() || '');
         setLng(data.adresse_lng?.toString() || '');
         setCouleurTheme(data.couleur_theme || '#17A2B8');
+        setConsentementSMS(data.sms_actif === true);
       }
       setLoading(false);
     });
@@ -233,6 +235,8 @@ export default function ProfilEtablissement() {
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
   const [couleurTheme, setCouleurTheme] = useState('#17A2B8');
+  const [consentementSMS, setConsentementSMS] = useState(false);
+  const [smsToggling, setSmsToggling] = useState(false);
 
   // adresse_lat, adresse_lng, couleur_theme are loaded from the RPC in the main useEffect above
 
@@ -396,6 +400,45 @@ export default function ProfilEtablissement() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
+          </div>
+          {/* SMS notifications toggle */}
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+            <div className="flex-1">
+              <p className="text-sm text-foreground font-medium">Notifications SMS</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {consentementSMS
+                  ? 'Vous recevrez un SMS en cas d\'annulation tardive ou d\'alerte critique.'
+                  : 'Activez pour recevoir les alertes critiques par SMS.'}
+              </p>
+            </div>
+            <Switch
+              checked={consentementSMS}
+              disabled={smsToggling}
+              onCheckedChange={async (checked) => {
+                setSmsToggling(true);
+                const { error } = await supabase
+                  .from('etablissements')
+                  .update({ sms_actif: checked, sms_consent_le: checked ? new Date().toISOString() : null })
+                  .eq('id', user!.id);
+                if (error) {
+                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+                } else {
+                  setConsentementSMS(checked);
+                  await supabase.rpc('fn_ecrire_audit_safe', {
+                    p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',
+                    p_action: checked ? 'SMS_CONSENTEMENT_ACTIVE' : 'SMS_CONSENTEMENT_RETIRE',
+                    p_type_ressource: 'etablissement', p_id_ressource: user!.id,
+                    p_cle_s3: null, p_details: { sms_actif: checked },
+                    p_ip: null, p_navigateur: navigator.userAgent,
+                  });
+                  afficherNotification({
+                    type: checked ? 'succes' : 'avertissement',
+                    message: checked ? 'Notifications SMS activées.' : 'Notifications SMS désactivées.',
+                  });
+                }
+                setSmsToggling(false);
+              }}
+            />
           </div>
         </div>
         <div className="card-base">

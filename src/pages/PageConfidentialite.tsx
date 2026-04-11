@@ -71,7 +71,24 @@ export default function PageConfidentialite() {
           <p><strong>Jolene ne stocke aucune donnée de santé à caractère personnel</strong> au sens de l'article L.1111-8 du Code de la santé publique. Les vaccinations et aptitudes médicales sont déclarées sur l'honneur par le Soignant et vérifiées en présentiel par l'Établissement lors de la première mission.</p>
         </div>
         <p className="mb-3">L'ensemble des données sont stockées sur des serveurs situés dans l'Union européenne (France). Les sauvegardes sont chiffrées (AES-256) et répliquées sur un site secondaire au sein de l'UE.</p>
-        <p>Les transferts de données hors UE, s'ils devaient avoir lieu dans le cadre de prestations techniques de sous-traitants, sont encadrés par des clauses contractuelles types approuvées par la Commission européenne (décision 2021/914).</p>
+        <p className="mb-3">Les transferts de données hors UE, s'ils devaient avoir lieu dans le cadre de prestations techniques de sous-traitants, sont encadrés par des clauses contractuelles types approuvées par la Commission européenne (décision 2021/914).</p>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">3.2 — Sous-traitants et processeurs de données</h3>
+        <p className="mb-3">Les données personnelles peuvent être transmises aux sous-traitants suivants, dans le strict cadre de leurs prestations :</p>
+        <div className="overflow-x-auto mb-3">
+          <table className="w-full text-sm border border-border rounded-xl overflow-hidden">
+            <thead><tr className="bg-muted/50"><th className="px-4 py-2 text-left font-semibold text-foreground">Sous-traitant</th><th className="px-4 py-2 text-left font-semibold text-foreground">Finalité</th><th className="px-4 py-2 text-left font-semibold text-foreground">Données concernées</th><th className="px-4 py-2 text-left font-semibold text-foreground">Localisation</th></tr></thead>
+            <tbody className="divide-y divide-border">
+              <tr><td className="px-4 py-2 text-foreground">Supabase Inc.</td><td className="px-4 py-2 text-muted-foreground">Hébergement, base de données, stockage</td><td className="px-4 py-2 text-muted-foreground">Toutes données</td><td className="px-4 py-2 text-muted-foreground">UE (AWS Paris)</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Stripe Inc.</td><td className="px-4 py-2 text-muted-foreground">Paiements, SEPA, Connect</td><td className="px-4 py-2 text-muted-foreground">IBAN, identité, facturation</td><td className="px-4 py-2 text-muted-foreground">UE (Ireland)</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Anthropic PBC</td><td className="px-4 py-2 text-muted-foreground">Vérification IA de documents</td><td className="px-4 py-2 text-muted-foreground">Documents téléversés, nom du soignant</td><td className="px-4 py-2 text-muted-foreground">USA (SCC)</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Twilio Inc.</td><td className="px-4 py-2 text-muted-foreground">Envoi de SMS</td><td className="px-4 py-2 text-muted-foreground">Numéro de téléphone, contenu SMS</td><td className="px-4 py-2 text-muted-foreground">USA (SCC)</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Yousign SAS</td><td className="px-4 py-2 text-muted-foreground">Signature électronique des contrats</td><td className="px-4 py-2 text-muted-foreground">Nom, prénom, contrat de mission</td><td className="px-4 py-2 text-muted-foreground">France</td></tr>
+              <tr><td className="px-4 py-2 text-foreground">Resend Inc.</td><td className="px-4 py-2 text-muted-foreground">Envoi d'emails transactionnels</td><td className="px-4 py-2 text-muted-foreground">Adresse email, contenu email</td><td className="px-4 py-2 text-muted-foreground">USA (SCC)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-muted-foreground italic">SCC = Standard Contractual Clauses (clauses contractuelles types, décision 2021/914). Les documents transmis à Anthropic pour vérification ne sont pas conservés par le prestataire au-delà du traitement.</p>
       </section>
 
       {/* Article 4 */}
@@ -154,11 +171,16 @@ export default function PageConfidentialite() {
         <ul className="list-disc pl-6 space-y-3 mb-4">
           <li><strong>Droit d'accès</strong> (article 15) : obtenir la confirmation que des données vous concernant sont traitées et en recevoir une copie.</li>
           <li><strong>Droit de rectification</strong> (article 16) : demander la correction de données inexactes ou incomplètes.</li>
-          <li><strong>Droit à l'effacement</strong> (article 17) : demander la suppression de vos données, sous réserve des obligations légales de conservation.</li>
+          <li><strong>Droit à l'effacement</strong> (article 17) : demander la suppression de vos données, sous réserve des obligations légales de conservation. La suppression entraîne l'anonymisation irréversible de votre profil et le nettoyage de vos données personnelles dans l'ensemble des 34 tables concernées (messages, documents, presences GPS, tokens, candidatures, évaluations, paiements, etc.). Les données comptables sont conservées conformément aux obligations fiscales (10 ans).</li>
           <li><strong>Droit à la limitation du traitement</strong> (article 18) : demander la suspension du traitement de vos données dans certains cas.</li>
           <li><strong>Droit à la portabilité</strong> (article 20) : recevoir vos données dans un format structuré, couramment utilisé et lisible par machine (JSON ou CSV).</li>
           <li><strong>Droit d'opposition</strong> (article 21) : vous opposer au traitement de vos données pour des motifs légitimes.</li>
+          <li><strong>Droit de ne pas faire l'objet d'une décision automatisée</strong> (article 22) : la vérification de documents par intelligence artificielle n'entraîne aucune décision automatisée sans possibilité de recours. En cas de rejet automatique d'un document, vous pouvez demander une revue manuelle à tout moment.</li>
         </ul>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">6.2 — Traitement par intelligence artificielle</h3>
+        <p className="mb-3">Certains documents téléversés (pièce d'identité, diplômes, attestations RCP) sont analysés par un système d'intelligence artificielle (Anthropic Claude) pour vérifier leur authenticité et leur concordance avec les informations déclarées. Ce traitement est fondé sur l'intérêt légitime de l'Éditeur (sécurité de la plateforme et protection des Établissements). Les documents sont transmis via une connexion chiffrée (TLS 1.3) et ne sont pas conservés par le prestataire d'IA au-delà du temps de traitement.</p>
+
         <p className="mb-3">Pour exercer vos droits, adressez votre demande à : <a href="mailto:dpo@jolene.app" className="text-primary underline font-medium">dpo@jolene.app</a></p>
         <p className="mb-3">L'Éditeur s'engage à répondre dans un délai d'un mois. Ce délai peut être prolongé de deux mois en cas de complexité ou de nombre élevé de demandes.</p>
         <p>En cas de difficulté dans l'exercice de vos droits, vous pouvez introduire une réclamation auprès de la Commission Nationale de l'Informatique et des Libertés (CNIL) : <a href="https://www.cnil.fr" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">www.cnil.fr</a></p>

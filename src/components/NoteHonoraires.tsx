@@ -1,7 +1,7 @@
 import { Printer, Send, FileDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import jsPDF from 'jspdf';
+import type jsPDF from 'jspdf';
 
 interface NoteHonorairesProps {
   mission: any;
@@ -22,7 +22,8 @@ function genererNumeroNote(missionId: string): string {
   return `NH-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${hash}`;
 }
 
-function genererPDFNote(m: any, soignant: any, etab: any) {
+async function genererPDFNote(m: any, soignant: any, etab: any) {
+  const { default: jsPDF } = await import('jspdf');
   const doc = new jsPDF();
   const duree = m.duree_heures ?? 0;
   const tauxEffectif = m.taux_rist_plafonne || m.taux_horaire_base;
@@ -158,9 +159,9 @@ export function NoteHonoraires({ mission, soignant, etablissement, onAudit }: No
     window.print();
   };
 
-  const handlePDF = () => {
+  const handlePDF = async () => {
     onAudit?.();
-    genererPDFNote(m, soignant, etab);
+    await genererPDFNote(m, soignant, etab);
   };
 
   return (

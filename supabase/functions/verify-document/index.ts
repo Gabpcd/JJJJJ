@@ -52,6 +52,14 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
 
   try {
+    // Warm ping: return immediately to prevent cold starts
+    const body = await req.clone().json().catch(() => ({}));
+    if (body?.warm === true) {
+      return new Response(JSON.stringify({ warm: true }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     // Auth: verify JWT user or service_role
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {

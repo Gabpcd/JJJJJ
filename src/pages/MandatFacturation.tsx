@@ -28,7 +28,7 @@ function renderMarkdown(texte: string) {
       elements.push(
         <ol key={key++} className="list-decimal list-inside space-y-1.5 text-sm text-foreground ml-2 mb-3">
           {listBuffer.map((item, i) => (
-            <li key={i} dangerouslySetInnerHTML={{ __html: item.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />
+            <li key={i} dangerouslySetInnerHTML={{ __html: item.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/[<>]/g, m => m === '<' ? '&lt;' : '&gt;') }} />
           ))}
         </ol>,
       );

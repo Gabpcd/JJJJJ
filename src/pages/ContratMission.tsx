@@ -323,7 +323,7 @@ export default function ContratMission() {
               data: { prenom: user.prenom || '', mission: missionName, contrat_id: contrat.id },
               destinataire_id: user.id,
             },
-          }).catch(() => {});
+          }).catch((err) => { logger.warn('[ContratMission] send-email contrat signé failed', err); });
 
           // Email to the other party via edge function (service handles authorization)
           // We fetch the other party's email from the etablissement table
@@ -335,7 +335,7 @@ export default function ContratMission() {
                   data: { mission: missionName, contrat_id: contrat.id },
                   destinataire_id: missionData.etablissement_id,
                 },
-              }).catch(() => {});
+              }).catch((err) => { logger.warn('[ContratMission] send-email other party failed', err); });
             }
           }
         }

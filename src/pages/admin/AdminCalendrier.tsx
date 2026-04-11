@@ -200,7 +200,7 @@ export default function AdminCalendrier() {
         </div>
 
         {/* Days header */}
-        <div className="grid grid-cols-7 gap-px">
+        <div className="grid grid-cols-7 gap-px min-w-[320px]">
           {JOURS_SEMAINE.map(j => (
             <div key={j} className="text-center text-xs font-semibold text-muted-foreground py-2">
               {j}
@@ -209,7 +209,7 @@ export default function AdminCalendrier() {
         </div>
 
         {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-px">
+        <div className="grid grid-cols-7 gap-px min-w-[320px]">
           {jours.map((d, i) => {
             const dansLeMois = isSameMonth(d, moisCourant);
             const estAujourdhui = isToday(d);

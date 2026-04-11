@@ -127,7 +127,7 @@ export function AvatarUpload({ src, prenom, nom, size = 96, mode, onUploaded }: 
 
       const { data: urlData } = await supabase.storage
         .from('jolene-documents')
-        .createSignedUrl(path, 60 * 60 * 24 * 365); // 1 year
+        .createSignedUrl(path, 60 * 60); // 1 hour — refreshed on demand
 
       const signedUrl = urlData?.signedUrl;
       if (!signedUrl) throw new Error('URL generation failed');

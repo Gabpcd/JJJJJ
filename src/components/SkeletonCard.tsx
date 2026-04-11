@@ -1,44 +1,35 @@
 import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function SkeletonCard() {
+export function SkeletonCard({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="card-base space-y-3">
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-5 w-16 rounded-full" />
-        <Skeleton className="h-4 w-20" />
-      </div>
-      <Skeleton className="h-4 w-3/4" />
-      <Skeleton className="h-3 w-1/2" />
-      <div className="flex gap-4">
-        <Skeleton className="h-3 w-28" />
-        <Skeleton className="h-3 w-20" />
-      </div>
-      <Skeleton className="h-3 w-24" />
+    <div className="card-base animate-pulse space-y-3">
+      <div className="h-4 bg-muted rounded w-3/4" />
+      {Array.from({ length: lines - 1 }).map((_, i) => (
+        <div key={i} className="h-3 bg-muted rounded" style={{ width: `${60 + Math.random() * 30}%` }} />
+      ))}
+    </div>
+  );
+}
+
+export function SkeletonList({ count = 3, lines = 3 }: { count?: number; lines?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonCard key={i} lines={lines} />
+      ))}
     </div>
   );
 }
 
 export function SkeletonKPI() {
   return (
-    <div className="card-base">
-      <div className="flex items-start gap-3">
-        <Skeleton className="h-10 w-10 rounded-xl" />
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-7 w-16" />
-          <Skeleton className="h-3 w-24" />
-        </div>
+    <div className="card-base animate-pulse flex items-center gap-4 p-4">
+      <div className="h-12 w-12 bg-muted rounded-xl" />
+      <div className="space-y-2 flex-1">
+        <div className="h-5 bg-muted rounded w-1/3" />
+        <div className="h-3 bg-muted rounded w-1/2" />
       </div>
-    </div>
-  );
-}
-
-export function SkeletonList({ count = 3 }: { count?: number }) {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {Array.from({ length: count }).map((_, i) => (
-        <SkeletonCard key={i} />
-      ))}
     </div>
   );
 }

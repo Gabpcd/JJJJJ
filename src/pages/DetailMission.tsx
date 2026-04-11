@@ -76,10 +76,10 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
       const debut = new Date(mission.debut_le);
       const fin = new Date(mission.fin_le);
 
-      // Send notification + email to each soignant
-      let sent = 0;
-      for (const s of soignants as any[]) {
-        try {
+      // Send notification + email to all soignants in parallel
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const results = await Promise.allSettled(
+        (soignants as any[]).map(async (s) => {
           await supabase.rpc('fn_creer_notification', {
             p_destinataire_id: s.soignant_id,
             p_type_destinataire: 'SOIGNANT',
@@ -90,9 +90,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
             p_type_ressource: 'MISSION',
             p_id_ressource: missionId,
           });
-
           if (token) {
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
             fetch(`${supabaseUrl}/functions/v1/send-email`, {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -110,13 +108,11 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
                   mission_id: missionId,
                 },
               }),
-            }).catch(() => {});
+            }).catch((err) => { logger.warn('[DetailMission] send-email alert failed', err); });
           }
-          sent++;
-        } catch {
-          // Non-blocking per soignant
-        }
-      }
+        })
+      );
+      const sent = results.filter(r => r.status === 'fulfilled').length;
 
       toast.success(`🚨 ${sent} soignant${sent > 1 ? 's' : ''} alerté${sent > 1 ? 's' : ''}`);
       setAlerted(true);

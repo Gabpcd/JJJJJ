@@ -46,6 +46,8 @@ export default function MissionsSoignant() {
   const [soignant, setSoignant] = useState<SoignantData | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
   const [filtres, setFiltres] = useState<FiltresMissionsState | null>(null);
   const [heuresSemaine, setHeuresSemaine] = useState(0);
   const [rcpExpiree, setRcpExpiree] = useState(false);
@@ -116,19 +118,20 @@ export default function MissionsSoignant() {
           .order('debut_le', { ascending: false });
       }
 
-      // M1: Add pagination limit to prevent silently capped data
-      query = query.limit(500);
+      // M1: Cursor-based pagination to prevent silently capped data
+      query = query.range(0, (page + 1) * PAGE_SIZE - 1);
 
       const { data } = await query;
       const enriched = data ? await enrichirEtablissements(data as any) : [];
-      setMissions(enriched);
+      if (page === 0) setMissions(enriched);
+      else setMissions(prev => [...prev, ...enriched]);
       setLoading(false);
     };
     fetchMissions();
-  }, [user, soignant, onglet, filtres]);
+  }, [user, soignant, onglet, filtres, page]);
 
   // Reset pagination when tab/filters change
-  useEffect(() => { setNbAffiche(20); }, [onglet, filtres]);
+  useEffect(() => { setNbAffiche(20); setPage(0); }, [onglet, filtres]);
 
   const missionsAvecDistance = useMemo(() => {
     if (!soignant) return [];
@@ -319,6 +322,10 @@ export default function MissionsSoignant() {
               <EtatVide icone={History} titre="Aucune mission dans l'historique"
                 sousTitre="Vos missions terminées et annulées apparaîtront ici." />
             )
+          )}
+
+          {missions.length === (page + 1) * PAGE_SIZE && (
+            <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
           )}
         </>
       )}

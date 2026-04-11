@@ -107,7 +107,7 @@ export function CalendrierMensuel() {
       </div>
 
       {/* Days header */}
-      <div className="grid grid-cols-7 gap-px mb-1">
+      <div className="grid grid-cols-7 gap-px min-w-[320px] mb-1">
         {JOURS_SEMAINE.map(j => (
           <div key={j} className="text-center text-[11px] font-semibold text-muted-foreground py-1">
             {j}
@@ -116,7 +116,7 @@ export function CalendrierMensuel() {
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-px">
+      <div className="grid grid-cols-7 gap-px min-w-[320px]">
         {jours.map((d, i) => {
           const dansLeMois = isSameMonth(d, moisCourant);
           const estAujourdhui = isToday(d);
