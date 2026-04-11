@@ -105,19 +105,25 @@ export default function ObligationsFinancieres() {
     charger();
   }, [user, etablissementId]);
 
-  const declarer = async (missionId: string) => {
+  const declarer = async (missionId: string, netAPayer: number) => {
     const ref = declaringRef[missionId] || '';
     if (!isRefValid(ref)) {
       toast.error('La référence doit contenir au moins 5 caractères dont un chiffre.');
       return;
     }
+    if (!netAPayer || netAPayer <= 0) {
+      toast.error('Montant invalide — impossible de déclarer le paiement.');
+      return;
+    }
     setDeclaringId(missionId);
     try {
-      const { error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
+      const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
         p_mission_id: missionId,
-        p_reference_virement: ref.trim(),
+        p_montant: netAPayer,
+        p_reference: ref.trim(),
       });
       if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
       toast.success('Paiement déclaré avec succès');
       charger();
     } catch (e: any) {
@@ -308,7 +314,7 @@ export default function ObligationsFinancieres() {
                         />
                         <Button
                           size="sm"
-                          onClick={() => declarer(m.mission_id)}
+                          onClick={() => declarer(m.mission_id, Number(m.net_a_payer) || 0)}
                           disabled={declaringId === m.mission_id || !isRefValid(declaringRef[m.mission_id] || '')}
                         >
                           {declaringId === m.mission_id ? '…' : 'Déclarer'}

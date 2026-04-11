@@ -160,9 +160,9 @@ export default function PasserEnLiberal() {
     if (!user) return;
     setSaving(true);
     try {
-      const { data, error } = await supabase.rpc('fn_activer_liberal' as any, {
-        p_siret: soignant?.siret_liberal || '',
-      });
+      // fn_activer_liberal ne prend aucun argument — elle lit siret_liberal
+      // depuis la table soignants, qui doit donc avoir été persisté avant.
+      const { data, error } = await supabase.rpc('fn_activer_liberal' as any);
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       afficherNotification({ type: 'succes', message: '🎉 Profil libéral activé !' });
