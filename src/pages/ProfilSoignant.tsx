@@ -39,7 +39,7 @@ function StripeConnectBanner({ userId }: { userId?: string }) {
     supabase.functions.invoke('stripe-connect-status').then(({ data }) => {
       setStatus(data);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).then(undefined, () => setLoading(false));
   }, [userId]);
 
   if (loading || !status) return null;
@@ -160,8 +160,7 @@ export default function ProfilSoignant() {
     if (!user) return;
     supabase.rpc('fn_mon_profil_soignant_complet' as any).then(({ data, error }: any) => {
       if (error) {
-        afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) })
-      .catch(() => {});
+        afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
         setLoading(false);
         return;
       }
@@ -210,8 +209,7 @@ export default function ProfilSoignant() {
     // Load filleuls
     supabase.rpc('fn_mes_filleuls' as any).then(({ data }: any) => {
       if (Array.isArray(data)) setFilleuls(data);
-    })
-      .catch(() => {});
+    }).then(undefined, () => {});
   }, [user]);
 
   const [geoLoading, setGeoLoading] = useState(false);
@@ -353,13 +351,11 @@ export default function ProfilSoignant() {
       .then(({ data }: any) => {
         if (Array.isArray(data) && data.length > 0) setNoteMoyenne(data[0]);
         else if (data && typeof data === 'object' && !Array.isArray(data) && 'total' in data) setNoteMoyenne(data);
-      })
-      .catch(() => {});
+      }).then(undefined, () => {});
     supabase.rpc('fn_mes_evaluations_recues' as any)
       .then(({ data }: any) => {
         if (Array.isArray(data)) setEvaluations(data);
-      })
-      .catch(() => {});
+      }).then(undefined, () => {});
     // Load badge stats — map RPC response fields to BadgeStats interface
     supabase.rpc('fn_badge_stats' as any).then(({ data }: any) => {
       if (data) {
@@ -373,8 +369,7 @@ export default function ProfilSoignant() {
           maxMissionsMemeEtab: data.max_missions_meme_etab ?? data.maxMissionsMemeEtab ?? 0,
           retards: data.retards ?? 0,
           totalMissions: data.total_missions ?? data.missionsTerminees ?? 0,
-        })
-      .catch(() => {});
+        });
       }
     });
   }, [user]);

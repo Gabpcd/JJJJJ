@@ -134,8 +134,7 @@ export default function DetailMissionSoignant() {
       .gt('fin_le', mission.debut_le)
       .then(({ data }) => {
         setChevauchement((data || []).length > 0);
-      })
-      .catch(() => {});
+      }).then(undefined, () => {});
   }, [mission, user]);
 
   // Fetch average rating for the establishment
@@ -145,8 +144,7 @@ export default function DetailMissionSoignant() {
       .then(({ data }: any) => {
         if (data && typeof data === 'object') setNoteMoyenne(data);
         else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
-      })
-      .catch(() => {});
+      }).then(undefined, () => {});
   }, [mission?.etablissement_id]);
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
@@ -264,7 +262,7 @@ export default function DetailMissionSoignant() {
           },
           destinataire_id: user!.id,
         },
-      }).catch(() => {});
+      }).then(undefined, () => {});
 
       // Email à l'établissement (établissement role can send to other addresses)
       {
@@ -280,7 +278,7 @@ export default function DetailMissionSoignant() {
             },
             destinataire_id: mission.etablissement_id,
           },
-        }).catch(() => {});
+        }).then(undefined, () => {});
       }
     } finally {
       setAcceptationEnCours(false);

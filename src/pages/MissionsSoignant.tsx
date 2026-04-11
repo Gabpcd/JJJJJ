@@ -56,8 +56,7 @@ export default function MissionsSoignant() {
     supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
       .eq('id', user.id).single()
-      .then(({ data, error }) => { if (data) setSoignant(data as any); if (error) console.warn('Profil soignant:', error.message); })
-      .catch(() => {});
+      .then(({ data, error }) => { if (data) setSoignant(data as any); if (error) console.warn('Profil soignant:', error.message); }).then(undefined, () => {});
 
     supabase.from('documents_soignants')
       .select('statut_verification, valide_jusqua')
@@ -73,8 +72,7 @@ export default function MissionsSoignant() {
           const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
           setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
         }
-      })
-      .catch(() => { setRcpExpiree(true); });
+      }).then(undefined, () => { setRcpExpiree(true); });
 
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
     const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
@@ -87,8 +85,7 @@ export default function MissionsSoignant() {
       .then(({ data }) => {
         const total = (data ?? []).reduce((s: number, m: any) => s + (m.duree_heures ?? 0), 0);
         setHeuresSemaine(total);
-      })
-      .catch(() => {});
+      }).then(undefined, () => {});
   }, [user]);
 
   useEffect(() => {

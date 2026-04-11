@@ -106,6 +106,158 @@ export type Database = {
           },
         ]
       }
+      assurance_config: {
+        Row: {
+          actif: boolean | null
+          assurance_auto: boolean | null
+          cree_le: string | null
+          etablissement_id: string
+          id: string
+          montant_couverture_eur: number | null
+          part_soignant_pourcent: number | null
+          prise_en_charge: string | null
+          provider: string | null
+          provider_contrat_cadre: string | null
+          type_couverture: string | null
+        }
+        Insert: {
+          actif?: boolean | null
+          assurance_auto?: boolean | null
+          cree_le?: string | null
+          etablissement_id: string
+          id?: string
+          montant_couverture_eur?: number | null
+          part_soignant_pourcent?: number | null
+          prise_en_charge?: string | null
+          provider?: string | null
+          provider_contrat_cadre?: string | null
+          type_couverture?: string | null
+        }
+        Update: {
+          actif?: boolean | null
+          assurance_auto?: boolean | null
+          cree_le?: string | null
+          etablissement_id?: string
+          id?: string
+          montant_couverture_eur?: number | null
+          part_soignant_pourcent?: number | null
+          prise_en_charge?: string | null
+          provider?: string | null
+          provider_contrat_cadre?: string | null
+          type_couverture?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assurance_config_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: true
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assurances_mission: {
+        Row: {
+          accepte_conditions: boolean | null
+          accepte_le: string | null
+          cree_le: string | null
+          debut_couverture: string
+          etablissement_id: string
+          fin_couverture: string
+          franchise_eur: number | null
+          id: string
+          mission_id: string
+          modifie_le: string | null
+          montant_couverture_eur: number
+          prime_ht_eur: number
+          prime_ttc_eur: number
+          provider: string | null
+          provider_police_id: string | null
+          provider_reference: string | null
+          provider_sinistre_id: string | null
+          sinistre_declare_le: string | null
+          sinistre_description: string | null
+          sinistre_montant_estime: number | null
+          sinistre_statut: string | null
+          soignant_id: string
+          souscrit_par: string | null
+          statut: string
+          taux_tva: number | null
+          type: string
+        }
+        Insert: {
+          accepte_conditions?: boolean | null
+          accepte_le?: string | null
+          cree_le?: string | null
+          debut_couverture: string
+          etablissement_id: string
+          fin_couverture: string
+          franchise_eur?: number | null
+          id?: string
+          mission_id: string
+          modifie_le?: string | null
+          montant_couverture_eur?: number
+          prime_ht_eur: number
+          prime_ttc_eur: number
+          provider?: string | null
+          provider_police_id?: string | null
+          provider_reference?: string | null
+          provider_sinistre_id?: string | null
+          sinistre_declare_le?: string | null
+          sinistre_description?: string | null
+          sinistre_montant_estime?: number | null
+          sinistre_statut?: string | null
+          soignant_id: string
+          souscrit_par?: string | null
+          statut?: string
+          taux_tva?: number | null
+          type?: string
+        }
+        Update: {
+          accepte_conditions?: boolean | null
+          accepte_le?: string | null
+          cree_le?: string | null
+          debut_couverture?: string
+          etablissement_id?: string
+          fin_couverture?: string
+          franchise_eur?: number | null
+          id?: string
+          mission_id?: string
+          modifie_le?: string | null
+          montant_couverture_eur?: number
+          prime_ht_eur?: number
+          prime_ttc_eur?: number
+          provider?: string | null
+          provider_police_id?: string | null
+          provider_reference?: string | null
+          provider_sinistre_id?: string | null
+          sinistre_declare_le?: string | null
+          sinistre_description?: string | null
+          sinistre_montant_estime?: number | null
+          sinistre_statut?: string | null
+          soignant_id?: string
+          souscrit_par?: string | null
+          statut?: string
+          taux_tva?: number | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assurances_mission_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assurances_mission_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attestations_heures_externes: {
         Row: {
           attestation_honneur: boolean | null
@@ -203,6 +355,96 @@ export type Database = {
             columns: ["groupe_id"]
             isOneToOne: false
             referencedRelation: "groupes_sante"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendar_connections: {
+        Row: {
+          access_token: string | null
+          calendar_id: string | null
+          cree_le: string | null
+          id: string
+          last_sync_at: string | null
+          last_sync_error: string | null
+          modifie_le: string | null
+          provider: string
+          refresh_token: string | null
+          sync_enabled: boolean | null
+          token_expires_at: string | null
+          utilisateur_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          calendar_id?: string | null
+          cree_le?: string | null
+          id?: string
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          modifie_le?: string | null
+          provider: string
+          refresh_token?: string | null
+          sync_enabled?: boolean | null
+          token_expires_at?: string | null
+          utilisateur_id: string
+        }
+        Update: {
+          access_token?: string | null
+          calendar_id?: string | null
+          cree_le?: string | null
+          id?: string
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          modifie_le?: string | null
+          provider?: string
+          refresh_token?: string | null
+          sync_enabled?: boolean | null
+          token_expires_at?: string | null
+          utilisateur_id?: string
+        }
+        Relationships: []
+      }
+      calendar_events_sync: {
+        Row: {
+          connection_id: string
+          cree_le: string | null
+          external_event_id: string | null
+          id: string
+          last_synced_at: string | null
+          mission_id: string
+          sync_direction: string | null
+        }
+        Insert: {
+          connection_id: string
+          cree_le?: string | null
+          external_event_id?: string | null
+          id?: string
+          last_synced_at?: string | null
+          mission_id: string
+          sync_direction?: string | null
+        }
+        Update: {
+          connection_id?: string
+          cree_le?: string | null
+          external_event_id?: string | null
+          id?: string
+          last_synced_at?: string | null
+          mission_id?: string
+          sync_direction?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_sync_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_sync_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
             referencedColumns: ["id"]
           },
         ]
@@ -1005,6 +1247,76 @@ export type Database = {
         }
         Relationships: []
       }
+      equipe_membres: {
+        Row: {
+          depuis_le: string | null
+          equipe_id: string
+          id: string
+          role_equipe: string | null
+          soignant_id: string
+        }
+        Insert: {
+          depuis_le?: string | null
+          equipe_id: string
+          id?: string
+          role_equipe?: string | null
+          soignant_id: string
+        }
+        Update: {
+          depuis_le?: string | null
+          equipe_id?: string
+          id?: string
+          role_equipe?: string | null
+          soignant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_membres_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipes: {
+        Row: {
+          couleur: string | null
+          cree_le: string | null
+          etablissement_id: string
+          id: string
+          nom: string
+          service: string | null
+          supprime_le: string | null
+        }
+        Insert: {
+          couleur?: string | null
+          cree_le?: string | null
+          etablissement_id: string
+          id?: string
+          nom: string
+          service?: string | null
+          supprime_le?: string | null
+        }
+        Update: {
+          couleur?: string | null
+          cree_le?: string | null
+          etablissement_id?: string
+          id?: string
+          nom?: string
+          service?: string | null
+          supprime_le?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipes_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       etablissements: {
         Row: {
           adresse_code_postal: string
@@ -1053,6 +1365,8 @@ export type Database = {
           siret_raison_sociale: string | null
           siret_verifie: boolean | null
           siret_verifie_le: string | null
+          sms_actif: boolean | null
+          sms_consent_le: string | null
           statut_verification: string | null
           stripe_account_id: string | null
           stripe_customer_id: string | null
@@ -1114,6 +1428,8 @@ export type Database = {
           siret_raison_sociale?: string | null
           siret_verifie?: boolean | null
           siret_verifie_le?: string | null
+          sms_actif?: boolean | null
+          sms_consent_le?: string | null
           statut_verification?: string | null
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
@@ -1175,6 +1491,8 @@ export type Database = {
           siret_raison_sociale?: string | null
           siret_verifie?: boolean | null
           siret_verifie_le?: string | null
+          sms_actif?: boolean | null
+          sms_consent_le?: string | null
           statut_verification?: string | null
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
@@ -3179,6 +3497,117 @@ export type Database = {
         }
         Relationships: []
       }
+      shift_affectations: {
+        Row: {
+          cree_le: string | null
+          id: string
+          mission_id: string | null
+          shift_id: string
+          soignant_id: string
+          statut: string | null
+        }
+        Insert: {
+          cree_le?: string | null
+          id?: string
+          mission_id?: string | null
+          shift_id: string
+          soignant_id: string
+          statut?: string | null
+        }
+        Update: {
+          cree_le?: string | null
+          id?: string
+          mission_id?: string | null
+          shift_id?: string
+          soignant_id?: string
+          statut?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shift_affectations_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shift_affectations_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shifts: {
+        Row: {
+          cree_le: string | null
+          equipe_id: string | null
+          etablissement_id: string
+          heure_debut: string
+          heure_fin: string
+          id: string
+          intitule: string
+          jour: string
+          modifie_le: string | null
+          nb_postes: number | null
+          nb_pourvus: number | null
+          notes: string | null
+          profession_requise: string | null
+          recurrence: string | null
+          service: string | null
+        }
+        Insert: {
+          cree_le?: string | null
+          equipe_id?: string | null
+          etablissement_id: string
+          heure_debut: string
+          heure_fin: string
+          id?: string
+          intitule: string
+          jour: string
+          modifie_le?: string | null
+          nb_postes?: number | null
+          nb_pourvus?: number | null
+          notes?: string | null
+          profession_requise?: string | null
+          recurrence?: string | null
+          service?: string | null
+        }
+        Update: {
+          cree_le?: string | null
+          equipe_id?: string | null
+          etablissement_id?: string
+          heure_debut?: string
+          heure_fin?: string
+          id?: string
+          intitule?: string
+          jour?: string
+          modifie_le?: string | null
+          nb_postes?: number | null
+          nb_pourvus?: number | null
+          notes?: string | null
+          profession_requise?: string | null
+          recurrence?: string | null
+          service?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shifts_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signatures_yousign: {
         Row: {
           contrat_id: string
@@ -3222,6 +3651,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sms_envoyes: {
+        Row: {
+          contenu: string
+          cout_eur: number | null
+          cree_le: string
+          destinataire_id: string | null
+          erreur: string | null
+          id: string
+          provider_id: string | null
+          statut: string | null
+          telephone: string
+          type: string
+        }
+        Insert: {
+          contenu: string
+          cout_eur?: number | null
+          cree_le?: string
+          destinataire_id?: string | null
+          erreur?: string | null
+          id?: string
+          provider_id?: string | null
+          statut?: string | null
+          telephone: string
+          type: string
+        }
+        Update: {
+          contenu?: string
+          cout_eur?: number | null
+          cree_le?: string
+          destinataire_id?: string | null
+          erreur?: string | null
+          id?: string
+          provider_id?: string | null
+          statut?: string | null
+          telephone?: string
+          type?: string
+        }
+        Relationships: []
       }
       soignants: {
         Row: {
@@ -3295,6 +3763,8 @@ export type Database = {
           rpps_verifie_le: string | null
           score_fiabilite: number | null
           siret_liberal: string | null
+          sms_actif: boolean | null
+          sms_consent_le: string | null
           specialites: string[] | null
           statut_liberal: string | null
           statut_verification_aria:
@@ -3392,6 +3862,8 @@ export type Database = {
           rpps_verifie_le?: string | null
           score_fiabilite?: number | null
           siret_liberal?: string | null
+          sms_actif?: boolean | null
+          sms_consent_le?: string | null
           specialites?: string[] | null
           statut_liberal?: string | null
           statut_verification_aria?:
@@ -3489,6 +3961,8 @@ export type Database = {
           rpps_verifie_le?: string | null
           score_fiabilite?: number | null
           siret_liberal?: string | null
+          sms_actif?: boolean | null
+          sms_consent_le?: string | null
           specialites?: string[] | null
           statut_liberal?: string | null
           statut_verification_aria?:
@@ -3941,6 +4415,7 @@ export type Database = {
         Returns: Json
       }
       fn_activer_liberal: { Args: never; Returns: Json }
+      fn_admin_cohort_economics: { Args: { p_mois?: number }; Returns: Json }
       fn_admin_conformite: { Args: never; Returns: Json }
       fn_admin_conformite_detail: { Args: { p_type: string }; Returns: Json }
       fn_admin_factor_stats: { Args: never; Returns: Json }
@@ -4009,6 +4484,10 @@ export type Database = {
         Returns: Json
       }
       fn_alerter_paiements_retard: { Args: never; Returns: undefined }
+      fn_analytics_etablissement: {
+        Args: { p_etablissement_id: string; p_mois?: number }
+        Returns: Json
+      }
       fn_annuler_mission: {
         Args: { p_mission_id: string; p_motif?: string }
         Returns: Json
@@ -4191,6 +4670,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_dashboard_soignant_complet: { Args: never; Returns: Json }
       fn_declarer_paiement_soignant: {
         Args: {
           p_date_paiement?: string
@@ -4438,6 +4918,21 @@ export type Database = {
           rang_matching: number
           repos_11h_ok: boolean
           score_fiabilite: number
+          soignant_id: string
+        }[]
+      }
+      fn_matching_soignants: {
+        Args: { p_mission_id: string }
+        Returns: {
+          deja_travaille: boolean
+          disponible: boolean
+          distance_km: number
+          nom: string
+          note_moyenne: number
+          prenom: string
+          profession: string
+          score_fiabilite: number
+          score_matching: number
           soignant_id: string
         }[]
       }

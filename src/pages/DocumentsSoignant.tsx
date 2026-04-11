@@ -34,8 +34,7 @@ function AttestationSante({ userId }: { userId: string }) {
           setCheckVaccin(true);
           setCheckMedecine(true);
         }
-      })
-      .catch(() => {});
+      }).then(undefined, () => {});
   }, [userId]);
 
   const signer = async () => {
@@ -200,7 +199,7 @@ export default function DocumentsSoignant() {
       } else {
         setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
       }
-    }).catch(() => {
+    }).then(undefined, () => {
       setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
     });
   }, [user, mesDocuments]);
@@ -306,7 +305,7 @@ export default function DocumentsSoignant() {
         toast.info('🔄 Document en cours de vérification...');
       }
       charger();
-    }).catch((err) => {
+    }).then(undefined, (err: any) => {
       handleErrorSilent(err, 'Vérification automatique document');
       toast.info('Document téléversé. Vérification manuelle en attente.');
     });
