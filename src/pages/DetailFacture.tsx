@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle, Clock, Download } from 'lucide-react';
+import { ArrowLeft, Printer, CreditCard, Loader2, CheckCircle, Clock, Download, ChevronDown, ChevronRight } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
@@ -16,7 +16,6 @@ import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
 import type jsPDF from 'jspdf';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 
 const STATUT_COLORS: Record<string, string> = {
   BROUILLON: 'bg-muted text-muted-foreground',
@@ -51,8 +50,198 @@ function calcHeures(debut: string, fin: string): string {
   return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
 }
 
-function calcHeuresNum(debut: string, fin: string): number {
-  return Math.abs(differenceInMinutes(new Date(fin), new Date(debut))) / 60;
+const formatHeure = (d: string) => format(new Date(d), 'HH:mm', { locale: fr });
+const formatDateCourte = (d: string) => format(new Date(d), 'EEEE dd/MM/yyyy', { locale: fr });
+
+function dureeEntre(debut: string, fin: string): string {
+  const mins = differenceInMinutes(new Date(fin), new Date(debut));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+}
+
+/** Groupe les pointages par jour (gère les pauses entre shifts sur une même journée) */
+function PresencesJour({ presences }: { presences: any[] }) {
+  if (!presences || presences.length === 0) {
+    return <p className="text-xs text-muted-foreground italic py-1">Aucun pointage enregistré</p>;
+  }
+
+  const parJour: Record<string, any[]> = {};
+  presences.forEach(p => {
+    const jour = p.pointage_arrivee_le
+      ? format(new Date(p.pointage_arrivee_le), 'yyyy-MM-dd')
+      : 'inconnu';
+    if (!parJour[jour]) parJour[jour] = [];
+    parJour[jour].push(p);
+  });
+
+  return (
+    <div className="space-y-1">
+      {Object.entries(parJour).sort().map(([jour, pList]) => (
+        <div key={jour} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs">
+          <span className="font-medium text-foreground w-36 capitalize">
+            {jour !== 'inconnu' ? formatDateCourte(jour + 'T00:00:00') : '—'}
+          </span>
+          {pList.map((p) => (
+            <span key={p.id} className="text-muted-foreground">
+              {p.pointage_arrivee_le ? formatHeure(p.pointage_arrivee_le) : '?'}
+              {' → '}
+              {p.pointage_depart_le ? formatHeure(p.pointage_depart_le) : '?'}
+              {p.pointage_arrivee_le && p.pointage_depart_le && (
+                <span className="text-foreground font-medium ml-1">
+                  ({dureeEntre(p.pointage_arrivee_le, p.pointage_depart_le)})
+                </span>
+              )}
+              {p.methode_pointage_arrivee && (
+                <span className="ml-1 text-[10px] text-muted-foreground/70">
+                  [{p.methode_pointage_arrivee}]
+                </span>
+              )}
+              {p.valide_par_etablissement && (
+                <CheckCircle className="inline h-3 w-3 ml-0.5 text-green-600" />
+              )}
+            </span>
+          ))}
+          {pList.length > 1 && (
+            <span className="text-[10px] text-primary font-medium">(pause entre shifts)</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Carte mission dépliable avec décomposition financière détaillée et pointages */
+function MissionDetail({ mission }: { mission: any }) {
+  const [open, setOpen] = useState(false);
+  const presences = mission.presences || [];
+
+  return (
+    <div className="border border-border/60 rounded-lg overflow-hidden mb-3">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-3 hover:bg-muted/30 transition-colors text-left"
+        aria-expanded={open}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            {open ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            )}
+            <span className="font-semibold text-foreground text-sm">{mission.intitule}</span>
+            {mission.soignant_nom && (
+              <span className="text-xs text-muted-foreground">· {mission.soignant_nom}</span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-1 ml-6">
+            {mission.profession && <span>{mission.profession}</span>}
+            {mission.service && <span>· {mission.service}</span>}
+            <span>
+              {mission.debut_le ? format(new Date(mission.debut_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+              {' → '}
+              {mission.fin_le ? format(new Date(mission.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+            </span>
+            <span>{Number(mission.duree_heures ?? 0)}h</span>
+          </div>
+        </div>
+        <div className="text-right shrink-0 ml-3">
+          <p className="text-sm font-bold text-primary">{formatEur(mission.montant_commission_ht ?? 0)}</p>
+          <p className="text-[10px] text-muted-foreground">commission HT</p>
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-border/60 bg-muted/20 p-4 space-y-4">
+          {/* Décomposition financière */}
+          <div>
+            <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">
+              💶 Décomposition financière
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Taux horaire</span>
+                <span className="font-medium">{formatEur(mission.taux_horaire_base ?? 0)}/h</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Durée</span>
+                <span className="font-medium">{Number(mission.duree_heures ?? 0)}h</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Brut soignant</span>
+                <span className="font-medium">{formatEur(mission.total_brut ?? 0)}</span>
+              </div>
+              {Number(mission.montant_majoration_nuit ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">🌙 Majoration nuit</span>
+                  <span className="font-medium">{formatEur(mission.montant_majoration_nuit)}</span>
+                </div>
+              )}
+              {Number(mission.montant_majoration_dimanche ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">☀️ Majoration dimanche</span>
+                  <span className="font-medium">{formatEur(mission.montant_majoration_dimanche)}</span>
+                </div>
+              )}
+              {Number(mission.montant_majoration_ferie ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">🎌 Majoration férié</span>
+                  <span className="font-medium">{formatEur(mission.montant_majoration_ferie)}</span>
+                </div>
+              )}
+              {Number(mission.montant_ifm ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">IFM ({Number(mission.taux_ifm ?? 10)}%)</span>
+                  <span className="font-medium">{formatEur(mission.montant_ifm)}</span>
+                </div>
+              )}
+              {Number(mission.montant_icp ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">ICP ({Number(mission.taux_icp ?? 10)}%)</span>
+                  <span className="font-medium">{formatEur(mission.montant_icp)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Commission Jolene */}
+          <div>
+            <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">
+              🏷️ Commission Jolene
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Taux</span>
+                <span className="font-medium">{Number(mission.taux_commission ?? 15)}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Com. HT</span>
+                <span className="font-semibold text-primary">{formatEur(mission.montant_commission_ht ?? 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">TVA</span>
+                <span className="font-medium">{formatEur(mission.montant_commission_tva ?? 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Com. TTC</span>
+                <span className="font-bold text-foreground">{formatEur(mission.montant_commission_ttc ?? 0)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Pointages détaillés */}
+          <div>
+            <h4 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">
+              ⏱️ Pointages détaillés
+            </h4>
+            <PresencesJour presences={presences} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function DetailFacture() {
@@ -321,43 +510,13 @@ export default function DetailFacture() {
         {missions.length === 0 ? (
           <p className="text-sm text-muted-foreground italic py-4">Aucune mission liée à cette facture.</p>
         ) : (
-          <div className="overflow-x-auto mb-6">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Mission</TableHead>
-                  <TableHead>Soignant</TableHead>
-                  <TableHead className="text-right">Heures</TableHead>
-                  <TableHead className="text-right">Taux/h</TableHead>
-                  <TableHead className="text-right">Brut</TableHead>
-                  <TableHead className="text-right">Tx Com.</TableHead>
-                  <TableHead className="text-right">Com. HT</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {missions.map((m: any, i: number) => {
-                  const heures = m.debut_le && m.fin_le ? calcHeures(m.debut_le, m.fin_le) : '—';
-                  return (
-                    <TableRow key={m.id ?? i}>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {m.debut_le ? format(new Date(m.debut_le), 'dd/MM/yy', { locale: fr }) : '—'}
-                      </TableCell>
-                      <TableCell className="text-xs font-medium">{m.intitule || '—'}</TableCell>
-                      <TableCell className="text-xs">
-                        <div>{m.soignant_nom || '—'}</div>
-                        {m.profession && <div className="text-muted-foreground text-[10px]">{m.profession}</div>}
-                      </TableCell>
-                      <TableCell className="text-xs text-right">{heures}</TableCell>
-                      <TableCell className="text-xs text-right">{formatEur(m.taux_horaire_base ?? 0)}</TableCell>
-                      <TableCell className="text-xs text-right">{formatEur(m.total_brut ?? 0)}</TableCell>
-                      <TableCell className="text-xs text-right">{m.taux_commission ?? 0}%</TableCell>
-                      <TableCell className="text-xs text-right font-semibold text-primary">{formatEur(m.montant_commission_ht ?? 0)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+          <div className="mb-6">
+            <p className="text-xs text-muted-foreground mb-3">
+              Cliquez sur une mission pour voir le détail complet (heures, majorations nuit/dimanche/férié, IFM, ICP, commission, pointages).
+            </p>
+            {missions.map((m: any) => (
+              <MissionDetail key={m.id} mission={m} />
+            ))}
           </div>
         )}
 
