@@ -56,24 +56,29 @@ jobs:
         # directory". On auto-répare en marquant ces orphelins comme
         # "reverted" (retire la ligne du tracking, ne touche pas au schéma).
         #
-        # Symétriquement, les migrations locales pas encore tracked sont
-        # laissées telles quelles — `db push` les appliquera à l'étape
-        # suivante.
+        # On passe par l'API Management (POST /v1/projects/{ref}/database/query)
+        # plutôt que psql car le pooler Supavisor rejette parfois les
+        # connections depuis GitHub Actions avec "Tenant or user not found".
+        # L'API Management utilise SUPABASE_ACCESS_TOKEN (déjà configuré pour
+        # supabase link) et fonctionne où que tourne le runner.
+        #
+        # Step best-effort : en cas d'échec (rate limit, API indispo), on
+        # laisse `db push` tenter sa chance — s'il échoue aussi, le job fail
+        # avec son propre message d'erreur, plus actionable.
+        continue-on-error: true
         run: |
           set -euo pipefail
 
-          # Installer psql (souvent absent des runners ubuntu-latest)
-          if ! command -v psql >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -qq -y postgresql-client
-          fi
-
-          DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}:${SUPABASE_DB_PASSWORD}@aws-0-eu-west-1.pooler.supabase.com:6543/postgres"
+          API="https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/database/query"
+          AUTH="Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}"
 
           # Versions trackées côté remote (schema_migrations)
-          psql "$DB_URL" -tAc \
-            "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version" \
-            > /tmp/remote_versions.txt
+          REMOTE_JSON=$(curl -sf -X POST "$API" \
+            -H "$AUTH" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"SELECT version FROM supabase_migrations.schema_migrations ORDER BY version"}')
+
+          echo "$REMOTE_JSON" | jq -r '.[].version' > /tmp/remote_versions.txt
 
           # Versions présentes dans le repo
           ls supabase/migrations/*.sql 2>/dev/null \
@@ -93,18 +98,20 @@ jobs:
           if [ "$ORPHAN_COUNT" -gt 0 ]; then
             echo "::warning::Found $ORPHAN_COUNT orphan remote migrations (applied out-of-band) — removing from schema_migrations tracking"
             cat /tmp/orphans.txt
-            # DELETE direct plutôt que `supabase migration repair` (qui
-            # fait exactement ça mais lance un process par version).
-            VERSIONS=$(awk '{printf "%s'\''%s'\''", (NR==1?"":","), $1}' /tmp/orphans.txt)
-            psql "$DB_URL" -c \
-              "DELETE FROM supabase_migrations.schema_migrations WHERE version IN ($VERSIONS)"
+            # Build IN clause: 'v1','v2',... (single-quoted SQL string literals,
+            # safe dans un JSON double-quoted)
+            VERSIONS=$(awk 'BEGIN{q=sprintf("%c",39)} {printf "%s%s%s%s", (NR==1?"":","), q, $1, q}' /tmp/orphans.txt)
+            DELETE_QUERY="{\"query\":\"DELETE FROM supabase_migrations.schema_migrations WHERE version IN ($VERSIONS)\"}"
+            curl -sf -X POST "$API" \
+              -H "$AUTH" \
+              -H "Content-Type: application/json" \
+              -d "$DELETE_QUERY"
           else
             echo "No orphan remote migrations — schema_migrations is in sync with repo"
           fi
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
       - name: Push pending migrations
         # Pas de --include-all : on laisse le CLI ignorer ce qui est déjà
