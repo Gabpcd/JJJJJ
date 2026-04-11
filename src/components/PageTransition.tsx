@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
-import { getPlatform } from '@/lib/platform';
+import { getPlatform, isNative } from '@/lib/platform';
 
 interface PageTransitionProps {
   children: React.ReactNode;
@@ -40,15 +40,20 @@ export function PageTransition({ children }: PageTransitionProps) {
   }, [children, location.key, navType, platform]);
 
   // Determine CSS class based on platform and direction
+  // CRITICAL: transform-based slide animations are ONLY used in Capacitor native,
+  // because transform on a parent creates a containing block that breaks
+  // position:fixed children (mobile header, bottom nav, modals) on Safari web.
+  // Mobile browsers get a simple opacity fade, keeping fixed positioning intact.
+  const useNativeSlides = isNative();
   const getTransitionClass = () => {
     if (phase === 'exit') {
-      if (platform === 'ios') return isBack.current ? 'ios-exit-back' : 'ios-exit-forward';
-      if (platform === 'android') return 'android-exit';
+      if (useNativeSlides && platform === 'ios') return isBack.current ? 'ios-exit-back' : 'ios-exit-forward';
+      if (useNativeSlides && platform === 'android') return 'android-exit';
       return 'page-exit';
     }
     // enter
-    if (platform === 'ios') return isBack.current ? 'ios-enter-back' : 'ios-enter-forward';
-    if (platform === 'android') return 'android-enter';
+    if (useNativeSlides && platform === 'ios') return isBack.current ? 'ios-enter-back' : 'ios-enter-forward';
+    if (useNativeSlides && platform === 'android') return 'android-enter';
     return 'page-enter';
   };
 

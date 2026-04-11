@@ -1,22 +1,24 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { BarreNavigation } from '@/components/BarreNavigation';
 import { FooterLegal } from '@/components/FooterLegal';
 import { DemandePermissionPush } from '@/components/DemandePermissionPush';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { SyncHorsLigne } from '@/components/SyncHorsLigne';
+import { BandeauInstallerPWA } from '@/components/BandeauInstallerPWA';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
-
-import { isNative as isNativePlatform } from '@/lib/platform';
 
 interface LayoutAppProps {
   role: UserRole;
   children: React.ReactNode;
 }
 
+/**
+ * Unified layout for Capacitor native app AND mobile Safari web.
+ * Same structure, same safe-area insets, same height handling.
+ * The only difference is the presence of Safari's browser chrome on web.
+ */
 export function LayoutApp({ role, children }: LayoutAppProps) {
-  const isNative = useMemo(() => isNativePlatform(), []);
-
   useEffect(() => {
     let mounted = true;
     let cleanup: (() => void) | undefined;
@@ -35,10 +37,7 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
   }, []);
 
   return (
-    <div
-      className={isNative ? "h-screen flex flex-col overflow-hidden bg-background" : "flex flex-col bg-background"}
-      style={isNative ? undefined : { minHeight: 'var(--app-height, 100dvh)' }}
-    >
+    <div className="flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
       <a href="#main-content" className="skip-to-main">Aller au contenu principal</a>
       <BandeauHorsLigne />
       <SyncHorsLigne />
@@ -46,23 +45,18 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
       <main
         id="main-content"
         role="main"
-        className={isNative
-          ? "flex-1 overflow-y-auto md:ml-[260px]"
-          : "flex-1 md:ml-[260px]"
-        }
+        className="flex-1 md:ml-[260px] min-w-0"
         style={{
-          paddingBottom: isNative
-            ? 'calc(5rem + env(safe-area-inset-bottom))'
-            : 'calc(5rem + env(safe-area-inset-bottom) + var(--viewport-offset-bottom, 0px))',
-          minHeight: isNative ? undefined : 'var(--app-height, 100dvh)',
+          paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))',
         }}
       >
-        <div className="max-w-6xl mx-auto px-4 py-6 md:pb-6">
+        <div className="max-w-6xl mx-auto px-4 py-6 md:pb-6 min-w-0">
           {children}
         </div>
         <FooterLegal />
       </main>
       <DemandePermissionPush />
+      <BandeauInstallerPWA />
     </div>
   );
 }

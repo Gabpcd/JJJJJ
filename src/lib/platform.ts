@@ -8,17 +8,49 @@ export function isNative(): boolean {
   return Capacitor.isNativePlatform();
 }
 
+/** True on iPhone/iPad Safari (web), not just Capacitor. */
+export function isIOSBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/** True on Android Chrome/Firefox/etc. (web), not just Capacitor. */
+export function isAndroidBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent);
+}
+
 export function isIOS(): boolean {
-  return isNative() && Capacitor.getPlatform() === 'ios';
+  if (isNative() && Capacitor.getPlatform() === 'ios') return true;
+  return isIOSBrowser();
 }
 
 export function isAndroid(): boolean {
-  return isNative() && Capacitor.getPlatform() === 'android';
+  if (isNative() && Capacitor.getPlatform() === 'android') return true;
+  return isAndroidBrowser();
 }
 
+/**
+ * Detect the platform for UI-style purposes (transitions, safe-area, etc.).
+ * Returns 'ios' or 'android' for BOTH Capacitor native AND mobile browsers,
+ * so the Safari iOS web experience matches the Capacitor iOS app visually.
+ * Desktop browsers still return 'web'.
+ */
 export function getPlatform(): Platform {
-  if (!Capacitor.isNativePlatform()) return 'web';
-  return Capacitor.getPlatform() as 'ios' | 'android';
+  if (Capacitor.isNativePlatform()) {
+    return Capacitor.getPlatform() as 'ios' | 'android';
+  }
+  if (isIOSBrowser()) return 'ios';
+  if (isAndroidBrowser()) return 'android';
+  return 'web';
+}
+
+/** True when the PWA is installed / running in standalone mode. */
+export function isStandalonePWA(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true;
 }
 
 /**

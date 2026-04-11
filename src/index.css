@@ -167,6 +167,19 @@
     font-size: max(16px, 1rem);
   }
 
+  /* ── Use dynamic viewport height everywhere to handle Safari iOS URL bar
+     auto-show/hide behavior (the bars appear on scroll down, hide on scroll up).
+     Without this, 100vh includes the hidden bars space and layout jumps. ── */
+  html, body {
+    min-height: 100vh; /* fallback */
+    min-height: 100dvh;
+  }
+
+  /* ── Allow vertical pull-to-refresh only on the body, prevent on children ── */
+  body {
+    overscroll-behavior-y: none;
+  }
+
   /* ── Remove blue tap flash on all interactive elements ── */
   button, a, [role="button"] {
     -webkit-tap-highlight-color: transparent;
