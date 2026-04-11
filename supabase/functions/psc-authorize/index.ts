@@ -36,12 +36,11 @@ function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
   const allowed = [
     "https://jolene.app",
-    "https://jolene.app",
+    "https://www.jolene.app",
     "http://localhost:5173",
     "http://localhost:8080",
   ];
-    ? origin
-    : "https://jolene.app";
+  const allowedOrigin = allowed.includes(origin) ? origin : "https://jolene.app";
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
