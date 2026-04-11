@@ -33,17 +33,20 @@ export default function ExclusionsSoignant() {
   const [loading, setLoading] = useState(true);
   const [suppressionExcluId, setSuppressionExcluId] = useState<string | null>(null);
   const [onglet, setOnglet] = useState<Onglet>('envoyees');
+  const [poolActif, setPoolActif] = useState(false);
+  const [poolRayon, setPoolRayon] = useState(30);
 
   const charger = async () => {
     if (!user) return;
 
-    const [resEnvoyees, resRecues] = await Promise.all([
+    const [resEnvoyees, resRecues, resProfil] = await Promise.all([
       supabase
         .from('exclusions')
         .select('id, exclu_id, exclu_par, motif, type_exclu_par, cree_le')
         .eq('exclu_par', user.id)
         .order('cree_le', { ascending: false }),
       supabase.rpc('fn_mes_exclusions_recues' as any),
+      supabase.from('soignants').select('disponible_urgence, urgence_rayon_km').eq('id', user.id).maybeSingle(),
     ]);
 
     let list = resEnvoyees.data || [];
@@ -54,6 +57,10 @@ export default function ExclusionsSoignant() {
     }
     setExclusions(list);
     setExclusionsRecues((resRecues.data as ExclusionRecue[]) || []);
+    if (resProfil.data) {
+      setPoolActif(!!(resProfil.data as any).disponible_urgence);
+      setPoolRayon((resProfil.data as any).urgence_rayon_km || 30);
+    }
     setLoading(false);
   };
 
@@ -85,7 +92,13 @@ export default function ExclusionsSoignant() {
 
       {/* Pool urgence toggle */}
       <div className="mb-6">
-        <PoolUrgenceToggle actif={false} rayonKm={30} onUpdate={() => {}} onError={() => {}} onSuccess={() => {}} />
+        <PoolUrgenceToggle
+          actif={poolActif}
+          rayonKm={poolRayon}
+          onUpdate={(a, r) => { setPoolActif(a); setPoolRayon(r); }}
+          onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
+          onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
+        />
       </div>
 
       <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">

@@ -264,12 +264,18 @@ export default function DashboardSoignant() {
       {/* 48h banner: hidden for LIBERAL, shown for SALARIE & MIXTE */}
       {soignantWithCounts.type_exercice !== 'LIBERAL' && <BandeauAlerte48h heuresSemaine={heuresSemaine} />}
 
-      {/* Cumul d'activité warning for MIXTE */}
-      {soignantWithCounts.type_exercice === 'MIXTE' && (
+      {/* Cumul d'activité warning for MIXTE — hidden once attestation signed */}
+      {soignantWithCounts.type_exercice === 'MIXTE' && !(soignantWithCounts as any).attestation_cumul_activite && (
         <div className="bg-warning/5 border-l-4 border-warning p-4 rounded-r-xl mb-4">
-          <p className="text-sm text-warning font-medium">
-            ⚠️ Cumul d'activité : pensez à vérifier que vos heures sur Jolene sont compatibles avec votre contrat salarié.
+          <p className="text-sm text-warning font-medium mb-2">
+            ⚠️ Cumul d'activité : vos heures sur Jolene doivent être compatibles avec votre contrat salarié.
           </p>
+          <button
+            onClick={() => navigate('/soignant/profil')}
+            className="text-xs text-warning underline font-semibold"
+          >
+            Attester la compatibilité →
+          </button>
         </div>
       )}
 
@@ -536,7 +542,20 @@ export default function DashboardSoignant() {
         {/* ─── ONGLET PARCOURS ─── */}
         <TabsContent value="parcours">
           <SectionErrorBoundary section="parcours">
-          {!PROFESSIONS_NON_LIBERAL.includes(soignantWithCounts.profession) ? (
+          {soignantWithCounts.type_exercice === 'LIBERAL' ? (
+            <div className="rounded-2xl bg-success/5 border border-success/20 p-6 text-center">
+              <div className="flex items-center justify-center mb-3">
+                <div className="rounded-full bg-success/10 p-3">
+                  <CheckCircle className="h-8 w-8 text-success" />
+                </div>
+              </div>
+              <h2 className="text-base font-bold text-foreground mb-1">Vous exercez déjà en libéral</h2>
+              <p className="text-sm text-muted-foreground">Votre statut libéral est actif. Bénéficiez de tous les avantages de votre indépendance professionnelle.</p>
+              <button onClick={() => navigate('/soignant/profil')} className="mt-4 text-sm text-primary font-semibold hover:underline">
+                Gérer mon profil libéral →
+              </button>
+            </div>
+          ) : !PROFESSIONS_NON_LIBERAL.includes(soignantWithCounts.profession) ? (
             <div className="space-y-4">
               <div className="rounded-2xl bg-gradient-to-r from-rose-light to-rose/5 dark:from-rose/10 dark:to-rose/5 border border-rose/20 p-4 md:p-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
                 <div className="flex items-center justify-between mb-1">

@@ -26,7 +26,8 @@ export default function AttestationHeures() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !debut || !fin) return;
+    if (!user) return;
+    if (!debut || !fin) { setLoading(false); return; }
     const load = async () => {
       const [{ data: sg }, { data: ms }] = await Promise.all([
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
@@ -81,6 +82,23 @@ export default function AttestationHeures() {
   const identifiant = `ATT-${user?.id?.substring(0, 8) || 'XXXX'}-${Date.now()}`;
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><ChargementPage /></div>;
+
+  if (!debut || !fin) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="max-w-md text-center space-y-4">
+          <h1 className="text-xl font-bold text-foreground">Attestation d'heures</h1>
+          <p className="text-sm text-muted-foreground">
+            Pour générer une attestation, vous devez sélectionner une période depuis la page "Mes gains".
+          </p>
+          <button onClick={() => navigate('/soignant/mes-gains')} className="btn-primary">
+            Aller à Mes gains
+          </button>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="min-h-screen bg-background">
