@@ -47,11 +47,75 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
+      - name: Heal schema_migrations drift (orphan remote versions)
+        # Quand Lovable (ou n'importe qui) applique une migration via le
+        # dashboard / MCP apply_migration / SQL direct, la ligne est ajoutée
+        # à supabase_migrations.schema_migrations avec un timestamp qui
+        # n'existe pas dans supabase/migrations/. `supabase db push` bloque
+        # alors avec "Remote migration versions not found in local migrations
+        # directory". On auto-répare en marquant ces orphelins comme
+        # "reverted" (retire la ligne du tracking, ne touche pas au schéma).
+        #
+        # Symétriquement, les migrations locales pas encore tracked sont
+        # laissées telles quelles — `db push` les appliquera à l'étape
+        # suivante.
+        run: |
+          set -euo pipefail
+
+          # Installer psql (souvent absent des runners ubuntu-latest)
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -qq -y postgresql-client
+          fi
+
+          DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}:${SUPABASE_DB_PASSWORD}@aws-0-eu-west-1.pooler.supabase.com:6543/postgres"
+
+          # Versions trackées côté remote (schema_migrations)
+          psql "$DB_URL" -tAc \
+            "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version" \
+            > /tmp/remote_versions.txt
+
+          # Versions présentes dans le repo
+          ls supabase/migrations/*.sql 2>/dev/null \
+            | xargs -n1 basename \
+            | awk -F_ '{print $1}' \
+            | sort -u > /tmp/local_versions.txt
+
+          sort -u /tmp/remote_versions.txt -o /tmp/remote_versions.txt
+
+          echo "Remote versions: $(wc -l < /tmp/remote_versions.txt)"
+          echo "Local versions:  $(wc -l < /tmp/local_versions.txt)"
+
+          # Orphelins = remote mais pas local
+          comm -23 /tmp/remote_versions.txt /tmp/local_versions.txt > /tmp/orphans.txt
+
+          ORPHAN_COUNT=$(wc -l < /tmp/orphans.txt)
+          if [ "$ORPHAN_COUNT" -gt 0 ]; then
+            echo "::warning::Found $ORPHAN_COUNT orphan remote migrations (applied out-of-band) — removing from schema_migrations tracking"
+            cat /tmp/orphans.txt
+            # DELETE direct plutôt que `supabase migration repair` (qui
+            # fait exactement ça mais lance un process par version).
+            VERSIONS=$(awk '{printf "%s'\''%s'\''", (NR==1?"":","), $1}' /tmp/orphans.txt)
+            psql "$DB_URL" -c \
+              "DELETE FROM supabase_migrations.schema_migrations WHERE version IN ($VERSIONS)"
+          else
+            echo "No orphan remote migrations — schema_migrations is in sync with repo"
+          fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
       - name: Push pending migrations
         # Pas de --include-all : on laisse le CLI ignorer ce qui est déjà
         # appliqué. La table schema_migrations contient déjà les versions
         # appliquées donc db push est quasiment un no-op s'il n'y a rien
         # de nouveau dans le repo depuis le dernier run.
+        #
+        # Baseline initialisé manuellement le 2026-04-11 : les 141 versions
+        # Lovable ont été insérées en bulk dans schema_migrations via MCP
+        # execute_sql (le schéma existait déjà, appliqué hors-CLI par
+        # Lovable pendant le dev). Les runs suivants sont ~no-op.
         run: supabase db push --password "$SUPABASE_DB_PASSWORD"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
