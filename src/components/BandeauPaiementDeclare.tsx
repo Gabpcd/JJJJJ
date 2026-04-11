@@ -135,14 +135,12 @@ export function BandeauPaiementDeclare() {
     setProcessing(paiementId);
     try {
       if (confirme) {
-        const { error } = await (supabase.from('paiements_soignant' as any) as any)
-          .update({
-            statut: 'CONFIRME',
-            confirme_par_soignant: true,
-            confirme_par_soignant_le: new Date().toISOString(),
-          })
-          .eq('id', paiementId);
+        // RPC dédiée (SECURITY DEFINER) — plus sûre qu'un UPDATE direct
+        const { data, error } = await supabase.rpc('fn_confirmer_paiement_soignant' as any, {
+          p_paiement_id: paiementId,
+        });
         if (error) throw error;
+        if ((data as any)?.error) throw new Error((data as any).error);
       } else {
         const { data, error } = await supabase.rpc('fn_contester_paiement_soignant' as any, {
           p_paiement_id: paiementId,
