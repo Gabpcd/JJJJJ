@@ -1,12 +1,22 @@
 {
-  "name": "Jolene",
+  "name": "Jolene — Staffing médical",
   "short_name": "Jolene",
+  "description": "Plateforme de mise en relation entre établissements de santé et soignants qualifiés.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#17A2B8",
-  "background_color": "#0F172A",
+  "orientation": "portrait",
+  "theme_color": "#E04590",
+  "background_color": "#FFFFFF",
+  "lang": "fr",
   "gcm_sender_id": "103953800507",
   "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
     {
       "src": "/icon-192x192.png",
       "sizes": "192x192",

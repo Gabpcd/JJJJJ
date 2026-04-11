@@ -283,6 +283,21 @@ export function BarreNavigation({ role }: { role: UserRole }) {
 
   return (
     <>
+      {/* ── Mobile top header (logo + notifs + logout) ── */}
+      <header className="sticky top-0 left-0 right-0 flex md:hidden z-40 bg-card/95 backdrop-blur-sm border-b border-border px-4 items-center justify-between no-print" style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }} role="banner">
+        <button onClick={() => navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord')} className="flex items-center gap-2" aria-label="Accueil">
+          <HeartPulse className="h-6 w-6 text-primary" />
+          <span className="text-lg font-bold text-primary">Jolene</span>
+        </button>
+        <div className="flex items-center gap-2">
+          <BadgeNotification />
+          <ThemeToggle className="text-foreground hover:bg-muted" />
+          <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
+            <LogOut className="h-5 w-5" />
+          </button>
+        </div>
+      </header>
+
       {/* ── Mobile bottom tab bar ── */}
       <nav className="fixed bottom-0 left-0 right-0 flex md:hidden z-50 bg-card dark:bg-accent-foreground/5 shadow-lg no-print" style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)', borderTop: '2px solid', borderImage: 'linear-gradient(90deg, hsl(330 85% 60%), hsl(270 60% 50%), hsl(215 80% 55%)) 1' }} role="navigation" aria-label="Navigation mobile">
         {mobileItems.map((item) => {
