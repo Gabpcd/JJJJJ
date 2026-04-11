@@ -424,9 +424,10 @@
     pointer-events: none;
     opacity: 0.6;
   }
-  .btn-primary:active, .btn-secondary:active, .btn-danger:active {
-    pointer-events: none;
-  }
+  /* NOTE: Do NOT set pointer-events:none on :active — this cancels the click
+     event on touch devices (iOS Safari / Android) and permanently breaks
+     button taps. The `disabled` state above is the correct way to block
+     double-submits (the pages already set disabled={submitting}). */
 
   .bottom-nav {
     @apply fixed bottom-0 left-0 right-0 bg-card border-t shadow-lg z-50 flex items-center justify-around px-2;

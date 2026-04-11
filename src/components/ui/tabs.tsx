@@ -12,7 +12,10 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      // min-h-10 (not h-10) so TabsList with wrapping grid layouts
+      // (e.g. grid grid-cols-2 sm:grid-cols-4 on mobile) can grow to 2 rows
+      // instead of overflowing into the content below.
+      "inline-flex min-h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
       className,
     )}
     {...props}
