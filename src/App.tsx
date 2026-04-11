@@ -260,7 +260,17 @@ const App = () => (
           <NotificationProvider>
             <BrowserRouter>
               <AppRoutes />
-              <Toaster position="top-center" richColors closeButton toastOptions={{ style: { marginTop: 'env(safe-area-inset-top, 0px)' } }} />
+              <Toaster
+                position="top-center"
+                richColors
+                closeButton
+                offset={16}
+                toastOptions={{
+                  style: {
+                    marginTop: 'calc(env(safe-area-inset-top, 0px) + 3.75rem)',
+                  },
+                }}
+              />
               <BandeauCookies />
             </BrowserRouter>
           </NotificationProvider>
