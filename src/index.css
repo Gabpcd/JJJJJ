@@ -545,8 +545,15 @@
 }
 
 /* ═══ Page transitions ═══ */
+/*
+ * NOTE: no will-change/transform on .page-transition itself.
+ * Applying transform/will-change on a parent creates a new containing block
+ * and breaks position:fixed on iOS Safari (headers, bottom nav, modals
+ * become positioned relative to PageTransition instead of the viewport).
+ * Animations are still smooth because the child elements animate themselves.
+ */
 .page-transition {
-  will-change: opacity, transform;
+  /* intentionally empty — animations run on child elements */
 }
 
 /* --- Web: light fade --- */
