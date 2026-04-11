@@ -160,7 +160,7 @@ export default function ProfilSoignant() {
     if (!user) return;
     supabase.rpc('fn_mon_profil_soignant_complet' as any).then(({ data, error }: any) => {
       if (error) {
-        afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) }).then(undefined, () => {});
+        afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
         setLoading(false);
         return;
       }
