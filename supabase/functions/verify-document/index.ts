@@ -156,7 +156,7 @@ serve(async (req) => {
     const typeLabel = typeLabels[doc.type_document] || doc.type_document;
     const nomComplet = soignant ? `${soignant.prenom} ${soignant.nom}` : "inconnu";
 
-    // 5. Call AI for analysis
+    // 5. Call Anthropic Claude API for analysis
     const systemPrompt = `Tu es un vérificateur de documents professionnels de santé. Analyse le document fourni et réponds UNIQUEMENT en JSON valide avec cette structure exacte:
 {
   "type_correspond": true/false,
@@ -190,78 +190,35 @@ Fichier: ${doc.nom_fichier}
 
 Analyse ce document et vérifie sa conformité.`;
 
-    const messages: any[] = [
-      { role: "system", content: systemPrompt },
-    ];
-
-    // Gemini supports PDF and images natively via data URL
     const mimeType = isPdf ? "application/pdf" : (doc.type_mime || "application/octet-stream");
 
+    // Build Anthropic-format content directly (no OpenAI intermediate)
+    const anthropicContent: any[] = [{ type: "text", text: userMessage }];
     if (isImage || isPdf) {
-      messages.push({
-        role: "user",
-        content: [
-          { type: "text", text: userMessage },
-          {
-            type: "image_url",
-            image_url: { url: `data:${mimeType};base64,${base64}` },
-          },
-        ],
+      anthropicContent.push({
+        type: "image",
+        source: { type: "base64", media_type: mimeType, data: base64 },
       });
-    } else {
-      messages.push({ role: "user", content: userMessage });
     }
 
-    // Anthropic Claude API pour la vérification IA
-    let aiResponse: Response | null = null;
-    let aiSource = "anthropic";
+    const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: [{ role: "user", content: anthropicContent }],
+      }),
+    });
 
-    {
-      const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-      if (anthropicKey) {
-        aiSource = "anthropic";
-        console.log("Falling back to Anthropic API");
-        const anthropicMessages = [];
-        const lastMsg = messages[messages.length - 1];
-        if (Array.isArray(lastMsg.content)) {
-          const anthropicContent = lastMsg.content.map((block: any) => {
-            if (block.type === "text") return { type: "text", text: block.text };
-            if (block.type === "image_url") {
-              const dataUrl = block.image_url.url;
-              const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-              if (match) {
-                return { type: "image", source: { type: "base64", media_type: match[1], data: match[2] } };
-              }
-            }
-            return { type: "text", text: "[unsupported block]" };
-          });
-          anthropicMessages.push({ role: "user", content: anthropicContent });
-        } else {
-          anthropicMessages.push({ role: "user", content: lastMsg.content });
-        }
-
-        aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "x-api-key": anthropicKey,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 1000,
-            system: messages[0].content,
-            messages: anthropicMessages,
-          }),
-        });
-
-        if (!aiResponse.ok) {
-          console.error("Anthropic API also failed:", aiResponse.status);
-        }
-      }
-    }
-
-    if (!aiResponse || !aiResponse.ok) {
+    if (!aiResponse.ok) {
+      const errText = await aiResponse.text();
+      console.error("Anthropic API failed:", aiResponse.status, errText);
       await supabase.rpc("fn_update_document_verification", {
         p_document_id: document_id, p_statut_verification: "EN_ATTENTE", p_motif_rejet: null,
       });
@@ -271,19 +228,12 @@ Analyse ce document et vérifie sa conformité.`;
     }
 
     const aiData = await aiResponse.json();
-    // Handle both OpenAI format (Lovable) and Anthropic format
-    let rawContent = "";
-    if (aiSource === "anthropic") {
-      rawContent = aiData.content?.[0]?.text || "";
-    } else {
-      rawContent = aiData.choices?.[0]?.message?.content || "";
-    }
-    const content = rawContent;
+    const rawContent = aiData.content?.[0]?.text || "";
 
     // Parse JSON from response
     let analysis: any;
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
       analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
     } catch {
       analysis = null;
