@@ -10,7 +10,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, LogOut } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/lib/stripe';
@@ -169,7 +169,7 @@ const CONVENTIONS_COLLECTIVES = [
 
 export default function ProfilEtablissement() {
   usePageTitle('Profil');
-  const { user } = useAuth();
+  const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
