@@ -161,7 +161,7 @@ export function StripeEmbeddedCheckout({ factureId, open, onClose, onComplete }:
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
         <DialogHeader className="p-4 border-b border-border space-y-1">
           <DialogTitle className="text-lg font-bold text-foreground">Paiement sécurisé</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">

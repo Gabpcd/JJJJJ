@@ -1,8 +1,10 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React from 'react';
 import { HeartPulse, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ConfirmerEmail() {
+  usePageTitle('Confirmer Email');
   const { deconnexion } = useAuth();
 
   return (

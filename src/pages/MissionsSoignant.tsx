@@ -58,9 +58,8 @@ export default function MissionsSoignant() {
     supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
       .eq('id', user.id).single()
-      .then(({ data }) => { if (data) setSoignant(data as any); });
+      .then(({ data, error }) => { if (data) setSoignant(data as any); if (error) console.warn('Profil soignant:', error.message); }).then(undefined, () => {});
 
-    // Vérifier si la RCP est expirée
     supabase.from('documents_soignants')
       .select('statut_verification, valide_jusqua')
       .eq('soignant_id', user.id)
@@ -75,9 +74,8 @@ export default function MissionsSoignant() {
           const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
           setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
         }
-      });
+      }).then(undefined, () => { setRcpExpiree(true); });
 
-    // M6: Compteur heures planifiées cette semaine
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
     const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
     supabase.from('missions')
@@ -89,7 +87,7 @@ export default function MissionsSoignant() {
       .then(({ data }) => {
         const total = (data ?? []).reduce((s: number, m: any) => s + (m.duree_heures ?? 0), 0);
         setHeuresSemaine(total);
-      });
+      }).then(undefined, () => {});
   }, [user]);
 
   useEffect(() => {

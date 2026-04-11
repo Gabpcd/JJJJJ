@@ -97,7 +97,7 @@ export default function AdminGroupes() {
       let allSoignantIds = new Set<string>();
 
       if (etabIds.length > 0) {
-        // Batch queries: 2 instead of 2N
+        // 2 requêtes batch au lieu de N×2 requêtes par clinique
         const [resMissions, resFactures] = await Promise.all([
           supabase.from('missions')
             .select('id, statut, soignant_assigne_id, montant_commission_ht, montant_commission_ttc, etablissement_id')
@@ -106,6 +106,7 @@ export default function AdminGroupes() {
             .select('montant_ttc, statut, etablissement_id')
             .in('etablissement_id', etabIds),
         ]);
+
         const allMissions = resMissions.data ?? [];
         const allFactures = resFactures.data ?? [];
 

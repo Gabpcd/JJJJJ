@@ -44,7 +44,7 @@ export default function PresencesSoignant() {
     supabase.from('soignants').select('consentement_gps').eq('id', user.id).single().then(({ data }) => {
       setConsentementGPS(data?.consentement_gps ?? null);
       setConsentementCharge(true);
-    });
+    }).then(undefined, () => {});
   }, [user]);
 
   const handleAccepterGPS = async () => {
@@ -374,7 +374,7 @@ export default function PresencesSoignant() {
           },
           destinataire_id: user.id,
         },
-      }).catch(() => { afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi de l\'email de confirmation.' }); });
+      }).then(undefined, () => { afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi de l\'email de confirmation.' }); });
     }
 
     afficherNotification({ type: 'succes', message: '🏁 Départ pointé ! Mission terminée.' });

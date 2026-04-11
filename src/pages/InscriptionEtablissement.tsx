@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check, AlertCircle, CheckCircle2, Loader2, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
@@ -8,7 +9,6 @@ import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
 import { supabase } from '@/integrations/supabase/client';
-import { logger } from '@/lib/logger';
 import { FooterLegal } from '@/components/FooterLegal';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
@@ -38,6 +38,7 @@ interface SiretInseeResult {
 }
 
 export default function InscriptionEtablissement() {
+  usePageTitle('Inscription Établissement');
   const navigate = useNavigate();
   const { inscriptionEtablissement } = useAuth();
   const { afficherNotification } = useNotification();
@@ -83,7 +84,7 @@ export default function InscriptionEtablissement() {
         maj('nom', data.raison_sociale);
       }
     } catch (err) {
-      logger.warn('[InscriptionEtablissement] Vérification INSEE échouée', err);
+      console.warn('Vérification INSEE échouée:', err);
       setInseeCheck({
         statut: 'ALERTE',
         raison_sociale: null,
@@ -156,19 +157,18 @@ export default function InscriptionEtablissement() {
           {etape === 1 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label><input type="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" autoComplete="email" required /></div>
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label><input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required /></div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</label>
                 <div className="relative">
-                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" autoComplete="new-password" aria-describedby="etab-password-help" required />
+                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required />
                   <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p id="etab-password-help" className="text-xs text-muted-foreground mt-1">Minimum 8 caractères</p>
               </div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Confirmer *</label><input type="password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" autoComplete="new-password" aria-describedby="etab-confirm-password-help" required />
-                {form.confirmMdp && form.confirmMdp !== form.motDePasse && <p id="etab-confirm-password-help" className="text-xs text-destructive mt-1">Les mots de passe ne correspondent pas</p>}
+              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Confirmer *</label><input type="password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required />
+                {form.confirmMdp && form.confirmMdp !== form.motDePasse && <p className="text-xs text-destructive mt-1">Les mots de passe ne correspondent pas</p>}
               </div>
               <label className="flex items-start gap-2 cursor-pointer">
                 <input type="checkbox" checked={cgu} onChange={e => setCgu(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
@@ -188,7 +188,7 @@ export default function InscriptionEtablissement() {
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre établissement</p>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom de l'établissement *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">SIRET * (14 chiffres)</label>
                   <div className="relative">
@@ -238,15 +238,15 @@ export default function InscriptionEtablissement() {
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Adresse</label>
                 <input value={form.rue} onChange={e => maj('rue', e.target.value)} placeholder="Rue" className="input-base mb-2" />
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville *" className="input-base" required />
                   <input value={form.codePostal} onChange={e => maj('codePostal', e.target.value.replace(/\D/g, '').slice(0, 5))} placeholder="Code postal" className="input-base" />
                   <input value={form.departement} onChange={e => maj('departement', e.target.value)} placeholder="Dép." className="input-base" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email contact</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" autoComplete="email" /></div>
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" autoComplete="tel" /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email contact</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
+                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>

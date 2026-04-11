@@ -24,3 +24,4 @@ Disallow: /groupe/
 Disallow: /auth/
 
 Sitemap: https://jolene.app/sitemap.xml
+Host: https://jolene.app

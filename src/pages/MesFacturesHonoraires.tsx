@@ -72,9 +72,9 @@ export default function MesFacturesHonoraires() {
       if (!f) { toast.error('Facture introuvable'); return; }
 
       const [{ data: sg }, { data: etab }, { data: mission }] = await Promise.all([
-        supabase.from('soignants').select('prenom, nom, profession, numero_rpps, numero_adeli, email, telephone, adresse_ligne1, adresse_code_postal, adresse_ville').eq('id', f.soignant_id).maybeSingle(),
-        supabase.from('etablissements').select('nom, type, adresse_ligne1, adresse_code_postal, adresse_ville, siret, email_contact').eq('id', f.etablissement_id).maybeSingle(),
-        f.mission_id ? supabase.from('missions').select('intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base').eq('id', f.mission_id).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from('soignants').select('prenom, nom, profession, numero_rpps, numero_adeli, email, telephone, adresse_rue, adresse_code_postal, adresse_ville').eq('id', (f as any).soignant_id).maybeSingle(),
+        supabase.from('etablissements').select('nom, type, adresse_rue, adresse_code_postal, adresse_ville, siret, email_contact').eq('id', (f as any).etablissement_id).maybeSingle(),
+        (f as any).mission_id ? supabase.from('missions').select('intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base').eq('id', (f as any).mission_id).maybeSingle() : Promise.resolve({ data: null }),
       ]);
 
       const { default: jsPDF } = await import('jspdf');
@@ -112,7 +112,7 @@ export default function MesFacturesHonoraires() {
         doc.text(sg.profession || '', 14, y); y += 4;
         if (sg.numero_rpps) { doc.text(`RPPS : ${sg.numero_rpps}`, 14, y); y += 4; }
         if (sg.numero_adeli) { doc.text(`ADELI : ${sg.numero_adeli}`, 14, y); y += 4; }
-        if (sg.adresse_ligne1) { doc.text(sg.adresse_ligne1, 14, y); y += 4; }
+        if (sg.adresse_rue) { doc.text(sg.adresse_rue, 14, y); y += 4; }
         if (sg.adresse_code_postal) { doc.text(`${sg.adresse_code_postal} ${sg.adresse_ville || ''}`, 14, y); y += 4; }
         if (sg.email) { doc.text(sg.email, 14, y); y += 4; }
       }
@@ -125,7 +125,7 @@ export default function MesFacturesHonoraires() {
       yClient += 5;
       if (etab) {
         doc.text(etab.nom || '', 120, yClient); yClient += 4;
-        if (etab.adresse_ligne1) { doc.text(etab.adresse_ligne1, 120, yClient); yClient += 4; }
+        if (etab.adresse_rue) { doc.text(etab.adresse_rue, 120, yClient); yClient += 4; }
         if (etab.adresse_code_postal) { doc.text(`${etab.adresse_code_postal} ${etab.adresse_ville || ''}`, 120, yClient); yClient += 4; }
         if (etab.siret) { doc.text(`SIRET : ${etab.siret}`, 120, yClient); yClient += 4; }
       }
@@ -266,7 +266,7 @@ export default function MesFacturesHonoraires() {
         )}
 
         {/* KPIs */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="card-base">
             <p className="text-xs text-muted-foreground">Total facturé</p>
             <p className="text-xl font-bold text-foreground">{fmt(totalFacture)}</p>

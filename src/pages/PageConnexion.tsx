@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Mail, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
@@ -20,6 +21,7 @@ import { hapticNotification } from '@/lib/haptics';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 
 export default function PageConnexion() {
+  usePageTitle('Connexion');
   const navigate = useNavigate();
   const { connexion, loading } = useAuth();
   const { afficherNotification } = useNotification();
@@ -34,7 +36,7 @@ export default function PageConnexion() {
     if (isNative()) {
       isBiometricAvailable().then((ok) => {
         setBioAvailable(ok && isBiometricEnabled());
-      });
+      }).then(undefined, () => {});
     }
   }, []);
 
@@ -73,7 +75,7 @@ export default function PageConnexion() {
     else if (role === 'ADMIN_GROUPE') navigate('/groupe/tableau-de-bord');
     else if (role === 'SOIGNANT') navigate('/soignant/tableau-de-bord');
     else {
-      logger.warn('[CONNEXION] Rôle non reconnu, roleData brut:', roleData);
+      console.warn('[CONNEXION] Rôle non reconnu, roleData brut:', roleData);
       afficherNotification({ type: 'erreur', message: 'Votre inscription n\'est pas complète. Veuillez vous réinscrire.' });
       const { supabase: sb } = await import('@/integrations/supabase/client');
       await sb.auth.signOut();
@@ -141,7 +143,7 @@ export default function PageConnexion() {
               <label className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@email.com" className="input-base pl-10" autoComplete="email" required />
+                <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@email.com" className="input-base pl-10" required />
               </div>
             </div>
 
@@ -149,7 +151,7 @@ export default function PageConnexion() {
               <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input type={afficherMdp ? 'text' : 'password'} value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} placeholder="••••••••" className="input-base pl-10 pr-10" autoComplete="current-password" required />
+                <input type={afficherMdp ? "text" : "password"} autoComplete="current-password" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} placeholder="••••••••" className="input-base pl-10 pr-10" required />
                 <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

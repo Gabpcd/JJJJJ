@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React from 'react';
 import LayoutLegal from '@/components/LayoutLegal';
 
@@ -10,6 +11,7 @@ const TOC = [
 ];
 
 export default function PageMentionsLegales() {
+  usePageTitle('Mentions Légales');
   return (
     <LayoutLegal
       titre="Mentions Légales"

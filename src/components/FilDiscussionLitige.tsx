@@ -163,7 +163,7 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
           <div className="flex items-center gap-2">
             <CheckCircle className="h-4 w-4 text-primary shrink-0" />
             <p className="text-sm text-primary font-medium">
-              Vous avez accepté la clôture — en attente de l'{iAmSoignant ? 'établissement' : 'soignant(e)'}
+              Vous avez accepté la clôture — en attente {iAmSoignant ? "de l'établissement" : 'du soignant(e)'}
             </p>
           </div>
         </div>
@@ -186,7 +186,7 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
       )}
 
       {/* Messages thread */}
-      <div className="space-y-2 max-h-80 overflow-y-auto rounded-xl bg-muted/10 p-2">
+      <div className="space-y-2 max-h-none rounded-xl bg-muted/10 p-2">
         {loadingMsgs ? (
           <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
         ) : messages.length === 0 ? (

@@ -19,7 +19,7 @@ export function BandeauHorsLigne() {
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 bg-warning text-warning-foreground text-sm z-[9998] flex items-center justify-center gap-2"
+      className="fixed top-0 left-0 right-0 bg-warning text-warning-foreground text-sm z-[9998] flex items-center justify-center flex-wrap gap-1 sm:gap-2"
       style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top))', paddingBottom: '0.5rem' }}
       role="alert"
     >

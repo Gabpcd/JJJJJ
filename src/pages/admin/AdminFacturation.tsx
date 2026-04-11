@@ -11,10 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { logger } from '@/lib/logger';
-import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type jsPDF from 'jspdf';
+import jsPDF from 'jspdf';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -44,24 +43,23 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase
+    (supabase
       .from('missions')
       .select('id, intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, montant_commission_ht, montant_commission_ttc, soignant_assigne_id')
       .eq('facture_id', factureId)
-      .order('debut_le', { ascending: true })
-      .then(async ({ data }) => {
+      .order('debut_le', { ascending: true }) as any)
+      .then(async ({ data }: any) => {
         const mList = (data as any[]) || [];
-        // Fetch soignant names separately (no FK on missions)
-        const sgIds = [...new Set(mList.map(m => m.soignant_assigne_id).filter(Boolean))];
+        const sgIds = [...new Set(mList.map((m: any) => m.soignant_assigne_id).filter(Boolean))];
         let sgMap: Record<string, any> = {};
         if (sgIds.length > 0) {
           const { data: sgData } = await supabase.from('soignants').select('id, prenom, nom').in('id', sgIds);
           if (sgData) for (const s of sgData) sgMap[s.id] = s;
         }
-        setMissions(mList.map(m => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
+        setMissions(mList.map((m: any) => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
         setLoading(false);
       })
-      .catch((err) => { logger.warn('[AdminFacturation] FactureDetailRow fetch error', err); setLoading(false); });
+      .catch((err: any) => { console.warn('FactureDetailRow fetch error:', err); setLoading(false); });
   }, [factureId]);
 
   if (loading) return (
@@ -143,8 +141,7 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
 // Jolene brand teal — used in PDF generation where CSS vars are unavailable
 const PDF_BRAND_COLOR = { r: 23, g: 162, b: 184 } as const;
 
-async function genererFacturePDF(facture: any) {
-  const { default: jsPDF } = await import('jspdf');
+function genererFacturePDF(facture: any) {
   const doc = new jsPDF();
   const etab = (facture.etablissements as any)?.nom ?? 'Établissement';
 
@@ -213,8 +210,6 @@ export default function AdminFacturation() {
   const [factures, setFactures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 100;
   const [actionId, setActionId] = useState<string | null>(null);
   const [filtreStatut, setFiltreStatut] = useState('TOUS');
   const [recherche, setRecherche] = useState('');
@@ -224,20 +219,17 @@ export default function AdminFacturation() {
 
   const charger = async () => {
     setLoading(true);
-    const { data } = await supabase.from('factures')
-      .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
-      .order('date_emission', { ascending: false })
-      .range(0, (page + 1) * PAGE_SIZE - 1)
-      .then(res => res)
-      .catch(err => { logger.warn('[AdminFacturation] charger factures error', err); return { data: null }; });
-    if (data) {
-      if (page === 0) setFactures(data);
-      else setFactures(prev => [...prev, ...data]);
-    }
+    try {
+      const { data } = await supabase.from('factures')
+        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, statut, date_emission, date_echeance, nombre_missions, etablissement_id, virement_reference, etablissements(nom)')
+        .order('date_emission', { ascending: false })
+        .limit(500);
+      if (data) setFactures(data);
+    } catch (err) { console.warn('charger factures error:', err); }
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, [page]);
+  useEffect(() => { charger(); }, []);
 
   const filtered = useMemo(() => {
     let f = factures;
@@ -279,7 +271,7 @@ export default function AdminFacturation() {
 
   const exporterFEC = async () => {
     const annee = new Date().getFullYear();
-    const result = await supabase.rpc('fn_export_fec' as any, { p_annee: annee }).catch(err => { logger.warn('[AdminFacturation] exporterFEC error', err); return { data: null, error: err }; });
+    const result = await (supabase.rpc('fn_export_fec' as any, { p_annee: annee }) as any).catch((err: any) => { console.warn('exporterFEC error:', err); return { data: null, error: err }; });
     const { data, error } = result;
     if (error) { toast.error('Une erreur est survenue. Veuillez réessayer.'); return; }
     const lignes = Array.isArray(data) ? data : [];
@@ -294,7 +286,6 @@ export default function AdminFacturation() {
   };
 
   const genererRapportPDF = async () => {
-    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     doc.setFillColor(PDF_BRAND_COLOR.r, PDF_BRAND_COLOR.g, PDF_BRAND_COLOR.b);
     doc.rect(0, 0, 210, 30, 'F');
@@ -373,7 +364,7 @@ export default function AdminFacturation() {
             <Input placeholder="Rechercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10" />
           </div>
           <Select value={filtreStatut} onValueChange={setFiltreStatut}>
-            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {STATUTS.map(s => <SelectItem key={s} value={s}>{s === 'TOUS' ? 'Tous statuts' : s}</SelectItem>)}
             </SelectContent>
@@ -480,7 +471,7 @@ export default function AdminFacturation() {
                             size="icon"
                             className="h-8 w-8"
                             title="Télécharger la facture PDF"
-                            onClick={async (e) => { e.stopPropagation(); await genererFacturePDF(f); }}
+                            onClick={(e) => { e.stopPropagation(); genererFacturePDF(f); }}
                           >
                             <Download className="h-4 w-4" />
                           </Button>
@@ -495,10 +486,6 @@ export default function AdminFacturation() {
             </TableBody>
           </Table>
         </div>
-
-        {factures.length === (page + 1) * PAGE_SIZE && (
-          <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de factures</button>
-        )}
       </div>
     </LayoutAdmin>
   );

@@ -83,9 +83,9 @@ export default function AttestationHeures() {
   if (loading) return <div className="flex items-center justify-center min-h-screen"><ChargementPage /></div>;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       {/* Toolbar — hidden on print */}
-      <div className="no-print sticky top-0 z-50 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
+      <div className="no-print sticky top-0 z-50 bg-background border-b border-border px-4 py-3 flex items-center gap-3">
         <button onClick={() => navigate('/soignant/mes-gains')} className="flex items-center gap-1 text-sm text-primary font-medium hover:underline">
           <ArrowLeft className="h-4 w-4" /> Retour à mes gains
         </button>

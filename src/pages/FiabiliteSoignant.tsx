@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -13,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 
 export default function FiabiliteSoignant() {
+  usePageTitle('Score de Fiabilité');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
@@ -33,7 +35,7 @@ export default function FiabiliteSoignant() {
           p_type_ressource: 'soignant', p_id_ressource: user.id,
           p_cle_s3: null, p_details: { page: 'fiabilite' },
           p_ip: null, p_navigateur: navigator.userAgent,
-        });
+        }).then(undefined, () => {});
       });
   }, [user]);
 

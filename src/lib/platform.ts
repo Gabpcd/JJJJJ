@@ -80,6 +80,44 @@ export async function partagerContenu(options: {
 }
 
 /**
+ * Open a location in Maps app (iOS), Google Maps, or Waze.
+ * Falls back to Google Maps web on desktop.
+ */
+export function ouvrirNavigation(lat: number, lng: number, label?: string) {
+  const encodedLabel = encodeURIComponent(label || 'Destination');
+  const platform = getPlatform();
+
+  return {
+    plans: () => {
+      const url = platform === 'ios'
+        ? `maps:?q=${encodedLabel}&ll=${lat},${lng}`
+        : `https://maps.google.com/maps?q=${lat},${lng}&label=${encodedLabel}`;
+      if (isNative()) {
+        import('@capacitor/browser').then(({ Browser }) => Browser.open({ url }));
+      } else {
+        window.open(url, '_blank');
+      }
+    },
+    googleMaps: () => {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+      if (isNative()) {
+        import('@capacitor/browser').then(({ Browser }) => Browser.open({ url }));
+      } else {
+        window.open(url, '_blank');
+      }
+    },
+    waze: () => {
+      const url = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+      if (isNative()) {
+        import('@capacitor/browser').then(({ Browser }) => Browser.open({ url }));
+      } else {
+        window.open(url, '_blank');
+      }
+    },
+  };
+}
+
+/**
  * Configure keyboard behavior per-platform.
  * Call once at app startup on native.
  */

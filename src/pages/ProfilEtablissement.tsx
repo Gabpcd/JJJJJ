@@ -9,8 +9,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { capturerErreurSentry } from '@/lib/sentry';
-import { supabase } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle } from 'lucide-react';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, LogOut } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Switch } from '@/components/ui/switch';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -46,7 +46,7 @@ function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
     const { data: session } = await supabase.auth.getSession();
     const token = session?.session?.access_token;
     const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-sepa`,
+      `${SUPABASE_URL}/functions/v1/setup-sepa`,
       {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -81,8 +81,9 @@ function SepaIbanForm({ onSuccess }: { onSuccess: (last4: string) => void }) {
         disabled={submitting || !stripe}
         className="btn-primary text-sm w-full disabled:opacity-50"
       >
-        {submitting ? 'Validation…' : '🏦 Valider le mandat SEPA'}
+        {submitting ? 'Validation…' : !stripe ? '⏳ Chargement Stripe…' : '🏦 Valider le mandat SEPA'}
       </button>
+      {!stripe && <p className="text-[10px] text-warning">Le module de paiement charge. Patientez quelques secondes…</p>}
       <p className="text-[10px] text-muted-foreground">
         En fournissant votre IBAN, vous autorisez Jolene à envoyer des instructions à votre banque pour débiter votre compte conformément au mandat SEPA.
       </p>
@@ -103,7 +104,7 @@ function SepaSetupSection({ userId }: { userId?: string }) {
       const token = session?.session?.access_token;
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-sepa`,
+          `${SUPABASE_URL}/functions/v1/setup-sepa`,
           {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -169,7 +170,7 @@ const CONVENTIONS_COLLECTIVES = [
 
 export default function ProfilEtablissement() {
   usePageTitle('Profil');
-  const { user } = useAuth();
+  const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -362,7 +363,7 @@ export default function ProfilEtablissement() {
           <h2 className="text-base font-semibold text-foreground mb-4">Informations générales</h2>
           <div className="space-y-3">
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" /></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">SIRET</label><input value={siret} disabled className="input-base bg-muted cursor-not-allowed" /></div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">FINESS</label><input value={form.finess} onChange={e => maj('finess', e.target.value)} className="input-base" /></div>
             </div>
@@ -387,7 +388,7 @@ export default function ProfilEtablissement() {
           <h2 className="text-base font-semibold text-foreground mb-4">Adresse</h2>
           <div className="space-y-3">
             <input value={form.rue} onChange={e => maj('rue', e.target.value)} placeholder="Rue" className="input-base" />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <input value={form.ville} onChange={e => maj('ville', e.target.value)} placeholder="Ville" className="input-base" />
               <input value={form.codePostal} onChange={e => maj('codePostal', e.target.value)} placeholder="Code postal" className="input-base" />
               <input value={form.departement} onChange={e => maj('departement', e.target.value)} placeholder="Département" className="input-base" />
@@ -396,7 +397,7 @@ export default function ProfilEtablissement() {
         </div>
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Contact</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
             <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
           </div>
@@ -447,7 +448,7 @@ export default function ProfilEtablissement() {
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
               {geoLoading ? 'Récupération en cours…' : '📍 Localiser mon établissement'}
             </button>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Latitude</label><input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className="input-base" /></div>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Longitude</label><input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className="input-base" /></div>
             </div>
@@ -473,7 +474,9 @@ export default function ProfilEtablissement() {
               { value: 'STRIPE_RESERVATION', icon: '💳', label: 'Carte bancaire', desc: 'Commission prélevée à chaque mission (autorisée à la réservation, capturée à la fin)' },
               { value: 'SEPA_DEBIT', icon: '🏦', label: 'Prélèvement SEPA (recommandé)', desc: '', isSEPA: true },
               { value: 'FACTURE_MENSUELLE', icon: '📄', label: 'Facture mensuelle', desc: 'Paiement à 30 jours par virement ou carte' },
-              { value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' },
+              ...(['HOPITAL_PUBLIC', 'CHU', 'CENTRE_SANTE', 'HAD'].includes(type)
+                ? [{ value: 'CHORUS_PRO', icon: '🏛️', label: 'Chorus Pro', desc: 'Dépôt automatique pour les établissements publics' }]
+                : []),
             ].map(opt => (
               <label
                 key={opt.value}
@@ -732,6 +735,16 @@ export default function ProfilEtablissement() {
           </div>
         </div>
       )}
+
+      {/* Déconnexion — visible uniquement sur mobile */}
+      <div className="md:hidden mt-6 pt-6 border-t border-border">
+        <button
+          onClick={async () => { await deconnexion(); navigate('/'); }}
+          className="btn-secondary w-full flex items-center justify-center gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
+        >
+          <LogOut className="h-4 w-4" /> Se déconnecter
+        </button>
+      </div>
     </LayoutApp>
   );
 }

@@ -351,11 +351,11 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
 
   return (
     <LayoutApp role={layoutRole}>
-    <div className="flex flex-col h-[calc(100vh-12rem)] md:h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-[calc(100dvh-14rem)] md:h-[calc(100dvh-8rem)]">
 
       <div className="flex flex-1 rounded-xl border border-border overflow-hidden bg-card min-h-0">
         {/* ── Conversation list ── */}
-        <div className={`w-full md:w-[340px] md:border-r border-border flex flex-col ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
+        <div className={`w-full md:w-[340px] lg:w-[380px] md:border-r border-border flex flex-col ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
           <div className="p-4 border-b border-border flex items-center justify-between">
             <h2 className="font-bold text-foreground flex items-center gap-2">
               <MessageCircle className="h-5 w-5 text-primary" />

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
-import { logger } from '@/lib/logger';
 import { useNavigate } from 'react-router-dom';
 import { FolderOpen, AlertCircle, Clock, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -35,7 +34,7 @@ function AttestationSante({ userId }: { userId: string }) {
           setCheckVaccin(true);
           setCheckMedecine(true);
         }
-      });
+      }).then(undefined, () => {});
   }, [userId]);
 
   const signer = async () => {
@@ -200,8 +199,7 @@ export default function DocumentsSoignant() {
       } else {
         setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
       }
-    }).catch((err) => {
-      logger.warn('[DocumentsSoignant] coherence check failed', err);
+    }).then(undefined, () => {
       setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
     });
   }, [user, mesDocuments]);
@@ -307,7 +305,7 @@ export default function DocumentsSoignant() {
         toast.info('🔄 Document en cours de vérification...');
       }
       charger();
-    }).catch((err) => {
+    }).then(undefined, (err: any) => {
       handleErrorSilent(err, 'Vérification automatique document');
       toast.info('Document téléversé. Vérification manuelle en attente.');
     });

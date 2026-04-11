@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
-import { logger } from '@/lib/logger';
+import { ouvrirNavigation } from '@/lib/platform';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { hapticNotification } from '@/lib/haptics';
@@ -134,7 +134,7 @@ export default function DetailMissionSoignant() {
       .gt('fin_le', mission.debut_le)
       .then(({ data }) => {
         setChevauchement((data || []).length > 0);
-      });
+      }).then(undefined, () => {});
   }, [mission, user]);
 
   // Fetch average rating for the establishment
@@ -144,10 +144,12 @@ export default function DetailMissionSoignant() {
       .then(({ data }: any) => {
         if (data && typeof data === 'object') setNoteMoyenne(data);
         else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
-      });
+      }).then(undefined, () => {});
   }, [mission?.etablissement_id]);
 
-  if (loading || !mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (!loading && !mission) return <LayoutApp role="SOIGNANT"><div className="text-center py-20"><p className="text-lg font-semibold text-foreground">Mission introuvable</p><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate('/soignant/missions')} className="btn-primary mt-4">Retour aux missions</button></div></LayoutApp>;
+  if (!mission || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
   const distance = calculerDistanceKm(
     soignant.adresse_lat, soignant.adresse_lng,
@@ -171,22 +173,19 @@ export default function DetailMissionSoignant() {
 
   const postulerMission = async (choixContrat?: string) => {
     setPostulationEnCours(true);
-    setCandidatureEnvoyee(true); // Optimistic: show success immediately
     try {
       const params: any = { p_mission_id: id!, p_message: messageCandidature || null };
       if (choixContrat) params.p_choix_contrat = choixContrat;
       const { data, error } = await supabase.rpc('fn_postuler_mission' as any, params);
-      if (error) { setCandidatureEnvoyee(false); toast.error(extraireMessageErreur(error)); return; }
+      if (error) { toast.error(extraireMessageErreur(error)); return; }
       if (data?.choix_requis) {
-        setCandidatureEnvoyee(false); // Revert — need user choice first
         setChoixContratDialog({ open: true, options: data.options || [], action: 'postuler' });
         return;
       }
-      if (data?.error) { setCandidatureEnvoyee(false); toast.error(data.error); return; }
-      // Success — keep optimistic state
+      if (data?.error) { toast.error(data.error); return; }
+      setCandidatureEnvoyee(true);
       toast.success('Candidature envoyée ! L\'établissement examinera votre profil.');
     } catch (err: any) {
-      setCandidatureEnvoyee(false); // Revert on error
       capturerErreurSentry(err, 'DetailMissionSoignant', 'candidature');
       toast.error(extraireMessageErreur(err));
     }
@@ -263,7 +262,7 @@ export default function DetailMissionSoignant() {
           },
           destinataire_id: user!.id,
         },
-      }).catch((err) => { logger.warn('[DetailMissionSoignant] send-email soignant failed', err); });
+      }).then(undefined, () => {});
 
       // Email à l'établissement (établissement role can send to other addresses)
       {
@@ -279,7 +278,7 @@ export default function DetailMissionSoignant() {
             },
             destinataire_id: mission.etablissement_id,
           },
-        }).catch((err) => { logger.warn('[DetailMissionSoignant] send-email etablissement failed', err); });
+        }).then(undefined, () => {});
       }
     } finally {
       setAcceptationEnCours(false);
@@ -387,8 +386,30 @@ export default function DetailMissionSoignant() {
                   {etablissement?.adresse_rue}, {etablissement?.adresse_code_postal} {etablissement?.adresse_ville}
                   {etablissement?.adresse_departement && ` (${etablissement.adresse_departement})`}
                 </p>
-                <div className="mt-1">
+                <div className="mt-1 flex items-center gap-2 flex-wrap">
                   <BadgeDistance distanceKm={distance} />
+                  {etablissement?.adresse_lat && etablissement?.adresse_lng && (
+                    <>
+                      <button
+                        onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).plans()}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        📍 Plans
+                      </button>
+                      <button
+                        onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).googleMaps()}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        🗺️ Google Maps
+                      </button>
+                      <button
+                        onClick={() => ouvrirNavigation(etablissement.adresse_lat, etablissement.adresse_lng, etablissement.nom).waze()}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        🚗 Waze
+                      </button>
+                    </>
+                  )}
                 </div>
                 {/* L4: Contact info only visible after assignment */}
                 {estAssigne && (

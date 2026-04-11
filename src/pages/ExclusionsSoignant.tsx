@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -24,6 +25,7 @@ interface ExclusionRecue {
 }
 
 export default function ExclusionsSoignant() {
+  usePageTitle('Exclusions');
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [exclusions, setExclusions] = useState<any[]>([]);

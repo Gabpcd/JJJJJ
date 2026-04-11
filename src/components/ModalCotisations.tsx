@@ -29,7 +29,7 @@ export function ModalCotisations({ missionId, open, onClose }: { missionId: stri
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Détail des cotisations</DialogTitle>
         </DialogHeader>

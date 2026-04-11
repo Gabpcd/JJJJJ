@@ -18,22 +18,24 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true }:
       const { data, error } = await supabase.functions.invoke('psc-authorize', {
         body: { intention },
       });
-      if (error) {
-        if (data?.configured === false) {
-          toast.info('Pro Santé Connect sera disponible très prochainement');
-        } else {
-          toast.error(data?.error || 'Erreur Pro Santé Connect');
-        }
+
+      if (error || data?.configured === false) {
+        toast.info('Pro Santé Connect sera disponible très prochainement. Utilisez l\'inscription classique en attendant.');
         return;
       }
+
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
       if (data?.authorization_url) {
-        // Redirection vers PSC
         window.location.href = data.authorization_url;
       } else {
-        toast.error('URL d\'autorisation manquante');
+        toast.error('Impossible de contacter Pro Santé Connect');
       }
-    } catch (e: any) {
-      toast.error(e?.message || 'Erreur');
+    } catch {
+      toast.info('Pro Santé Connect sera disponible très prochainement.');
     } finally {
       setLoading(false);
     }

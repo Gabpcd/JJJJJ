@@ -8,9 +8,9 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RouteProtegee } from "@/components/RouteProtegee";
 import { PageTransition } from "@/components/PageTransition";
 import { ChargementPage } from "@/components/ChargementPage";
-import { BandeauCookies } from "@/components/BandeauCookies";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { Toaster } from "sonner";
+import { BandeauCookies } from "@/components/BandeauCookies";
 
 /* ─── Public pages ─── */
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
@@ -39,8 +39,6 @@ const PageMentionsLegales = lazy(() => import("./pages/PageMentionsLegales"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
 const Telecharger = lazy(() => import("./pages/Telecharger"));
-const VilleLanding = lazy(() => import("./pages/VilleLanding"));
-const ProfessionLanding = lazy(() => import("./pages/ProfessionLanding"));
 
 /* ─── Soignant pages ─── */
 const DashboardSoignant = lazy(() => import("./pages/DashboardSoignant"));
@@ -66,14 +64,12 @@ const PremiumSoignant = lazy(() => import("./pages/PremiumSoignant"));
 const ChargesSociales = lazy(() => import("./pages/ChargesSociales"));
 const PageParrainage = lazy(() => import("./pages/PageParrainage"));
 const PageMessagerie = lazy(() => import("./pages/PageMessagerie"));
-const SyncCalendrierPage = lazy(() => import("./pages/SyncCalendrier"));
 const LitigesSoignant = lazy(() => import("./pages/LitigesSoignant"));
 const LitigesEtablissement = lazy(() => import("./pages/LitigesEtablissement"));
 const PageStripeConnect = lazy(() => import("./pages/PageStripeConnect"));
 
 /* ─── Établissement pages ─── */
 const DashboardEtablissement = lazy(() => import("./pages/DashboardEtablissement"));
-const AnalyticsEtablissement = lazy(() => import("./pages/AnalyticsEtablissement"));
 const APIEtablissement = lazy(() => import("./pages/APIEtablissement"));
 const ProfilEtablissement = lazy(() => import("./pages/ProfilEtablissement"));
 const ListeMissions = lazy(() => import("./pages/ListeMissions"));
@@ -93,7 +89,6 @@ const PoolUrgenceEtablissement = lazy(() => import("./pages/PoolUrgenceEtablisse
 const ContratPlateforme = lazy(() => import("./pages/ContratPlateforme"));
 const DetailPresencesMission = lazy(() => import("./pages/DetailPresencesMission"));
 const ObligationsFinancieres = lazy(() => import("./pages/ObligationsFinancieres"));
-const AssuranceMission = lazy(() => import("./pages/AssuranceMission"));
 
 /* ─── Shared protected ─── */
 const ContratMission = lazy(() => import("./pages/ContratMission"));
@@ -117,11 +112,6 @@ const AdminCalendrier = lazy(() => import("./pages/admin/AdminCalendrier"));
 const AdminMissions = lazy(() => import("./pages/admin/AdminMissions"));
 const AdminReclamations = lazy(() => import("./pages/admin/AdminReclamations"));
 const AdminFinances = lazy(() => import("./pages/admin/AdminFinances"));
-const AdminCohortEconomics = lazy(() => import("./pages/admin/AdminCohortEconomics"));
-const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
-const AdminDPIA = lazy(() => import("./pages/admin/AdminDPIA"));
-const AdminHealthcheck = lazy(() => import("./pages/admin/AdminHealthcheck"));
-const GestionShifts = lazy(() => import("./pages/GestionShifts"));
 
 const queryClient = new QueryClient();
 
@@ -137,8 +127,6 @@ function AppRoutes() {
           <Route path="/recruter-soignants" element={<RecruterSoignants />} />
           <Route path="/infirmiere-liberale" element={<InfirmiereLiberal />} />
           <Route path="/pharmacie-remplacement" element={<PharmacieRemplacement />} />
-          <Route path="/emploi-soignant/:ville" element={<VilleLanding />} />
-          <Route path="/metier/:profession" element={<ProfessionLanding />} />
           <Route path="/blog" element={<BlogListe />} />
           <Route path="/blog/:slug" element={<BlogArticle />} />
           <Route path="/a-propos" element={<APropos />} />
@@ -187,7 +175,6 @@ function AppRoutes() {
           <Route path="/soignant/messagerie" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageMessagerie role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/litiges" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><LitigesSoignant /></RouteProtegee>} />
           <Route path="/soignant/stripe-connect" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageStripeConnect /></RouteProtegee>} />
-          <Route path="/soignant/calendrier-sync" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><SyncCalendrierPage /></RouteProtegee>} />
 
           {/* Établissement */}
           <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
@@ -207,8 +194,6 @@ function AppRoutes() {
           <Route path="/etablissement/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageNotifications role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/exclusions" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExclusionsEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/api" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><APIEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/analytics" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><AnalyticsEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/shifts" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><GestionShifts /></RouteProtegee>} />
           <Route path="/etablissement/premium" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PremiumEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/chorus-config" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ChorusConfig /></RouteProtegee>} />
           <Route path="/etablissement/pool-urgence" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PoolUrgenceEtablissement /></RouteProtegee>} />
@@ -217,7 +202,6 @@ function AppRoutes() {
           <Route path="/etablissement/obligations" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ObligationsFinancieres /></RouteProtegee>} />
           <Route path="/etablissement/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageMessagerie role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><LitigesEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/assurance" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><AssuranceMission /></RouteProtegee>} />
           <Route path="/etablissement/presences/mission/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailPresencesMission /></RouteProtegee>} />
 
           {/* Contrat (accessible par soignant et établissement) */}
@@ -249,10 +233,6 @@ function AppRoutes() {
           <Route path="/admin/presences/mission/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><DetailPresencesMission role="ADMIN_PLATEFORME" /></RouteProtegee>} />
           <Route path="/admin/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><PageMessagerie role="ADMIN_PLATEFORME" /></RouteProtegee>} />
           <Route path="/admin/finances" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminFinances /></RouteProtegee>} />
-          <Route path="/admin/cohort" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCohortEconomics /></RouteProtegee>} />
-          <Route path="/admin/audit" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAuditLogs /></RouteProtegee>} />
-          <Route path="/admin/dpia" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDPIA /></RouteProtegee>} />
-          <Route path="/admin/healthcheck" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminHealthcheck /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
@@ -272,7 +252,7 @@ const App = () => (
           <NotificationProvider>
             <BrowserRouter>
               <AppRoutes />
-              <Toaster position="top-right" richColors closeButton />
+              <Toaster position="top-center" richColors closeButton toastOptions={{ style: { marginTop: 'env(safe-area-inset-top, 0px)' } }} />
               <BandeauCookies />
             </BrowserRouter>
           </NotificationProvider>

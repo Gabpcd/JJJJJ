@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/lib/logger';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -97,7 +98,7 @@ export default function RechercheMissions() {
           setProfession(s.profession);
           setRayonKm(s.rayon_deplacement_km || 50);
         }
-      });
+      }).then(undefined, () => {});
 
     // Vérifier si la RCP est expirée
     supabase.from('documents_soignants')
@@ -140,6 +141,7 @@ export default function RechercheMissions() {
       const { data, error } = await query;
       if (error) {
         logger.warn('[RechercheMissions] Erreur requête missions:', error.message);
+        toast.error('Impossible de charger les missions. Vérifiez votre connexion.');
       }
       const enriched = data ? await enrichirEtablissements(data as any) : [];
       setMissions(enriched);
@@ -418,7 +420,7 @@ export default function RechercheMissions() {
             <div
               ref={mapRef}
               className="w-full rounded-xl border border-border overflow-hidden"
-              style={{ height: 'calc(100vh - 280px)', minHeight: '300px', maxHeight: '600px' }}
+              style={{ height: 'min(calc(100dvh - 280px), 600px)', minHeight: '250px' }}
             />
             {filtered.length === 0 && !loading && (
               <p className="text-sm text-muted-foreground text-center mt-3">Aucune mission à afficher sur la carte.</p>

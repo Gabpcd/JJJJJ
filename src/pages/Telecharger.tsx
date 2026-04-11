@@ -190,7 +190,7 @@ export default function Telecharger() {
         <section className="py-16 md:py-20">
           <div className="max-w-5xl mx-auto px-4">
             <h2 className="text-2xl md:text-3xl font-bold text-foreground text-center mb-12">Tout ce qu'il vous faut, en poche</h2>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
               {features.map((f) => (
                 <div key={f.titre} className="text-center">
                   <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -208,7 +208,7 @@ export default function Telecharger() {
         <section className="py-16 md:py-20 bg-muted/50">
           <div className="max-w-md mx-auto px-4 text-center">
             <h2 className="text-xl font-bold text-foreground mb-6">Scannez pour accéder à Jolene</h2>
-            <div className="bg-white p-6 rounded-2xl inline-block shadow-sm border border-border">
+            <div className="bg-card p-6 rounded-2xl inline-block shadow-sm border border-border">
               <QRCode />
             </div>
             <p className="text-sm text-muted-foreground mt-4">Ouvrez l'appareil photo de votre téléphone et scannez ce code</p>
