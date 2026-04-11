@@ -1,0 +1,91 @@
+name: Deploy Supabase (migrations + edge functions)
+
+# Automatise le déploiement des migrations SQL et des edge functions
+# à chaque push sur main qui touche supabase/**. Vercel s'occupe déjà
+# du frontend de son côté.
+#
+# Prérequis (secrets GitHub repo) :
+# - SUPABASE_ACCESS_TOKEN  : dashboard Supabase → Account → Access Tokens
+# - SUPABASE_PROJECT_REF   : flripxtsyegjshnhzjkz
+# - SUPABASE_DB_PASSWORD   : Project Settings → Database → Connection String
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/deploy-supabase.yml'
+  workflow_dispatch: # Permet un déclenchement manuel depuis l'UI GitHub
+
+concurrency:
+  # Empêche deux déploiements simultanés (évite race conditions sur les migrations)
+  group: deploy-supabase-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-migrations:
+    name: Apply SQL migrations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link to Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Push pending migrations
+        run: supabase db push --include-all
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+  deploy-functions:
+    name: Deploy edge functions
+    runs-on: ubuntu-latest
+    needs: deploy-migrations # Attendre que le schéma soit à jour avant de déployer le code qui l'utilise
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy every function listed in supabase/config.toml
+        run: |
+          set -euo pipefail
+          cd supabase/functions
+          # Filtrer les répertoires qui contiennent un index.ts
+          for dir in */; do
+            fn="${dir%/}"
+            if [ -f "$fn/index.ts" ]; then
+              echo "Deploying $fn..."
+              supabase functions deploy "$fn" \
+                --project-ref "$SUPABASE_PROJECT_REF" \
+                --no-verify-jwt \
+                --use-api
+            fi
+          done
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Summary
+        run: |
+          echo "### Deploy Supabase ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Migrations SQL appliquées" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Edge functions redéployées depuis le repo" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Projet : \`${{ secrets.SUPABASE_PROJECT_REF }}\`" >> "$GITHUB_STEP_SUMMARY"
