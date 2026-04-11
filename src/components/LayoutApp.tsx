@@ -35,7 +35,10 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
   }, []);
 
   return (
-    <div className={isNative ? "h-screen flex flex-col overflow-hidden bg-background" : "flex-1 flex flex-col min-h-screen bg-background"}>
+    <div
+      className={isNative ? "h-screen flex flex-col overflow-hidden bg-background" : "flex flex-col bg-background"}
+      style={isNative ? undefined : { minHeight: 'var(--app-height, 100dvh)' }}
+    >
       <a href="#main-content" className="skip-to-main">Aller au contenu principal</a>
       <BandeauHorsLigne />
       <SyncHorsLigne />
@@ -50,7 +53,8 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
         style={{
           paddingBottom: isNative
             ? 'calc(5rem + env(safe-area-inset-bottom))'
-            : '5rem',
+            : 'calc(5rem + env(safe-area-inset-bottom) + var(--viewport-offset-bottom, 0px))',
+          minHeight: isNative ? undefined : 'var(--app-height, 100dvh)',
         }}
       >
         <div className="max-w-6xl mx-auto px-4 py-6 md:pb-6">
