@@ -1,23 +1,31 @@
 import { useEffect, useState } from 'react';
-import { X, Share, Plus } from 'lucide-react';
-import { isIOSBrowser, isStandalonePWA, isNative } from '@/lib/platform';
+import { X, Share, Plus, Download } from 'lucide-react';
+import { isIOSBrowser, isAndroidBrowser, isStandalonePWA, isNative } from '@/lib/platform';
 
 const DISMISS_KEY = 'pwa_install_dismissed';
 const DISMISS_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  prompt(): Promise<void>;
+  readonly userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 /**
- * Discreet banner suggesting iPhone Safari users to "Add to Home Screen"
- * for a full-screen app experience. Only appears on:
- * - iOS Safari web (not Capacitor native, not standalone PWA, not desktop)
- * - After 30 seconds of page load (not intrusive)
- * - Only once every 7 days after dismissal
+ * Cross-browser "install as app" suggestion banner.
+ * - iOS Safari: shows instructions (Share → Sur l'écran d'accueil)
+ * - Android Chrome/Edge: shows an "Installer" button (native beforeinstallprompt)
+ * - Desktop browsers / standalone PWA / Capacitor native: hidden
+ * - Dismissible for 7 days
  */
 export function BandeauInstallerPWA() {
   const [visible, setVisible] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [mode, setMode] = useState<'ios' | 'android-native' | null>(null);
 
   useEffect(() => {
-    // Skip if not iOS Safari web, if Capacitor native, or if already installed
-    if (isNative() || isStandalonePWA() || !isIOSBrowser()) return;
+    // Skip if already running as app or on desktop
+    if (isNative() || isStandalonePWA()) return;
 
     // Skip if recently dismissed
     const dismissedAt = localStorage.getItem(DISMISS_KEY);
@@ -26,9 +34,28 @@ export function BandeauInstallerPWA() {
       if (elapsed < DISMISS_DURATION_MS) return;
     }
 
-    // Show after 30s delay
-    const timer = setTimeout(() => setVisible(true), 30_000);
-    return () => clearTimeout(timer);
+    // iOS Safari → show manual instructions after 30s
+    if (isIOSBrowser()) {
+      const timer = setTimeout(() => {
+        setMode('ios');
+        setVisible(true);
+      }, 30_000);
+      return () => clearTimeout(timer);
+    }
+
+    // Android Chrome / Edge / Samsung Internet → intercept the native install prompt
+    if (isAndroidBrowser()) {
+      const handler = (e: Event) => {
+        e.preventDefault();
+        setDeferredPrompt(e as BeforeInstallPromptEvent);
+        setTimeout(() => {
+          setMode('android-native');
+          setVisible(true);
+        }, 15_000);
+      };
+      window.addEventListener('beforeinstallprompt', handler);
+      return () => window.removeEventListener('beforeinstallprompt', handler);
+    }
   }, []);
 
   const dismiss = () => {
@@ -36,7 +63,21 @@ export function BandeauInstallerPWA() {
     setVisible(false);
   };
 
-  if (!visible) return null;
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    try {
+      await deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        setVisible(false);
+        setDeferredPrompt(null);
+      }
+    } catch {
+      // ignore errors
+    }
+  };
+
+  if (!visible || !mode) return null;
 
   return (
     <div
@@ -47,14 +88,28 @@ export function BandeauInstallerPWA() {
     >
       <div className="pointer-events-auto mx-4 bg-gradient-to-r from-primary to-primary/90 text-primary-foreground rounded-2xl shadow-2xl p-4 flex items-start gap-3 animate-in slide-in-from-bottom-4 duration-300">
         <div className="flex-1">
-          <p className="text-sm font-bold mb-1">Installer Jolene sur votre iPhone</p>
-          <p className="text-xs opacity-90 leading-snug">
-            Tapez <Share className="inline h-3.5 w-3.5 mx-0.5" /> puis{' '}
-            <span className="inline-flex items-center bg-white/20 rounded px-1.5 py-0.5 text-[11px] font-semibold">
-              <Plus className="h-3 w-3 mr-0.5" />Sur l'écran d'accueil
-            </span>{' '}
-            pour une expérience plein écran.
-          </p>
+          <p className="text-sm font-bold mb-1">Installer Jolene sur votre téléphone</p>
+          {mode === 'ios' ? (
+            <p className="text-xs opacity-90 leading-snug">
+              Tapez <Share className="inline h-3.5 w-3.5 mx-0.5" /> puis{' '}
+              <span className="inline-flex items-center bg-white/20 rounded px-1.5 py-0.5 text-[11px] font-semibold">
+                <Plus className="h-3 w-3 mr-0.5" />Sur l'écran d'accueil
+              </span>{' '}
+              pour une expérience plein écran.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs opacity-90 leading-snug mb-2">
+                Installez Jolene comme une vraie application pour un accès rapide et plein écran.
+              </p>
+              <button
+                onClick={handleInstallClick}
+                className="inline-flex items-center gap-1.5 bg-white text-primary px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-white/90 transition"
+              >
+                <Download className="h-3.5 w-3.5" /> Installer Jolene
+              </button>
+            </>
+          )}
         </div>
         <button
           onClick={dismiss}
