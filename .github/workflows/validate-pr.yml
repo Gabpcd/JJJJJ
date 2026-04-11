@@ -54,14 +54,13 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Scanning for '#17A2B8' (old Soin Direct turquoise) in code"
-          # Autorisé : commentaires, types.ts généré. Bloqué : code source actif.
-          HITS=$(grep -rn "#17A2B8" src/ supabase/functions/ 2>/dev/null \
-            | grep -v "// " \
-            | grep -v "/\*" || true)
+          # Scope: only real source files (not docs that may legitimately mention drift)
+          HITS=$(grep -rn --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.css' --include='*.html' "#17A2B8" src/ supabase/functions/ public/ 2>/dev/null \
+            | grep -v "^[[:space:]]*//" \
+            | grep -v "^[[:space:]]*\*" || true)
           if [ -n "$HITS" ]; then
-            echo "::warning::Old turquoise branding found:"
+            echo "::warning::Old turquoise branding found in code:"
             echo "$HITS"
-            # Warning only — ne fail pas le build pour laisser passer les faux positifs
           fi
           echo "::endgroup::"
 
@@ -87,21 +86,6 @@ jobs:
           fi
           echo "::endgroup::"
 
-  supabase-advisors:
-    name: Supabase security advisors
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' # Only on main push, not every PR
-    steps:
-      - name: Fetch security advisors
-        run: |
-          set -euo pipefail
-          RESP=$(curl -s -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
-            "https://api.supabase.com/v1/projects/${{ secrets.SUPABASE_PROJECT_REF }}/advisors?type=security")
-          ERROR_COUNT=$(echo "$RESP" | grep -o '"level":"ERROR"' | wc -l)
-          if [ "$ERROR_COUNT" -gt 0 ]; then
-            echo "::error::Supabase security advisor reports $ERROR_COUNT ERROR-level issues"
-            echo "$RESP"
-            exit 1
-          fi
-          WARN_COUNT=$(echo "$RESP" | grep -o '"level":"WARN"' | wc -l)
-          echo "Security advisor: $WARN_COUNT warnings (non-blocking)"
+  # NB : le job supabase-advisors a été retiré parce que l'endpoint
+  # /v1/projects/{ref}/advisors n'existe pas dans le Management API public.
+  # Les advisors restent accessibles via le dashboard Supabase ou le MCP.
