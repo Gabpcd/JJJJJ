@@ -88,7 +88,7 @@ export default function RechercheMissions() {
 
   useEffect(() => {
     if (!user) return;
-    Promise.resolve(supabase.from('soignants')
+    supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
       .eq('id', user.id).single()
       .then(({ data }) => {
@@ -98,11 +98,10 @@ export default function RechercheMissions() {
           setProfession(s.profession);
           setRayonKm(s.rayon_deplacement_km || 50);
         }
-      })
-      ).catch(() => {});
+      }).then(undefined, () => {});
 
     // Vérifier si la RCP est expirée
-    Promise.resolve(supabase.from('documents_soignants')
+    supabase.from('documents_soignants')
       .select('statut_verification, valide_jusqua')
       .eq('soignant_id', user.id)
       .eq('type_document', 'RCP_ASSURANCE')

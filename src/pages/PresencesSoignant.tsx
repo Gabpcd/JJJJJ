@@ -46,17 +46,16 @@ export default function PresencesSoignant() {
   // Load GPS consent on mount
   useEffect(() => {
     if (!user) return;
-    Promise.resolve(supabase.from('soignants').select('consentement_gps').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('soignants').select('consentement_gps').eq('id', user.id).single().then(({ data }) => {
       setConsentementGPS(data?.consentement_gps ?? null);
       setConsentementCharge(true);
-    })
-      ).catch(() => {});
+    }).then(undefined, () => {});
   }, [user]);
 
   const handleAccepterGPS = async () => {
     if (!user) return;
     // Use dedicated RPC to update only GPS consent without touching other fields
-    await Promise.resolve(supabase.rpc('fn_consentir_gps' as any, {
+    await supabase.rpc('fn_consentir_gps' as any, {
       p_accepte: true,
     });
     setConsentementGPS(true);
@@ -365,7 +364,7 @@ export default function PresencesSoignant() {
           },
           destinataire_id: user.id,
         },
-      })).catch(() => { afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi de l\'email de confirmation.' }); });
+      }).then(undefined, () => { afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi de l\'email de confirmation.' }); });
     }
 
     afficherNotification({ type: 'succes', message: '🏁 Départ pointé ! Mission terminée.' });

@@ -24,7 +24,7 @@ function AttestationSante({ userId }: { userId: string }) {
 
   useEffect(() => {
     // Charger l'attestation existante
-    Promise.resolve(supabase.from('soignants')
+    supabase.from('soignants')
       .select('attestation_sante_signee_le')
       .eq('id', userId)
       .single()
@@ -34,13 +34,12 @@ function AttestationSante({ userId }: { userId: string }) {
           setCheckVaccin(true);
           setCheckMedecine(true);
         }
-      })
-      ).catch(() => {});
+      }).then(undefined, () => {});
   }, [userId]);
 
   const signer = async () => {
     setSigning(true);
-    const { data, error } = await Promise.resolve(supabase.rpc('fn_signer_attestation_sante' as any);
+    const { data, error } = await supabase.rpc('fn_signer_attestation_sante' as any);
     if (error) {
       toast.error('Erreur lors de la signature. Veuillez réessayer.');
       handleErrorSilent(error, 'Signature attestation santé');
@@ -200,7 +199,7 @@ export default function DocumentsSoignant() {
       } else {
         setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
       }
-    })).catch(() => {
+    }).then(undefined, () => {
       setIncoherenceMessage(issues.length > 0 ? issues.join('. ') + '.' : null);
     });
   }, [user, mesDocuments]);
@@ -270,7 +269,7 @@ export default function DocumentsSoignant() {
       motif_rejet: null,
     };
 
-    const { data, error } = await Promise.resolve(supabase.from('documents_soignants').insert(insertData).select().single();
+    const { data, error } = await supabase.from('documents_soignants').insert(insertData).select().single();
 
     if (error) {
       await supabase.storage.from('jolene-documents').remove([chemin]);
@@ -306,7 +305,7 @@ export default function DocumentsSoignant() {
         toast.info('🔄 Document en cours de vérification...');
       }
       charger();
-    })).catch((err) => {
+    }).then(undefined, (err: any) => {
       handleErrorSilent(err, 'Vérification automatique document');
       toast.info('Document téléversé. Vérification manuelle en attente.');
     });
@@ -328,7 +327,7 @@ export default function DocumentsSoignant() {
         throw error || new Error('Signed URL absente');
       }
 
-      await Promise.resolve(supabase.rpc('fn_ecrire_audit_safe', {
+      await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: user!.id, p_type_acteur: 'SOIGNANT', p_action: 'DOCUMENT_CONSULTATION',
         p_type_ressource: 'document', p_id_ressource: doc.id, p_cle_s3: doc.s3_cle,
         p_details: { type_document: doc.type_document }, p_ip: null, p_navigateur: navigator.userAgent,

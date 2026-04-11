@@ -39,7 +39,7 @@ function StripeConnectBanner({ userId }: { userId?: string }) {
     supabase.functions.invoke('stripe-connect-status').then(({ data }) => {
       setStatus(data);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).then(undefined, () => setLoading(false));
   }, [userId]);
 
   if (loading || !status) return null;
@@ -158,16 +158,15 @@ export default function ProfilSoignant() {
   const [statutLiberal, setStatutLiberal] = useState('');
   useEffect(() => {
     if (!user) return;
-    Promise.resolve(supabase.rpc('fn_mon_profil_soignant_complet' as any).then(({ data, error }: any) => {
+    supabase.rpc('fn_mon_profil_soignant_complet' as any).then(({ data, error }: any) => {
       if (error) {
-        afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) })
-      ).catch(() => {});
+        afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) }).then(undefined, () => {});
         setLoading(false);
         return;
       }
 
       if (data) {
-        Promise.resolve(supabase.rpc('fn_ecrire_audit_safe', {
+        supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
           p_action: 'DONNEES_PERSO_CONSULTATION',
           p_type_ressource: 'soignant', p_id_ressource: user.id,
@@ -210,8 +209,7 @@ export default function ProfilSoignant() {
     // Load filleuls
     supabase.rpc('fn_mes_filleuls' as any).then(({ data }: any) => {
       if (Array.isArray(data)) setFilleuls(data);
-    })
-      ).catch(() => {});
+    }).then(undefined, () => {});
   }, [user]);
 
   const [geoLoading, setGeoLoading] = useState(false);
@@ -260,7 +258,7 @@ export default function ProfilSoignant() {
       return;
     }
     setSaving(true);
-    const { data: rpcResult, error } = await Promise.resolve(supabase.rpc('fn_modifier_mon_profil' as any, {
+    const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
       p_telephone: form.telephone || null,
       p_adresse_rue: null, p_adresse_ville: null, p_adresse_code_postal: null,
       p_rayon_deplacement_km: form.rayon,
@@ -353,15 +351,13 @@ export default function ProfilSoignant() {
       .then(({ data }: any) => {
         if (Array.isArray(data) && data.length > 0) setNoteMoyenne(data[0]);
         else if (data && typeof data === 'object' && !Array.isArray(data) && 'total' in data) setNoteMoyenne(data);
-      })
-      ).catch(() => {});
-    Promise.resolve(supabase.rpc('fn_mes_evaluations_recues' as any)
+      }).then(undefined, () => {});
+    supabase.rpc('fn_mes_evaluations_recues' as any)
       .then(({ data }: any) => {
         if (Array.isArray(data)) setEvaluations(data);
-      })
-      ).catch(() => {});
+      }).then(undefined, () => {});
     // Load badge stats — map RPC response fields to BadgeStats interface
-    Promise.resolve(supabase.rpc('fn_badge_stats' as any).then(({ data }: any) => {
+    supabase.rpc('fn_badge_stats' as any).then(({ data }: any) => {
       if (data) {
         setBadgeStats({
           missionsTerminees: data.total_missions ?? data.missionsTerminees ?? 0,
@@ -373,8 +369,7 @@ export default function ProfilSoignant() {
           maxMissionsMemeEtab: data.max_missions_meme_etab ?? data.maxMissionsMemeEtab ?? 0,
           retards: data.retards ?? 0,
           totalMissions: data.total_missions ?? data.missionsTerminees ?? 0,
-        })
-      ).catch(() => {});
+        }).then(undefined, () => {});
       }
     });
   }, [user]);
@@ -640,7 +635,7 @@ export default function ProfilSoignant() {
               disabled={gpsToggling}
               onCheckedChange={async (checked) => {
                 setGpsToggling(true);
-                const { data, error } = await Promise.resolve(supabase.rpc('fn_consentir_gps' as any, { p_accepte: checked });
+                const { data, error } = await supabase.rpc('fn_consentir_gps' as any, { p_accepte: checked });
                 if (error) {
                   afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
                 } else if (data && (data as any).error) {

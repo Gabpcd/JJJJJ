@@ -53,13 +53,12 @@ export default function MissionsSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    Promise.resolve(supabase.from('soignants')
+    supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
       .eq('id', user.id).single()
-      .then(({ data, error }) => { if (data) setSoignant(data as any); if (error) console.warn('Profil soignant:', error.message); })
-      ).catch(() => {});
+      .then(({ data, error }) => { if (data) setSoignant(data as any); if (error) console.warn('Profil soignant:', error.message); }).then(undefined, () => {});
 
-    Promise.resolve(supabase.from('documents_soignants')
+    supabase.from('documents_soignants')
       .select('statut_verification, valide_jusqua')
       .eq('soignant_id', user.id)
       .eq('type_document', 'RCP_ASSURANCE')
@@ -73,12 +72,11 @@ export default function MissionsSoignant() {
           const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
           setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
         }
-      })
-      ).catch(() => { setRcpExpiree(true); });
+      }).then(undefined, () => { setRcpExpiree(true); });
 
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
     const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
-    Promise.resolve(supabase.from('missions')
+    supabase.from('missions')
       .select('duree_heures')
       .eq('soignant_assigne_id', user.id)
       .in('statut', ['ASSIGNEE', 'EN_COURS'])
@@ -87,8 +85,7 @@ export default function MissionsSoignant() {
       .then(({ data }) => {
         const total = (data ?? []).reduce((s: number, m: any) => s + (m.duree_heures ?? 0), 0);
         setHeuresSemaine(total);
-      })
-      ).catch(() => {});
+      }).then(undefined, () => {});
   }, [user]);
 
   useEffect(() => {
@@ -96,7 +93,7 @@ export default function MissionsSoignant() {
     setLoading(true);
     const fetchMissions = async () => {
       const maintenantIso = new Date().toISOString();
-      let query = Promise.resolve(supabase.from('missions').select(`
+      let query = supabase.from('missions').select(`
         id, intitule, description, service, profession_requise,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
