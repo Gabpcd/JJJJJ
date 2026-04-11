@@ -4,7 +4,7 @@ function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
     origin === "https://jolene.app" ||
-    origin === "https://jolene.app" ||
+    origin === "https://www.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
   ) {
@@ -39,6 +39,12 @@ Deno.serve(async (req) => {
 
   if (!uid || !token) {
     return new Response("Missing uid or token", { status: 400, headers: corsHeaders(req) });
+  }
+
+  // Validate UUID format (defense-in-depth)
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(uid)) {
+    return new Response("Invalid uid", { status: 400, headers: corsHeaders(req) });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

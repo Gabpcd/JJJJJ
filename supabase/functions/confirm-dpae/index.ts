@@ -5,7 +5,7 @@ function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
     origin === "https://jolene.app" ||
-    origin === "https://jolene.app" ||
+    origin === "https://www.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
   ) {
