@@ -4,11 +4,15 @@
   "description": "Plateforme de mise en relation entre établissements de santé et soignants qualifiés.",
   "start_url": "/",
   "scope": "/",
+  "id": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "theme_color": "#E04590",
   "background_color": "#FFFFFF",
   "lang": "fr",
+  "dir": "ltr",
+  "categories": ["health", "medical", "business", "productivity"],
   "gcm_sender_id": "103953800507",
   "icons": [
     {
@@ -21,13 +25,39 @@
       "src": "/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mes missions",
+      "short_name": "Missions",
+      "url": "/soignant/missions",
+      "description": "Accéder à mes missions en cours"
+    },
+    {
+      "name": "Pointer",
+      "short_name": "Pointer",
+      "url": "/soignant/presences",
+      "description": "Pointer mon arrivée ou mon départ"
     }
   ]
 }
