@@ -179,7 +179,7 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
           <button
             onClick={() => { onContester(presence.id, motifLitige); setShowContester(false); setMotifLitige(''); }}
             disabled={!motifLitige.trim()}
-            className="btn-primary text-xs disabled:opacity-50"
+            className="btn-primary text-xs disabled:opacity-50 disabled:pointer-events-none"
           >
             Envoyer la contestation
           </button>

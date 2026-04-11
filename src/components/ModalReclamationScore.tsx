@@ -91,7 +91,7 @@ export function ModalReclamationScore({ onClose, onSuccess }: Props) {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-lg w-full space-y-4 max-h-[calc(90vh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-foreground">⚖️ Contester une pénalité</h3>
           <button onClick={onClose} className="p-1 hover:bg-muted rounded-lg"><X className="h-5 w-5" /></button>

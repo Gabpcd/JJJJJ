@@ -45,7 +45,7 @@ export function BoutonFavori({ soignantId, etablissementId }: Props) {
       onClick={toggle}
       disabled={loading}
       title={favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-      className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${bouncing ? 'animate-bounce-fav' : ''} ${
+      className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none ${bouncing ? 'animate-bounce-fav' : ''} ${
         favori ? 'text-warning' : 'text-muted-foreground hover:text-warning'
       }`}
     >

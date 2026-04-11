@@ -54,7 +54,11 @@ export default function HistoriqueMissions() {
 
   const moisDisponibles = useMemo(() => {
     const set = new Set<string>();
-    missions.forEach(m => set.add(m.debut_le.substring(0, 7)));
+    missions.forEach(m => {
+      if (typeof m.debut_le === 'string' && m.debut_le.length >= 7) {
+        set.add(m.debut_le.substring(0, 7));
+      }
+    });
     return Array.from(set).sort().reverse();
   }, [missions]);
 
