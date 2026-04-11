@@ -232,8 +232,8 @@ export default function RechercheMissions() {
               <p style="font-weight:600;font-size:13px;margin:0 0 4px;">${m.intitule}</p>
               <p style="font-size:11px;color:#666;margin:0 0 2px;">🏥 ${m.etablissements?.nom ?? '—'}</p>
               <p style="font-size:11px;color:#666;margin:0 0 2px;">📅 ${format(new Date(m.debut_le), "d MMM · HH'h'mm", { locale: fr })}</p>
-              <p style="font-size:13px;font-weight:700;color:#17A2B8;margin:4px 0;">💰 ${(m.taux_horaire_base ?? 0).toFixed(2)} €/h</p>
-              <a href="/soignant/missions/${m.id}" style="display:inline-block;margin-top:6px;padding:4px 12px;background:#17A2B8;color:white;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600;">Voir la mission</a>
+              <p style="font-size:13px;font-weight:700;color:#E04590;margin:4px 0;">💰 ${(m.taux_horaire_base ?? 0).toFixed(2)} €/h</p>
+              <a href="/soignant/missions/${m.id}" style="display:inline-block;margin-top:6px;padding:4px 12px;background:#E04590;color:white;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600;">Voir la mission</a>
             </div>
           `;
           marker.bindPopup(popup);

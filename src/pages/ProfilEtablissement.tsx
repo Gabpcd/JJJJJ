@@ -216,7 +216,7 @@ export default function ProfilEtablissement() {
         });
         setLat(data.adresse_lat?.toString() || '');
         setLng(data.adresse_lng?.toString() || '');
-        setCouleurTheme(data.couleur_theme || '#17A2B8');
+        setCouleurTheme(data.couleur_theme || '#E04590');
         setConsentementSMS(data.sms_actif === true);
       }
       setLoading(false);
@@ -234,7 +234,7 @@ export default function ProfilEtablissement() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
-  const [couleurTheme, setCouleurTheme] = useState('#17A2B8');
+  const [couleurTheme, setCouleurTheme] = useState('#E04590');
   const [consentementSMS, setConsentementSMS] = useState(false);
   const [smsToggling, setSmsToggling] = useState(false);
 

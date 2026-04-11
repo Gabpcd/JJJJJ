@@ -9,7 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BarChart3, TrendingUp, Users, Clock, DollarSign, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
-const COULEURS = ['#E04590', '#17A2B8', '#F59E0B', '#10B981', '#8B5CF6', '#F97316'];
+const COULEURS = ['#E04590', '#E04590', '#F59E0B', '#10B981', '#8B5CF6', '#F97316'];
 
 function fmt(v: number | null | undefined): string {
   if (v == null) return '—';

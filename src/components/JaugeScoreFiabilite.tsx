@@ -6,7 +6,7 @@ interface JaugeScoreFiabiliteProps {
 
 function getConfig(score: number) {
   if (score >= 90) return { couleur: '#059669', label: 'Excellent' };
-  if (score >= 70) return { couleur: '#17A2B8', label: 'Fiable' };
+  if (score >= 70) return { couleur: '#E04590', label: 'Fiable' };
   if (score >= 50) return { couleur: '#D97706', label: 'Correct' };
   if (score >= 30) return { couleur: '#D97706', label: 'À améliorer' };
   return { couleur: '#DC2626', label: 'Critique' };

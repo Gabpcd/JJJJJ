@@ -122,7 +122,7 @@ export default function AdminCohortEconomics() {
                 <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
                 <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0.75rem', fontSize: 12 }} />
                 <Bar dataKey="nouveaux_soignants" name="Soignants" fill="#E04590" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="nouveaux_etabs" name="Établissements" fill="#17A2B8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="nouveaux_etabs" name="Établissements" fill="#E04590" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -157,7 +157,7 @@ export default function AdminCohortEconomics() {
               <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
               <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0.75rem', fontSize: 12 }} />
               <Bar dataKey="soignants_actifs" name="Soignants actifs" fill="#E04590" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="etabs_actifs" name="Étab. actifs" fill="#17A2B8" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="etabs_actifs" name="Étab. actifs" fill="#E04590" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

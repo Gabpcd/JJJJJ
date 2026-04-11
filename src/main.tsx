@@ -120,11 +120,11 @@ function showUpdateBanner() {
     gap: '12px',
     padding: '10px 16px',
     paddingTop: 'calc(10px + env(safe-area-inset-top))',
-    background: '#17a2b8',
+    background: 'linear-gradient(90deg, #E04590 0%, #9B2B6F 100%)',
     color: '#fff',
     fontSize: '14px',
     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+    boxShadow: '0 2px 8px rgba(224,69,144,0.25)',
   });
 
   const text = document.createElement('span');
@@ -134,7 +134,7 @@ function showUpdateBanner() {
   btn.textContent = 'Mettre à jour';
   Object.assign(btn.style, {
     background: '#fff',
-    color: '#17a2b8',
+    color: '#E04590',
     border: 'none',
     borderRadius: '6px',
     padding: '6px 14px',
