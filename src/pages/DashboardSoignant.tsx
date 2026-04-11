@@ -126,18 +126,17 @@ export default function DashboardSoignant() {
   }, [dashboard?.missions_oubliees_count]);
 
   const gainsCeMois = useMemo(() => {
-    const gainsMois = (dashboard?.gains_mois ?? []) as any[];
-    const net = gainsMois.reduce((s: number, m: any) => s + (m.net_estime || (m.total_brut ? m.total_brut * 0.78 : 0)), 0);
-    return { net, nb: gainsMois.length };
+    // RPC returns { net_total, brut_total, nb_missions } as an object
+    const gm = (dashboard?.gains_mois ?? { net_total: 0, brut_total: 0, nb_missions: 0 }) as { net_total: number; brut_total: number; nb_missions: number };
+    return { net: Number(gm.net_total) || 0, nb: Number(gm.nb_missions) || 0 };
   }, [dashboard?.gains_mois]);
 
   const { missionsTermineesCount, heuresCumuleesTotal } = useMemo(() => {
-    const totalTerminees = (dashboard?.heures_totales_terminees ?? []) as any[];
-    const realMissionsTerminees = totalTerminees.length;
-    const realHeuresCumulees = totalTerminees.reduce((t: number, m: any) => t + (m.duree_heures || 0), 0);
+    // RPC returns heures_totales_terminees as a number (SUM of duree_heures)
+    const heuresTotales = Number(dashboard?.heures_totales_terminees ?? 0);
     return {
-      missionsTermineesCount: Math.max(soignant?.total_missions_terminees || 0, realMissionsTerminees),
-      heuresCumuleesTotal: Math.max(soignant?.heures_cumulees || 0, realHeuresCumulees),
+      missionsTermineesCount: soignant?.total_missions_terminees ?? 0,
+      heuresCumuleesTotal: Math.max(soignant?.heures_cumulees || 0, heuresTotales),
     };
   }, [dashboard?.heures_totales_terminees, soignant]);
 
