@@ -50,7 +50,7 @@ function redirectToFrontend(url: string, params: Record<string, string>) {
 }
 
 Deno.serve(async (req) => {
-  const appUrl = Deno.env.get("PSC_FRONTEND_URL") || "https://app.jolene.app";
+  const appUrl = Deno.env.get("PSC_FRONTEND_URL") || "https://jolene.app";
   const callbackPage = `${appUrl}/auth/psc/callback`;
 
   try {

@@ -56,7 +56,7 @@ export default function ProfessionLanding() {
       <SEOHead
         title={`Missions ${professionLabel} intérimaires | Jolene`}
         description={`${professionDesc} Taux horaire moyen : ${salaire}. Inscrivez-vous gratuitement et accédez à des centaines de missions.`}
-        url={`https://app.jolene.app/metier/${professionSlug}`}
+        url={`https://jolene.app/metier/${professionSlug}`}
       />
       <SEOPageLayout
         heroTitle={`Missions ${professionLabel}`}

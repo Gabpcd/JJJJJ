@@ -6,7 +6,7 @@ import { Zap, FileText, MapPin, Bell, ArrowRight, Smartphone } from 'lucide-reac
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-/* ─── Inline QR Code SVG for https://app.jolene.app ─── */
+/* ─── Inline QR Code SVG for https://jolene.app ─── */
 function QRCode() {
   // Simplified QR-like pattern representing a URL
   const modules = [
@@ -115,7 +115,7 @@ export default function Telecharger() {
       <SEOHead
         title="Télécharger Jolene | App iOS et Android"
         description="Téléchargez Jolene sur iPhone et Android. Trouvez des missions, signez vos contrats et pointez votre arrivée depuis votre téléphone."
-        url="https://app.jolene.app/telecharger"
+        url="https://jolene.app/telecharger"
       />
       <SEOPageLayout
         heroTitle="Jolene dans votre poche"

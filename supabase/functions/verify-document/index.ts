@@ -4,14 +4,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
-    origin === "https://app.jolene.app" ||
+    origin === "https://jolene.app" ||
     origin === "https://jolene.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
   ) {
     return origin;
   }
-  return "https://app.jolene.app";
+  return "https://jolene.app";
 }
 
 function corsHeaders(req: Request) {

@@ -67,7 +67,7 @@ export default function BlogArticle() {
     );
   }
 
-  const url = `https://app.jolene.app/blog/${article.slug}`;
+  const url = `https://jolene.app/blog/${article.slug}`;
   const contenuHtml = sanitizeHTML(markdownToHtml(article.contenu));
   const emoji = articleEmojis[article.slug] || '📖';
 

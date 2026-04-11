@@ -32,7 +32,7 @@ export default function BlogListe() {
       <SEOHead
         title="Blog Jolene | Actualités santé et staffing"
         description="Retrouvez nos articles sur le passage en libéral, la réglementation du staffing médical, le remplacement en pharmacie et les actualités Jolene."
-        url="https://app.jolene.app/blog"
+        url="https://jolene.app/blog"
       />
       <SEOPageLayout
         heroTitle="Le blog Jolene ✨"

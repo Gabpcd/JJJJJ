@@ -1,53 +1,53 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <!-- Pages principales -->
-  <url><loc>https://app.jolene.app/</loc><lastmod>2026-04-09</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://app.jolene.app/devenir-soignant</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://app.jolene.app/recruter-soignants</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://app.jolene.app/infirmiere-liberale</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://app.jolene.app/pharmacie-remplacement</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://app.jolene.app/inscription/soignant</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://app.jolene.app/inscription/etablissement</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://app.jolene.app/tarifs</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://app.jolene.app/a-propos</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/telecharger</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jolene.app/</loc><lastmod>2026-04-09</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://jolene.app/devenir-soignant</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://jolene.app/recruter-soignants</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://jolene.app/infirmiere-liberale</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://jolene.app/pharmacie-remplacement</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://jolene.app/inscription/soignant</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://jolene.app/inscription/etablissement</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://jolene.app/tarifs</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://jolene.app/a-propos</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/telecharger</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
 
   <!-- Blog -->
-  <url><loc>https://app.jolene.app/blog</loc><lastmod>2026-04-09</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/blog/comment-devenir-idel</loc><lastmod>2026-02-18</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://app.jolene.app/blog/loi-rist-2025-expliquee</loc><lastmod>2026-01-25</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://app.jolene.app/blog/remplacement-pharmacie-guide</loc><lastmod>2026-01-10</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://app.jolene.app/blog/cddu-contrat-usage-sante</loc><lastmod>2025-12-15</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://app.jolene.app/blog/free-transition-liberal</loc><lastmod>2025-11-28</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://app.jolene.app/blog/aide-soignante-interim-guide</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://app.jolene.app/blog/taux-horaire-infirmier-2026</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://app.jolene.app/blog/ehpad-recrutement-soignants</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jolene.app/blog</loc><lastmod>2026-04-09</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/blog/comment-devenir-idel</loc><lastmod>2026-02-18</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jolene.app/blog/loi-rist-2025-expliquee</loc><lastmod>2026-01-25</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jolene.app/blog/remplacement-pharmacie-guide</loc><lastmod>2026-01-10</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jolene.app/blog/cddu-contrat-usage-sante</loc><lastmod>2025-12-15</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jolene.app/blog/free-transition-liberal</loc><lastmod>2025-11-28</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jolene.app/blog/aide-soignante-interim-guide</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jolene.app/blog/taux-horaire-infirmier-2026</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jolene.app/blog/ehpad-recrutement-soignants</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
 
   <!-- Landing pages par ville -->
-  <url><loc>https://app.jolene.app/emploi-soignant/paris</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/emploi-soignant/lyon</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/emploi-soignant/marseille</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/emploi-soignant/toulouse</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/emploi-soignant/nice</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/emploi-soignant/nantes</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/emploi-soignant/montpellier</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/emploi-soignant/bordeaux</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/emploi-soignant/lille</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/emploi-soignant/strasbourg</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/paris</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/lyon</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/marseille</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/toulouse</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/nice</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/nantes</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/montpellier</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/bordeaux</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/lille</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/emploi-soignant/strasbourg</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
 
   <!-- Landing pages par profession -->
-  <url><loc>https://app.jolene.app/metier/infirmier-ide</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/metier/aide-soignant</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/metier/sage-femme</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/metier/kinesitherapeute</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/metier/pharmacien</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/metier/medecin</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/metier/ibode</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://app.jolene.app/metier/iade</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/metier/infirmier-ide</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/metier/aide-soignant</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/metier/sage-femme</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/metier/kinesitherapeute</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/metier/pharmacien</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/metier/medecin</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/metier/ibode</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jolene.app/metier/iade</loc><lastmod>2026-04-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
 
   <!-- Légal -->
-  <url><loc>https://app.jolene.app/cgu</loc><lastmod>2026-04-09</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
-  <url><loc>https://app.jolene.app/cgv</loc><lastmod>2026-04-09</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
-  <url><loc>https://app.jolene.app/confidentialite</loc><lastmod>2026-04-09</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
-  <url><loc>https://app.jolene.app/mentions-legales</loc><lastmod>2026-04-09</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://jolene.app/cgu</loc><lastmod>2026-04-09</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://jolene.app/cgv</loc><lastmod>2026-04-09</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://jolene.app/confidentialite</loc><lastmod>2026-04-09</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://jolene.app/mentions-legales</loc><lastmod>2026-04-09</lastmod><changefreq>yearly</changefreq><priority>0.4</priority></url>
 </urlset>

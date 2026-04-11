@@ -8,7 +8,7 @@ interface SEOHeadProps {
   jsonLd?: Record<string, any>;
 }
 
-const DEFAULT_OG_IMAGE = 'https://app.jolene.app/og-default.png';
+const DEFAULT_OG_IMAGE = 'https://jolene.app/og-default.png';
 
 export function SEOHead({ title, description, url, image, jsonLd }: SEOHeadProps) {
   useEffect(() => {

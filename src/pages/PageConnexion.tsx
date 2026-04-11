@@ -205,7 +205,7 @@ export default function PageConnexion() {
                 }
                 const { supabase } = await import('@/integrations/supabase/client');
                 const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                  redirectTo: 'https://app.jolene.app/connexion',
+                  redirectTo: 'https://jolene.app/connexion',
                 });
                 if (error) {
                   afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });

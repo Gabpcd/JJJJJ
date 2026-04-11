@@ -153,7 +153,7 @@ Jolene is seeking a **strategic factoring partnership** with Finqle to enable in
 President, Jolene SAS
 103 rue de Vaugirard, 75006 Paris, France
 Email: contact@jolene.app
-Platform: https://app.jolene.app
+Platform: https://jolene.app
 
 ---
 

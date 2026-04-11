@@ -35,13 +35,13 @@ async function sha256(text: string): Promise<Uint8Array> {
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
   const allowed = [
-    "https://app.jolene.app",
+    "https://jolene.app",
     "https://jolene.app",
     "http://localhost:5173",
     "http://localhost:8080",
   ];
     ? origin
-    : "https://app.jolene.app";
+    : "https://jolene.app";
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",

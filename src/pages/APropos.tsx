@@ -22,7 +22,7 @@ export default function APropos() {
       <SEOHead
         title="À propos de Jolene | Staffing médical digital"
         description="Découvrez la mission de Jolene : simplifier le staffing médical en connectant établissements de santé et soignants qualifiés, en toute conformité."
-        url="https://app.jolene.app/a-propos"
+        url="https://jolene.app/a-propos"
       />
       <SEOPageLayout
         heroTitle="Simplifier le staffing médical. Pour de bon."

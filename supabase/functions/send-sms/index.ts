@@ -11,7 +11,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
   if (
-    origin === "https://app.jolene.app" ||
+    origin === "https://jolene.app" ||
     origin === "https://jolene.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
@@ -23,7 +23,7 @@ function corsHeaders(req: Request) {
     };
   }
   return {
-    "Access-Control-Allow-Origin": "https://app.jolene.app",
+    "Access-Control-Allow-Origin": "https://jolene.app",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Content-Type": "application/json",
   };

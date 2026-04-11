@@ -5,14 +5,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
-    origin === "https://app.jolene.app" ||
+    origin === "https://jolene.app" ||
     origin === "https://jolene.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
   ) {
     return origin;
   }
-  return "https://app.jolene.app";
+  return "https://jolene.app";
 }
 
 function corsHeaders(req: Request) {
@@ -147,7 +147,7 @@ serve(async (req) => {
     }
 
     // Create account link for onboarding
-    const origin = req.headers.get("origin") || "https://app.jolene.app";
+    const origin = req.headers.get("origin") || "https://jolene.app";
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${origin}/soignant/stripe-connect?refresh=true`,

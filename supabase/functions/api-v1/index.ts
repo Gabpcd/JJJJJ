@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 serve(async (req) => {
-  const corsHeaders = { "Access-Control-Allow-Origin": "https://app.jolene.app", "Content-Type": "application/json" };
+  const corsHeaders = { "Access-Control-Allow-Origin": "https://jolene.app", "Content-Type": "application/json" };
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: { ...corsHeaders, "Access-Control-Allow-Headers": "authorization, x-api-key, content-type", "Access-Control-Allow-Methods": "GET,POST,PUT" }});
   }
@@ -74,7 +74,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       error: "Endpoint non trouvé",
       endpoints: ["GET /missions", "POST /missions", "GET /presences", "GET /factures"],
-      documentation: "https://app.jolene.app/admin/api"
+      documentation: "https://jolene.app/admin/api"
     }), { status: 404, headers: corsHeaders });
   } catch (e) {
     console.error("api-v1 error:", e); return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: corsHeaders });

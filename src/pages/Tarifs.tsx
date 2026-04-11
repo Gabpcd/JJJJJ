@@ -32,7 +32,7 @@ export default function Tarifs() {
       <SEOHead
         title="Tarifs Jolene | Commission dégressive"
         description="Découvrez la grille tarifaire Jolene : commission dégressive à partir de 15%, facturation transparente, pas de frais cachés."
-        url="https://app.jolene.app/tarifs"
+        url="https://jolene.app/tarifs"
       />
     <div className="min-h-screen bg-background">
       {/* Header */}

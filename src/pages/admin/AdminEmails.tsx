@@ -12,8 +12,8 @@ import { toast } from 'sonner';
 
 // [DEV] Dummy data for email template previews — not sent to real users
 const DONNEES_FICTIVES: Record<string, Record<string, string>> = {
-  BIENVENUE_SOIGNANT: { prenom: '[DEV] Marie', lien_profil: 'https://app.jolene.app/soignant/profil' },
-  BIENVENUE_ETABLISSEMENT: { nom_etablissement: '[DEV] EHPAD Les Oliviers', lien_profil: 'https://app.jolene.app/etablissement/profil' },
+  BIENVENUE_SOIGNANT: { prenom: '[DEV] Marie', lien_profil: 'https://jolene.app/soignant/profil' },
+  BIENVENUE_ETABLISSEMENT: { nom_etablissement: '[DEV] EHPAD Les Oliviers', lien_profil: 'https://jolene.app/etablissement/profil' },
   MISSION_ACCEPTEE_SOIGNANT: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement IDE — Jour', etablissement: '[DEV] EHPAD Les Oliviers', date: '15 mars 2026', heure: '07h00 – 19h00' },
   MISSION_ACCEPTEE_ETABLISSEMENT: { nom_etablissement: '[DEV] EHPAD Les Oliviers', mission: '[DEV] Remplacement IDE — Jour', soignant: '[DEV] Marie Dupont', date: '15 mars 2026' },
   MISSION_ANNULEE_SOIGNANT: { prenom: '[DEV] Marie', mission: '[DEV] Remplacement AS — Nuit', motif: 'Annulation par l\'établissement' },

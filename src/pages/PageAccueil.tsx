@@ -244,12 +244,12 @@ export default function PageAccueil() {
       <SEOHead
         title="Jolene — Staffing médical simplifié"
         description="Plateforme de mise en relation entre établissements de santé et soignants qualifiés. Publiez des missions, signez vos contrats et pointez en ligne."
-        url="https://app.jolene.app/"
+        url="https://jolene.app/"
         jsonLd={{
           "@context": "https://schema.org",
           "@type": "WebApplication",
           "name": "Jolene",
-          "url": "https://app.jolene.app",
+          "url": "https://jolene.app",
           "description": "Plateforme de staffing médical pour établissements de santé et soignants qualifiés en France.",
           "applicationCategory": "HealthApplication",
           "operatingSystem": "Web, iOS, Android",
