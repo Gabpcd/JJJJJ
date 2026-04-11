@@ -15,7 +15,7 @@ import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
 import { capturerErreurSentry } from '@/lib/sentry';
-import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle, CreditCard, AlertTriangle, ExternalLink } from 'lucide-react';
+import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle, CreditCard, AlertTriangle, ExternalLink, LogOut } from 'lucide-react';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { SectionBio } from '@/components/SectionBio';
 import { EncartInvitation } from '@/components/EncartInvitation';
@@ -780,6 +780,16 @@ export default function ProfilSoignant() {
           className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition"
         >
           <Trash2 className="h-4 w-4" /> Supprimer mon compte
+        </button>
+      </div>
+
+      {/* Déconnexion — visible uniquement sur mobile (sidebar gère le desktop) */}
+      <div className="md:hidden mt-6 pt-6 border-t border-border">
+        <button
+          onClick={async () => { await deconnexion(); navigate('/'); }}
+          className="btn-secondary w-full flex items-center justify-center gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
+        >
+          <LogOut className="h-4 w-4" /> Se déconnecter
         </button>
       </div>
 

@@ -10,7 +10,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle } from 'lucide-react';
+import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, LogOut } from 'lucide-react';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Elements, IbanElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/lib/stripe';
@@ -169,7 +169,7 @@ const CONVENTIONS_COLLECTIVES = [
 
 export default function ProfilEtablissement() {
   usePageTitle('Profil');
-  const { user } = useAuth();
+  const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -692,6 +692,16 @@ export default function ProfilEtablissement() {
           </div>
         </div>
       )}
+
+      {/* Déconnexion — visible uniquement sur mobile */}
+      <div className="md:hidden mt-6 pt-6 border-t border-border">
+        <button
+          onClick={async () => { await deconnexion(); navigate('/'); }}
+          className="btn-secondary w-full flex items-center justify-center gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
+        >
+          <LogOut className="h-4 w-4" /> Se déconnecter
+        </button>
+      </div>
     </LayoutApp>
   );
 }
