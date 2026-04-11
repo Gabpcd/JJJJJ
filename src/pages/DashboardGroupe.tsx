@@ -126,9 +126,9 @@ export default function DashboardGroupe() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" />
-        <CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" />
-        <CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
+        <CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/groupe/missions?statut=OUVERTE" />
+        <CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/groupe/missions?statut=EN_COURS" />
+        <CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" lien="/groupe/missions?statut=TERMINEE" />
         <CarteKPI icone={Building2} valeur={kpi.actifs} label="Établissements actifs" couleurIcone="text-info" couleurFond="bg-info/10" />
       </div>
 

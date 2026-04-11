@@ -141,10 +141,10 @@ export default function MesGains() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <CarteKPI icone={Banknote} valeur={fmt(totalNetFiltre)} label={`Net estimé* · ${labelPeriode}`} couleurIcone="text-primary" couleurFond="bg-primary/10" />
-        <CarteKPI icone={TrendingUp} valeur={fmt(totalBrutFiltre)} label={`Brut · ${labelPeriode}`} couleurIcone="text-foreground" couleurFond="bg-muted" />
-        <CarteKPI icone={Clock} valeur={`${totalHeures}h`} label={`${missions.length} mission${missions.length > 1 ? 's' : ''}`} couleurIcone="text-info" couleurFond="bg-info/10" />
-        <CarteKPI icone={TrendingUp} valeur={fmt(totalNetToutTemps)} label="Total tout temps" couleurIcone="text-success" couleurFond="bg-success/10" />
+        <CarteKPI icone={Banknote} valeur={fmt(totalNetFiltre)} label={`Net estimé* · ${labelPeriode}`} couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/soignant/mes-factures-honoraires" />
+        <CarteKPI icone={TrendingUp} valeur={fmt(totalBrutFiltre)} label={`Brut · ${labelPeriode}`} couleurIcone="text-foreground" couleurFond="bg-muted" lien="/soignant/mes-factures-honoraires" />
+        <CarteKPI icone={Clock} valeur={`${totalHeures}h`} label={`${missions.length} mission${missions.length > 1 ? 's' : ''}`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/soignant/historique-missions" />
+        <CarteKPI icone={TrendingUp} valeur={fmt(totalNetToutTemps)} label="Total tout temps" couleurIcone="text-success" couleurFond="bg-success/10" lien="/soignant/mes-factures-honoraires" />
       </div>
 
       {/* Graphique 6 mois */}

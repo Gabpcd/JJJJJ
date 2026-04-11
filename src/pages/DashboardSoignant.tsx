@@ -352,7 +352,7 @@ export default function DashboardSoignant() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <FadeInView delay={0}>
               <div className="cursor-pointer" onClick={() => navigate('/soignant/historique-missions')}>
-                <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" />
+                <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" lien="/soignant/historique-missions" />
               </div>
             </FadeInView>
             <FadeInView delay={100}>
@@ -368,12 +368,12 @@ export default function DashboardSoignant() {
             </FadeInView>
             <FadeInView delay={200}>
               <div className="cursor-pointer" onClick={() => navigate('/soignant/historique-missions')}>
-                <CarteKPI icone={Clock} valeur={`${heures}h`} label="Heures cumulées" sousLabel="sur 3 200h objectif" couleurIcone="text-purple-600" couleurFond="bg-purple-100" />
+                <CarteKPI icone={Clock} valeur={`${heures}h`} label="Heures cumulées" sousLabel="sur 3 200h objectif" couleurIcone="text-purple-600" couleurFond="bg-purple-100" lien="/soignant/parcours-3200h" />
               </div>
             </FadeInView>
             <FadeInView delay={300}>
               <div className="cursor-pointer" onClick={() => navigate('/soignant/planning')}>
-                <CarteKPI icone={CalendarDays} valeur={mesMissions.length} label="Planning" sousLabel="missions à venir" couleurIcone="text-info" couleurFond="bg-info/10" />
+                <CarteKPI icone={CalendarDays} valeur={mesMissions.length} label="Planning" sousLabel="missions à venir" couleurIcone="text-info" couleurFond="bg-info/10" lien="/soignant/planning" />
               </div>
             </FadeInView>
           </div>

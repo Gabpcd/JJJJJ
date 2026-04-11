@@ -296,9 +296,9 @@ export default function PageStripeConnect() {
 
                 {revenus && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <CarteKPI icone={Banknote} valeur={formatEur(revenus.mois_en_cours)} label="Ce mois" couleurIcone="text-success" couleurFond="bg-success/10" />
-                    <CarteKPI icone={Banknote} valeur={formatEur(revenus.total)} label="Total reçu" couleurIcone="text-primary" couleurFond="bg-primary/10" />
-                    <CarteKPI icone={Clock} valeur={formatEur(revenus.en_attente)} label="En attente" couleurIcone="text-warning" couleurFond="bg-warning/10" />
+                    <CarteKPI icone={Banknote} valeur={formatEur(revenus.mois_en_cours)} label="Ce mois" couleurIcone="text-success" couleurFond="bg-success/10" lien="/soignant/mes-gains" />
+                    <CarteKPI icone={Banknote} valeur={formatEur(revenus.total)} label="Total reçu" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/soignant/mes-factures-honoraires" />
+                    <CarteKPI icone={Clock} valeur={formatEur(revenus.en_attente)} label="En attente" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/soignant/mes-avances" />
                   </div>
                 )}
 
