@@ -24,7 +24,7 @@ export default function FiabiliteSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants')
+    Promise.resolve(supabase.from('soignants')
       .select('score_fiabilite, total_missions_terminees, total_missions_annulees, total_absences, total_retards_pointage')
       .eq('id', user.id).single()
       .then(({ data }) => {
@@ -36,7 +36,7 @@ export default function FiabiliteSoignant() {
           p_cle_s3: null, p_details: { page: 'fiabilite' },
           p_ip: null, p_navigateur: navigator.userAgent,
         })
-      .catch(() => {});
+      ).catch(() => {});
       });
   }, [user]);
 

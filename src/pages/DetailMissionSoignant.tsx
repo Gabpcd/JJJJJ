@@ -86,7 +86,7 @@ export default function DetailMissionSoignant() {
     if (!user || !id) return;
     const load = async () => {
       const [{ data: m }, { data: s }] = await Promise.all([
-        supabase.from('missions').select(`
+        Promise.resolve(supabase.from('missions').select(`
           id, intitule, description, service, profession_requise,
           debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
           heures_nuit, heures_dimanche, heures_ferie,
@@ -135,18 +135,18 @@ export default function DetailMissionSoignant() {
       .then(({ data }) => {
         setChevauchement((data || []).length > 0);
       })
-      .catch(() => {});
+      ).catch(() => {});
   }, [mission, user]);
 
   // Fetch average rating for the establishment
   useEffect(() => {
     if (!mission?.etablissement_id) return;
-    supabase.rpc('fn_note_moyenne' as any, { p_user_id: mission.etablissement_id })
+    Promise.resolve(supabase.rpc('fn_note_moyenne' as any, { p_user_id: mission.etablissement_id })
       .then(({ data }: any) => {
         if (data && typeof data === 'object') setNoteMoyenne(data);
         else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
       })
-      .catch(() => {});
+      ).catch(() => {});
   }, [mission?.etablissement_id]);
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
@@ -178,7 +178,7 @@ export default function DetailMissionSoignant() {
     try {
       const params: any = { p_mission_id: id!, p_message: messageCandidature || null };
       if (choixContrat) params.p_choix_contrat = choixContrat;
-      const { data, error } = await supabase.rpc('fn_postuler_mission' as any, params);
+      const { data, error } = await Promise.resolve(supabase.rpc('fn_postuler_mission' as any, params);
       if (error) { toast.error(extraireMessageErreur(error)); return; }
       if (data?.choix_requis) {
         setChoixContratDialog({ open: true, options: data.options || [], action: 'postuler' });
@@ -264,7 +264,7 @@ export default function DetailMissionSoignant() {
           },
           destinataire_id: user!.id,
         },
-      }).catch(() => {});
+      })).catch(() => {});
 
       // Email à l'établissement (établissement role can send to other addresses)
       {
@@ -288,7 +288,7 @@ export default function DetailMissionSoignant() {
   };
 
   const annulerParticipation = async () => {
-    const { data, error } = await supabase.rpc('fn_annuler_mission_soignant' as any, { p_mission_id: id! });
+    const { data, error } = await Promise.resolve(supabase.rpc('fn_annuler_mission_soignant' as any, { p_mission_id: id! });
 
     if (error) {
       toast.error(extraireMessageErreur(error));
