@@ -1,17 +1,13 @@
 /* eslint-disable no-undef */
 
 // ─── Cache Configuration ───
-const CACHE_VERSION = 'jolene-v4';
+const CACHE_VERSION = 'jolene-v5';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 
+// Only cache offline fallback — everything else network-only for instant updates
 const STATIC_ASSETS = [
-  '/',
   '/offline.html',
-  '/favicon.ico',
-  '/icon-192x192.png',
-  '/icon-512x512.png',
-  '/manifest.json',
 ];
 
 // ─── Web Push (VAPID, no Firebase) ───
@@ -96,7 +92,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ─── Fetch: Cache-first for statics, Network-first for API ───
+// ─── Fetch: Only cache fonts/images, let JS/HTML/CSS/API go to network ───
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -104,28 +100,36 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   if (!url.protocol.startsWith('http')) return;
 
-  if (url.hostname.includes('supabase.co') || url.hostname.includes('supabase.in')) {
-    event.respondWith(networkFirst(request));
-    return;
-  }
-
-  if (isStaticAsset(url)) {
+  // Only cache fonts and static images — NEVER cache JS/HTML/CSS to avoid
+  // version mismatch after deployments
+  if (isCacheableAsset(url)) {
     event.respondWith(cacheFirst(request));
     return;
   }
 
-  if (request.mode === 'navigate') {
-    event.respondWith(navigationHandler(request));
-    return;
-  }
-
-  event.respondWith(networkFirst(request));
+  // Everything else (JS, HTML, CSS, API, navigations) → always go to network
+  // Only fall back to cache if offline
+  event.respondWith(networkOnly(request));
 });
 
-function isStaticAsset(url) {
+function isCacheableAsset(url) {
   const ext = url.pathname.split('.').pop()?.toLowerCase();
-  const staticExts = ['js', 'css', 'woff', 'woff2', 'ttf', 'otf', 'png', 'jpg', 'jpeg', 'svg', 'webp', 'ico', 'gif', 'avif'];
-  return staticExts.includes(ext) || url.pathname.startsWith('/assets/');
+  // Only cache truly static immutable assets (fonts, images)
+  const cacheableExts = ['woff', 'woff2', 'ttf', 'otf', 'png', 'jpg', 'jpeg', 'svg', 'webp', 'ico', 'gif', 'avif'];
+  return cacheableExts.includes(ext);
+}
+
+async function networkOnly(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    // Offline fallback only
+    if (request.mode === 'navigate') {
+      const offlinePage = await caches.match('/offline.html');
+      if (offlinePage) return offlinePage;
+    }
+    return new Response('Hors connexion', { status: 503 });
+  }
 }
 
 async function cacheFirst(request) {
