@@ -369,7 +369,7 @@ export default function ProfilSoignant() {
           maxMissionsMemeEtab: data.max_missions_meme_etab ?? data.maxMissionsMemeEtab ?? 0,
           retards: data.retards ?? 0,
           totalMissions: data.total_missions ?? data.missionsTerminees ?? 0,
-        }).then(undefined, () => {});
+        });
       }
     });
   }, [user]);
