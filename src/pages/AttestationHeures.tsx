@@ -1,25 +1,77 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Printer, ArrowLeft } from 'lucide-react';
+import { Printer, ArrowLeft, FileText } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { PROFESSIONS } from '@/lib/constantes';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { ChargementPage } from '@/components/ChargementPage';
-import { format } from 'date-fns';
+import { LayoutApp } from '@/components/LayoutApp';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 function getLabelProfession(code: string) {
   return PROFESSIONS.find(p => p.valeur === code)?.label || code;
 }
 
+const RACCOURCIS = [
+  { label: 'Ce mois', fn: () => ({ debut: startOfMonth(new Date()), fin: endOfMonth(new Date()) }) },
+  { label: 'Mois dernier', fn: () => ({ debut: startOfMonth(subMonths(new Date(), 1)), fin: endOfMonth(subMonths(new Date(), 1)) }) },
+  { label: 'Ce trimestre', fn: () => {
+    const m = new Date().getMonth();
+    const q = Math.floor(m / 3) * 3;
+    return { debut: new Date(new Date().getFullYear(), q, 1), fin: new Date(new Date().getFullYear(), q + 3, 0) };
+  }},
+  { label: 'Cette année', fn: () => ({ debut: startOfYear(new Date()), fin: endOfYear(new Date()) }) },
+];
+
 export default function AttestationHeures() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const debut = searchParams.get('debut') || '';
   const fin = searchParams.get('fin') || '';
+
+  // Formulaire de sélection de période (affiché quand debut/fin absents)
+  const [formDebut, setFormDebut] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [formFin, setFormFin] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [preview, setPreview] = useState({ nb: 0, heures: 0 });
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  // Preview live du nombre de missions / heures pour la période sélectionnée
+  useEffect(() => {
+    if (!user || debut || fin) return;
+    let cancelled = false;
+    const load = async () => {
+      setLoadingPreview(true);
+      const { data } = await supabase
+        .from('missions')
+        .select('duree_heures')
+        .eq('soignant_assigne_id', user.id)
+        .eq('statut', 'TERMINEE')
+        .gte('debut_le', formDebut)
+        .lte('debut_le', formFin);
+      if (cancelled) return;
+      const ms = (data as any[]) || [];
+      setPreview({ nb: ms.length, heures: ms.reduce((s: number, m: any) => s + (m.duree_heures || 0), 0) });
+      setLoadingPreview(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user, formDebut, formFin, debut, fin]);
+
+  function appliquerRaccourci(r: typeof RACCOURCIS[0]) {
+    const { debut: d, fin: f } = r.fn();
+    setFormDebut(format(d, 'yyyy-MM-dd'));
+    setFormFin(format(f, 'yyyy-MM-dd'));
+  }
+
+  function genererAttestation() {
+    setSearchParams({ debut: formDebut, fin: formFin });
+  }
 
   const [soignant, setSoignant] = useState<any>(null);
   const [missions, setMissions] = useState<any[]>([]);
@@ -85,17 +137,76 @@ export default function AttestationHeures() {
 
   if (!debut || !fin) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <div className="max-w-md text-center space-y-4">
-          <h1 className="text-xl font-bold text-foreground">Attestation d'heures</h1>
-          <p className="text-sm text-muted-foreground">
-            Pour générer une attestation, vous devez sélectionner une période depuis la page "Mes gains".
-          </p>
-          <button onClick={() => navigate('/soignant/mes-gains')} className="btn-primary">
-            Aller à Mes gains
-          </button>
+      <LayoutApp role="SOIGNANT">
+        <div className="max-w-xl mx-auto space-y-5">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" /> Attestation d'heures travaillées
+              </h1>
+              <p className="text-xs text-muted-foreground">Sélectionnez la période à couvrir</p>
+            </div>
+          </div>
+
+          <div className="card-base p-5 space-y-4">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">Période :</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground">Du</label>
+                  <Input type="date" value={formDebut} onChange={(e) => setFormDebut(e.target.value)} />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground">Au</label>
+                  <Input type="date" value={formFin} onChange={(e) => setFormFin(e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Raccourcis :</p>
+              <div className="flex flex-wrap gap-1.5">
+                {RACCOURCIS.map(r => (
+                  <button
+                    key={r.label}
+                    onClick={() => appliquerRaccourci(r)}
+                    className="text-xs bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-muted/50 rounded-xl p-3 text-center">
+              {loadingPreview ? (
+                <p className="text-sm text-muted-foreground">Chargement...</p>
+              ) : (
+                <p className="text-sm font-medium text-foreground">
+                  Missions incluses : <span className="text-primary font-bold">{preview.nb} missions</span> · <span className="text-primary font-bold">{Math.round(preview.heures)}h</span>
+                </p>
+              )}
+            </div>
+
+            <Button
+              onClick={genererAttestation}
+              disabled={preview.nb === 0 || loadingPreview}
+              className="w-full gap-2"
+            >
+              <FileText className="h-4 w-4" /> Générer l'attestation
+            </Button>
+
+            {preview.nb === 0 && !loadingPreview && (
+              <p className="text-xs text-muted-foreground text-center italic">
+                Aucune mission terminée sur cette période. Essayez une autre plage de dates.
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      </LayoutApp>
     );
   }
 

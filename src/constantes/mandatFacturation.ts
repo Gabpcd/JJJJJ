@@ -2,9 +2,60 @@
 // Document légal permettant à Jolene d'émettre techniquement des factures au nom et pour le compte du soignant libéral.
 // Le soignant reste le vendeur légal et juridique de la prestation. Jolene agit uniquement en qualité de mandataire technique.
 
-export const MANDAT_FACTURATION_VERSION = '1.0';
+export const MANDAT_FACTURATION_VERSION = '1.1';
 
-export const MANDAT_FACTURATION_TEXTE = `
+// Info soignant à injecter dans le mandat lors du rendu. Les champs manquants
+// sont remplacés par "—" pour ne pas générer un document faussement complet.
+export interface SoignantMandatInfo {
+  prenom?: string | null;
+  nom?: string | null;
+  profession?: string | null;
+  professionLabel?: string | null;
+  numero_rpps?: string | null;
+  numero_adeli?: string | null;
+  siret_liberal?: string | null;
+  email?: string | null;
+  adresse_rue?: string | null;
+  adresse_code_postal?: string | null;
+  adresse_ville?: string | null;
+}
+
+function formatValeur(v?: string | null): string {
+  const s = (v || '').trim();
+  return s.length > 0 ? s : '—';
+}
+
+function formatAdresse(info: SoignantMandatInfo): string {
+  const rue = (info.adresse_rue || '').trim();
+  const cp = (info.adresse_code_postal || '').trim();
+  const ville = (info.adresse_ville || '').trim();
+  const cpVille = [cp, ville].filter(Boolean).join(' ');
+  const parts = [rue, cpVille].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : '—';
+}
+
+/**
+ * Construit le texte du mandat de facturation en injectant les informations
+ * personnelles du soignant dans la section "Parties".
+ */
+export function buildMandatFacturationTexte(info: SoignantMandatInfo): string {
+  const nomComplet = [info.prenom, info.nom].filter(Boolean).join(' ') || '—';
+  const profession = info.professionLabel || info.profession || '—';
+  const rpps = formatValeur(info.numero_rpps);
+  const adeli = formatValeur(info.numero_adeli);
+  const siret = formatValeur(info.siret_liberal);
+  const email = formatValeur(info.email);
+  const adresse = formatAdresse(info);
+
+  // On ne liste un numéro d'identification que s'il est réellement renseigné,
+  // mais on affiche toujours les deux lignes RPPS/ADELI pour cohérence légale.
+  const ligneRpps = `Numéro RPPS : ${rpps}`;
+  const ligneAdeli = `Numéro ADELI : ${adeli}`;
+  const ligneSiret = `SIRET : ${siret}`;
+  const ligneAdresse = `Adresse professionnelle : ${adresse}`;
+  const ligneEmail = `Email de contact : ${email}`;
+
+  return `
 # Mandat de facturation et d'encaissement
 
 **Article 289 I-2 du Code Général des Impôts**
@@ -13,7 +64,19 @@ export const MANDAT_FACTURATION_TEXTE = `
 
 ## 1. Parties
 
-**LE MANDANT** : Le professionnel de santé libéral utilisateur de la plateforme Jolene (ci-après « le Soignant »).
+**LE MANDANT** — **${nomComplet}**, professionnel de santé libéral utilisateur de la plateforme Jolene (ci-après « le Soignant »).
+
+Profession : **${profession}**
+
+${ligneRpps}
+
+${ligneAdeli}
+
+${ligneSiret}
+
+${ligneAdresse}
+
+${ligneEmail}
 
 **LE MANDATAIRE** : La société Jolene, SAS au capital social indiqué dans ses mentions légales, dont le siège social figure sur son site, représentée par son représentant légal (ci-après « Jolene »).
 
@@ -117,8 +180,13 @@ Jolene peut modifier le présent mandat à tout moment. Toute modification subst
 ---
 
 **Version du mandat** : ${MANDAT_FACTURATION_VERSION}
-**Dernière mise à jour** : 7 avril 2026
+**Dernière mise à jour** : 11 avril 2026
 `.trim();
+}
+
+// Version "template vide" conservée pour compat : rendue avec placeholders — ne
+// pas utiliser dans le rendu final, utiliser buildMandatFacturationTexte().
+export const MANDAT_FACTURATION_TEXTE = buildMandatFacturationTexte({});
 
 // Calcule un hash court du texte pour preuve d'intégrité (non cryptographique fort, indicateur)
 export async function hashMandatTexte(texte: string): Promise<string> {

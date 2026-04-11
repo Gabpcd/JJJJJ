@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, CheckCircle, ShieldCheck, Loader2, ArrowLeft, ExternalLink } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -10,10 +10,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { PROFESSIONS } from '@/lib/constantes';
 import {
   MANDAT_FACTURATION_VERSION,
-  MANDAT_FACTURATION_TEXTE,
+  buildMandatFacturationTexte,
   hashMandatTexte,
+  type SoignantMandatInfo,
 } from '@/constantes/mandatFacturation';
 
 // Conversion markdown-like basique pour affichage
@@ -28,7 +30,8 @@ function renderMarkdown(texte: string) {
       elements.push(
         <ol key={key++} className="list-decimal list-inside space-y-1.5 text-sm text-foreground ml-2 mb-3">
           {listBuffer.map((item, i) => (
-            <li key={i} dangerouslySetInnerHTML={{ __html: item.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/[<>]/g, m => m === '<' ? '&lt;' : '&gt;') }} />
+            // eslint-disable-next-line react/no-danger
+            <li key={i} dangerouslySetInnerHTML={{ __html: item.replace(/[<>]/g, m => m === '<' ? '&lt;' : '&gt;').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />
           ))}
         </ol>,
       );
@@ -74,23 +77,45 @@ export default function MandatFacturation() {
   const [signatureDate, setSignatureDate] = useState<string | null>(null);
   const [signatureVersion, setSignatureVersion] = useState<string | null>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const [soignantInfo, setSoignantInfo] = useState<SoignantMandatInfo | null>(null);
 
   useEffect(() => {
     if (!user) return;
     (async () => {
       const { data } = await supabase
         .from('soignants')
-        .select('mandat_facturation_signe, mandat_facturation_signe_le, mandat_facturation_version')
+        .select('prenom, nom, email, profession, numero_rpps, numero_adeli, siret_liberal, adresse_rue, adresse_code_postal, adresse_ville, mandat_facturation_signe, mandat_facturation_signe_le, mandat_facturation_version')
         .eq('id', user.id)
         .maybeSingle();
-      if (data?.mandat_facturation_signe) {
-        setAlreadySigned(true);
-        setSignatureDate(data.mandat_facturation_signe_le);
-        setSignatureVersion(data.mandat_facturation_version);
+      if (data) {
+        setSoignantInfo({
+          prenom: (data as any).prenom,
+          nom: (data as any).nom,
+          email: (data as any).email,
+          profession: (data as any).profession,
+          professionLabel: PROFESSIONS.find(p => p.valeur === (data as any).profession)?.label || (data as any).profession,
+          numero_rpps: (data as any).numero_rpps,
+          numero_adeli: (data as any).numero_adeli,
+          siret_liberal: (data as any).siret_liberal,
+          adresse_rue: (data as any).adresse_rue,
+          adresse_code_postal: (data as any).adresse_code_postal,
+          adresse_ville: (data as any).adresse_ville,
+        });
+        if ((data as any).mandat_facturation_signe) {
+          setAlreadySigned(true);
+          setSignatureDate((data as any).mandat_facturation_signe_le);
+          setSignatureVersion((data as any).mandat_facturation_version);
+        }
       }
       setLoading(false);
     })();
   }, [user]);
+
+  // Texte du mandat avec les infos du soignant injectées dans la section Parties
+  const mandatTexte = useMemo(
+    () => buildMandatFacturationTexte(soignantInfo || {}),
+    [soignantInfo],
+  );
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -106,7 +131,7 @@ export default function MandatFacturation() {
     }
     setSigning(true);
     try {
-      const hash = await hashMandatTexte(MANDAT_FACTURATION_TEXTE);
+      const hash = await hashMandatTexte(mandatTexte);
       const { data, error } = await supabase.rpc('fn_signer_mandat_facturation' as any, {
         p_version: MANDAT_FACTURATION_VERSION,
         p_ip: null, // L'IP est capturée côté serveur si besoin via un edge trigger
@@ -191,7 +216,7 @@ export default function MandatFacturation() {
             className="max-h-[50vh] overflow-y-auto px-5 py-4 border-b border-border"
             onScroll={handleScroll}
           >
-            {renderMarkdown(MANDAT_FACTURATION_TEXTE)}
+            {renderMarkdown(mandatTexte)}
           </div>
 
           {!alreadySigned && (
