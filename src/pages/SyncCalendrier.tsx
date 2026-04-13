@@ -3,7 +3,6 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNotification } from '@/contexts/NotificationContext';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
@@ -13,29 +12,30 @@ import {
   Check,
   RefreshCw,
   Link2,
-  Unlink,
   Loader2,
   ExternalLink,
-  AlertCircle,
   CheckCircle,
   Clock,
+  Download,
 } from 'lucide-react';
 
-/* ── Types ── */
-interface CalendarConnection {
-  id: string;
-  utilisateur_id: string;
-  provider: 'google' | 'outlook' | 'apple';
-  status: string;
-  last_sync_at: string | null;
-  created_at: string;
-}
-
 /* ── Provider display config ── */
-const PROVIDERS: Record<string, { label: string; color: string }> = {
-  google: { label: 'Google Calendar', color: 'text-red-500' },
-  outlook: { label: 'Outlook', color: 'text-blue-600' },
-  apple: { label: 'Apple Calendar', color: 'text-gray-700' },
+const PROVIDERS: Record<string, { label: string; color: string; instructions: string }> = {
+  google: {
+    label: 'Google Calendar',
+    color: 'text-red-500',
+    instructions: 'Cliquez pour ajouter le calendrier Jolene à votre Google Calendar. Les missions se mettent à jour automatiquement.',
+  },
+  outlook: {
+    label: 'Outlook',
+    color: 'text-blue-600',
+    instructions: 'Cliquez pour ouvrir Outlook Web et ajouter le calendrier Jolene. Compatible Outlook.com et Outlook desktop.',
+  },
+  apple: {
+    label: 'Apple Calendar',
+    color: 'text-gray-700',
+    instructions: 'Cliquez pour ouvrir Apple Calendar avec un abonnement à vos missions. Fonctionne sur Mac, iPhone et iPad.',
+  },
 };
 
 function ProviderIcon({ provider, className }: { provider: string; className?: string }) {
@@ -85,20 +85,13 @@ function formatDateHeure(d: string | null): string {
 export default function SyncCalendrier() {
   usePageTitle('Sync Calendrier');
   const { user } = useAuth();
-  const { afficherNotification } = useNotification();
 
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [connections, setConnections] = useState<CalendarConnection[]>([]);
   const [syncCount, setSyncCount] = useState(0);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-
-  // Apple CalDAV form state
-  const [showAppleForm, setShowAppleForm] = useState(false);
-  const [applePassword, setApplePassword] = useState('');
-  const [appleCalDavUrl, setAppleCalDavUrl] = useState('https://caldav.icloud.com');
 
   /* ── Load data ── */
   const chargerDonnees = useCallback(async () => {
@@ -113,27 +106,18 @@ export default function SyncCalendrier() {
         .maybeSingle();
       if (tokenData) setToken((tokenData as any).token);
 
-      // Fetch calendar connections
-      const { data: conns } = await supabase
-        .from('calendar_connections' as any)
-        .select('*')
-        .eq('utilisateur_id', user.id);
-      if (conns) setConnections(conns as any[]);
+      // If no token, try to generate one
+      if (!tokenData) {
+        const { data: newToken } = await supabase.rpc('fn_mon_token_calendrier' as any);
+        if (newToken) setToken(newToken as string);
+      }
 
       // Fetch sync count
-      const { data: syncData, count } = await supabase
+      const { count } = await supabase
         .from('calendar_events_sync' as any)
         .select('id', { count: 'exact', head: true })
         .eq('utilisateur_id', user.id);
       setSyncCount(count || 0);
-
-      // Determine last sync from connections
-      const syncTimes = (conns as any[] || [])
-        .map((c: any) => c.last_sync_at)
-        .filter(Boolean)
-        .sort()
-        .reverse();
-      setLastSync(syncTimes[0] || null);
     } catch (err) {
       logger.error('Erreur chargement sync calendrier', err);
     } finally {
@@ -145,11 +129,24 @@ export default function SyncCalendrier() {
     chargerDonnees();
   }, [chargerDonnees]);
 
-  /* ── Copy iCal URL ── */
+  /* ── URLs ── */
   const icalUrl = token
     ? `${SUPABASE_URL}/functions/v1/calendar-feed?uid=${user?.id}&token=${token}`
     : null;
 
+  const webcalUrl = icalUrl
+    ? icalUrl.replace(/^https?:\/\//, 'webcal://')
+    : null;
+
+  const googleUrl = webcalUrl
+    ? `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}`
+    : null;
+
+  const outlookUrl = icalUrl
+    ? `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(icalUrl)}&name=Missions%20Jolene`
+    : null;
+
+  /* ── Copy iCal URL ── */
   const copierLien = async () => {
     if (!icalUrl) return;
     try {
@@ -162,37 +159,21 @@ export default function SyncCalendrier() {
     }
   };
 
-  /* ── Connect providers ── */
-  const connecterGoogle = () => {
-    toast.info('Bientôt disponible — configuration OAuth2 en cours');
-  };
-
-  const connecterOutlook = () => {
-    toast.info('Bientôt disponible — configuration OAuth2 en cours');
-  };
-
-  const connecterApple = async () => {
-    if (!applePassword.trim()) {
-      toast.error('Veuillez saisir votre mot de passe spécifique à l\'application');
-      return;
-    }
-    // For now, store connection entry as placeholder
-    toast.info('Bientôt disponible — intégration CalDAV en cours');
-    setShowAppleForm(false);
-    setApplePassword('');
-  };
-
-  /* ── Disconnect ── */
-  const deconnecter = async (connectionId: string) => {
+  /* ── Download .ics ── */
+  const telechargerIcs = async () => {
+    if (!icalUrl) return;
     try {
-      await supabase
-        .from('calendar_connections' as any)
-        .delete()
-        .eq('id', connectionId);
-      toast.success('Calendrier déconnecté');
-      chargerDonnees();
+      const res = await fetch(icalUrl);
+      const text = await res.text();
+      const blob = new Blob([text], { type: 'text/calendar' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'missions-jolene.ics';
+      a.click();
+      URL.revokeObjectURL(url);
     } catch {
-      toast.error('Erreur lors de la déconnexion');
+      toast.error('Erreur lors du téléchargement');
     }
   };
 
@@ -218,6 +199,8 @@ export default function SyncCalendrier() {
   if (!user) return <ChargementPage />;
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
+  const hasToken = !!icalUrl;
+
   return (
     <LayoutApp role="SOIGNANT">
       <div className="max-w-3xl mx-auto space-y-6">
@@ -234,23 +217,86 @@ export default function SyncCalendrier() {
           </div>
         </div>
 
-        {/* ── Section 1: Lien iCal ── */}
+        {/* ── Section 1: S'abonner en un clic ── */}
         <div className="card-base p-5 space-y-4">
           <div className="flex items-center gap-2">
-            <Link2 className="h-5 w-5 text-primary" />
-            <h2 className="text-base font-semibold text-foreground">Flux iCal (lecture seule)</h2>
+            <Calendar className="h-5 w-5 text-primary" />
+            <h2 className="text-base font-semibold text-foreground">S'abonner au calendrier Jolene</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            Collez ce lien dans Outlook, Google Calendar ou Apple Calendar pour afficher vos missions.
-            Le calendrier se met à jour automatiquement.
+            Cliquez sur votre calendrier pour y ajouter vos missions. Le calendrier se met à jour automatiquement — vos nouvelles missions apparaissent sans rien faire.
           </p>
 
-          {icalUrl ? (
+          {hasToken ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {/* Google Calendar */}
+              <a
+                href={googleUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 transition-all text-center group"
+              >
+                <ProviderIcon provider="google" className="h-8 w-8" />
+                <span className="text-sm font-medium text-foreground">Google Calendar</span>
+                <span className="text-[10px] text-muted-foreground leading-tight">
+                  Ouvre Google Calendar et ajoute l'abonnement
+                </span>
+                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+              </a>
+
+              {/* Outlook */}
+              <a
+                href={outlookUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 transition-all text-center group"
+              >
+                <ProviderIcon provider="outlook" className="h-8 w-8" />
+                <span className="text-sm font-medium text-foreground">Outlook</span>
+                <span className="text-[10px] text-muted-foreground leading-tight">
+                  Ouvre Outlook Web et ajoute l'abonnement
+                </span>
+                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+              </a>
+
+              {/* Apple Calendar */}
+              <a
+                href={webcalUrl!}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 transition-all text-center group"
+              >
+                <ProviderIcon provider="apple" className="h-8 w-8" />
+                <span className="text-sm font-medium text-foreground">Apple Calendar</span>
+                <span className="text-[10px] text-muted-foreground leading-tight">
+                  Ouvre Apple Calendar (Mac, iPhone, iPad)
+                </span>
+                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+              </a>
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-muted/30 border border-border text-center">
+              <p className="text-sm text-muted-foreground">
+                Aucun token calendrier trouvé. Accédez à votre planning pour en générer un automatiquement.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Section 2: Lien iCal (avancé) ── */}
+        {hasToken && (
+          <div className="card-base p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-primary" />
+              <h2 className="text-base font-semibold text-foreground">Lien iCal (avancé)</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Pour les autres applications de calendrier, copiez ce lien et ajoutez-le comme "abonnement à un calendrier" ou "calendrier internet".
+            </p>
+
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 readOnly
-                value={icalUrl}
+                value={icalUrl!}
                 className="input-base flex-1 text-xs font-mono truncate"
               />
               <button
@@ -261,149 +307,17 @@ export default function SyncCalendrier() {
                 {copied ? 'Copié' : 'Copier'}
               </button>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">
-              Aucun token calendrier trouvé. Accédez à votre planning pour en générer un.
-            </p>
-          )}
-        </div>
 
-        {/* ── Section 2: Calendriers connectés ── */}
-        <div className="card-base p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="h-5 w-5 text-primary" />
-            <h2 className="text-base font-semibold text-foreground">Calendriers connectés</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Connectez un calendrier pour une synchronisation bidirectionnelle de vos missions.
-          </p>
-
-          {/* Existing connections */}
-          {connections.length > 0 && (
-            <div className="space-y-3">
-              {connections.map((conn) => {
-                const provider = PROVIDERS[conn.provider] || { label: conn.provider, color: 'text-foreground' };
-                const isError = conn.status === 'error';
-                return (
-                  <div
-                    key={conn.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border"
-                  >
-                    <div className="flex items-center gap-3">
-                      <ProviderIcon provider={conn.provider} className={`h-5 w-5 ${provider.color}`} />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{provider.label}</p>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          {isError ? (
-                            <AlertCircle className="h-3 w-3 text-destructive" />
-                          ) : (
-                            <CheckCircle className="h-3 w-3 text-success" />
-                          )}
-                          <span>{isError ? 'Erreur' : 'Connecté'}</span>
-                          {conn.last_sync_at && (
-                            <>
-                              <span className="mx-1">·</span>
-                              <Clock className="h-3 w-3" />
-                              <span>Dernière sync : {formatDateHeure(conn.last_sync_at)}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => deconnecter(conn.id)}
-                      className="btn-secondary flex items-center gap-1 px-2 py-1.5 text-xs text-destructive hover:text-destructive"
-                    >
-                      <Unlink className="h-3.5 w-3.5" />
-                      Déconnecter
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Connect buttons */}
-          <div className="grid gap-3 sm:grid-cols-3">
-            {/* Google */}
             <button
-              onClick={connecterGoogle}
-              className="btn-secondary flex items-center justify-center gap-2 p-3 text-sm"
+              onClick={telechargerIcs}
+              className="btn-secondary flex items-center gap-2 text-sm"
             >
-              <ProviderIcon provider="google" className="h-5 w-5" />
-              Google Calendar
-            </button>
-
-            {/* Outlook */}
-            <button
-              onClick={connecterOutlook}
-              className="btn-secondary flex items-center justify-center gap-2 p-3 text-sm"
-            >
-              <ProviderIcon provider="outlook" className="h-5 w-5" />
-              Outlook
-            </button>
-
-            {/* Apple */}
-            <button
-              onClick={() => setShowAppleForm(!showAppleForm)}
-              className="btn-secondary flex items-center justify-center gap-2 p-3 text-sm"
-            >
-              <ProviderIcon provider="apple" className="h-5 w-5" />
-              Apple Calendar
+              <Download className="h-4 w-4" /> Télécharger le fichier .ics
             </button>
           </div>
+        )}
 
-          {/* Apple CalDAV form */}
-          {showAppleForm && (
-            <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-3">
-              <p className="text-sm font-medium text-foreground">Connexion Apple Calendar (CalDAV)</p>
-              <p className="text-xs text-muted-foreground">
-                Apple utilise des mots de passe spécifiques aux applications.{' '}
-                <a
-                  href="https://support.apple.com/fr-fr/102654"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline inline-flex items-center gap-0.5"
-                >
-                  Comment en créer un <ExternalLink className="h-3 w-3" />
-                </a>
-              </p>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-foreground">URL CalDAV</label>
-                <input
-                  type="url"
-                  value={appleCalDavUrl}
-                  onChange={(e) => setAppleCalDavUrl(e.target.value)}
-                  placeholder="https://caldav.icloud.com"
-                  className="input-base w-full text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-foreground">Mot de passe spécifique à l'application</label>
-                <input
-                  type="password"
-                  value={applePassword}
-                  onChange={(e) => setApplePassword(e.target.value)}
-                  placeholder="xxxx-xxxx-xxxx-xxxx"
-                  className="input-base w-full text-sm"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={connecterApple} className="btn-primary px-4 py-2 text-sm">
-                  Connecter
-                </button>
-                <button
-                  onClick={() => { setShowAppleForm(false); setApplePassword(''); }}
-                  className="btn-secondary px-4 py-2 text-sm"
-                >
-                  Annuler
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Section 3: Statut de synchronisation ── */}
+        {/* ── Section 3: Statut ── */}
         <div className="card-base p-5 space-y-4">
           <div className="flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-primary" />
