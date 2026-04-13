@@ -26,17 +26,18 @@ CREATE INDEX IF NOT EXISTS idx_reclamations_cree_le ON public.reclamations(cree_
 -- RLS
 ALTER TABLE public.reclamations ENABLE ROW LEVEL SECURITY;
 
--- Les utilisateurs authentifiés peuvent voir leurs propres réclamations
+-- Policies idempotentes (DROP IF EXISTS avant CREATE)
+DROP POLICY IF EXISTS "reclamations_select_own" ON public.reclamations;
 CREATE POLICY "reclamations_select_own" ON public.reclamations
   FOR SELECT TO authenticated
   USING (utilisateur_id = auth.uid() OR est_admin());
 
--- Les utilisateurs authentifiés peuvent créer une réclamation
+DROP POLICY IF EXISTS "reclamations_insert_own" ON public.reclamations;
 CREATE POLICY "reclamations_insert_own" ON public.reclamations
   FOR INSERT TO authenticated
   WITH CHECK (utilisateur_id = auth.uid());
 
--- Seuls les admins peuvent mettre à jour (répondre / changer statut)
+DROP POLICY IF EXISTS "reclamations_update_admin" ON public.reclamations;
 CREATE POLICY "reclamations_update_admin" ON public.reclamations
   FOR UPDATE TO authenticated
   USING (est_admin());

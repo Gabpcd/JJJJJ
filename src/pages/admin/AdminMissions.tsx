@@ -39,14 +39,35 @@ function statutBadge(statut: string) {
 export default function AdminMissions() {
   usePageTitle('Missions');
   const [searchParams, setSearchParams] = useSearchParams();
-  const filtreParam = (searchParams.get('filtre') ?? 'TOUTES').toUpperCase() as FiltreStatut;
+  // Support both ?filtre= (legacy) and ?statut= (from AdminGroupes)
+  const filtreParam = (searchParams.get('filtre') || searchParams.get('statut') || 'TOUTES').toUpperCase() as FiltreStatut;
+  const groupeParam = searchParams.get('groupe') || null;
   const [filtre, setFiltre] = useState<FiltreStatut>(FILTRES.some(f => f.cle === filtreParam) ? filtreParam : 'TOUTES');
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [groupeNom, setGroupeNom] = useState<string | null>(null);
 
   useEffect(() => {
     async function charger() {
       setLoading(true);
+
+      // Si filtre par groupe, récupérer les etab IDs du groupe
+      let etabIds: string[] | null = null;
+      if (groupeParam) {
+        const { data: grp } = await supabase
+          .from('groupes_sante')
+          .select('nom')
+          .eq('id', groupeParam)
+          .maybeSingle();
+        if (grp) setGroupeNom((grp as any).nom);
+
+        const { data: etabs } = await supabase
+          .from('etablissements')
+          .select('id')
+          .eq('groupe_sante_id', groupeParam);
+        etabIds = (etabs || []).map((e: any) => e.id);
+      }
+
       let query = supabase
         .from('missions')
         .select('id, intitule, statut, debut_le, fin_le, duree_heures, profession_requise, taux_horaire_base, net_estime, soignant_assigne_id, etablissement_id, etablissements(nom), soignants(prenom, nom)')
@@ -57,16 +78,28 @@ export default function AdminMissions() {
         query = query.eq('statut', filtre);
       }
 
+      if (etabIds && etabIds.length > 0) {
+        query = query.in('etablissement_id', etabIds);
+      } else if (groupeParam && (!etabIds || etabIds.length === 0)) {
+        // Groupe sans établissements → aucune mission
+        setMissions([]);
+        setLoading(false);
+        return;
+      }
+
       const { data } = await query;
       setMissions(data ?? []);
       setLoading(false);
     }
     charger();
-  }, [filtre]);
+  }, [filtre, groupeParam]);
 
   function changerFiltre(f: FiltreStatut) {
     setFiltre(f);
-    setSearchParams(f === 'TOUTES' ? {} : { filtre: f });
+    const params: Record<string, string> = {};
+    if (f !== 'TOUTES') params.filtre = f;
+    if (groupeParam) params.groupe = groupeParam;
+    setSearchParams(params);
   }
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
@@ -75,7 +108,9 @@ export default function AdminMissions() {
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Missions" />
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-foreground">Missions</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          Missions{groupeNom ? <span className="text-primary"> — {groupeNom}</span> : ''}
+        </h1>
 
         {/* Filtres */}
         <div className="flex flex-wrap gap-2">

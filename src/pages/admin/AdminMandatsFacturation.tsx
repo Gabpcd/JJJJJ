@@ -67,28 +67,28 @@ export default function AdminMandatsFacturation() {
           </p>
         </div>
 
-        {/* KPIs */}
+        {/* KPIs — tous cliquables */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card>
+          <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => { setFiltre('TOUS'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground uppercase">Soignants total</p>
               <p className="text-2xl font-bold text-foreground">{stats?.total_soignants ?? 0}</p>
             </CardContent>
           </Card>
-          <Card className="border-success/30 bg-success/5">
+          <Card className="border-success/30 bg-success/5 cursor-pointer hover:border-success/50 transition-colors" onClick={() => { setFiltre('SIGNE'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground uppercase">Mandat signé</p>
               <p className="text-2xl font-bold text-success">{stats?.mandat_signe ?? 0}</p>
               <p className="text-xs text-success mt-0.5">{tauxSignature}% du total</p>
             </CardContent>
           </Card>
-          <Card className="border-warning/30 bg-warning/5">
+          <Card className="border-warning/30 bg-warning/5 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => { setFiltre('NON_SIGNE'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground uppercase">Non signé</p>
               <p className="text-2xl font-bold text-warning">{stats?.mandat_non_signe ?? 0}</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/admin/facturation')}>
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground uppercase">Factures honoraires émises</p>
               <p className="text-2xl font-bold text-foreground">{stats?.total_factures_honoraires ?? 0}</p>
