@@ -59,6 +59,7 @@ const FiabiliteSoignant = lazy(() => import("./pages/FiabiliteSoignant"));
 const Parcours3200h = lazy(() => import("./pages/Parcours3200h"));
 const PrevoyanceSoignant = lazy(() => import("./pages/PrevoyanceSoignant"));
 const AttestationHeures = lazy(() => import("./pages/AttestationHeures"));
+const MesReclamations = lazy(() => import("./pages/MesReclamations"));
 const PasserEnLiberal = lazy(() => import("./pages/PasserEnLiberal"));
 const ExclusionsSoignant = lazy(() => import("./pages/ExclusionsSoignant"));
 const PremiumSoignant = lazy(() => import("./pages/PremiumSoignant"));
@@ -170,6 +171,7 @@ function AppRoutes() {
           <Route path="/soignant/parcours-3200h" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><Parcours3200h /></RouteProtegee>} />
           <Route path="/soignant/prevoyance" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PrevoyanceSoignant /></RouteProtegee>} />
           <Route path="/soignant/attestation-heures" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><AttestationHeures /></RouteProtegee>} />
+          <Route path="/soignant/reclamations" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesReclamations role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/passer-en-liberal" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PasserEnLiberal /></RouteProtegee>} />
           <Route path="/soignant/exclusions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ExclusionsSoignant /></RouteProtegee>} />
           <Route path="/soignant/contrats" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ListeContrats role="SOIGNANT" /></RouteProtegee>} />
@@ -210,6 +212,7 @@ function AppRoutes() {
           <Route path="/etablissement/obligations" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ObligationsFinancieres /></RouteProtegee>} />
           <Route path="/etablissement/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageMessagerie role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><LitigesEtablissement /></RouteProtegee>} />
+          <Route path="/etablissement/reclamations" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MesReclamations role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/presences/mission/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailPresencesMission /></RouteProtegee>} />
 
           {/* Contrat (accessible par soignant et établissement) */}
