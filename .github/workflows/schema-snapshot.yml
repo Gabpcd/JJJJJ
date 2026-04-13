@@ -32,9 +32,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p supabase/schema
-          supabase db dump \
-            --schema public \
-            --db-url "postgresql://postgres.${SUPABASE_PROJECT_REF}:${SUPABASE_DB_PASSWORD}@aws-0-eu-west-1.pooler.supabase.com:6543/postgres" \
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase db dump --schema public --linked \
+            --password "$SUPABASE_DB_PASSWORD" \
             > supabase/schema/public.sql
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
