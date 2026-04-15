@@ -482,19 +482,32 @@ export default function AdminDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="rounded-lg bg-muted/50 p-3 text-center mb-3">
+                <p className="text-xs text-muted-foreground">Comptes Connect</p>
+                <p className="text-xl font-bold text-foreground">{connectStats.total_comptes}</p>
+                <p className="text-[10px] text-muted-foreground">{connectStats.complets} complets · {connectStats.en_cours} en cours</p>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="rounded-lg bg-muted/50 p-3 text-center">
-                  <p className="text-xs text-muted-foreground">Comptes</p>
-                  <p className="text-xl font-bold text-foreground">{connectStats.total_comptes}</p>
-                  <p className="text-[10px] text-muted-foreground">{connectStats.complets} complets · {connectStats.en_cours} en cours</p>
+                <div className="rounded-lg bg-success/5 border border-success/20 p-3 text-center" title="Montant net effectivement versé aux soignants via Stripe Connect (hors commission Jolene)">
+                  <p className="text-xs text-muted-foreground">Versé aux soignants</p>
+                  <p className="text-xl font-bold text-success">{formatEur(connectStats.total_verse_soignants ?? 0)}</p>
+                  {(connectStats.en_attente_soignants ?? 0) > 0 && (
+                    <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_soignants)}</p>
+                  )}
                 </div>
-                <div className="rounded-lg bg-muted/50 p-3 text-center">
-                  <p className="text-xs text-muted-foreground">Transféré</p>
-                  <p className="text-xl font-bold text-success">{formatEur(connectStats.total_transfere)}</p>
+                <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-center" title="Commission Jolene retenue sur chaque paiement Connect (CA réel de la plateforme)">
+                  <p className="text-xs text-muted-foreground">Commission Jolene</p>
+                  <p className="text-xl font-bold text-primary">{formatEur(connectStats.total_commission_jolene ?? 0)}</p>
+                  {(connectStats.en_attente_commission ?? 0) > 0 && (
+                    <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.en_attente_commission)}</p>
+                  )}
                 </div>
-                <div className="rounded-lg bg-muted/50 p-3 text-center">
-                  <p className="text-xs text-muted-foreground">En attente</p>
-                  <p className="text-xl font-bold text-warning">{formatEur(connectStats.total_en_attente)}</p>
+                <div className="rounded-lg bg-muted/50 p-3 text-center" title="Volume brut total ayant transité via Stripe Connect (GMV = soignant + commission)">
+                  <p className="text-xs text-muted-foreground">Volume transité (GMV)</p>
+                  <p className="text-xl font-bold text-foreground">{formatEur(connectStats.volume_total ?? 0)}</p>
+                  {(connectStats.volume_en_attente ?? 0) > 0 && (
+                    <p className="text-[10px] text-warning">En attente : {formatEur(connectStats.volume_en_attente)}</p>
+                  )}
                 </div>
               </div>
             </CardContent>

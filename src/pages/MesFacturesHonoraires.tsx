@@ -304,6 +304,9 @@ export default function MesFacturesHonoraires() {
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${config.color}`}>
                           {config.icon} {config.label}
                         </span>
+                        {(!f.template_version || f.template_version === 'v1') && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground" title="Facture générée avec l'ancien template (avant Factur-X)">Format historique</span>
+                        )}
                       </div>
                       <p className="text-sm text-foreground font-medium">{f.mission_intitule || '—'}</p>
                       <p className="text-xs text-muted-foreground">{f.etablissement_nom}</p>
