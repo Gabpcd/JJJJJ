@@ -16,7 +16,10 @@
     "open:android": "npx cap open android",
     "resources": "npx @capacitor/assets generate",
     "test:e2e": "npx playwright test",
-    "test:e2e:ui": "npx playwright test --ui"
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:invoicing": "vitest run tests/invoicing/",
+    "test:chorus:sandbox": "vitest run tests/invoicing/chorus-submission.test.ts",
+    "test:regression": "vitest run tests/invoicing/no-regression.test.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",
