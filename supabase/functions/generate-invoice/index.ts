@@ -13,6 +13,7 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
 
 /* ── Rate limit state (in-memory, per isolate) ── */
 const serviceRoleCallLog: number[] = [];
@@ -207,8 +208,8 @@ function escapeXml(s: string): string {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
-/* ── PDF Generator (text-based, mentions légales art. 242 nonies CGI) ── */
-function generateInvoicePdfText(inv: {
+/* ── PDF Generator (pdf-lib, mentions légales art. 242 nonies CGI) ── */
+async function generateInvoicePdf(inv: {
   invoiceNumber: string;
   issueDate: string;
   dueDate: string;
@@ -231,65 +232,143 @@ function generateInvoicePdfText(inv: {
   factorName?: string;
   factorIban?: string;
   mandatVersion: string;
-}): string {
-  // Text representation for PDF generation
-  // In production, this would use pdf-lib to generate a proper PDF
-  // For now, we generate structured text that can be converted
-  const lines = [
-    `FACTURE D'HONORAIRES`,
-    ``,
-    `Numéro : ${inv.invoiceNumber}`,
-    `Date d'émission : ${inv.issueDate}`,
-    `Date d'échéance : ${inv.dueDate}`,
-    ``,
-    `═══════════════════════════════════════`,
-    `ÉMETTEUR (Professionnel de santé)`,
-    `═══════════════════════════════════════`,
-    `${inv.sellerName}`,
-    `Profession : ${inv.sellerProfession}`,
-    `SIRET : ${inv.sellerSiret}`,
-    inv.sellerRpps ? `N° RPPS : ${inv.sellerRpps}` : '',
-    inv.sellerAdeli ? `N° ADELI : ${inv.sellerAdeli}` : '',
-    `Adresse : ${inv.sellerAddress}`,
-    ``,
-    `Facture émise par Jolene SASU en qualité de mandataire`,
-    `de facturation (art. 289 I-2 CGI), mandat v${inv.mandatVersion}.`,
-    ``,
-    `═══════════════════════════════════════`,
-    `DESTINATAIRE`,
-    `═══════════════════════════════════════`,
-    `${inv.buyerName}`,
-    `SIRET : ${inv.buyerSiret}`,
-    `Adresse : ${inv.buyerAddress}`,
-    ``,
-    `═══════════════════════════════════════`,
-    `DÉTAIL DE LA PRESTATION`,
-    `═══════════════════════════════════════`,
-    `${inv.description}`,
-    ``,
-    `Montant HT : ${inv.amountHt.toFixed(2)} €`,
-    `TVA : ${inv.amountTva.toFixed(2)} €`,
-    `Montant TTC : ${inv.amountTtc.toFixed(2)} €`,
-    ``,
-    inv.vatExempt ? `${inv.vatExemptionReason}` : '',
-    ``,
-  ];
+}): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595, 842]); // A4
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontSize = 9;
+  const titleSize = 14;
+  const sectionSize = 10;
+  const black = rgb(0, 0, 0);
+  const grey = rgb(0.4, 0.4, 0.4);
+  const pink = rgb(0.878, 0.271, 0.565); // #E04590
+  const w = page.getWidth();
+  let y = 800;
+  const margin = 50;
 
-  if (inv.subrogationMention) {
-    lines.push(`═══════════════════════════════════════`);
-    lines.push(`MENTION SUBROGATIVE`);
-    lines.push(`═══════════════════════════════════════`);
-    lines.push(inv.subrogationMention);
-    if (inv.factorName) lines.push(`Paiement à l'ordre de : ${inv.factorName}`);
-    if (inv.factorIban) lines.push(`IBAN : ${inv.factorIban}`);
-    lines.push(``);
+  function drawText(text: string, x: number, yPos: number, options?: { font?: typeof font; size?: number; color?: typeof black }) {
+    page.drawText(text, {
+      x, y: yPos,
+      font: options?.font || font,
+      size: options?.size || fontSize,
+      color: options?.color || black,
+    });
   }
 
-  lines.push(`═══════════════════════════════════════`);
-  lines.push(`Jolene SASU — Mandataire de facturation`);
-  lines.push(`art. 289 I-2 du Code Général des Impôts`);
+  function drawLine(yPos: number) {
+    page.drawLine({ start: { x: margin, y: yPos }, end: { x: w - margin, y: yPos }, thickness: 0.5, color: grey });
+  }
 
-  return lines.filter(l => l !== undefined).join('\n');
+  // Header
+  drawText('Jolene', margin, y, { font: fontBold, size: 18, color: pink });
+  drawText("FACTURE D'HONORAIRES", w - margin - 180, y, { font: fontBold, size: titleSize });
+  y -= 25;
+  drawLine(y);
+  y -= 20;
+
+  // Invoice meta
+  drawText(`Numero : ${inv.invoiceNumber}`, margin, y, { font: fontBold, size: sectionSize });
+  y -= 14;
+  drawText(`Date d'emission : ${inv.issueDate}`, margin, y);
+  drawText(`Date d'echeance : ${inv.dueDate}`, margin + 200, y);
+  y -= 25;
+
+  // Seller block
+  drawText('EMETTEUR (Professionnel de sante)', margin, y, { font: fontBold, size: sectionSize });
+  y -= 14;
+  drawText(inv.sellerName, margin, y, { font: fontBold });
+  y -= 12;
+  drawText(`Profession : ${inv.sellerProfession}`, margin, y);
+  y -= 12;
+  drawText(`SIRET : ${inv.sellerSiret}`, margin, y);
+  y -= 12;
+  if (inv.sellerRpps) { drawText(`N. RPPS : ${inv.sellerRpps}`, margin, y); y -= 12; }
+  if (inv.sellerAdeli) { drawText(`N. ADELI : ${inv.sellerAdeli}`, margin, y); y -= 12; }
+  drawText(`Adresse : ${inv.sellerAddress}`, margin, y);
+  y -= 16;
+  drawText(`Facture emise par Jolene SASU en qualite de mandataire`, margin, y, { color: grey, size: 8 });
+  y -= 10;
+  drawText(`de facturation (art. 289 I-2 CGI), mandat v${inv.mandatVersion}.`, margin, y, { color: grey, size: 8 });
+  y -= 20;
+
+  // Buyer block
+  drawLine(y); y -= 15;
+  drawText('DESTINATAIRE', margin, y, { font: fontBold, size: sectionSize });
+  y -= 14;
+  drawText(inv.buyerName, margin, y, { font: fontBold });
+  y -= 12;
+  drawText(`SIRET : ${inv.buyerSiret}`, margin, y);
+  y -= 12;
+  drawText(`Adresse : ${inv.buyerAddress}`, margin, y);
+  y -= 25;
+
+  // Description
+  drawLine(y); y -= 15;
+  drawText('DETAIL DE LA PRESTATION', margin, y, { font: fontBold, size: sectionSize });
+  y -= 14;
+  // Wrap long description
+  const descWords = inv.description.split(' ');
+  let line = '';
+  for (const word of descWords) {
+    const test = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(test, fontSize) > w - 2 * margin) {
+      drawText(line, margin, y); y -= 12;
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) { drawText(line, margin, y); y -= 20; }
+
+  // Amounts table
+  drawLine(y); y -= 15;
+  drawText('MONTANTS', margin, y, { font: fontBold, size: sectionSize });
+  y -= 18;
+  // Table header
+  drawText('Designation', margin, y, { font: fontBold, size: 8 });
+  drawText('HT', w - margin - 180, y, { font: fontBold, size: 8 });
+  drawText('TVA', w - margin - 120, y, { font: fontBold, size: 8 });
+  drawText('TTC', w - margin - 60, y, { font: fontBold, size: 8 });
+  y -= 4; drawLine(y); y -= 12;
+  // Table row
+  drawText('Honoraires', margin, y, { size: 8 });
+  drawText(`${inv.amountHt.toFixed(2)} EUR`, w - margin - 180, y, { size: 8 });
+  drawText(`${inv.amountTva.toFixed(2)} EUR`, w - margin - 120, y, { size: 8 });
+  drawText(`${inv.amountTtc.toFixed(2)} EUR`, w - margin - 60, y, { size: 8 });
+  y -= 4; drawLine(y); y -= 12;
+  // Totals
+  drawText('TOTAL', margin, y, { font: fontBold });
+  drawText(`${inv.amountHt.toFixed(2)} EUR`, w - margin - 180, y, { font: fontBold });
+  drawText(`${inv.amountTva.toFixed(2)} EUR`, w - margin - 120, y, { font: fontBold });
+  drawText(`${inv.amountTtc.toFixed(2)} EUR`, w - margin - 60, y, { font: fontBold });
+  y -= 20;
+
+  // VAT exemption
+  if (inv.vatExempt && inv.vatExemptionReason) {
+    drawText(inv.vatExemptionReason, margin, y, { size: 8, color: grey });
+    y -= 18;
+  }
+
+  // Subrogation
+  if (inv.subrogationMention) {
+    drawLine(y); y -= 15;
+    drawText('MENTION SUBROGATIVE', margin, y, { font: fontBold, size: sectionSize });
+    y -= 14;
+    drawText(inv.subrogationMention, margin, y, { size: 8 });
+    y -= 12;
+    if (inv.factorName) { drawText(`Paiement a l'ordre de : ${inv.factorName}`, margin, y, { size: 8 }); y -= 12; }
+    if (inv.factorIban) { drawText(`IBAN : ${inv.factorIban}`, margin, y, { size: 8 }); y -= 12; }
+    y -= 10;
+  }
+
+  // Footer
+  drawLine(y); y -= 15;
+  drawText('Jolene SASU - Mandataire de facturation', margin, y, { size: 7, color: grey });
+  y -= 10;
+  drawText('art. 289 I-2 du Code General des Impots', margin, y, { size: 7, color: grey });
+
+  return await pdfDoc.save();
 }
 
 /* ── Main Handler ── */
@@ -446,8 +525,8 @@ Deno.serve(async (req) => {
       currencyCode: 'EUR',
     });
 
-    // 10. Generate PDF text content
-    const pdfText = generateInvoicePdfText({
+    // 10. Generate real PDF binary via pdf-lib
+    const pdfBytes = await generateInvoicePdf({
       invoiceNumber: invoiceNumber as string,
       issueDate,
       dueDate,
@@ -465,17 +544,17 @@ Deno.serve(async (req) => {
       amountTva,
       amountTtc,
       vatExempt,
-      vatExemptionReason: vatExempt ? 'TVA non applicable — art. 261, 4-1° du CGI (actes médicaux et paramédicaux)' : '',
+      vatExemptionReason: vatExempt ? 'TVA non applicable - art. 261, 4-1 du CGI (actes medicaux et paramedicaux)' : '',
       mandatVersion: soignant.mandat_facturation_version || '1.1',
     });
 
     // 11. Upload to Supabase Storage
-    const storagePath = `invoices/${soignant.id}/${invoiceNumber}.txt`;
+    const storagePath = `invoices/${soignant.id}/${invoiceNumber}.pdf`;
     const xmlPath = `invoices/${soignant.id}/${invoiceNumber}.xml`;
 
     const { error: uploadErr } = await supabaseAdmin.storage
       .from('jolene-documents')
-      .upload(storagePath, new Blob([pdfText], { type: 'text/plain' }), { upsert: true });
+      .upload(storagePath, new Blob([pdfBytes], { type: 'application/pdf' }), { upsert: true });
 
     const { error: xmlUploadErr } = await supabaseAdmin.storage
       .from('jolene-documents')
