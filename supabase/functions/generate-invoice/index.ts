@@ -1,15 +1,51 @@
 /**
  * generate-invoice — Génération de facture honoraire Factur-X
  *
- * Prend un mission_id, vérifie les pré-requis (mission TERMINEE, mandat actif),
- * génère un PDF avec mentions légales art. 242 nonies CGI + un XML CII séparé
- * (profil EN16931 BASIC WL), upload dans Supabase Storage, insère en base.
- *
- * Si factor_assigned=true, injecte la mention subrogative + IBAN factor.
- * Si is_public_sector=true, déclenche le stub submit-to-chorus.
+ * AUTH :
+ * - JWT utilisateur (soignant) : vérifié via auth.getUser()
+ * - Service_role key : bypass auth, mais TOUTES les règles métier restent actives :
+ *   - Mission doit être TERMINEE
+ *   - Mandat actif signé pour le soignant
+ *   - Pas de double génération (idempotence)
+ *   - Tous les triggers Postgres (immutabilité, auto-audit)
+ *   Le bypass service_role requiert un `service_role_reason` valide.
+ *   Max 10 appels/min en service_role (rate limit).
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+
+/* ── Rate limit state (in-memory, per isolate) ── */
+const serviceRoleCallLog: number[] = [];
+const SERVICE_ROLE_MAX_PER_MIN = 10;
+
+const VALID_REASON_PATTERNS = [
+  /^cron_auto_generation$/,
+  /^admin_replay_[0-9a-f-]{36}$/,
+  /^ops_test_.+$/,
+];
+
+function validateServiceRoleReason(reason: string | undefined): { valid: boolean; error?: string } {
+  if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+    return { valid: false, error: 'service_role_reason requis pour les appels service_role' };
+  }
+  if (!VALID_REASON_PATTERNS.some(p => p.test(reason))) {
+    return { valid: false, error: `service_role_invalid_reason: "${reason}" ne match aucun pattern autorisé (cron_auto_generation, admin_replay_<uuid>, ops_test_<purpose>)` };
+  }
+  return { valid: true };
+}
+
+function checkServiceRoleRateLimit(): boolean {
+  const now = Date.now();
+  // Purge entries older than 60s
+  while (serviceRoleCallLog.length > 0 && serviceRoleCallLog[0] < now - 60_000) {
+    serviceRoleCallLog.shift();
+  }
+  if (serviceRoleCallLog.length >= SERVICE_ROLE_MAX_PER_MIN) {
+    return false; // rate limited
+  }
+  serviceRoleCallLog.push(now);
+  return true;
+}
 
 /* ── CORS ── */
 function getCorsOrigin(req: Request): string {
@@ -265,23 +301,41 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) return json(req, { error: 'Non autorisé' }, 401);
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-      { auth: { persistSession: false } },
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Auth
-    const supabaseUser = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: userData, error: authError } = await supabaseUser.auth.getUser(authHeader.replace('Bearer ', ''));
-    if (authError || !userData?.user) return json(req, { error: 'Token invalide' }, 401);
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-    const { mission_id } = await req.json();
+    const token = authHeader.replace('Bearer ', '');
+    const isServiceRole = token === serviceRoleKey;
+
+    const body = await req.json();
+    const { mission_id, service_role_reason } = body;
     if (!mission_id) return json(req, { error: 'mission_id requis' }, 400);
+
+    // ── Service_role bypass: validate reason + rate limit ──
+    if (isServiceRole) {
+      const reasonCheck = validateServiceRoleReason(service_role_reason);
+      if (!reasonCheck.valid) {
+        console.warn(`[generate-invoice] service_role rejected: ${reasonCheck.error}`);
+        if (reasonCheck.error?.includes('invalid_reason')) {
+          return json(req, { error: reasonCheck.error }, 403);
+        }
+        return json(req, { error: reasonCheck.error }, 400);
+      }
+      if (!checkServiceRoleRateLimit()) {
+        console.warn(`[generate-invoice] service_role rate limited (>${SERVICE_ROLE_MAX_PER_MIN}/min)`);
+        return json(req, { error: 'Rate limit: max 10 appels service_role par minute' }, 429);
+      }
+      console.log(`[generate-invoice] service_role call: reason="${service_role_reason}"`);
+    } else {
+      // ── JWT user validation ──
+      const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: userData, error: authError } = await supabaseUser.auth.getUser(token);
+      if (authError || !userData?.user) return json(req, { error: 'Token invalide' }, 401);
+    }
 
     // 1. Vérifier mission TERMINEE
     const { data: mission, error: mErr } = await supabaseAdmin
@@ -473,7 +527,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[generate-invoice] Facture ${invoiceNumber} générée pour mission ${mission_id}`);
+    // 14. If service_role, insert explicit audit entry
+    if (isServiceRole) {
+      await supabaseAdmin.from('invoice_audit_log').insert({
+        invoice_id: facture!.id,
+        action: 'GENERATED_VIA_SERVICE_ROLE',
+        actor_id: null,
+        payload_before: { caller_context: 'service_role', mission_id, reason: service_role_reason },
+        payload_after: { numero_facture: facture!.numero_facture, template_version: 'v2_facturx' },
+      });
+    }
+
+    console.log(`[generate-invoice] Facture ${invoiceNumber} générée pour mission ${mission_id}${isServiceRole ? ` (service_role: ${service_role_reason})` : ''}`);
 
     return json(req, {
       success: true,
