@@ -447,6 +447,7 @@ Deno.serve(async (req) => {
         date_echeance: dueDate,
         statut: 'EMISE',
         mandat_version: soignant.mandat_facturation_version || '1.1',
+        template_version: 'v2_facturx',
         pdf_s3_key: storagePath,
         facturx_xml_url: xmlPath,
         is_public_sector: etab.est_secteur_public || false,
