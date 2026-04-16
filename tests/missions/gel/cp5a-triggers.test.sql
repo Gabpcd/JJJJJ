@@ -49,6 +49,16 @@
 -- Uses créneaux (MAX fin WHERE NOT est_pause) for actual work end ✓
 
 -- ══════════════════════════════════════════════════════════════
+-- Test 4c-blocage: plafond 48h dépassé → BLOCKED
+-- Result: PASS — "55.0h Jolene + 0.0h ailleurs = 55.0h total (max 48h)"
+-- ══════════════════════════════════════════════════════════════
+-- Setup: fake TERMINEE mission with 24h créneau (DISABLE TRIGGER for setup)
+-- Soignant total: 12h + 9h + 24h = 45h
+-- Try assigning 10h mission → 55h > 48h
+-- RAISE: "Plafond hebdomadaire dépassé : 55.0h Jolene" ✓
+-- Cleanup: DELETE fake mission + conformite_travail entries
+
+-- ══════════════════════════════════════════════════════════════
 -- Bugs fixed during testing:
 -- 1. RAISE format: %.1f → ROUND(v_ecart, 1) (PL/pgSQL doesn't support printf)
 -- 2. conformite_travail columns: type_violation/details → type_controle/resultat/details_violation

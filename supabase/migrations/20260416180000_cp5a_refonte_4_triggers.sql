@@ -162,8 +162,8 @@ BEGIN
         'plafond', 48,
         'article', 'L3121-20'
       ));
-    RAISE EXCEPTION '[CODE DU TRAVAIL] Plafond hebdomadaire dépassé : %.1fh Jolene + %.1fh ailleurs = %.1fh total (max 48h, Art. L3121-20)',
-      v_heures_jolene + v_heures_mission, v_heures_externes, v_heures_total;
+    RAISE EXCEPTION '[CODE DU TRAVAIL] Plafond hebdomadaire dépassé : %h Jolene + %h ailleurs = %h total (max 48h, Art. L3121-20)',
+      ROUND(v_heures_jolene + v_heures_mission, 1), ROUND(v_heures_externes, 1), ROUND(v_heures_total, 1);
   END IF;
 
   INSERT INTO conformite_travail (soignant_id, mission_id, type_controle, resultat, details_violation)
