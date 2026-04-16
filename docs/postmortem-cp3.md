@@ -217,3 +217,41 @@ Chaque usage de `DISABLE TRIGGER USER` doit être documenté dans le header de l
 - Colonnes modifiées
 - Triggers impactés
 - Vérification post-opération
+
+## 7. Inventaire des sites d'écriture `UPDATE missions`
+
+### Edge functions (3 sites — SAFE)
+
+| Fonction | Champs modifiés | Touche financials ? | Risque |
+|---|---|---|---|
+| `stripe-webhook` (L127) | `mode_paiement_soignant`, `commission_facturee`, `modifie_le` | Non (flags uniquement) | Aucun |
+| `stripe-webhook` (L325) | `commission_facturee`, `modifie_le` | Non (flag) | Aucun |
+| `stripe-connect-pay-mission` (L316) | `mode_paiement_soignant` | Non | Aucun |
+
+### RPCs / Trigger functions (24 sites — SAFE)
+
+Aucune de ces fonctions ne modifie `debut_le`, `fin_le`, `duree_heures` ou des montants financiers. Elles modifient `statut`, `soignant_assigne_id`, `commission_facturee`, `facture_id`, etc.
+
+| Catégorie | Fonctions | Champs modifiés |
+|---|---|---|
+| Transitions statut | `fn_accepter_mission`, `fn_annuler_mission_*`, `fn_auto_terminer_missions`, `fn_auto_transitions_missions`, `fn_terminer_mission`, `fn_assigner_mission_admin`, `fn_traiter_candidature` | `statut`, `soignant_assigne_id`, `modifie_le` |
+| Modification | `fn_modifier_mission_etablissement` | `intitule`, `description`, `service` (PAS timing) |
+| Facturation | `fn_generer_facture`, `fn_generer_facture_mensuelle`, `fn_auto_facturation_mensuelle` | `commission_facturee`, `facture_id` |
+| Litiges | `fn_creer_litige`, `fn_resoudre_litige`, `fn_admin_resoudre_litige` | `statut` |
+| Pointage | `fn_pointer_arrivee`, `fn_pointer_arrivee_code`, `fn_codes_pointage_mission` | `code_arrivee`, `code_depart` |
+| Séries | `fn_annuler_serie`, `fn_annuler_serie_etablissement` | `statut` |
+| Nettoyage | `fn_nettoyer_missions_fantomes` | `statut` |
+| Contrats | `fn_relancer_signatures_contrats` | `yousign_*` |
+
+### Site unique utilisant `sync_in_progress` : `fn_sync_mission_creneaux`
+
+C'est le SEUL code path qui active `jolene.sync_in_progress = 'true'` et fait `UPDATE missions SET debut_le, fin_le, duree_heures, nb_creneaux`.
+
+Après la correction Option C :
+- Les 21 champs financiers sont freezés à OLD pendant le sync
+- `debut_le`, `fin_le`, `duree_heures`, `nb_creneaux` passent
+- Le trigger `trg_protect_creneaux_facture` bloque les modifications de créneaux sur les missions facturées
+
+### Conclusion
+
+Aucun autre code path ne combine `sync_in_progress` + `UPDATE missions`. Le risque de l'incident CP3 est contenu au seul site identifié, et la correction Option C le protège.
