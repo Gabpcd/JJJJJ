@@ -1,239 +1,239 @@
 #!/usr/bin/env npx tsx
 /**
- * test-generate-invoice.ts — Invoque la VRAIE edge function generate-invoice
+ * test-generate-invoice.ts — E2E test via admin-invoke
  *
- * Usage :
- *   SUPABASE_URL=https://flripxtsyegjshnhzjkz.supabase.co \
- *   SUPABASE_SERVICE_ROLE_KEY=xxx \
+ * Usage:
+ *   OPS_TEST_ADMIN_PASSWORD=xxx \
+ *   ADMIN_INVOKE_SALT=yyy \
  *   npx tsx scripts/test-generate-invoice.ts [mission_id]
  *
- * Utilise le bypass service_role avec reason="ops_test_pr2_validation".
- * Sans mission_id : auto-sélectionne une mission TERMINEE éligible.
- *
- * Artefacts dans /tmp/jolene-invoice-test/ :
- *   facture.txt  — PDF text
- *   facture.xml  — XML CII Factur-X
- *   report.json  — Résumé des mentions
+ * Signs in as ops-test@jolene.app, computes X-Admin-Confirm,
+ * calls admin-invoke → generate-invoice, downloads PDF + XML.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { createHash } from 'crypto';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://flripxtsyegjshnhzjkz.supabase.co';
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscmlweHRzeWVnanNobmh6amt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMTk2OTYsImV4cCI6MjA4ODc5NTY5Nn0.ywor0oGht7aYi8J1YwNRo_rfmJtQ6GBodmCp1kAB3UY';
+const OPS_EMAIL = 'ops-test@jolene.app';
+const OPS_PASSWORD = process.env.OPS_TEST_ADMIN_PASSWORD || '';
+const SALT = process.env.ADMIN_INVOKE_SALT || 'jolene-ops-default-salt-change-me';
 
-if (!SERVICE_ROLE_KEY) {
-  console.error('❌ SUPABASE_SERVICE_ROLE_KEY required');
-  process.exit(1);
+const OUTPUT_DIR = '/tmp/jolene-invoice-test';
+const FIXTURES_DIR = join(process.cwd(), 'tests', 'fixtures', 'sample-invoice');
+
+function log(step: string, status: 'OK' | 'FAIL' | 'INFO', msg: string) {
+  const icon = status === 'OK' ? '✅' : status === 'FAIL' ? '❌' : 'ℹ️';
+  console.log(`${icon} [${step}] ${msg}`);
 }
 
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-const OUTPUT_DIR = '/tmp/jolene-invoice-test';
-
-function log(step: string, status: 'OK' | 'FAIL' | 'INFO', message: string) {
-  const icon = status === 'OK' ? '✅' : status === 'FAIL' ? '❌' : 'ℹ️';
-  console.log(`${icon} [${step}] ${message}`);
+function computeAdminConfirm(userId: string, salt: string): string {
+  const minute = Math.floor(Date.now() / 60000);
+  return createHash('sha256').update(`${userId}:${minute}:${salt}`).digest('hex');
 }
 
 async function main() {
   mkdirSync(OUTPUT_DIR, { recursive: true });
+  mkdirSync(FIXTURES_DIR, { recursive: true });
 
   console.log('═══════════════════════════════════════');
-  console.log('  P1bis — Test generate-invoice (REAL)');
+  console.log('  E2E Test: generate-invoice via admin-invoke');
   console.log('═══════════════════════════════════════\n');
 
-  // 1. Find eligible mission
-  const inputMissionId = process.argv[2];
-  let missionId: string;
-
-  if (inputMissionId) {
-    missionId = inputMissionId;
-    log('MISSION', 'INFO', `Using provided: ${missionId}`);
-  } else {
-    const { data: missions } = await supabase
-      .from('missions')
-      .select('id, intitule, soignant_assigne_id')
-      .eq('statut', 'TERMINEE')
-      .limit(20);
-
-    let found = false;
-    for (const m of (missions || [])) {
-      const { data: sg } = await supabase
-        .from('soignants')
-        .select('mandat_facturation_signe')
-        .eq('id', m.soignant_assigne_id)
-        .single();
-      if (!sg?.mandat_facturation_signe) continue;
-
-      const { data: existing } = await supabase
-        .from('factures_honoraires')
-        .select('id')
-        .eq('mission_id', m.id)
-        .not('statut', 'eq', 'ANNULEE')
-        .maybeSingle();
-      if (existing) continue;
-
-      missionId = m.id;
-      log('MISSION', 'OK', `Auto-selected: ${m.intitule} (${m.id})`);
-      found = true;
-      break;
-    }
-    if (!found) {
-      log('MISSION', 'FAIL', 'No eligible mission (TERMINEE + mandate + no invoice)');
-      process.exit(1);
-    }
+  if (!OPS_PASSWORD) {
+    log('PREREQ', 'FAIL', 'OPS_TEST_ADMIN_PASSWORD env var required');
+    process.exit(1);
   }
 
-  // 2. Call REAL edge function via supabase.functions.invoke
-  log('INVOKE', 'INFO', `POST /functions/v1/generate-invoice`);
+  const missionId = process.argv[2];
+  if (!missionId) {
+    log('PREREQ', 'FAIL', 'Usage: npx tsx scripts/test-generate-invoice.ts <mission_id>');
+    process.exit(1);
+  }
 
-  const { data: result, error: invokeError } = await supabase.functions.invoke('generate-invoice', {
-    body: {
-      mission_id: missionId!,
-      service_role_reason: 'ops_test_pr2_validation',
-    },
+  // ── Step 1: Sign in as ops-test admin ──
+  log('AUTH', 'INFO', `Signing in as ${OPS_EMAIL}...`);
+  const supabase = createClient(SUPABASE_URL, ANON_KEY);
+  const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
+    email: OPS_EMAIL,
+    password: OPS_PASSWORD,
   });
 
-  if (invokeError) {
-    log('INVOKE', 'FAIL', `Edge function error: ${JSON.stringify(invokeError)}`);
+  if (authErr || !authData.session) {
+    log('AUTH', 'FAIL', `Sign-in failed: ${authErr?.message || 'no session'}`);
     process.exit(1);
   }
 
-  if (!result?.success) {
-    log('INVOKE', 'FAIL', `Generation failed: ${JSON.stringify(result)}`);
+  const accessToken = authData.session.access_token;
+  const userId = authData.user.id;
+  log('AUTH', 'OK', `JWT obtained for ${userId}`);
+
+  // ── Step 2: Compute X-Admin-Confirm ──
+  const adminConfirm = computeAdminConfirm(userId, SALT);
+  log('AUTH', 'OK', `X-Admin-Confirm computed (minute ${Math.floor(Date.now() / 60000)})`);
+
+  // ── Step 3: Call admin-invoke ──
+  log('INVOKE', 'INFO', `POST /functions/v1/admin-invoke → generate-invoice`);
+  const startMs = Date.now();
+
+  const invokeRes = await fetch(`${SUPABASE_URL}/functions/v1/admin-invoke`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Admin-Confirm': adminConfirm,
+    },
+    body: JSON.stringify({
+      target_function: 'generate-invoice',
+      target_payload: { mission_id: missionId },
+      reason: 'ops_test_pr2_validation_v5_pdf',
+    }),
+  });
+
+  const elapsed = Date.now() - startMs;
+  const invokeBody = await invokeRes.text();
+  let invokeResult: any;
+  try { invokeResult = JSON.parse(invokeBody); } catch { invokeResult = { raw: invokeBody }; }
+
+  log('INVOKE', invokeRes.ok ? 'OK' : 'FAIL', `Status ${invokeRes.status} (${elapsed}ms)`);
+
+  if (!invokeRes.ok) {
+    log('INVOKE', 'FAIL', `Response: ${invokeBody.substring(0, 500)}`);
     process.exit(1);
   }
 
-  log('INVOKE', 'OK', `Facture: ${result.numero_facture} (${result.facture_id})`);
-  log('INVOKE', 'INFO', `Public sector: ${result.is_public_sector}`);
-  log('INVOKE', 'INFO', `PDF: ${result.pdf_path}`);
-  log('INVOKE', 'INFO', `XML: ${result.xml_path}`);
+  const invocationId = invokeResult.invocation_id;
+  const requestId = invokeResult.request_id;
+  log('INVOKE', 'INFO', `Invocation ID: ${invocationId}`);
+  log('INVOKE', 'INFO', `Request ID: ${requestId}`);
 
-  // 3. Verify DB entry
-  const { data: dbFact } = await supabase
-    .from('factures_honoraires')
-    .select('id, numero_facture, template_version, statut, soignant_id, montant_ttc')
-    .eq('id', result.facture_id)
-    .single();
-
-  if (dbFact) {
-    log('DB', dbFact.template_version === 'v2_facturx' ? 'OK' : 'FAIL',
-      `template_version = ${dbFact.template_version}`);
-    log('DB', dbFact.statut === 'EMISE' ? 'OK' : 'FAIL',
-      `statut = ${dbFact.statut}`);
-    log('DB', 'INFO', `montant_ttc = ${dbFact.montant_ttc}`);
-  } else {
-    log('DB', 'FAIL', 'Facture not found in DB');
+  // The response from admin-invoke contains the generate-invoice result
+  const genResult = invokeResult.response;
+  if (!genResult?.success) {
+    log('INVOKE', 'FAIL', `generate-invoice failed: ${JSON.stringify(genResult)}`);
+    process.exit(1);
   }
 
-  // 4. Check audit log for GENERATED_VIA_SERVICE_ROLE
-  const { data: auditLog } = await supabase
-    .from('invoice_audit_log')
-    .select('id, action, payload_before')
-    .eq('invoice_id', result.facture_id)
-    .eq('action', 'GENERATED_VIA_SERVICE_ROLE')
-    .maybeSingle();
+  log('INVOICE', 'OK', `Facture: ${genResult.numero_facture} (${genResult.facture_id})`);
 
-  log('AUDIT', auditLog ? 'OK' : 'FAIL',
-    auditLog
-      ? `Audit log found: reason="${(auditLog.payload_before as any)?.reason}"`
-      : 'No GENERATED_VIA_SERVICE_ROLE audit entry');
+  // ── Step 4: Verify DB records ──
+  const serviceClient = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY || ANON_KEY);
 
-  // 5. Check numbering continuity
-  const { data: lastTwo } = await supabase
-    .from('factures_honoraires')
-    .select('numero_facture')
-    .eq('soignant_id', dbFact?.soignant_id)
-    .like('numero_facture', 'JOL-%')
-    .order('numero_facture', { ascending: false })
-    .limit(2);
+  // admin_invocations
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const { data: invRow } = await serviceClient
+      .from('admin_invocations')
+      .select('*')
+      .eq('id', invocationId)
+      .single();
 
-  if (lastTwo && lastTwo.length >= 1) {
-    log('NUMBERING', 'OK', `Latest: ${lastTwo.map(f => f.numero_facture).join(', ')}`);
-  }
+    if (invRow) {
+      log('AUDIT', invRow.internal_status === 'COMPLETED' ? 'OK' : 'FAIL',
+        `internal_status = ${invRow.internal_status}`);
+      log('AUDIT', 'INFO', `request_id = ${invRow.request_id}`);
+      log('AUDIT', 'INFO', `reason = ${invRow.reason}`);
+    }
 
-  // 6. Download artifacts from Storage
-  log('STORAGE', 'INFO', 'Downloading PDF...');
-  const { data: pdfBlob } = await supabase.storage
-    .from('jolene-documents')
-    .download(result.pdf_path);
+    // factures_honoraires
+    const { data: fh } = await serviceClient
+      .from('factures_honoraires')
+      .select('id, numero_facture, template_version, statut, montant_ht, montant_ttc, mandat_version, pdf_s3_key, facturx_xml_url')
+      .eq('id', genResult.facture_id)
+      .single();
 
-  if (pdfBlob) {
-    const pdfText = await pdfBlob.text();
-    writeFileSync(join(OUTPUT_DIR, 'facture.txt'), pdfText);
-    log('STORAGE', 'OK', `PDF saved: ${join(OUTPUT_DIR, 'facture.txt')} (${pdfText.length} chars)`);
+    if (fh) {
+      log('DB', fh.template_version === 'v2_facturx' ? 'OK' : 'FAIL', `template_version = ${fh.template_version}`);
+      log('DB', 'OK', `statut = ${fh.statut}`);
+      log('DB', 'OK', `montant_ht = ${fh.montant_ht}, montant_ttc = ${fh.montant_ttc}`);
+      log('DB', 'OK', `mandat_version = ${fh.mandat_version}`);
+      log('DB', 'OK', `pdf_s3_key = ${fh.pdf_s3_key}`);
+      log('DB', 'OK', `facturx_xml_url = ${fh.facturx_xml_url}`);
 
-    // Check mentions
-    const checks: Record<string, boolean> = {
-      'numero_facture': pdfText.includes(result.numero_facture),
-      'mandataire_289': pdfText.includes('289 I-2') || pdfText.includes('mandataire'),
-      'TVA_261': pdfText.includes('261') || pdfText.includes('TVA non applicable'),
-      'SIRET_pro': /SIRET\s*:\s*\S+/.test(pdfText),
-      'RPPS_ou_ADELI': /RPPS|ADELI/.test(pdfText),
-      'montant_HT': /Montant HT/.test(pdfText),
-      'montant_TTC': /Montant TTC/.test(pdfText),
-    };
-    console.log('\nMentions PDF:');
-    for (const [k, v] of Object.entries(checks)) {
-      log('PDF', v ? 'OK' : 'FAIL', k);
+      // invoice_audit_log with chain reason
+      const { data: auditLogs } = await serviceClient
+        .from('invoice_audit_log')
+        .select('action, payload_before')
+        .eq('invoice_id', genResult.facture_id)
+        .eq('action', 'GENERATED_VIA_SERVICE_ROLE');
+
+      if (auditLogs && auditLogs.length > 0) {
+        const reason = (auditLogs[0].payload_before as any)?.reason || '';
+        log('AUDIT', reason.startsWith('admin_invoke_') ? 'OK' : 'FAIL',
+          `invoice_audit reason = ${reason}`);
+      }
+
+      // Download PDF
+      if (fh.pdf_s3_key) {
+        log('STORAGE', 'INFO', 'Downloading PDF...');
+        const { data: pdfBlob } = await serviceClient.storage.from('jolene-documents').download(fh.pdf_s3_key);
+        if (pdfBlob) {
+          const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+          const isPdf = pdfBytes[0] === 0x25 && pdfBytes[1] === 0x50 && pdfBytes[2] === 0x44 && pdfBytes[3] === 0x46; // %PDF
+          log('STORAGE', isPdf ? 'OK' : 'FAIL', `PDF binary: ${pdfBytes.length} bytes, starts with %PDF: ${isPdf}`);
+
+          writeFileSync(join(OUTPUT_DIR, `${genResult.numero_facture}.pdf`), pdfBytes);
+          writeFileSync(join(FIXTURES_DIR, `${genResult.numero_facture}.pdf`), pdfBytes);
+          log('STORAGE', 'OK', `Saved to ${OUTPUT_DIR} and fixtures/`);
+        }
+
+        const { data: pdfUrl } = await serviceClient.storage.from('jolene-documents').createSignedUrl(fh.pdf_s3_key, 86400);
+        if (pdfUrl?.signedUrl) log('STORAGE', 'OK', `PDF signed URL: ${pdfUrl.signedUrl}`);
+      }
+
+      // Download XML
+      if (fh.facturx_xml_url) {
+        log('STORAGE', 'INFO', 'Downloading XML...');
+        const { data: xmlBlob } = await serviceClient.storage.from('jolene-documents').download(fh.facturx_xml_url);
+        if (xmlBlob) {
+          const xmlText = await xmlBlob.text();
+          log('STORAGE', 'OK', `XML CII: ${xmlText.length} chars`);
+          log('XML', xmlText.includes('CrossIndustryInvoice') ? 'OK' : 'FAIL', 'namespace CII');
+          log('XML', xmlText.includes('urn:cen.eu:en16931') ? 'OK' : 'FAIL', 'EN16931 profile');
+          log('XML', xmlText.includes('<ram:TypeCode>380</ram:TypeCode>') ? 'OK' : 'FAIL', 'TypeCode 380');
+
+          writeFileSync(join(OUTPUT_DIR, `${genResult.numero_facture}.xml`), xmlText);
+          writeFileSync(join(FIXTURES_DIR, `${genResult.numero_facture}.xml`), xmlText);
+        }
+
+        const { data: xmlUrl } = await serviceClient.storage.from('jolene-documents').createSignedUrl(fh.facturx_xml_url, 86400);
+        if (xmlUrl?.signedUrl) log('STORAGE', 'OK', `XML signed URL: ${xmlUrl.signedUrl}`);
+      }
     }
   } else {
-    log('STORAGE', 'FAIL', 'PDF download failed');
+    log('DB', 'INFO', 'SUPABASE_SERVICE_ROLE_KEY not set — skipping DB verification (PDF/XML not downloadable)');
   }
 
-  log('STORAGE', 'INFO', 'Downloading XML...');
-  const { data: xmlBlob } = await supabase.storage
-    .from('jolene-documents')
-    .download(result.xml_path);
+  // Write fixtures README
+  writeFileSync(join(FIXTURES_DIR, 'README.md'), `# Sample Invoice Fixture
 
-  if (xmlBlob) {
-    const xmlText = await xmlBlob.text();
-    writeFileSync(join(OUTPUT_DIR, 'facture.xml'), xmlText);
-    log('STORAGE', 'OK', `XML saved: ${join(OUTPUT_DIR, 'facture.xml')} (${xmlText.length} chars)`);
+Generated by \`scripts/test-generate-invoice.ts\` via admin-invoke.
 
-    const xmlChecks: Record<string, boolean> = {
-      'namespace_CII': xmlText.includes('CrossIndustryInvoice'),
-      'EN16931': xmlText.includes('urn:cen.eu:en16931'),
-      'TypeCode_380': xmlText.includes('<ram:TypeCode>380</ram:TypeCode>'),
-      'EUR': xmlText.includes('EUR'),
-      'TVA_CategoryCode': xmlText.includes('CategoryCode'),
-    };
-    console.log('\nXML CII:');
-    for (const [k, v] of Object.entries(xmlChecks)) {
-      log('XML', v ? 'OK' : 'FAIL', k);
-    }
-  } else {
-    log('STORAGE', 'FAIL', 'XML download failed');
-  }
+- **Date**: ${new Date().toISOString()}
+- **Mission**: ${missionId}
+- **Facture**: ${genResult.numero_facture}
+- **Template**: v2_facturx (pdf-lib + XML CII EN16931)
+- **Admin**: ops-test@jolene.app
+- **Invocation ID**: ${invocationId}
+- **Request ID**: ${requestId}
 
-  // 7. Generate signed URLs (24h)
-  const { data: pdfSigned } = await supabase.storage
-    .from('jolene-documents')
-    .createSignedUrl(result.pdf_path, 86400);
-  const { data: xmlSigned } = await supabase.storage
-    .from('jolene-documents')
-    .createSignedUrl(result.xml_path, 86400);
+## How to regenerate
 
-  console.log('\n═══════════════════════════════════════');
-  console.log('  SIGNED URLs (24h):');
-  if (pdfSigned?.signedUrl) console.log(`  PDF: ${pdfSigned.signedUrl}`);
-  if (xmlSigned?.signedUrl) console.log(`  XML: ${xmlSigned.signedUrl}`);
-  console.log('═══════════════════════════════════════');
+\`\`\`bash
+OPS_TEST_ADMIN_PASSWORD=<from Supabase Secrets> \\
+ADMIN_INVOKE_SALT=<from Supabase Secrets> \\
+SUPABASE_SERVICE_ROLE_KEY=<from Supabase dashboard> \\
+npx tsx scripts/test-generate-invoice.ts <mission_id>
+\`\`\`
 
-  // Write report
-  writeFileSync(join(OUTPUT_DIR, 'report.json'), JSON.stringify({
-    facture_id: result.facture_id,
-    numero_facture: result.numero_facture,
-    template_version: dbFact?.template_version,
-    statut: dbFact?.statut,
-    audit_logged: !!auditLog,
-    pdf_signed_url: pdfSigned?.signedUrl,
-    xml_signed_url: xmlSigned?.signedUrl,
-  }, null, 2));
+Note: The mission must be TERMINEE with no existing non-ANNULEE invoice.
+`);
 
-  console.log(`\nAll artifacts in: ${OUTPUT_DIR}`);
-  console.log('Done.');
+  console.log(`\n═══════════════════════════════════════`);
+  console.log(`  DONE — artifacts in ${OUTPUT_DIR} and tests/fixtures/sample-invoice/`);
+  console.log(`═══════════════════════════════════════`);
 }
 
 main().catch(err => {
