@@ -224,6 +224,6 @@ UPDATE missions SET duree_heures = duree_heures WHERE statut != 'OUVERTE';
 
 Attention : ne PAS toucher les missions facturées (trigger `trg_protect_creneaux_facture` pourrait bloquer). Filtrer par absence de facture émise, ou utiliser bypass admin.
 
-**Priorité** : P1 (à faire avant CP6 purge)
+**Priorité** : P3 — Les 265 missions test seront purgées en CP6. Recalcul batch uniquement nécessaire si des missions test sont conservées post-purge.
 
 **Date** : 2026-04-16
