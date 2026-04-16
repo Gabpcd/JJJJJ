@@ -188,6 +188,8 @@ RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS
 DECLARE
   v_mission_id uuid;
   v_has_facture boolean;
+  v_correction_mission uuid;
+  v_correction_reason text;
 BEGIN
   v_mission_id := COALESCE(NEW.mission_id, OLD.mission_id);
 
@@ -197,13 +199,33 @@ BEGIN
       AND statut NOT IN ('BROUILLON', 'ANNULEE')
   ) INTO v_has_facture;
 
-  IF v_has_facture AND NOT public.est_admin() THEN
-    RAISE EXCEPTION 'Impossible de modifier les créneaux : une facture émise existe pour cette mission (mission_id=%)',
-      v_mission_id
-      USING ERRCODE = 'check_violation';
+  IF NOT v_has_facture THEN
+    IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
   END IF;
 
-  IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
+  -- Facture exists → check for traced admin correction override
+  v_correction_mission := NULLIF(current_setting('jolene.admin_correction_mission_id', true), '')::uuid;
+  v_correction_reason := NULLIF(current_setting('jolene.admin_correction_reason', true), '');
+
+  IF v_correction_mission = v_mission_id AND v_correction_reason IS NOT NULL THEN
+    -- Admin correction with traced reason → allow and audit
+    INSERT INTO invoice_audit_log (invoice_id, action, performed_by, payload_before)
+    SELECT fh.id, 'CRENEAUX_MODIFIED_POST_FACTURE', auth.uid(),
+      jsonb_build_object(
+        'reason', v_correction_reason,
+        'mission_id', v_mission_id,
+        'operation', TG_OP,
+        'creneau_id', COALESCE(NEW.id, OLD.id)
+      )
+    FROM factures_honoraires fh
+    WHERE fh.mission_id = v_mission_id AND fh.statut NOT IN ('BROUILLON', 'ANNULEE')
+    LIMIT 1;
+
+    IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
+  END IF;
+
+  RAISE EXCEPTION 'Impossible de modifier les créneaux : une facture émise existe pour cette mission (mission_id=%). Pour corriger, un admin doit définir jolene.admin_correction_mission_id et jolene.admin_correction_reason.',
+    v_mission_id USING ERRCODE = 'check_violation';
 END;
 $$;
 
