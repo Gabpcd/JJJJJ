@@ -104,6 +104,10 @@ CREATE INDEX IF NOT EXISTS idx_mc_mission ON public.mission_creneaux(mission_id)
 -- ──────────────────────────────────────────────────────────────
 -- Using a denormalized column instead of a trigger to avoid race conditions.
 -- nb_creneaux is maintained by the sync trigger (see CP2 migration).
+-- TODO CP2 : missions.nb_creneaux doit être maintenu par fn_sync_mission_creneaux()
+--   AFTER INSERT/UPDATE/DELETE sur mission_creneaux.
+--   Sans cette maintenance, le CHECK constraint nb_creneaux BETWEEN 0 AND 6 ne protège rien.
+--   Test attendu : INSERT créneau → nb_creneaux++, DELETE créneau → nb_creneaux--.
 ALTER TABLE public.missions
   ADD COLUMN IF NOT EXISTS nb_creneaux smallint NOT NULL DEFAULT 0
   CONSTRAINT ck_max_6_creneaux CHECK (nb_creneaux >= 0 AND nb_creneaux <= 6);
