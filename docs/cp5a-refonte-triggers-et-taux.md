@@ -299,9 +299,7 @@ Arguments :
 | Champ | Justification |
 |---|---|
 | `taux_horaire_base` | Le taux horaire est la base du contrat financier. |
-| `intitule` | Le titre de la mission, vu par le soignant lors de l'acceptation. |
-| `description` | Le descriptif détaillé, base de l'engagement. |
-| `service` | Le service/département — le soignant a accepté de travailler dans CE service. |
+| `intitule` | Le titre de la mission, vu par le soignant lors de l'acceptation. Coquilles → bypass admin tracé. |
 | `profession_requise` | La profession requise ne peut pas changer après qu'un soignant de cette profession a accepté. |
 | `taux_horaire_base_fige` | Snapshot — immutable par définition. |
 | `taux_majoration_nuit_fige` | Idem. |
@@ -311,6 +309,20 @@ Arguments :
 | `heure_fin_nuit_fige` | Idem. |
 | `taux_commission_fige` | Idem. |
 | `fige_le` | Idem — horodatage du gel, jamais modifiable. |
+
+**Message d'erreur paramétré** (identique pour tous les champs bloqués) :
+```sql
+RAISE EXCEPTION 'Modification du champ "%" interdite après assignation (gel du %). Pour corriger une coquille, contactez le support Jolene pour un override admin tracé. Pour modifier le contenu substantiel, annuler la mission et en créer une nouvelle.',
+  v_champ_modifie, OLD.fige_le
+  USING ERRCODE = 'check_violation';
+```
+
+**Champs retirés de la liste bloquée (décisions Gabrielle) :**
+
+| Champ | Raison du retrait | Ticket tech-debt |
+|---|---|---|
+| `description` | Reçoit des ajouts utiles post-assignation (infos logistiques, corrections typo). Bloquer = friction inutile. | T3 (P3) : audit trail modifications description post-gel |
+| `service` | Les étabs santé réaffectent légitimement un soignant d'un service à un autre le jour même (réorg interne, absence collègue). Usage réel du terrain. | T4 (P3) : notifier le soignant par email si service modifié post-gel |
 
 **Champs mécaniques — NON BLOQUÉS (protégés par d'autres triggers) :**
 
@@ -323,17 +335,37 @@ Arguments :
 | `duree_heures`, `debut_le`, `fin_le`, `nb_creneaux` | `fn_sync_mission_creneaux` (sync) | Maintenus par le sync trigger. |
 | `soignant_assigne_id` | Flow assignation/désistement | Doit changer lors d'une ré-attribution. |
 | `statut` | `fn_valider_transition_statut_mission` | Géré par la machine d'états. |
+| `description` | — (non bloqué, ticket T3) | Ajouts logistiques post-assignation légitimes. |
+| `service` | — (non bloqué, ticket T4) | Réaffectation service légitime. |
 | `est_urgente`, `niveau_urgence` | — | L'étab peut légitimement modifier l'urgence post-assignation (ex: situation qui s'aggrave). |
 | `mode_attribution`, `type_contrat_recherche` | — | Administratif, pas contractuel vis-à-vis du soignant. |
 | `commission_facturee` | Flow facturation | Flag mécanique. |
 | `taux_ifm`, `taux_icp` | Légaux (10% fixe) | Taux légaux, pas négociables. |
-| `etablissement_id` | `dec_proteger_mission_soignant` | Déjà protégé. Changer d'étab post-assignation = incohérent. |
+| `etablissement_id` | `dec_proteger_mission_soignant` | Déjà protégé (freeze to OLD). Pas de duplication dans le trigger de gel. |
 | `rist_plafond_applique`, `taux_rist_plafonne` | `fn_calculer_financier_mission` | Calculés. |
 
-**Point de discussion** : `etablissement_id` est déjà protégé par `dec_proteger_mission_soignant` (freeze to OLD). Le rajouter dans le trigger de gel serait redondant mais ne coûte rien. **Proposition : ne pas le rajouter** — la protection existante suffit et on évite la duplication.
+**Total : 11 champs bloqués** (3 contractuels + 8 `_fige` / `fige_le`).
 
-**Total : 13 champs bloqués** (5 contractuels + 8 `_fige` / `fige_le`).
+### 2.7 Risques identifiés (préliminaire — complété en Message C)
+
+**P4 — `est_urgente` changeant post-gel :**
+
+Vérifié : `fn_trg_sms_mission_urgente` (trigger `trg_sms_mission_urgente`, AFTER INSERT OR UPDATE) n'envoie un SMS que si `NEW.statut = 'OUVERTE' AND NEW.est_urgente = TRUE`. Donc un changement `est_urgente = FALSE → TRUE` sur une mission ASSIGNEE ne déclenche PAS le SMS pool. **Pas de risque de notification parasite.**
+
+Cependant, aucun trigger ne notifie le soignant assigné quand `est_urgente` change post-assignation. Ce n'est pas bloquant pour CP5a (le soignant voit le badge urgence dans l'app), mais à surveiller si un flow de notification soignant est ajouté plus tard.
+
+**P5 — Transitions admin forcées :**
+
+Un admin peut forcer toute transition via `est_admin()` bypass dans `fn_valider_transition_statut_mission`. Le trigger de gel doit se comporter normalement dans tous les cas :
+- Admin force `ASSIGNEE → OUVERTE` : DEGEL normal (NULL des `_fige`). Pas de traitement spécial.
+- Admin force une transition "anormale" (ex: `TERMINEE → OUVERTE`) : le trigger détecte `NEW.statut = 'OUVERTE'` → le degel s'applique si `OLD.fige_le IS NOT NULL`. Comportement cohérent.
+- Admin force `OUVERTE → EN_COURS` (bypass machine d'états) : pas de gel car la condition est `OLD.statut = 'OUVERTE' AND NEW.statut = 'ASSIGNEE'` — la mission EN_COURS n'aurait pas de `_fige`. **Risque mineur** : une mission EN_COURS sans gel. Mitigation : le calculateur financier utilise les valeurs etab live (`_fige IS NULL` → fallback). Ticket tech-debt si ce scénario admin se produit.
+
+Tests spécifiques requis (section 2.6, Message C) :
+- Test : admin force `ASSIGNEE → OUVERTE` → `_fige` remis à NULL
+- Test : admin force `TERMINEE → OUVERTE` → `_fige` remis à NULL (si étaient non-NULL)
+- Test : admin force `OUVERTE → EN_COURS` (bypass ASSIGNEE) → mission fonctionne sans gel (fallback etab)
 
 ---
 
-*Sections 2.4–2.7 (code SQL, bypass admin, tests, risques) en attente de validation Q1/Q2/Q3.*
+*Sections 2.4–2.6 (code SQL, bypass admin, tests) en attente — livraison Messages B et C.*

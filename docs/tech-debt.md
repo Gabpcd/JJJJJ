@@ -145,3 +145,27 @@ Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
 **Priorité** : P3 — avant 1000 missions en base
 
 **Date** : 2026-04-16
+
+---
+
+## T3 — Audit trail modifications description post-gel
+
+**Contexte** : CP5a décision Gabrielle — `description` n'est pas bloqué après gel (ajouts logistiques légitimes : "blouse fournie sur place", "entrée parking B", corrections typo). Mais les modifications post-assignation doivent être traçables pour audit.
+
+**Action** : Logger toute modification de `missions.description` quand `fige_le IS NOT NULL` dans une table d'audit (ex: `mission_audit_log`). Payload : `old_description`, `new_description`, `modified_by`, `modified_at`.
+
+**Priorité** : P3
+
+**Date** : 2026-04-16
+
+---
+
+## T4 — Notifier le soignant si service modifié post-gel
+
+**Contexte** : CP5a décision Gabrielle — `service` n'est pas bloqué après gel (réaffectation service légitime en étab santé). Mais le soignant doit être informé du changement.
+
+**Action** : Envoyer un email/SMS au soignant assigné quand `missions.service` est modifié et `fige_le IS NOT NULL`. Message type : "Votre mission [intitule] du [date] a été déplacée du service [ancien] au service [nouveau]."
+
+**Priorité** : P3
+
+**Date** : 2026-04-16
