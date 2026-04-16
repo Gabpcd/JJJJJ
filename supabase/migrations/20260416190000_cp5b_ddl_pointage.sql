@@ -28,6 +28,11 @@ ALTER TABLE public.missions
 ALTER TABLE public.missions
   ADD CONSTRAINT chk_prochain_type_scan CHECK (prochain_type_scan IN ('OUVERTURE', 'FERMETURE'));
 
+-- Allow NULL fin for EFFECTIF (open slots from OUVERTURE scan without FERMETURE)
+ALTER TABLE public.mission_creneaux ALTER COLUMN fin DROP NOT NULL;
+ALTER TABLE public.mission_creneaux
+  ADD CONSTRAINT chk_fin_previsionnel CHECK (type_creneau = 'EFFECTIF' OR fin IS NOT NULL);
+
 -- ──────────────────────────────────────────────────────────────
 -- 1c. Table scans_pointage
 -- ──────────────────────────────────────────────────────────────
