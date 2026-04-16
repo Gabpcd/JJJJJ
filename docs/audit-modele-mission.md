@@ -459,3 +459,197 @@ Recommandation : **conserver `serie_id`** mais le rendre fonctionnel :
 - `fn_creer_serie` doit écrire le `serie_id` en DB (pas seulement dans `description`)
 - Supprimer le pattern `[SERIE_ID:...]` dans `description`
 - Ajouter un index `idx_missions_serie ON missions(serie_id) WHERE serie_id IS NOT NULL`
+
+---
+
+## 6. Plan de migration des 268 missions existantes
+
+### 6.1 Stratégie : migration rétroactive mono-créneau
+
+Chaque mission existante (268 rows) devient une mission avec **1 créneau** dans `mission_creneaux`. C'est factuellement correct : le modèle actuel ne permettait pas de déclarer les pauses, donc toutes les missions historiques sont stockées comme un bloc continu. On ne réécrit pas l'histoire.
+
+### 6.2 Script de migration
+
+```sql
+-- Étape 1 : Créer la table mission_creneaux
+-- (voir §5.1)
+
+-- Étape 2 : Peupler avec 1 créneau par mission existante
+INSERT INTO mission_creneaux (mission_id, debut, fin, est_pause, ordre)
+SELECT id, debut_le, fin_le, false, 1
+FROM missions
+WHERE debut_le IS NOT NULL AND fin_le IS NOT NULL;
+-- Résultat attendu : 268 rows insérés
+
+-- Étape 3 : Trigger de sync mission_creneaux → missions
+CREATE OR REPLACE FUNCTION fn_sync_mission_creneaux()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE missions SET
+    debut_le = (SELECT MIN(debut) FROM mission_creneaux WHERE mission_id = COALESCE(NEW.mission_id, OLD.mission_id) AND NOT est_pause),
+    fin_le   = (SELECT MAX(fin)   FROM mission_creneaux WHERE mission_id = COALESCE(NEW.mission_id, OLD.mission_id) AND NOT est_pause),
+    duree_heures = (SELECT SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0) FROM mission_creneaux WHERE mission_id = COALESCE(NEW.mission_id, OLD.mission_id) AND NOT est_pause)
+  WHERE id = COALESCE(NEW.mission_id, OLD.mission_id);
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_sync_creneaux
+  AFTER INSERT OR UPDATE OR DELETE ON mission_creneaux
+  FOR EACH ROW EXECUTE FUNCTION fn_sync_mission_creneaux();
+
+-- Étape 4 : RLS sur mission_creneaux
+ALTER TABLE mission_creneaux ENABLE ROW LEVEL SECURITY;
+CREATE POLICY mc_select_own ON mission_creneaux FOR SELECT USING (
+  EXISTS (SELECT 1 FROM missions m WHERE m.id = mission_id
+    AND (m.etablissement_id = mon_etablissement_id()
+      OR m.soignant_assigne_id = mon_soignant_id()
+      OR est_admin()))
+);
+CREATE POLICY mc_insert_etab ON mission_creneaux FOR INSERT WITH CHECK (
+  EXISTS (SELECT 1 FROM missions m WHERE m.id = mission_id
+    AND m.etablissement_id = mon_etablissement_id())
+);
+-- UPDATE/DELETE : service_role uniquement (pas de modification directe par le client)
+```
+
+### 6.3 Ordre d'exécution
+
+1. **Sub-PR 1** (data model) : CREATE TABLE + migration + trigger sync + RLS + GRANTs
+2. **Sub-PR 2** (formulaire) : Adapter `FormulaireMission.tsx` pour saisir N créneaux
+3. **Sub-PR 3** (downstream) : Adapter `fn_calculer_financier_mission`, `generate-invoice`, `calendar-feed/sync`, `api-v1`
+4. **Sub-PR 4** (affichage) : Adapter `DetailMission`, `DetailMissionSoignant`, `ExportPaie`
+
+### 6.4 Rétrocompatibilité pendant la migration
+
+Pendant la phase transitoire (Sub-PR 1 déployé, Sub-PR 2 pas encore) :
+- Le formulaire continue de créer des missions mono-créneau
+- La RPC `fn_creer_mission` est modifiée pour aussi insérer 1 row dans `mission_creneaux`
+- Le trigger financier utilise le fallback `fin_le − debut_le` si 0 créneaux
+- **Aucune régression** : les 73 fichiers frontend lisent toujours `missions.debut_le`/`fin_le`/`duree_heures`
+
+---
+
+## 7. Impact estimé sur le code
+
+### 7.1 Fichiers à modifier obligatoirement
+
+| Fichier | Type de changement | Effort |
+|---|---|---|
+| **Migration SQL** | CREATE TABLE + INSERT + triggers + RLS | Moyen |
+| `fn_calculer_financier_mission` | Step 1 : lire `mission_creneaux` au lieu de `fin_le − debut_le` | Faible |
+| `fn_creer_mission` (RPC) | Ajouter INSERT into `mission_creneaux` après INSERT mission | Faible |
+| `fn_creer_serie` (RPC) | Idem pour chaque mission de la série | Faible |
+| `FormulaireMission.tsx` | Ajouter UI multi-créneaux (optionnel, un ou N) | **Élevé** |
+| `FormulaireRecurrence.tsx` | Adapter pour supporter multi-créneaux par jour | Moyen |
+| `generate-invoice/index.ts` | Description ligne facture : itérer sur créneaux | Moyen |
+| `calendar-feed/index.ts` | Générer 1 event iCal par créneau (ou 1 event avec breaks) | Faible |
+| `calendar-sync/index.ts` | Idem | Faible |
+| `api-v1/index.ts` | POST /missions : accepter array de créneaux | Moyen |
+| `types.ts` (Supabase) | Régénérer (`supabase gen types`) | Auto |
+
+### 7.2 Fichiers impactés mais sans modification nécessaire (rétrocompatibilité)
+
+Les 60+ fichiers frontend qui lisent `missions.debut_le`/`fin_le`/`duree_heures` **ne changent pas** grâce à la dénormalisation. Les valeurs restent à jour via le trigger de sync.
+
+### 7.3 Fichiers à adapter pour affichage amélioré (optionnel, post-migration)
+
+| Fichier | Amélioration |
+|---|---|
+| `DetailMission.tsx` | Afficher la liste des créneaux au lieu d'un seul horaire |
+| `DetailMissionSoignant.tsx` | Idem |
+| `DetailPresencesMission.tsx` | Pointage par créneau |
+| `ExportPaie.tsx` | Détailler les créneaux dans le CSV |
+| `ContratMission.tsx` | Lister les créneaux dans le contrat |
+| `NoteHonoraires.tsx` | Détailler les créneaux sur la note d'honoraires |
+
+### 7.4 Triggers à auditer (impact potentiel)
+
+| Trigger | Impact | Raison |
+|---|---|---|
+| `dec_refuser_chevauchement_soignant` | **Moyen** | Doit vérifier les chevauchements créneau par créneau, pas mission par mission |
+| `dec_verifier_plafond_48h` | **Moyen** | Doit sommer les créneaux effectifs, pas les spans |
+| `dec_verifier_repos_11h` | **Moyen** | Le repos 11h se calcule entre le dernier créneau d'une mission et le premier de la suivante |
+| `fn_trg_auto_heures_majorees` | **Élevé** | Doit détecter les heures nuit/dimanche/férié par créneau |
+| `dec_generer_codes_pointage` | **Faible** | 1 code par mission suffit (pas par créneau) |
+| Autres triggers | **Aucun** | Ne touchent pas au timing |
+
+### 7.5 Résumé quantitatif
+
+| Catégorie | Nombre |
+|---|---|
+| Fichiers à modifier (obligatoire) | ~11 |
+| Triggers à adapter | 4–5 |
+| Fichiers rétrocompatibles (0 changement) | ~60 |
+| Fichiers à améliorer (optionnel) | ~6 |
+| Tables impactées | 1 créée, 1 modifiée (missions) |
+
+---
+
+## 8. Décisions à arbitrer par Gabrielle
+
+### D1 — Périmètre de la pause
+
+**Option A** : Les pauses sont implicites (gaps entre créneaux). Pas de flag `est_pause`.
+- Pro : Simple, pas d'ambiguïté
+- Con : Impossible de distinguer pause payée (garde de nuit) vs non payée
+
+**Option B** : Le flag `est_pause` permet de déclarer des créneaux de pause comptabilisée.
+- Pro : Conforme aux conventions collectives hospitalières (pause nuit intégrée)
+- Con : Complexité formulaire + triggers
+
+**Recommandation** : Option B, mais `est_pause = false` par défaut. Le formulaire ne montre le toggle "pause comptée" que pour les missions de nuit (21h–7h).
+
+### D2 — Nombre max de créneaux par mission
+
+- **2** : couvre 95% des cas (matin + après-midi)
+- **4** : couvre les gardes fragmentées (rare)
+- **Illimité** : flexible mais risque d'abus
+
+**Recommandation** : MAX 4, avec CHECK constraint.
+
+### D3 — Migration des 42 missions multi-jour
+
+42 missions ont `debut_le.date ≠ fin_le.date`. Certaines sont des gardes (19h → 7h le lendemain, normal). 3 missions > 24h sont toutes ANNULEE.
+
+**Question** : Faut-il les éclater en multi-créneaux automatiquement (ex: 19h–7h → 1 créneau de nuit), ou les laisser en mono-créneau ?
+
+**Recommandation** : Les laisser en mono-créneau (état historique fidèle). Seules les nouvelles missions bénéficieront du multi-créneaux.
+
+### D4 — Timing de la refonte vs finalisation PDF facture
+
+La facture d'honoraires (generate-invoice) utilise `debut_le`/`fin_le`/`duree_heures` dans la description de ligne. Deux stratégies :
+
+**Option A** : Refonte modèle AVANT template PDF v2.1
+- Pro : Le PDF affichera directement les créneaux
+- Con : Retarde la livraison de la facturation
+
+**Option B** : Template PDF v2.1 MAINTENANT avec le modèle actuel, puis adapter quand multi-créneaux arrive
+- Pro : Facturation opérationnelle plus vite
+- Con : Double travail sur le template
+
+**Recommandation** : Option A (c'est la décision déjà prise par Gabrielle le 2026-04-16).
+
+### D5 — Sort de `serie_id`
+
+**Option A** : Rendre `serie_id` fonctionnel (écrire en DB, indexer, supprimer le hack `[SERIE_ID:...]` dans description)
+**Option B** : Supprimer `serie_id`, garder le système actuel par tag dans description
+
+**Recommandation** : Option A — c'est propre, et le coût de migration est quasi nul (colonne existe déjà, juste la peupler).
+
+### D6 — Sort de la table `shifts`
+
+**Option A** : Conserver `shifts`/`shift_affectations` comme système planning indépendant
+**Option B** : Supprimer (0 données, 0 usage)
+
+**Recommandation** : Conserver mais ne pas y toucher. C'est un module planning futur distinct du multi-créneaux mission.
+
+### D7 — Rétroactivité sur les missions TERMINEE
+
+Faut-il demander aux établissements de corriger les pauses sur les 213 missions terminées ?
+
+**Recommandation** : Non. Les missions terminées restent en l'état (mono-créneau). Le multi-créneaux ne s'applique qu'aux nouvelles missions. Les factures déjà émises ne sont pas rétroactivement modifiées — c'est le principe de l'annuité comptable.
+
+---
+
+> **Prochaine étape** : Gabrielle valide les 7 décisions ci-dessus, puis on découpe en Sub-PRs.
