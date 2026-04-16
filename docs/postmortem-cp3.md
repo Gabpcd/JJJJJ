@@ -3,6 +3,7 @@
 > Date : 2026-04-16
 > Sévérité : P1 (données financières modifiées, détecté et corrigé avant impact utilisateur)
 > Durée de l'incident : ~5 minutes (entre exécution et détection)
+> **Résolu le 2026-04-16** — Migration corrective : `20260416150000_cp3_fix_targeted_bypass.sql`
 
 ## 1. Timeline factuelle
 
@@ -251,6 +252,22 @@ Après la correction Option C :
 - Les 21 champs financiers sont freezés à OLD pendant le sync
 - `debut_le`, `fin_le`, `duree_heures`, `nb_creneaux` passent
 - Le trigger `trg_protect_creneaux_facture` bloque les modifications de créneaux sur les missions facturées
+
+### Conclusion
+
+Aucun autre code path ne combine `sync_in_progress` + `UPDATE missions`. Le risque de l'incident CP3 est contenu au seul site identifié, et la correction Option C le protège.
+
+## 8. Leçons apprises
+
+1. **Un bypass de session variable est une arme nucléaire** : `RETURN NEW` dans un trigger de protection désactive TOUTE la protection, pas juste la partie ciblée. Toujours écrire des bypasses granulaires (freeze explicite des champs à protéger).
+
+2. **Le dry-run ne suffit pas** : le dry-run CP3 utilisait `RAISE EXCEPTION` pour rollback — il n'a pas détecté le problème car les vérifications financières comparaient des valeurs qui allaient être rollback. Toujours vérifier financials APRÈS commit réel.
+
+3. **`DISABLE TRIGGER USER` est plus sûr que `sync_in_progress` pour les bulk updates** : la session variable interagit de façon complexe avec la cascade de triggers. Le DISABLE est atomique et prédictible.
+
+4. **La table `missions` a un modèle de protection implicite** : les triggers de calcul (commission, finance, net_estime) ÉCRIVENT de nouvelles valeurs, mais les triggers de protection REVERTENT ces écritures. Ce pattern "write then revert" est fragile — tout bypass des protecteurs expose les écritures des calculateurs.
+
+5. **Toujours snapshoter avant une migration destructive** : le snapshot a permis une restauration complète en <2 minutes. Sans lui, il aurait fallu recalculer 268 missions manuellement.
 
 ### Conclusion
 

@@ -91,6 +91,16 @@ Ces triggers RAISE EXCEPTION sur timing invalide. Ils NE doivent PAS être bypas
 **Vérification** : les 268 missions existantes ont conservé leurs valeurs (0 NULL après conversion).
 **Source de vérité** : désormais `fn_sync_mission_creneaux()` (sync trigger) + `fn_calculer_financier_mission()` (fallback COALESCE si NULL).
 
+## CP3 — Migration data : COMPLETED (2026-04-16)
+
+- 265 créneaux mono-créneau insérés (3 missions >24h skippées)
+- 1 série reconstruite (SERIE_DEMO_001, 8 missions)
+- Incident : bypass trop large → 231 missions avec financials recalculés → corrigé via snapshot restore
+- Correction Option C : bypass ciblé (freeze 21 champs financiers, laisse passer 4 timing)
+- Nouveau trigger `trg_protect_creneaux_facture` : bloque créneaux si facture émise
+- Post-mortem complet : `/docs/postmortem-cp3.md`
+- Snapshots droppés après validation
+
 ## Triggers modifiés en CP2
 
 | Trigger | Modification | Raison |
