@@ -133,7 +133,7 @@ CREATE TABLE public.scans_pointage (
   horodatage_arrondi timestamptz NOT NULL,
 
   -- Créneau effectif lié
-  creneau_effectif_id uuid REFERENCES mission_creneaux(id),
+  creneau_effectif_id uuid REFERENCES mission_creneaux(id) ON DELETE CASCADE,
 
   -- Validation
   est_en_avance boolean NOT NULL DEFAULT false,
@@ -178,6 +178,8 @@ ALTER TABLE public.missions
 Remplacement de `code_arrivee`/`code_depart` (gardés mais DEPRECATED — pas de DROP pour compat frontend existant).
 
 ### 2.3 RPC `fn_scanner_code_pointage(p_code text, p_metadata jsonb DEFAULT NULL)`
+
+**SECURITY DEFINER SET search_path TO 'public'** — obligatoire car le soignant appelant n'a pas les droits RLS pour INSERT `mission_creneaux` ni UPDATE `missions` (protecteurs freeze). Le check `auth.uid() = soignant_assigne_id` est fait DANS la fonction (step 2), pas par RLS.
 
 Flux :
 ```
@@ -447,7 +449,9 @@ SELECT
 FROM missions WHERE id = p_mission_id;
 ```
 
-Si `ecart_pourcent > 10` → flag dans la facture (`invoice_audit_log` action `ECART_PREVISIONNEL_EFFECTIF`), pas bloquant mais visible pour l'étab.
+**BLOQUANT** (décision C3) : si `ecart_pourcent > 10` ET facturation sur EFFECTIF → RAISE EXCEPTION. Le soignant ou l'étab doit compléter le pointage via `fn_declarer_fin_retroactive` avant facturation.
+
+Vérification supplémentaire : si un créneau EFFECTIF est ouvert (`fin IS NULL`) → RAISE EXCEPTION. Pas de facturation tant qu'un créneau est en cours.
 
 ---
 
@@ -513,9 +517,23 @@ END
 
 ### 6.5 `fn_geler_mission_a_assignation` (CP5a)
 
-**Bloc 1 GEL** : étendu pour générer `code_pointage_actif` + HMAC (section 3.1).
+**Bloc 1 GEL** : étendu pour générer `code_pointage_actif` + HMAC (section 3.1). Ajoute aussi un INSERT `GEL_APPLIED` dans `journaux_audit` avec le snapshot complet (_fige + code initial). Décision Q1 : traçabilité complète du cycle gel/dégel.
 
-**Bloc 2 DEGEL** : doit NULLifier `code_pointage_actif`, `code_pointage_hmac`, `prochain_type_scan`, `nb_scans` + DELETE les créneaux EFFECTIF et scans_pointage de cette mission.
+**Bloc 2 DEGEL** : cleanup complet avec suppression sync re-entrance (décision C4) :
+```sql
+PERFORM set_config('jolene.sync_in_progress', 'true', true);
+DELETE FROM mission_creneaux WHERE mission_id = OLD.id AND type_creneau = 'EFFECTIF';
+-- CASCADE → scans_pointage auto-deleted via FK ON DELETE CASCADE
+PERFORM set_config('jolene.sync_in_progress', 'false', true);
+
+NEW.debut_effectif := NULL;
+NEW.fin_effective := NULL;
+NEW.duree_heures_effective := NULL;
+NEW.code_pointage_actif := NULL;
+NEW.code_pointage_hmac := NULL;
+NEW.prochain_type_scan := NULL;
+NEW.nb_scans := 0;
+```
 
 **Bloc 3 PROTECTION** : `code_pointage_actif` n'est PAS dans les champs bloqués — il change à chaque scan.
 

@@ -193,3 +193,15 @@ Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
 **Priorité** : P3
 
 **Date** : 2026-04-16
+
+---
+
+## T7 — Cron détection créneaux effectifs jamais fermés
+
+**Contexte** : CP5b risque R4 — un soignant peut ouvrir un créneau effectif (scan OUVERTURE) puis ne jamais scanner la FERMETURE. Le créneau reste `fin IS NULL` indéfiniment. Le flow `fn_declarer_fin_retroactive` permet la correction manuelle, mais il n'y a pas de détection automatique.
+
+**Action** : Edge function schedulée (pg_cron ou Supabase cron) qui détecte `mission_creneaux WHERE type_creneau = 'EFFECTIF' AND fin IS NULL AND debut < now() - INTERVAL '24 hours'`. Envoyer notification au soignant + flaguer `validation_etab_requise` sur les scans associés.
+
+**Priorité** : P2
+
+**Date** : 2026-04-16
