@@ -33,6 +33,10 @@ ALTER TABLE public.mission_creneaux ALTER COLUMN fin DROP NOT NULL;
 ALTER TABLE public.mission_creneaux
   ADD CONSTRAINT chk_fin_previsionnel CHECK (type_creneau = 'EFFECTIF' OR fin IS NOT NULL);
 
+-- Relax ck_creneau_coherent to allow NULL fin (EFFECTIF open slots)
+ALTER TABLE public.mission_creneaux DROP CONSTRAINT IF EXISTS ck_creneau_coherent;
+ALTER TABLE public.mission_creneaux ADD CONSTRAINT ck_creneau_coherent CHECK (fin IS NULL OR fin > debut);
+
 -- ──────────────────────────────────────────────────────────────
 -- 1c. Table scans_pointage
 -- ──────────────────────────────────────────────────────────────
