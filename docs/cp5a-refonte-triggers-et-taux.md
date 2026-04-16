@@ -219,4 +219,121 @@ ALTER TABLE public.missions
 
 ---
 
-*Partie 2 (trigger de gel) en attente de validation de la Partie 1.*
+## Partie 2 : Trigger de gel `fn_geler_mission_a_assignation`
+
+### 2.1 Matrice des transitions de statut
+
+**Machine d'états existante** (source : `fn_valider_transition_statut_mission`) :
+
+```
+OUVERTE → ASSIGNEE                    (assignation soignant)
+OUVERTE → ANNULEE_PAR_ETABLISSEMENT   (étab annule avant assignation)
+ASSIGNEE → EN_COURS                   (mission démarre)
+ASSIGNEE → OUVERTE                    (soignant se désiste)
+ASSIGNEE → ANNULEE_PAR_ETABLISSEMENT
+ASSIGNEE → ANNULEE_PAR_SOIGNANT
+ASSIGNEE → ABSENCE                    (no-show)
+EN_COURS → TERMINEE
+EN_COURS → ABSENCE
+EN_COURS → LITIGE
+EN_COURS → ANNULEE_PAR_ETABLISSEMENT
+LITIGE → TERMINEE                     (litige résolu)
+LITIGE → ANNULEE_PAR_ETABLISSEMENT
+```
+
+Note : un admin peut forcer TOUTE transition (`est_admin()` bypass dans `fn_valider_transition_statut_mission`).
+
+**Action du trigger de gel par transition :**
+
+| Avant | Après | Action `*_fige` | Raison |
+|---|---|---|---|
+| `OUVERTE` | `ASSIGNEE` | **GEL** : remplir les 8 `_fige` + `fige_le = now()` | Première assignation = formation du contrat |
+| `OUVERTE` | `ANNULEE_PAR_ETABLISSEMENT` | Rien (`_fige` restent `NULL`) | Jamais assignée, pas de contrat |
+| `ASSIGNEE` | `EN_COURS` | Rien (déjà gelé) | Contrat en cours d'exécution |
+| `ASSIGNEE` | `OUVERTE` | **DEGEL** : `_fige = NULL`, `fige_le = NULL` | Soignant se désiste, contrat rompu, mission rouverte |
+| `ASSIGNEE` | `ANNULEE_PAR_ETABLISSEMENT` | **CONSERVER** les `_fige` | Audit trail : quel contrat a été annulé |
+| `ASSIGNEE` | `ANNULEE_PAR_SOIGNANT` | **CONSERVER** les `_fige` | Idem |
+| `ASSIGNEE` | `ABSENCE` | **CONSERVER** les `_fige` | Idem — le no-show s'est produit sous ces conditions |
+| `EN_COURS` | `TERMINEE` | Rien (déjà gelé) | Fin normale |
+| `EN_COURS` | `ABSENCE` | **CONSERVER** | — |
+| `EN_COURS` | `LITIGE` | Rien (déjà gelé) | — |
+| `EN_COURS` | `ANNULEE_PAR_ETABLISSEMENT` | **CONSERVER** | — |
+| `LITIGE` | `TERMINEE` | Rien (déjà gelé) | Litige résolu |
+| `LITIGE` | `ANNULEE_PAR_ETABLISSEMENT` | **CONSERVER** | — |
+
+**Résumé** : 3 actions possibles :
+- **GEL** : uniquement `OUVERTE → ASSIGNEE`
+- **DEGEL** : uniquement `ASSIGNEE → OUVERTE` (soignant se désiste)
+- **CONSERVER** : toutes les transitions depuis un état gelé vers un état terminal/annulé
+
+Pas de transition directe `OUVERTE → EN_COURS` dans la machine d'états → le gel se fait toujours via `ASSIGNEE`.
+
+### 2.2 Comportement sur ré-attribution (Q1)
+
+**Scénario** : Mission M assignée à soignant A (gel). A se désiste (ASSIGNEE → OUVERTE). M réassignée à soignant B (OUVERTE → ASSIGNEE).
+
+**Analyse des 3 options :**
+
+| Option | Comportement | Avantage | Inconvénient |
+|---|---|---|---|
+| **A — Garder** | `_fige` restent aux valeurs du gel initial (soignant A). B hérite des taux de A. | Simple (pas de degel). | B voit des taux potentiellement obsolètes. Si l'étab a changé ses taux entre A et B, le contrat de B est basé sur des conditions périmées. Confusion UX. |
+| **B — Re-snapshotter** | `_fige` écrasés au nouveau gel sans passer par NULL. `fige_le` mis à jour. | Taux à jour pour B. | Perte de traçabilité : on ne sait plus quels taux étaient proposés à A. Pas de distinction entre premier gel et re-gel. |
+| **C — NULL puis re-gel** | `ASSIGNEE → OUVERTE` : `_fige = NULL`. `OUVERTE → ASSIGNEE` : nouveau gel complet. | Chaque assignation = transaction complète. B obtient les taux actuels. Traçabilité via `fige_le` (date du nouveau gel). Distinction claire gel rétroactif (`fige_le = NULL`) / premier gel / re-gel. | Deux actions trigger au lieu d'une (degel + gel). Légèrement plus complexe. |
+
+**Recommandation : Option C.**
+
+Arguments :
+1. **Cohérence produit** : le soignant B n'a pas négocié avec les conditions de A. Chaque acceptation de mission est un nouvel engagement.
+2. **Traçabilité** : `fige_le` du nouveau gel = date réelle de la nouvelle assignation. Pas de confusion avec l'ancien gel.
+3. **Simplicité conceptuelle** : un état OUVERTE a toujours `_fige = NULL`. Un état post-ASSIGNEE a toujours `_fige NOT NULL` (sauf les backfillés CP5a avec `fige_le = NULL`).
+4. **Impact performances** : négligeable — le degel est un simple `SET _fige = NULL` sur 8 colonnes + 1 timestamp. Le re-gel est le même coût que le premier gel.
+
+**Perte de traçabilité du gel de A** : si nécessaire pour des audits futurs, on pourrait logger le degel dans l'audit log (`GEL_RESET`, payload = ancien snapshot). Mais pour V1, pas nécessaire — les conditions de A n'ont jamais donné lieu à facturation (la mission n'a jamais été TERMINEE sous A).
+
+### 2.3 Champs bloqués après gel (Q3)
+
+**Principe** : après gel (`fige_le IS NOT NULL`), les champs qui constituent le « contrat visible du soignant » sont immutables. Les champs mécaniques (calculés par triggers) restent libres.
+
+**Champs contractuels — BLOQUÉS après gel :**
+
+| Champ | Justification |
+|---|---|
+| `taux_horaire_base` | Le taux horaire est la base du contrat financier. |
+| `intitule` | Le titre de la mission, vu par le soignant lors de l'acceptation. |
+| `description` | Le descriptif détaillé, base de l'engagement. |
+| `service` | Le service/département — le soignant a accepté de travailler dans CE service. |
+| `profession_requise` | La profession requise ne peut pas changer après qu'un soignant de cette profession a accepté. |
+| `taux_horaire_base_fige` | Snapshot — immutable par définition. |
+| `taux_majoration_nuit_fige` | Idem. |
+| `taux_majoration_dimanche_fige` | Idem. |
+| `taux_majoration_ferie_fige` | Idem. |
+| `heure_debut_nuit_fige` | Idem. |
+| `heure_fin_nuit_fige` | Idem. |
+| `taux_commission_fige` | Idem. |
+| `fige_le` | Idem — horodatage du gel, jamais modifiable. |
+
+**Champs mécaniques — NON BLOQUÉS (protégés par d'autres triggers) :**
+
+| Champ | Protégé par | Raison |
+|---|---|---|
+| `total_brut`, `net_a_payer`, `net_estime` | `fn_calculer_financier_mission` (recalcule) + `dec_proteger_mission_soignant` (freeze CP3) | Calculés par triggers, pas éditables directement. |
+| `montant_majoration_*`, `montant_ifm`, `montant_icp` | Idem | Idem. |
+| `montant_commission_*`, `taux_commission` | Idem | `taux_commission` reste live, `_fige` prend le relais dans les calculs. |
+| `heures_nuit`, `heures_dimanche`, `heures_ferie` | `fn_trg_auto_heures_majorees` (recalcule) | Calculés depuis les créneaux. |
+| `duree_heures`, `debut_le`, `fin_le`, `nb_creneaux` | `fn_sync_mission_creneaux` (sync) | Maintenus par le sync trigger. |
+| `soignant_assigne_id` | Flow assignation/désistement | Doit changer lors d'une ré-attribution. |
+| `statut` | `fn_valider_transition_statut_mission` | Géré par la machine d'états. |
+| `est_urgente`, `niveau_urgence` | — | L'étab peut légitimement modifier l'urgence post-assignation (ex: situation qui s'aggrave). |
+| `mode_attribution`, `type_contrat_recherche` | — | Administratif, pas contractuel vis-à-vis du soignant. |
+| `commission_facturee` | Flow facturation | Flag mécanique. |
+| `taux_ifm`, `taux_icp` | Légaux (10% fixe) | Taux légaux, pas négociables. |
+| `etablissement_id` | `dec_proteger_mission_soignant` | Déjà protégé. Changer d'étab post-assignation = incohérent. |
+| `rist_plafond_applique`, `taux_rist_plafonne` | `fn_calculer_financier_mission` | Calculés. |
+
+**Point de discussion** : `etablissement_id` est déjà protégé par `dec_proteger_mission_soignant` (freeze to OLD). Le rajouter dans le trigger de gel serait redondant mais ne coûte rien. **Proposition : ne pas le rajouter** — la protection existante suffit et on évite la duplication.
+
+**Total : 13 champs bloqués** (5 contractuels + 8 `_fige` / `fige_le`).
+
+---
+
+*Sections 2.4–2.7 (code SQL, bypass admin, tests, risques) en attente de validation Q1/Q2/Q3.*
