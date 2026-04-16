@@ -45,3 +45,26 @@ Instructions détaillées dans `/docs/admin-invoke.md`.
 **Priorité** : P3 — nettoyage
 
 **Date** : 2026-04-16
+
+---
+
+## CP4 — fn_calculer_financier_mission doit utiliser mission_creneaux
+
+**Fichier** : trigger `fn_calculer_financier_mission` (migration `20260315170131`)
+
+**Contexte** : Le trigger financier calcule `duree_heures` via `COALESCE(NEW.duree_heures, EXTRACT(EPOCH FROM (fin_le - debut_le)) / 3600.0)`. Quand le sync trigger envoie une valeur non-NULL (cas normal multi-créneaux), le COALESCE la conserve — OK. Mais quand toutes les créneaux sont des pauses, le sync envoie `duree_heures = NULL`, et le fallback recalcule le span brut `(fin_le - debut_le)` — **incorrect**.
+
+**Bug vérifié en prod** : mission avec 2 créneaux pauses (7h-12h + 14h-19h) → `duree_heures = 12h` (span) au lieu de `0h` (somme non-pauses).
+
+**Action** : Modifier `fn_calculer_financier_mission` pour lire directement `mission_creneaux` :
+```sql
+SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0), 0)
+INTO v_duree
+FROM mission_creneaux
+WHERE mission_id = NEW.id AND NOT est_pause;
+```
+Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
+
+**Priorité** : CP4 — Sub-PR 1
+
+**Date** : 2026-04-16

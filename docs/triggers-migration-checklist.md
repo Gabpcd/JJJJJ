@@ -40,20 +40,61 @@ EXISTS (
 
 **Fix CP5** : Itérer sur chaque créneau `WHERE NOT est_pause` et calculer les majorations par créneau.
 
+## Triggers protégés par `jolene.sync_in_progress`
+
+Audit exhaustif (2026-04-16) — tous les triggers sur `missions` qui référencent `debut_le`/`fin_le`/`duree_heures` ont été analysés.
+
+### Protégés (bypass sync) — 3 triggers
+
+| Trigger | Pattern dangereux | Guard ajouté |
+|---|---|---|
+| `dec_bloquer_modif_apres_acceptation` | `RAISE EXCEPTION` si `debut_le`/`fin_le` changent après acceptation | `jolene.sync_in_progress` skip ✅ |
+| `dec_proteger_mission_soignant` | `NEW.debut_le := OLD.debut_le` (revert) quand caller ≠ admin/etab | `jolene.sync_in_progress` skip ✅ |
+| `fn_protect_mission_financials` | `NEW.debut_le := OLD.debut_le` (revert) quand caller = soignant assigné | `jolene.sync_in_progress` skip ✅ |
+
+### Non protégés — validations légitimes (3 triggers)
+
+Ces triggers RAISE EXCEPTION sur timing invalide. Ils NE doivent PAS être bypassés car leurs validations s'appliquent aussi au sync.
+
+| Trigger | Condition de feu | Pourquoi pas de guard |
+|---|---|---|
+| `dec_verifier_docs_jusqua_fin` | Seulement sur transition `OUVERTE → ASSIGNEE` | Sync ne change pas `statut` → ne fire pas |
+| `dec_verifier_plafond_48h` | Vérifie le plafond 48h/semaine | Validation légitime, DOIT bloquer si dépassement |
+| `dec_verifier_repos_11h` | Vérifie repos 11h entre missions | Validation légitime, DOIT bloquer si repos insuffisant |
+
+### Non protégés — calculs cascadés (2 triggers, OK)
+
+| Trigger | Effet | Pourquoi OK |
+|---|---|---|
+| `fn_calculer_financier_mission` | Recalcule `duree_heures` via `COALESCE(NEW.duree_heures, span)` | Garde la valeur du sync si non-NULL, recalcule si NULL (cas "all pauses" → bug CP4) |
+| `fn_trg_auto_heures_majorees` | Recalcule heures nuit/dimanche/férié | Calcul basé sur debut_le/fin_le — à refondre en CP5 pour utiliser créneaux |
+
+### Non protégés — ne référencent timing qu'en lecture (9 triggers, OK)
+
+| Trigger | Usage |
+|---|---|
+| `dec_alerte_mission_liberee` | Lit debut_le pour contexte notification |
+| `dec_calculer_finance_mission` | Lit debut_le/fin_le pour calcul |
+| `dec_incrementer_heures_plateforme` | Lit duree_heures (seulement sur → TERMINEE) |
+| `dec_maj_compteurs_soignant` | Lit duree_heures |
+| `dec_mettre_a_jour_fiabilite` | Lit debut_le |
+| `dec_penalite_annulation_tardive` | Lit debut_le |
+| `dec_refuser_chevauchement_soignant` | Lit debut_le/fin_le (faux positifs multi-créneaux → CP5) |
+| `dec_refuser_mission_passee` | Lit debut_le |
+| `fn_trg_sms_annulation_tardive` | Lit debut_le |
+
+## Changement structurel irréversible — CP2
+
+**Date** : 2026-04-16
+**Action** : `ALTER TABLE missions ALTER COLUMN duree_heures DROP EXPRESSION IF EXISTS`
+**Raison** : `duree_heures` était `GENERATED ALWAYS AS (EXTRACT(epoch FROM (fin_le - debut_le)) / 3600.0)`. Cette expression calculait le span brut sans soustraire les pauses. Converti en colonne régulière pour permettre au trigger `fn_sync_mission_creneaux` de la maintenir avec la somme des créneaux non-pause.
+**Vérification** : les 268 missions existantes ont conservé leurs valeurs (0 NULL après conversion).
+**Source de vérité** : désormais `fn_sync_mission_creneaux()` (sync trigger) + `fn_calculer_financier_mission()` (fallback COALESCE si NULL).
+
 ## Triggers modifiés en CP2
 
 | Trigger | Modification | Raison |
 |---|---|---|
 | `dec_bloquer_modif_apres_acceptation` | Skip si `jolene.sync_in_progress = 'true'` | Permettre au sync de mettre à jour `debut_le`/`fin_le` sans être bloqué |
-
-## Triggers OK sans modification
-
-| Trigger | Raison |
-|---|---|
-| `trg_calculer_financier` | Recalcule correctement avec les nouvelles valeurs dénormalisées |
-| `dec_notifier_changement_mission` | Ne fire que sur changement de `statut` |
-| `fn_trg_auto_facture_honoraires` | Ne fire que sur `statut → TERMINEE` |
-| `fn_trg_email_mission_terminee` | Idem |
-| `fn_trg_sms_*` | Idem |
-| `dec_incrementer_heures_plateforme` | Idem |
-| Tous les triggers `{statut}` column-filtered | Le sync ne change pas `statut` |
+| `dec_proteger_mission_soignant` | Skip si `jolene.sync_in_progress = 'true'` | Empêcher le revert `NEW.x := OLD.x` sur les champs timing/financiers |
+| `fn_protect_mission_financials` | Skip si `jolene.sync_in_progress = 'true'` | Idem pour les soignants assignés |
