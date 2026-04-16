@@ -23,6 +23,7 @@ const VALID_REASON_PATTERNS = [
   /^cron_auto_generation$/,
   /^admin_replay_[0-9a-f-]{36}$/,
   /^ops_test_.+$/,
+  /^admin_invoke_[0-9a-f-]{36}:.+$/,
 ];
 
 function validateServiceRoleReason(reason: string | undefined): { valid: boolean; error?: string } {

@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.sync-chorus-status]
 verify_jwt = false
+
+[functions.admin-invoke]
+verify_jwt = true
