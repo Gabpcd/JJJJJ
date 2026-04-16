@@ -27,10 +27,31 @@
 ### Comment ajouter une fonction à l'allowlist
 
 1. Ouvrir `supabase/functions/admin-invoke/index.ts`
-2. Ajouter le nom dans `ALLOWED_FUNCTIONS`
+2. Ajouter le nom dans `ALLOWED_FUNCTIONS_PROD`
 3. Si sensible (flux argent, facture, données perso), ajouter aussi dans `SENSITIVE_FUNCTIONS`
 4. Créer une PR avec justification (pourquoi cette fonction doit être invocable par un admin)
 5. Valider que la fonction cible supporte le bypass service_role
+
+### Mode dev (A4)
+
+En mode `SUPABASE_ENV=dev`, des fonctions supplémentaires sont autorisées (ex: `seed-test-data`). Ces fonctions sont dans `ALLOWED_FUNCTIONS_DEV_EXTRA`. Ne jamais ajouter de fonctions sensibles dans cette liste — elles doivent être dans `ALLOWED_FUNCTIONS_PROD`.
+
+### Correlation (A3)
+
+Chaque invocation génère un `request_id` (UUID v4) propagé dans :
+- La colonne `request_id` de `admin_invocations`
+- Le header `X-Request-Id` passé à la fonction cible
+- L'email de notification Resend
+- Les logs console `[admin-invoke][request_id]`
+
+### internal_status (V7)
+
+| État | Signification |
+|---|---|
+| PENDING | Audit écrit, invocation pas encore lancée |
+| INVOKED | Fetch vers la cible en cours |
+| COMPLETED | Résultat reçu et écrit dans audit |
+| CRASHED | Monitoring : lignes PENDING/INVOKED > 5 min |
 
 ## Auth (3 couches)
 
