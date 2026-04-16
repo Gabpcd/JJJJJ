@@ -101,6 +101,40 @@ Ces triggers RAISE EXCEPTION sur timing invalide. Ils NE doivent PAS être bypas
 - Post-mortem complet : `/docs/postmortem-cp3.md`
 - Snapshots droppés après validation
 
+## CP5a — Gel financier + refonte 4 triggers : COMPLETED (2026-04-16)
+
+**Step 1 — Colonnes snapshot + trigger de gel + backfill :**
+- 2 colonnes `time` ajoutées sur `etablissements` (heure_debut_nuit, heure_fin_nuit)
+- 3 CHECK planchers ajoutés (nuit ≥25%, dimanche ≥25%, férié ≥50%)
+- 8 colonnes `_fige` + `fige_le` ajoutées sur `missions`
+- `fn_geler_mission_a_assignation` : GEL (OUVERTE→ASSIGNEE), DEGEL (→OUVERTE), PROTECTION (11 champs)
+- `trg_zz_geler_mission` : BEFORE UPDATE, position 25/25 (préfixe `zz_` = dernier)
+- Protecteurs mis à jour : `_fige` ajoutés aux listes de freeze (dec_proteger + fn_protect)
+- 266 missions backfillées (`fige_le = NULL` gel rétroactif), 2 OUVERTE laissées NULL
+- Audit : `journaux_audit` (Option Z) avec actions DEGEL_APPLIED + OVERRIDE_CHAMP_POST_GEL
+
+**Step 3 — Tests gel (7/7 PASS) :**
+- A. GEL normal, B. DEGEL + audit, C. Protection sans bypass, D. Protection avec bypass admin
+- E. Re-gel après désistement (Option C), F. Sync créneau transparent, G. 11 champs bloqués
+
+**Step 4 — Refonte 4 triggers span → créneaux :**
+
+| Trigger | Changement | Tests |
+|---|---|---|
+| `fn_trg_auto_heures_majorees` | Créneaux non-pause, night _fige configurable, TZ Europe/Paris, SECURITY DEFINER | 3 PASS (night, dimanche, pause) |
+| `dec_refuser_chevauchement_soignant` | Inchangé (D1 : span bloque) | N/A |
+| `dec_verifier_plafond_48h` | Créneaux non-pause, fix conformite_travail columns, fix RAISE format | 2 PASS (sanity + blocage 55h>48h) |
+| `dec_verifier_repos_11h` | MAX/MIN créneaux non-pause, fix RAISE format | 2 PASS (blocage 0.4h<11h, format) |
+
+**Bugs corrigés en passant :**
+- `journaux_audit` CHECK constraint : ajout DEGEL_APPLIED + OVERRIDE_CHAMP_POST_GEL
+- `type_acteur` : 'system'→'SYSTEME', 'admin'→'ADMIN_PLATEFORME'
+- `dec_alerte_mission_liberee` : `niveau_urgence := 'CRITIQUE'` → `3` (colonne integer)
+- `conformite_travail` columns : `type_violation`/`details` → `type_controle`/`resultat`/`details_violation`
+- RAISE format PL/pgSQL : `%.1f` → `ROUND(v, 1)` (3 fonctions)
+
+**Total : 14 tests, 14 PASS.**
+
 ## Triggers modifiés en CP2
 
 | Trigger | Modification | Raison |

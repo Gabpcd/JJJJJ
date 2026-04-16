@@ -169,3 +169,27 @@ Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
 **Priorité** : P3
 
 **Date** : 2026-04-16
+
+---
+
+## T5 — Phase 2 sync + JWT context pour heures majorées
+
+**Contexte** : La Phase 2 du sync trigger (`jolene.sync_in_progress = false`, UPDATE duree_heures) déclenche `fn_trg_auto_heures_majorees` qui recalcule les heures nuit/dimanche/férié. Mais `dec_proteger_mission_soignant` (#14) freeze ces champs si le caller n'est pas admin/etab (vérifie `est_admin()` via JWT). En prod OK (UI authenticated = etab/admin). En batch/migration sans JWT, les heures majorées ne se propagent pas.
+
+**Action** : Documenter dans `/docs/bulk-updates-playbook.md` : toute modification de créneaux en batch doit être précédée de `SELECT set_config('request.jwt.claims', '{"sub": "<admin_id>", "role": "authenticated"}', true)`.
+
+**Priorité** : P3
+
+**Date** : 2026-04-16
+
+---
+
+## T6 — Test plafond 48h avec heures externes déclarées
+
+**Contexte** : Le trigger `dec_verifier_plafond_48h` refondé en CP5a lit `attestations_heures_externes.heures_salarie` pour les heures travaillées hors Jolene. Actuellement 0 attestations en base → `v_heures_externes = 0` systématiquement. Le trigger est testé uniquement avec des heures Jolene (test 4c-blocage : 55h > 48h).
+
+**Action** : Quand Jolene intègre un import d'heures externes (API étab, déclaration soignant), ajouter un test avec `heures_salarie > 0` pour vérifier que le cumul Jolene + externes est correctement calculé.
+
+**Priorité** : P3
+
+**Date** : 2026-04-16
