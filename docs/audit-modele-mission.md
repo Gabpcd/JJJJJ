@@ -333,3 +333,129 @@ La table `shifts` (jour + heure_debut + heure_fin) aurait pu servir de système 
 - Le système de shifts est un module planning indépendant, pas un sous-système de la mission
 
 **Conclusion** : `shifts` n'est pas la bonne base pour les multi-créneaux. Il faut une table dédiée `mission_creneaux` (voir §5).
+
+---
+
+## 4. Contraintes légales — Pauses et déclaration horaire
+
+### 4.1 Code du travail — Temps de pause obligatoire
+
+**Article L.3121-16** : Au-delà de 6h de travail effectif continu, le salarié bénéficie d'un temps de pause d'au moins 20 minutes. Pour les intérimaires, cette obligation s'applique via l'article L.1251-21 (conditions de travail identiques aux salariés de l'entreprise utilisatrice).
+
+**Conséquence pour Jolene** : toute mission de 6h+ sans pause déclarée est juridiquement suspecte. Or, 97.7% des missions en prod font > 6h (avg 9.4h). Le modèle actuel ne permet pas de déclarer les pauses — donc **aucune mission ne déclare de pause**, même celles qui en ont une dans la réalité.
+
+### 4.2 Convention collective et spécificités santé
+
+Les conventions collectives hospitalières (FHP, FEHAP, Croix-Rouge, fonction publique hospitalière) imposent des temps de pause spécifiques :
+- **Jour** : 20 min minimum après 6h, souvent 30 min–1h en pratique (pause déjeuner)
+- **Nuit** : 20 min minimum, souvent intégrée au poste (pas toujours déductible)
+- **12h (garde)** : 2 × 20 min minimum, souvent 1h cumulée
+
+La distinction pause déductible / non déductible dépend de la convention de l'établissement. Certaines pauses (repas sur place, astreinte passive) sont considérées comme du temps de travail effectif.
+
+### 4.3 Factur-X et Chorus Pro
+
+**Factur-X (EN16931)** : La facture doit indiquer la quantité et l'unité (heures) de la prestation. Si la facture indique 12h mais que la réalité est 10h + 2h pause, c'est une **fausse déclaration** susceptible de requalification en fraude fiscale (article 1741 CGI).
+
+**Chorus Pro** : Pour les établissements publics (EHPAD publics, CH, CHU), la facture soumise à Chorus Pro est un document comptable officiel. L'écart entre heures déclarées et heures effectives peut entraîner un rejet au contrôle de la Cour des comptes.
+
+### 4.4 Impact sur la facture d'honoraires (soignant libéral)
+
+Le soignant libéral émet une facture d'honoraires basée sur `net_a_payer`. Si ce montant est gonflé par des heures de pause incluses :
+- Le soignant déclare un CA supérieur à la réalité → charges sociales URSSAF majorées
+- L'établissement paie plus que le service rendu → litige potentiel
+- Jolene touche une commission sur un montant erroné
+
+### 4.5 Recommandation
+
+Le modèle cible DOIT permettre :
+1. **Déclarer les créneaux effectifs** (ex: 7h–12h + 14h–19h) → la pause de 12h–14h est implicite
+2. **Calculer `duree_heures` comme la somme des créneaux** (10h, pas 12h)
+3. **Optionnellement** : distinguer pause déductible vs non déductible (pour les gardes de nuit)
+
+La solution la plus simple et la plus conforme est le **multi-créneaux par mission** : la somme des `(fin − debut)` de chaque créneau donne le temps de travail effectif.
+
+---
+
+## 5. Proposition de modèle cible — `mission_creneaux`
+
+### 5.1 Nouvelle table `mission_creneaux`
+
+```sql
+CREATE TABLE public.mission_creneaux (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  mission_id  uuid NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
+  debut       timestamptz NOT NULL,
+  fin         timestamptz NOT NULL,
+  est_pause   boolean NOT NULL DEFAULT false,
+  -- est_pause = true → créneau de pause comptée (garde de nuit)
+  -- est_pause = false → créneau de travail effectif
+  ordre       smallint NOT NULL DEFAULT 1,
+  cree_le     timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT ck_creneau_coherent CHECK (fin > debut),
+  CONSTRAINT ck_creneau_max_24h CHECK (EXTRACT(EPOCH FROM (fin - debut)) <= 86400),
+  UNIQUE (mission_id, ordre)
+);
+
+CREATE INDEX idx_mc_mission ON mission_creneaux(mission_id);
+```
+
+### 5.2 Invariants
+
+- **Au moins 1 créneau** par mission (enforced par trigger ou RPC, pas par CHECK)
+- Les créneaux d'une même mission ne se chevauchent pas
+- `missions.debut_le` = `MIN(debut)` des créneaux, `missions.fin_le` = `MAX(fin)` des créneaux (dénormalisé pour compatibilité)
+- `missions.duree_heures` = somme des `(fin − debut)` des créneaux WHERE `est_pause = false`
+
+### 5.3 Modification du trigger financier
+
+Le trigger `fn_calculer_financier_mission` change à l'étape 1 :
+
+```sql
+-- AVANT (actuel)
+v_duree := COALESCE(NEW.duree_heures,
+  EXTRACT(EPOCH FROM (NEW.fin_le - NEW.debut_le)) / 3600.0);
+
+-- APRÈS (multi-créneaux)
+SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (fin - debut)) / 3600.0), 0)
+INTO v_duree
+FROM mission_creneaux
+WHERE mission_id = NEW.id AND est_pause = false;
+-- Fallback si 0 créneaux (migration en cours) :
+IF v_duree = 0 THEN
+  v_duree := EXTRACT(EPOCH FROM (NEW.fin_le - NEW.debut_le)) / 3600.0;
+END IF;
+NEW.duree_heures := v_duree;
+```
+
+Le reste du trigger (RIST, majorations, IFM, ICP, commission) ne change pas — tout dépend de `v_duree`.
+
+### 5.4 Colonnes conservées sur `missions` (rétrocompatibilité)
+
+| Colonne | Comportement |
+|---|---|
+| `debut_le` | Dénormalisé = `MIN(mc.debut)` — mis à jour par trigger sur `mission_creneaux` |
+| `fin_le` | Dénormalisé = `MAX(mc.fin)` — mis à jour par trigger sur `mission_creneaux` |
+| `duree_heures` | Recalculé = somme créneaux effectifs |
+
+Ces colonnes restent pour que les 73 fichiers frontend qui lisent `debut_le`/`fin_le`/`duree_heures` **continuent de fonctionner sans modification**. Seuls les fichiers d'écriture (FormulaireMission) et d'affichage détaillé (DetailMission) doivent être adaptés.
+
+### 5.5 Création simplifiée (mission mono-créneau)
+
+Pour la majorité des missions (un seul créneau), le workflow reste identique :
+1. L'établissement saisit debut + fin dans le formulaire
+2. La RPC `fn_creer_mission` crée la mission + 1 row dans `mission_creneaux`
+3. Le trigger de sync met à jour `missions.debut_le`/`fin_le`/`duree_heures`
+
+Pour les missions multi-créneaux :
+1. L'établissement saisit N créneaux dans un formulaire étendu
+2. La RPC crée la mission + N rows dans `mission_creneaux`
+3. Les pauses sont implicites (gaps entre créneaux)
+
+### 5.6 `serie_id` — Nettoyage
+
+Recommandation : **conserver `serie_id`** mais le rendre fonctionnel :
+- `fn_creer_serie` doit écrire le `serie_id` en DB (pas seulement dans `description`)
+- Supprimer le pattern `[SERIE_ID:...]` dans `description`
+- Ajouter un index `idx_missions_serie ON missions(serie_id) WHERE serie_id IS NOT NULL`
