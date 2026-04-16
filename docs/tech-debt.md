@@ -117,3 +117,31 @@ Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
 **Priorité** : P1 — à traiter avant lancement public (CP6 ou post-CP6)
 
 **Date** : 2026-04-16
+
+---
+
+## T1 — Validation juridique planchers CCN pré-lancement
+
+**Contexte** : CP5a retient des planchers prudents (nuit >= 25%, dimanche >= 25%, férié >= 50%) calibrés au-dessus des minima CCN FHP n°2264 art. 82.1/82.2, sans validation juridique formelle. Le calibrage couvre a priori FHP, FEHAP, CCU, Croix-Rouge, FPH, mais n'a pas été confirmé par un avocat spécialisé santé.
+
+**Action** : Consultation avocat santé (budget estimé 1500–2500€, ~2h) avec brief préparé :
+1. Les planchers 25/25/50 couvrent-ils toutes les CCN santé visées (FHP, FEHAP, CCU, CRF, FPH) ?
+2. Si une convention exige plus, de combien ? Faut-il un plancher par CCN ?
+3. Quelles mentions obligatoires sur la facture honoraires soignant (mandat art. 289 I-2 CGI) ?
+4. Quel risque de requalification URSSAF salarié déguisé dans le modèle Jolene ?
+
+**Priorité** : P1 — bloquant go-live public
+
+**Date** : 2026-04-16
+
+---
+
+## T2 — Automatiser détection divergence backfill
+
+**Contexte** : La vérification pré-backfill CP5a (section 1.4) liste les taux pour inspection manuelle. Suffisant pour ~10 missions organiques actuelles.
+
+**Action** : Pour volumes supérieurs (>100 missions organiques), automatiser le calcul `total_brut` recalculable à partir des taux backfillés vs `total_brut` stocké. Script SQL ou edge function qui compare et alerte si écart > 0.01€.
+
+**Priorité** : P3 — avant 1000 missions en base
+
+**Date** : 2026-04-16

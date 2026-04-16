@@ -20,9 +20,9 @@ Deux colonnes pour les bornes horaires de nuit configurables (D4). Les taux de m
 
 | Colonne existante | Default actuel | CHECK à ajouter | Justification légale |
 |---|---|---|---|
-| `taux_majoration_nuit_pourcent` | 25.00 | `>= 10` | Art. L3122-8 : minimum 10% pour travail de nuit habituel |
-| `taux_majoration_dimanche_pourcent` | 50.00 | `>= 20` | CCN FHP (2264, art. 82.1) : 20% min. Toutes les CCN santé (FEHAP, CCU, Croix-Rouge, FPH) imposent >= 20%. |
-| `taux_majoration_ferie_pourcent` | 100.00 | `>= 50` | CCN FHP (2264, art. 82.2) : 50% min pour jours fériés hors 1er mai. Art. L3133-6 : 100% pour le 1er mai. Plancher 50% couvre toutes les CCN santé. |
+| `taux_majoration_nuit_pourcent` | 25.00 | `>= 25` | Plancher prudent au-dessus des minima CCN FHP n°2264 art. 82.1/82.2 pour couvrir FEHAP, CCU, Croix-Rouge, FPH. Ticket tech-debt T1 : validation avocat santé pré-lancement. |
+| `taux_majoration_dimanche_pourcent` | 50.00 | `>= 25` | Idem — plancher prudent. CCN FHP art. 82.1 impose 20% min, relevé à 25% par précaution. |
+| `taux_majoration_ferie_pourcent` | 100.00 | `>= 50` | CCN FHP art. 82.2 : 50% min hors 1er mai. Art. L3133-6 : 100% pour le 1er mai. Ticket tech-debt T1. |
 
 **Pas de colonne ajoutée pour les taux de majoration eux-mêmes** — ils existent déjà :
 - `taux_majoration_nuit_pourcent` (default 25)
@@ -55,14 +55,53 @@ Tant que `_fige IS NULL`, les triggers utilisent les valeurs live de l'établiss
 ### 1.2b Cycle de vie `taux_commission` et `taux_horaire_base` vs `*_fige`
 
 **`taux_horaire_base`** (colonne existante sur `missions`) :
-- Reste la colonne éditable. Renseignée par l'étab à la création de la mission. Protégée par `dec_proteger_mission_soignant` après la création.
-- `taux_horaire_base_fige` : snapshot de `taux_horaire_base` au moment de la transition OUVERTE → ASSIGNEE. En pratique, les deux valeurs seront toujours identiques (la colonne est protégée après création). Le `_fige` sert de verrou supplémentaire : même si un admin modifie `taux_horaire_base` post-assignation, les calculs financiers utilisent la valeur figée.
+- Éditable uniquement tant que `fige_le IS NULL` (mission OUVERTE). Renseignée par l'étab à la création de la mission.
+- `taux_horaire_base_fige` : snapshot de `taux_horaire_base` au moment de la transition OUVERTE → ASSIGNEE.
+- **Après gel (`fige_le IS NOT NULL`) : `taux_horaire_base` est immutable.** Toute tentative de modification est bloquée par le trigger de gel (Partie 2). Exception : bypass admin tracé via session vars `jolene.admin_override_gel` + `jolene.admin_override_reason` avec audit dans `invoice_audit_log`.
 - **Pas de deprecation** de `taux_horaire_base`. Elle reste utilisée en affichage, dans les RPCs, dans le frontend. `_fige` est interne aux triggers financiers.
+
+**Règle d'immutabilité post-gel** (implémentée dans le trigger de gel, Partie 2) :
+```sql
+-- Bloque toute modification de taux_horaire_base après gel
+IF NEW.taux_horaire_base IS DISTINCT FROM OLD.taux_horaire_base
+   AND OLD.fige_le IS NOT NULL THEN
+  -- Bypass admin tracé
+  IF current_setting('jolene.admin_override_gel', true) = NEW.id::text
+     AND COALESCE(current_setting('jolene.admin_override_reason', true), '') != '' THEN
+    INSERT INTO invoice_audit_log (invoice_id, action, performed_by, payload_before)
+    SELECT fh.id, 'TAUX_HORAIRE_MODIFIED_POST_GEL', auth.uid(),
+      jsonb_build_object(
+        'reason', current_setting('jolene.admin_override_reason', true),
+        'mission_id', NEW.id,
+        'old_taux', OLD.taux_horaire_base,
+        'new_taux', NEW.taux_horaire_base
+      )
+    FROM factures_honoraires fh
+    WHERE fh.mission_id = NEW.id AND fh.statut NOT IN ('BROUILLON', 'ANNULEE')
+    LIMIT 1;
+    -- Si pas de facture, log dans une table d'audit directe
+    IF NOT FOUND THEN
+      INSERT INTO invoice_audit_log (action, performed_by, payload_before)
+      VALUES ('TAUX_HORAIRE_MODIFIED_POST_GEL', auth.uid(),
+        jsonb_build_object(
+          'reason', current_setting('jolene.admin_override_reason', true),
+          'mission_id', NEW.id,
+          'old_taux', OLD.taux_horaire_base,
+          'new_taux', NEW.taux_horaire_base
+        ));
+    END IF;
+  ELSE
+    RAISE EXCEPTION 'Modification de taux_horaire_base interdite après gel (fige_le=%). Pour corriger : annuler la mission et en créer une nouvelle, ou utiliser le bypass admin tracé (jolene.admin_override_gel + jolene.admin_override_reason).',
+      OLD.fige_le USING ERRCODE = 'check_violation';
+  END IF;
+END IF;
+```
 
 **`taux_commission`** (colonne existante sur `missions`, default 15) :
 - Initialisée par `fn_calculer_financier_mission` depuis `etablissements.taux_commission_negocie`.
-- `taux_commission_fige` : snapshot de `taux_commission` au gel. Après gel, c'est `_fige` qui est lu par le calculateur financier.
+- `taux_commission_fige` : snapshot au gel via `COALESCE(missions.taux_commission, etab.taux_commission_negocie, 15)`. Après gel, c'est `_fige` qui est lu par le calculateur financier.
 - **Pas de deprecation** de `taux_commission`. Elle continue d'exister comme valeur "live" et reste utile pour l'affichage et les RPCs.
+- **État actuel en base** (vérifié 2026-04-16) : 0 missions avec `taux_commission IS NULL`, 133 à 15%, 135 à un taux différent. Le COALESCE dans le backfill ne changera rien en pratique, mais reste en sécurité pour les futurs INSERT sans trigger.
 
 **Lecture par `fn_calculer_financier_mission` :**
 
@@ -71,7 +110,7 @@ Tant que `_fige IS NULL`, les triggers utilisent les valeurs live de l'établiss
 | OUVERTE (`_fige IS NULL`) | `missions.taux_horaire_base` | `etablissements.taux_majoration_*_pourcent` | `COALESCE(missions.taux_commission, etab.taux_commission_negocie, 15)` |
 | ASSIGNEE+ (`_fige NOT NULL`) | `missions.taux_horaire_base_fige` | `missions.taux_majoration_*_fige` | `missions.taux_commission_fige` |
 
-**Backfill des 268 missions existantes** : oui, `taux_commission_fige` est backfillé depuis `missions.taux_commission` (pas depuis l'étab) pour les missions non-OUVERTE. Même logique pour `taux_horaire_base_fige` depuis `missions.taux_horaire_base`.
+**Backfill des 268 missions existantes** : `taux_commission_fige` est backfillé via `COALESCE(missions.taux_commission, etab.taux_commission_negocie, 15)` — cascade identique à la lecture OUVERTE pour cohérence. `taux_horaire_base_fige` depuis `missions.taux_horaire_base` (pas de COALESCE nécessaire, colonne NOT NULL).
 
 ### 1.3 Impact sur les protecteurs existants
 
@@ -157,11 +196,13 @@ ALTER TABLE public.etablissements
   ADD CONSTRAINT chk_heure_fin_nuit CHECK (heure_fin_nuit BETWEEN '04:00' AND '08:00');
 
 -- ── etablissements : planchers légaux sur taux existants ──
--- Réf : CCN FHP n°2264 (hospitalisation privée), art. 82.1 et 82.2
--- Couvre aussi FEHAP, CCU, Croix-Rouge, FPH (planchers >= à ceux de la FHP)
+-- Planchers calibrés au-dessus des minima CCN FHP n°2264 art. 82.1/82.2
+-- pour couvrir également FEHAP, CCU, Croix-Rouge, FPH sans validation
+-- juridique formelle à ce stade. Ticket tech-debt T1 : validation
+-- avocat santé avant lancement public.
 ALTER TABLE public.etablissements
-  ADD CONSTRAINT chk_taux_maj_nuit_min CHECK (taux_majoration_nuit_pourcent >= 10),   -- Art. L3122-8
-  ADD CONSTRAINT chk_taux_maj_dim_min CHECK (taux_majoration_dimanche_pourcent >= 20), -- CCN FHP art. 82.1
+  ADD CONSTRAINT chk_taux_maj_nuit_min CHECK (taux_majoration_nuit_pourcent >= 25),   -- Prudent > CCN FHP
+  ADD CONSTRAINT chk_taux_maj_dim_min CHECK (taux_majoration_dimanche_pourcent >= 25), -- Prudent > CCN FHP art. 82.1 (20%)
   ADD CONSTRAINT chk_taux_maj_fer_min CHECK (taux_majoration_ferie_pourcent >= 50);    -- CCN FHP art. 82.2
 
 -- ── missions : colonnes snapshot ──
