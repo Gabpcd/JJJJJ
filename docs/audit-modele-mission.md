@@ -192,3 +192,80 @@ Logique séquentielle :
 - `trg_rappel_evaluation` → `dec_rappel_evaluation()`
 - `trg_sms_annulation_tardive` → `fn_trg_sms_annulation_tardive()`
 - `trg_sms_mission_urgente` → `fn_trg_sms_mission_urgente()`
+
+---
+
+## 2. Cartographie des usages
+
+### 2.1 Edge Functions (Supabase)
+
+| Fonction | Accès missions | Champs timing | Champs financiers | Usage |
+|---|---|---|---|---|
+| `generate-invoice` | READ | `debut_le`, `fin_le`, `duree_heures` | `net_a_payer`, `total_brut`, `montant_commission_ht` | Génération PDF/XML facture honoraires |
+| `stripe-connect-pay-mission` | READ | — | `montant_commission_ttc`, `net_a_payer` | Stripe Checkout (commission + honoraires) |
+| `create-mission-payment` | READ | — | `montant_commission_ttc` | Stripe PaymentIntent commission |
+| `stripe-webhook` | WRITE | — | Écrit `commission_facturee`, `mode_paiement_soignant` | Callback post-paiement |
+| `calendar-feed` | READ | `debut_le`, `fin_le` | `taux_horaire_base` | Génération iCal (.ics) |
+| `calendar-sync` | READ | `debut_le`, `fin_le` | `taux_horaire_base` | Sync calendrier externe |
+| `api-v1` | READ+WRITE | `debut_le`, `fin_le` | `taux_horaire_base` | API REST partenaires |
+| `factor-request-advance` | READ | — | — | Lit `intitule` uniquement |
+| `send-email` | READ (count) | — | — | Vérification d'autorisation |
+| `email-cron` | Indirect (RPC) | `heure_debut` via RPC | — | Rappels J-1 |
+
+**Impact refonte** : `generate-invoice` est le plus critique — il construit la description de la ligne facture à partir de `debut_le`/`fin_le`/`duree_heures`. Avec multi-créneaux, cette description devra itérer sur N créneaux.
+
+### 2.2 Frontend — Fichiers WRITE (création/modification de missions)
+
+| Fichier | Mode | Champs écrits |
+|---|---|---|
+| `components/FormulaireMission.tsx` | WRITE (RPC `fn_creer_mission`) | `debut_le`, `fin_le`, `taux_horaire_base` |
+| `components/FormulaireRecurrence.tsx` | WRITE (génère `CreneauFlex[]` → 1 mission par créneau) | `debut`/`fin` par créneau → `debut_le`/`fin_le` |
+| `pages/ModifierMission.tsx` | WRITE (RPC `fn_modifier_mission_etablissement`) | `intitule`, `description`, `service` uniquement (timing NON modifiable) |
+
+**Note** : en mode récurrence, `FormulaireRecurrence` génère un tableau de `CreneauFlex` (debut, fin, dureeHeures) — mais chaque créneau crée **une mission distincte**. Il n'y a pas de multi-créneaux au sein d'une même mission.
+
+### 2.3 Frontend — Fichiers READ (73 fichiers touchent les champs timing/financiers)
+
+**Pages avec décomposition financière complète** (lisent tous les champs financiers) :
+- `pages/DetailMission.tsx` — Vue étab, tous champs + majorations
+- `pages/DetailMissionSoignant.tsx` — Vue soignant, tous champs + IFM/ICP
+- `pages/DetailPresencesMission.tsx` — Fiche présence détaillée
+- `pages/ExportPaie.tsx` — Export CSV paie (Standard/Silae/Sage)
+
+**Pages avec résumé financier** (net_a_payer, total_brut, taux_horaire) :
+- `pages/MesGains.tsx`, `pages/HistoriqueMissions.tsx`, `pages/AttestationHeures.tsx`
+- `pages/ChargesSociales.tsx`, `pages/ContratMission.tsx`
+- `pages/ListeMissions.tsx`, `pages/MissionsSoignant.tsx`, `pages/RechercheMissions.tsx`
+- `pages/MesFacturesHonoraires.tsx`, `pages/FacturationEtablissement.tsx`
+- `pages/DashboardEtablissement.tsx`, `pages/ObligationsFinancieres.tsx`
+- `components/BandeauPaiementDeclare.tsx`, `components/DecompositionFinanciere.tsx`
+
+**Pages timing uniquement** (debut_le, fin_le, duree_heures) :
+- `pages/PresencesSoignant.tsx`, `pages/PresencesEtablissement.tsx`
+- `pages/Parcours3200h.tsx`, `pages/PoolUrgenceEtablissement.tsx`
+- `pages/LitigesEtablissement.tsx`, `pages/LitigesSoignant.tsx`
+- `components/CalendrierMensuel.tsx`, `components/PlanningHebdomadaire.tsx`
+- `components/CompteurHebdomadaire.tsx`, `components/BlocConformite.tsx`
+
+**Pages admin** :
+- `admin/AdminMissions.tsx` — `debut_le`, `fin_le`, `duree_heures`, `taux_horaire_base`, `net_estime`
+- `admin/AdminFinances.tsx` — `total_brut`, `montant_commission_ht/ttc`
+- `admin/AdminFacturation.tsx`, `admin/AdminImpayees.tsx` — Tous champs financiers
+- `admin/AdminDashboard.tsx` — `montant_commission_ht/tva`, `commission_facturee`
+- `admin/AdminCalendrier.tsx` — `debut_le`, `fin_le`
+- `admin/AdminDetailUtilisateur.tsx` — `debut_le`, `fin_le`, `taux_horaire_base`, `duree_heures`, `net_a_payer`
+- `admin/AdminGroupes.tsx` — `montant_commission_ht/ttc`
+
+### 2.4 RPCs et fonctions DB touchant le timing
+
+| RPC | Champs timing | Usage |
+|---|---|---|
+| `fn_creer_mission` | `p_debut_le`, `p_fin_le` | Création mission unique |
+| `fn_creer_serie` | Array de `{debut, fin}` | Création série (1 mission par créneau) |
+| `fn_modifier_mission_etablissement` | — (timing non modifiable) | Modification post-création |
+| `fn_calculer_financier_mission` | `debut_le`, `fin_le` → `duree_heures` | Trigger calcul |
+| `dec_refuser_chevauchement_soignant` | `debut_le`, `fin_le` | Validation anti-chevauchement |
+| `dec_verifier_plafond_48h` | `debut_le`, `fin_le`, `duree_heures` | Plafond hebdo 48h |
+| `dec_verifier_repos_11h` | `debut_le`, `fin_le` | Repos inter-mission 11h |
+| `fn_trg_auto_heures_majorees` | `debut_le`, `fin_le` | Auto-détection heures nuit/dimanche/férié |
+| `fn_email_rappels_j1` | `debut_le` → `heure_debut` | Email rappel J-1 |
