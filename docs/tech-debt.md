@@ -227,3 +227,21 @@ Attention : ne PAS toucher les missions facturées (trigger `trg_protect_creneau
 **Priorité** : P3 — Les 265 missions test seront purgées en CP6. Recalcul batch uniquement nécessaire si des missions test sont conservées post-purge.
 
 **Date** : 2026-04-16
+
+---
+
+## Sub-PR 2bis — Gestion admin des taux commission
+
+**Contexte** : Le taux commission est aujourd'hui fixé par `etablissements.taux_commission_negocie` (défaut 15%). Aucune gestion multi-étabs/groupe ni UI admin de modification. Bloquant avant acceptation de clients multi-établissements sous contrat-cadre.
+
+**Scope** :
+- Table `groupes_etablissements` (nom, siret, taux_commission_negocie, contrat_debut, contrat_fin)
+- Colonne `etablissements.groupe_id` (FK nullable)
+- Règle cascade : `missions.taux_commission_fige` au gel = `COALESCE(etab.taux_commission_negocie, groupe.taux_commission_negocie, 15)`
+- UI admin dans dashboard : liste étabs/groupes, modification taux avec raison, audit log
+- Audit des changements de taux dans `journaux_audit`
+- Application : nouveaux taux impactent seulement les futures missions (gel existant préservé)
+
+**Priorité** : P1 — à faire avant acceptation de clients multi-étabs
+
+**Date** : 2026-04-16
