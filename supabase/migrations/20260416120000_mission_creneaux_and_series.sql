@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS public.mission_series (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   etablissement_id    uuid NOT NULL REFERENCES public.etablissements(id),
-  cree_par            uuid NOT NULL DEFAULT auth.uid(),
+  cree_par            uuid DEFAULT auth.uid(),  -- nullable: service_role inserts have no auth.uid()
   motif               text,
   nb_missions_prevues integer NOT NULL DEFAULT 1,
   cree_le             timestamptz NOT NULL DEFAULT now(),
@@ -100,37 +100,13 @@ COMMENT ON TABLE public.mission_creneaux IS
 CREATE INDEX IF NOT EXISTS idx_mc_mission ON public.mission_creneaux(mission_id);
 
 -- ──────────────────────────────────────────────────────────────
--- 4. Trigger: max 6 créneaux par mission
+-- 4. Max 6 créneaux: denormalized column + CHECK on missions
 -- ──────────────────────────────────────────────────────────────
--- CHECK constraints can't reference other rows, so we use a trigger.
-CREATE OR REPLACE FUNCTION public.fn_limit_creneaux_per_mission()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-DECLARE
-  v_count integer;
-BEGIN
-  SELECT COUNT(*) INTO v_count
-  FROM mission_creneaux
-  WHERE mission_id = NEW.mission_id;
-
-  -- On INSERT, current row isn't counted yet by the SELECT above
-  -- (BEFORE trigger), so the limit check is count >= 6
-  IF v_count >= 6 THEN
-    RAISE EXCEPTION 'Maximum 6 créneaux par mission (actuellement %)', v_count
-      USING ERRCODE = 'check_violation';
-  END IF;
-
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER trg_limit_creneaux
-  BEFORE INSERT ON public.mission_creneaux
-  FOR EACH ROW
-  EXECUTE FUNCTION public.fn_limit_creneaux_per_mission();
+-- Using a denormalized column instead of a trigger to avoid race conditions.
+-- nb_creneaux is maintained by the sync trigger (see CP2 migration).
+ALTER TABLE public.missions
+  ADD COLUMN IF NOT EXISTS nb_creneaux smallint NOT NULL DEFAULT 0
+  CONSTRAINT ck_max_6_creneaux CHECK (nb_creneaux >= 0 AND nb_creneaux <= 6);
 
 -- ──────────────────────────────────────────────────────────────
 -- 5. Trigger: no overlapping créneaux within same mission
