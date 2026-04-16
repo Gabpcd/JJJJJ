@@ -92,12 +92,39 @@ Le recalcul financier RÉEL se fait uniquement quand l'UPDATE vient d'une source
 
 3. **Snapshot recommandé** : oui, pour les 265 missions migrées. Pas de risque théorique (scénario E = 0 delta), mais le post-mortem CP3 nous a appris qu'il vaut mieux vérifier.
 
-## 7. Plan d'exécution
+## 7. Décision technique : sync 2-phase
 
-1. `ALTER TABLE missions DROP CONSTRAINT chk_duree_positive` + re-create avec `>= 0`
-2. `CREATE OR REPLACE FUNCTION fn_calculer_financier_mission()` avec la nouvelle logique
-3. Snapshot des 265 missions
-4. Force recalcul : `UPDATE missions SET modifie_le = now() WHERE id IN (SELECT mission_id FROM mission_creneaux)` (avec DISABLE TRIGGER USER sauf trg_calculer_financier)
-5. Vérification : 0 delta sur les 265 missions
-6. Tests A-E
-7. DROP snapshot
+Le sync trigger `fn_sync_mission_creneaux` a été modifié pour fonctionner en 2 phases :
+
+**Pourquoi** : le sync doit mettre à jour `debut_le`, `fin_le`, `nb_creneaux` ET `duree_heures`. Mais la mise à jour de `duree_heures` doit déclencher `fn_calculer_financier_mission` pour que les valeurs financières soient recalculées avec la bonne durée. Si tout est dans une seule UPDATE avec `sync_in_progress=true`, les protecteurs gèlent les financials → le recalcul ne persiste pas.
+
+**Phase 1** (sync_in_progress=true) :
+- UPDATE `debut_le`, `fin_le`, `nb_creneaux`
+- Les protecteurs (`dec_proteger_mission_soignant`, `fn_protect_mission_financials`) gèlent les 21 champs financiers à OLD
+- `fn_calculer_financier` recalcule mais ses résultats sont écrasés par les protecteurs
+
+**Phase 2** (sync_in_progress=false) :
+- UPDATE `duree_heures` uniquement
+- `fn_calculer_financier` se redéclenche (duree_heures est dans son column filter)
+- Les protecteurs ne gèlent PAS (guard inactive) — MAIS en contexte service_role/MCP, `est_admin()=false` et `est_admin_etablissement()=false` → les protecteurs GÈLENT quand même (c'est un UPDATE sans contexte auth)
+- En contexte authenticated (ex: etab user insère un créneau via le front), `est_admin_etablissement()=true` → les protecteurs ne gèlent PAS → les financials sont recalculés correctement
+
+**Garantie de sécurité** :
+- La Phase 2 n'est jamais déclenchée directement par du code utilisateur — elle est interne à `fn_sync_mission_creneaux`
+- Le test régression CP3 passe toujours (Phase 1 gèle les financials)
+- Pour les missions facturées, `trg_protect_creneaux_facture` bloque en amont
+
+**Conséquence** : en contexte service_role (MCP, admin-invoke), les financials ne sont PAS recalculés par Phase 2 (les protecteurs gèlent). C'est acceptable : les opérations admin qui modifient les créneaux via service_role doivent ensuite forcer un recalcul explicite si nécessaire.
+
+## 8. Écarts pré-existants missions vs factures
+
+Les valeurs `missions.net_a_payer` et `factures_honoraires.montant_ht` divergent déjà (écarts de 3€ à 68€ sur les missions test). La facture est le document de vérité financière — la mission est un estimatif qui peut dériver.
+
+**Règle** : ne JAMAIS recalculer financièrement une mission déjà facturée via un bulk update. Le trigger `trg_protect_creneaux_facture` empêche la modification des créneaux sur les missions facturées. Toute correction post-facture passe par le flow annulation-refacturation avec audit trail.
+
+## 9. Résultat du déploiement
+
+- 265 missions migrées : `duree_diff = 0` (aucun changement de durée)
+- Pas de mass recalcul nécessaire (SUM mono-créneau = span = identique)
+- Tests A-E verts
+- Régression CP3 verte

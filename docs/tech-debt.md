@@ -65,6 +65,37 @@ WHERE mission_id = NEW.id AND NOT est_pause;
 ```
 Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
 
-**Priorité** : CP4 — Sub-PR 1
+**Priorité** : CP4 — Sub-PR 1 — **RÉSOLU** (migration `20260416160000`)
+
+**Date** : 2026-04-16
+
+---
+
+## CP5 — fn_trg_auto_heures_majorees utilise le span au lieu des créneaux
+
+**Fichier** : trigger `fn_trg_auto_heures_majorees` (fires on UPDATE OF debut_le, fin_le)
+
+**Contexte** : Le trigger auto-détecte les heures nuit/dimanche/férié à partir du span `debut_le`/`fin_le` (colonnes dénormalisées). Avec le multi-créneaux, le span inclut les pauses. Résultat : des heures de nuit sont détectées même pour des missions all-pauses.
+
+**Bug vérifié** : test C (CP4) — mission all-pauses (7h-12h + 14h-19h, les deux en pause) → `heures_nuit = 1`, `montant_majoration_nuit = 6.25€`, `total_brut = 6.25€` au lieu de 0€. Le résidu 6.25€ = 1h nuit × 25€/h × 25% majoration. Source unique : `fn_trg_auto_heures_majorees`.
+
+**Action** : Modifier `fn_trg_auto_heures_majorees` pour itérer sur `mission_creneaux WHERE NOT est_pause` et calculer les majorations par créneau effectif. À corriger en même temps que les 3 autres triggers documentés dans `/docs/triggers-migration-checklist.md` :
+- `dec_refuser_chevauchement_soignant` (faux positifs multi-créneaux)
+- `dec_verifier_plafond_48h` (surestimation)
+- `dec_verifier_repos_11h` (repos calculé sur span pas sur dernier créneau effectif)
+
+**Priorité** : CP5 — Sub-PR 1
+
+**Date** : 2026-04-16
+
+---
+
+## Recalcul post-facturation peut créer des écarts
+
+**Contexte** : Les valeurs `missions.net_a_payer` et `factures_honoraires.montant_ht` divergent déjà (écarts de 3€ à 68€ sur les données test). La facture est calculée au moment de la génération par `generate-invoice` et est ensuite immutable. Les missions peuvent être recalculées ultérieurement par les triggers.
+
+**Règle** : ne JAMAIS recalculer financièrement une mission déjà facturée via un bulk update ou un sync de créneau. Le trigger `trg_protect_creneaux_facture` empêche la modification des créneaux sur les missions facturées. Toute correction post-facture passe par le flow annulation → correction → refacturation avec audit trail (session vars `jolene.admin_correction_mission_id` + `jolene.admin_correction_reason`).
+
+**Priorité** : Documentation — pas d'action code
 
 **Date** : 2026-04-16
