@@ -269,3 +269,67 @@ Logique séquentielle :
 | `dec_verifier_repos_11h` | `debut_le`, `fin_le` | Repos inter-mission 11h |
 | `fn_trg_auto_heures_majorees` | `debut_le`, `fin_le` | Auto-détection heures nuit/dimanche/férié |
 | `fn_email_rappels_j1` | `debut_le` → `heure_debut` | Email rappel J-1 |
+
+---
+
+## 3. Bug B — `serie_id` et missions récurrentes
+
+### 3.1 État de `serie_id`
+
+La colonne `serie_id` (uuid, nullable) existe sur la table `missions` en prod. **Aucune des 268 missions n'a un `serie_id` non NULL** (0 sur 268).
+
+Historique :
+- La colonne semble provenir du schéma initial Lovable
+- Un trigger `dec_limite_serie` a été créé puis **droppé** dans la migration `20260316215405` avec le commentaire "Fix broken trigger referencing non-existent serie_id column" — incohérence historique
+- La RPC `fn_annuler_serie` existe dans les types TS mais aucune migration SQL ne la définit
+- `fn_creer_mission` a un paramètre `p_serie_id` dans la signature TS, mais **le corps SQL ne l'utilise pas**
+
+### 3.2 Comment les séries fonctionnent aujourd'hui
+
+Le mécanisme actuel de séries est **100% client-side** :
+
+1. `FormulaireRecurrence.tsx` génère un tableau de `CreneauFlex[]` (un par jour)
+2. `FormulaireMission.tsx` injecte un tag `[SERIE_ID:SERIE_${Date.now()}_${random}]` dans le champ `description` de chaque mission
+3. `DetailSerieSoignant.tsx` retrouve les missions d'une série via `ilike('description', '%[SERIE_ID:…]%')`
+4. `fn_creer_serie` (RPC) crée N missions indépendantes en batch
+
+**Chaque mission d'une série est un row indépendant** avec son propre `debut_le`/`fin_le`. La colonne `serie_id` n'est jamais peuplée. Le groupement se fait par pattern matching dans `description`.
+
+### 3.3 Le vrai Bug B : impossibilité de modéliser les pauses intra-journée
+
+Le problème n'est pas les séries (missions récurrentes sur plusieurs jours) — celles-ci fonctionnent en créant une mission par jour.
+
+**Le Bug B est l'absence de multi-créneaux au sein d'une même mission-jour.**
+
+Exemple concret :
+- Mission "IDE — Nuit urgences week-end"
+- Travail réel : 19h–00h + 01h–07h (pause de 1h pour repas)
+- Modèle actuel : `debut_le = 19:00, fin_le = 07:00, duree_heures = 12.0`
+- Réalité : 11h travaillées, 1h de pause
+- **Erreur de facturation : +1h facturée à tort** → impact sur `total_brut`, `net_a_payer`, `IFM`, `ICP`, commission
+
+Exemple jour classique :
+- Mission "IDE — Clinique Test"
+- Travail réel : 7h–12h + 14h–19h (pause déjeuner 2h)
+- Modèle actuel : `debut_le = 07:00, fin_le = 19:00, duree_heures = 12.0`
+- Réalité : 10h travaillées
+- **Erreur de facturation : +2h facturées à tort**
+
+### 3.4 Impact financier estimé du Bug B
+
+Sur 213 missions TERMINEE, si on estime qu'environ 50% ont une pause non déclarée d'1h en moyenne :
+- ~106 missions × 1h × taux moyen ~25€/h = **~2 650 € de surfacturation brute**
+- Avec IFM+ICP (20%) : **~3 180 €**
+- Commission Jolene (15% de total_brut) : **~400 € de surcommission**
+
+Ce ne sont que des estimations, mais le risque juridique est réel (voir §4).
+
+### 3.5 Table `shifts` — alternative avortée
+
+La table `shifts` (jour + heure_debut + heure_fin) aurait pu servir de système multi-créneaux, mais :
+- 0 lignes en prod
+- Pas d'intégration avec le formulaire de création de mission
+- `shift_affectations` a un `mission_id` FK mais n'est pas peuplé
+- Le système de shifts est un module planning indépendant, pas un sous-système de la mission
+
+**Conclusion** : `shifts` n'est pas la bonne base pour les multi-créneaux. Il faut une table dédiée `mission_creneaux` (voir §5).
