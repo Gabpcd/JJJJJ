@@ -7,16 +7,21 @@
 -- - 268 missions in prod (213 TERMINEE, 43 ANNULEE, etc.)
 -- - 3 missions skipped: span > 24h (all ANNULEE, invalid test data)
 -- - 1 série found: SERIE_DEMO_001 (8 missions, etab b0000000...0002)
--- - jolene.sync_in_progress bypass used to avoid trigger cascade
---   during bulk INSERT (sync runs manually at the end)
+--
+-- LESSON LEARNED: Using jolene.sync_in_progress bypass for UPDATE on
+-- missions is NOT SAFE for financial integrity. The bypass disables
+-- dec_proteger_mission_soignant, which normally reverts financial
+-- recalculations from other triggers. Instead, use DISABLE TRIGGER USER
+-- for bulk UPDATEs on missions during migration.
 -- ============================================================
-
--- Enable sync bypass for bulk migration
-SELECT set_config('jolene.sync_in_progress', 'true', false);
 
 -- ──────────────────────────────────────────────────────────────
 -- 1. Create 1 créneau per mission (excluding 3 with span > 24h)
 -- ──────────────────────────────────────────────────────────────
+-- INSERT into mission_creneaux triggers trg_sync_creneaux which
+-- would UPDATE missions. We set sync bypass to prevent this.
+SELECT set_config('jolene.sync_in_progress', 'true', false);
+
 INSERT INTO mission_creneaux (mission_id, debut, fin, est_pause, ordre)
 SELECT id, debut_le, fin_le, false, 1
 FROM missions
@@ -25,15 +30,25 @@ WHERE debut_le IS NOT NULL
   AND EXTRACT(EPOCH FROM (fin_le - debut_le)) <= 86400;
 -- Expected: 265 rows
 
+SELECT set_config('jolene.sync_in_progress', 'false', false);
+
 -- ──────────────────────────────────────────────────────────────
 -- 2. Update nb_creneaux on migrated missions
 -- ──────────────────────────────────────────────────────────────
+-- DISABLE TRIGGER USER to prevent financial cascade from
+-- 30+ BEFORE UPDATE triggers on missions.
+ALTER TABLE missions DISABLE TRIGGER USER;
+
 UPDATE missions SET nb_creneaux = 1
 WHERE id IN (SELECT DISTINCT mission_id FROM mission_creneaux);
+
+ALTER TABLE missions ENABLE TRIGGER USER;
 
 -- ──────────────────────────────────────────────────────────────
 -- 3. Reconstruct mission_series from [SERIE_ID:...] tags
 -- ──────────────────────────────────────────────────────────────
+ALTER TABLE missions DISABLE TRIGGER USER;
+
 DO $$
 DECLARE
   v_tag text;
@@ -62,7 +77,6 @@ BEGIN
     WHERE description LIKE '%[SERIE_ID:' || v_tag || ']%';
     GET DIAGNOSTICS v_updated = ROW_COUNT;
 
-    -- Clean the tag from description
     UPDATE missions SET description = TRIM(REGEXP_REPLACE(description, '\s*\[SERIE_ID:[^\]]+\]\s*', ' ', 'g'))
     WHERE serie_id = v_serie_id;
 
@@ -70,7 +84,4 @@ BEGIN
   END LOOP;
 END $$;
 
--- ──────────────────────────────────────────────────────────────
--- 4. Disable sync bypass
--- ──────────────────────────────────────────────────────────────
-SELECT set_config('jolene.sync_in_progress', 'false', false);
+ALTER TABLE missions ENABLE TRIGGER USER;
