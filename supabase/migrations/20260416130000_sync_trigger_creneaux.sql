@@ -133,12 +133,10 @@ $$;
 -- ──────────────────────────────────────────────────────────────
 -- 2. Sync trigger function
 -- ──────────────────────────────────────────────────────────────
+-- 2-PHASE SYNC: Phase 1 (sync guard ON) updates timing envelope (financials frozen).
+-- Phase 2 (sync guard OFF) updates duree_heures → triggers fn_calculer_financier freely.
 CREATE OR REPLACE FUNCTION public.fn_sync_mission_creneaux()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
 DECLARE
   v_mission_id uuid;
   v_old_mission_id uuid;
@@ -147,17 +145,14 @@ DECLARE
   v_duree numeric;
   v_nb integer;
 BEGIN
-  -- Guard against infinite loops (defensive — no known path today)
   IF current_setting('jolene.sync_in_progress', true) = 'true' THEN
     RETURN NULL;
   END IF;
 
-  -- Determine which mission(s) to update
   IF TG_OP = 'DELETE' THEN
     v_mission_id := OLD.mission_id;
     v_old_mission_id := NULL;
   ELSIF TG_OP = 'UPDATE' AND OLD.mission_id IS DISTINCT FROM NEW.mission_id THEN
-    -- Rare: créneau moved to another mission → update both
     v_mission_id := NEW.mission_id;
     v_old_mission_id := OLD.mission_id;
   ELSE
@@ -165,64 +160,53 @@ BEGIN
     v_old_mission_id := NULL;
   END IF;
 
-  -- Set guard
-  PERFORM set_config('jolene.sync_in_progress', 'true', true);
-
-  -- Sync the primary mission
-  SELECT
-    MIN(debut),
-    MAX(fin),
+  SELECT MIN(debut), MAX(fin),
     COALESCE(SUM(CASE WHEN NOT est_pause THEN EXTRACT(EPOCH FROM (fin - debut)) / 3600.0 ELSE 0 END), 0),
     COUNT(*)
   INTO v_debut, v_fin, v_duree, v_nb
-  FROM mission_creneaux
-  WHERE mission_id = v_mission_id;
+  FROM mission_creneaux WHERE mission_id = v_mission_id;
 
+  -- Phase 1: sync guard ON → timing envelope + nb (financials frozen by protectors)
+  PERFORM set_config('jolene.sync_in_progress', 'true', true);
   IF v_nb > 0 THEN
-    UPDATE missions SET
-      debut_le = v_debut,
-      fin_le = v_fin,
-      duree_heures = CASE WHEN v_duree > 0 THEN ROUND(v_duree::numeric, 2) ELSE NULL END,
-      nb_creneaux = v_nb
+    UPDATE missions SET debut_le = v_debut, fin_le = v_fin, nb_creneaux = v_nb
     WHERE id = v_mission_id;
   ELSE
-    -- All créneaux deleted: keep debut_le/fin_le, set duree NULL, nb 0
-    UPDATE missions SET
-      duree_heures = NULL,
-      nb_creneaux = 0
-    WHERE id = v_mission_id;
+    UPDATE missions SET nb_creneaux = 0 WHERE id = v_mission_id;
+  END IF;
+  PERFORM set_config('jolene.sync_in_progress', 'false', true);
+
+  -- Phase 2: sync guard OFF → SET duree_heures → triggers fn_calculer_financier freely
+  IF v_nb > 0 THEN
+    UPDATE missions SET duree_heures = ROUND(v_duree::numeric, 2) WHERE id = v_mission_id;
+  ELSE
+    UPDATE missions SET duree_heures = NULL WHERE id = v_mission_id;
   END IF;
 
-  -- If mission_id changed on UPDATE, also sync the old mission
   IF v_old_mission_id IS NOT NULL THEN
-    SELECT
-      MIN(debut),
-      MAX(fin),
+    SELECT MIN(debut), MAX(fin),
       COALESCE(SUM(CASE WHEN NOT est_pause THEN EXTRACT(EPOCH FROM (fin - debut)) / 3600.0 ELSE 0 END), 0),
       COUNT(*)
     INTO v_debut, v_fin, v_duree, v_nb
-    FROM mission_creneaux
-    WHERE mission_id = v_old_mission_id;
+    FROM mission_creneaux WHERE mission_id = v_old_mission_id;
 
+    PERFORM set_config('jolene.sync_in_progress', 'true', true);
     IF v_nb > 0 THEN
-      UPDATE missions SET
-        debut_le = v_debut,
-        fin_le = v_fin,
-        duree_heures = CASE WHEN v_duree > 0 THEN ROUND(v_duree::numeric, 2) ELSE NULL END,
-        nb_creneaux = v_nb
+      UPDATE missions SET debut_le = v_debut, fin_le = v_fin, nb_creneaux = v_nb
       WHERE id = v_old_mission_id;
     ELSE
-      UPDATE missions SET
-        duree_heures = NULL,
-        nb_creneaux = 0
-      WHERE id = v_old_mission_id;
+      UPDATE missions SET nb_creneaux = 0 WHERE id = v_old_mission_id;
+    END IF;
+    PERFORM set_config('jolene.sync_in_progress', 'false', true);
+
+    IF v_nb > 0 THEN
+      UPDATE missions SET duree_heures = ROUND(v_duree::numeric, 2) WHERE id = v_old_mission_id;
+    ELSE
+      UPDATE missions SET duree_heures = NULL WHERE id = v_old_mission_id;
     END IF;
   END IF;
 
-  -- Release guard
-  PERFORM set_config('jolene.sync_in_progress', 'false', true);
-
-  RETURN NULL; -- AFTER trigger, return value ignored
+  RETURN NULL;
 END;
 $$;
 
