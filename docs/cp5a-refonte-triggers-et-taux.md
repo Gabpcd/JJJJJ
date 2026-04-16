@@ -57,45 +57,10 @@ Tant que `_fige IS NULL`, les triggers utilisent les valeurs live de l'établiss
 **`taux_horaire_base`** (colonne existante sur `missions`) :
 - Éditable uniquement tant que `fige_le IS NULL` (mission OUVERTE). Renseignée par l'étab à la création de la mission.
 - `taux_horaire_base_fige` : snapshot de `taux_horaire_base` au moment de la transition OUVERTE → ASSIGNEE.
-- **Après gel (`fige_le IS NOT NULL`) : `taux_horaire_base` est immutable.** Toute tentative de modification est bloquée par le trigger de gel (Partie 2). Exception : bypass admin tracé via session vars `jolene.admin_override_gel` + `jolene.admin_override_reason` avec audit dans `invoice_audit_log`.
+- **Après gel (`fige_le IS NOT NULL`) : `taux_horaire_base` est immutable.** Toute tentative de modification est bloquée par le trigger de gel (Partie 2). Exception : bypass admin tracé via session vars `jolene.admin_override_gel` + `jolene.admin_override_reason` avec audit dans `journaux_audit`.
 - **Pas de deprecation** de `taux_horaire_base`. Elle reste utilisée en affichage, dans les RPCs, dans le frontend. `_fige` est interne aux triggers financiers.
 
-**Règle d'immutabilité post-gel** (implémentée dans le trigger de gel, Partie 2) :
-```sql
--- Bloque toute modification de taux_horaire_base après gel
-IF NEW.taux_horaire_base IS DISTINCT FROM OLD.taux_horaire_base
-   AND OLD.fige_le IS NOT NULL THEN
-  -- Bypass admin tracé
-  IF current_setting('jolene.admin_override_gel', true) = NEW.id::text
-     AND COALESCE(current_setting('jolene.admin_override_reason', true), '') != '' THEN
-    INSERT INTO invoice_audit_log (invoice_id, action, performed_by, payload_before)
-    SELECT fh.id, 'TAUX_HORAIRE_MODIFIED_POST_GEL', auth.uid(),
-      jsonb_build_object(
-        'reason', current_setting('jolene.admin_override_reason', true),
-        'mission_id', NEW.id,
-        'old_taux', OLD.taux_horaire_base,
-        'new_taux', NEW.taux_horaire_base
-      )
-    FROM factures_honoraires fh
-    WHERE fh.mission_id = NEW.id AND fh.statut NOT IN ('BROUILLON', 'ANNULEE')
-    LIMIT 1;
-    -- Si pas de facture, log dans une table d'audit directe
-    IF NOT FOUND THEN
-      INSERT INTO invoice_audit_log (action, performed_by, payload_before)
-      VALUES ('TAUX_HORAIRE_MODIFIED_POST_GEL', auth.uid(),
-        jsonb_build_object(
-          'reason', current_setting('jolene.admin_override_reason', true),
-          'mission_id', NEW.id,
-          'old_taux', OLD.taux_horaire_base,
-          'new_taux', NEW.taux_horaire_base
-        ));
-    END IF;
-  ELSE
-    RAISE EXCEPTION 'Modification de taux_horaire_base interdite après gel (fige_le=%). Pour corriger : annuler la mission et en créer une nouvelle, ou utiliser le bypass admin tracé (jolene.admin_override_gel + jolene.admin_override_reason).',
-      OLD.fige_le USING ERRCODE = 'check_violation';
-  END IF;
-END IF;
-```
+**Règle d'immutabilité post-gel** : toute modification de `taux_horaire_base` après gel est bloquée par le trigger `fn_geler_mission_a_assignation` (section 2.4, Bloc 3). Bypass admin tracé via session vars `jolene.admin_override_gel` + `jolene.admin_override_reason` avec audit dans `journaux_audit` (section 2.5).
 
 **`taux_commission`** (colonne existante sur `missions`, default 15) :
 - Initialisée par `fn_calculer_financier_mission` depuis `etablissements.taux_commission_negocie`.
