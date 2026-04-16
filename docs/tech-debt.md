@@ -99,3 +99,21 @@ Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
 **Priorité** : Documentation — pas d'action code
 
 **Date** : 2026-04-16
+
+---
+
+## Hardening anti-seed-incohérent — empêcher les INSERT qui bypassent les triggers financiers
+
+**Contexte** : 223/268 missions en base ont un `total_brut` incohérent (n'inclut pas les majorations). Toutes sont issues de seed batches Lovable. Les 17 missions créées via le flow normal (RPC + triggers) sont 100% cohérentes. Le problème : les INSERT seed bypassent `fn_calculer_financier_mission`.
+
+**Actions proposées** :
+
+1. **Trigger BEFORE INSERT sur `factures_honoraires`** : vérifie que `montant_ht` est dans un intervalle raisonnable autour de `mission.net_a_payer` (±1% ou ε = 0.01€). Si écart > seuil, bloquer sauf si session variable `jolene.admin_override_facture_montant` est définie avec raison. Audit trail dans `invoice_audit_log`.
+
+2. **Trigger BEFORE INSERT sur `missions`** : vérifie que `total_brut` est cohérent avec `taux × duree + majorations` après passage par `fn_calculer_financier_mission`. En pratique : le trigger `trg_calculer_financier` fire déjà sur INSERT et recalcule. Mais un INSERT via `DISABLE TRIGGER USER` ou `COPY` pourrait bypasser. Protection supplémentaire : CHECK constraint ou trigger dédié qui détecte l'incohérence.
+
+3. **Edge function de diagnostic périodique** (ou cron SQL) : vérifie mensuellement la cohérence missions ↔ factures_honoraires ↔ stripe_transfers. Alerte par email si écart détecté.
+
+**Priorité** : P1 — à traiter avant lancement public (CP6 ou post-CP6)
+
+**Date** : 2026-04-16

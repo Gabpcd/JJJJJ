@@ -104,7 +104,59 @@ Les 6 factures seeded (`f1000000-...`) et les missions associées seront purgée
 
 L'écart "missions vs factures" documenté dans tech-debt.md peut être reclassifié de "bug potentiel" à "artefact de données de test". En production, avec des données créées via le flow normal (RPC → trigger → generate-invoice), les montants sont cohérents.
 
-## 7. Risque résiduel
+## 7. Étendue du seeding incohérent
+
+### missions (268 total)
+
+| Origine | Total | total_brut incohérent | Pattern |
+|---|---|---|---|
+| Batch 2026-03-25 | 204 | **204 (100%)** | total_brut = base SANS majorations |
+| Batch 2026-03-11 | 30 | 12 (40%) | Idem |
+| Seeded 2026-04-09 (e-pattern) | 17 | 7 (41%) | Idem |
+| **Organic (via UI/RPC, post 2026-03-16)** | **17** | **0 (0%)** | **Tous cohérents** |
+
+**223/268 missions incohérentes — toutes issues de seed batches.** Les 17 missions créées via le flow normal (RPC → triggers) sont 100% cohérentes.
+
+Le pattern d'incohérence est unique : `total_brut = taux_effectif × duree_heures` SANS inclure les majorations (nuit, dimanche, férié). Les majorations sont stockées mais pas additionnées dans total_brut. Cause : les seeds INSERTent en bypassant `fn_calculer_financier_mission`.
+
+### factures (commissions Jolene) — 10 rows
+
+Toutes non-seeded (UUIDs organiques). Pas d'incohérence vérifiable sans le détail des calculs de commission mensuelle. À purger avec les missions associées.
+
+### factures_honoraires — 10 rows
+
+6 seeded (f1000000 pattern) avec écarts 3€–303€. 4 organic avec 0 écart. Déjà analysé en §1-6.
+
+### stripe_transfers — 6 rows
+
+| Type | Total | montant_soignant = net_a_payer | montant_commission = commission_ttc |
+|---|---|---|---|
+| Seeded missions | 4 | 3/4 ✓ | 1/4 ✓ (écarts commission 3€–23€) |
+| Organic missions | 2 | **2/2 ✓** | **2/2 ✓ (exact)** |
+
+Les 2 real stripe_transfers (missions créées via le flow) ont des montants parfaitement cohérents.
+
+### factor_advances — 2 rows, paiements_mission — 4 rows, cotisations_sociales — 6 rows
+
+Tous avec UUIDs organiques. À vérifier lors de la purge.
+
+### Synthèse : combien de rows à purger au go-live ?
+
+| Table | Total | Seeded/incohérent | À purger |
+|---|---|---|---|
+| missions | 268 | ~251 | Oui (toutes les missions test) |
+| mission_creneaux | 265 | ~248 | Cascade (ON DELETE CASCADE) |
+| mission_series | 1 | 1 (SERIE_DEMO_001) | Oui |
+| factures_honoraires | 10 | 6 | Oui (les 6 seeded + les 4 de test) |
+| factures | 10 | ~10 | Oui |
+| stripe_transfers | 6 | 4 | Oui (probablement toutes — données test) |
+| factor_advances | 2 | 0 | Oui (test) |
+| paiements_mission | 4 | 0 | Oui (test) |
+| cotisations_sociales | 6 | 0 | Oui (test) |
+
+**Estimation : ~600 rows à purger au total, répartis sur ~10 tables.** Toutes sont des données de test. Le script `purge-test-data.ts` (CP6) gérera ça.
+
+## 8. Risque résiduel
 
 Un risque théorique existe si `mission.net_a_payer` est modifié APRÈS la génération de la facture (ex: un trigger recalcule les financials suite à une modification). Dans ce cas, `missions.net_a_payer ≠ factures_honoraires.montant_ht`.
 
