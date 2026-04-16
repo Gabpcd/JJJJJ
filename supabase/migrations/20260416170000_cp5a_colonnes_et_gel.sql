@@ -85,7 +85,7 @@ BEGIN
     INSERT INTO journaux_audit
       (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
     VALUES (
-      auth.uid(), 'system', 'DEGEL_APPLIED', 'mission', OLD.id,
+      auth.uid(), 'SYSTEME', 'DEGEL_APPLIED', 'mission', OLD.id,
       jsonb_build_object(
         'old_snapshot', jsonb_build_object(
           'taux_horaire_base_fige', OLD.taux_horaire_base_fige,
@@ -176,7 +176,7 @@ BEGIN
           INSERT INTO journaux_audit
             (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
           VALUES (
-            auth.uid(), 'admin', 'OVERRIDE_CHAMP_POST_GEL', 'mission', OLD.id,
+            auth.uid(), 'ADMIN_PLATEFORME', 'OVERRIDE_CHAMP_POST_GEL', 'mission', OLD.id,
             jsonb_build_object(
               'reason', v_override_reason,
               'fields_modified', v_fields_modified
@@ -433,3 +433,35 @@ WHERE e.id = m.etablissement_id
   AND m.statut != 'OUVERTE';
 
 ALTER TABLE public.missions ENABLE TRIGGER USER;
+
+-- ──────────────────────────────────────────────────────────────
+-- 6. Extend journaux_audit CHECK constraint for new actions
+-- ──────────────────────────────────────────────────────────────
+ALTER TABLE public.journaux_audit DROP CONSTRAINT IF EXISTS journaux_audit_action_check;
+ALTER TABLE public.journaux_audit ADD CONSTRAINT journaux_audit_action_check CHECK (action = ANY (ARRAY[
+  'INSCRIPTION','CONNEXION','DECONNEXION','MODIFICATION_PROFIL','SUPPRESSION_COMPTE',
+  'UPLOAD_DOCUMENT','TELECHARGEMENT_DOCUMENT','VERIFICATION_DOCUMENT','VERIFICATION_RPPS',
+  'CREATION_MISSION','MODIFICATION_MISSION','ANNULATION_MISSION','CANDIDATURE','ASSIGNATION',
+  'POINTAGE','SIGNATURE_CONTRAT','EVALUATION','PAIEMENT','FACTURATION',
+  'DONNEES_PERSO_CONSULTATION','DONNEES_PERSO_EXPORT','DONNEES_PERSO_SUPPRESSION',
+  'ADMIN_ACTION','SYSTEM','RIB_CONSULTE','RIB_PARTAGE','CONTRAT_SIGNE',
+  'DOCUMENT_CONSULTATION','DOCUMENT_TELEVERSEMENT','DONNEES_PERSO_MODIFICATION',
+  'EXPORT_RH_PAIE','FINANCE_FACTURE_PAYEE','MISSION_ASSIGNATION','MISSION_CREATION',
+  'RGPD_EXPORT_DONNEES',
+  'DEGEL_APPLIED','OVERRIDE_CHAMP_POST_GEL'
+]));
+
+-- ──────────────────────────────────────────────────────────────
+-- 7. Bugfix: dec_alerte_mission_liberee — 'CRITIQUE' → 3 (integer)
+-- ──────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.dec_alerte_mission_liberee()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $function$
+BEGIN
+    IF OLD.statut = 'ASSIGNEE' AND NEW.statut = 'OUVERTE'
+       AND NEW.debut_le < NOW() + INTERVAL '24 hours' THEN
+        NEW.est_urgente := TRUE;
+        NEW.niveau_urgence := 3;
+    END IF;
+    RETURN NEW;
+END;
+$function$;
