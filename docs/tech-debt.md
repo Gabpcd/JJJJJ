@@ -205,3 +205,25 @@ Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
 **Priorité** : P2
 
 **Date** : 2026-04-16
+
+---
+
+## T8 — Batch recalc financials pour les 265 missions existantes
+
+**Contexte** : CP5b Step 4 a découvert que `trg_auto_heures_majorees` ne fireait que sur `UPDATE OF debut_le, fin_le` — pas sur changement de créneau (via sync). Résultat : quand `fn_calculer_financier_mission` fire sur changement de `duree_heures`, il utilise `heures_*` stales.
+
+Le test T5 a révélé que 2/3 missions sample avaient `total_brut` incorrect (majorations dimanche/férié manquantes dans total_brut alors que `heures_dim/ferie` étaient non-nuls).
+
+Étendu en Step 4 : `trg_auto_heures_majorees` fire maintenant sur `UPDATE OF debut_le, fin_le, duree_heures`. Mais les 265 missions existantes ont encore des `total_brut` stales.
+
+**Action** : Script SQL qui force un recalc sur toutes les missions :
+```sql
+-- Force recalc via no-op UPDATE on duree_heures (fires auto_heures + calculer_financier)
+UPDATE missions SET duree_heures = duree_heures WHERE statut != 'OUVERTE';
+```
+
+Attention : ne PAS toucher les missions facturées (trigger `trg_protect_creneaux_facture` pourrait bloquer). Filtrer par absence de facture émise, ou utiliser bypass admin.
+
+**Priorité** : P1 (à faire avant CP6 purge)
+
+**Date** : 2026-04-16
