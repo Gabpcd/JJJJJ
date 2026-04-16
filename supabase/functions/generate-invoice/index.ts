@@ -427,6 +427,15 @@ Deno.serve(async (req) => {
     if (mErr || !mission) return json(req, { error: 'Mission introuvable' }, 404);
     if (mission.statut !== 'TERMINEE') return json(req, { error: `Mission en statut ${mission.statut}, doit être TERMINEE` }, 400);
 
+    // 1b. Garde-fou pré-facturation CP5b (créneaux ouverts + écart > 10%)
+    const { data: preCheck, error: preCheckErr } = await supabaseAdmin
+      .rpc('fn_verifier_pre_facturation', { p_mission_id: mission_id });
+
+    if (preCheckErr) {
+      console.warn(`[generate-invoice] pré-facturation bloquée: ${preCheckErr.message}`);
+      return json(req, { error: preCheckErr.message }, 400);
+    }
+
     // 2. Vérifier mandat actif
     const { data: soignant } = await supabaseAdmin
       .from('soignants')
