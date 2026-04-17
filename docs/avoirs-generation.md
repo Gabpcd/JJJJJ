@@ -62,13 +62,15 @@ Implémentation dans `supabase/functions/generate-invoice/index.ts` :
 
 - Métadonnée `chorus_avoir_reference_invoice` : numero_facture d'origine, requise.
 - Invocation : `submit-to-chorus { facture_honoraire_id, type_document: 'AVOIR' }`.
-- L'edge function `submit-to-chorus` doit être étendue pour reconnaître le type AVOIR et transmettre la référence à l'API Chorus Pro. **Tech-debt si non fait**.
+- L'edge function `submit-to-chorus` accepte `type_document='AVOIR'` et stocke la référence dans `chorus_submissions.avoir_reference_invoice` (CP-LITIGES-7a FIX 15).
+- Le payload Factur-X (BT-3=381) est transmis tel quel à l'API PISTE DeposerPDFacture (même endpoint que FACTURE, le BT-3 distingue le type).
 
 ## Trigger et cadence de regen
 
 Le cron `litige-escalation-cron` (quotidien 08h UTC) scanne `fn_lister_factures_a_regenerer(50)` et invoke `generate-invoice` en mode regen.
 
-**Limite** : délai jusqu'à 24h entre résolution admin et disponibilité du PDF. → Ticket **T14** (P2) dans `docs/tech-debt.md` pour passer au déclenchement direct via `pg_net.http_post` depuis `fn_admin_resoudre_litige`.
+**Avant FIX 18** : délai jusqu'à 24h entre résolution admin et disponibilité du PDF.
+**Depuis FIX 18** : regen déclenchée immédiatement via `pg_net.http_post` depuis `fn_admin_resoudre_litige`. Le cron reste filet de sécurité (filtre `modifie_le < NOW() - INTERVAL '1 hour'`). Ticket **T14** fermé.
 
 ## Edge function — API mode regen
 
