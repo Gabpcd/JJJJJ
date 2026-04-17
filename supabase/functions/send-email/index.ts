@@ -90,6 +90,7 @@ const ALLOWED_TYPES = new Set([
   'LITIGE_RESOLU_AJUSTE', 'AVOIR_EMIS', 'REMBOURSEMENT_CONFIRME',
   'LITIGE_RAPPEL_J1', 'LITIGE_RAPPEL_J3', 'LITIGE_RAPPEL_J5',
   'REGULARISATION_SOCIALE_REQUISE', 'LITIGE_MEDIATION_PRIORITAIRE',
+  'COMMISSION_AJUSTEE',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -624,6 +625,31 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           ${SECURITY_NOTE}
         `),
       };
+
+    case 'COMMISSION_AJUSTEE': {
+      const isAvoir = (data.type_document || 'AVOIR') === 'AVOIR';
+      const bodyLine = isAvoir
+        ? `Un <strong>avoir commission ${data.numero_document || '—'}</strong> de <strong>${data.montant || '—'} €</strong> a été émis suite à la résolution du litige sur la mission <strong>${data.mission_intitule || '—'}</strong>. Cet avoir sera déduit de votre prochaine facture mensuelle.`
+        : `Une <strong>facture complémentaire ${data.numero_document || '—'}</strong> de <strong>${data.montant || '—'} €</strong> a été émise suite à la résolution du litige sur la mission <strong>${data.mission_intitule || '—'}</strong>. Cette facture sera due aux conditions habituelles.`;
+      return {
+        subject: isAvoir
+          ? `Avoir commission ${data.numero_document || ''} — ajustement litige`
+          : `Facture complémentaire ${data.numero_document || ''} — ajustement litige`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">${isAvoir ? '📉' : '📈'} Commission ajustée suite à résolution de litige</h2>
+          <p style="color:#334155;">${bodyLine}</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Type :</strong> ${isAvoir ? 'Avoir commission' : 'Facture complémentaire'}<br/>
+            <strong style="color:#0F172A;">Numéro :</strong> ${data.numero_document || '—'}<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${isAvoir ? '-' : ''}${data.montant || '—'} € TTC<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_intitule || '—'}
+          `)}
+          ${INFO_BOX(`<strong>Origine :</strong> recalcul automatique des commissions Jolene après résolution du litige #${data.litige_id || '—'}.`)}
+          ${data.litige_id ? BUTTON('Voir le litige →', `${APP_URL}/admin/moderation?litige=${data.litige_id}`) : BUTTON('Voir mes factures →', `${APP_URL}/etablissement/factures`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+    }
 
     default:
       return null;
