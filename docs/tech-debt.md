@@ -245,3 +245,35 @@ Attention : ne PAS toucher les missions facturées (trigger `trg_protect_creneau
 **Priorité** : P1 — à faire avant acceptation de clients multi-étabs
 
 **Date** : 2026-04-16
+
+---
+
+## T9 — Gel de facture par période (pas mission entière)
+
+**Contexte** : `CP-LITIGES-2` (trigger `trg_litige_gel_degel_facture`) gèle **toutes** les factures non-PAYEE d'une mission quand un litige de catégorie `PRESENCE`, `CONDITIONS` ou `COMPORTEMENT` est ouvert. La granularité par période n'est pas possible tant que les colonnes `periode_debut` / `periode_fin` n'existent pas sur `factures_honoraires` (elles arrivent avec Partie 2 — facturation hebdomadaire libérale).
+
+**Exemple du problème** : mission libérale de 4 semaines, soignant conteste ses heures sur la semaine 1. Aujourd'hui → factures S1, S2, S3, S4 toutes gelées. Attendu → seule S1 gelée, S2-S4 continuent.
+
+**Action** : une fois Partie 2 livrée avec `periode_debut` / `periode_fin` :
+1. Étendre `trg_litige_gel_degel_facture` pour accepter une période (lue depuis le contexte du litige — à définir : champ `periode_debut`/`periode_fin` sur `litiges`, ou déduction via `presence.pointage_arrivee_le` / `pointage_depart_le`).
+2. Ne geler que les factures dont `[periode_debut, periode_fin]` chevauche la période litigieuse.
+3. Exception conservée : `SECURITE_DANGER` ou `COMPORTEMENT` avec gravité confirmée par admin → gèle toute la mission (cf. audit Sub-PR 2 quater, précision 14).
+
+**Priorité** : P1 — à traiter dès livraison Partie 2
+
+**Date** : 2026-04-17
+
+---
+
+## T10 — Évaluer rate limit litiges : 3/heure vs 3/24h
+
+**Contexte** : Le code `fn_ouvrir_litige_rate_limited` applique historiquement 3 litiges par heure par entité. L'audit Sub-PR 2 quater proposait 3/24h. Après discussion, le code actuel (3/heure) est conservé pour ne pas casser les scénarios admin/support légitimes. La clé seed a été renommée de `rate_limit_litiges_par_24h` en `rate_limit_litiges_par_heure` par cohérence (CP-LITIGES-2 FIX-A).
+
+**Action** : si les feedbacks utilisateurs révèlent des abus (spam 3/heure × 24h = 72/jour), ouvrir à 3/24h en :
+1. Renommant à nouveau la clé en `rate_limit_litiges_par_24h` (valeur 3).
+2. Modifiant le WHERE `cree_le > NOW() - INTERVAL '1 hour'` → `'24 hours'` dans `fn_ouvrir_litige_rate_limited`.
+3. Reconsidérer en parallèle les exceptions `SECURITE_DANGER` (toujours autoriser même après rate limit).
+
+**Priorité** : P3 — attendre retours terrain
+
+**Date** : 2026-04-17
