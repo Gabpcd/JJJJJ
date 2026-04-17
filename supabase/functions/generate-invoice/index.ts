@@ -24,6 +24,7 @@ const VALID_REASON_PATTERNS = [
   /^admin_replay_[0-9a-f-]{36}$/,
   /^ops_test_.+$/,
   /^admin_invoke_[0-9a-f-]{36}:.+$/,
+  /^admin_resoudre_litige_immediate$/,
 ];
 
 function validateServiceRoleReason(reason: string | undefined): { valid: boolean; error?: string } {
@@ -31,7 +32,7 @@ function validateServiceRoleReason(reason: string | undefined): { valid: boolean
     return { valid: false, error: 'service_role_reason requis pour les appels service_role' };
   }
   if (!VALID_REASON_PATTERNS.some(p => p.test(reason))) {
-    return { valid: false, error: `service_role_invalid_reason: "${reason}" ne match aucun pattern autorisé (cron_auto_generation, admin_replay_<uuid>, ops_test_<purpose>)` };
+    return { valid: false, error: `service_role_invalid_reason: "${reason}" ne match aucun pattern autorisé (cron_auto_generation, admin_replay_<uuid>, ops_test_<purpose>, admin_resoudre_litige_immediate)` };
   }
   return { valid: true };
 }

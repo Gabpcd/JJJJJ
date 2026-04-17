@@ -339,7 +339,7 @@ Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_inte
 
 ---
 
-## T14 — Regen PDF/XML avoir : passer en déclenchement direct
+## T14 — Regen PDF/XML avoir : passer en déclenchement direct ✅ RÉSOLU
 
 **Contexte** : CP-LITIGES-6 câble la regénération des PDF/XML (factures ajustées + avoirs) via le cron quotidien `litige-escalation-cron` qui scanne `factures_honoraires.pdf_a_regenerer = TRUE`. Inconvénient : si un admin résout un litige à 09h, le PDF de l'avoir ne sera disponible que le lendemain à 08h UTC.
 
@@ -348,3 +348,10 @@ Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_inte
 **Priorité** : P2 — amélioration UX (résolution pas bloquante mais délai frustrant)
 
 **Date** : 2026-04-17
+
+**Résolution (CP-LITIGES-7a FIX 18, migration `20260417130712_fix18_pg_net_regen_immediat.sql`)** :
+- `CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions` (v0.19.5 déjà installée).
+- Helper `fn_trigger_regen_pdf_immediate(UUID) RETURNS BIGINT` : lit URL depuis `parametres_litiges.generate_invoice_url`, clé depuis `vault.decrypted_secrets.service_role_key`, appelle `net.http_post` async. Retourne `request_id` ou `NULL` si config absente (dégradation gracieuse).
+- `fn_admin_resoudre_litige` : appel direct après chaque UPDATE `pdf_a_regenerer=TRUE` (3 sites : RECALCUL, ANNULER_REEMETTRE, AVOIR). `request_id` consigné dans audit RGPD via nouveau champ JSONB `regen_pdf_request_ids`, également retourné par la RPC.
+- Edge function `generate-invoice` : regex `/^admin_resoudre_litige_immediate$/` ajoutée aux `VALID_REASON_PATTERNS`.
+- Cron `litige-escalation-cron` conservé en filet de sécurité : filtre `modifie_le < NOW() - INTERVAL '1 hour'` dans `fn_lister_factures_a_regenerer` pour ne pas doubler les appels en vol.

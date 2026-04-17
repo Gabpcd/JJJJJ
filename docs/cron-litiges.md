@@ -136,6 +136,44 @@ Les crons Supabase sont déclenchés en UTC. Un cron « 8h UTC » tourne donc
 qui filtrent sur `cree_le < NOW() - INTERVAL 'N hours'` restent correctes
 car la durée absolue est indépendante du fuseau.
 
+## Regen PDF immédiat — pg_net (CP-LITIGES-7a FIX 18)
+
+Pour les factures flag `pdf_a_regenerer=TRUE` issues de `fn_admin_resoudre_litige`,
+la regen PDF/XML est déclenchée **immédiatement** via `pg_net.http_post` (fire-and-forget,
+async) depuis la fonction SQL. Le cron ci-dessus reste filet de sécurité pour les appels
+échoués (filtre `modifie_le < NOW() - INTERVAL '1 hour'`).
+
+### Pré-requis
+
+1. **Extension pg_net** : installée par la migration FIX 18 (`CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions`).
+2. **URL edge function** : seedée automatiquement dans `parametres_litiges.generate_invoice_url`
+   (valeur par défaut : `https://<project-ref>.supabase.co/functions/v1/generate-invoice`).
+   Admin peut la mettre à jour via `UPDATE parametres_litiges SET valeur = '...' WHERE cle = 'generate_invoice_url'`.
+3. **Vault secret `service_role_key`** : à créer **manuellement** par Gabrielle dans
+   Supabase Dashboard → *Project Settings* → *Vault* → *New Secret* :
+   - **Name** : `service_role_key`
+   - **Secret** : valeur de `SUPABASE_SERVICE_ROLE_KEY`
+   La fonction `fn_trigger_regen_pdf_immediate` lit ce secret via
+   `vault.decrypted_secrets`. Si absent : retour `NULL` (pas d'appel immédiat,
+   le cron reprendra la main).
+
+### Dégradation gracieuse
+
+Si l'URL ou le secret manque, `fn_trigger_regen_pdf_immediate` retourne `NULL` silencieusement.
+Le flag `pdf_a_regenerer=TRUE` reste posé ; le cron `litige-escalation-cron`
+réémettra l'appel au prochain run (filtre 1h permet la fenêtre de retry pg_net).
+
+### Observabilité
+
+Chaque appel `net.http_post` retourne un `request_id BIGINT`. Les IDs sont
+consignés dans le JSONB `details.regen_pdf_request_ids` de l'audit RGPD
+(table `journal_audit`, action `LITIGE_RESOLU`).
+
+Consultation du statut d'une requête pg_net :
+```sql
+SELECT * FROM net._http_response WHERE id = <request_id>;
+```
+
 ## Rollback
 
 En cas de problème en prod :
