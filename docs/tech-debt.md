@@ -277,3 +277,62 @@ Attention : ne PAS toucher les missions facturées (trigger `trg_protect_creneau
 **Priorité** : P3 — attendre retours terrain
 
 **Date** : 2026-04-17
+
+---
+
+## T11 — Audit exhaustif des objets SQL fantômes (types.ts vs migrations)
+
+**Contexte** : Pendant CP-LITIGES-3, j'ai découvert que `fn_admin_resoudre_litige` était référencée dans `src/integrations/supabase/types.ts:4455` (et appelée depuis `AdminModeration.tsx`) sans qu'aucune migration locale ne la crée. Inversement, `types.ts` ne reflète pas toujours les colonnes ajoutées par des migrations récentes (ex: `factor_id`, `chorus_*` de `20260413140000`). Ces décalages créent deux risques :
+1. Des fonctions SQL actives en prod sans historique git → impossibilité de reconstruire l'état depuis zéro.
+2. Des colonnes absentes de types.ts → le frontend ne peut pas les utiliser correctement.
+
+**Action** :
+1. Écrire un script `scripts/audit-phantom-objects.ts` qui :
+   - Parse `types.ts` pour extraire toutes les fonctions référencées + leurs signatures.
+   - Grep toutes les migrations pour trouver les `CREATE FUNCTION` / `ALTER TABLE ADD COLUMN`.
+   - Compare les deux listes et remonte les écarts (fonctions orphelines, colonnes manquantes).
+2. Pour chaque objet fantôme identifié : créer une migration de "retro-engineering" qui reconstitue l'état.
+3. Régénérer `types.ts` depuis la prod via `supabase gen types typescript` après chaque migration majeure.
+
+**Priorité** : P2 — avant Sub-PR 3 (consolidation)
+
+**Date** : 2026-04-17
+
+---
+
+## T12 — Câblage stripe_payment_intent_id sur factures_honoraires (Stripe Connect)
+
+**Contexte** : La colonne `factures_honoraires.stripe_payment_intent_id` a été ajoutée par CP-LITIGES-3 comme placeholder pour le refund auto (<120j) des avoirs. Actuellement, `stripe-connect-pay-mission` écrit `stripe_payment_intent_id` sur la table `stripe_transfers` (ligne 293-309) mais ne le propage PAS vers `factures_honoraires`. Résultat : `fn_admin_resoudre_litige` cas AVOIR tombera toujours sur `mode_remboursement = VIREMENT_MANUEL` même pour des factures payées via Stripe il y a moins de 120j.
+
+**Action** : trois options à trancher en Sub-PR 3 :
+- **A — Trigger propagation** : AFTER INSERT/UPDATE sur `stripe_transfers` → UPDATE `factures_honoraires.stripe_payment_intent_id = NEW.stripe_payment_intent_id WHERE mission_id = NEW.mission_id`. Simple mais couplage direct.
+- **B — Edge function stripe-webhook étendu** : au webhook `checkout.session.completed` ou `payment_intent.succeeded`, faire le UPDATE factures_honoraires.
+- **C — Refacto `generate-invoice`** : au moment de l'émission, lire la dernière entrée `stripe_transfers` pour cette mission et copier `stripe_payment_intent_id`.
+
+Ma recommandation : **B** (webhook = source de vérité la plus fiable, cohérent avec stripe-webhook existant).
+
+**Priorité** : P1 — avant Sub-PR 3 (sinon les avoirs AUTO_STRIPE ne se déclencheront jamais)
+
+**Date** : 2026-04-17
+
+---
+
+## T13 — Edge function process-stripe-refunds à finaliser
+
+**Contexte** : CP-LITIGES-4 livre un squelette d'edge function `process-stripe-refunds` qui :
+- Authentifie par `service_role`.
+- Log un ping de monitoring (heartbeat).
+- Ne consomme PAS encore la queue `stripe_refunds_queue`.
+
+Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_intent_id` sur factures_honoraires, pour transformer les avoirs `AUTO_STRIPE` en vraies transactions Stripe.
+
+**Action** :
+1. Dans la function, ajouter : `SELECT * FROM stripe_refunds_queue WHERE statut = 'EN_ATTENTE' ORDER BY cree_le LIMIT 20` (batch).
+2. Pour chaque ligne : appeler Stripe API `refunds.create({ payment_intent, amount, reason: 'requested_by_customer', metadata: { avoir_id } })`.
+3. UPDATE queue : `statut='TRAITE'`, `stripe_refund_id`, `traite_le=NOW()`. Sur erreur : `statut='ECHEC'`, `erreur=msg`, `tentatives=tentatives+1`.
+4. UPDATE `factures_honoraires SET statut='REMBOURSE', date_remboursement=NOW(), reference_remboursement=stripe_refund_id WHERE id = avoir_id`.
+5. Ajouter un schedule Supabase dashboard (ex: toutes les 30 min).
+
+**Priorité** : P1 — couplé à T12
+
+**Date** : 2026-04-17

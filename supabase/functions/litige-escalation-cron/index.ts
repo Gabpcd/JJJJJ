@@ -1,0 +1,91 @@
+// litige-escalation-cron
+//
+// Cron quotidien (08h UTC) qui appelle les 4 RPCs du système litiges :
+//   1. fn_auto_creation_litiges_presence()
+//   2. fn_envoyer_rappels_litiges()
+//   3. fn_litiges_escalader_auto()
+//   4. fn_alerter_mediation_prioritaire()
+//
+// Auth : Bearer <service_role_key> (cf. pattern email-cron).
+// Pas de body requis.
+//
+// Déploiement : cf. docs/cron-litiges.md.
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const URL = Deno.env.get("SUPABASE_URL")!;
+const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+serve(async (req) => {
+  try {
+    // Auth service_role uniquement
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader !== `Bearer ${KEY}`) {
+      return new Response(JSON.stringify({ error: "Non autorisé" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const sb = createClient(URL, KEY);
+    const results: Record<string, unknown> = {};
+    const t0 = Date.now();
+
+    // Ordre d'exécution important :
+    //   1. Auto-création AVANT rappels (pour que les nouveaux litiges
+    //      n'échappent pas aux rappels).
+    //   2. Rappels AVANT escalade (pour laisser une dernière chance).
+    //   3. Escalade AVANT alerte médiation (même raison).
+
+    try {
+      const { data: r1, error: e1 } = await sb.rpc("fn_auto_creation_litiges_presence");
+      if (e1) throw e1;
+      results.auto_creation = r1;
+    } catch (err) {
+      console.error("fn_auto_creation_litiges_presence error:", err);
+      results.auto_creation_error = (err as Error).message;
+    }
+
+    try {
+      const { data: r2, error: e2 } = await sb.rpc("fn_envoyer_rappels_litiges");
+      if (e2) throw e2;
+      results.rappels = r2;
+    } catch (err) {
+      console.error("fn_envoyer_rappels_litiges error:", err);
+      results.rappels_error = (err as Error).message;
+    }
+
+    try {
+      const { data: r3, error: e3 } = await sb.rpc("fn_litiges_escalader_auto");
+      if (e3) throw e3;
+      results.escalade = r3;
+    } catch (err) {
+      console.error("fn_litiges_escalader_auto error:", err);
+      results.escalade_error = (err as Error).message;
+    }
+
+    try {
+      const { data: r4, error: e4 } = await sb.rpc("fn_alerter_mediation_prioritaire");
+      if (e4) throw e4;
+      results.mediation_prioritaire = r4;
+    } catch (err) {
+      console.error("fn_alerter_mediation_prioritaire error:", err);
+      results.mediation_prioritaire_error = (err as Error).message;
+    }
+
+    const duration_ms = Date.now() - t0;
+    console.log("litige-escalation-cron done:", { duration_ms, results });
+
+    return new Response(
+      JSON.stringify({ success: true, duration_ms, results }),
+      { headers: { "Content-Type": "application/json" } },
+    );
+  } catch (err) {
+    console.error("litige-escalation-cron fatal:", err);
+    return new Response(
+      JSON.stringify({ error: "Une erreur interne est survenue." }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+});
