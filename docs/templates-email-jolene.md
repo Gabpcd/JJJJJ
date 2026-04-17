@@ -95,15 +95,17 @@ commit.
 | ----------------- | --------------------------- | ------------------------------ |
 | `ADMIN_BROADCAST` | groupe (soignants/étabs)    | `{subject}` (libre)            |
 
-## Incohérences connues à résoudre
+## Convention de nommage — rappels
 
-- **`RELANCE_FACTURE` vs `RAPPEL_FACTURE`** : `ALLOWED_TYPES` whiteliste
-  `RELANCE_FACTURE` (l.88) **et** `RAPPEL_FACTURE` (l.84) ; seul
-  `RAPPEL_FACTURE` a un `case` dans le switch. `src/pages/admin/AdminImpayees.tsx`
-  pousse `type: 'RELANCE_FACTURE'` → `renderTemplate` renvoie `null` et l'email
-  n'est pas envoyé. **TODO** : aligner sur un seul nom (conserver
-  `RAPPEL_FACTURE` et mettre à jour `AdminImpayees.tsx`, ou ajouter un `case
-  'RELANCE_FACTURE'` dupliqué).
+Tous les rappels utilisent le préfixe **`RAPPEL_`** (pas `RELANCE_`) :
+`RAPPEL_MISSION`, `RAPPEL_FACTURE`, `RAPPEL_DOCUMENTS`, `LITIGE_RAPPEL_J1/J3/J5`.
+
+> **Historique** : `RELANCE_FACTURE` existait dans `ALLOWED_TYPES` et dans
+> `AdminImpayees.tsx` mais aucun `case` ne le rendait → emails silencieusement
+> perdus. Résolu (bug fix post-CP7a) : `AdminImpayees.tsx` envoie désormais
+> `RAPPEL_FACTURE` ; `RELANCE_FACTURE` retiré de la whitelist. La requête de
+> comptage `notifications.type` accepte `['RAPPEL_FACTURE', 'RELANCE_FACTURE']`
+> pour préserver l'historique antérieur.
 
 ## Templates orphelins (whitelistés sans déclencheur actif)
 

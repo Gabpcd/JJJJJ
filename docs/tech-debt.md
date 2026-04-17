@@ -355,3 +355,21 @@ Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_inte
 - `fn_admin_resoudre_litige` : appel direct après chaque UPDATE `pdf_a_regenerer=TRUE` (3 sites : RECALCUL, ANNULER_REEMETTRE, AVOIR). `request_id` consigné dans audit RGPD via nouveau champ JSONB `regen_pdf_request_ids`, également retourné par la RPC.
 - Edge function `generate-invoice` : regex `/^admin_resoudre_litige_immediate$/` ajoutée aux `VALID_REASON_PATTERNS`.
 - Cron `litige-escalation-cron` conservé en filet de sécurité : filtre `modifie_le < NOW() - INTERVAL '1 hour'` dans `fn_lister_factures_a_regenerer` pour ne pas doubler les appels en vol.
+
+---
+
+## T15 — Type email `RELANCE_FACTURE` orphelin (emails impayés perdus) ✅ RÉSOLU
+
+**Contexte** : `src/pages/admin/AdminImpayees.tsx` (bouton "Relance" admin) envoyait `type: 'RELANCE_FACTURE'` à `send-email`. Ce type était whitelisté dans `ALLOWED_TYPES` de `send-email/index.ts` mais AUCUN `case` ne le rendait → `renderTemplate` renvoyait `null` et l'email n'était jamais envoyé. Seul `RAPPEL_FACTURE` (convention dominante `RAPPEL_*`) avait un template valide. Bug silencieux : aucune erreur visible, juste pas d'email aux étabs impayés. Identifié lors de l'audit CP-LITIGES-7a FIX 0 (registre templates).
+
+**Action** : aligner sur la convention `RAPPEL_*`. `AdminImpayees.tsx` → envoie `RAPPEL_FACTURE` avec data keys conformes au template (`numero`, `facture_id`, `montant_ttc`, `date_echeance`). `RELANCE_FACTURE` retiré de `ALLOWED_TYPES`. Requête historique `notifications.type` étendue à `['RAPPEL_FACTURE', 'RELANCE_FACTURE']` pour conserver le comptage des relances pré-fix.
+
+**Priorité** : P1 — bug de fonctionnalité admin, relances jamais parties.
+
+**Date** : 2026-04-17
+
+**Résolution (post-CP-LITIGES-7a)** :
+- `src/pages/admin/AdminImpayees.tsx` : `type: 'RAPPEL_FACTURE'` + data keys alignés sur le template.
+- `supabase/functions/send-email/index.ts` : `RELANCE_FACTURE` retiré de `ALLOWED_TYPES`.
+- `tests/litiges/templates-structure.test.ts` : ajout `RAPPEL_FACTURE` + régression `RELANCE_FACTURE` interdit.
+- `docs/templates-email-jolene.md` : section "Convention de nommage — rappels" + note historique.

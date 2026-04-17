@@ -41,6 +41,8 @@ const LITIGE_TEMPLATES = [
   'LITIGE_RAPPEL_J5',
   'REGULARISATION_SOCIALE_REQUISE',
   'COMMISSION_AJUSTEE',
+  // Hors-litige inclus pour couverture post-fix RELANCE_FACTURE → RAPPEL_FACTURE :
+  'RAPPEL_FACTURE',
 ] as const;
 
 /**
@@ -98,5 +100,11 @@ describe('Templates email litiges — structure (FIX 13)', () => {
     const block = extractCaseBlock(SOURCE, 'AVOIR_EMIS');
     expect(block).not.toBeNull();
     expect(block!).toMatch(/hasAttachment\s*:\s*true/);
+  });
+
+  it('RELANCE_FACTURE ne doit plus exister dans ALLOWED_TYPES (renommé RAPPEL_FACTURE)', () => {
+    // Régression post-fix : convention dominante = RAPPEL_*, RELANCE_FACTURE
+    // laissait AdminImpayees.tsx envoyer un type orphelin (renderTemplate → null).
+    expect(SOURCE).not.toMatch(/['"]RELANCE_FACTURE['"]/);
   });
 });
