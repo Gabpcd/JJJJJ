@@ -501,7 +501,18 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         `),
       };
 
-    case 'LITIGE_RESOLU_AJUSTE':
+    case 'LITIGE_RESOLU_AJUSTE': {
+      const action = (data.action_financiere || 'AUCUNE') as string;
+      const actionBlock = action === 'AVOIR' ? `
+          <p style="color:#334155;">📄 Un avoir <strong>${data.numero_avoir || '—'}</strong> a été émis. Vous recevrez l'avoir dans un email séparé avec le PDF joint.</p>
+          <p style="color:#334155;">💡 Le document est disponible <strong>immédiatement</strong> dans votre espace (pas de délai de 24h).</p>
+        ` : action === 'RECALCUL' ? `
+          <p style="color:#334155;">🧮 Votre facture <strong>${data.numero_facture || '—'}</strong> a été recalculée avec les nouveaux montants.</p>
+          <p style="color:#334155;">💡 Le PDF mis à jour est disponible <strong>immédiatement</strong> dans votre espace (pas de délai de 24h).</p>
+        ` : action === 'ANNULER_REEMETTRE' ? `
+          <p style="color:#334155;">🔄 Une nouvelle facture <strong>${data.numero_nouvelle || '—'}</strong> remplace <strong>${data.numero_ancienne || '—'}</strong>.</p>
+          <p style="color:#334155;">💡 Les deux documents (ancien + nouveau) sont disponibles <strong>immédiatement</strong> dans votre espace (pas de délai de 24h).</p>
+        ` : '';
       return {
         subject: `Litige résolu — ajustement appliqué`,
         html: WRAPPER(`
@@ -513,10 +524,12 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             Heures : ${data.heures_avant}h → ${data.heures_apres}h<br/>
             Montant : ${data.montant_avant} € → ${data.montant_apres} €
           `) : ''}
+          ${actionBlock}
           ${data.url_facture ? BUTTON('Voir la facture →', data.url_facture) : BUTTON('Voir le détail →', `${APP_URL}/soignant/litiges`)}
           ${SECURITY_NOTE}
         `),
       };
+    }
 
     case 'AVOIR_EMIS':
       return {
