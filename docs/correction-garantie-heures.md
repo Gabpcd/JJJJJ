@@ -236,3 +236,28 @@ Nouveau comportement :
 5. Revue manuelle : régénérer `FH-2026-04-0011` en mode simulation pour confirmer le delta chiffré.
 
 **STOP** — audit terminé. En attente décision pour questions §5.4 (1-2) avant GO implémentation.
+
+---
+
+## Décisions produit (validées 2026-04-17)
+
+- **D1** — Commission Jolene calculée sur GREATEST (même base que net_a_payer). Étab paie le plancher au soignant ET la commission à Jolene sur le même montant. Implémenté dans `fn_calculer_financier_mission` : la commission reste sur `total_brut`, qui bénéficie mécaniquement du GREATEST.
+- **D2** — Blocage `fn_verifier_pre_facturation` asymétrique :
+  - EFF < PREV → pas de blocage (garantie plancher = comportement normal)
+  - EFF > PREV × 1.10 → RAISE check_violation (dépassement > 10%, validation étab requise)
+  - créneau EFFECTIF ouvert (fin NULL) → RAISE (inchangé)
+- **D3** — Cas exotique PREV=0 / EFF>0 : RAISE WARNING (pour investigation), facturation effectif quand même, pas de blocage.
+
+## Note pour Partie 2 (facturation hebdo/mensuelle)
+
+**Avec la règle GREATEST, la commission hebdomadaire/mensuelle Jolene suit naturellement.**
+
+La commission mensuelle (table `factures`, générée par `fn_auto_facturation_mensuelle` — migration `20260316103953`) est calculée par `SUM(montant_commission_ht)` sur les missions terminées du mois. Chaque mission a déjà `montant_commission_ht = total_brut × taux_commission%`, où `total_brut = taux × GREATEST(prev, eff) + majorations`.
+
+→ **Aucune modification côté facturation hebdo/mensuelle n'est nécessaire** : la correction garantie d'heures se propage de façon transparente via les agrégats. À documenter lors de Partie 2 (facturation hebdo) pour cohérence.
+
+## Implémentation livrée
+
+- **Migration** : `supabase/migrations/20260417120000_correction_garantie_heures.sql` (3 fonctions mises à jour)
+- **Tests** : `tests/missions/gel/correction-garantie-heures.test.sql` (T1-T8)
+- **Résultats prod** : les 8 scénarios passent. Cf. commit de livraison pour tableau récapitulatif.
