@@ -114,6 +114,28 @@ Pour l'instant, la function peut être déployée sans schedule — appelable ma
 - **SQL metadata + comportemental** : `tests/litiges/cp4-cron.test.sql`
 - **End-to-end** (scénarios complets) : prévus en CP-LITIGES-8 (vitest, contexte admin simulé).
 
+## Timezone — convention Europe/Paris (CP-LITIGES-7a FIX 10)
+
+La base Supabase stocke toutes les dates en **TIMESTAMPTZ UTC canonique**.
+Les règles métiers Jolene s'expriment en heure **Europe/Paris** (DST incluse).
+
+| Type de calcul                      | TZ à utiliser          | Pourquoi                        |
+|-------------------------------------|------------------------|----------------------------------|
+| Durées absolues (délai N heures)    | UTC (NOW() - INTERVAL) | Indépendant du fuseau, OK       |
+| Calculs calendaires (DOW, DATE)     | `AT TIME ZONE 'Europe/Paris'` | Évite les glissements à minuit Paris |
+| Jours ouvrés / jours fériés         | `AT TIME ZONE 'Europe/Paris'` | `jours_feries_fr` utilise des dates civiles Paris |
+| Arithmétique « ajouter N jours »    | Wall time Paris (TIMESTAMP puis reconversion) | Préserve l'heure affichée à travers DST |
+
+La fonction `fn_ajouter_jours_ouvres(TIMESTAMPTZ, INTEGER)` applique cette
+convention : bascule interne en `TIMESTAMP Europe/Paris`, arithmétique
+en jour civil, reconversion en `TIMESTAMPTZ`. Elle est utilisée par
+`fn_litiges_escalader_auto` (délai salarié 5 jours ouvrés).
+
+Les crons Supabase sont déclenchés en UTC. Un cron « 8h UTC » tourne donc
+à **10h Paris en été** (CEST) et **9h Paris en hiver** (CET). Les RPCs
+qui filtrent sur `cree_le < NOW() - INTERVAL 'N hours'` restent correctes
+car la durée absolue est indépendante du fuseau.
+
 ## Rollback
 
 En cas de problème en prod :
