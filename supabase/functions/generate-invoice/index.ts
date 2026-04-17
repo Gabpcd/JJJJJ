@@ -13,7 +13,7 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
+import { PDFDocument, StandardFonts, rgb, degrees } from 'npm:pdf-lib@1.17.1';
 
 /* ── Rate limit state (in-memory, per isolate) ── */
 const serviceRoleCallLog: number[] = [];
@@ -254,6 +254,9 @@ async function generateInvoicePdf(inv: {
   precedingInvoiceNumber?: string;
   precedingInvoiceIssueDate?: string;
   motifAvoir?: string;  // issu de litiges.resolution
+  // CP-LITIGES-7a FIX 7 : tampons ANNULEE / REMPLACEE
+  statut?: string;
+  replacedByInvoiceNumber?: string;
 }): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]); // A4
@@ -313,6 +316,15 @@ async function generateInvoicePdf(inv: {
       drawText(`Motif : ${inv.motifAvoir.substring(0, 90)}`, margin, y, { size: 8, color: grey });
       y -= 12;
     }
+  }
+  // CP-LITIGES-7a FIX 7 : mention rectification pour facture REMPLACEE
+  if (inv.statut === 'REMPLACEE') {
+    const orange = rgb(0.95, 0.55, 0.05);
+    const mentionReplace = inv.replacedByInvoiceNumber
+      ? `Facture rectificative remplacee par ${inv.replacedByInvoiceNumber} (art. L441-9 C. com.).`
+      : `Facture rectifiee et remplacee (art. L441-9 C. com.).`;
+    drawText(mentionReplace, margin, y, { font: fontBold, size: sectionSize, color: orange });
+    y -= 14;
   }
   y -= 10;
 
@@ -410,6 +422,34 @@ async function generateInvoicePdf(inv: {
   y -= 10;
   drawText('art. 289 I-2 du Code General des Impots', margin, y, { size: 7, color: grey });
 
+  // CP-LITIGES-7a FIX 7 : tampon diagonal ANNULEE / REMPLACEE
+  if (inv.statut === 'ANNULEE' || inv.statut === 'REMPLACEE') {
+    const isAnnulee = inv.statut === 'ANNULEE';
+    const stampColor = isAnnulee
+      ? rgb(0.86, 0.15, 0.15)  // red
+      : rgb(0.95, 0.55, 0.05); // orange
+    const stampMain = isAnnulee ? 'ANNULEE' : 'REMPLACEE';
+    const stampSub = !isAnnulee && inv.replacedByInvoiceNumber
+      ? `par facture ${inv.replacedByInvoiceNumber}`
+      : null;
+    const rot = degrees(30);
+    // Anchor tuned for visual centering of a diagonal stamp on A4 (595x842).
+    page.drawText(stampMain, {
+      x: 90, y: 320,
+      font: fontBold, size: 100,
+      color: stampColor, opacity: 0.35,
+      rotate: rot,
+    });
+    if (stampSub) {
+      page.drawText(stampSub, {
+        x: 170, y: 280,
+        font: fontBold, size: 22,
+        color: stampColor, opacity: 0.45,
+        rotate: rot,
+      });
+    }
+  }
+
   return await pdfDoc.save();
 }
 
@@ -485,6 +525,7 @@ Deno.serve(async (req) => {
       let precedingNumero: string | null = null;
       let precedingDate: string | null = null;
       let motifAvoir: string | null = null;
+      let replacedByNumero: string | null = null;
 
       if (isAvoir) {
         if (!facture.facture_precedente_id) {
@@ -506,6 +547,18 @@ Deno.serve(async (req) => {
             .single();
           motifAvoir = lit?.resolution ?? null;
         }
+      }
+
+      // CP-LITIGES-7a FIX 7 : pour tampon REMPLACEE, lookup successeur
+      if (facture.statut === 'REMPLACEE') {
+        const { data: succ } = await supabaseAdmin
+          .from('factures_honoraires')
+          .select('numero_facture, cree_le')
+          .eq('facture_precedente_id', facture.id)
+          .order('cree_le', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        replacedByNumero = succ?.numero_facture ?? null;
       }
 
       const sellerAddress = [sg.adresse_rue, sg.adresse_code_postal, sg.adresse_ville].filter(Boolean).join(', ');
@@ -569,6 +622,8 @@ Deno.serve(async (req) => {
         precedingInvoiceNumber: precedingNumero ?? undefined,
         precedingInvoiceIssueDate: precedingDate ?? undefined,
         motifAvoir: motifAvoir ?? undefined,
+        statut: facture.statut,
+        replacedByInvoiceNumber: replacedByNumero ?? undefined,
       });
 
       const subDir = isAvoir ? 'avoirs' : 'invoices';
