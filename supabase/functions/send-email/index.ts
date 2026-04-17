@@ -84,6 +84,10 @@ const ALLOWED_TYPES = new Set([
   'RAPPEL_DOCUMENTS', 'MISSION_URGENTE', 'MISSION_PROPOSEE',
   'EVALUATION_RECUE', 'PAIEMENT_CONFIRME', 'ADMIN_BROADCAST',
   'MISSION_NON_POURVUE', 'RELANCE_FACTURE', 'PAIEMENT_RAPIDE_RECU',
+  'LITIGE_OUVERTURE', 'LITIGE_NOUVEAU_MESSAGE', 'LITIGE_ESCALADE_ADMIN',
+  'LITIGE_RESOLU_AJUSTE', 'AVOIR_EMIS', 'REMBOURSEMENT_CONFIRME',
+  'LITIGE_RAPPEL_J1', 'LITIGE_RAPPEL_J3', 'LITIGE_RAPPEL_J5',
+  'REGULARISATION_SOCIALE_REQUISE', 'LITIGE_MEDIATION_PRIORITAIRE',
 ]);
 
 interface TemplateResult { subject: string; html: string }
@@ -428,6 +432,179 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           <h2 style="color:#0F172A;margin:0 0 12px;">💸 Votre paiement rapide a été versé</h2>
           <p style="color:#334155;">Votre demande d'avance a été traitée. Le montant a été crédité sur votre compte bancaire sous 24-48h.</p>
           ${BUTTON('Voir mes avances →', `${APP_URL}/soignant/mes-avances`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    // ─── Templates Litiges (CP-LITIGES-5) ──────────────────
+
+    case 'LITIGE_OUVERTURE':
+      return {
+        subject: `Un litige a été ouvert sur votre mission du ${data.date_mission || ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⚠️ Litige ouvert</h2>
+          <p style="color:#334155;">Un litige de type <strong>${data.type_litige_libelle || data.type_litige || ''}</strong> a été ouvert ${data.initie_par === 'SOIGNANT' ? 'par le soignant' : data.initie_par === 'ETABLISSEMENT' ? 'par l\'établissement' : ''} sur la mission :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">${data.mission_intitule || data.mission || 'Mission'}</strong><br/>
+            <span style="color:#334155;">📅 ${data.date_mission || ''}</span>
+          `)}
+          ${INFO_BOX(`<strong>Motif :</strong> ${data.motif || 'Non précisé'}`)}
+          <p style="color:#334155;">Vous disposez de <strong>${data.delai_reponse_texte || '72h'}</strong> pour répondre avant escalade automatique.</p>
+          ${BUTTON('Répondre au litige →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_NOUVEAU_MESSAGE':
+      return {
+        subject: `Nouveau message sur votre litige`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">💬 Nouveau message</h2>
+          <p style="color:#334155;"><strong>${data.auteur || 'Un participant'}</strong> a ajouté un message à votre litige :</p>
+          ${INFO_BOX(`"${data.extrait_message || '...'}"`.substring(0, 200))}
+          ${BUTTON('Voir la discussion →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_ESCALADE_ADMIN':
+      return {
+        subject: `🚨 Litige escaladé — action requise`,
+        html: WRAPPER(`
+          <h2 style="color:#DC2626;margin:0 0 12px;">🚨 Litige escaladé en médiation</h2>
+          <p style="color:#334155;">Un litige nécessite votre intervention :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Type :</strong> ${data.type_litige || ''}<br/>
+            <strong style="color:#0F172A;">Soignant :</strong> ${data.soignant_nom || '—'}<br/>
+            <strong style="color:#0F172A;">Établissement :</strong> ${data.etablissement_nom || '—'}<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_intitule || data.mission_id || '—'}<br/>
+            <strong style="color:#0F172A;">Ouvert depuis :</strong> ${data.jours_ouverture || '?'} jours<br/>
+            ${data.montant_bloque ? `<strong style="color:#DC2626;">Trésorerie bloquée :</strong> ${data.montant_bloque} €` : ''}
+          `)}
+          ${BUTTON('Résoudre le litige →', `${APP_URL}/admin/moderation`)}
+        `),
+      };
+
+    case 'LITIGE_MEDIATION_PRIORITAIRE':
+      return {
+        subject: `🚨 Litige en médiation depuis > ${data.jours_depuis_escalade || 7} jours`,
+        html: WRAPPER(`
+          <h2 style="color:#DC2626;margin:0 0 12px;">🚨 Alerte prioritaire — médiation prolongée</h2>
+          <p style="color:#334155;">Un litige est en médiation depuis plus de <strong>${data.jours_depuis_escalade || 7} jours</strong> sans action.</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Type :</strong> ${data.type_litige || ''}<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_id || '—'}
+          `)}
+          ${BUTTON('Traiter le litige →', `${APP_URL}/admin/moderation`)}
+        `),
+      };
+
+    case 'LITIGE_RESOLU_AJUSTE':
+      return {
+        subject: `Litige résolu — ajustement appliqué`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">✅ Litige résolu</h2>
+          <p style="color:#334155;">Le litige a été résolu ${data.en_faveur_de ? `en faveur du <strong>${data.en_faveur_de === 'SOIGNANT' ? 'soignant' : 'établissement'}</strong>` : 'par l\'administration'}.</p>
+          ${INFO_BOX(`<strong>Résolution :</strong> ${data.resolution || '—'}`)}
+          ${data.heures_avant ? CARD_BOX(`
+            <strong style="color:#0F172A;">Ajustement :</strong><br/>
+            Heures : ${data.heures_avant}h → ${data.heures_apres}h<br/>
+            Montant : ${data.montant_avant} € → ${data.montant_apres} €
+          `) : ''}
+          ${data.url_facture ? BUTTON('Voir la facture →', data.url_facture) : BUTTON('Voir le détail →', `${APP_URL}/soignant/litiges`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'AVOIR_EMIS':
+      return {
+        subject: `Avoir ${data.numero_avoir || ''} émis — Jolene`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📄 Avoir émis</h2>
+          <p style="color:#334155;">Un avoir a été émis suite à la résolution d'un litige :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">N° avoir :</strong> ${data.numero_avoir || '—'}<br/>
+            <strong style="color:#0F172A;">Facture d'origine :</strong> ${data.numero_facture_origine || '—'}<br/>
+            <strong style="color:#0F172A;">Montant :</strong> -${data.montant_avoir || '0'} €<br/>
+            <strong style="color:#0F172A;">Remboursement :</strong> ${data.mode_remboursement_texte || 'Virement sous 7 jours ouvrés'}
+          `)}
+          ${data.date_remboursement_prevue ? `<p style="color:#334155;">Remboursement prévu : <strong>${data.date_remboursement_prevue}</strong></p>` : ''}
+          ${BUTTON('Consulter l\'avoir →', `${APP_URL}/soignant/mes-factures`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'REMBOURSEMENT_CONFIRME':
+      return {
+        subject: `Remboursement de ${data.montant || ''} € effectué`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">💸 Remboursement effectué</h2>
+          <p style="color:#334155;">Votre remboursement a été traité :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Montant :</strong> ${data.montant || '—'} €<br/>
+            <strong style="color:#0F172A;">Mode :</strong> ${data.mode_texte || '—'}<br/>
+            <strong style="color:#0F172A;">Référence :</strong> ${data.reference || '—'}<br/>
+            <strong style="color:#0F172A;">Avoir n° :</strong> ${data.numero_avoir || '—'}
+          `)}
+          <p style="color:#334155;">⏱️ Délai bancaire : ${data.delai_bancaire || '2 à 5 jours ouvrés'}.</p>
+          ${BUTTON('Voir mes factures →', `${APP_URL}/soignant/mes-factures`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_RAPPEL_J1':
+      return {
+        subject: 'Rappel : litige en attente de votre réponse',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⏰ Rappel — litige en attente</h2>
+          <p style="color:#334155;">Un litige est en attente de votre réponse depuis <strong>1 jour</strong>.</p>
+          ${INFO_BOX('Répondez avant l\'escalade automatique en médiation.')}
+          ${BUTTON('Répondre →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_RAPPEL_J3':
+      return {
+        subject: '⚠️ Rappel urgent : litige en attente depuis 3 jours',
+        html: WRAPPER(`
+          <h2 style="color:#F59E0B;margin:0 0 12px;">⚠️ Rappel urgent — 3 jours</h2>
+          <p style="color:#334155;">Un litige est en attente de votre réponse depuis <strong>3 jours</strong>.</p>
+          ${INFO_BOX('<strong>Sans réponse, ce litige sera automatiquement escaladé en médiation.</strong>')}
+          ${BUTTON('Répondre maintenant →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_RAPPEL_J5':
+      return {
+        subject: '🚨 Dernier rappel — escalade imminente',
+        html: WRAPPER(`
+          <h2 style="color:#DC2626;margin:0 0 12px;">🚨 Dernier rappel — jour 5</h2>
+          <p style="color:#334155;">Un litige est en attente de votre réponse depuis <strong>5 jours ouvrés</strong>. L'escalade en médiation est imminente.</p>
+          ${INFO_BOX('<strong>Ceci est le dernier rappel automatique. Sans réponse, un administrateur interviendra.</strong>')}
+          ${BUTTON('Répondre immédiatement →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'REGULARISATION_SOCIALE_REQUISE':
+      return {
+        subject: 'Ajustement de vos heures — régularisation URSSAF/Carpimko à prévoir',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📋 Régularisation sociale à prévoir</h2>
+          <p style="color:#334155;">Suite à la résolution d'un litige, vos heures déclarées ont été ajustées :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_intitule || '—'}<br/>
+            <strong style="color:#0F172A;">Heures :</strong> ${data.ancien_nombre_heures || '—'}h → ${data.nouveau_nombre_heures || '—'}h<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${data.ancien_montant || '—'} € → ${data.nouveau_montant || '—'} €<br/>
+            <strong style="color:#0F172A;">Facture d'origine :</strong> émise le ${data.date_origine_facture || '—'}
+          `)}
+          ${INFO_BOX(`
+            <strong>⚠️ Important :</strong> cette résolution modifie vos heures déclarées. Si vous avez déjà déclaré ces revenus (URSSAF, Carpimko), une régularisation peut être nécessaire.<br/><br/>
+            <strong>Nous vous recommandons de consulter votre comptable.</strong>
+          `)}
+          ${data.url_nouvelle_facture_ou_avoir ? BUTTON('Voir le document →', data.url_nouvelle_facture_ou_avoir) : BUTTON('Voir mes factures →', `${APP_URL}/soignant/mes-factures`)}
           ${SECURITY_NOTE}
         `),
       };

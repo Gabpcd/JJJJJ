@@ -36,7 +36,9 @@ serve(async (req) => {
       try {
         // Si c'est un SMS (type commence par SMS_), envoyer via send-sms
         if (email.type?.startsWith('SMS_') && email.data?.telephone) {
-          const smsContenu = email.type === 'SMS_MISSION_URGENTE'
+          const smsContenu = email.data.contenu
+            ? String(email.data.contenu)
+            : email.type === 'SMS_MISSION_URGENTE'
             ? `${email.data.prenom}, mission urgente dispo : ${email.data.mission}. Postulez sur jolene.app`
             : email.type === 'SMS_ANNULATION_TARDIVE'
             ? `Annulation tardive sur "${email.data.mission}". Trouvez un remplaçant sur jolene.app`
