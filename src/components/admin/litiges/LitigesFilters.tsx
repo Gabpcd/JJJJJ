@@ -110,6 +110,7 @@ export function LitigesFilters({ filtres, onChange }: Props) {
           <SelectContent>
             <SelectItem value="GRAVITE">Par gravité</SelectItem>
             <SelectItem value="TRESORERIE">Par trésorerie bloquée</SelectItem>
+            <SelectItem value="ESCALADE_MEDIATION">Par escalade médiation</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -174,6 +174,7 @@ export type LitigeEnrichi = {
   est_informatif?: boolean | null;
   montant_tresorerie_bloquee?: number | null;
   facture_id?: string | null;
+  escalade_auto_le?: string | null;
   soignant?: {
     id: string;
     prenom: string | null;
@@ -204,7 +205,7 @@ export type FiltresLitiges = {
   type_litige: TypeLitige | 'TOUS';
   categorie_litige: CategorieLitige | 'TOUTES';
   statut: StatutLitigeOuvert | 'TOUS_OUVERTS';
-  tri: 'GRAVITE' | 'TRESORERIE';
+  tri: 'GRAVITE' | 'TRESORERIE' | 'ESCALADE_MEDIATION';
 };
 
 export const FILTRES_DEFAUT: FiltresLitiges = {

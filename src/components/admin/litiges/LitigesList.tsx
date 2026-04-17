@@ -61,6 +61,15 @@ export function filtrerEtTrier(
       if (mb !== ma) return mb - ma;
       return rangGravite(a) - rangGravite(b);
     });
+  } else if (filtres.tri === 'ESCALADE_MEDIATION') {
+    // escalade_auto_le asc (plus ancienne = plus urgente),
+    // les litiges sans escalade en fin de liste.
+    sorted.sort((a, b) => {
+      const ea = a.escalade_auto_le ? new Date(a.escalade_auto_le).getTime() : Infinity;
+      const eb = b.escalade_auto_le ? new Date(b.escalade_auto_le).getTime() : Infinity;
+      if (ea !== eb) return ea - eb;
+      return rangGravite(a) - rangGravite(b);
+    });
   } else {
     sorted.sort((a, b) => {
       const ra = rangGravite(a);

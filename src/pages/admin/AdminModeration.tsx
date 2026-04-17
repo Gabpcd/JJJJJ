@@ -13,9 +13,15 @@ import { FileCheck, MessageSquare, Check, X, Eye, ShieldAlert } from 'lucide-rea
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { LitigesFilters } from '@/components/admin/litiges/LitigesFilters';
-import { LitigesList } from '@/components/admin/litiges/LitigesList';
+import { LitigesList, filtrerEtTrier } from '@/components/admin/litiges/LitigesList';
 import { LitigePreuvesPanel } from '@/components/admin/litiges/LitigePreuvesPanel';
 import { LitigeResolutionModal } from '@/components/admin/litiges/LitigeResolutionModal';
+import { AvoirsList } from '@/components/admin/litiges/AvoirsList';
+import { LegacyRecategorisation } from '@/components/admin/litiges/LegacyRecategorisation';
+import { MediationBanner } from '@/components/admin/litiges/MediationBanner';
+import { RefundsQueueWidget } from '@/components/admin/litiges/RefundsQueueWidget';
+import { telechargerCsv } from '@/components/admin/litiges/csv';
+import { Download, Receipt, Tag } from 'lucide-react';
 import {
   FILTRES_DEFAUT,
   type FiltresLitiges,
@@ -41,12 +47,16 @@ export default function AdminModeration() {
   const [loading, setLoading] = useState(true);
 
   const [filtres, setFiltres] = useState<FiltresLitiges>(FILTRES_DEFAUT);
+  const [mediationCount, setMediationCount] = useState<number>(0);
+  const [legacyCount, setLegacyCount] = useState<number>(0);
 
   const [preuvesLitige, setPreuvesLitige] = useState<LitigeEnrichi | null>(null);
   const [preuvesOpen, setPreuvesOpen] = useState(false);
 
   const [resolutionLitige, setResolutionLitige] = useState<LitigeEnrichi | null>(null);
   const [resolutionOpen, setResolutionOpen] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<string>('litiges');
 
   const charger = async () => {
     setLoading(true);
@@ -55,7 +65,7 @@ export default function AdminModeration() {
       supabase
         .from('litiges')
         .select(
-          'id, motif, reponse, statut, cree_le, soignant_id, etablissement_id, mission_id, initie_par, resolution, resolu_le, type_litige, categorie_litige, est_informatif, montant_tresorerie_bloquee, facture_id',
+          'id, motif, reponse, statut, cree_le, soignant_id, etablissement_id, mission_id, initie_par, resolution, resolu_le, type_litige, categorie_litige, est_informatif, montant_tresorerie_bloquee, facture_id, escalade_auto_le',
         )
         .in('statut', ['OUVERT', 'EN_DISCUSSION', 'EN_MEDIATION', 'CONTESTEE'])
         .order('cree_le', { ascending: false }),
@@ -145,6 +155,16 @@ export default function AdminModeration() {
       setEvaluations([]);
     }
     if (resDocs.data) setDocuments(resDocs.data);
+
+    // Count litiges EN_MEDIATION depuis plus de 7 jours (escalade_auto_le < now - 7d).
+    const seuilIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: medCount, error: errMed } = await supabase
+      .from('litiges')
+      .select('id', { count: 'exact', head: true })
+      .eq('statut', 'EN_MEDIATION')
+      .lt('escalade_auto_le', seuilIso);
+    if (!errMed) setMediationCount(medCount ?? 0);
+
     setLoading(false);
   };
 
@@ -186,18 +206,53 @@ export default function AdminModeration() {
     <LayoutAdmin>
       <BreadcrumbAdmin pageName="Modération" />
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-foreground">Modération</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-bold text-foreground">Modération</h1>
+          <RefundsQueueWidget />
+        </div>
 
-        <Tabs defaultValue="litiges">
+        <MediationBanner
+          count={mediationCount}
+          onVoir={() => {
+            setFiltres({
+              ...FILTRES_DEFAUT,
+              statut: 'EN_MEDIATION',
+              tri: 'ESCALADE_MEDIATION',
+            });
+            setActiveTab('litiges');
+          }}
+        />
+
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="litiges" className="gap-1.5"><MessageSquare className="h-4 w-4" />Litiges ({litiges.length})</TabsTrigger>
+            <TabsTrigger value="avoirs" className="gap-1.5"><Receipt className="h-4 w-4" />Avoirs</TabsTrigger>
+            <TabsTrigger value="legacy" className="gap-1.5">
+              <Tag className="h-4 w-4" />Legacy{legacyCount > 0 ? ` (${legacyCount})` : ''}
+            </TabsTrigger>
             <TabsTrigger value="evaluations" className="gap-1.5"><Eye className="h-4 w-4" />Évaluations ({evaluations.length})</TabsTrigger>
             <TabsTrigger value="documents" className="gap-1.5"><FileCheck className="h-4 w-4" />Documents ({documents.length})</TabsTrigger>
             <TabsTrigger value="incoherences" className="gap-1.5"><ShieldAlert className="h-4 w-4" />Identité ({incoherences.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="litiges" className="space-y-4" data-testid="tab-litiges">
-            <LitigesFilters filtres={filtres} onChange={setFiltres} />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <LitigesFilters filtres={filtres} onChange={setFiltres} />
+            </div>
+
+            <div className="flex items-center justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => telechargerCsv(filtrerEtTrier(litiges, filtres))}
+                disabled={litiges.length === 0}
+                aria-label="Exporter les litiges filtrés en CSV"
+                data-testid="btn-export-csv"
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                Exporter CSV
+              </Button>
+            </div>
 
             <LitigesList
               litiges={litiges}
@@ -231,6 +286,17 @@ export default function AdminModeration() {
               onResolved={() => {
                 charger();
               }}
+            />
+          </TabsContent>
+
+          <TabsContent value="avoirs" className="space-y-4" data-testid="tab-avoirs">
+            <AvoirsList onChanged={charger} />
+          </TabsContent>
+
+          <TabsContent value="legacy" className="space-y-4" data-testid="tab-legacy">
+            <LegacyRecategorisation
+              onChanged={charger}
+              onCountChange={setLegacyCount}
             />
           </TabsContent>
 
