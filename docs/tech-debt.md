@@ -336,3 +336,15 @@ Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_inte
 **Priorité** : P1 — couplé à T12
 
 **Date** : 2026-04-17
+
+---
+
+## T14 — Regen PDF/XML avoir : passer en déclenchement direct
+
+**Contexte** : CP-LITIGES-6 câble la regénération des PDF/XML (factures ajustées + avoirs) via le cron quotidien `litige-escalation-cron` qui scanne `factures_honoraires.pdf_a_regenerer = TRUE`. Inconvénient : si un admin résout un litige à 09h, le PDF de l'avoir ne sera disponible que le lendemain à 08h UTC.
+
+**Action** : passer à un déclenchement direct en appelant `generate-invoice` depuis `fn_admin_resoudre_litige` (CP3) via `pg_net.http_post`. Vérifier d'abord que `pg_net` est disponible sur l'instance Supabase. Alternative : appel côté frontend admin juste après le RPC `fn_admin_resoudre_litige` (moins robuste car dépend du client). Conserver le scan cron comme filet de sécurité en cas d'échec du direct.
+
+**Priorité** : P2 — amélioration UX (résolution pas bloquante mais délai frustrant)
+
+**Date** : 2026-04-17

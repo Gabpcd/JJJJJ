@@ -74,6 +74,30 @@ serve(async (req) => {
       results.mediation_prioritaire_error = (err as Error).message;
     }
 
+    // ── 5. Regen PDF/XML pour les factures flag pdf_a_regenerer=TRUE (CP-LITIGES-6) ──
+    try {
+      const { data: pending } = await sb.rpc("fn_lister_factures_a_regenerer", { p_limit: 50 });
+      let regen_ok = 0, regen_fail = 0;
+      for (const row of (pending || []) as Array<{ id: string; numero_facture: string; type_document: string }>) {
+        try {
+          await sb.functions.invoke("generate-invoice", {
+            body: {
+              facture_id: row.id,
+              service_role_reason: `cron_auto_generation`,
+            },
+          });
+          regen_ok++;
+        } catch (e) {
+          console.error(`regen ${row.numero_facture} failed:`, e);
+          regen_fail++;
+        }
+      }
+      results.regen = { ok: regen_ok, fail: regen_fail, total: (pending || []).length };
+    } catch (err) {
+      console.error("regen scan error:", err);
+      results.regen_error = (err as Error).message;
+    }
+
     const duration_ms = Date.now() - t0;
     console.log("litige-escalation-cron done:", { duration_ms, results });
 
