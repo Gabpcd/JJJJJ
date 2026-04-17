@@ -38,7 +38,7 @@ function escapeHtml(str: unknown): string {
 
 // ─── Email template helpers ──────────────────────────────
 
-const WRAPPER = (content: string) => `
+const WRAPPER = (content: string, opts?: { hasAttachment?: boolean }) => `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
@@ -52,9 +52,11 @@ const WRAPPER = (content: string) => `
     </div>
     <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;">
       <p style="margin:0 0 6px;">Jolene SAS — <a href="${APP_URL}" style="color:#E04590;text-decoration:none;">jolene.app</a></p>
-      <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> · 
+      <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> ·
          <a href="${APP_URL}/confidentialite" style="color:#94A3B8;text-decoration:none;">Confidentialité</a></p>
-      <p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>
+      ${opts?.hasAttachment
+        ? `<p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">📎 Le document est joint à cet email.</p>`
+        : `<p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>`}
     </div>
   </div>
 </body>
@@ -90,7 +92,7 @@ const ALLOWED_TYPES = new Set([
   'REGULARISATION_SOCIALE_REQUISE', 'LITIGE_MEDIATION_PRIORITAIRE',
 ]);
 
-interface TemplateResult { subject: string; html: string }
+interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
 
 function renderTemplate(type: string, rawData: Record<string, unknown>): TemplateResult | null {
   const data: Record<string, string> = {};
@@ -519,6 +521,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
     case 'AVOIR_EMIS':
       return {
         subject: `Avoir ${data.numero_avoir || ''} émis — Jolene`,
+        hasAttachment: true,
         html: WRAPPER(`
           <h2 style="color:#0F172A;margin:0 0 12px;">📄 Avoir émis</h2>
           <p style="color:#334155;">Un avoir a été émis suite à la résolution d'un litige :</p>
@@ -530,8 +533,8 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           `)}
           ${data.date_remboursement_prevue ? `<p style="color:#334155;">Remboursement prévu : <strong>${data.date_remboursement_prevue}</strong></p>` : ''}
           ${BUTTON('Consulter l\'avoir →', `${APP_URL}/soignant/mes-factures`)}
-          ${SECURITY_NOTE}
-        `),
+          <p style="font-size:12px;color:#94A3B8;text-align:center;margin-top:20px;">📎 Le PDF de l'avoir est joint à cet email. En cas de problème, consultez-le directement dans l'application.</p>
+        `), { hasAttachment: true }),
       };
 
     case 'REMBOURSEMENT_CONFIRME':
@@ -755,6 +758,46 @@ serve(async (req) => {
 
     const { subject, html } = rendered;
 
+    // CP-LITIGES-7a FIX 16 : attachment PDF pour AVOIR_EMIS
+    const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+    let attachments: Array<{ filename: string; content: string }> | undefined;
+
+    if (rendered.hasAttachment && type === 'AVOIR_EMIS' && templateData?.avoir_id) {
+      try {
+        const { data: avoir } = await supabaseService
+          .from('factures_honoraires')
+          .select('pdf_s3_key, numero_facture')
+          .eq('id', templateData.avoir_id)
+          .single();
+
+        if (avoir?.pdf_s3_key) {
+          const { data: blob, error: dlErr } = await supabaseService.storage
+            .from('jolene-documents')
+            .download(avoir.pdf_s3_key);
+
+          if (dlErr || !blob) {
+            console.warn(`[send-email] AVOIR_EMIS attachment: PDF download failed (${avoir.pdf_s3_key}):`, dlErr);
+          } else if (blob.size > MAX_ATTACHMENT_BYTES) {
+            console.warn(`[send-email] AVOIR_EMIS attachment: PDF too large (${blob.size} bytes > ${MAX_ATTACHMENT_BYTES}), skipping attachment`);
+          } else {
+            const buffer = await blob.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            const base64 = btoa(binary);
+            const safeNumero = (avoir.numero_facture || 'avoir').replace(/[^a-zA-Z0-9_-]/g, '_');
+            attachments = [{ filename: `avoir-${safeNumero}.pdf`, content: base64 }];
+          }
+        } else {
+          console.warn(`[send-email] AVOIR_EMIS attachment: no pdf_s3_key for avoir ${templateData.avoir_id} — PDF not yet generated`);
+        }
+      } catch (e) {
+        console.warn('[send-email] AVOIR_EMIS attachment fetch error:', e);
+      }
+    }
+
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
     if (!RESEND_API_KEY) {
       console.log('RESEND_API_KEY not configured — email skipped');
@@ -763,18 +806,23 @@ serve(async (req) => {
       });
     }
 
+    const emailPayload: Record<string, unknown> = {
+      from: 'Jolene <noreply@jolene.app>',
+      to: [resolvedEmail],
+      subject,
+      html,
+    };
+    if (attachments && attachments.length > 0) {
+      emailPayload.attachments = attachments;
+    }
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: 'Jolene <noreply@jolene.app>',
-        to: [resolvedEmail],
-        subject,
-        html,
-      }),
+      body: JSON.stringify(emailPayload),
     });
 
     const resData = await response.json();
