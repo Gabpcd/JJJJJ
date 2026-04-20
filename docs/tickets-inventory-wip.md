@@ -3,8 +3,8 @@
 **Date** : 2026-04-20
 **Snapshot base** : commit `f6e8d279` (tech-debt.md restauré, 428 lignes)
 **Branche** : `claude/fix-merge-conflicts-2Y4ph`
-**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email)
-**Sources à venir** : E (Audit 4 Paiement salarié), F (Audit 5 Scoring), G (Audit 6 Statut REMPLACEE), H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
+**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié)
+**Sources à venir** : F (Audit 5 Scoring), G (Audit 6 Statut REMPLACEE), H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
 
 ## Légende
 
@@ -65,30 +65,47 @@
 | D10  | PAIEMENT_CONFIRME : aucun trigger (distinct FACTURE_PAYEE), câbler ou fusionner | P2 | OUVERT | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
 | D11  | AdminEmails.tsx : 7 noms legacy → bouton "Send test" rend templates vides | P1   | OUVERT   | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
 | D12  | Audit systémique pattern "notif in-app sans email" + 3 TODOs post-CP-LITIGES-3 | P1 | OUVERT  | Audit 3 : Templates email       | 8         | SP-B-templates-email-critiques    |
+| E1   | Harmoniser 2 logiques blocage divergentes (trigger 30j vs RPC 60j) → chemin unique | P0 | OUVERT | Audit 4 : Paiement salarié    | 6         | SP-C-paiement-salarie-refonte     |
+| E2   | Créer 3 templates email manquants (RAPPEL_PAIEMENT_J7 + PAIEMENT_RETARD_J30 + PUBLICATION_SUSPENDUE) | P0 | OUVERT | Audit 4 : Paiement salarié | 8 | SP-C-paiement-salarie-refonte     |
+| E3   | Pont pg_net → send-email (RPC écrit notif in-app uniquement, aucun email) | P0 | OUVERT | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
+| E4   | Déduplication notif par `type` dédié (aujourd'hui titre LIKE '%retard%' fragile) | P0 | OUVERT | Audit 4 : Paiement salarié   | 3         | SP-C-paiement-salarie-refonte     |
+| E5   | Statut EXPIRE + transition automatique après échéance                  | P1       | OUVERT   | Audit 4 : Paiement salarié      | 8         | SP-C-paiement-salarie-refonte     |
+| E6   | Exploiter colonne `relance_2_le` (dead column, jamais écrite)          | P1       | OUVERT   | Audit 4 : Paiement salarié      | 3         | SP-C-paiement-salarie-refonte     |
+| E7   | Unfreeze automatique quand étab régularise (aujourd'hui bloqué à vie)  | P1       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
+| E8   | Basculer source de vérité sur `echeance_le` (aujourd'hui fin_le + INTERVAL) | P2   | OUVERT   | Audit 4 : Paiement salarié      | 4         | SP-C-paiement-salarie-refonte     |
+| E9   | Ajouter colonnes `bloque_le`, `raison_blocage`, historique blocages    | P2       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
+| E10  | Aligner seuils J+7/J+30/expiration (prod J+30/J+15/J+60 vs annoncés)   | P0       | OUVERT   | Audit 4 : Paiement salarié      | 4         | SP-C-paiement-salarie-refonte     |
+| E11  | Implémenter reminder J+7 (zéro code actuel)                            | P0       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
 
 ---
 
 ## Comptage automatique
 
-**Total tickets** : 47
+**Total tickets** : 58
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 6      | B1, B2, B3a, D1, D2, D3                                                 |
+| P0 OUVERTS      | 12     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11                       |
 | P0 RÉSOLUS      | 2      | A24, A25                                                                |
-| P1 OUVERTS      | 12     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12                     |
+| P1 OUVERTS      | 15     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7         |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 3      | A4, A23, A26                                                            |
-| P2 OUVERTS      | 16     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10  |
+| P2 OUVERTS      | 18     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9 |
 | P2 RÉSOLUS      | 2      | A22, B5                                                                 |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 6 + 2 + 12 + 1 + 3 + 16 + 2 + 5 = **47** ✓
+**Validation somme** : 12 + 2 + 15 + 1 + 3 + 18 + 2 + 5 = **58** ✓
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
-- P0 OUVERTS (6 tickets) : B1=10 + B2=6 + B3a=0.5 + D1=3 + D2=2 + D3=4 = **25.5 h**
-- P1 OUVERTS + EN COURS (13 tickets) : A5=12 + A7=16 + A8=4 + A16=24 + A20=8 + A21=12 + B4=0.5 + D4=3 + D5=2 + D6=2 + D7=2 + D11=2 + D12=8 = **95.5 h**
-- P2 OUVERTS (16 tickets) : A1=4 + A2=1 + A3=0.5 + A6=2 + A9=4 + A10=3 + A11=3 + A12=1 + A14=6 + A15=2 + A19=16 + B3b=0.25 + C1=2 + D8=4 + D9=3 + D10=2 = **53.75 h**
-- **Total actionnable immédiatement : 174.75 h** (≈ 4.5 semaines ingénieur)
+- P0 OUVERTS (12 tickets) : B1=10 + B2=6 + B3a=0.5 + D1=3 + D2=2 + D3=4 + E1=6 + E2=8 + E3=6 + E4=3 + E10=4 + E11=6 = **58.5 h**
+- P1 OUVERTS + EN COURS (16 tickets) : A5=12 + A7=16 + A8=4 + A16=24 + A20=8 + A21=12 + B4=0.5 + D4=3 + D5=2 + D6=2 + D7=2 + D11=2 + D12=8 + E5=8 + E6=3 + E7=6 = **112.5 h**
+- P2 OUVERTS (18 tickets) : A1=4 + A2=1 + A3=0.5 + A6=2 + A9=4 + A10=3 + A11=3 + A12=1 + A14=6 + A15=2 + A19=16 + B3b=0.25 + C1=2 + D8=4 + D9=3 + D10=2 + E8=4 + E9=6 = **63.75 h**
+- **Total actionnable immédiatement : 234.75 h** (≈ 6 semaines ingénieur)
 
 Les DIFFÉRÉS (5 tickets : A13=2 + A17=8 + A18=2 + C2=4 + C3=6 = **22 h**) sont hors périmètre sprint courant.
+
+### Scope par Sub-PR (en construction)
+
+| Sub-PR                                 | Tickets                                    | Scope (h) |
+|----------------------------------------|--------------------------------------------|-----------|
+| SP-C-paiement-salarie-refonte (Source E) | E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11 | **60 h**  |
