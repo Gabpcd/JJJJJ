@@ -4,7 +4,7 @@
 -- Dépend de : CP-LITIGES-1/2/3 (20260417130000-130300) + fixes CP2.
 --
 -- Livre :
---   0. fn_list_admin_user_ids() — helper interne (lookup user_roles).
+--   0. fn_list_admin_user_ids() — helper interne (lookup auth.users JWT).
 --   1. fn_litiges_escalader_auto() — escalade auto après 72h libéral /
 --      5 jours ouvrés salarié.
 --   2. fn_auto_creation_litiges_presence() — auto-création ABSENCE_SOIGNANT
@@ -17,8 +17,8 @@
 -- email-cron existant) + notifications (in-app). Aucun appel direct
 -- à send-email/send-sms depuis ces RPCs.
 --
--- La table user_roles (role='ADMIN_PLATEFORME') est utilisée pour
--- identifier les admins. Cf. usage dans 20260328174939.
+-- auth.users.raw_app_meta_data->>'role' = 'ADMIN_PLATEFORME' est utilisé
+-- pour identifier les admins (pattern JWT Jolene).
 -- ============================================================
 
 BEGIN;
@@ -32,15 +32,15 @@ RETURNS SETOF UUID
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path TO 'public', 'auth'
 AS $$
-  SELECT user_id
-    FROM public.user_roles
-   WHERE role = 'ADMIN_PLATEFORME';
+  SELECT id
+    FROM auth.users
+   WHERE raw_app_meta_data->>'role' = 'ADMIN_PLATEFORME';
 $$;
 
 COMMENT ON FUNCTION public.fn_list_admin_user_ids() IS
-  'Retourne la liste des user_ids ADMIN_PLATEFORME. Utilisé par les crons litiges pour notifier les admins.';
+  'Retourne la liste des user_ids ADMIN_PLATEFORME via auth.users JWT. Utilisé par les crons litiges pour notifier les admins.';
 
 GRANT EXECUTE ON FUNCTION public.fn_list_admin_user_ids() TO service_role;
 
@@ -294,11 +294,7 @@ BEGIN
   FOR v_litige IN
     SELECT l.id, l.mission_id, l.soignant_id, l.etablissement_id,
            l.initie_par, l.cree_le, l.reponse, l.type_litige,
-           l.derniers_rappels_envoyes,
-           (SELECT ur.user_id FROM public.user_roles ur
-             WHERE ur.etablissement_id = l.etablissement_id
-               AND ur.role IN ('ETABLISSEMENT', 'ADMIN_ETABLISSEMENT')
-             LIMIT 1) AS etab_user_id
+           l.derniers_rappels_envoyes
       FROM public.litiges l
      WHERE l.statut IN ('OUVERT', 'EN_DISCUSSION')
        AND NOT l.est_informatif
@@ -322,7 +318,7 @@ BEGIN
 
     -- Ciblage : partie opposée à l'initiateur
     IF v_litige.initie_par = 'SOIGNANT' THEN
-      v_destinataire_id := v_litige.etab_user_id;
+      v_destinataire_id := v_litige.etablissement_id;
       v_destinataire_type := 'ETABLISSEMENT';
     ELSE
       v_destinataire_id := v_litige.soignant_id;

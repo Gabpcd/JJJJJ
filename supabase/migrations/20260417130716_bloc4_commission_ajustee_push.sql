@@ -38,7 +38,6 @@ DECLARE
   v_notifs_envoyees    INT := 0;
   v_mission_intitule   TEXT;
   v_litige_id          UUID;
-  v_user_id            UUID;
 BEGIN
   FOR v_mission IN
     SELECT id, taux_commission, facture_id, commission_facturee,
@@ -134,38 +133,30 @@ BEGIN
 
     v_mission_intitule := COALESCE(v_mission.intitule, 'Mission #' || v_mission.id::text);
 
-    -- Notifier tous les users avec role ADMIN_ETABLISSEMENT ou
-    -- ETABLISSEMENT sur cet étab (représentants légaux multiples).
-    FOR v_user_id IN
-      SELECT ur.user_id
-        FROM public.user_roles ur
-       WHERE ur.etablissement_id = v_mission.etablissement_id
-         AND ur.role IN ('ADMIN_ETABLISSEMENT', 'ETABLISSEMENT')
-    LOOP
-      PERFORM public.fn_litige_push_notification(
-        v_user_id,
-        'ETABLISSEMENT',
-        'COMMISSION_AJUSTEE',
-        CASE WHEN v_doc_type = 'AVOIR'
-          THEN 'Avoir commission ' || v_doc_number || ' émis'
-          ELSE 'Facture complémentaire ' || v_doc_number || ' émise'
-        END,
-        CASE WHEN v_doc_type = 'AVOIR'
-          THEN 'Un avoir de ' || v_delta_ttc || ' € a été émis sur la commission de la mission "' || v_mission_intitule || '". Déduit de votre prochaine facture mensuelle.'
-          ELSE 'Une facture complémentaire de ' || v_delta_ttc || ' € a été émise sur la commission de la mission "' || v_mission_intitule || '". Due aux conditions habituelles.'
-        END,
-        v_litige_id,
-        jsonb_build_object(
-          'type_document', v_doc_type,
-          'numero_document', v_doc_number,
-          'montant', v_delta_ttc,
-          'mission_id', v_mission.id,
-          'mission_intitule', v_mission_intitule,
-          'etablissement_id', v_mission.etablissement_id
-        )
-      );
-      v_notifs_envoyees := v_notifs_envoyees + 1;
-    END LOOP;
+    -- Notifier l'établissement (pattern Jolene : destinataire_id = etablissement_id).
+    PERFORM public.fn_litige_push_notification(
+      v_mission.etablissement_id,
+      'ETABLISSEMENT',
+      'COMMISSION_AJUSTEE',
+      CASE WHEN v_doc_type = 'AVOIR'
+        THEN 'Avoir commission ' || v_doc_number || ' émis'
+        ELSE 'Facture complémentaire ' || v_doc_number || ' émise'
+      END,
+      CASE WHEN v_doc_type = 'AVOIR'
+        THEN 'Un avoir de ' || v_delta_ttc || ' € a été émis sur la commission de la mission "' || v_mission_intitule || '". Déduit de votre prochaine facture mensuelle.'
+        ELSE 'Une facture complémentaire de ' || v_delta_ttc || ' € a été émise sur la commission de la mission "' || v_mission_intitule || '". Due aux conditions habituelles.'
+      END,
+      v_litige_id,
+      jsonb_build_object(
+        'type_document', v_doc_type,
+        'numero_document', v_doc_number,
+        'montant', v_delta_ttc,
+        'mission_id', v_mission.id,
+        'mission_intitule', v_mission_intitule,
+        'etablissement_id', v_mission.etablissement_id
+      )
+    );
+    v_notifs_envoyees := v_notifs_envoyees + 1;
   END LOOP;
 
   RETURN jsonb_build_object(

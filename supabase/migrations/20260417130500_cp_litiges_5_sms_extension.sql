@@ -6,7 +6,7 @@
 --      éligibles (LITIGE_OUVERTURE, REMBOURSEMENT_CONFIRME,
 --      LITIGE_RAPPEL_J1/J3/J5).
 --   2. Lookup automatique du téléphone du destinataire via
---      soignants.telephone ou user_roles + etablissements.telephone_contact.
+--      soignants.telephone ou etablissements.telephone_contact (pattern JWT).
 --
 -- email-cron route les types SMS_* vers send-sms (passthrough contenu).
 -- ============================================================
@@ -78,9 +78,7 @@ BEGIN
   ELSIF p_type_destinataire = 'ETABLISSEMENT' THEN
     SELECT e.telephone_contact INTO v_telephone
       FROM public.etablissements e
-      JOIN public.user_roles ur ON ur.etablissement_id = e.id
-     WHERE ur.user_id = p_destinataire_id
-     LIMIT 1;
+     WHERE e.id = p_destinataire_id;
   END IF;
 
   IF v_telephone IS NULL OR length(trim(v_telephone)) < 10 THEN

@@ -328,11 +328,7 @@ BEGIN
   IF v_action IN ('RECALCUL', 'ANNULER_REEMETTRE', 'AVOIR') AND v_litige IS NOT NULL THEN
     v_soignant_id := v_litige.soignant_id;
 
-    SELECT ur.user_id INTO v_etab_user_id
-      FROM public.user_roles ur
-     WHERE ur.etablissement_id = v_litige.etablissement_id
-       AND ur.role IN ('ETABLISSEMENT', 'ADMIN_ETABLISSEMENT')
-     LIMIT 1;
+    v_etab_user_id := v_litige.etablissement_id;
 
     v_email_data := jsonb_build_object(
       'action_financiere', v_action,
