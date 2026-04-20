@@ -10,10 +10,11 @@
 -- doit émettre un AVOIR mode_remboursement=AUTO_STRIPE + ligne dans
 -- stripe_refunds_queue.
 --
--- Note signature RPC : fn_admin_resoudre_litige nécessite
--- ajuster_heures ET ajuster_taux NON-NULL pour que v_diff > 0 (sinon
--- retour error 'AVOIR non applicable'). On passe donc taux=25 (inchangé)
--- avec heures=4 pour produire 4×25=100 vs 300 initial, diff=200€.
+-- Depuis le FIX bonus null values (migration 20260417130720),
+-- p_ajuster_heures et p_ajuster_taux peuvent être passés NULL
+-- indépendamment (fallback sur mission.taux_horaire_base et
+-- presence.heures_reelles). On garde ici p_ajuster_taux=25 explicite
+-- pour rester lisible : 4h × 25€ = 100 vs 300 initial → diff=200€.
 --
 -- Tout en BEGIN/ROLLBACK. Si aucun admin n'existe → SKIP documenté.
 -- ============================================================
