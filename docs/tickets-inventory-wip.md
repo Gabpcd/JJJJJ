@@ -3,8 +3,8 @@
 **Date** : 2026-04-20
 **Snapshot base** : commit `f6e8d279` (tech-debt.md restauré, 428 lignes)
 **Branche** : `claude/fix-merge-conflicts-2Y4ph`
-**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant)
-**Sources à venir** : G (Audit 6 Statut REMPLACEE), H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
+**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant) + G (Audit 6 Statuts factures REMPLACEE)
+**Sources à venir** : H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
 
 ## Légende
 
@@ -91,31 +91,35 @@
 | F13  | Refonte `fn_recalculer_score_fiabilite` unifiée (remplace 4 mécanismes concurrents) | P0 | OUVERT | Audit 5 : Scoring soignant     | 24        | SP-E-scoring-refonte              |
 | F14  | Table `scoring_events` append-only (traçabilité + anti-double-compte + audit) | P1 | OUVERT | Audit 5 : Scoring soignant          | 12        | SP-E-scoring-refonte              |
 | F15  | Mapping catégories litige → impact explicite (SECURITE_DANGER -20, COMPORTEMENT_SOIGNANT -10) | P0 | OUVERT | Audit 5 : Scoring soignant | 4 | SP-E-scoring-refonte            |
+| G1   | `fn_protect_creneaux_si_facture` trigger : filtre statut oublie REMPLACEE → blocage post-litige | P0 | OUVERT | Audit 6 : Statuts factures REMPLACEE | 2 | SP-A-fixes-rapides               |
+| G2   | `generate-invoice/index.ts:716` guard doublon oublie REMPLACEE → risque 3e facture même mission | P0 | OUVERT | Audit 6 : Statuts factures REMPLACEE | 2 | SP-A-fixes-rapides               |
+| G3   | `MesFacturesHonoraires.tsx` : STATUT_CONFIG sans REMPLACEE (badge trompeur) + KPI totalFacture gonflé | P1 | OUVERT | Audit 6 : Statuts factures REMPLACEE | 3 | SP-A-fixes-rapides               |
+| G4   | `fn_admin_mandats_stats` : SUM(montant_ttc) sans filtre statut (bug pré-existant amplifié par REMPLACEE) | P2 | OUVERT | Audit 6 : Statuts factures REMPLACEE | 2 | SP-A-fixes-rapides               |
 
 ---
 
 ## Comptage automatique
 
-**Total tickets** : 73
+**Total tickets** : 77
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 18     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15 |
+| P0 OUVERTS      | 20     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2 |
 | P0 RÉSOLUS      | 2      | A24, A25                                                                |
-| P1 OUVERTS      | 21     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14 |
+| P1 OUVERTS      | 22     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3 |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 3      | A4, A23, A26                                                            |
-| P2 OUVERTS      | 21     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12 |
+| P2 OUVERTS      | 22     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4 |
 | P2 RÉSOLUS      | 2      | A22, B5                                                                 |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 18 + 2 + 21 + 1 + 3 + 21 + 2 + 5 = **73** ✓
+**Validation somme** : 20 + 2 + 22 + 1 + 3 + 22 + 2 + 5 = **77** ✓
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
-- P0 OUVERTS (18 tickets) : 58.5 + F1=6 + F2=8 + F3=3 + F4=6 + F13=24 + F15=4 = **109.5 h**
-- P1 OUVERTS + EN COURS (22 tickets) : 112.5 + F5=6 + F6=3 + F7=3 + F8=4 + F9=3 + F14=12 = **143.5 h**
-- P2 OUVERTS (21 tickets) : 63.75 + F10=4 + F11=2 + F12=6 = **75.75 h**
-- **Total actionnable immédiatement : 328.75 h** (≈ 8.5 semaines ingénieur)
+- P0 OUVERTS (20 tickets) : 109.5 + G1=2 + G2=2 = **113.5 h**
+- P1 OUVERTS + EN COURS (23 tickets) : 143.5 + G3=3 = **146.5 h**
+- P2 OUVERTS (22 tickets) : 75.75 + G4=2 = **77.75 h**
+- **Total actionnable immédiatement : 337.75 h** (≈ 8.5 semaines ingénieur)
 
 Les DIFFÉRÉS (5 tickets : A13=2 + A17=8 + A18=2 + C2=4 + C3=6 = **22 h**) sont hors périmètre sprint courant.
 
@@ -123,5 +127,6 @@ Les DIFFÉRÉS (5 tickets : A13=2 + A17=8 + A18=2 + C2=4 + C3=6 = **22 h**) sont
 
 | Sub-PR                                   | Tickets                                                   | Scope (h) |
 |------------------------------------------|-----------------------------------------------------------|-----------|
+| SP-A-fixes-rapides (Source G)            | G1, G2, G3, G4                                            | **9 h**   |
 | SP-C-paiement-salarie-refonte (Source E) | E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11              | **60 h**  |
 | SP-E-scoring-refonte (Source F)          | F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15 | **94 h**  |
