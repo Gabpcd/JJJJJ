@@ -37,17 +37,39 @@ Appelle en séquence les 4 RPCs `SECURITY DEFINER` :
 
 ### Déploiement
 
+> **Statut prod au 2026-04-20** : edge function `litige-escalation-cron` **NON déployée** sur le projet Jolene (`flripxtsyegjshnhzjkz`). Source présente dans `/supabase/functions/litige-escalation-cron/`, migrations CP-LITIGES-1→7b appliquées. Action manuelle Gabrielle requise (§ *Actions manuelles Gabrielle* dans `/docs/sub-pr-2-quater-recap.md`).
+
 1. **Déployer la function** :
    ```bash
    supabase functions deploy litige-escalation-cron
    ```
 
-2. **Configurer le schedule** (Supabase Dashboard → *Project Settings* → *Edge Functions* → *Schedules*) :
+2. **Configurer le schedule** (deux options équivalentes) :
+
+   **Option A — Dashboard** (Supabase → *Project Settings* → *Edge Functions* → *Schedules*) :
    - **Name** : `litige-escalation-cron-daily`
    - **Cron** : `0 8 * * *` (08h UTC = 09h Paris en hiver, 10h en été)
    - **Function** : `litige-escalation-cron`
    - **HTTP Method** : `POST`
    - **Payload** : `{}`
+
+   **Option B — SQL via `cron.schedule`** (même pattern que `email-cron-daily`, jobid=4) :
+   ```sql
+   SELECT cron.schedule(
+     'litige-escalation-cron-daily',
+     '0 8 * * *',
+     $$
+     SELECT net.http_post(
+       url := current_setting('app.settings.supabase_url') || '/functions/v1/litige-escalation-cron',
+       headers := jsonb_build_object(
+         'Content-Type', 'application/json',
+         'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+       ),
+       body := '{}'::jsonb
+     );
+     $$
+   );
+   ```
 
 3. **Secrets requis** (déjà présents si email-cron déployé) :
    - `SUPABASE_URL`
