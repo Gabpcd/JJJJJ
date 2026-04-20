@@ -51,6 +51,7 @@ export const BADGES_STATUT: Record<string, { label: string; classes: string }> =
   'ASSIGNEE': { label: 'Assignée', classes: 'bg-warning/10 text-warning' },
   'EN_COURS': { label: 'En cours', classes: 'bg-info/10 text-info' },
   'TERMINEE': { label: 'Terminée', classes: 'bg-success/10 text-success' },
+  'EXPIREE': { label: 'Expirée (non pourvue)', classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
   'ANNULEE_PAR_ETABLISSEMENT': { label: 'Annulée', classes: 'bg-muted text-muted-foreground' },
   'ANNULEE_PAR_SOIGNANT': { label: 'Annulée (soignant)', classes: 'bg-destructive/10 text-destructive' },
   'ABSENCE': { label: 'Absence', classes: 'bg-destructive/20 text-destructive' },
