@@ -390,3 +390,21 @@ Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_inte
 **Statut** : RÉSOLU
 
 **Date** : 2026-04-20
+
+---
+
+## [RÉSOLU] T19 — fn_litiges_escalader_auto + fenêtre contestation : flag global au lieu du contrat figé
+
+**Contexte** : `fn_litiges_escalader_auto` et `fn_fenetre_contestation_ouverte` lisaient `soignants.est_salarie_etablissement` (flag global du profil) pour déterminer le délai applicable (72h libéral vs 5 j.o. salarié pour escalade ; 48h vs 60j pour contestation facture). Pour un profil MIXTE — soignant salarié dans étab A et libéral dans étab B — ce flag global est faux pour la mission concernée → délais incorrects (72h appliqué à du salarié, ou 5 j.o. à du libéral).
+
+**Impact** : faille métier : escalades trop tardives ou trop précoces selon l'inversion ; même type d'incohérence sur les fenêtres de contestation factures.
+
+**Résolution** : migration `20260417130722_fix_t19_escalade_type_contrat_applique.sql`
+- Lecture prioritaire de `missions.type_contrat_applique` (enum `LIBERAL`/`SALARIE`, figé à l'assignation par FIX 3).
+- Fallback documenté sur `soignants.est_salarie_etablissement` quand la colonne mission est NULL (missions antérieures au FIX 3 non backfillées) — préserve la rétrocompat.
+- Application cohérente dans les deux RPCs (escalade + fenêtre).
+- Tests : `tests/litiges/fix-t19-escalade-type-contrat.test.sql` — 3 scénarios (mission LIBERAL prime sur flag SALARIE, mission SALARIE prime sur flag LIBERAL, mission NULL → fallback flag).
+
+**Statut** : RÉSOLU
+
+**Date** : 2026-04-20
