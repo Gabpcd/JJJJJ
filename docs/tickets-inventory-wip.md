@@ -106,6 +106,8 @@
 | H9   | Gestion erreurs Stripe typées manquante (3 fonctions, catch global unique) | P2      | OUVERT   | Audit 7 : Stripe Connect        | 4         | SP-D-stripe-connect-prod-ready    |
 | H10  | Pas de throttle/cache sur stripe-connect-status (appel Stripe à chaque render) | P2   | OUVERT   | Audit 7 : Stripe Connect        | 3         | SP-D-stripe-connect-prod-ready    |
 | H11  | Gestion compte Stripe supprimé → 500 au lieu de SUSPENDU gracieux       | P2       | OUVERT   | Audit 7 : Stripe Connect        | 2         | SP-D-stripe-connect-prod-ready    |
+| H12  | Enum `mode_remboursement_avoir` orphelin (faux positif : colonne existe sous le nom `mode_remboursement`) | P2 | RÉSOLU | Audit CP-STRIPE-1               | 0         | SP-D-stripe-connect-prod-ready    |
+| H13  | 27 missions STRIPE_CONNECT sans soignant onboardé (data de test : UUIDs seed + étabs test) | P1 | RÉSOLU | Audit CP-STRIPE-1                | 0         | SP-D-stripe-connect-prod-ready    |
 | I1   | Migration orpheline prod `20260417102123_correction_garantie_heures` (appliquée sans fichier local) | P2 | OUVERT | Migrations : Sub-PR 2 quater | 2         | SP-F-bugs-latents-nettoyage       |
 | I2   | Cohabitation 2 versions `fn_admin_resoudre_litige` (5-arg legacy + 6-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
 | I3   | Cohabitation 2 versions `fn_ouvrir_litige_rate_limited` (2-arg + 3-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
@@ -130,7 +132,7 @@
 
 ## Comptage automatique
 
-**Total tickets** : 107
+**Total tickets** : 109
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
@@ -138,12 +140,12 @@
 | P0 RÉSOLUS      | 2      | A24, A25                                                                |
 | P1 OUVERTS      | 29     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, H5, H6, H7, H8, K1, L4, L5 |
 | P1 EN COURS     | 1      | B4                                                                      |
-| P1 RÉSOLUS      | 3      | A4, A23, A26                                                            |
+| P1 RÉSOLUS      | 4      | A4, A23, A26, H13                                                       |
 | P2 OUVERTS      | 38     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I1, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8 |
-| P2 RÉSOLUS      | 2      | A22, B5                                                                 |
+| P2 RÉSOLUS      | 3      | A22, B5, H12                                                            |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 27 + 2 + 29 + 1 + 3 + 38 + 2 + 5 = **107** ✓
+**Validation somme** : 27 + 2 + 29 + 1 + 4 + 38 + 3 + 5 = **109** ✓
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
 - P0 OUVERTS (27 tickets, dont H1/H3 scope=0 dédupliqués) : 121.5 + L1=3 + L2=1 + L3=6 = **131.5 h**
