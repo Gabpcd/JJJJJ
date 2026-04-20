@@ -115,8 +115,8 @@
 | E9   | Ajouter colonnes `bloque_le`, `raison_blocage`, historique blocages    | P2       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
 | E10  | Seuils paiement validés Gabrielle : J+7 1ère relance, J+21 2ème, J+45 blocage (commission + soignant) | P0 | OUVERT | Audit 4 / Audit Sub-PR C | 4         | SP-C-paiement-salarie-refonte     |
 | E11  | Implémenter reminder J+7 (cron paiements_soignant, zéro code actuel)    | P0       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
-| E12  | Créer page UI + RPC côté étab pour DÉCLARER paiement soignant (ATTESTATION SUR L'HONNEUR obligatoire) | P0 | OUVERT | Audit Sub-PR C — GAP CRITIQUE (pas de flow UI aujourd'hui) | 12 | SP-C-paiement-salarie-refonte     |
-| E13  | Audit source historique des 14 lignes `paiements_soignant` existantes (data test ? seed ? admin manuel ?) | P1 | OUVERT | Audit Sub-PR C                   | 2         | SP-C-paiement-salarie-refonte     |
+| E12  | Créer page UI + RPC côté étab pour DÉCLARER paiement soignant (ATTESTATION SUR L'HONNEUR obligatoire) | P0 | RÉSOLU | Audit Sub-PR C / CP-C-1 | 12 | SP-C-paiement-salarie-refonte     |
+| E13  | Audit source historique des 14 lignes `paiements_soignant` existantes — mix seed + usage réel minime | P1 | RÉSOLU | Audit Sub-PR C / CP-C-1 audit intégré       | 0         | SP-C-paiement-salarie-refonte     |
 | E14  | Ajouter `EXPIREE` à enum `statut_mission` (scope inclus dans E5)        | P1       | OUVERT   | Audit Sub-PR C                  | 0 (⇔ E5)  | SP-C-paiement-salarie-refonte     |
 | E15  | Chorus Pro full : PISTE OAuth2 + API DeposerPDFacture + sync-chorus-status + UI admin + fallback Stripe/SEPA | P0 | OUVERT | Audit Sub-PR C (Q11 confirmé scope) | 30 | SP-C-paiement-salarie-refonte     |
 | F1   | Triple pénalité annulation soignant (dec_penalite + dec_fiabilite + RPC, cumul -15 à -35) | P0 | OUVERT | Audit 5 : Scoring soignant | 6 | SP-E-scoring-refonte              |
@@ -195,16 +195,16 @@
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 26     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, E12, E15, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
-| P0 RÉSOLUS      | 6      | A24, A25, H1, H2, H3, H4                                                |
-| P1 OUVERTS      | 28     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E6, E7, E13, E14, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b |
+| P0 OUVERTS      | 25     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, E15, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
+| P0 RÉSOLUS      | 7      | A24, A25, E12, H1, H2, H3, H4                                           |
+| P1 OUVERTS      | 27     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E6, E7, E14, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b |
 | P1 EN COURS     | 1      | B4                                                                      |
-| P1 RÉSOLUS      | 11     | A4, A20, A21, A23, A26, H5, H6, H7, H8, H13, H14                        |
+| P1 RÉSOLUS      | 12     | A4, A20, A21, A23, A26, E13, H5, H6, H7, H8, H13, H14                   |
 | P2 OUVERTS      | 45     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j |
 | P2 RÉSOLUS      | 7      | A22, B5, H9, H10, H11, H12, I1                                          |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 26 + 6 + 28 + 1 + 11 + 45 + 7 + 5 = **129** ✓
+**Validation somme** : 25 + 7 + 27 + 1 + 12 + 45 + 7 + 5 = **129** ✓
 
 **Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable : 430.75 - 15 = 415.75 h**.
 

@@ -98,6 +98,8 @@ const ALLOWED_TYPES = new Set([
   'PAYOUT_CANCELED_ADMIN',
   // [CP-STRIPE-5] template refund process cron
   'REFUND_ECHEC_ADMIN',
+  // [CP-C-1] template déclaration paiement soignant par étab
+  'PAIEMENT_SOIGNANT_DECLARE',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -807,6 +809,34 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
       };
 
     // ─── Template CP-STRIPE-5 (refund cron échec permanent) ────
+
+    // ─── Template CP-C-1 (déclaration paiement soignant par étab) ────
+
+    case 'PAIEMENT_SOIGNANT_DECLARE':
+      return {
+        subject: `Votre établissement a déclaré vous avoir payé ${data.montant_formatte || ''} € — confirmez`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">💶 Paiement déclaré par votre établissement</h2>
+          <p style="color:#334155;">Bonjour ${data.soignant_prenom || ''},</p>
+          <p style="color:#334155;">
+            <strong>${data.etablissement_nom || 'Votre établissement'}</strong> a déclaré vous avoir payé pour la mission
+            <strong>${data.mission_intitule || ''}</strong>. Merci de confirmer la réception du paiement dans votre espace Jolene.
+          </p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Montant :</strong> <span style="color:#E04590;font-weight:bold;font-size:18px;">${data.montant_formatte || '—'} €</span><br/>
+            <strong style="color:#0F172A;">Méthode :</strong> ${data.methode_libelle || data.methode || '—'}<br/>
+            ${data.reference_virement ? '<strong style="color:#0F172A;">Référence :</strong> ' + data.reference_virement + '<br/>' : ''}
+            <strong style="color:#0F172A;">Date paiement déclarée :</strong> ${data.date_paiement_fr || data.date_paiement || '—'}
+          `)}
+          ${INFO_BOX(`⚠️ <strong>Action requise</strong> : connectez-vous pour confirmer que vous avez bien reçu ce paiement sur votre compte bancaire. En cas de désaccord, vous pouvez ouvrir une contestation.`)}
+          ${BUTTON('Confirmer la réception dans mon espace Jolene', `${APP_URL}${data.deep_link || '/soignant/mes-gains'}`)}
+          <p style="font-size:12px;color:#94A3B8;margin-top:16px;">
+            Cette déclaration a été faite par l'établissement sous attestation sur l'honneur (URSSAF + Code pénal art. 441-1).
+            Vous avez 30 jours pour confirmer ou contester.
+          </p>
+          ${SECURITY_NOTE}
+        `),
+      };
 
     case 'REFUND_ECHEC_ADMIN':
       return {

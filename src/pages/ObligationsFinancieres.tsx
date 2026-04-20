@@ -16,7 +16,10 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/lib/stripe';
 
@@ -105,26 +108,103 @@ export default function ObligationsFinancieres() {
     charger();
   }, [user, etablissementId]);
 
-  const declarer = async (missionId: string, netAPayer: number) => {
-    const ref = declaringRef[missionId] || '';
-    if (!isRefValid(ref)) {
+  // [CP-C-1] Dialog de déclaration paiement soignant
+  type MethodePaiement = 'VIREMENT' | 'CHEQUE' | 'BULLETIN_PAIE' | 'NOTE_HONORAIRES';
+  const [declarerDialogMission, setDeclarerDialogMission] = useState<any | null>(null);
+  const [declarerMontant, setDeclarerMontant] = useState<string>('');
+  const [declarerMethode, setDeclarerMethode] = useState<MethodePaiement>('VIREMENT');
+  const [declarerReference, setDeclarerReference] = useState<string>('');
+  const [declarerDatePaiement, setDeclarerDatePaiement] = useState<string>('');
+  const [declarerAttestation, setDeclarerAttestation] = useState<boolean>(false);
+
+  const ouvrirDialogDeclarer = (mission: any) => {
+    setDeclarerDialogMission(mission);
+    setDeclarerMontant(String(Number(mission.net_a_payer || 0).toFixed(2)));
+    setDeclarerMethode('VIREMENT');
+    setDeclarerReference('');
+    setDeclarerDatePaiement(new Date().toISOString().split('T')[0]);
+    setDeclarerAttestation(false);
+  };
+
+  const fermerDialogDeclarer = () => {
+    setDeclarerDialogMission(null);
+    setDeclaringId(null);
+  };
+
+  const validerDeclarationPaiement = async () => {
+    if (!declarerDialogMission) return;
+    const missionId = declarerDialogMission.mission_id;
+    const montantNum = Number(declarerMontant);
+    if (!montantNum || montantNum <= 0) {
+      toast.error('Montant invalide');
+      return;
+    }
+    const refRequired = declarerMethode !== 'BULLETIN_PAIE';
+    if (refRequired && !isRefValid(declarerReference)) {
       toast.error('La référence doit contenir au moins 5 caractères dont un chiffre.');
       return;
     }
-    if (!netAPayer || netAPayer <= 0) {
-      toast.error('Montant invalide — impossible de déclarer le paiement.');
+    if (!declarerAttestation) {
+      toast.error('Vous devez cocher l\'attestation sur l\'honneur.');
       return;
     }
+
     setDeclaringId(missionId);
     try {
       const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
         p_mission_id: missionId,
-        p_montant: netAPayer,
-        p_reference: ref.trim(),
+        p_montant: montantNum,
+        p_methode: declarerMethode,
+        p_reference: declarerReference.trim(),
+        p_date_paiement: declarerDatePaiement,
+        p_attestation_sur_l_honneur: true,
       });
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success('Paiement déclaré avec succès');
+      const res = data as any;
+      if (res?.error === 'ATTESTATION_REQUISE') {
+        toast.error('Attestation sur l\'honneur obligatoire');
+        return;
+      }
+      if (res?.error === 'use_stripe_connect') {
+        toast.info('Ce soignant a Stripe Connect actif — utilisez le paiement Stripe');
+        fermerDialogDeclarer();
+        return;
+      }
+      if (res?.error) throw new Error(res.message || res.error);
+
+      // Invoke send-email PAIEMENT_SOIGNANT_DECLARE (non-bloquant)
+      try {
+        const methodeLabels: Record<MethodePaiement, string> = {
+          VIREMENT: 'Virement bancaire',
+          CHEQUE: 'Chèque',
+          BULLETIN_PAIE: 'Bulletin de paie',
+          NOTE_HONORAIRES: 'Note d\'honoraires',
+        };
+        await supabase.functions.invoke('send-email', {
+          body: {
+            type: 'PAIEMENT_SOIGNANT_DECLARE',
+            destinataire_id: res.soignant_id,
+            data: {
+              soignant_prenom: declarerDialogMission.soignant_prenom || declarerDialogMission.soignant_nom?.split(' ')[0] || '',
+              montant_formatte: montantNum.toFixed(2),
+              methode: declarerMethode,
+              methode_libelle: methodeLabels[declarerMethode],
+              reference_virement: declarerReference || '',
+              date_paiement: declarerDatePaiement,
+              date_paiement_fr: new Date(declarerDatePaiement).toLocaleDateString('fr-FR'),
+              etablissement_nom: data?.etablissement_nom || '',
+              mission_intitule: res.mission_intitule || declarerDialogMission.mission_intitule || '',
+              deep_link: '/soignant/mes-gains',
+            },
+          },
+        });
+      } catch (emailErr) {
+        // eslint-disable-next-line no-console
+        console.error('send-email PAIEMENT_SOIGNANT_DECLARE failed:', emailErr);
+      }
+
+      toast.success('Paiement déclaré — le soignant a été notifié pour confirmation');
+      fermerDialogDeclarer();
       charger();
     } catch (e: any) {
       toast.error(extraireMessageErreur(e));
@@ -312,21 +392,15 @@ export default function ObligationsFinancieres() {
                         {connectPayingId === m.mission_id ? 'Redirection…' : '💳 Payer via Stripe'}
                       </Button>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          placeholder="Référence virement (min. 5 car.)"
-                          value={declaringRef[m.mission_id] || ''}
-                          onChange={(e) => setDeclaringRef(prev => ({ ...prev, [m.mission_id]: e.target.value }))}
-                          className="text-sm"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => declarer(m.mission_id, Number(m.net_a_payer) || 0)}
-                          disabled={declaringId === m.mission_id || !isRefValid(declaringRef[m.mission_id] || '')}
-                        >
-                          {declaringId === m.mission_id ? '…' : 'Déclarer'}
-                        </Button>
-                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => ouvrirDialogDeclarer(m)}
+                        disabled={declaringId === m.mission_id}
+                        className="w-full"
+                      >
+                        <Banknote className="w-4 h-4 mr-2" />
+                        Déclarer un paiement
+                      </Button>
                     )}
                   </div>
                 ))}
@@ -493,6 +567,122 @@ export default function ObligationsFinancieres() {
             <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: connectClientSecret }}>
               <EmbeddedCheckout />
             </EmbeddedCheckoutProvider>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* [CP-C-1] Dialog déclaration paiement soignant */}
+      {declarerDialogMission && (
+        <Dialog open={!!declarerDialogMission} onOpenChange={(open) => { if (!open) fermerDialogDeclarer(); }}>
+          <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Déclarer un paiement au soignant</DialogTitle>
+              <DialogDescription>
+                {declarerDialogMission.mission_intitule || 'Mission'} — {declarerDialogMission.soignant_nom || ''}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div>
+                <Label htmlFor="declarer-montant">Montant payé (€ net)</Label>
+                <Input
+                  id="declarer-montant"
+                  type="number"
+                  step="0.01"
+                  value={declarerMontant}
+                  onChange={(e) => setDeclarerMontant(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Montant estimé : {fmt(Number(declarerDialogMission.net_a_payer || 0))}
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="declarer-methode">Méthode de paiement</Label>
+                <Select
+                  value={declarerMethode}
+                  onValueChange={(v) => setDeclarerMethode(v as MethodePaiement)}
+                >
+                  <SelectTrigger id="declarer-methode">
+                    <SelectValue placeholder="Choisir une méthode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
+                    <SelectItem value="CHEQUE">Chèque</SelectItem>
+                    <SelectItem value="BULLETIN_PAIE">Bulletin de paie</SelectItem>
+                    <SelectItem value="NOTE_HONORAIRES">Note d'honoraires</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="declarer-reference">
+                  Référence {declarerMethode === 'BULLETIN_PAIE' ? '(optionnelle)' : '(obligatoire, min. 5 car. + 1 chiffre)'}
+                </Label>
+                <Input
+                  id="declarer-reference"
+                  value={declarerReference}
+                  onChange={(e) => setDeclarerReference(e.target.value)}
+                  placeholder={
+                    declarerMethode === 'VIREMENT' ? 'Réf. virement bancaire'
+                      : declarerMethode === 'CHEQUE' ? 'N° chèque'
+                      : declarerMethode === 'BULLETIN_PAIE' ? 'N° bulletin (facultatif)'
+                      : 'Réf. note d\'honoraires'
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="declarer-date">Date du paiement</Label>
+                <Input
+                  id="declarer-date"
+                  type="date"
+                  value={declarerDatePaiement}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setDeclarerDatePaiement(e.target.value)}
+                />
+              </div>
+
+              <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="declarer-attestation"
+                    checked={declarerAttestation}
+                    onCheckedChange={(c) => setDeclarerAttestation(c === true)}
+                    className="mt-0.5"
+                  />
+                  <Label
+                    htmlFor="declarer-attestation"
+                    className="text-xs text-foreground leading-relaxed cursor-pointer"
+                  >
+                    <strong>J'atteste sur l'honneur</strong> avoir effectivement payé ce soignant conformément au
+                    Code du travail (pour un salarié) ou au Code de commerce (pour un libéral) en contrepartie
+                    de la prestation effectuée dans le cadre de cette mission. Cette déclaration m'engage au
+                    regard de l'URSSAF et de l'administration fiscale. Une déclaration frauduleuse m'expose à
+                    des sanctions pénales (article 441-1 du Code pénal).
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={fermerDialogDeclarer}>
+                Annuler
+              </Button>
+              <Button
+                onClick={validerDeclarationPaiement}
+                disabled={
+                  !declarerAttestation ||
+                  declaringId === declarerDialogMission.mission_id ||
+                  !declarerMontant ||
+                  Number(declarerMontant) <= 0 ||
+                  (declarerMethode !== 'BULLETIN_PAIE' && !isRefValid(declarerReference))
+                }
+              >
+                {declaringId === declarerDialogMission.mission_id ? 'Envoi…' : 'Valider la déclaration'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
