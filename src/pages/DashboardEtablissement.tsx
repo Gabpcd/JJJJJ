@@ -14,6 +14,7 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EtatVide } from '@/components/EtatVide';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
+import { BandeauBlocageAuto } from '@/components/BandeauBlocageAuto';
 
 import { BadgePalier } from '@/components/BadgePalier';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,6 +40,14 @@ export default function DashboardEtablissement() {
     groupes_sante?: { nom: string } | null;
     groupe_sante_id?: string | null;
     peut_publier_missions?: boolean;
+    bloque_auto_le?: string | null;
+    bloque_auto_raisons?: {
+      paiements_retard_nb?: number;
+      paiements_retard_montant?: number;
+      factures_retard_nb?: number;
+      factures_retard_montant?: number;
+      seuil_jours?: number;
+    } | null;
   }
   interface MissionSummary {
     id: string;
@@ -382,7 +391,12 @@ export default function DashboardEtablissement() {
         )}
       </div>
 
-      {etab && !etab.peut_publier_missions && (
+      {etab?.bloque_auto_le ? (
+        <BandeauBlocageAuto
+          raisons={etab.bloque_auto_raisons}
+          bloque_le={etab.bloque_auto_le}
+        />
+      ) : etab && !etab.peut_publier_missions ? (
         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 mb-4 flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
           <div>
@@ -390,7 +404,7 @@ export default function DashboardEtablissement() {
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vous pourrez publier des missions une fois votre établissement vérifié par l'équipe Jolene (24-48h).</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* KPI row 1 — All from RPC */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">

@@ -29,9 +29,10 @@ serve(async (req) => {
     results.tokens_push = v5 || 0;
 
     // Traiter la queue d'emails ET SMS (notifications automatiques des triggers DB)
+    // [CP-C-3 D] Source de vérité : statut='EN_ATTENTE' (colonne envoye deprecated)
     let emailQueueCount = 0;
     let smsQueueCount = 0;
-    const { data: pendingEmails } = await sb.from('email_queue').select('*').eq('envoye', false).order('cree_le').limit(50);
+    const { data: pendingEmails } = await sb.from('email_queue').select('*').eq('statut', 'EN_ATTENTE').order('cree_le').limit(50);
     for (const email of (pendingEmails || [])) {
       try {
         // Si c'est un SMS (type commence par SMS_), envoyer via send-sms
@@ -65,9 +66,9 @@ serve(async (req) => {
           });
           emailQueueCount++;
         }
-        await sb.from('email_queue').update({ envoye: true, envoye_le: new Date().toISOString() }).eq('id', email.id);
+        await sb.from('email_queue').update({ statut: 'ENVOYE', envoye: true, envoye_le: new Date().toISOString() }).eq('id', email.id);
       } catch (err: any) {
-        await sb.from('email_queue').update({ erreur: err?.message || 'Erreur envoi' }).eq('id', email.id);
+        await sb.from('email_queue').update({ statut: 'ERREUR', erreur: err?.message || 'Erreur envoi' }).eq('id', email.id);
       }
     }
     results.email_queue = emailQueueCount;
