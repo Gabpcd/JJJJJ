@@ -100,6 +100,8 @@ const ALLOWED_TYPES = new Set([
   'REFUND_ECHEC_ADMIN',
   // [CP-C-1] template déclaration paiement soignant par étab
   'PAIEMENT_SOIGNANT_DECLARE',
+  // [CP-C-2] relances paiement + blocage
+  'RAPPEL_PAIEMENT_J7', 'PAIEMENT_RETARD_J21', 'PUBLICATION_SUSPENDUE',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -864,6 +866,108 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           </ul>
           ${BUTTON('Dashboard Stripe Refunds →', 'https://dashboard.stripe.com/refunds')}
           <p style="font-size:12px;color:#94A3B8;text-align:center;margin-top:20px;">Ce mail est envoyé automatiquement par le cron process-stripe-refunds (toutes les 15 min).</p>
+        `),
+      };
+
+    // ─── Templates CP-C-2 (relances paiement étab) ──────────
+
+    case 'RAPPEL_PAIEMENT_J7': {
+      const isFacture = data.type_obligation === 'FACTURE_COMMISSION';
+      const cta = isFacture
+        ? `${APP_URL}/etablissement/facturation`
+        : `${APP_URL}/etablissement/obligations-financieres`;
+      const titre = isFacture
+        ? `Rappel : facture ${data.numero_facture || ''} à régler`
+        : `Rappel : paiement de ${data.soignant_prenom || ''} ${data.soignant_nom || ''} à déclarer`;
+      return {
+        subject: `${titre} — 7 jours`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">🔔 Rappel de régularisation</h2>
+          <p style="color:#334155;">Bonjour,</p>
+          <p style="color:#334155;">
+            Pour l'établissement <strong>${data.etablissement_nom || '—'}</strong>, une obligation de régularisation a été identifiée il y a <strong>7 jours</strong>.
+          </p>
+          ${CARD_BOX(isFacture ? `
+            <strong style="color:#0F172A;">Type :</strong> Facture de commission Jolene<br/>
+            <strong style="color:#0F172A;">Numéro :</strong> ${data.numero_facture || '—'}<br/>
+            <strong style="color:#0F172A;">Montant TTC :</strong> <span style="color:#E04590;font-weight:bold;">${data.montant_ttc || '—'} €</span><br/>
+            <strong style="color:#0F172A;">Émise le :</strong> ${data.date_emission || '—'}
+          ` : `
+            <strong style="color:#0F172A;">Type :</strong> Paiement soignant à déclarer<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_intitule || '—'}<br/>
+            <strong style="color:#0F172A;">Soignant :</strong> ${data.soignant_prenom || ''} ${data.soignant_nom || ''}<br/>
+            <strong style="color:#0F172A;">Montant estimé :</strong> <span style="color:#E04590;font-weight:bold;">${data.montant_estime || '—'} €</span><br/>
+            <strong style="color:#0F172A;">Fin de mission :</strong> ${data.date_fin_mission || '—'}
+          `)}
+          ${INFO_BOX('Un simple clic sur le bouton ci-dessous suffit pour régulariser. Cette notification est un rappel amical, aucune sanction n\'est appliquée à ce stade.')}
+          ${BUTTON('Régulariser maintenant →', cta)}
+          ${SECURITY_NOTE}
+        `),
+      };
+    }
+
+    case 'PAIEMENT_RETARD_J21': {
+      const isFacture = data.type_obligation === 'FACTURE_COMMISSION';
+      const cta = isFacture
+        ? `${APP_URL}/etablissement/facturation`
+        : `${APP_URL}/etablissement/obligations-financieres`;
+      const titre = isFacture
+        ? `Facture ${data.numero_facture || ''} en retard de 21 jours`
+        : `Paiement ${data.soignant_prenom || ''} ${data.soignant_nom || ''} en retard de 21 jours`;
+      const mentionLegale = isFacture
+        ? 'Les pénalités de retard légales s\'appliquent selon l\'article L441-10 du Code de commerce.'
+        : 'Le non-paiement du soignant expose l\'établissement à des poursuites URSSAF (obligation de vigilance, article L8222-1 Code du travail).';
+      return {
+        subject: `⚠️ ${titre} — action requise`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⚠️ Paiement en retard de 21 jours</h2>
+          <p style="color:#334155;">Bonjour,</p>
+          <p style="color:#334155;">
+            Une obligation de régularisation identifiée depuis <strong>21 jours</strong> reste en attente pour l'établissement <strong>${data.etablissement_nom || '—'}</strong>.
+          </p>
+          ${CARD_BOX(isFacture ? `
+            <strong style="color:#0F172A;">Type :</strong> Facture de commission Jolene<br/>
+            <strong style="color:#0F172A;">Numéro :</strong> ${data.numero_facture || '—'}<br/>
+            <strong style="color:#0F172A;">Montant TTC :</strong> <span style="color:#E04590;font-weight:bold;">${data.montant_ttc || '—'} €</span><br/>
+            <strong style="color:#0F172A;">Émise le :</strong> ${data.date_emission || '—'}
+          ` : `
+            <strong style="color:#0F172A;">Type :</strong> Paiement soignant à déclarer<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_intitule || '—'}<br/>
+            <strong style="color:#0F172A;">Soignant :</strong> ${data.soignant_prenom || ''} ${data.soignant_nom || ''}<br/>
+            <strong style="color:#0F172A;">Montant estimé :</strong> <span style="color:#E04590;font-weight:bold;">${data.montant_estime || '—'} €</span><br/>
+            <strong style="color:#0F172A;">Fin de mission :</strong> ${data.date_fin_mission || '—'}
+          `)}
+          ${INFO_BOX(`⚠️ <strong>Sans régularisation sous 24 jours</strong>, la publication de nouvelles missions sera automatiquement suspendue (seuil J+45).`)}
+          ${BUTTON('Régulariser immédiatement →', cta)}
+          <p style="font-size:12px;color:#94A3B8;margin-top:16px;">
+            ${mentionLegale}
+          </p>
+          ${SECURITY_NOTE}
+        `),
+      };
+    }
+
+    case 'PUBLICATION_SUSPENDUE':
+      return {
+        subject: `❌ Publication de missions suspendue — ${data.etablissement_nom || 'action requise'}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">❌ Publication suspendue</h2>
+          <p style="color:#334155;">Bonjour,</p>
+          <p style="color:#334155;">
+            En raison d'obligations de paiement non régularisées depuis plus de <strong>45 jours</strong>, la publication de nouvelles missions est automatiquement suspendue pour l'établissement <strong>${data.etablissement_nom || '—'}</strong>.
+          </p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Obligations en cours :</strong><br/>
+            ${data.obligations_en_cours || '—'}<br/>
+            <strong style="color:#0F172A;">Total dû :</strong> <span style="color:#E04590;font-weight:bold;font-size:18px;">${data.total_montant_du || '—'} €</span><br/>
+            <strong style="color:#0F172A;">Date de suspension :</strong> ${data.date_blocage || '—'}
+          `)}
+          ${INFO_BOX(`🔓 <strong>Déblocage automatique</strong> : votre compte sera immédiatement réactivé dès la régularisation complète de vos obligations.`)}
+          ${BUTTON('Régulariser maintenant →', `${APP_URL}/etablissement/obligations-financieres`)}
+          <p style="font-size:12px;color:#94A3B8;margin-top:16px;">
+            Cette suspension intervient en application de notre obligation de vigilance (article L8222-1 Code du travail + article L441-10 Code de commerce). Jolene, en tant qu'intermédiaire, est tenu de garantir la régularité des paiements entre établissements et soignants.
+          </p>
+          ${SECURITY_NOTE}
         `),
       };
 
