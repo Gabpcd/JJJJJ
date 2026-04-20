@@ -3,8 +3,8 @@
 **Date** : 2026-04-20
 **Snapshot base** : commit `f6e8d279` (tech-debt.md restauré, 428 lignes)
 **Branche** : `claude/fix-merge-conflicts-2Y4ph`
-**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié)
-**Sources à venir** : F (Audit 5 Scoring), G (Audit 6 Statut REMPLACEE), H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
+**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant)
+**Sources à venir** : G (Audit 6 Statut REMPLACEE), H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
 
 ## Légende
 
@@ -76,36 +76,52 @@
 | E9   | Ajouter colonnes `bloque_le`, `raison_blocage`, historique blocages    | P2       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
 | E10  | Aligner seuils J+7/J+30/expiration (prod J+30/J+15/J+60 vs annoncés)   | P0       | OUVERT   | Audit 4 : Paiement salarié      | 4         | SP-C-paiement-salarie-refonte     |
 | E11  | Implémenter reminder J+7 (zéro code actuel)                            | P0       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
+| F1   | Triple pénalité annulation soignant (dec_penalite + dec_fiabilite + RPC, cumul -15 à -35) | P0 | OUVERT | Audit 5 : Scoring soignant | 6 | SP-E-scoring-refonte              |
+| F2   | Deux moteurs de score s'écrasent (compteurs vs évaluation, dernier trigger gagne) | P0 | OUVERT | Audit 5 : Scoring soignant    | 8         | SP-E-scoring-refonte              |
+| F3   | Trois valeurs désynchro annulation soignant (-8, -10, -15/25) dans 3 endroits | P0 | OUVERT | Audit 5 : Scoring soignant        | 3         | SP-E-scoring-refonte              |
+| F4   | COMPORTEMENT_SOIGNANT / SECURITE_DANGER verdict contre soignant = 0 impact score | P0 | OUVERT | Audit 5 : Scoring soignant    | 6         | SP-E-scoring-refonte              |
+| F5   | Aucune décote temporelle (absence 2 ans pèse autant qu'hier)           | P1       | OUVERT   | Audit 5 : Scoring soignant      | 6         | SP-E-scoring-refonte              |
+| F6   | Compteurs doublement MAJ (dec_maj_compteurs SELECT COUNT + dec_fiabilite +1) | P1 | OUVERT | Audit 5 : Scoring soignant         | 3         | SP-E-scoring-refonte              |
+| F7   | `heures_reelles=0` non couplé à `total_absences`                       | P1       | OUVERT   | Audit 5 : Scoring soignant      | 3         | SP-E-scoring-refonte              |
+| F8   | Départ anticipé calculé mais non pénalisé                              | P1       | OUVERT   | Audit 5 : Scoring soignant      | 4         | SP-E-scoring-refonte              |
+| F9   | Bonus urgence effacé au prochain recalcul formule principale           | P1       | OUVERT   | Audit 5 : Scoring soignant      | 3         | SP-E-scoring-refonte              |
+| F10  | Pas de pondération évaluation récente vs ancienne                      | P2       | OUVERT   | Audit 5 : Scoring soignant      | 4         | SP-E-scoring-refonte              |
+| F11  | Initialisation score à 50 non documentée produit                       | P2       | OUVERT   | Audit 5 : Scoring soignant      | 2         | SP-E-scoring-refonte              |
+| F12  | `reclamations` vs `reclamations_scoring` — 2 tables parallèles à fusionner/documenter | P2 | OUVERT | Audit 5 : Scoring soignant | 6         | SP-E-scoring-refonte              |
+| F13  | Refonte `fn_recalculer_score_fiabilite` unifiée (remplace 4 mécanismes concurrents) | P0 | OUVERT | Audit 5 : Scoring soignant     | 24        | SP-E-scoring-refonte              |
+| F14  | Table `scoring_events` append-only (traçabilité + anti-double-compte + audit) | P1 | OUVERT | Audit 5 : Scoring soignant          | 12        | SP-E-scoring-refonte              |
+| F15  | Mapping catégories litige → impact explicite (SECURITE_DANGER -20, COMPORTEMENT_SOIGNANT -10) | P0 | OUVERT | Audit 5 : Scoring soignant | 4 | SP-E-scoring-refonte            |
 
 ---
 
 ## Comptage automatique
 
-**Total tickets** : 58
+**Total tickets** : 73
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 12     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11                       |
+| P0 OUVERTS      | 18     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15 |
 | P0 RÉSOLUS      | 2      | A24, A25                                                                |
-| P1 OUVERTS      | 15     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7         |
+| P1 OUVERTS      | 21     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14 |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 3      | A4, A23, A26                                                            |
-| P2 OUVERTS      | 18     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9 |
+| P2 OUVERTS      | 21     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12 |
 | P2 RÉSOLUS      | 2      | A22, B5                                                                 |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 12 + 2 + 15 + 1 + 3 + 18 + 2 + 5 = **58** ✓
+**Validation somme** : 18 + 2 + 21 + 1 + 3 + 21 + 2 + 5 = **73** ✓
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
-- P0 OUVERTS (12 tickets) : B1=10 + B2=6 + B3a=0.5 + D1=3 + D2=2 + D3=4 + E1=6 + E2=8 + E3=6 + E4=3 + E10=4 + E11=6 = **58.5 h**
-- P1 OUVERTS + EN COURS (16 tickets) : A5=12 + A7=16 + A8=4 + A16=24 + A20=8 + A21=12 + B4=0.5 + D4=3 + D5=2 + D6=2 + D7=2 + D11=2 + D12=8 + E5=8 + E6=3 + E7=6 = **112.5 h**
-- P2 OUVERTS (18 tickets) : A1=4 + A2=1 + A3=0.5 + A6=2 + A9=4 + A10=3 + A11=3 + A12=1 + A14=6 + A15=2 + A19=16 + B3b=0.25 + C1=2 + D8=4 + D9=3 + D10=2 + E8=4 + E9=6 = **63.75 h**
-- **Total actionnable immédiatement : 234.75 h** (≈ 6 semaines ingénieur)
+- P0 OUVERTS (18 tickets) : 58.5 + F1=6 + F2=8 + F3=3 + F4=6 + F13=24 + F15=4 = **109.5 h**
+- P1 OUVERTS + EN COURS (22 tickets) : 112.5 + F5=6 + F6=3 + F7=3 + F8=4 + F9=3 + F14=12 = **143.5 h**
+- P2 OUVERTS (21 tickets) : 63.75 + F10=4 + F11=2 + F12=6 = **75.75 h**
+- **Total actionnable immédiatement : 328.75 h** (≈ 8.5 semaines ingénieur)
 
 Les DIFFÉRÉS (5 tickets : A13=2 + A17=8 + A18=2 + C2=4 + C3=6 = **22 h**) sont hors périmètre sprint courant.
 
 ### Scope par Sub-PR (en construction)
 
-| Sub-PR                                 | Tickets                                    | Scope (h) |
-|----------------------------------------|--------------------------------------------|-----------|
-| SP-C-paiement-salarie-refonte (Source E) | E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11 | **60 h**  |
+| Sub-PR                                   | Tickets                                                   | Scope (h) |
+|------------------------------------------|-----------------------------------------------------------|-----------|
+| SP-C-paiement-salarie-refonte (Source E) | E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11              | **60 h**  |
+| SP-E-scoring-refonte (Source F)          | F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15 | **94 h**  |
