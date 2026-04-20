@@ -3,8 +3,8 @@
 **Date** : 2026-04-20
 **Snapshot base** : commit `f6e8d279` (tech-debt.md restauré, 428 lignes)
 **Branche** : `claude/fix-merge-conflicts-2Y4ph`
-**Sources couvertes** : A (héritage) + B (Audit 1 Crons)
-**Sources à venir** : C (Audit 2 Objets fantômes), D (Audit 3 Templates email), E (Audit 4 Paiement salarié), F (Audit 5 Scoring), G (Audit 6 Statut REMPLACEE), H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
+**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes)
+**Sources à venir** : D (Audit 3 Templates email), E (Audit 4 Paiement salarié), F (Audit 5 Scoring), G (Audit 6 Statut REMPLACEE), H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
 
 ## Légende
 
@@ -50,12 +50,15 @@
 | B3b  | calculer-bfa-annuel : vérifier déclenchement cron 2 janvier 2027       | P2       | OUVERT   | Audit 1 : Crons                 | 0.25      | SP-crons-fixes                    |
 | B4   | litige-escalation-cron : deploy CLI + schedule + vault secret prod     | P1       | EN COURS | Audit 1 : Crons                 | 0.5       | SP-activation-prod                |
 | B5   | auto-transitions-missions : purge 900 logs d'échecs historiques        | P2       | RÉSOLU   | Audit 1 : Crons                 | 0.5       | SP-nettoyage-observabilite        |
+| C1   | Régén types.ts : 3 RPCs typées `as any` (reclamation ×2 + paiement_soignant) | P2 | OUVERT   | Audit 2 : Objets fantômes       | 2         | SP-phantom-objects-audit          |
+| C2   | Câbler UI fn_declarer_fin_retroactive (RPC CP5b présente sans front)   | DIFFÉRÉ  | OUVERT   | Audit 2 : Objets fantômes       | 4         | Modules futurs (UI pointage)      |
+| C3   | Câbler UI fn_scanner_code_pointage (RPC CP5b scanner, pas d'écran soignant) | DIFFÉRÉ | OUVERT | Audit 2 : Objets fantômes       | 6         | Modules futurs (UI pointage)      |
 
 ---
 
 ## Comptage automatique
 
-**Total tickets** : 32
+**Total tickets** : 35
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
@@ -64,16 +67,16 @@
 | P1 OUVERTS      | 6      | A5, A7, A8, A16, A20, A21                                               |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 3      | A4, A23, A26                                                            |
-| P2 OUVERTS      | 12     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b                   |
+| P2 OUVERTS      | 13     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1               |
 | P2 RÉSOLUS      | 2      | A22, B5                                                                 |
-| DIFFÉRÉS        | 3      | A13, A17, A18                                                           |
+| DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 3 + 2 + 6 + 1 + 3 + 12 + 2 + 3 = **32** ✓
+**Validation somme** : 3 + 2 + 6 + 1 + 3 + 13 + 2 + 5 = **35** ✓
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
 - P0 : 3 + 6 + 0.5 + 0.25 = **16.75 h**
 - P1 : 12 + 16 + 4 + 24 + 8 + 12 + 0.5 = **76.5 h**
-- P2 : 4 + 1 + 0.5 + 2 + 4 + 3 + 3 + 1 + 6 + 2 + 16 + 0.25 + 0.5 = **43.25 h**
-- **Total actionnable immédiatement : 136.5 h** (≈ 3.5 semaines ingénieur)
+- P2 : 4 + 1 + 0.5 + 2 + 4 + 3 + 3 + 1 + 6 + 2 + 16 + 0.25 + 0.5 + 2 = **45.25 h**
+- **Total actionnable immédiatement : 138.5 h** (≈ 3.5 semaines ingénieur)
 
-Les DIFFÉRÉS (3 tickets, 12 h) sont hors périmètre sprint courant.
+Les DIFFÉRÉS (5 tickets, 22 h) sont hors périmètre sprint courant.
