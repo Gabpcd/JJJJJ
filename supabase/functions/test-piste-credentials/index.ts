@@ -39,15 +39,43 @@ Deno.serve(async (req) => {
   const start = Date.now();
 
   try {
-    // Auth : service_role uniquement
+    // Auth : décoder le JWT et valider role === 'service_role'
+    // (pas de validation signature — endpoint diagnostic interne seulement)
     const authHeader = req.headers.get('Authorization');
-    const expectedAuth = `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`;
-    if (authHeader !== expectedAuth) {
-      return new Response(JSON.stringify({ error: 'Non autorisé (service_role requis)' }), {
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authorization header Bearer manquant' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    const token = authHeader.slice(7).trim();
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return new Response(JSON.stringify({ error: 'Token JWT invalide (format malformé)' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    let payload: any;
+    try {
+      // base64url decode du payload (partie 1)
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+      payload = JSON.parse(atob(padded));
+    } catch (decodeErr) {
+      return new Response(JSON.stringify({
+        error: 'Impossible de décoder le JWT',
+        detail: decodeErr instanceof Error ? decodeErr.message : String(decodeErr),
+      }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (payload?.role !== 'service_role') {
+      return new Response(JSON.stringify({
+        error: 'Token n\'a pas le role service_role',
+        role_recu: payload?.role ?? '(absent)',
+        iss: payload?.iss ?? '(absent)',
+      }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+    }
+    // Auth OK
 
     // ─── Étape 1 : Lecture des secrets ───
     // Support double naming (PISTE_* préféré, fallback CHORUS_PRO_* pour compat)
@@ -82,117 +110,143 @@ Deno.serve(async (req) => {
     }
 
     // ─── Étape 2 : OAuth2 client_credentials ───
-    const oauthStart = Date.now();
-    const oauthBody = new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: clientId,
-      client_secret: clientSecret,
-      scope: 'openid',
-    });
+    let accessToken: string | undefined;
+    {
+      const oauthStart = Date.now();
+      try {
+        const oauthBody = new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: clientId,
+          client_secret: clientSecret,
+          scope: 'openid',
+        });
+        const oauthRes = await fetch(urls.oauth, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: oauthBody.toString(),
+        });
+        const oauthText = await oauthRes.text();
+        let oauthData: any;
+        try { oauthData = JSON.parse(oauthText); } catch { oauthData = { raw: oauthText }; }
 
-    const oauthRes = await fetch(urls.oauth, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: oauthBody.toString(),
-    });
+        if (!oauthRes.ok) {
+          diagnostics.push({
+            step: '2. OAuth2 token request',
+            status: 'FAIL',
+            http_status: oauthRes.status,
+            duration_ms: Date.now() - oauthStart,
+            detail: `${urls.oauth} → ${oauthRes.status}: ${oauthData?.error || oauthData?.error_description || oauthText.slice(0, 200)}`,
+          });
+          return new Response(JSON.stringify({
+            success: false,
+            summary: `OAuth2 échec : ${oauthRes.status}. Vérifier PISTE_CLIENT_ID/SECRET sur https://piste.gouv.fr (${env}).`,
+            env,
+            diagnostics,
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
 
-    const oauthDuration = Date.now() - oauthStart;
-    const oauthText = await oauthRes.text();
-    let oauthData: any;
-    try { oauthData = JSON.parse(oauthText); } catch { oauthData = { raw: oauthText }; }
-
-    if (!oauthRes.ok) {
-      diagnostics.push({
-        step: '2. OAuth2 token request',
-        status: 'FAIL',
-        http_status: oauthRes.status,
-        duration_ms: oauthDuration,
-        detail: `${urls.oauth} → ${oauthRes.status}: ${oauthData?.error || oauthData?.error_description || oauthText.slice(0, 200)}`,
-      });
-      return new Response(JSON.stringify({
-        success: false,
-        summary: `OAuth2 échec : ${oauthRes.status}. Vérifier PISTE_CLIENT_ID/SECRET sur https://piste.gouv.fr (sandbox).`,
-        env,
-        diagnostics,
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        accessToken = oauthData.access_token;
+        diagnostics.push({
+          step: '2. OAuth2 token request',
+          status: 'OK',
+          http_status: oauthRes.status,
+          duration_ms: Date.now() - oauthStart,
+          detail: `access_token obtenu (${accessToken?.length || 0} chars, expires_in=${oauthData.expires_in}s)`,
+        });
+      } catch (fetchErr) {
+        diagnostics.push({
+          step: '2. OAuth2 token request',
+          status: 'FAIL',
+          duration_ms: Date.now() - oauthStart,
+          detail: `Exception fetch OAuth : ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
+        });
+        return new Response(JSON.stringify({
+          success: false,
+          summary: 'Exception réseau lors de l\'appel OAuth PISTE',
+          env, diagnostics,
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
     }
-
-    const accessToken = oauthData.access_token;
-    const expiresIn = oauthData.expires_in;
-    diagnostics.push({
-      step: '2. OAuth2 token request',
-      status: 'OK',
-      http_status: oauthRes.status,
-      duration_ms: oauthDuration,
-      detail: `access_token obtenu (${accessToken?.length || 0} chars, expires_in=${expiresIn}s)`,
-    });
 
     // ─── Étape 3 : Ping API Chorus Pro (endpoint métier léger) ───
     // Endpoint recommanderChorusPro : /cpro/transverses/v1/recupererAnnuaireDestinataire
     // Alternative plus simple : consulter annuaire destinataire via API PISTE structures
     const pingStart = Date.now();
     const pingUrl = `${urls.api}/cpro/transverses/v1/recupererUtilisateurCourant`;
-    const pingRes = await fetch(pingUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ idUtilisateurCourant: 0 }),
-    });
-
-    const pingDuration = Date.now() - pingStart;
-    const pingText = await pingRes.text();
-    let pingData: any;
-    try { pingData = JSON.parse(pingText); } catch { pingData = { raw: pingText.slice(0, 500) }; }
-
-    diagnostics.push({
-      step: '3. Ping API Chorus Pro (recupererUtilisateurCourant)',
-      status: pingRes.ok ? 'OK' : 'FAIL',
-      http_status: pingRes.status,
-      duration_ms: pingDuration,
-      detail: pingRes.ok
-        ? `Utilisateur courant : ${JSON.stringify(pingData).slice(0, 300)}`
-        : `Erreur ${pingRes.status}: ${pingData?.libelleErreur || pingData?.error || pingText.slice(0, 200)}`,
-    });
-
-    // ─── Étape 4 : Test auth Basic CHORUS_TECH_USER_* (si présent) ───
-    // Certains endpoints nécessitent en plus de l'OAuth2 un header
-    // "cpro-account" = base64(login:password) pour identifier l'utilisateur technique.
-    if (techLogin && techPassword) {
-      const techAuthStart = Date.now();
-      const cproAccount = btoa(`${techLogin}:${techPassword}`);
-      const techUrl = `${urls.api}/cpro/transverses/v1/rechercherStructure`;
-      const techRes = await fetch(techUrl, {
+    try {
+      const pingRes = await fetch(pingUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          'cpro-account': cproAccount,
         },
-        body: JSON.stringify({
-          idUtilisateurCourant: 0,
-          parametres: { nbResultatsMaxParPage: 1, numeroPagePourRechercher: 1, triSurChamp: 'Identifiant', triSensTri: 'Ascendant' },
-          restreindreStructures: { structureActive: true },
-          typeRecherche: 'ACTIF',
-        }),
+        body: JSON.stringify({ idUtilisateurCourant: 0 }),
       });
-      const techDuration = Date.now() - techAuthStart;
-      const techText = await techRes.text();
-      let techData: any;
-      try { techData = JSON.parse(techText); } catch { techData = { raw: techText.slice(0, 500) }; }
+      const pingText = await pingRes.text();
+      let pingData: any;
+      try { pingData = JSON.parse(pingText); } catch { pingData = { raw: pingText.slice(0, 500) }; }
 
       diagnostics.push({
-        step: '4. Auth CHORUS_TECH_USER (rechercherStructure)',
-        status: techRes.ok ? 'OK' : 'FAIL',
-        http_status: techRes.status,
-        duration_ms: techDuration,
-        detail: techRes.ok
-          ? `Recherche structure OK (resultats=${techData?.listeStructures?.length ?? 0})`
-          : `Erreur ${techRes.status}: ${techData?.libelleErreur || techData?.message || techText.slice(0, 200)}`,
+        step: '3. Ping API Chorus Pro (recupererUtilisateurCourant)',
+        status: pingRes.ok ? 'OK' : 'FAIL',
+        http_status: pingRes.status,
+        duration_ms: Date.now() - pingStart,
+        detail: pingRes.ok
+          ? `Utilisateur courant : ${JSON.stringify(pingData).slice(0, 300)}`
+          : `Erreur ${pingRes.status}: ${pingData?.libelleErreur || pingData?.error || pingText.slice(0, 200)}`,
       });
+    } catch (pingErr) {
+      diagnostics.push({
+        step: '3. Ping API Chorus Pro (recupererUtilisateurCourant)',
+        status: 'FAIL',
+        duration_ms: Date.now() - pingStart,
+        detail: `Exception fetch : ${pingErr instanceof Error ? pingErr.message : String(pingErr)}`,
+      });
+    }
+
+    // ─── Étape 4 : Test auth Basic CHORUS_TECH_USER_* (si présent) ───
+    if (techLogin && techPassword) {
+      const techAuthStart = Date.now();
+      try {
+        const cproAccount = btoa(`${techLogin}:${techPassword}`);
+        const techUrl = `${urls.api}/cpro/transverses/v1/rechercherStructure`;
+        const techRes = await fetch(techUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'cpro-account': cproAccount,
+          },
+          body: JSON.stringify({
+            idUtilisateurCourant: 0,
+            parametres: { nbResultatsMaxParPage: 1, numeroPagePourRechercher: 1, triSurChamp: 'Identifiant', triSensTri: 'Ascendant' },
+            restreindreStructures: { structureActive: true },
+            typeRecherche: 'ACTIF',
+          }),
+        });
+        const techText = await techRes.text();
+        let techData: any;
+        try { techData = JSON.parse(techText); } catch { techData = { raw: techText.slice(0, 500) }; }
+
+        diagnostics.push({
+          step: '4. Auth CHORUS_TECH_USER (rechercherStructure)',
+          status: techRes.ok ? 'OK' : 'FAIL',
+          http_status: techRes.status,
+          duration_ms: Date.now() - techAuthStart,
+          detail: techRes.ok
+            ? `Recherche structure OK (resultats=${techData?.listeStructures?.length ?? 0})`
+            : `Erreur ${techRes.status}: ${techData?.libelleErreur || techData?.message || techText.slice(0, 200)}`,
+        });
+      } catch (techErr) {
+        diagnostics.push({
+          step: '4. Auth CHORUS_TECH_USER (rechercherStructure)',
+          status: 'FAIL',
+          duration_ms: Date.now() - techAuthStart,
+          detail: `Exception fetch : ${techErr instanceof Error ? techErr.message : String(techErr)}`,
+        });
+      }
     } else {
       diagnostics.push({
         step: '4. Auth CHORUS_TECH_USER',
