@@ -104,17 +104,21 @@
 | D10  | PAIEMENT_CONFIRME : aucun trigger (distinct FACTURE_PAYEE), câbler ou fusionner | P2 | OUVERT | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
 | D11  | AdminEmails.tsx : 7 noms legacy → bouton "Send test" rend templates vides | P1   | OUVERT   | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
 | D12  | Audit systémique pattern "notif in-app sans email" + 3 TODOs post-CP-LITIGES-3 | P1 | OUVERT  | Audit 3 : Templates email       | 8         | SP-B-templates-email-critiques    |
-| E1   | Harmoniser 2 logiques blocage divergentes (trigger 30j vs RPC 60j) → chemin unique | P0 | OUVERT | Audit 4 : Paiement salarié    | 6         | SP-C-paiement-salarie-refonte     |
+| E1   | Unifier blocage auto étab (OR : commission impayée >45j OU paiement soignant non déclaré >45j) + reformulé post-audit Sub-PR C | P0 | OUVERT | Audit 4 : Paiement salarié / reformulé audit Sub-PR C | 6         | SP-C-paiement-salarie-refonte     |
 | E2   | Créer 3 templates email manquants (RAPPEL_PAIEMENT_J7 + PAIEMENT_RETARD_J30 + PUBLICATION_SUSPENDUE) | P0 | OUVERT | Audit 4 : Paiement salarié | 8 | SP-C-paiement-salarie-refonte     |
-| E3   | Pont pg_net → send-email (RPC écrit notif in-app uniquement, aucun email) | P0 | OUVERT | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
-| E4   | Déduplication notif par `type` dédié (aujourd'hui titre LIKE '%retard%' fragile) | P0 | OUVERT | Audit 4 : Paiement salarié   | 3         | SP-C-paiement-salarie-refonte     |
-| E5   | Statut EXPIRE + transition automatique après échéance                  | P1       | OUVERT   | Audit 4 : Paiement salarié      | 8         | SP-C-paiement-salarie-refonte     |
-| E6   | Exploiter colonne `relance_2_le` (dead column, jamais écrite)          | P1       | OUVERT   | Audit 4 : Paiement salarié      | 3         | SP-C-paiement-salarie-refonte     |
-| E7   | Unfreeze automatique quand étab régularise (aujourd'hui bloqué à vie)  | P1       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
+| E3   | Pont pg_net → send-email pour notif étab/soignant paiement (validé post-audit) | P0 | OUVERT | Audit 4 : Paiement salarié      | 4         | SP-C-paiement-salarie-refonte     |
+| E4   | Déduplication notif par `type` dédié (clarifié : RAPPEL_PAIEMENT_J7/J21, BLOCAGE_ETAB, DEBLOCAGE_ETAB) | P0 | OUVERT | Audit 4 : Paiement salarié | 3 | SP-C-paiement-salarie-refonte     |
+| E5   | Statut mission EXPIREE + transition automatique (non pourvue après 30j — à confirmer) | P1 | OUVERT | Audit 4 / Audit Sub-PR C        | 8         | SP-C-paiement-salarie-refonte     |
+| E6   | Exploiter colonne `relance_2_le` (dead column, jamais écrite — confirmé par audit)          | P1       | OUVERT   | Audit 4 : Paiement salarié      | 3         | SP-C-paiement-salarie-refonte     |
+| E7   | Unfreeze automatique quand étab régularise (immédiat, pas de cooldown)  | P1       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
 | E8   | Basculer source de vérité sur `echeance_le` (aujourd'hui fin_le + INTERVAL) | P2   | OUVERT   | Audit 4 : Paiement salarié      | 4         | SP-C-paiement-salarie-refonte     |
 | E9   | Ajouter colonnes `bloque_le`, `raison_blocage`, historique blocages    | P2       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
-| E10  | Aligner seuils J+7/J+30/expiration (prod J+30/J+15/J+60 vs annoncés)   | P0       | OUVERT   | Audit 4 : Paiement salarié      | 4         | SP-C-paiement-salarie-refonte     |
-| E11  | Implémenter reminder J+7 (zéro code actuel)                            | P0       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
+| E10  | Seuils paiement validés Gabrielle : J+7 1ère relance, J+21 2ème, J+45 blocage (commission + soignant) | P0 | OUVERT | Audit 4 / Audit Sub-PR C | 4         | SP-C-paiement-salarie-refonte     |
+| E11  | Implémenter reminder J+7 (cron paiements_soignant, zéro code actuel)    | P0       | OUVERT   | Audit 4 : Paiement salarié      | 6         | SP-C-paiement-salarie-refonte     |
+| E12  | Créer page UI + RPC côté étab pour DÉCLARER paiement soignant (ATTESTATION SUR L'HONNEUR obligatoire) | P0 | OUVERT | Audit Sub-PR C — GAP CRITIQUE (pas de flow UI aujourd'hui) | 12 | SP-C-paiement-salarie-refonte     |
+| E13  | Audit source historique des 14 lignes `paiements_soignant` existantes (data test ? seed ? admin manuel ?) | P1 | OUVERT | Audit Sub-PR C                   | 2         | SP-C-paiement-salarie-refonte     |
+| E14  | Ajouter `EXPIREE` à enum `statut_mission` (scope inclus dans E5)        | P1       | OUVERT   | Audit Sub-PR C                  | 0 (⇔ E5)  | SP-C-paiement-salarie-refonte     |
+| E15  | Chorus Pro full : PISTE OAuth2 + API DeposerPDFacture + sync-chorus-status + UI admin + fallback Stripe/SEPA | P0 | OUVERT | Audit Sub-PR C (Q11 confirmé scope) | 30 | SP-C-paiement-salarie-refonte     |
 | F1   | Triple pénalité annulation soignant (dec_penalite + dec_fiabilite + RPC, cumul -15 à -35) | P0 | OUVERT | Audit 5 : Scoring soignant | 6 | SP-E-scoring-refonte              |
 | F2   | Deux moteurs de score s'écrasent (compteurs vs évaluation, dernier trigger gagne) | P0 | OUVERT | Audit 5 : Scoring soignant    | 8         | SP-E-scoring-refonte              |
 | F3   | Trois valeurs désynchro annulation soignant (-8, -10, -15/25) dans 3 endroits | P0 | OUVERT | Audit 5 : Scoring soignant        | 3         | SP-E-scoring-refonte              |
@@ -187,20 +191,20 @@
 
 ## Comptage automatique
 
-**Total tickets** : 125
+**Total tickets** : 129
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 24     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
+| P0 OUVERTS      | 26     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, E12, E15, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
 | P0 RÉSOLUS      | 6      | A24, A25, H1, H2, H3, H4                                                |
-| P1 OUVERTS      | 26     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b |
+| P1 OUVERTS      | 28     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E6, E7, E13, E14, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 11     | A4, A20, A21, A23, A26, H5, H6, H7, H8, H13, H14                        |
 | P2 OUVERTS      | 45     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j |
 | P2 RÉSOLUS      | 7      | A22, B5, H9, H10, H11, H12, I1                                          |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 24 + 6 + 26 + 1 + 11 + 45 + 7 + 5 = **125** ✓
+**Validation somme** : 26 + 6 + 28 + 1 + 11 + 45 + 7 + 5 = **129** ✓
 
 **Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable : 430.75 - 15 = 415.75 h**.
 
