@@ -109,7 +109,7 @@
 | H12  | Enum `mode_remboursement_avoir` orphelin (faux positif : colonne existe sous le nom `mode_remboursement`) | P2 | RÉSOLU | Audit CP-STRIPE-1               | 0         | SP-D-stripe-connect-prod-ready    |
 | H13  | 27 missions STRIPE_CONNECT sans soignant onboardé (data de test : UUIDs seed + étabs test) | P1 | RÉSOLU | Audit CP-STRIPE-1                | 0         | SP-D-stripe-connect-prod-ready    |
 | H14  | Transition EMISE → PAYEE de factures_honoraires manquante dans flow CONNECT | P1 | RÉSOLU | Audit CP-STRIPE-2                | 3         | SP-D-stripe-connect-prod-ready    |
-| I1   | Migration orpheline prod `20260417102123_correction_garantie_heures` (appliquée sans fichier local) | P2 | OUVERT | Migrations : Sub-PR 2 quater | 2         | SP-F-bugs-latents-nettoyage       |
+| I1   | Migration orpheline prod `20260417102123` — FAUX POSITIF (version correcte = 20260417120000, fichier local OK) | P2 | RÉSOLU | Audit CP-STRIPE-1 / post-merge | 0         | SP-F-bugs-latents-nettoyage       |
 | I2   | Cohabitation 2 versions `fn_admin_resoudre_litige` (5-arg legacy + 6-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
 | I3   | Cohabitation 2 versions `fn_ouvrir_litige_rate_limited` (2-arg + 3-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
 | I4   | `fn_generer_code_parrainage` appelle gen_random_bytes sans schéma → SET search_path | P2 | OUVERT | Migrations : Sub-PR 2 quater | 2         | SP-F-bugs-latents-nettoyage       |
@@ -142,11 +142,11 @@
 | P1 OUVERTS      | 27     | A5, A7, A8, A16, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, H5, H6, H8, K1, L4, L5 |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 7      | A4, A20, A23, A26, H7, H13, H14                                         |
-| P2 OUVERTS      | 38     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I1, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8 |
-| P2 RÉSOLUS      | 3      | A22, B5, H12                                                            |
+| P2 OUVERTS      | 37     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8 |
+| P2 RÉSOLUS      | 4      | A22, B5, H12, I1                                                        |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 26 + 3 + 27 + 1 + 7 + 38 + 3 + 5 = **110** ✓
+**Validation somme** : 26 + 3 + 27 + 1 + 7 + 37 + 4 + 5 = **110** ✓
 
 **Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable : 430.75 - 15 = 415.75 h**.
 
