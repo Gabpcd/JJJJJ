@@ -96,19 +96,21 @@
 | G3   | `MesFacturesHonoraires.tsx` : STATUT_CONFIG sans REMPLACEE (badge trompeur) + KPI totalFacture gonflé | P1 | OUVERT | Audit 6 : Statuts factures REMPLACEE | 3 | SP-A-fixes-rapides               |
 | G4   | `fn_admin_mandats_stats` : SUM(montant_ttc) sans filtre statut (bug pré-existant amplifié par REMPLACEE) | P2 | OUVERT | Audit 6 : Statuts factures REMPLACEE | 2 | SP-A-fixes-rapides               |
 | H1   | stripe_payment_intent_id jamais écrit sur factures_honoraires (⇔ A20 T12, même travail) | P0 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-2 | 0 (⇔ A20) | SP-D-stripe-connect-prod-ready    |
-| H2   | Edge functions Stripe ne consomment pas DDL FIX 9 (type_document, facture_precedente_id, montant_signe) | P0 | OUVERT | Audit 7 : Stripe Connect     | 6         | SP-D-stripe-connect-prod-ready    |
+| H2   | Edge functions Stripe ne consomment pas DDL FIX 9 (résolu via CP2-3-4-5 cumulés : stripe-webhook consomme dispute_*, reversed_le, stripe_payout_id, paye_le, type_document ; autres colonnes légitimement hors scope edge functions) | P0 | RÉSOLU | Audit 7 / CP-STRIPE-2+3+4+5 | 0 | SP-D-stripe-connect-prod-ready    |
 | H3   | stripe_refunds_queue non consommée, process-stripe-refunds squelette (⇔ A21 T13) | P0 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-5 | 0 (⇔ A21) | SP-D-stripe-connect-prod-ready    |
 | H4   | stripe-webhook ignore statut REMPLACEE → paiement possible contre facture invalidée (CP-STRIPE-2 : factures_honoraires OK ; CP-STRIPE-3 : factures commission OK) | P0 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-2+3 | 1 | SP-D-stripe-connect-prod-ready    |
 | H5   | Pas de rollback atomique stripe-connect-pay-mission (Checkout OK, upsert KO → orphelin) | P1 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-3 | 4 | SP-D-stripe-connect-prod-ready    |
 | H6   | Pas de handler `transfer.failed` dans stripe-webhook — étendu à 13 events (CP-STRIPE-4 inc. dispute, payout, refund, charge failed/pending/expired) | P1 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-4 | 22         | SP-D-stripe-connect-prod-ready    |
 | H7   | Pas de notification soignant à réception transfert Connect                | P1       | RÉSOLU   | Audit 7 : Stripe Connect / CP-STRIPE-2 | 3         | SP-D-stripe-connect-prod-ready    |
 | H8   | stripe-connect-pay-mission ne vérifie pas statut facture (peut payer ANNULEE) | P1    | RÉSOLU   | Audit 7 : Stripe Connect / CP-STRIPE-2 | 3         | SP-D-stripe-connect-prod-ready    |
-| H9   | Gestion erreurs Stripe typées manquante (3 fonctions, catch global unique) | P2      | OUVERT   | Audit 7 : Stripe Connect        | 4         | SP-D-stripe-connect-prod-ready    |
-| H10  | Pas de throttle/cache sur stripe-connect-status (appel Stripe à chaque render) | P2   | OUVERT   | Audit 7 : Stripe Connect        | 3         | SP-D-stripe-connect-prod-ready    |
-| H11  | Gestion compte Stripe supprimé → 500 au lieu de SUSPENDU gracieux       | P2       | OUVERT   | Audit 7 : Stripe Connect        | 2         | SP-D-stripe-connect-prod-ready    |
+| H9   | Gestion erreurs Stripe typées manquante (helper _shared/stripe-errors.ts) | P2      | RÉSOLU   | Audit 7 / CP-STRIPE-6           | 5         | SP-D-stripe-connect-prod-ready    |
+| H10  | Pas de throttle/cache sur stripe-connect-status (cache 5min via modifie_le + ?force=true) | P2 | RÉSOLU | Audit 7 / CP-STRIPE-6       | 3         | SP-D-stripe-connect-prod-ready    |
+| H11  | Gestion compte Stripe supprimé (catch resource_missing + statut SUPPRIME + UI branche) | P2 | RÉSOLU | Audit 7 / CP-STRIPE-6           | 3         | SP-D-stripe-connect-prod-ready    |
 | H12  | Enum `mode_remboursement_avoir` orphelin (faux positif : colonne existe sous le nom `mode_remboursement`) | P2 | RÉSOLU | Audit CP-STRIPE-1               | 0         | SP-D-stripe-connect-prod-ready    |
 | H13  | 27 missions STRIPE_CONNECT sans soignant onboardé (data de test : UUIDs seed + étabs test) | P1 | RÉSOLU | Audit CP-STRIPE-1                | 0         | SP-D-stripe-connect-prod-ready    |
 | H14  | Transition EMISE → PAYEE de factures_honoraires manquante dans flow CONNECT | P1 | RÉSOLU | Audit CP-STRIPE-2                | 3         | SP-D-stripe-connect-prod-ready    |
+| H15  | UI admin disputes (chargebacks Stripe) — tableau de bord dédié         | P2       | OUVERT   | Audit CP-STRIPE-4 (suivi)       | 8         | SP-admin-ui-disputes (futur)      |
+| H16  | Template email STRIPE_COMPTE_SUPPRIME_SOIGNANT (notif soignant quand compte Stripe détecté supprimé) | P2 | OUVERT | Audit CP-STRIPE-6 (suivi)        | 2         | SP-B-templates-email-critiques    |
 | I1   | Migration orpheline prod `20260417102123` — FAUX POSITIF (version correcte = 20260417120000, fichier local OK) | P2 | RÉSOLU | Audit CP-STRIPE-1 / post-merge | 0         | SP-F-bugs-latents-nettoyage       |
 | I2   | Cohabitation 2 versions `fn_admin_resoudre_litige` (5-arg legacy + 6-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
 | I3   | Cohabitation 2 versions `fn_ouvrir_litige_rate_limited` (2-arg + 3-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
@@ -133,20 +135,20 @@
 
 ## Comptage automatique
 
-**Total tickets** : 110
+**Total tickets** : 112
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 24     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, H2, L1, L2, L3 |
-| P0 RÉSOLUS      | 5      | A24, A25, H1, H3, H4                                                    |
+| P0 OUVERTS      | 23     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3 |
+| P0 RÉSOLUS      | 6      | A24, A25, H1, H2, H3, H4                                                |
 | P1 OUVERTS      | 23     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5 |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 11     | A4, A20, A21, A23, A26, H5, H6, H7, H8, H13, H14                        |
-| P2 OUVERTS      | 37     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8 |
-| P2 RÉSOLUS      | 4      | A22, B5, H12, I1                                                        |
+| P2 OUVERTS      | 36     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8 |
+| P2 RÉSOLUS      | 7      | A22, B5, H9, H10, H11, H12, I1                                          |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 24 + 5 + 23 + 1 + 11 + 37 + 4 + 5 = **110** ✓
+**Validation somme** : 23 + 6 + 23 + 1 + 11 + 36 + 7 + 5 = **112** ✓
 
 **Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable : 430.75 - 15 = 415.75 h**.
 

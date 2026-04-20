@@ -93,6 +93,25 @@ function StripeConnectBanner({ userId }: { userId?: string }) {
     );
   }
 
+  // [CP-STRIPE-6 H11] Compte Stripe supprimé — recommencer onboarding
+  if (status.statut === 'SUPPRIME') {
+    return (
+      <div className="mt-4 p-3 rounded-xl border border-destructive/30 bg-destructive/5 space-y-2">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-destructive">❌ Compte Stripe supprimé</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Recommencez l'onboarding pour recevoir vos paiements.</p>
+          </div>
+        </div>
+        <Button size="sm" variant="destructive" onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
+          {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+          Recommencer l'onboarding
+        </Button>
+      </div>
+    );
+  }
+
   // Pas de compte
   return (
     <div className="mt-4 p-3 rounded-xl border border-border bg-muted/30 space-y-2">
