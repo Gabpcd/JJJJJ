@@ -52,5 +52,7 @@
 	<string>Jolene utilise la caméra pour photographier vos documents professionnels (diplômes, pièce d'identité, RCP).</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Jolene accède à vos photos pour téléverser vos documents professionnels.</string>
+	<key>NSLocalNotificationUsageDescription</key>
+	<string>Jolene vous envoie des rappels pour vos missions (début, pointage, paiement).</string>
 </dict>
 </plist>

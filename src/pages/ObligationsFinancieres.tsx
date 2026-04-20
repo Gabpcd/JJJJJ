@@ -146,11 +146,18 @@ export default function ObligationsFinancieres() {
         if (typeof charger === 'function') charger();
         return;
       }
-      if (error) {
-        toast.error(result?.error || error.message || 'Erreur lors du paiement');
+      // [CP-STRIPE-2] Facture honoraires pas encore générée : message explicite
+      if (result?.error === 'FACTURE_NON_GENEREE') {
+        toast.error(result.message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", {
+          duration: 8000,
+        });
         return;
       }
-      if (result?.error) throw new Error(result.error);
+      if (error) {
+        toast.error(result?.message || result?.error || error.message || 'Erreur lors du paiement');
+        return;
+      }
+      if (result?.error) throw new Error(result.message || result.error);
       if (result?.url) { window.location.href = result.url; return; }
       if (result?.client_secret) { setConnectClientSecret(result.client_secret); return; }
       toast.error('Aucune URL de paiement reçue');

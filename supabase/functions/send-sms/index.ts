@@ -5,8 +5,43 @@
 //   TWILIO_ACCOUNT_SID
 //   TWILIO_AUTH_TOKEN
 //   TWILIO_PHONE_NUMBER (format E.164, ex: +33757592xxx)
+//
+// Secrets optionnels (CP-LITIGES-7a FIX 20 — préfixe configurable) :
+//   SMS_PREFIX_DEFAULT      défaut "Jolene: "
+//   SMS_PREFIX_OVERRIDES    JSON {type: prefix}, ex :
+//                           {"LITIGE_SECURITE":"Jolene-URGENT: "}
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+// ═══ [FIX 20] Préfixe SMS configurable ═══════════════════════════
+// Appelé par le handler et testé unitairement (export via globalThis).
+const SMS_PREFIX_DEFAULT = Deno.env.get("SMS_PREFIX_DEFAULT") ?? "Jolene: ";
+
+let SMS_PREFIX_OVERRIDES: Record<string, string> = {};
+try {
+  const raw = Deno.env.get("SMS_PREFIX_OVERRIDES");
+  if (raw && raw.trim().length > 0) {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      SMS_PREFIX_OVERRIDES = parsed;
+    }
+  }
+} catch (err) {
+  console.warn("[send-sms] SMS_PREFIX_OVERRIDES JSON invalide, fallback {} :", err);
+}
+
+export function resolveSmsPrefix(
+  prefixType: string | undefined | null,
+  defaultPrefix: string = SMS_PREFIX_DEFAULT,
+  overrides: Record<string, string> = SMS_PREFIX_OVERRIDES,
+): string {
+  if (prefixType && typeof prefixType === "string" && overrides[prefixType]) {
+    return overrides[prefixType];
+  }
+  return defaultPrefix;
+}
+
+const SMS_MAX_LENGTH = 160;
 
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
@@ -54,7 +89,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { telephone, type, contenu, destinataire_id } = body;
+    const { telephone, type, contenu, destinataire_id, prefix_type } = body;
 
     if (!telephone || !contenu) {
       return new Response(JSON.stringify({ error: "telephone et contenu requis" }), {
@@ -70,9 +105,13 @@ Deno.serve(async (req) => {
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
     const credentials = btoa(`${accountSid}:${authToken}`);
 
-    // Tronquer le contenu à 160 caractères (1 SMS)
-    const smsBody = contenu.length > 155 ? contenu.substring(0, 152) + "..." : contenu;
-    const fullBody = `Jolene: ${smsBody}`;
+    // [FIX 20] Préfixe résolu via prefix_type (override) ou DEFAULT
+    const prefix = resolveSmsPrefix(prefix_type);
+    const maxBodyLen = Math.max(20, SMS_MAX_LENGTH - prefix.length);
+    const smsBody = contenu.length > maxBodyLen
+      ? contenu.substring(0, maxBodyLen - 3) + "..."
+      : contenu;
+    const fullBody = `${prefix}${smsBody}`;
 
     const twilioRes = await fetch(twilioUrl, {
       method: "POST",

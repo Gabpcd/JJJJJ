@@ -38,7 +38,7 @@ function escapeHtml(str: unknown): string {
 
 // ─── Email template helpers ──────────────────────────────
 
-const WRAPPER = (content: string) => `
+const WRAPPER = (content: string, opts?: { hasAttachment?: boolean }) => `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
@@ -52,9 +52,11 @@ const WRAPPER = (content: string) => `
     </div>
     <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;">
       <p style="margin:0 0 6px;">Jolene SAS — <a href="${APP_URL}" style="color:#E04590;text-decoration:none;">jolene.app</a></p>
-      <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> · 
+      <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> ·
          <a href="${APP_URL}/confidentialite" style="color:#94A3B8;text-decoration:none;">Confidentialité</a></p>
-      <p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>
+      ${opts?.hasAttachment
+        ? `<p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">📎 Le document est joint à cet email.</p>`
+        : `<p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>`}
     </div>
   </div>
 </body>
@@ -83,10 +85,15 @@ const ALLOWED_TYPES = new Set([
   'ELIGIBLE_LIBERAL', 'RECAP_HEBDO',
   'RAPPEL_DOCUMENTS', 'MISSION_URGENTE', 'MISSION_PROPOSEE',
   'EVALUATION_RECUE', 'PAIEMENT_CONFIRME', 'ADMIN_BROADCAST',
-  'MISSION_NON_POURVUE', 'RELANCE_FACTURE', 'PAIEMENT_RAPIDE_RECU',
+  'MISSION_NON_POURVUE', 'PAIEMENT_RAPIDE_RECU',
+  'LITIGE_OUVERTURE', 'LITIGE_NOUVEAU_MESSAGE', 'LITIGE_ESCALADE_ADMIN',
+  'LITIGE_RESOLU_AJUSTE', 'AVOIR_EMIS', 'REMBOURSEMENT_CONFIRME',
+  'LITIGE_RAPPEL_J1', 'LITIGE_RAPPEL_J3', 'LITIGE_RAPPEL_J5',
+  'REGULARISATION_SOCIALE_REQUISE', 'LITIGE_MEDIATION_PRIORITAIRE',
+  'COMMISSION_AJUSTEE',
 ]);
 
-interface TemplateResult { subject: string; html: string }
+interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
 
 function renderTemplate(type: string, rawData: Record<string, unknown>): TemplateResult | null {
   const data: Record<string, string> = {};
@@ -422,6 +429,28 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
       };
 
     case 'PAIEMENT_RAPIDE_RECU':
+      // Deux contextes supportés :
+      //  - contexte=CONNECT_MISSION_PAYMENT : soignant payé en Stripe Connect après une mission
+      //  - par défaut : avance Defacto (factor), template historique
+      if (data.contexte === 'CONNECT_MISSION_PAYMENT') {
+        return {
+          subject: `Paiement reçu pour votre mission — ${data.numero_facture || ''}`,
+          html: WRAPPER(`
+            <h2 style="color:#0F172A;margin:0 0 12px;">💸 Paiement reçu</h2>
+            <p style="color:#334155;">Bonjour ${data.soignant_prenom || ''},</p>
+            <p style="color:#334155;">L'établissement a payé votre mission via Stripe Connect. Les fonds sont en route vers votre compte bancaire (délai standard Stripe).</p>
+            ${CARD_BOX(`
+              <strong style="color:#0F172A;">${data.mission_intitule || 'Mission'}</strong><br/>
+              <span style="color:#334155;">🏥 ${data.etablissement_nom || ''}</span><br/>
+              <span style="color:#334155;">📄 Facture ${data.numero_facture || ''}</span><br/>
+              <span style="color:#E04590;font-weight:bold;font-size:18px;">${data.montant_ttc || '0.00'} € TTC</span>
+            `)}
+            ${INFO_BOX(`Votre facture honoraires est désormais marquée <strong>PAYEE</strong>. Consultez-la dans votre espace facturation.`)}
+            ${BUTTON('Voir mes factures →', `${APP_URL}/soignant/mes-factures-honoraires`)}
+            ${SECURITY_NOTE}
+          `),
+        };
+      }
       return {
         subject: `Paiement rapide reçu 💸`,
         html: WRAPPER(`
@@ -431,6 +460,218 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           ${SECURITY_NOTE}
         `),
       };
+
+    // ─── Templates Litiges (CP-LITIGES-5) ──────────────────
+
+    case 'LITIGE_OUVERTURE':
+      return {
+        subject: `Un litige a été ouvert sur votre mission du ${data.date_mission || ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⚠️ Litige ouvert</h2>
+          <p style="color:#334155;">Un litige de type <strong>${data.type_litige_libelle || data.type_litige || ''}</strong> a été ouvert ${data.initie_par === 'SOIGNANT' ? 'par le soignant' : data.initie_par === 'ETABLISSEMENT' ? 'par l\'établissement' : ''} sur la mission :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">${data.mission_intitule || data.mission || 'Mission'}</strong><br/>
+            <span style="color:#334155;">📅 ${data.date_mission || ''}</span>
+          `)}
+          ${INFO_BOX(`<strong>Motif :</strong> ${data.motif || 'Non précisé'}`)}
+          <p style="color:#334155;">Vous disposez de <strong>${data.delai_reponse_texte || '72h'}</strong> pour répondre avant escalade automatique.</p>
+          ${BUTTON('Répondre au litige →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_NOUVEAU_MESSAGE':
+      return {
+        subject: `Nouveau message sur votre litige`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">💬 Nouveau message</h2>
+          <p style="color:#334155;"><strong>${data.auteur || 'Un participant'}</strong> a ajouté un message à votre litige :</p>
+          ${INFO_BOX(`"${data.extrait_message || '...'}"`.substring(0, 200))}
+          ${BUTTON('Voir la discussion →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_ESCALADE_ADMIN':
+      return {
+        subject: `🚨 Litige escaladé — action requise`,
+        html: WRAPPER(`
+          <h2 style="color:#DC2626;margin:0 0 12px;">🚨 Litige escaladé en médiation</h2>
+          <p style="color:#334155;">Un litige nécessite votre intervention :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Type :</strong> ${data.type_litige || ''}<br/>
+            <strong style="color:#0F172A;">Soignant :</strong> ${data.soignant_nom || '—'}<br/>
+            <strong style="color:#0F172A;">Établissement :</strong> ${data.etablissement_nom || '—'}<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_intitule || data.mission_id || '—'}<br/>
+            <strong style="color:#0F172A;">Ouvert depuis :</strong> ${data.jours_ouverture || '?'} jours<br/>
+            ${data.montant_bloque ? `<strong style="color:#DC2626;">Trésorerie bloquée :</strong> ${data.montant_bloque} €` : ''}
+          `)}
+          ${BUTTON('Résoudre le litige →', `${APP_URL}/admin/moderation`)}
+        `),
+      };
+
+    case 'LITIGE_MEDIATION_PRIORITAIRE':
+      return {
+        subject: `🚨 Litige en médiation depuis > ${data.jours_depuis_escalade || 7} jours`,
+        html: WRAPPER(`
+          <h2 style="color:#DC2626;margin:0 0 12px;">🚨 Alerte prioritaire — médiation prolongée</h2>
+          <p style="color:#334155;">Un litige est en médiation depuis plus de <strong>${data.jours_depuis_escalade || 7} jours</strong> sans action.</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Type :</strong> ${data.type_litige || ''}<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_id || '—'}
+          `)}
+          ${BUTTON('Traiter le litige →', `${APP_URL}/admin/moderation`)}
+        `),
+      };
+
+    case 'LITIGE_RESOLU_AJUSTE': {
+      const action = (data.action_financiere || 'AUCUNE') as string;
+      const actionBlock = action === 'AVOIR' ? `
+          <p style="color:#334155;">📄 Un avoir <strong>${data.numero_avoir || '—'}</strong> a été émis. Vous recevrez l'avoir dans un email séparé avec le PDF joint.</p>
+          <p style="color:#334155;">💡 Le document est disponible <strong>immédiatement</strong> dans votre espace (pas de délai de 24h).</p>
+        ` : action === 'RECALCUL' ? `
+          <p style="color:#334155;">🧮 Votre facture <strong>${data.numero_facture || '—'}</strong> a été recalculée avec les nouveaux montants.</p>
+          <p style="color:#334155;">💡 Le PDF mis à jour est disponible <strong>immédiatement</strong> dans votre espace (pas de délai de 24h).</p>
+        ` : action === 'ANNULER_REEMETTRE' ? `
+          <p style="color:#334155;">🔄 Une nouvelle facture <strong>${data.numero_nouvelle || '—'}</strong> remplace <strong>${data.numero_ancienne || '—'}</strong>.</p>
+          <p style="color:#334155;">💡 Les deux documents (ancien + nouveau) sont disponibles <strong>immédiatement</strong> dans votre espace (pas de délai de 24h).</p>
+        ` : '';
+      return {
+        subject: `Litige résolu — ajustement appliqué`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">✅ Litige résolu</h2>
+          <p style="color:#334155;">Le litige a été résolu ${data.en_faveur_de ? `en faveur du <strong>${data.en_faveur_de === 'SOIGNANT' ? 'soignant' : 'établissement'}</strong>` : 'par l\'administration'}.</p>
+          ${INFO_BOX(`<strong>Résolution :</strong> ${data.resolution || '—'}`)}
+          ${data.heures_avant ? CARD_BOX(`
+            <strong style="color:#0F172A;">Ajustement :</strong><br/>
+            Heures : ${data.heures_avant}h → ${data.heures_apres}h<br/>
+            Montant : ${data.montant_avant} € → ${data.montant_apres} €
+          `) : ''}
+          ${actionBlock}
+          ${data.url_facture ? BUTTON('Voir la facture →', data.url_facture) : BUTTON('Voir le détail →', `${APP_URL}/soignant/litiges`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+    }
+
+    case 'AVOIR_EMIS':
+      return {
+        subject: `Avoir ${data.numero_avoir || ''} émis — Jolene`,
+        hasAttachment: true,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📄 Avoir émis</h2>
+          <p style="color:#334155;">Un avoir a été émis suite à la résolution d'un litige :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">N° avoir :</strong> ${data.numero_avoir || '—'}<br/>
+            <strong style="color:#0F172A;">Facture d'origine :</strong> ${data.numero_facture_origine || '—'}<br/>
+            <strong style="color:#0F172A;">Montant :</strong> -${data.montant_avoir || '0'} €<br/>
+            <strong style="color:#0F172A;">Remboursement :</strong> ${data.mode_remboursement_texte || 'Virement sous 7 jours ouvrés'}
+          `)}
+          ${data.date_remboursement_prevue ? `<p style="color:#334155;">Remboursement prévu : <strong>${data.date_remboursement_prevue}</strong></p>` : ''}
+          ${BUTTON('Consulter l\'avoir →', `${APP_URL}/soignant/mes-factures`)}
+          <p style="font-size:12px;color:#94A3B8;text-align:center;margin-top:20px;">📎 Le PDF de l'avoir est joint à cet email. En cas de problème, consultez-le directement dans l'application.</p>
+        `), { hasAttachment: true }),
+      };
+
+    case 'REMBOURSEMENT_CONFIRME':
+      return {
+        subject: `Remboursement de ${data.montant || ''} € effectué`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">💸 Remboursement effectué</h2>
+          <p style="color:#334155;">Votre remboursement a été traité :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Montant :</strong> ${data.montant || '—'} €<br/>
+            <strong style="color:#0F172A;">Mode :</strong> ${data.mode_texte || '—'}<br/>
+            <strong style="color:#0F172A;">Référence :</strong> ${data.reference || '—'}<br/>
+            <strong style="color:#0F172A;">Avoir n° :</strong> ${data.numero_avoir || '—'}
+          `)}
+          <p style="color:#334155;">⏱️ Délai bancaire : ${data.delai_bancaire || '2 à 5 jours ouvrés'}.</p>
+          ${BUTTON('Voir mes factures →', `${APP_URL}/soignant/mes-factures`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_RAPPEL_J1':
+      return {
+        subject: 'Rappel : litige en attente de votre réponse',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⏰ Rappel — litige en attente</h2>
+          <p style="color:#334155;">Un litige est en attente de votre réponse depuis <strong>1 jour</strong>.</p>
+          ${INFO_BOX('Répondez avant l\'escalade automatique en médiation.')}
+          ${BUTTON('Répondre →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_RAPPEL_J3':
+      return {
+        subject: '⚠️ Rappel urgent : litige en attente depuis 3 jours',
+        html: WRAPPER(`
+          <h2 style="color:#F59E0B;margin:0 0 12px;">⚠️ Rappel urgent — 3 jours</h2>
+          <p style="color:#334155;">Un litige est en attente de votre réponse depuis <strong>3 jours</strong>.</p>
+          ${INFO_BOX('<strong>Sans réponse, ce litige sera automatiquement escaladé en médiation.</strong>')}
+          ${BUTTON('Répondre maintenant →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'LITIGE_RAPPEL_J5':
+      return {
+        subject: '🚨 Dernier rappel — escalade imminente',
+        html: WRAPPER(`
+          <h2 style="color:#DC2626;margin:0 0 12px;">🚨 Dernier rappel — jour 5</h2>
+          <p style="color:#334155;">Un litige est en attente de votre réponse depuis <strong>5 jours ouvrés</strong>. L'escalade en médiation est imminente.</p>
+          ${INFO_BOX('<strong>Ceci est le dernier rappel automatique. Sans réponse, un administrateur interviendra.</strong>')}
+          ${BUTTON('Répondre immédiatement →', `${APP_URL}${data.url_litige || '/soignant/litiges'}`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'REGULARISATION_SOCIALE_REQUISE':
+      return {
+        subject: 'Ajustement de vos heures — régularisation URSSAF/Carpimko à prévoir',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">📋 Régularisation sociale à prévoir</h2>
+          <p style="color:#334155;">Suite à la résolution d'un litige, vos heures déclarées ont été ajustées :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_intitule || '—'}<br/>
+            <strong style="color:#0F172A;">Heures :</strong> ${data.ancien_nombre_heures || '—'}h → ${data.nouveau_nombre_heures || '—'}h<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${data.ancien_montant || '—'} € → ${data.nouveau_montant || '—'} €<br/>
+            <strong style="color:#0F172A;">Facture d'origine :</strong> émise le ${data.date_origine_facture || '—'}
+          `)}
+          ${INFO_BOX(`
+            <strong>⚠️ Important :</strong> cette résolution modifie vos heures déclarées. Si vous avez déjà déclaré ces revenus (URSSAF, Carpimko), une régularisation peut être nécessaire.<br/><br/>
+            <strong>Nous vous recommandons de consulter votre comptable.</strong>
+          `)}
+          ${data.url_nouvelle_facture_ou_avoir ? BUTTON('Voir le document →', data.url_nouvelle_facture_ou_avoir) : BUTTON('Voir mes factures →', `${APP_URL}/soignant/mes-factures`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'COMMISSION_AJUSTEE': {
+      const isAvoir = (data.type_document || 'AVOIR') === 'AVOIR';
+      const bodyLine = isAvoir
+        ? `Un <strong>avoir commission ${data.numero_document || '—'}</strong> de <strong>${data.montant || '—'} €</strong> a été émis suite à la résolution du litige sur la mission <strong>${data.mission_intitule || '—'}</strong>. Cet avoir sera déduit de votre prochaine facture mensuelle.`
+        : `Une <strong>facture complémentaire ${data.numero_document || '—'}</strong> de <strong>${data.montant || '—'} €</strong> a été émise suite à la résolution du litige sur la mission <strong>${data.mission_intitule || '—'}</strong>. Cette facture sera due aux conditions habituelles.`;
+      return {
+        subject: isAvoir
+          ? `Avoir commission ${data.numero_document || ''} — ajustement litige`
+          : `Facture complémentaire ${data.numero_document || ''} — ajustement litige`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">${isAvoir ? '📉' : '📈'} Commission ajustée suite à résolution de litige</h2>
+          <p style="color:#334155;">${bodyLine}</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Type :</strong> ${isAvoir ? 'Avoir commission' : 'Facture complémentaire'}<br/>
+            <strong style="color:#0F172A;">Numéro :</strong> ${data.numero_document || '—'}<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${isAvoir ? '-' : ''}${data.montant || '—'} € TTC<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_intitule || '—'}
+          `)}
+          ${INFO_BOX(`<strong>Origine :</strong> recalcul automatique des commissions Jolene après résolution du litige #${data.litige_id || '—'}.`)}
+          ${data.litige_id ? BUTTON('Voir le litige →', `${APP_URL}/admin/moderation?litige=${data.litige_id}`) : BUTTON('Voir mes factures →', `${APP_URL}/etablissement/factures`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+    }
 
     default:
       return null;
@@ -578,6 +819,46 @@ serve(async (req) => {
 
     const { subject, html } = rendered;
 
+    // CP-LITIGES-7a FIX 16 : attachment PDF pour AVOIR_EMIS
+    const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+    let attachments: Array<{ filename: string; content: string }> | undefined;
+
+    if (rendered.hasAttachment && type === 'AVOIR_EMIS' && templateData?.avoir_id) {
+      try {
+        const { data: avoir } = await supabaseService
+          .from('factures_honoraires')
+          .select('pdf_s3_key, numero_facture')
+          .eq('id', templateData.avoir_id)
+          .single();
+
+        if (avoir?.pdf_s3_key) {
+          const { data: blob, error: dlErr } = await supabaseService.storage
+            .from('jolene-documents')
+            .download(avoir.pdf_s3_key);
+
+          if (dlErr || !blob) {
+            console.warn(`[send-email] AVOIR_EMIS attachment: PDF download failed (${avoir.pdf_s3_key}):`, dlErr);
+          } else if (blob.size > MAX_ATTACHMENT_BYTES) {
+            console.warn(`[send-email] AVOIR_EMIS attachment: PDF too large (${blob.size} bytes > ${MAX_ATTACHMENT_BYTES}), skipping attachment`);
+          } else {
+            const buffer = await blob.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            const base64 = btoa(binary);
+            const safeNumero = (avoir.numero_facture || 'avoir').replace(/[^a-zA-Z0-9_-]/g, '_');
+            attachments = [{ filename: `avoir-${safeNumero}.pdf`, content: base64 }];
+          }
+        } else {
+          console.warn(`[send-email] AVOIR_EMIS attachment: no pdf_s3_key for avoir ${templateData.avoir_id} — PDF not yet generated`);
+        }
+      } catch (e) {
+        console.warn('[send-email] AVOIR_EMIS attachment fetch error:', e);
+      }
+    }
+
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
     if (!RESEND_API_KEY) {
       console.log('RESEND_API_KEY not configured — email skipped');
@@ -586,18 +867,23 @@ serve(async (req) => {
       });
     }
 
+    const emailPayload: Record<string, unknown> = {
+      from: 'Jolene <noreply@jolene.app>',
+      to: [resolvedEmail],
+      subject,
+      html,
+    };
+    if (attachments && attachments.length > 0) {
+      emailPayload.attachments = attachments;
+    }
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: 'Jolene <noreply@jolene.app>',
-        to: [resolvedEmail],
-        subject,
-        html,
-      }),
+      body: JSON.stringify(emailPayload),
     });
 
     const resData = await response.json();

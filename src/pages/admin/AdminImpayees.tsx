@@ -115,11 +115,12 @@ export default function AdminImpayees() {
     for (const s of (soignants ?? [])) soignantMap[s.id] = `${s.prenom || ''} ${s.nom || ''}`.trim();
 
     // Fetch relance count from notifications
+    // Accepte l'ancien 'RELANCE_FACTURE' (pré-fix) pour préserver l'historique.
     const { data: relances } = await supabase
       .from('notifications')
       .select('id, destinataire_id, type')
       .in('destinataire_id', etabIds)
-      .eq('type', 'RELANCE_FACTURE');
+      .in('type', ['RAPPEL_FACTURE', 'RELANCE_FACTURE']);
 
     const relanceCountMap: Record<string, number> = {};
     for (const r of (relances ?? [])) {
@@ -176,9 +177,10 @@ export default function AdminImpayees() {
     try {
       await supabase.functions.invoke('send-email', {
         body: {
-          type: 'RELANCE_FACTURE',
+          type: 'RAPPEL_FACTURE',
           data: {
-            numero_facture: facture.numero_facture,
+            numero: facture.numero_facture,
+            facture_id: facture.id,
             montant_ttc: facture.montant_ttc.toFixed(2),
             date_echeance: fmtDate(facture.date_echeance),
             jours_retard: facture.joursRetard,
@@ -191,7 +193,7 @@ export default function AdminImpayees() {
       // Log notification
       await supabase.from('notifications').insert({
         destinataire_id: facture.etablissement_id,
-        type: 'RELANCE_FACTURE',
+        type: 'RAPPEL_FACTURE',
         type_destinataire: 'ETABLISSEMENT',
         titre: `Relance facture ${facture.numero_facture}`,
         corps: `Rappel : facture ${facture.numero_facture} de ${fmt(facture.montant_ttc)} en retard de ${facture.joursRetard} jour(s).`,

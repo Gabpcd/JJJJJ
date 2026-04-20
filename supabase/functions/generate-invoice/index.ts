@@ -13,7 +13,7 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
+import { PDFDocument, StandardFonts, rgb, degrees } from 'npm:pdf-lib@1.17.1';
 
 /* ── Rate limit state (in-memory, per isolate) ── */
 const serviceRoleCallLog: number[] = [];
@@ -24,6 +24,7 @@ const VALID_REASON_PATTERNS = [
   /^admin_replay_[0-9a-f-]{36}$/,
   /^ops_test_.+$/,
   /^admin_invoke_[0-9a-f-]{36}:.+$/,
+  /^admin_resoudre_litige_immediate$/,
 ];
 
 function validateServiceRoleReason(reason: string | undefined): { valid: boolean; error?: string } {
@@ -31,7 +32,7 @@ function validateServiceRoleReason(reason: string | undefined): { valid: boolean
     return { valid: false, error: 'service_role_reason requis pour les appels service_role' };
   }
   if (!VALID_REASON_PATTERNS.some(p => p.test(reason))) {
-    return { valid: false, error: `service_role_invalid_reason: "${reason}" ne match aucun pattern autorisé (cron_auto_generation, admin_replay_<uuid>, ops_test_<purpose>)` };
+    return { valid: false, error: `service_role_invalid_reason: "${reason}" ne match aucun pattern autorisé (cron_auto_generation, admin_replay_<uuid>, ops_test_<purpose>, admin_resoudre_litige_immediate)` };
   }
   return { valid: true };
 }
@@ -96,9 +97,23 @@ function generateCiiXml(inv: {
   factorBic?: string;
   factorName?: string;
   subrogationMention?: string;
+  // CP-LITIGES-6 : mode AVOIR (BT-3=381 + BT-25/BT-26)
+  isAvoir?: boolean;
+  precedingInvoiceNumber?: string;  // BT-25
+  precedingInvoiceIssueDate?: string; // BT-26 (YYYY-MM-DD)
 }): string {
   const fmtDate = (d: string) => d.replace(/-/g, '');
   const fmtAmt = (n: number) => n.toFixed(2);
+  // CP-LITIGES-6 : AVOIR → TypeCode 381 + montants négatifs + référence facture origine
+  const typeCode = inv.isAvoir ? '381' : '380';
+  const sign = inv.isAvoir ? -1 : 1;
+  const signed = (n: number) => fmtAmt(n * sign);
+  const precedingRef = inv.isAvoir && inv.precedingInvoiceNumber
+    ? `<ram:InvoiceReferencedDocument>
+        <ram:IssuerAssignedID>${escapeXml(inv.precedingInvoiceNumber)}</ram:IssuerAssignedID>
+        ${inv.precedingInvoiceIssueDate ? `<ram:FormattedIssueDateTime><qdt:DateTimeString format="102">${fmtDate(inv.precedingInvoiceIssueDate)}</qdt:DateTimeString></ram:FormattedIssueDateTime>` : ''}
+      </ram:InvoiceReferencedDocument>`
+    : '';
 
   const paymentMeans = inv.factorIban
     ? `<ram:SpecifiedTradeSettlementPaymentMeans>
@@ -135,7 +150,7 @@ function generateCiiXml(inv: {
   </rsm:ExchangedDocumentContext>
   <rsm:ExchangedDocument>
     <ram:ID>${escapeXml(inv.invoiceNumber)}</ram:ID>
-    <ram:TypeCode>380</ram:TypeCode>
+    <ram:TypeCode>${typeCode}</ram:TypeCode>
     <ram:IssueDateTime><udt:DateTimeString format="102">${fmtDate(inv.issueDate)}</udt:DateTimeString></ram:IssueDateTime>
     ${noteBlock}
   </rsm:ExchangedDocument>
@@ -180,6 +195,7 @@ function generateCiiXml(inv: {
           <ram:CountryID>FR</ram:CountryID>
         </ram:PostalTradeAddress>
       </ram:BuyerTradeParty>
+      ${precedingRef}
     </ram:ApplicableHeaderTradeAgreement>
     <ram:ApplicableHeaderTradeDelivery/>
     <ram:ApplicableHeaderTradeSettlement>
@@ -194,11 +210,11 @@ function generateCiiXml(inv: {
         <ram:DueDateDateTime><udt:DateTimeString format="102">${fmtDate(inv.dueDate)}</udt:DateTimeString></ram:DueDateDateTime>
       </ram:SpecifiedTradePaymentTerms>
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
-        <ram:LineTotalAmount>${fmtAmt(inv.amountHt)}</ram:LineTotalAmount>
-        <ram:TaxBasisTotalAmount>${fmtAmt(inv.amountHt)}</ram:TaxBasisTotalAmount>
-        <ram:TaxTotalAmount currencyID="${inv.currencyCode}">${fmtAmt(inv.amountTva)}</ram:TaxTotalAmount>
-        <ram:GrandTotalAmount>${fmtAmt(inv.amountTtc)}</ram:GrandTotalAmount>
-        <ram:DuePayableAmount>${fmtAmt(inv.amountTtc)}</ram:DuePayableAmount>
+        <ram:LineTotalAmount>${signed(inv.amountHt)}</ram:LineTotalAmount>
+        <ram:TaxBasisTotalAmount>${signed(inv.amountHt)}</ram:TaxBasisTotalAmount>
+        <ram:TaxTotalAmount currencyID="${inv.currencyCode}">${signed(inv.amountTva)}</ram:TaxTotalAmount>
+        <ram:GrandTotalAmount>${signed(inv.amountTtc)}</ram:GrandTotalAmount>
+        <ram:DuePayableAmount>${signed(inv.amountTtc)}</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
     </ram:ApplicableHeaderTradeSettlement>
   </rsm:SupplyChainTradeTransaction>
@@ -233,6 +249,14 @@ async function generateInvoicePdf(inv: {
   factorName?: string;
   factorIban?: string;
   mandatVersion: string;
+  // CP-LITIGES-6 : mode AVOIR
+  isAvoir?: boolean;
+  precedingInvoiceNumber?: string;
+  precedingInvoiceIssueDate?: string;
+  motifAvoir?: string;  // issu de litiges.resolution
+  // CP-LITIGES-7a FIX 7 : tampons ANNULEE / REMPLACEE
+  statut?: string;
+  replacedByInvoiceNumber?: string;
 }): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]); // A4
@@ -244,6 +268,9 @@ async function generateInvoicePdf(inv: {
   const black = rgb(0, 0, 0);
   const grey = rgb(0.4, 0.4, 0.4);
   const pink = rgb(0.878, 0.271, 0.565); // #E04590
+  const red = rgb(0.86, 0.15, 0.15);     // AVOIR title
+  const sign = inv.isAvoir ? -1 : 1;
+  const signedAmt = (n: number) => `${(n * sign).toFixed(2)} EUR`;
   const w = page.getWidth();
   let y = 800;
   const margin = 50;
@@ -263,7 +290,10 @@ async function generateInvoicePdf(inv: {
 
   // Header
   drawText('Jolene', margin, y, { font: fontBold, size: 18, color: pink });
-  drawText("FACTURE D'HONORAIRES", w - margin - 180, y, { font: fontBold, size: titleSize });
+  const titleText = inv.isAvoir ? 'AVOIR' : "FACTURE D'HONORAIRES";
+  const titleColor = inv.isAvoir ? red : black;
+  const titleOffset = inv.isAvoir ? 80 : 180;
+  drawText(titleText, w - margin - titleOffset, y, { font: fontBold, size: titleSize, color: titleColor });
   y -= 25;
   drawLine(y);
   y -= 20;
@@ -273,7 +303,30 @@ async function generateInvoicePdf(inv: {
   y -= 14;
   drawText(`Date d'emission : ${inv.issueDate}`, margin, y);
   drawText(`Date d'echeance : ${inv.dueDate}`, margin + 200, y);
-  y -= 25;
+  y -= 14;
+
+  // CP-LITIGES-6 : mention obligatoire AVOIR (art. L441-10 C. com.)
+  if (inv.isAvoir && inv.precedingInvoiceNumber) {
+    drawText(
+      `Avoir emis sur facture n. ${inv.precedingInvoiceNumber}${inv.precedingInvoiceIssueDate ? ` du ${inv.precedingInvoiceIssueDate}` : ''}`,
+      margin, y, { font: fontBold, size: sectionSize, color: red }
+    );
+    y -= 14;
+    if (inv.motifAvoir) {
+      drawText(`Motif : ${inv.motifAvoir.substring(0, 90)}`, margin, y, { size: 8, color: grey });
+      y -= 12;
+    }
+  }
+  // CP-LITIGES-7a FIX 7 : mention rectification pour facture REMPLACEE
+  if (inv.statut === 'REMPLACEE') {
+    const orange = rgb(0.95, 0.55, 0.05);
+    const mentionReplace = inv.replacedByInvoiceNumber
+      ? `Facture rectificative remplacee par ${inv.replacedByInvoiceNumber} (art. L441-9 C. com.).`
+      : `Facture rectifiee et remplacee (art. L441-9 C. com.).`;
+    drawText(mentionReplace, margin, y, { font: fontBold, size: sectionSize, color: orange });
+    y -= 14;
+  }
+  y -= 10;
 
   // Seller block
   drawText('EMETTEUR (Professionnel de sante)', margin, y, { font: fontBold, size: sectionSize });
@@ -332,17 +385,17 @@ async function generateInvoicePdf(inv: {
   drawText('TVA', w - margin - 120, y, { font: fontBold, size: 8 });
   drawText('TTC', w - margin - 60, y, { font: fontBold, size: 8 });
   y -= 4; drawLine(y); y -= 12;
-  // Table row
-  drawText('Honoraires', margin, y, { size: 8 });
-  drawText(`${inv.amountHt.toFixed(2)} EUR`, w - margin - 180, y, { size: 8 });
-  drawText(`${inv.amountTva.toFixed(2)} EUR`, w - margin - 120, y, { size: 8 });
-  drawText(`${inv.amountTtc.toFixed(2)} EUR`, w - margin - 60, y, { size: 8 });
+  // Table row (amounts signés pour AVOIR)
+  drawText(inv.isAvoir ? 'Avoir' : 'Honoraires', margin, y, { size: 8 });
+  drawText(signedAmt(inv.amountHt), w - margin - 180, y, { size: 8 });
+  drawText(signedAmt(inv.amountTva), w - margin - 120, y, { size: 8 });
+  drawText(signedAmt(inv.amountTtc), w - margin - 60, y, { size: 8 });
   y -= 4; drawLine(y); y -= 12;
   // Totals
   drawText('TOTAL', margin, y, { font: fontBold });
-  drawText(`${inv.amountHt.toFixed(2)} EUR`, w - margin - 180, y, { font: fontBold });
-  drawText(`${inv.amountTva.toFixed(2)} EUR`, w - margin - 120, y, { font: fontBold });
-  drawText(`${inv.amountTtc.toFixed(2)} EUR`, w - margin - 60, y, { font: fontBold });
+  drawText(signedAmt(inv.amountHt), w - margin - 180, y, { font: fontBold });
+  drawText(signedAmt(inv.amountTva), w - margin - 120, y, { font: fontBold });
+  drawText(signedAmt(inv.amountTtc), w - margin - 60, y, { font: fontBold });
   y -= 20;
 
   // VAT exemption
@@ -369,6 +422,34 @@ async function generateInvoicePdf(inv: {
   y -= 10;
   drawText('art. 289 I-2 du Code General des Impots', margin, y, { size: 7, color: grey });
 
+  // CP-LITIGES-7a FIX 7 : tampon diagonal ANNULEE / REMPLACEE
+  if (inv.statut === 'ANNULEE' || inv.statut === 'REMPLACEE') {
+    const isAnnulee = inv.statut === 'ANNULEE';
+    const stampColor = isAnnulee
+      ? rgb(0.86, 0.15, 0.15)  // red
+      : rgb(0.95, 0.55, 0.05); // orange
+    const stampMain = isAnnulee ? 'ANNULEE' : 'REMPLACEE';
+    const stampSub = !isAnnulee && inv.replacedByInvoiceNumber
+      ? `par facture ${inv.replacedByInvoiceNumber}`
+      : null;
+    const rot = degrees(30);
+    // Anchor tuned for visual centering of a diagonal stamp on A4 (595x842).
+    page.drawText(stampMain, {
+      x: 90, y: 320,
+      font: fontBold, size: 100,
+      color: stampColor, opacity: 0.35,
+      rotate: rot,
+    });
+    if (stampSub) {
+      page.drawText(stampSub, {
+        x: 170, y: 280,
+        font: fontBold, size: 22,
+        color: stampColor, opacity: 0.45,
+        rotate: rot,
+      });
+    }
+  }
+
   return await pdfDoc.save();
 }
 
@@ -390,8 +471,10 @@ Deno.serve(async (req) => {
     const isServiceRole = token === serviceRoleKey;
 
     const body = await req.json();
-    const { mission_id, service_role_reason } = body;
-    if (!mission_id) return json(req, { error: 'mission_id requis' }, 400);
+    const { mission_id, facture_id, service_role_reason } = body;
+    if (!mission_id && !facture_id) {
+      return json(req, { error: 'mission_id ou facture_id requis' }, 400);
+    }
 
     // ── Service_role bypass: validate reason + rate limit ──
     if (isServiceRole) {
@@ -416,6 +499,174 @@ Deno.serve(async (req) => {
       const { data: userData, error: authError } = await supabaseUser.auth.getUser(token);
       if (authError || !userData?.user) return json(req, { error: 'Token invalide' }, 401);
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // MODE REGEN (CP-LITIGES-6) — facture_id fourni
+    // Regénère PDF + Factur-X XML + upload S3 + Chorus resubmission
+    // pour une facture existante (cas AVOIR ou ANNULER_REEMETTRE).
+    // ═══════════════════════════════════════════════════════════
+    if (facture_id && !mission_id) {
+      const { data: facture, error: fErr } = await supabaseAdmin
+        .from('factures_honoraires')
+        .select('id, numero_facture, soignant_id, etablissement_id, mission_id, montant_ht, montant_tva, montant_ttc, taux_tva, exoneration_tva, date_emission, date_echeance, statut, mandat_version, type_document, facture_precedente_id, litige_id, is_public_sector, service_code_chorus')
+        .eq('id', facture_id)
+        .single();
+      if (fErr || !facture) return json(req, { error: 'Facture introuvable' }, 404);
+
+      // Charger soignant + etab + mission (lookup pour description)
+      const [{ data: sg }, { data: et }, { data: ms }] = await Promise.all([
+        supabaseAdmin.from('soignants').select('id, prenom, nom, profession, numero_rpps, numero_adeli, siret_liberal, email, adresse_rue, adresse_ville, adresse_code_postal, assujetti_tva, numero_tva').eq('id', facture.soignant_id).single(),
+        supabaseAdmin.from('etablissements').select('id, nom, siret, adresse_rue, adresse_ville, adresse_code_postal, est_secteur_public, chorus_pro_actif').eq('id', facture.etablissement_id).single(),
+        supabaseAdmin.from('missions').select('id, intitule, service, debut_le, fin_le, duree_heures').eq('id', facture.mission_id).maybeSingle(),
+      ]);
+      if (!sg || !et) return json(req, { error: 'Soignant/établissement introuvable' }, 404);
+
+      const isAvoir = facture.type_document === 'AVOIR';
+      let precedingNumero: string | null = null;
+      let precedingDate: string | null = null;
+      let motifAvoir: string | null = null;
+      let replacedByNumero: string | null = null;
+
+      if (isAvoir) {
+        if (!facture.facture_precedente_id) {
+          return json(req, { error: 'AVOIR sans facture_precedente_id — incohérence critique' }, 400);
+        }
+        const { data: prec } = await supabaseAdmin
+          .from('factures_honoraires')
+          .select('numero_facture, date_emission')
+          .eq('id', facture.facture_precedente_id)
+          .single();
+        precedingNumero = prec?.numero_facture ?? null;
+        precedingDate = prec?.date_emission ?? null;
+
+        if (facture.litige_id) {
+          const { data: lit } = await supabaseAdmin
+            .from('litiges')
+            .select('resolution')
+            .eq('id', facture.litige_id)
+            .single();
+          motifAvoir = lit?.resolution ?? null;
+        }
+      }
+
+      // CP-LITIGES-7a FIX 7 : pour tampon REMPLACEE, lookup successeur
+      if (facture.statut === 'REMPLACEE') {
+        const { data: succ } = await supabaseAdmin
+          .from('factures_honoraires')
+          .select('numero_facture, cree_le')
+          .eq('facture_precedente_id', facture.id)
+          .order('cree_le', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        replacedByNumero = succ?.numero_facture ?? null;
+      }
+
+      const sellerAddress = [sg.adresse_rue, sg.adresse_code_postal, sg.adresse_ville].filter(Boolean).join(', ');
+      const buyerAddress = [et.adresse_rue, et.adresse_code_postal, et.adresse_ville].filter(Boolean).join(', ');
+      const description = isAvoir
+        ? `Avoir sur facture ${precedingNumero ?? ''}${motifAvoir ? ' — ' + motifAvoir.substring(0, 100) : ''}`
+        : `Honoraires — ${ms?.intitule || 'Mission'} (${ms?.service || ''}) du ${ms?.debut_le || ''} au ${ms?.fin_le || ''} — ${ms?.duree_heures || 0}h`;
+
+      const xmlCii = generateCiiXml({
+        invoiceNumber: facture.numero_facture,
+        issueDate: facture.date_emission,
+        dueDate: facture.date_echeance,
+        sellerName: `${sg.prenom} ${sg.nom}`,
+        sellerSiret: sg.siret_liberal || '',
+        sellerRpps: sg.numero_rpps || '',
+        sellerAdeli: sg.numero_adeli || '',
+        sellerAddress: sg.adresse_rue || '',
+        sellerCity: sg.adresse_ville || '',
+        sellerPostalCode: sg.adresse_code_postal || '',
+        sellerEmail: sg.email || '',
+        buyerName: et.nom,
+        buyerSiret: et.siret || '',
+        buyerAddress: et.adresse_rue || '',
+        buyerCity: et.adresse_ville || '',
+        buyerPostalCode: et.adresse_code_postal || '',
+        serviceCode: facture.service_code_chorus || '',
+        description,
+        amountHt: Number(facture.montant_ht) || 0,
+        amountTva: Number(facture.montant_tva) || 0,
+        amountTtc: Number(facture.montant_ttc) || 0,
+        vatRate: Number(facture.taux_tva) || 0,
+        vatExempt: !!facture.exoneration_tva,
+        vatExemptionReason: facture.exoneration_tva ? 'TVA non applicable — art. 261, 4-1° du CGI (actes médicaux et paramédicaux)' : '',
+        currencyCode: 'EUR',
+        isAvoir,
+        precedingInvoiceNumber: precedingNumero ?? undefined,
+        precedingInvoiceIssueDate: precedingDate ?? undefined,
+      });
+
+      const pdfBytes = await generateInvoicePdf({
+        invoiceNumber: facture.numero_facture,
+        issueDate: facture.date_emission,
+        dueDate: facture.date_echeance,
+        sellerName: `${sg.prenom} ${sg.nom}`,
+        sellerProfession: sg.profession || '',
+        sellerSiret: sg.siret_liberal || '',
+        sellerRpps: sg.numero_rpps || '',
+        sellerAdeli: sg.numero_adeli || '',
+        sellerAddress,
+        buyerName: et.nom,
+        buyerSiret: et.siret || '',
+        buyerAddress,
+        description,
+        amountHt: Number(facture.montant_ht) || 0,
+        amountTva: Number(facture.montant_tva) || 0,
+        amountTtc: Number(facture.montant_ttc) || 0,
+        vatExempt: !!facture.exoneration_tva,
+        vatExemptionReason: facture.exoneration_tva ? 'TVA non applicable - art. 261, 4-1 du CGI (actes medicaux et paramedicaux)' : '',
+        mandatVersion: facture.mandat_version || '1.1',
+        isAvoir,
+        precedingInvoiceNumber: precedingNumero ?? undefined,
+        precedingInvoiceIssueDate: precedingDate ?? undefined,
+        motifAvoir: motifAvoir ?? undefined,
+        statut: facture.statut,
+        replacedByInvoiceNumber: replacedByNumero ?? undefined,
+      });
+
+      const subDir = isAvoir ? 'avoirs' : 'invoices';
+      const storagePath = `${subDir}/${sg.id}/${facture.numero_facture}.pdf`;
+      const xmlPath = `${subDir}/${sg.id}/${facture.numero_facture}.xml`;
+
+      await supabaseAdmin.storage.from('jolene-documents')
+        .upload(storagePath, new Blob([pdfBytes], { type: 'application/pdf' }), { upsert: true });
+      await supabaseAdmin.storage.from('jolene-documents')
+        .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: true });
+
+      const { error: upErr } = await supabaseAdmin
+        .from('factures_honoraires')
+        .update({
+          pdf_s3_key: storagePath,
+          facturx_xml_url: xmlPath,
+          pdf_a_regenerer: false,
+          chorus_avoir_reference_invoice: isAvoir ? precedingNumero : null,
+        })
+        .eq('id', facture_id);
+      if (upErr) return json(req, { error: `UPDATE facture échoué : ${upErr.message}` }, 500);
+
+      if (facture.is_public_sector) {
+        try {
+          await supabaseAdmin.functions.invoke('submit-to-chorus', {
+            body: { facture_honoraire_id: facture_id, type_document: facture.type_document },
+          });
+        } catch (e) { console.warn('Chorus regen deferred:', e); }
+      }
+
+      console.log(`[generate-invoice] REGEN ${facture.type_document} ${facture.numero_facture} (id=${facture_id})`);
+      return json(req, {
+        success: true,
+        mode: 'regen',
+        facture_id,
+        type_document: facture.type_document,
+        numero_facture: facture.numero_facture,
+        pdf_path: storagePath,
+        xml_path: xmlPath,
+      });
+    }
+
+    if (!mission_id) return json(req, { error: 'mission_id requis' }, 400);
 
     // 1. Vérifier mission TERMINEE
     const { data: mission, error: mErr } = await supabaseAdmin
