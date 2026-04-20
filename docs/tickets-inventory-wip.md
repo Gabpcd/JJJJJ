@@ -3,8 +3,8 @@
 **Date** : 2026-04-20
 **Snapshot base** : commit `f6e8d279` (tech-debt.md restauré, 428 lignes)
 **Branche** : `claude/fix-merge-conflicts-2Y4ph`
-**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes)
-**Sources à venir** : D (Audit 3 Templates email), E (Audit 4 Paiement salarié), F (Audit 5 Scoring), G (Audit 6 Statut REMPLACEE), H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
+**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email)
+**Sources à venir** : E (Audit 4 Paiement salarié), F (Audit 5 Scoring), G (Audit 6 Statut REMPLACEE), H (Audit 7 Stripe Connect), I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
 
 ## Légende
 
@@ -53,30 +53,42 @@
 | C1   | Régén types.ts : 3 RPCs typées `as any` (reclamation ×2 + paiement_soignant) | P2 | OUVERT   | Audit 2 : Objets fantômes       | 2         | SP-phantom-objects-audit          |
 | C2   | Câbler UI fn_declarer_fin_retroactive (RPC CP5b présente sans front)   | DIFFÉRÉ  | OUVERT   | Audit 2 : Objets fantômes       | 4         | Modules futurs (UI pointage)      |
 | C3   | Câbler UI fn_scanner_code_pointage (RPC CP5b scanner, pas d'écran soignant) | DIFFÉRÉ | OUVERT | Audit 2 : Objets fantômes       | 6         | Modules futurs (UI pointage)      |
+| D1   | CONTRAT_A_SIGNER non câblé post-création contrats_mission (UX rompue)  | P0       | OUVERT   | Audit 3 : Templates email       | 3         | SP-B-templates-email-critiques    |
+| D2   | REMBOURSEMENT_CONFIRME : TODO dans fn_confirmer_remboursement_avoir    | P0       | OUVERT   | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
+| D3   | REGULARISATION_SOCIALE_REQUISE promise par LitigeResolutionModal, backend muet | P0 | OUVERT | Audit 3 : Templates email       | 4         | SP-B-templates-email-critiques    |
+| D4   | EVALUATION_RECUE jamais déclenché (mock AdminEmails uniquement)        | P1       | OUVERT   | Audit 3 : Templates email       | 3         | SP-B-templates-email-critiques    |
+| D5   | MISSION_NON_POURVUE jamais appelé                                      | P1       | OUVERT   | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
+| D6   | LITIGE_NOUVEAU_MESSAGE non câblé dans fn_ajouter_message_litige        | P1       | OUVERT   | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
+| D7   | PAIEMENT_RAPIDE_RECU : factor-webhook insère notif sans invoke send-email | P1    | OUVERT   | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
+| D8   | RECAP_HEBDO : aucun cron, câbler ou retirer                            | P2       | OUVERT   | Audit 3 : Templates email       | 4         | SP-B-templates-email-critiques    |
+| D9   | ELIGIBLE_LIBERAL : aucun trigger (heures_totales ≥ seuil), câbler ou supprimer | P2 | OUVERT  | Audit 3 : Templates email       | 3         | SP-B-templates-email-critiques    |
+| D10  | PAIEMENT_CONFIRME : aucun trigger (distinct FACTURE_PAYEE), câbler ou fusionner | P2 | OUVERT | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
+| D11  | AdminEmails.tsx : 7 noms legacy → bouton "Send test" rend templates vides | P1   | OUVERT   | Audit 3 : Templates email       | 2         | SP-B-templates-email-critiques    |
+| D12  | Audit systémique pattern "notif in-app sans email" + 3 TODOs post-CP-LITIGES-3 | P1 | OUVERT  | Audit 3 : Templates email       | 8         | SP-B-templates-email-critiques    |
 
 ---
 
 ## Comptage automatique
 
-**Total tickets** : 35
+**Total tickets** : 47
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 3      | B1, B2, B3a                                                             |
+| P0 OUVERTS      | 6      | B1, B2, B3a, D1, D2, D3                                                 |
 | P0 RÉSOLUS      | 2      | A24, A25                                                                |
-| P1 OUVERTS      | 6      | A5, A7, A8, A16, A20, A21                                               |
+| P1 OUVERTS      | 12     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12                     |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 3      | A4, A23, A26                                                            |
-| P2 OUVERTS      | 13     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1               |
+| P2 OUVERTS      | 16     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10  |
 | P2 RÉSOLUS      | 2      | A22, B5                                                                 |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 3 + 2 + 6 + 1 + 3 + 13 + 2 + 5 = **35** ✓
+**Validation somme** : 6 + 2 + 12 + 1 + 3 + 16 + 2 + 5 = **47** ✓
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
-- P0 : 3 + 6 + 0.5 + 0.25 = **16.75 h**
-- P1 : 12 + 16 + 4 + 24 + 8 + 12 + 0.5 = **76.5 h**
-- P2 : 4 + 1 + 0.5 + 2 + 4 + 3 + 3 + 1 + 6 + 2 + 16 + 0.25 + 0.5 + 2 = **45.25 h**
-- **Total actionnable immédiatement : 138.5 h** (≈ 3.5 semaines ingénieur)
+- P0 OUVERTS (6 tickets) : B1=10 + B2=6 + B3a=0.5 + D1=3 + D2=2 + D3=4 = **25.5 h**
+- P1 OUVERTS + EN COURS (13 tickets) : A5=12 + A7=16 + A8=4 + A16=24 + A20=8 + A21=12 + B4=0.5 + D4=3 + D5=2 + D6=2 + D7=2 + D11=2 + D12=8 = **95.5 h**
+- P2 OUVERTS (16 tickets) : A1=4 + A2=1 + A3=0.5 + A6=2 + A9=4 + A10=3 + A11=3 + A12=1 + A14=6 + A15=2 + A19=16 + B3b=0.25 + C1=2 + D8=4 + D9=3 + D10=2 = **53.75 h**
+- **Total actionnable immédiatement : 174.75 h** (≈ 4.5 semaines ingénieur)
 
-Les DIFFÉRÉS (5 tickets, 22 h) sont hors périmètre sprint courant.
+Les DIFFÉRÉS (5 tickets : A13=2 + A17=8 + A18=2 + C2=4 + C3=6 = **22 h**) sont hors périmètre sprint courant.
