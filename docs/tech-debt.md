@@ -408,3 +408,21 @@ Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_inte
 **Statut** : RÉSOLU
 
 **Date** : 2026-04-20
+
+---
+
+## [RÉSOLU] T20 — fn_cloturer_litige_mutuel sans audit RGPD
+
+**Contexte** : `fn_cloturer_litige_mutuel` ne traçait aucune entrée dans `journaux_audit` lors de l'accord individuel (soignant ou étab) ni lors de la clôture amiable bilatérale. Incohérent avec les autres RPCs litiges (`fn_ouvrir_litige_rate_limited` → `LITIGE_OUVERTURE`, `fn_admin_resoudre_litige` → `LITIGE_RESOLUTION`, etc.).
+
+**Impact** : conformité RGPD réduite — impossible de retracer une clôture amiable dans les journaux d'audit.
+
+**Résolution** : migration `20260417130723_fix_t20_audit_cloture_amiable.sql`
+- Après chaque accord individuel : audit `LITIGE_ACCORD_CLOTURE` avec partie + état des accords précédents.
+- Si le 2e accord déclenche la résolution : audit `LITIGE_CLOTURE_AMIABLE` avec flag `cloture_par_accord_bilateral`.
+- `fn_litiges_escalader_auto` déjà couvert (`LITIGE_ESCALADE_AUTO` dans CP-LITIGES-4/FIX T19).
+- Tests : `tests/litiges/fix-t20-audit-cloture.test.sql` — 2 scénarios (1 accord → 1 audit, 2e accord → 2e audit + clôture audit).
+
+**Statut** : RÉSOLU
+
+**Date** : 2026-04-20
