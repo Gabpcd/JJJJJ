@@ -174,8 +174,11 @@ export default function DetailSerieSoignant() {
           break;
         }
       } else if (data?.choix_requis) {
-        // Series don't support contract choice — inform user to accept individually
-        toast.error('Cette mission nécessite un choix de contrat. Acceptez-la individuellement.');
+        // Series don't support contract choice dialog — direct user to mission detail
+        toast.error('Choix de contrat requis', {
+          description: `La mission "${mission.intitule}" accepte salarié ou libéral : ouvrez son détail pour choisir votre mode de contrat avant d'accepter.`,
+          duration: 8000,
+        });
         echouees++;
       } else if (data?.error) {
         echouees++;
