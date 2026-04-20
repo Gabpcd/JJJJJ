@@ -3,8 +3,8 @@
 **Date** : 2026-04-20
 **Snapshot base** : commit `f6e8d279` (tech-debt.md restauré, 428 lignes)
 **Branche** : `claude/fix-merge-conflicts-2Y4ph`
-**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant) + G (Audit 6 Statuts factures REMPLACEE) + H (Audit 7 Stripe Connect) + I (Migrations Sub-PR 2 quater) + J (Smoke tests)
-**Sources à venir** : K (Audit 8 RLS — placeholder)
+**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant) + G (Audit 6 Statuts factures REMPLACEE) + H (Audit 7 Stripe Connect) + I (Migrations Sub-PR 2 quater) + J (Smoke tests) + K (Audit 8 RLS global)
+**Inventaire complet**. Prochaine étape : planification des Sub-PR.
 
 ## Légende
 
@@ -114,44 +114,64 @@
 | J1   | Enum `type_document_facture` manque FACTURE_COMPLEMENTAIRE (uniquement FACTURE + AVOIR) | P2 | OUVERT | Smoke tests : FAIL design        | 3         | SP-G-decisions-design-factures    |
 | J2   | Colonnes `ajuster_heures`/`ajuster_taux`/`action_financiere_appliquee` absentes table litiges (design JSONB audit_log) | P2 | OUVERT | Smoke tests : FAIL design | 2 | SP-G-decisions-design-factures    |
 | J3   | Colonne `annulee_pour_litige_id` absente factures_honoraires (tracé via statut + facture_precedente_id + litige_id) | P2 | OUVERT | Smoke tests : FAIL design | 1 | SP-G-decisions-design-factures    |
+| K1   | 8 policies RLS role `public` → `authenticated` (messages_litige, factures_honoraires, calendar_*, email_queue, sms_envoyes) | P1 | OUVERT | Audit 8 : RLS global | 1 | SP-H-rls-consolidation            |
+| K2   | 3 SELECT policies redondantes factures_honoraires → garder `fh_select_own` seule | P2 | OUVERT | Audit 8 : RLS global             | 1         | SP-H-rls-consolidation            |
+| K3   | Documenter tables append-only by design (litiges, messages_litige, contrats_mission, journaux_audit…) | P2 | OUVERT | Audit 8 : RLS global        | 2         | SP-H-rls-consolidation            |
 
 ---
 
 ## Comptage automatique
 
-**Total tickets** : 96
+**Total tickets** : 99
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
 | P0 OUVERTS      | 24     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, H1, H2, H3, H4 |
 | P0 RÉSOLUS      | 2      | A24, A25                                                                |
-| P1 OUVERTS      | 26     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, H5, H6, H7, H8 |
+| P1 OUVERTS      | 27     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, H5, H6, H7, H8, K1 |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 3      | A4, A23, A26                                                            |
-| P2 OUVERTS      | 33     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I1, I2, I3, I4, I5, J1, J2, J3 |
+| P2 OUVERTS      | 35     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I1, I2, I3, I4, I5, J1, J2, J3, K2, K3 |
 | P2 RÉSOLUS      | 2      | A22, B5                                                                 |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 24 + 2 + 26 + 1 + 3 + 33 + 2 + 5 = **96** ✓
+**Validation somme** : 24 + 2 + 27 + 1 + 3 + 35 + 2 + 5 = **99** ✓
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
 - P0 OUVERTS (24 tickets, dont H1/H3 scope=0 dédupliqués) : **121.5 h**
-- P1 OUVERTS + EN COURS (27 tickets) : **162.5 h**
-- P2 OUVERTS (33 tickets) : 98.75 + J1=3 + J2=2 + J3=1 = **104.75 h**
-- **Total actionnable immédiatement : 388.75 h** (≈ 10 semaines ingénieur)
+- P1 OUVERTS + EN COURS (28 tickets) : 162.5 + K1=1 = **163.5 h**
+- P2 OUVERTS (35 tickets) : 104.75 + K2=1 + K3=2 = **107.75 h**
+- **Total actionnable immédiatement : 392.75 h** (≈ 9.8 semaines ingénieur à 40h/semaine)
 
 Note : H1 (⇔ A20, 8h) et H3 (⇔ A21, 12h) sont des doublons scope — le travail est compté une seule fois dans A20/A21 (P1). Le scope total n'est pas gonflé.
 
 Les DIFFÉRÉS (5 tickets : A13=2 + A17=8 + A18=2 + C2=4 + C3=6 = **22 h**) sont hors périmètre sprint courant.
 
-### Scope par Sub-PR (en construction)
+### Scope par Sub-PR (inventaire exhaustif)
 
-| Sub-PR                                   | Tickets                                                   | Scope (h) |
-|------------------------------------------|-----------------------------------------------------------|-----------|
-| SP-A-fixes-rapides (Sources G…)          | G1, G2, G3, G4                                            | **9 h**   |
-| SP-B-templates-email-critiques (Source D) | D1-D12                                                   | **37 h**  |
-| SP-C-paiement-salarie-refonte (Source E) | E1-E11                                                    | **60 h**  |
-| SP-D-stripe-connect-prod-ready (Sources A+H) | A20, A21, H1-H11                                       | **53 h** (dont H1/H3 dédupliqués ⇔ A20/A21) |
-| SP-E-scoring-refonte (Source F)          | F1-F15                                                    | **94 h**  |
-| SP-F-bugs-latents-nettoyage (Source I)   | I1-I5                                                     | **12 h**  |
-| SP-G-decisions-design-factures (Source J) | J1, J2, J3                                               | **6 h**   |
+Les 8 Sub-PR identifiées pendant les audits + les Sub-PR dérivées des tickets héritage :
+
+| Sub-PR                                     | Tickets                                              | Scope (h) |
+|--------------------------------------------|------------------------------------------------------|-----------|
+| **SP-A-fixes-rapides**                     | G1, G2, G3, G4                                       | **9 h**   |
+| **SP-B-templates-email-critiques**         | D1-D12                                               | **37 h**  |
+| **SP-C-paiement-salarie-refonte**          | E1-E11                                               | **60 h**  |
+| **SP-D-stripe-connect-prod-ready**         | A20, A21, H1-H11 (H1/H3 ⇔ A20/A21 dédupliqués)       | **53 h**  |
+| **SP-E-scoring-refonte**                   | F1-F15                                               | **94 h**  |
+| **SP-F-bugs-latents-nettoyage**            | I1-I5                                                | **12 h**  |
+| **SP-G-decisions-design-factures**         | J1, J2, J3                                           | **6 h**   |
+| **SP-H-rls-consolidation**                 | K1, K2, K3                                           | **4 h**   |
+| *SP-triggers-multi-creneaux* (hérité)      | A5, A6                                               | 14 h      |
+| *SP-hardening-coherence-financiere* (hérité) | A7, A9                                             | 20 h      |
+| *SP-commission-groupes (= Sub-PR 2bis)*    | A16                                                  | 24 h      |
+| *SP-phantom-objects-audit* (hérité)        | A19, C1                                              | 18 h      |
+| *SP-crons-fixes* (hérité + Audit 1)        | A14, A15, B1, B2, B3a, B3b                           | 24.75 h   |
+| *SP-audit-trail-missions* (hérité)         | A10, A11                                             | 6 h       |
+| *SP-frontend-rpc-hardening* (hérité)       | A1                                                   | 4 h       |
+| *SP-validation-juridique* (hérité, externe) | A8                                                  | 4 h       |
+| *SP-secrets-config* (hérité, action manuelle) | A2                                                | 1 h       |
+| *SP-nettoyage-versions-rpcs* (hérité)      | A3                                                   | 0.5 h     |
+| *SP-docs* (hérité)                         | A12                                                  | 1 h       |
+| *SP-activation-prod* (Audit 1)             | B4 (EN COURS)                                        | 0.5 h     |
+| **TOTAL brut 8 Sub-PR majeures**           | 56 tickets                                           | **275 h** |
+| **TOTAL brut 20 Sub-PR (incl. héritages)** | 94 tickets actionnables                              | **392.75 h** |
