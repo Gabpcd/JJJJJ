@@ -119,6 +119,7 @@
 | E13  | Audit source historique des 14 lignes `paiements_soignant` existantes — mix seed + usage réel minime | P1 | RÉSOLU | Audit Sub-PR C / CP-C-1 audit intégré       | 0         | SP-C-paiement-salarie-refonte     |
 | E14  | Ajouter `EXPIREE` à enum `statut_mission` (scope inclus dans E5)        | P1       | OUVERT   | Audit Sub-PR C                  | 0 (⇔ E5)  | SP-C-paiement-salarie-refonte     |
 | E15  | Chorus Pro full : PISTE OAuth2 + API DeposerPDFacture + sync-chorus-status + UI admin + fallback Stripe/SEPA | P0 | OUVERT | Audit Sub-PR C (Q11 confirmé scope) | 30 | SP-C-paiement-salarie-refonte     |
+| E16  | Bug URSSAF critique : choix contrat SALARIE/LIBERAL pour soignant MIXTE × mission TOUS non persisté (5 RPCs + 3 front) | P0 | RÉSOLU | Investigation Passe 2 Sub-PR C / E16 backend 1A-1E + frontend 2B-2D | 8 | SP-C-paiement-salarie-refonte     |
 | F1   | Triple pénalité annulation soignant (dec_penalite + dec_fiabilite + RPC, cumul -15 à -35) | P0 | OUVERT | Audit 5 : Scoring soignant | 6 | SP-E-scoring-refonte              |
 | F2   | Deux moteurs de score s'écrasent (compteurs vs évaluation, dernier trigger gagne) | P0 | OUVERT | Audit 5 : Scoring soignant    | 8         | SP-E-scoring-refonte              |
 | F3   | Trois valeurs désynchro annulation soignant (-8, -10, -15/25) dans 3 endroits | P0 | OUVERT | Audit 5 : Scoring soignant        | 3         | SP-E-scoring-refonte              |
@@ -167,6 +168,8 @@
 | UI-2h | Audit + refonte UI `DashboardSoignant.tsx`                             | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 10        | SP-UI-2-refonte-ux-etab-soignant  |
 | UI-2i | Polish UI `PageStripeConnect.tsx` + `ProfilSoignant.tsx`               | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 4         | SP-UI-2-refonte-ux-etab-soignant  |
 | UI-2j | Refonte `BarreNavigation` (cohérence visuelle globale si nécessaire)   | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 3         | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-E16-1 | Dialog unique choix contrat pour série MIXTE×TOUS (DetailSerieSoignant) — contournement 2C laisse wording, dialog serait DX + | P2 | OUVERT | E16 Passe 2C | 4 | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-E16-2 | UI admin assignation mission avec param choix contrat obligatoire MIXTE×TOUS — fn_assigner_mission_admin prête backend, aucune UI existante | P2 | OUVERT | E16 audit Passe 2 | 6 | SP-UI-1-bugs-admin                |
 | I1   | Migration orpheline prod `20260417102123` — FAUX POSITIF (version correcte = 20260417120000, fichier local OK) | P2 | RÉSOLU | Audit CP-STRIPE-1 / post-merge | 0         | SP-F-bugs-latents-nettoyage       |
 | I2   | Cohabitation 2 versions `fn_admin_resoudre_litige` (5-arg legacy + 6-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
 | I3   | Cohabitation 2 versions `fn_ouvrir_litige_rate_limited` (2-arg + 3-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
@@ -191,22 +194,26 @@
 
 ## Comptage automatique
 
-**Total tickets** : 129
+**Total tickets** : 132
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
 | P0 OUVERTS      | 25     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, E15, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
-| P0 RÉSOLUS      | 7      | A24, A25, E12, H1, H2, H3, H4                                           |
+| P0 RÉSOLUS      | 8      | A24, A25, E12, E16, H1, H2, H3, H4                                      |
 | P1 OUVERTS      | 27     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E6, E7, E14, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 12     | A4, A20, A21, A23, A26, E13, H5, H6, H7, H8, H13, H14                   |
-| P2 OUVERTS      | 45     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j |
+| P2 OUVERTS      | 47     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j, UI-E16-1, UI-E16-2 |
 | P2 RÉSOLUS      | 7      | A22, B5, H9, H10, H11, H12, I1                                          |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 25 + 7 + 27 + 1 + 12 + 45 + 7 + 5 = **129** ✓
+**Validation somme** : 25 + 8 + 27 + 1 + 12 + 47 + 7 + 5 = **132** ✓
 
-**Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable : 430.75 - 15 = 415.75 h**.
+**Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable post-Sub-PR D : 430.75 - 15 = 415.75 h**.
+
+**Scope résolu CP-C-1** : E12 (12h) + E13 (0h audit) = **12h** de scope éliminé. **Scope actionnable post-CP-C-1 : 415.75 - 12 = 403.75 h**.
+
+**Scope ajouté E16 (CP-C-1.5)** : E16 (8h RÉSOLU, nouveau ticket non comptabilisé auparavant) + UI-E16-1 (4h P2 nouveau) + UI-E16-2 (6h P2 nouveau) = **+10h P2 ouverts**. **Scope actionnable post-E16 : 403.75 + 10 = 413.75 h**.
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
 - P0 OUVERTS (27 tickets, dont H1/H3 scope=0 dédupliqués) : 121.5 + L1=3 + L2=1 + L3=6 = **131.5 h**
