@@ -96,6 +96,8 @@ const ALLOWED_TYPES = new Set([
   'DISPUTE_OUVERTE_ADMIN', 'DISPUTE_CLOSE_ADMIN',
   'PAYOUT_FAILED_ADMIN', 'PAYOUT_FAILED_SOIGNANT',
   'PAYOUT_CANCELED_ADMIN',
+  // [CP-STRIPE-5] template refund process cron
+  'REFUND_ECHEC_ADMIN',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -801,6 +803,37 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             <strong style="color:#0F172A;">Montant :</strong> ${data.montant || '—'} €
           `)}
           ${INFO_BOX('Les stripe_transfers associés ont été mis en statut ANNULEE. Vérifier si un nouveau payout doit être initié.')}
+        `),
+      };
+
+    // ─── Template CP-STRIPE-5 (refund cron échec permanent) ────
+
+    case 'REFUND_ECHEC_ADMIN':
+      return {
+        subject: `🚨 Remboursement Stripe permanent en échec — avoir ${data.numero_avoir || ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">🚨 Remboursement Stripe en échec permanent</h2>
+          <p style="color:#334155;">Le cron <code>process-stripe-refunds</code> n'a pas pu exécuter un remboursement après ${data.tentatives || '—'} tentative(s). Action admin requise.</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Avoir :</strong> ${data.numero_avoir || '—'} (id ${data.avoir_id || '—'})<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${data.montant_formatte || '—'} €<br/>
+            <strong style="color:#0F172A;">Soignant :</strong> ${data.soignant_nom || '—'}<br/>
+            <strong style="color:#0F172A;">Établissement :</strong> ${data.etablissement_nom || '—'}<br/>
+            <strong style="color:#0F172A;">Payment Intent :</strong> <code>${data.payment_intent_id || '—'}</code>
+          `)}
+          ${INFO_BOX(`
+            <strong>Erreur Stripe :</strong><br/>
+            Code : <code>${data.erreur_code || '—'}</code><br/>
+            Message : ${data.erreur_stripe || '—'}
+          `)}
+          <p style="color:#334155;"><strong>Actions possibles :</strong></p>
+          <ul style="color:#334155;padding-left:20px;">
+            <li><strong>Retry manuel</strong> : si l'erreur est transitoire, <code>UPDATE stripe_refunds_queue SET statut='EN_ATTENTE', tentatives=0, erreur=NULL WHERE avoir_id='${data.avoir_id || ''}';</code></li>
+            <li><strong>Virement manuel</strong> : exécuter le remboursement hors Stripe et passer l'avoir en statut REMBOURSEE</li>
+            <li><strong>Contact Stripe</strong> : si le payment_intent est corrompu côté Stripe</li>
+          </ul>
+          ${BUTTON('Dashboard Stripe Refunds →', 'https://dashboard.stripe.com/refunds')}
+          <p style="font-size:12px;color:#94A3B8;text-align:center;margin-top:20px;">Ce mail est envoyé automatiquement par le cron process-stripe-refunds (toutes les 15 min).</p>
         `),
       };
 

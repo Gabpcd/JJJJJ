@@ -38,7 +38,7 @@
 | A18  | T10 Rate limit litiges 3/h vs 3/24h (post-retours terrain)             | DIFFÉRÉ  | OUVERT   | Héritage                        | 2         | Post-beta                         |
 | A19  | T11 Audit exhaustif objets SQL fantômes (types.ts ↔ migrations)        | P2       | OUVERT   | Héritage                        | 16        | SP-phantom-objects-audit          |
 | A20  | T12 Câblage stripe_payment_intent_id sur factures_honoraires           | P1       | RÉSOLU   | Héritage / CP-STRIPE-2          | 8         | SP-stripe-connect-prod-ready      |
-| A21  | T13 Edge function process-stripe-refunds à finaliser                   | P1       | OUVERT   | Héritage                        | 12        | SP-stripe-connect-prod-ready      |
+| A21  | T13 Edge function process-stripe-refunds à finaliser                   | P1       | RÉSOLU   | Héritage / CP-STRIPE-5          | 12        | SP-stripe-connect-prod-ready      |
 | A22  | T14 Regen PDF/XML avoir via pg_net (FIX 18)                            | P2       | RÉSOLU   | Héritage                        | —         | Sub-PR 2 quater (livrée)          |
 | A23  | T15 Type email RELANCE_FACTURE orphelin (relances perdues)             | P1       | RÉSOLU   | Héritage                        | —         | Sub-PR 2 quater (livrée)          |
 | A24  | T18 fn_ouvrir_litige_rate_limited : fenêtres F2/F3 ineffectives        | P0       | RÉSOLU   | Héritage                        | —         | Sub-PR 2 quater (livrée)          |
@@ -97,7 +97,7 @@
 | G4   | `fn_admin_mandats_stats` : SUM(montant_ttc) sans filtre statut (bug pré-existant amplifié par REMPLACEE) | P2 | OUVERT | Audit 6 : Statuts factures REMPLACEE | 2 | SP-A-fixes-rapides               |
 | H1   | stripe_payment_intent_id jamais écrit sur factures_honoraires (⇔ A20 T12, même travail) | P0 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-2 | 0 (⇔ A20) | SP-D-stripe-connect-prod-ready    |
 | H2   | Edge functions Stripe ne consomment pas DDL FIX 9 (type_document, facture_precedente_id, montant_signe) | P0 | OUVERT | Audit 7 : Stripe Connect     | 6         | SP-D-stripe-connect-prod-ready    |
-| H3   | stripe_refunds_queue non consommée, process-stripe-refunds squelette (⇔ A21 T13) | P0 | OUVERT | Audit 7 : Stripe Connect         | 0 (⇔ A21) | SP-D-stripe-connect-prod-ready    |
+| H3   | stripe_refunds_queue non consommée, process-stripe-refunds squelette (⇔ A21 T13) | P0 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-5 | 0 (⇔ A21) | SP-D-stripe-connect-prod-ready    |
 | H4   | stripe-webhook ignore statut REMPLACEE → paiement possible contre facture invalidée (CP-STRIPE-2 : factures_honoraires OK ; CP-STRIPE-3 : factures commission OK) | P0 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-2+3 | 1 | SP-D-stripe-connect-prod-ready    |
 | H5   | Pas de rollback atomique stripe-connect-pay-mission (Checkout OK, upsert KO → orphelin) | P1 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-3 | 4 | SP-D-stripe-connect-prod-ready    |
 | H6   | Pas de handler `transfer.failed` dans stripe-webhook — étendu à 13 events (CP-STRIPE-4 inc. dispute, payout, refund, charge failed/pending/expired) | P1 | RÉSOLU | Audit 7 : Stripe Connect / CP-STRIPE-4 | 22         | SP-D-stripe-connect-prod-ready    |
@@ -137,16 +137,16 @@
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 25     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, H2, H3, L1, L2, L3 |
-| P0 RÉSOLUS      | 4      | A24, A25, H1, H4                                                        |
-| P1 OUVERTS      | 24     | A5, A7, A8, A16, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5 |
+| P0 OUVERTS      | 24     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, H2, L1, L2, L3 |
+| P0 RÉSOLUS      | 5      | A24, A25, H1, H3, H4                                                    |
+| P1 OUVERTS      | 23     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5 |
 | P1 EN COURS     | 1      | B4                                                                      |
-| P1 RÉSOLUS      | 10     | A4, A20, A23, A26, H5, H6, H7, H8, H13, H14                             |
+| P1 RÉSOLUS      | 11     | A4, A20, A21, A23, A26, H5, H6, H7, H8, H13, H14                        |
 | P2 OUVERTS      | 37     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8 |
 | P2 RÉSOLUS      | 4      | A22, B5, H12, I1                                                        |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 25 + 4 + 24 + 1 + 10 + 37 + 4 + 5 = **110** ✓
+**Validation somme** : 24 + 5 + 23 + 1 + 11 + 37 + 4 + 5 = **110** ✓
 
 **Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable : 430.75 - 15 = 415.75 h**.
 

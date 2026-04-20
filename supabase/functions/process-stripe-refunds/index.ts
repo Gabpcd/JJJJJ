@@ -1,22 +1,68 @@
-// process-stripe-refunds (SQUELETTE — T13)
+// ============================================================
+// process-stripe-refunds — CP-STRIPE-5 (H3 + A21/T13)
+// ============================================================
+// Cron qui consomme stripe_refunds_queue pour exécuter les
+// remboursements Stripe associés aux avoirs AUTO_STRIPE.
 //
-// Cron qui consommera la table stripe_refunds_queue pour exécuter les
-// remboursements Stripe après émission d'avoirs en mode AUTO_STRIPE.
+// Cycle statut :
+//   EN_ATTENTE → EN_COURS (lock) → TRAITE (succès) OU EN_ATTENTE (retry)
+//                                → ECHEC (permanent ou 3 tentatives)
 //
-// État actuel : HEARTBEAT uniquement — ne consomme PAS encore la queue.
-// Sera finalisé en Sub-PR 3 consolidation Stripe Connect, après T12
-// (câblage stripe_payment_intent_id sur factures_honoraires).
+// Idempotence : UPDATE conditionnel `WHERE statut='EN_ATTENTE'` fait
+// office de lock optimiste. Si 2 crons tournent en parallèle, la ligne
+// ne sera prise qu'une fois.
 //
-// Cf. /docs/tech-debt.md § T13 pour le plan d'activation.
+// Webhook filet de sécurité : charge.refunded (CP-STRIPE-4) fait
+// UPDATE TRAITE idempotent si le cron tombe entre refunds.create et
+// le UPDATE final.
+// ============================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from "npm:stripe@18.5.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const STRIPE_KEY = Deno.env.get("STRIPE_SECRET_KEY") || "";
+
+// Codes d'erreur Stripe considérés comme permanents (ECHEC direct, pas de retry)
+const PERMANENT_ERROR_CODES = new Set([
+  "payment_intent_unexpected_state",
+  "amount_too_large",
+  "charge_disputed",
+  "charge_expired",
+  "missing_source",
+  "resource_missing", // payment_intent introuvable
+]);
+
+// Codes considérés comme succès idempotent (le refund existe déjà côté Stripe)
+const ALREADY_REFUNDED_CODES = new Set([
+  "charge_already_refunded",
+]);
+
+const MAX_TENTATIVES = 3;
+
+interface QueueRow {
+  id: string;
+  avoir_id: string;
+  facture_origine_id: string;
+  stripe_payment_intent_id: string;
+  montant_cts: number;
+  tentatives: number;
+}
+
+interface StripeErrorLike {
+  type?: string;
+  code?: string;
+  message?: string;
+  raw?: { code?: string; message?: string };
+}
 
 serve(async (req) => {
+  const t0 = Date.now();
+
   try {
+    // 1. Auth : Bearer service_role_key
     const authHeader = req.headers.get("Authorization");
     if (authHeader !== `Bearer ${KEY}`) {
       return new Response(JSON.stringify({ error: "Non autorisé" }), {
@@ -26,42 +72,239 @@ serve(async (req) => {
     }
 
     const sb = createClient(URL, KEY);
+    const stripe = new Stripe(STRIPE_KEY, { apiVersion: "2025-08-27.basil" });
 
-    // Heartbeat : on se contente de lire la queue pour remonter le nombre
-    // d'avoirs en attente. Aucune action Stripe pour l'instant.
-    const { count, error } = await sb
+    // 2. SELECT des lignes éligibles (max 10 / run)
+    const { data: rows, error: selErr } = await sb
       .from("stripe_refunds_queue")
-      .select("*", { count: "exact", head: true })
-      .eq("statut", "EN_ATTENTE");
+      .select("id, avoir_id, facture_origine_id, stripe_payment_intent_id, montant_cts, tentatives")
+      .eq("statut", "EN_ATTENTE")
+      .lt("tentatives", MAX_TENTATIVES)
+      .or(`dernier_essai_le.is.null,dernier_essai_le.lt.${new Date(Date.now() - 15 * 60 * 1000).toISOString()}`)
+      .order("cree_le", { ascending: true })
+      .limit(10);
 
-    if (error) {
-      console.error("stripe_refunds_queue read error:", error);
+    if (selErr) {
+      console.error("stripe_refunds_queue SELECT error:", selErr);
       return new Response(
-        JSON.stringify({ error: "Lecture queue impossible", details: error.message }),
+        JSON.stringify({ error: "Lecture queue impossible", details: selErr.message }),
         { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
 
-    console.log("process-stripe-refunds heartbeat:", {
-      timestamp: new Date().toISOString(),
-      pending_count: count ?? 0,
-      status: "SKELETON_NOT_PROCESSING",
-      next_step: "T13 — implementer refunds.create() et mise à jour queue",
-    });
+    const queue = (rows || []) as QueueRow[];
+    if (queue.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          processed: 0,
+          message: "Queue vide",
+          duration_ms: Date.now() - t0,
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    let successCount = 0;
+    let retryCount = 0;
+    let echecCount = 0;
+
+    for (const item of queue) {
+      // 3a. Lock atomique : EN_ATTENTE → EN_COURS
+      const { data: locked, error: lockErr } = await sb
+        .from("stripe_refunds_queue")
+        .update({
+          statut: "EN_COURS",
+          dernier_essai_le: new Date().toISOString(),
+        })
+        .eq("id", item.id)
+        .eq("statut", "EN_ATTENTE")
+        .select("id")
+        .maybeSingle();
+
+      if (lockErr || !locked) {
+        // Autre cron a déjà pris la ligne — skip
+        console.log(`Queue row ${item.id} already locked by another cron, skipping`);
+        continue;
+      }
+
+      // 3b. Appel Stripe refunds.create
+      try {
+        const refund = await stripe.refunds.create({
+          payment_intent: item.stripe_payment_intent_id,
+          amount: item.montant_cts,
+          reason: "requested_by_customer",
+          metadata: {
+            avoir_id: item.avoir_id,
+            facture_origine_id: item.facture_origine_id,
+            queue_id: item.id,
+            source: "jolene_refunds_cron",
+          },
+        });
+
+        // 3c. Succès → TRAITE
+        await sb
+          .from("stripe_refunds_queue")
+          .update({
+            statut: "TRAITE",
+            stripe_refund_id: refund.id,
+            traite_le: new Date().toISOString(),
+            erreur: null,
+          })
+          .eq("id", item.id);
+
+        console.log(`Refund ${refund.id} created for queue ${item.id} (avoir ${item.avoir_id})`);
+        successCount++;
+      } catch (err) {
+        const stripeErr = err as StripeErrorLike;
+        const code = stripeErr.code || stripeErr.raw?.code || "";
+        const errMsg = stripeErr.message || stripeErr.raw?.message || String(err);
+        const errType = stripeErr.type || "";
+
+        // 3d. Déterminer action selon type d'erreur
+        let nouveauStatut: "TRAITE" | "ECHEC" | "EN_ATTENTE";
+        let alertAdmin = false;
+
+        if (ALREADY_REFUNDED_CODES.has(code)) {
+          // Idempotence Stripe : on considère que le refund existe → TRAITE
+          nouveauStatut = "TRAITE";
+          console.log(`Queue ${item.id}: charge_already_refunded — marking TRAITE (idempotence)`);
+        } else if (errType === "StripeAuthenticationError") {
+          // Config cassée — ECHEC permanent ET alerte admin URGENT
+          nouveauStatut = "ECHEC";
+          alertAdmin = true;
+          console.error(`Queue ${item.id}: StripeAuthenticationError — ECHEC + alert admin`);
+        } else if (PERMANENT_ERROR_CODES.has(code)) {
+          // Erreur permanente (donnée invalide) — ECHEC + alerte admin
+          nouveauStatut = "ECHEC";
+          alertAdmin = true;
+          console.error(`Queue ${item.id}: permanent Stripe error ${code} — ECHEC`);
+        } else if ((item.tentatives + 1) >= MAX_TENTATIVES) {
+          // 3e tentative échouée → ECHEC permanent + alerte
+          nouveauStatut = "ECHEC";
+          alertAdmin = true;
+          console.error(`Queue ${item.id}: max retries reached — ECHEC`);
+        } else {
+          // Erreur retryable (rate limit, network, etc.) → retour EN_ATTENTE
+          nouveauStatut = "EN_ATTENTE";
+          console.warn(
+            `Queue ${item.id}: retryable error (${code || errType}), tentatives=${item.tentatives + 1}`,
+          );
+        }
+
+        await sb
+          .from("stripe_refunds_queue")
+          .update({
+            statut: nouveauStatut,
+            tentatives: item.tentatives + 1,
+            erreur: errMsg.substring(0, 500),
+          })
+          .eq("id", item.id);
+
+        if (nouveauStatut === "TRAITE") {
+          successCount++;
+        } else if (nouveauStatut === "ECHEC") {
+          echecCount++;
+        } else {
+          retryCount++;
+        }
+
+        // 3f. Email admin si ECHEC
+        if (alertAdmin) {
+          try {
+            // Récupérer les détails avoir + contexte pour le mail
+            const { data: avoir } = await sb
+              .from("factures_honoraires")
+              .select("numero_facture, montant_ttc, soignant_id, mission_id")
+              .eq("id", item.avoir_id)
+              .maybeSingle();
+
+            let soignantNom = "";
+            let etabNom = "";
+            if (avoir) {
+              const { data: s } = await sb
+                .from("soignants")
+                .select("prenom, nom")
+                .eq("id", avoir.soignant_id)
+                .maybeSingle();
+              soignantNom = s ? `${s.prenom || ""} ${s.nom || ""}`.trim() : "";
+
+              const { data: m } = await sb
+                .from("missions")
+                .select("etablissements(nom)")
+                .eq("id", avoir.mission_id)
+                .maybeSingle();
+              etabNom = (m?.etablissements as { nom?: string } | null)?.nom || "";
+            }
+
+            const { data: admins } = await sb.rpc("fn_list_admin_user_ids");
+            for (const adminId of (admins || []) as string[]) {
+              await sb.functions.invoke("send-email", {
+                body: {
+                  type: "REFUND_ECHEC_ADMIN",
+                  destinataire_id: adminId,
+                  data: {
+                    avoir_id: item.avoir_id,
+                    numero_avoir: avoir?.numero_facture || "—",
+                    montant_formatte: (item.montant_cts / 100).toFixed(2),
+                    payment_intent_id: item.stripe_payment_intent_id,
+                    tentatives: item.tentatives + 1,
+                    erreur_stripe: errMsg.substring(0, 300),
+                    erreur_code: code || errType || "unknown",
+                    soignant_nom: soignantNom,
+                    etablissement_nom: etabNom,
+                  },
+                },
+              });
+            }
+          } catch (emailErr) {
+            console.error("send-email REFUND_ECHEC_ADMIN failed:", emailErr);
+          }
+        }
+
+        // Audit trail pour investigation
+        await sb.rpc("fn_ecrire_audit_safe", {
+          p_acteur_id: "00000000-0000-0000-0000-000000000000",
+          p_type_acteur: "SYSTEME",
+          p_action: nouveauStatut === "TRAITE"
+            ? "FINANCE_REFUND_TRAITE_IDEMPOTENT"
+            : nouveauStatut === "ECHEC"
+            ? "FINANCE_REFUND_ECHEC"
+            : "FINANCE_REFUND_RETRY",
+          p_type_ressource: "stripe_refunds_queue",
+          p_id_ressource: item.id,
+          p_cle_s3: null,
+          p_details: {
+            avoir_id: item.avoir_id,
+            payment_intent_id: item.stripe_payment_intent_id,
+            montant_cts: item.montant_cts,
+            erreur_code: code,
+            erreur_type: errType,
+            erreur_message: errMsg.substring(0, 500),
+            tentatives: item.tentatives + 1,
+          },
+          p_ip: null,
+          p_navigateur: "process-stripe-refunds",
+        });
+      }
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        status: "heartbeat",
-        pending_count: count ?? 0,
-        note: "SKELETON — not processing refunds yet (cf. tech-debt T13).",
+        processed: queue.length,
+        success_count: successCount,
+        retry_count: retryCount,
+        echec_count: echecCount,
+        duration_ms: Date.now() - t0,
       }),
       { headers: { "Content-Type": "application/json" } },
     );
   } catch (err) {
-    console.error("process-stripe-refunds fatal:", err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("process-stripe-refunds fatal:", errMsg);
     return new Response(
-      JSON.stringify({ error: "Une erreur interne est survenue." }),
+      JSON.stringify({ error: "Une erreur interne est survenue.", details: errMsg }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }

@@ -7,7 +7,7 @@ Deux edge functions assurent le fonctionnement asynchrone du système de litiges
 | Edge function              | Fréquence    | État     | Rôle                                                 |
 | -------------------------- | ------------ | -------- | ---------------------------------------------------- |
 | `litige-escalation-cron`   | Quotidien    | Actif    | Escalade auto + auto-création + rappels + alertes   |
-| `process-stripe-refunds`   | Toutes 30min | Squelette (T13) | Remboursements Stripe async sur avoirs AUTO_STRIPE |
+| `process-stripe-refunds`   | Toutes 15min | **Actif** (CP-STRIPE-5) | Remboursements Stripe async sur avoirs AUTO_STRIPE |
 
 ## litige-escalation-cron
 
@@ -103,33 +103,72 @@ Les erreurs par RPC sont capturées individuellement (ne stoppent pas le pipelin
 
 Modifiables uniquement par admin via `UPDATE parametres_litiges`.
 
-## process-stripe-refunds (squelette)
+## process-stripe-refunds — CP-STRIPE-5 (actif)
 
-### État actuel
+### État prod (2026-04-20)
 
-- **Auth** : idem cron — Bearer service_role.
-- **Action** : lit simplement `stripe_refunds_queue WHERE statut = 'EN_ATTENTE'` et log le count. Ne fait AUCUN appel Stripe.
-- **Log** : `{ timestamp, pending_count, status: "SKELETON_NOT_PROCESSING", next_step: "T13" }`.
+- **Version** : v2+ (full implementation)
+- **Déployée** : oui (workflow GitHub Actions auto post-push CP-STRIPE-5)
+- **Schedulée** : oui, cron `process-stripe-refunds-15min` (jobid=17, `*/15 * * * *`)
+- **Tickets résolus** : H3 (P0 A20⇔H1 déjà fait), A21/T13 (P1)
 
-### Prérequis avant activation complète (T13)
+### Pipeline
 
-1. **T12** doit être fermé (câblage `stripe_payment_intent_id` sur `factures_honoraires` via webhook Stripe).
-2. Ajout dans la function : appel `stripe.refunds.create({ payment_intent, amount, metadata: { avoir_id } })`.
-3. UPDATE queue : `statut='TRAITE' | 'ECHEC'`, `stripe_refund_id`, `tentatives++`.
-4. UPDATE facture avoir : `statut='REMBOURSE'`, `date_remboursement`, `reference_remboursement = stripe_refund_id`.
+1. SELECT lignes `stripe_refunds_queue` éligibles :
+   - `statut = 'EN_ATTENTE'`
+   - `tentatives < 3`
+   - `dernier_essai_le IS NULL` OU `< NOW() - INTERVAL '15 min'`
+   - LIMIT 10 par run
+2. Pour chaque ligne :
+   a. Lock atomique : UPDATE `statut='EN_COURS'` avec condition `statut='EN_ATTENTE'` (si 0 rows → skip, autre cron a pris)
+   b. `stripe.refunds.create({ payment_intent, amount, reason: 'requested_by_customer', metadata: {avoir_id, facture_origine_id, queue_id} })`
+   c. Transition selon réponse :
+      - Success → TRAITE + `stripe_refund_id` + `traite_le`
+      - `charge_already_refunded` → TRAITE idempotent
+      - Erreur permanente (`payment_intent_unexpected_state`, `amount_too_large`, `resource_missing`, `charge_disputed`, `charge_expired`, `missing_source`) → ECHEC + email REFUND_ECHEC_ADMIN
+      - `StripeAuthenticationError` → ECHEC immédiat + email URGENT (config cassée, pas de retry)
+      - `StripeRateLimitError` / `StripeAPIError` / autre → EN_ATTENTE, tentatives++
+      - Après 3 tentatives retry → ECHEC + email
+3. Webhook `charge.refunded` (CP-STRIPE-4) reste filet de sécurité idempotent.
 
-### Déploiement (recommandé : après T12+T13)
+### Configuration cron (SQL)
 
-```bash
-supabase functions deploy process-stripe-refunds
+```sql
+SELECT cron.schedule(
+  'process-stripe-refunds-15min',
+  '*/15 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/process-stripe-refunds',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1)
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+  $$
+);
 ```
 
-Schedule Supabase Dashboard :
-- **Name** : `process-stripe-refunds-30min`
-- **Cron** : `*/30 * * * *`
-- **Function** : `process-stripe-refunds`
+### Monitoring
 
-Pour l'instant, la function peut être déployée sans schedule — appelable manuellement pour monitoring.
+```sql
+-- Historique runs (10 derniers)
+SELECT status, start_time, return_message
+FROM cron.job_run_details
+WHERE jobid = (SELECT jobid FROM cron.job WHERE jobname = 'process-stripe-refunds-15min')
+ORDER BY start_time DESC LIMIT 10;
+
+-- Distribution queue
+SELECT statut, COUNT(*) FROM public.stripe_refunds_queue GROUP BY statut;
+```
+
+### Rollback
+
+- **Désactiver** : `UPDATE cron.job SET active=false WHERE jobname='process-stripe-refunds-15min';`
+- **Supprimer** : `SELECT cron.unschedule('process-stripe-refunds-15min');`
+- **Débloquer lignes lockées** (si cron crash mi-run) : `UPDATE stripe_refunds_queue SET statut='EN_ATTENTE' WHERE statut='EN_COURS' AND dernier_essai_le < NOW() - INTERVAL '30 min';`
 
 ## Tests
 
