@@ -102,6 +102,8 @@ const ALLOWED_TYPES = new Set([
   'PAIEMENT_SOIGNANT_DECLARE',
   // [CP-C-2] relances paiement + blocage
   'RAPPEL_PAIEMENT_J7', 'PAIEMENT_RETARD_J21', 'PUBLICATION_SUSPENDUE',
+  // [CP-C-3] déblocage auto post-régularisation
+  'PUBLICATION_REACTIVEE',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -946,6 +948,21 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         `),
       };
     }
+
+    case 'PUBLICATION_REACTIVEE':
+      return {
+        subject: '✅ Publication de missions réactivée',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">✅ Publication réactivée</h2>
+          <p style="color:#334155;">Bonjour,</p>
+          <p style="color:#334155;">
+            Vos obligations de paiement ont été régularisées pour <strong>${data.etablissement_nom || '—'}</strong>. La publication de nouvelles missions est à nouveau active.
+          </p>
+          ${INFO_BOX('Pour éviter toute nouvelle suspension, veillez à déclarer vos paiements soignants et régler vos factures de commission dans les délais (J+7 rappel / J+21 relance / J+45 blocage).')}
+          ${BUTTON('Accéder à mon dashboard →', `${APP_URL}/etablissement/dashboard`)}
+          ${SECURITY_NOTE}
+        `),
+      };
 
     case 'PUBLICATION_SUSPENDUE':
       return {
