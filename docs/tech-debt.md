@@ -373,3 +373,20 @@ Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_inte
 - `supabase/functions/send-email/index.ts` : `RELANCE_FACTURE` retiré de `ALLOWED_TYPES`.
 - `tests/litiges/templates-structure.test.ts` : ajout `RAPPEL_FACTURE` + régression `RELANCE_FACTURE` interdit.
 - `docs/templates-email-jolene.md` : section "Convention de nommage — rappels" + note historique.
+
+---
+
+## [RÉSOLU] T18 — fn_ouvrir_litige_rate_limited : fenêtres F2/F3 ineffectives
+
+**Contexte** : `fn_ouvrir_litige_rate_limited` passait `p_facture_id=NULL` à `fn_fenetre_contestation_ouverte` pour tous les types, rendant les fenêtres F2 (48h libéral post-émission) et F3 (60j salarié post-paiement) totalement ineffectives pour `DESACCORD_MONTANT_FACTURE`, `FRAIS_COMPLEMENTAIRES` et `NON_PAIEMENT`. Un soignant pouvait contester une facture émise il y a 1 an sans aucun blocage.
+
+**Impact** : faille métier critique — les règles de prescription financière n'étaient pas appliquées.
+
+**Résolution** : migration `20260417130721_fix_t18_fenetre_financier_facture_lookup.sql`
+- `fn_ouvrir_litige_rate_limited` : lookup `factures_honoraires WHERE mission_id AND statut <> 'BROUILLON'` pour types financiers, passage du `v_facture_id` résolu à `fn_fenetre_contestation_ouverte` + stockage dans `litiges.facture_id`.
+- `fn_admin_creer_litige_force` : même lookup pour consistance + alimentation du trigger de gel facture.
+- Tests : `tests/litiges/fix-t18-fenetre-financier.test.sql` — 5 scénarios (libéral <48h OK, >48h KO, salarié <60j OK, >60j KO, pas de facture → erreur).
+
+**Statut** : RÉSOLU
+
+**Date** : 2026-04-20
