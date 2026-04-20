@@ -429,6 +429,28 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
       };
 
     case 'PAIEMENT_RAPIDE_RECU':
+      // Deux contextes supportés :
+      //  - contexte=CONNECT_MISSION_PAYMENT : soignant payé en Stripe Connect après une mission
+      //  - par défaut : avance Defacto (factor), template historique
+      if (data.contexte === 'CONNECT_MISSION_PAYMENT') {
+        return {
+          subject: `Paiement reçu pour votre mission — ${data.numero_facture || ''}`,
+          html: WRAPPER(`
+            <h2 style="color:#0F172A;margin:0 0 12px;">💸 Paiement reçu</h2>
+            <p style="color:#334155;">Bonjour ${data.soignant_prenom || ''},</p>
+            <p style="color:#334155;">L'établissement a payé votre mission via Stripe Connect. Les fonds sont en route vers votre compte bancaire (délai standard Stripe).</p>
+            ${CARD_BOX(`
+              <strong style="color:#0F172A;">${data.mission_intitule || 'Mission'}</strong><br/>
+              <span style="color:#334155;">🏥 ${data.etablissement_nom || ''}</span><br/>
+              <span style="color:#334155;">📄 Facture ${data.numero_facture || ''}</span><br/>
+              <span style="color:#E04590;font-weight:bold;font-size:18px;">${data.montant_ttc || '0.00'} € TTC</span>
+            `)}
+            ${INFO_BOX(`Votre facture honoraires est désormais marquée <strong>PAYEE</strong>. Consultez-la dans votre espace facturation.`)}
+            ${BUTTON('Voir mes factures →', `${APP_URL}/soignant/mes-factures-honoraires`)}
+            ${SECURITY_NOTE}
+          `),
+        };
+      }
       return {
         subject: `Paiement rapide reçu 💸`,
         html: WRAPPER(`

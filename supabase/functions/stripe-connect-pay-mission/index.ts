@@ -171,6 +171,36 @@ serve(async (req) => {
       );
     }
 
+    // [CP-STRIPE-2 H1/H14] Lookup facture_honoraires liée à la mission.
+    // On exige qu'elle existe avant de créer la Checkout Session — ainsi on
+    // peut (1) injecter son id dans la metadata Stripe pour que le webhook
+    // update le bon row, (2) éviter les sessions orphelines si la facture
+    // n'a jamais été générée, (3) supporter les avoirs AUTO_STRIPE futurs
+    // qui nécessitent un stripe_payment_intent_id sur la facture d'origine.
+    const { data: factureHonoraires } = await supabaseAdmin
+      .from("factures_honoraires")
+      .select("id, statut")
+      .eq("mission_id", mission_id)
+      .eq("soignant_id", soignantId)
+      .in("statut", ["EMISE", "EN_RETARD"])
+      .order("date_emission", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!factureHonoraires) {
+      return new Response(
+        JSON.stringify({
+          error: "FACTURE_NON_GENEREE",
+          message:
+            "Facture honoraires non générée pour cette mission. Cliquez sur 'Générer facture' avant de payer.",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        }
+      );
+    }
+
     // Check soignant has Connect account
     const { data: connectOnboarding } = await supabaseAdmin
       .from("stripe_connect_onboarding")
@@ -275,11 +305,13 @@ serve(async (req) => {
           connected_account_id: connectOnboarding.stripe_account_id,
           soignant_cents: soignantCents.toString(),
           commission_cents: commissionCents.toString(),
+          facture_honoraires_id: factureHonoraires.id,
         },
       },
       metadata: {
         type: "CONNECT_MISSION_PAYMENT",
         mission_id,
+        facture_honoraires_id: factureHonoraires.id,
       },
       return_url: `${origin}/etablissement/facturation?paiement=succes`,
     });

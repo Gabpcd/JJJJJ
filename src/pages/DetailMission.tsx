@@ -524,8 +524,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       setConnectPayLoading(false);
                       return;
                     }
+                    // [CP-STRIPE-2] Facture honoraires pas encore générée : message explicite
+                    if (data?.error === 'FACTURE_NON_GENEREE') {
+                      toast.error(data.message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", {
+                        duration: 8000,
+                      });
+                      setConnectPayLoading(false);
+                      return;
+                    }
                     if (fnErr || !data?.client_secret) {
-                      toast.error(data?.error || fnErr?.message || 'Erreur lors du paiement');
+                      toast.error(data?.message || data?.error || fnErr?.message || 'Erreur lors du paiement');
                       setConnectPayLoading(false);
                       return;
                     }

@@ -246,11 +246,18 @@ export default function FacturationEtablissement() {
         charger();
         return;
       }
-      if (error) {
-        toast.error(data?.error || error.message || 'Erreur lors du paiement');
+      // [CP-STRIPE-2] Facture honoraires pas encore générée : message explicite
+      if (data?.error === 'FACTURE_NON_GENEREE') {
+        toast.error(data.message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", {
+          duration: 8000,
+        });
         return;
       }
-      if (data?.error) throw new Error(data.error);
+      if (error) {
+        toast.error(data?.message || data?.error || error.message || 'Erreur lors du paiement');
+        return;
+      }
+      if (data?.error) throw new Error(data.message || data.error);
       if (data?.url) {
         window.location.href = data.url;
         return;

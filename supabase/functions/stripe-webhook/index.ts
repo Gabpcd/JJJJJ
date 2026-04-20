@@ -132,6 +132,98 @@ serve(async (req) => {
               })
               .eq("id", missionId);
 
+            // [CP-STRIPE-2 H1/H7/H14] Propagation du paiement vers factures_honoraires :
+            // - stripe_payment_intent_id rempli pour les avoirs AUTO_STRIPE futurs
+            // - transition statut EMISE/EN_RETARD → PAYEE
+            // - invoke send-email PAIEMENT_RAPIDE_RECU (notif soignant)
+            // Le guard `in statut EMISE/EN_RETARD` couvre H4 pour la facture honoraires
+            // (une facture ANNULEE/REMPLACEE ne peut pas repasser PAYEE par ce chemin).
+            const factureHonorairesId = session.metadata?.facture_honoraires_id;
+            if (factureHonorairesId && paymentIntentId) {
+              const { data: factureUpdated, error: factureError } = await supabaseAdmin
+                .from("factures_honoraires")
+                .update({
+                  stripe_payment_intent_id: paymentIntentId,
+                  statut: "PAYEE",
+                  date_paiement: new Date().toISOString().split("T")[0],
+                })
+                .eq("id", factureHonorairesId)
+                .in("statut", ["EMISE", "EN_RETARD"])
+                .select("id, numero_facture, montant_ttc, soignant_id, mission_id")
+                .maybeSingle();
+
+              if (factureError) {
+                console.error("factures_honoraires update failed:", factureError);
+              } else if (!factureUpdated) {
+                console.warn(
+                  `CONNECT webhook: facture_honoraires ${factureHonorairesId} not in EMISE/EN_RETARD, skipped`
+                );
+                await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+                  p_acteur_id: "00000000-0000-0000-0000-000000000000",
+                  p_type_acteur: "SYSTEME",
+                  p_action: "FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE",
+                  p_type_ressource: "facture_honoraires",
+                  p_id_ressource: factureHonorairesId,
+                  p_cle_s3: null,
+                  p_details: {
+                    raison: "statut_non_modifiable",
+                    mission_id: missionId,
+                    stripe_payment_intent_id: paymentIntentId,
+                    stripe_session_id: session.id,
+                  },
+                  p_ip: null,
+                  p_navigateur: "stripe-webhook",
+                });
+              } else {
+                // Invoke send-email PAIEMENT_RAPIDE_RECU (non-bloquant)
+                try {
+                  const { data: soignantRow } = await supabaseAdmin
+                    .from("soignants")
+                    .select("prenom")
+                    .eq("id", factureUpdated.soignant_id)
+                    .maybeSingle();
+                  const { data: soignantUser } = await supabaseAdmin.auth.admin.getUserById(
+                    factureUpdated.soignant_id
+                  );
+                  const soignantEmail = soignantUser?.user?.email;
+                  const { data: missionDetail } = await supabaseAdmin
+                    .from("missions")
+                    .select("intitule, etablissements(nom)")
+                    .eq("id", factureUpdated.mission_id)
+                    .maybeSingle();
+
+                  if (soignantEmail) {
+                    await supabaseAdmin.functions.invoke("send-email", {
+                      body: {
+                        type: "PAIEMENT_RAPIDE_RECU",
+                        destinataire_id: factureUpdated.soignant_id,
+                        destinataire_email: soignantEmail,
+                        data: {
+                          soignant_prenom: soignantRow?.prenom || "",
+                          montant_ttc: Number(factureUpdated.montant_ttc).toFixed(2),
+                          numero_facture: factureUpdated.numero_facture,
+                          mission_intitule: missionDetail?.intitule || "",
+                          etablissement_nom:
+                            (missionDetail?.etablissements as { nom?: string } | null)?.nom || "",
+                          contexte: "CONNECT_MISSION_PAYMENT",
+                        },
+                      },
+                    });
+                  }
+                } catch (emailErr) {
+                  // Non-bloquant — le paiement et la mise à jour facture restent valides
+                  console.error("send-email PAIEMENT_RAPIDE_RECU failed:", emailErr);
+                }
+                console.log(
+                  `factures_honoraires ${factureHonorairesId} marked PAYEE for mission ${missionId}`
+                );
+              }
+            } else {
+              console.warn(
+                `CONNECT webhook: missing facture_honoraires_id or payment_intent_id (session ${session.id})`
+              );
+            }
+
             // RGPD Art. 32 : audit du transfert financier (Stripe Connect mission payment)
             await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
               p_acteur_id: soignantId || "00000000-0000-0000-0000-000000000000",
@@ -147,6 +239,7 @@ serve(async (req) => {
                 stripe_session_id: session.id,
                 soignant_id: soignantId,
                 connected_account_id: connectedAccountId,
+                facture_honoraires_id: factureHonorairesId || null,
                 montant_cents: soignantCents,
                 devise: "eur",
               },
