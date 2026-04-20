@@ -3,8 +3,8 @@
 **Date** : 2026-04-20
 **Snapshot base** : commit `f6e8d279` (tech-debt.md restauré, 428 lignes)
 **Branche** : `claude/fix-merge-conflicts-2Y4ph`
-**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant) + G (Audit 6 Statuts factures REMPLACEE) + H (Audit 7 Stripe Connect)
-**Sources à venir** : I (Migrations), J (Smoke tests), K (Audit 8 RLS — placeholder)
+**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant) + G (Audit 6 Statuts factures REMPLACEE) + H (Audit 7 Stripe Connect) + I (Migrations Sub-PR 2 quater)
+**Sources à venir** : J (Smoke tests), K (Audit 8 RLS — placeholder)
 
 ## Légende
 
@@ -106,12 +106,17 @@
 | H9   | Gestion erreurs Stripe typées manquante (3 fonctions, catch global unique) | P2      | OUVERT   | Audit 7 : Stripe Connect        | 4         | SP-D-stripe-connect-prod-ready    |
 | H10  | Pas de throttle/cache sur stripe-connect-status (appel Stripe à chaque render) | P2   | OUVERT   | Audit 7 : Stripe Connect        | 3         | SP-D-stripe-connect-prod-ready    |
 | H11  | Gestion compte Stripe supprimé → 500 au lieu de SUSPENDU gracieux       | P2       | OUVERT   | Audit 7 : Stripe Connect        | 2         | SP-D-stripe-connect-prod-ready    |
+| I1   | Migration orpheline prod `20260417102123_correction_garantie_heures` (appliquée sans fichier local) | P2 | OUVERT | Migrations : Sub-PR 2 quater | 2         | SP-F-bugs-latents-nettoyage       |
+| I2   | Cohabitation 2 versions `fn_admin_resoudre_litige` (5-arg legacy + 6-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
+| I3   | Cohabitation 2 versions `fn_ouvrir_litige_rate_limited` (2-arg + 3-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
+| I4   | `fn_generer_code_parrainage` appelle gen_random_bytes sans schéma → SET search_path | P2 | OUVERT | Migrations : Sub-PR 2 quater | 2         | SP-F-bugs-latents-nettoyage       |
+| I5   | Trigger `fn_auto_code_parrainage` : NULL-only restrictif, refuse INSERT avec code explicite | P2 | OUVERT | Migrations : Sub-PR 2 quater | 2         | SP-F-bugs-latents-nettoyage       |
 
 ---
 
 ## Comptage automatique
 
-**Total tickets** : 88
+**Total tickets** : 93
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
@@ -120,17 +125,17 @@
 | P1 OUVERTS      | 26     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, H5, H6, H7, H8 |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 3      | A4, A23, A26                                                            |
-| P2 OUVERTS      | 25     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11 |
+| P2 OUVERTS      | 30     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I1, I2, I3, I4, I5 |
 | P2 RÉSOLUS      | 2      | A22, B5                                                                 |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 24 + 2 + 26 + 1 + 3 + 25 + 2 + 5 = **88** ✓
+**Validation somme** : 24 + 2 + 26 + 1 + 3 + 30 + 2 + 5 = **93** ✓
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
-- P0 OUVERTS (24 tickets, dont H1/H3 scope=0 dédupliqués) : 113.5 + H2=6 + H4=2 = **121.5 h**
-- P1 OUVERTS + EN COURS (27 tickets) : 146.5 + H5=6 + H6=4 + H7=3 + H8=3 = **162.5 h**
-- P2 OUVERTS (25 tickets) : 77.75 + H9=4 + H10=3 + H11=2 = **86.75 h**
-- **Total actionnable immédiatement : 370.75 h** (≈ 9.5 semaines ingénieur)
+- P0 OUVERTS (24 tickets, dont H1/H3 scope=0 dédupliqués) : **121.5 h**
+- P1 OUVERTS + EN COURS (27 tickets) : **162.5 h**
+- P2 OUVERTS (30 tickets) : 86.75 + I1=2 + I2=3 + I3=3 + I4=2 + I5=2 = **98.75 h**
+- **Total actionnable immédiatement : 382.75 h** (≈ 10 semaines ingénieur)
 
 Note : H1 (⇔ A20, 8h) et H3 (⇔ A21, 12h) sont des doublons scope — le travail est compté une seule fois dans A20/A21 (P1). Le scope total n'est pas gonflé.
 
@@ -145,3 +150,4 @@ Les DIFFÉRÉS (5 tickets : A13=2 + A17=8 + A18=2 + C2=4 + C3=6 = **22 h**) sont
 | SP-C-paiement-salarie-refonte (Source E) | E1-E11                                                    | **60 h**  |
 | SP-D-stripe-connect-prod-ready (Sources A+H) | A20, A21, H1-H11                                       | **53 h** (dont H1/H3 dédupliqués ⇔ A20/A21) |
 | SP-E-scoring-refonte (Source F)          | F1-F15                                                    | **94 h**  |
+| SP-F-bugs-latents-nettoyage (Source I)   | I1, I2, I3, I4, I5                                        | **12 h**  |
