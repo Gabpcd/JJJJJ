@@ -8,7 +8,7 @@
 
 ## 🎯 Sub-PR C — Paiement salarié + commission + Chorus Pro : EN COURS 🚧
 
-**Chantier principal Q2 2026** (~88h estimé, ~55h livrés).
+**Chantier principal Q2 2026** (~88h estimé, ~67h livrés).
 
 ### CP livrés
 
@@ -18,17 +18,17 @@
 | CP-C-1.5 (E16 bug critique MIXTE×TOUS) | E16 | `0e308bdd..6ee88090` (9 commits) |
 | CP-C-2 (templates email + cron relances) | E2, E6, E11 | `1e6bd1cb..9de62dd6` (5 commits) |
 | CP-C-3 (blocage auto J+45 + unfreeze + UI bandeau) | E1, E7, E9 | `82c5cc25..7435d8db` (5 commits) |
+| CP-C-4 (statut EXPIREE + transition auto) | E5, E8, E14 | `cd803211..50bc30fa` (2 commits) |
 
-**Scope réalisé** : E12 (12h) + E13 (0h) + E16 (8h) + E2 (8h) + E6 (3h) + E11 (6h) + E1 (6h) + E7 (6h) + E9 (6h) = **55h** (vs 88h total).
+**Scope réalisé** : E12 (12h) + E13 (0h) + E16 (8h) + E2 (8h) + E6 (3h) + E11 (6h) + E1 (6h) + E7 (6h) + E9 (6h) + E5 (8h) + E8 (4h) + E14 (0h) = **67h** (vs 88h total). Scope réel CP-C-4 : **4h** (vs 14h estimé).
 
-### CP restants
+### CP restant
 
 | CP | Tickets | Scope (h) | Dépendances |
 |----|---------|-----------|-------------|
-| CP-C-4 (statut EXPIREE + transition + echeance_le) | E5, E8, E14 | 14 | - |
 | CP-C-5 (Chorus Pro full + fallback Stripe/SEPA) | E15 | 30 | PISTE credentials |
 
-**Reste Sub-PR C** : ~44h.
+**Reste Sub-PR C** : ~30h (Chorus Pro uniquement).
 
 ---
 
@@ -134,16 +134,17 @@
 | E2   | Créer 3 templates email manquants (RAPPEL_PAIEMENT_J7 + PAIEMENT_RETARD_J21 + PUBLICATION_SUSPENDUE) | P0 | RÉSOLU | Audit 4 / CP-C-2 B commit 53e56f7b | 8 | SP-C-paiement-salarie-refonte     |
 | E3   | Pont pg_net → send-email pour notif étab/soignant paiement (validé post-audit) | P0 | OUVERT | Audit 4 : Paiement salarié      | 4         | SP-C-paiement-salarie-refonte     |
 | E4   | Déduplication notif par `type` dédié (clarifié : RAPPEL_PAIEMENT_J7/J21, BLOCAGE_ETAB, DEBLOCAGE_ETAB) | P0 | OUVERT | Audit 4 : Paiement salarié | 3 | SP-C-paiement-salarie-refonte     |
-| E5   | Statut mission EXPIREE + transition automatique (non pourvue après 30j — à confirmer) | P1 | OUVERT | Audit 4 / Audit Sub-PR C        | 8         | SP-C-paiement-salarie-refonte     |
+| E5   | Statut mission EXPIREE + transition automatique (seuil 1h post debut_le) | P1 | RÉSOLU | Audit 4 / CP-C-4 A commit cd803211 | 8         | SP-C-paiement-salarie-refonte     |
 | E6   | Exploiter colonne `relance_2_le` (dead column, jamais écrite — confirmé par audit)          | P1       | RÉSOLU   | Audit 4 / CP-C-2 A commit 1e6bd1cb      | 3         | SP-C-paiement-salarie-refonte     |
 | E7   | Unfreeze automatique quand étab régularise (immédiat, pas de cooldown)  | P1       | RÉSOLU   | Audit 4 / CP-C-3 C commit 21018ea7     | 6         | SP-C-paiement-salarie-refonte     |
-| E8   | Basculer source de vérité sur `echeance_le` (aujourd'hui fin_le + INTERVAL) | P2   | OUVERT   | Audit 4 : Paiement salarié      | 4         | SP-C-paiement-salarie-refonte     |
+| E8   | echeance_le calculé par fn_declarer_paiement_soignant (CP-C-1), seuils relances gardés sur fin_le pour uniformité produit | P2 | RÉSOLU | Audit 4 / CP-C-4 audit (aucun travail additionnel) | 4         | SP-C-paiement-salarie-refonte     |
 | E9   | Ajouter colonnes `bloque_auto_le`, `bloque_auto_raisons`, table historique_blocages_etablissements | P2 | RÉSOLU | Audit 4 / CP-C-3 A commit 82c5cc25 | 6         | SP-C-paiement-salarie-refonte     |
 | E10  | Seuils paiement validés Gabrielle : J+7 1ère relance, J+21 2ème, J+45 blocage (commission + soignant) | P0 | OUVERT | Audit 4 / Audit Sub-PR C | 4         | SP-C-paiement-salarie-refonte     |
 | E11  | Implémenter reminder J+7 (cron paiements_soignant, zéro code actuel)    | P0       | RÉSOLU   | Audit 4 / CP-C-2 C commit 0f8f62e9 | 6         | SP-C-paiement-salarie-refonte     |
 | E12  | Créer page UI + RPC côté étab pour DÉCLARER paiement soignant (ATTESTATION SUR L'HONNEUR obligatoire) | P0 | RÉSOLU | Audit Sub-PR C / CP-C-1 | 12 | SP-C-paiement-salarie-refonte     |
 | E13  | Audit source historique des 14 lignes `paiements_soignant` existantes — mix seed + usage réel minime | P1 | RÉSOLU | Audit Sub-PR C / CP-C-1 audit intégré       | 0         | SP-C-paiement-salarie-refonte     |
-| E14  | Ajouter `EXPIREE` à enum `statut_mission` (scope inclus dans E5)        | P1       | OUVERT   | Audit Sub-PR C                  | 0 (⇔ E5)  | SP-C-paiement-salarie-refonte     |
+| E14  | Ajouter `EXPIREE` à enum `statut_mission` (scope inclus dans E5)        | P1       | RÉSOLU   | Audit Sub-PR C / CP-C-4 A commit cd803211 | 0 (⇔ E5)  | SP-C-paiement-salarie-refonte     |
+| UI-C4-email | Template email MISSION_EXPIREE pour étab (notif in-app déjà OK, email optionnel nice-to-have) | P2 | OUVERT | CP-C-4 émergent | 2 | SP-B-templates-email-critiques    |
 | E15  | Chorus Pro full : PISTE OAuth2 + API DeposerPDFacture + sync-chorus-status + UI admin + fallback Stripe/SEPA | P0 | OUVERT | Audit Sub-PR C (Q11 confirmé scope) | 30 | SP-C-paiement-salarie-refonte     |
 | E16  | Bug URSSAF critique : choix contrat SALARIE/LIBERAL pour soignant MIXTE × mission TOUS non persisté (5 RPCs + 3 front) | P0 | RÉSOLU | Investigation Passe 2 Sub-PR C / E16 backend 1A-1E + frontend 2B-2D | 8 | SP-C-paiement-salarie-refonte     |
 | F1   | Triple pénalité annulation soignant (dec_penalite + dec_fiabilite + RPC, cumul -15 à -35) | P0 | OUVERT | Audit 5 : Scoring soignant | 6 | SP-E-scoring-refonte              |
@@ -220,20 +221,20 @@
 
 ## Comptage automatique
 
-**Total tickets** : 132
+**Total tickets** : 133
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
 | P0 OUVERTS      | 22     | B1, B2, B3a, D1, D2, D3, E3, E4, E10, E15, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
 | P0 RÉSOLUS      | 11     | A24, A25, E1, E2, E11, E12, E16, H1, H2, H3, H4                         |
-| P1 OUVERTS      | 25     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E14, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b |
+| P1 OUVERTS      | 23     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b |
 | P1 EN COURS     | 1      | B4                                                                      |
-| P1 RÉSOLUS      | 14     | A4, A20, A21, A23, A26, E6, E7, E13, H5, H6, H7, H8, H13, H14           |
-| P2 OUVERTS      | 46     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j, UI-E16-1, UI-E16-2 |
-| P2 RÉSOLUS      | 8      | A22, B5, E9, H9, H10, H11, H12, I1                                      |
+| P1 RÉSOLUS      | 16     | A4, A20, A21, A23, A26, E5, E6, E7, E13, E14, H5, H6, H7, H8, H13, H14  |
+| P2 OUVERTS      | 46     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j, UI-E16-1, UI-E16-2, UI-C4-email |
+| P2 RÉSOLUS      | 9      | A22, B5, E8, E9, H9, H10, H11, H12, I1                                  |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 22 + 11 + 25 + 1 + 14 + 46 + 8 + 5 = **132** ✓
+**Validation somme** : 22 + 11 + 23 + 1 + 16 + 46 + 9 + 5 = **133** ✓
 
 **Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable post-Sub-PR D : 430.75 - 15 = 415.75 h**.
 
@@ -244,6 +245,8 @@
 **Scope résolu CP-C-2** : E2 (8h) + E6 (3h) + E11 (6h) = **17h** de scope éliminé. **Scope actionnable post-CP-C-2 : 413.75 - 17 = 396.75 h**.
 
 **Scope résolu CP-C-3** : E1 (6h) + E7 (6h) + E9 (6h) = **18h** de scope éliminé. **Scope actionnable post-CP-C-3 : 396.75 - 18 = 378.75 h**.
+
+**Scope résolu CP-C-4** : E5 (8h) + E8 (4h) + E14 (0h) = **12h** éliminés. **+2h** émergent UI-C4-email (P2). **Scope actionnable post-CP-C-4 : 378.75 - 12 + 2 = 368.75 h**.
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
 - P0 OUVERTS (27 tickets, dont H1/H3 scope=0 dédupliqués) : 121.5 + L1=3 + L2=1 + L3=6 = **131.5 h**
