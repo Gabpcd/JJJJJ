@@ -570,7 +570,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           ${data.date_remboursement_prevue ? `<p style="color:#334155;">Remboursement prévu : <strong>${data.date_remboursement_prevue}</strong></p>` : ''}
           ${BUTTON('Consulter l\'avoir →', `${APP_URL}/soignant/mes-factures`)}
           <p style="font-size:12px;color:#94A3B8;text-align:center;margin-top:20px;">📎 Le PDF de l'avoir est joint à cet email. En cas de problème, consultez-le directement dans l'application.</p>
-        `), { hasAttachment: true }),
+        `, { hasAttachment: true }),
       };
 
     case 'REMBOURSEMENT_CONFIRME':
