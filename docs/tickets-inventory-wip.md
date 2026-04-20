@@ -3,7 +3,7 @@
 **Date** : 2026-04-20
 **Snapshot base** : commit `f6e8d279` (tech-debt.md restauré, 428 lignes)
 **Branche** : `claude/fix-merge-conflicts-2Y4ph`
-**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant) + G (Audit 6 Statuts factures REMPLACEE) + H (Audit 7 Stripe Connect) + I (Migrations Sub-PR 2 quater) + J (Smoke tests) + K (Audit 8 RLS global)
+**Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant) + G (Audit 6 Statuts factures REMPLACEE) + H (Audit 7 Stripe Connect) + I (Migrations Sub-PR 2 quater) + J (Smoke tests) + K (Audit 8 RLS global) + L (Audit commission flow Jolene)
 **Inventaire complet**. Prochaine étape : planification des Sub-PR.
 
 ## Légende
@@ -117,31 +117,39 @@
 | K1   | 8 policies RLS role `public` → `authenticated` (messages_litige, factures_honoraires, calendar_*, email_queue, sms_envoyes) | P1 | OUVERT | Audit 8 : RLS global | 1 | SP-H-rls-consolidation            |
 | K2   | 3 SELECT policies redondantes factures_honoraires → garder `fh_select_own` seule | P2 | OUVERT | Audit 8 : RLS global             | 1         | SP-H-rls-consolidation            |
 | K3   | Documenter tables append-only by design (litiges, messages_litige, contrats_mission, journaux_audit…) | P2 | OUVERT | Audit 8 : RLS global        | 2         | SP-H-rls-consolidation            |
+| L1   | Cron mensuel `fn_auto_facturation_mensuelle` (30 missions TERMINEE, 1092€ non facturé) | P0 | OUVERT | Audit L : Commission flow    | 3         | SP-I-commission-flow-hardening    |
+| L2   | Cron quotidien bascule EMISE → EN_RETARD (3/4 factures émises en retard non flaggées) | P0 | OUVERT | Audit L : Commission flow   | 1         | SP-I-commission-flow-hardening    |
+| L3   | Onboarding SEPA forcé signature contrat-cadre (0/16 étabs configurés)   | P0       | OUVERT   | Audit L : Commission flow       | 6         | SP-I-commission-flow-hardening    |
+| L4   | Expliciter compte Stripe Jolene (metadata + validation compta, aujourd'hui implicite) | P1 | OUVERT | Audit L : Commission flow    | 4         | SP-I-commission-flow-hardening    |
+| L5   | Mécanisme blocage étab impayé commission > 30j (aucune sanction aujourd'hui) | P1 | OUVERT | Audit L : Commission flow            | 8         | SP-I-commission-flow-hardening    |
+| L6   | Consommer table `paliers_commission` dans `fn_calculer_financier_mission` (4 paliers dormants) | P2 | OUVERT | Audit L : Commission flow | 8         | SP-I-commission-flow-hardening    |
+| L7   | Audit trail `taux_commission_source` lors du gel taux (traçabilité modifs mid-month) | P2 | OUVERT | Audit L : Commission flow    | 4         | SP-I-commission-flow-hardening    |
+| L8   | Auto-retry SEPA échouée (colonne tentatives_sepa + cron retry, max 3)    | P2       | OUVERT   | Audit L : Commission flow       | 4         | SP-I-commission-flow-hardening    |
 
 ---
 
 ## Comptage automatique
 
-**Total tickets** : 99
+**Total tickets** : 107
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 24     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, H1, H2, H3, H4 |
+| P0 OUVERTS      | 27     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, H1, H2, H3, H4, L1, L2, L3 |
 | P0 RÉSOLUS      | 2      | A24, A25                                                                |
-| P1 OUVERTS      | 27     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, H5, H6, H7, H8, K1 |
+| P1 OUVERTS      | 29     | A5, A7, A8, A16, A20, A21, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, H5, H6, H7, H8, K1, L4, L5 |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 3      | A4, A23, A26                                                            |
-| P2 OUVERTS      | 35     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I1, I2, I3, I4, I5, J1, J2, J3, K2, K3 |
+| P2 OUVERTS      | 38     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H9, H10, H11, I1, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8 |
 | P2 RÉSOLUS      | 2      | A22, B5                                                                 |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 24 + 2 + 27 + 1 + 3 + 35 + 2 + 5 = **99** ✓
+**Validation somme** : 27 + 2 + 29 + 1 + 3 + 38 + 2 + 5 = **107** ✓
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
-- P0 OUVERTS (24 tickets, dont H1/H3 scope=0 dédupliqués) : **121.5 h**
-- P1 OUVERTS + EN COURS (28 tickets) : 162.5 + K1=1 = **163.5 h**
-- P2 OUVERTS (35 tickets) : 104.75 + K2=1 + K3=2 = **107.75 h**
-- **Total actionnable immédiatement : 392.75 h** (≈ 9.8 semaines ingénieur à 40h/semaine)
+- P0 OUVERTS (27 tickets, dont H1/H3 scope=0 dédupliqués) : 121.5 + L1=3 + L2=1 + L3=6 = **131.5 h**
+- P1 OUVERTS + EN COURS (30 tickets) : 163.5 + L4=4 + L5=8 = **175.5 h**
+- P2 OUVERTS (38 tickets) : 107.75 + L6=8 + L7=4 + L8=4 = **123.75 h**
+- **Total actionnable immédiatement : 430.75 h** (≈ 10.8 semaines ingénieur à 40h/semaine)
 
 Note : H1 (⇔ A20, 8h) et H3 (⇔ A21, 12h) sont des doublons scope — le travail est compté une seule fois dans A20/A21 (P1). Le scope total n'est pas gonflé.
 
@@ -161,6 +169,7 @@ Les 8 Sub-PR identifiées pendant les audits + les Sub-PR dérivées des tickets
 | **SP-F-bugs-latents-nettoyage**            | I1-I5                                                | **12 h**  |
 | **SP-G-decisions-design-factures**         | J1, J2, J3                                           | **6 h**   |
 | **SP-H-rls-consolidation**                 | K1, K2, K3                                           | **4 h**   |
+| **SP-I-commission-flow-hardening**         | L1-L8                                                | **38 h**  |
 | *SP-triggers-multi-creneaux* (hérité)      | A5, A6                                               | 14 h      |
 | *SP-hardening-coherence-financiere* (hérité) | A7, A9                                             | 20 h      |
 | *SP-commission-groupes (= Sub-PR 2bis)*    | A16                                                  | 24 h      |
@@ -173,5 +182,5 @@ Les 8 Sub-PR identifiées pendant les audits + les Sub-PR dérivées des tickets
 | *SP-nettoyage-versions-rpcs* (hérité)      | A3                                                   | 0.5 h     |
 | *SP-docs* (hérité)                         | A12                                                  | 1 h       |
 | *SP-activation-prod* (Audit 1)             | B4 (EN COURS)                                        | 0.5 h     |
-| **TOTAL brut 8 Sub-PR majeures**           | 56 tickets                                           | **275 h** |
-| **TOTAL brut 20 Sub-PR (incl. héritages)** | 94 tickets actionnables                              | **392.75 h** |
+| **TOTAL brut 9 Sub-PR majeures**           | 64 tickets                                           | **313 h** |
+| **TOTAL brut 21 Sub-PR (incl. héritages)** | 102 tickets actionnables                             | **430.75 h** |
