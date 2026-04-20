@@ -316,37 +316,105 @@ serve(async (req) => {
       return_url: `${origin}/etablissement/facturation?paiement=succes`,
     });
 
-    // Upsert stripe_transfers record
+    // [CP-STRIPE-3 H5] Compensation Checkout Session orpheline.
+    // Les 2 opérations DB ci-dessous (upsert stripe_transfers + update missions)
+    // peuvent échouer APRÈS que la Session Stripe ait été créée. Sans compensation,
+    // on laisserait une session payable côté Stripe sans trace DB plateforme.
+    //
+    // Stratégie : try/catch englobant, si DB écrit échoue → expire la session
+    // Stripe (fire-and-forget, on log mais on n'échoue pas si expire échoue).
+    //
+    // Décision architecturale (Option A, strict) : si malgré l'expire le user
+    // complète quand même le paiement (expire a pu échouer), le webhook n'a
+    // AUCUN row stripe_transfers correspondant → idempotency check ligne 198
+    // ne matche pas mais le webhook part dans la branche CONNECT_MISSION_PAYMENT
+    // et tente un stripe.transfers.create(). Le webhook actuel ne crée pas de
+    // nouveau row stripe_transfers en secours, donc le paiement reste "dans
+    // les mains de Stripe" côté comptable sans qu'il soit rattaché à une
+    // mission côté plateforme. C'est intentionnel : on préfère laisser une
+    // anomalie visible (audit entry + pas de PAYEE sur factures_honoraires)
+    // plutôt qu'un flow miraculeux qui masque le bug DB initial. L'admin
+    // intervient manuellement pour réconcilier (via INSERT stripe_transfers
+    // ou refund Stripe).
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || null;
-    if (existingTransfer) {
-      await supabaseAdmin
-        .from("stripe_transfers")
-        .update({
-          stripe_payment_intent_id: paymentIntentId,
+
+    try {
+      if (existingTransfer) {
+        const { error: updErr } = await supabaseAdmin
+          .from("stripe_transfers")
+          .update({
+            stripe_payment_intent_id: paymentIntentId,
+            montant_soignant: soignantCents / 100,
+            montant_commission: commissionCents / 100,
+            montant_total: totalCents / 100,
+            statut: "EN_ATTENTE",
+          })
+          .eq("id", existingTransfer.id);
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabaseAdmin.from("stripe_transfers").insert({
+          mission_id,
+          soignant_id: soignantId,
+          etablissement_id: mission.etablissement_id,
           montant_soignant: soignantCents / 100,
           montant_commission: commissionCents / 100,
           montant_total: totalCents / 100,
+          stripe_payment_intent_id: paymentIntentId,
           statut: "EN_ATTENTE",
-        })
-        .eq("id", existingTransfer.id);
-    } else {
-      await supabaseAdmin.from("stripe_transfers").insert({
-        mission_id,
-        soignant_id: soignantId,
-        etablissement_id: mission.etablissement_id,
-        montant_soignant: soignantCents / 100,
-        montant_commission: commissionCents / 100,
-        montant_total: totalCents / 100,
-        stripe_payment_intent_id: paymentIntentId,
-        statut: "EN_ATTENTE",
-      });
-    }
+        });
+        if (insErr) throw insErr;
+      }
 
-    // Update mission payment mode
-    await supabaseAdmin
-      .from("missions")
-      .update({ mode_paiement_soignant: "STRIPE_CONNECT" })
-      .eq("id", mission_id);
+      // Update mission payment mode
+      const { error: missionErr } = await supabaseAdmin
+        .from("missions")
+        .update({ mode_paiement_soignant: "STRIPE_CONNECT" })
+        .eq("id", mission_id);
+      if (missionErr) throw missionErr;
+    } catch (dbErr) {
+      // DB écrit échoué post-Checkout Session → compensation
+      const dbErrMsg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      console.error("CHECKOUT_CREATED_DB_WRITE_FAILED:", dbErrMsg);
+
+      // Expire la session Stripe (fire-and-forget — si ça échoue, la session
+      // reste ouverte côté Stripe ; le webhook traitera l'anomalie Option A).
+      try {
+        await stripe.checkout.sessions.expire(session.id);
+        console.log(`Stripe session ${session.id} expired (compensation)`);
+      } catch (expireErr) {
+        const expireMsg = expireErr instanceof Error ? expireErr.message : String(expireErr);
+        console.error(`SESSION_EXPIRE_FAILED for ${session.id}:`, expireMsg);
+      }
+
+      // Audit trail pour investigation admin
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: mission.etablissement_id,
+        p_type_acteur: "SYSTEME",
+        p_action: "STRIPE_CHECKOUT_ORPHANED_RECOVERED",
+        p_type_ressource: "mission",
+        p_id_ressource: mission_id,
+        p_cle_s3: null,
+        p_details: {
+          stripe_session_id: session.id,
+          stripe_payment_intent_id: paymentIntentId,
+          db_error: dbErrMsg,
+          compensation_expire_attempted: true,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-connect-pay-mission",
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: "CHECKOUT_FAILED_RETRY",
+          message: "Paiement impossible, veuillez réessayer dans quelques instants.",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        }
+      );
+    }
 
     return new Response(
       JSON.stringify({

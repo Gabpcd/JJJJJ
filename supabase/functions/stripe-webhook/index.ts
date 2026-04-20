@@ -289,8 +289,13 @@ serve(async (req) => {
         });
       }
 
-      // Update facture to PAYEE
-      const { error: updateErr } = await supabaseAdmin
+      // [CP-STRIPE-3 H4] Update facture to PAYEE avec guard statut explicite.
+      // Autrefois : .neq("statut", "PAYEE") — laissait passer ANNULEE/REMPLACEE/BROUILLON
+      // qui pouvaient être marqués PAYEE si un webhook arrivait après annulation admin.
+      // Désormais : .in("statut", ["EMISE","EN_RETARD"]) bloque ces cas ; si 0 row updated,
+      // on logue une anomalie (webhook idempotent, on ne throw pas — le paiement Stripe
+      // est déjà capturé côté Stripe, on ne peut pas le refuser rétroactivement).
+      const { data: factureUpdated, error: updateErr } = await supabaseAdmin
         .from("factures")
         .update({
           statut: "PAYEE",
@@ -300,19 +305,52 @@ serve(async (req) => {
           modifie_le: new Date().toISOString(),
         })
         .eq("id", factureId)
-        .neq("statut", "PAYEE");
+        .in("statut", ["EMISE", "EN_RETARD"])
+        .select("id, numero_facture, etablissement_id, montant_ttc")
+        .maybeSingle();
 
       if (updateErr) {
         console.error("Erreur mise à jour facture:", updateErr);
         throw updateErr;
       }
 
-      // Get facture details for audit
-      const { data: facture } = await supabaseAdmin
-        .from("factures")
-        .select("numero_facture, etablissement_id, montant_ttc")
-        .eq("id", factureId)
-        .single();
+      if (!factureUpdated) {
+        // Anomalie : paiement Stripe capturé mais facture dans statut invalide
+        // (ANNULEE/REMPLACEE/BROUILLON). Le paiement est côté Stripe mais rien
+        // ne peut être comptabilisé côté plateforme. À investiguer manuellement.
+        console.warn(
+          `FACTURE webhook: facture ${factureId} not in EMISE/EN_RETARD, skipped (status may be ANNULEE/REMPLACEE)`
+        );
+        const { data: factureInvalide } = await supabaseAdmin
+          .from("factures")
+          .select("statut, etablissement_id")
+          .eq("id", factureId)
+          .maybeSingle();
+        await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+          p_acteur_id: factureInvalide?.etablissement_id || "00000000-0000-0000-0000-000000000000",
+          p_type_acteur: "SYSTEME",
+          p_action: "FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE",
+          p_type_ressource: "facture",
+          p_id_ressource: factureId,
+          p_cle_s3: null,
+          p_details: {
+            raison: "statut_non_modifiable",
+            statut_actuel: factureInvalide?.statut || "inconnu",
+            stripe_session_id: session.id,
+            stripe_payment_intent: session.payment_intent,
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        });
+        return new Response(JSON.stringify({ received: true, skipped: "facture_statut_invalide" }), {
+          status: 200,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      // Alias pour la suite du bloc (audit + email) — factureUpdated tient déjà
+      // numero_facture, etablissement_id, montant_ttc grâce au .select() ci-dessus.
+      const facture = factureUpdated;
 
       // Write audit log
       if (facture) {
