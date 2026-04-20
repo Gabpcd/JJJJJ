@@ -91,6 +91,11 @@ const ALLOWED_TYPES = new Set([
   'LITIGE_RAPPEL_J1', 'LITIGE_RAPPEL_J3', 'LITIGE_RAPPEL_J5',
   'REGULARISATION_SOCIALE_REQUISE', 'LITIGE_MEDIATION_PRIORITAIRE',
   'COMMISSION_AJUSTEE',
+  // [CP-STRIPE-4] 6 templates webhook events Stripe
+  'CHARGE_FAILED_ETAB',
+  'DISPUTE_OUVERTE_ADMIN', 'DISPUTE_CLOSE_ADMIN',
+  'PAYOUT_FAILED_ADMIN', 'PAYOUT_FAILED_SOIGNANT',
+  'PAYOUT_CANCELED_ADMIN',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -429,9 +434,10 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
       };
 
     case 'PAIEMENT_RAPIDE_RECU':
-      // Deux contextes supportés :
-      //  - contexte=CONNECT_MISSION_PAYMENT : soignant payé en Stripe Connect après une mission
-      //  - par défaut : avance Defacto (factor), template historique
+      // Trois contextes supportés :
+      //  - contexte=CONNECT_MISSION_PAYMENT : soignant payé en Stripe Connect (étab a payé)
+      //  - contexte=CONNECT_PAYOUT_PAID    : argent arrivé sur le compte bancaire du soignant (payout Stripe)
+      //  - par défaut                      : avance Defacto (factor), template historique
       if (data.contexte === 'CONNECT_MISSION_PAYMENT') {
         return {
           subject: `Paiement reçu pour votre mission — ${data.numero_facture || ''}`,
@@ -447,6 +453,24 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             `)}
             ${INFO_BOX(`Votre facture honoraires est désormais marquée <strong>PAYEE</strong>. Consultez-la dans votre espace facturation.`)}
             ${BUTTON('Voir mes factures →', `${APP_URL}/soignant/mes-factures-honoraires`)}
+            ${SECURITY_NOTE}
+          `),
+        };
+      }
+      if (data.contexte === 'CONNECT_PAYOUT_PAID') {
+        return {
+          subject: `💰 Paiement arrivé sur votre compte bancaire`,
+          html: WRAPPER(`
+            <h2 style="color:#0F172A;margin:0 0 12px;">💰 Paiement arrivé !</h2>
+            <p style="color:#334155;">Bonjour ${data.soignant_prenom || ''},</p>
+            <p style="color:#334155;">L'argent de vos missions est bien arrivé sur votre compte bancaire.</p>
+            ${CARD_BOX(`
+              <strong style="color:#0F172A;">Montant crédité :</strong> <span style="color:#E04590;font-weight:bold;font-size:18px;">${data.montant_ttc || '0.00'} €</span><br/>
+              <strong style="color:#0F172A;">Compte :</strong> IBAN se terminant par ${data.iban_last4 || '—'}<br/>
+              <strong style="color:#0F172A;">Date d'arrivée :</strong> ${data.arrival_date || 'aujourd\'hui'}
+            `)}
+            ${INFO_BOX('Vous pouvez consulter le détail du versement dans votre espace Stripe Connect.')}
+            ${BUTTON('Voir mes paiements →', `${APP_URL}/soignant/mes-factures-honoraires`)}
             ${SECURITY_NOTE}
           `),
         };
@@ -672,6 +696,113 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         `),
       };
     }
+
+    // ─── Templates CP-STRIPE-4 (webhook events Stripe) ────────
+
+    case 'CHARGE_FAILED_ETAB':
+      return {
+        subject: `⚠️ Paiement échoué — Facture ${data.numero_facture || ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⚠️ Paiement échoué</h2>
+          <p style="color:#334155;">Le paiement de votre facture Jolene a échoué :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Facture :</strong> ${data.numero_facture || '—'}<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${data.montant_ttc || '—'} € TTC<br/>
+            <strong style="color:#0F172A;">Raison :</strong> ${data.failure_message || 'Erreur carte'}
+          `)}
+          ${INFO_BOX('Merci de relancer le paiement depuis votre espace facturation. Si le problème persiste, vérifiez votre moyen de paiement ou contactez votre banque.')}
+          ${BUTTON('Relancer le paiement →', `${APP_URL}/etablissement/facturation`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'DISPUTE_OUVERTE_ADMIN':
+      return {
+        subject: `⚠️ Litige Stripe ouvert — action sous 7 jours`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⚠️ Chargeback Stripe</h2>
+          <p style="color:#334155;">Un établissement a contesté un paiement via sa banque. Action admin requise sous 7 jours (sinon dispute perdu automatiquement) :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Dispute ID :</strong> ${data.dispute_id || '—'}<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_id || '—'}<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${data.montant || '—'} €<br/>
+            <strong style="color:#0F172A;">Raison Stripe :</strong> ${data.reason || '—'}<br/>
+            <strong style="color:#0F172A;">Échéance preuves :</strong> ${data.evidence_due_by || '—'}
+          `)}
+          ${INFO_BOX('Connectez-vous au dashboard Stripe pour soumettre les preuves (contrat signé, facture, échanges) AVANT la deadline.')}
+          ${BUTTON('Dashboard Stripe →', 'https://dashboard.stripe.com/disputes')}
+        `),
+      };
+
+    case 'DISPUTE_CLOSE_ADMIN':
+      return {
+        subject: `Litige Stripe clôturé — résultat : ${data.dispute_status || ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Litige Stripe clôturé</h2>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Dispute ID :</strong> ${data.dispute_id || '—'}<br/>
+            <strong style="color:#0F172A;">Résultat :</strong> ${data.dispute_status || '—'}<br/>
+            <strong style="color:#0F172A;">Mission :</strong> ${data.mission_id || '—'}<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${data.montant || '—'} €
+          `)}
+          ${data.dispute_status === 'lost'
+            ? INFO_BOX('⚠️ <strong>Dispute perdu</strong> — l\'argent a été restitué à l\'étab côté Stripe. Potentielle récupération via ouverture d\'un litige Jolene.')
+            : INFO_BOX('Aucune action requise.')}
+          ${BUTTON('Dashboard Stripe →', 'https://dashboard.stripe.com/disputes')}
+        `),
+      };
+
+    case 'PAYOUT_FAILED_ADMIN':
+      return {
+        subject: `🚨 Payout Stripe échoué — soignant ${data.soignant_nom || ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">🚨 Payout soignant échoué</h2>
+          <p style="color:#334155;">Un versement Stripe vers un compte bancaire soignant a échoué :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Soignant :</strong> ${data.soignant_nom || '—'}<br/>
+            <strong style="color:#0F172A;">Payout ID :</strong> ${data.payout_id || '—'}<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${data.montant || '—'} €<br/>
+            <strong style="color:#0F172A;">Raison :</strong> ${data.failure_message || '—'} (code ${data.failure_code || '—'})
+          `)}
+          ${INFO_BOX('Causes fréquentes : IBAN invalide, compte fermé, vérification KYC incomplète. Le soignant a été notifié séparément.')}
+          ${BUTTON('Dashboard Stripe Payouts →', 'https://dashboard.stripe.com/payouts')}
+        `),
+      };
+
+    case 'PAYOUT_FAILED_SOIGNANT':
+      return {
+        subject: `⚠️ Problème avec votre RIB — action requise`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⚠️ Votre paiement est bloqué</h2>
+          <p style="color:#334155;">Bonjour ${data.soignant_prenom || ''},</p>
+          <p style="color:#334155;">Le versement de <strong>${data.montant || '—'} €</strong> vers votre compte bancaire a échoué. Cause probable :</p>
+          ${INFO_BOX(`<strong>${data.raison_simplifiee || data.failure_message || 'Vérification du compte bancaire'}</strong>`)}
+          <p style="color:#334155;">Merci de :</p>
+          <ul style="color:#334155;padding-left:20px;">
+            <li>Vérifier vos informations bancaires (IBAN, RIB) dans votre espace Stripe Connect</li>
+            <li>Vous assurer que votre compte bancaire est bien actif</li>
+            <li>Compléter les vérifications KYC si demandées</li>
+          </ul>
+          <p style="color:#334155;">L'équipe Jolene relance le versement dès que votre compte est à jour.</p>
+          ${BUTTON('Vérifier mon compte Stripe →', `${APP_URL}/soignant/stripe-connect`)}
+          ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'PAYOUT_CANCELED_ADMIN':
+      return {
+        subject: `Payout annulé — ${data.payout_id || ''}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Payout Stripe annulé</h2>
+          <p style="color:#334155;">Un payout a été annulé (côté Stripe ou par l'admin plateforme) :</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Payout ID :</strong> ${data.payout_id || '—'}<br/>
+            <strong style="color:#0F172A;">Soignant :</strong> ${data.soignant_nom || '—'}<br/>
+            <strong style="color:#0F172A;">Montant :</strong> ${data.montant || '—'} €
+          `)}
+          ${INFO_BOX('Les stripe_transfers associés ont été mis en statut ANNULEE. Vérifier si un nouveau payout doit être initié.')}
+        `),
+      };
 
     default:
       return null;

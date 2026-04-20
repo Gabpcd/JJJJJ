@@ -558,6 +558,645 @@ serve(async (req) => {
       console.log(`Connect account ${accountId} updated to ${statut}`);
     }
 
+    // ============================================================
+    // [CP-STRIPE-4] 13 events Stripe supplémentaires (H6)
+    // Ordre : critiques (dispute, fail) → importants (paid, reversed, canceled)
+    //         → informatifs (created, updated, pending, expired)
+    // ============================================================
+
+    // ── charge.failed : paiement étab échoué ──
+    if (event.type === "charge.failed") {
+      const charge = event.data.object as Stripe.Charge;
+      const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+      if (paymentIntentId) {
+        const { data: facture } = await supabaseAdmin
+          .from("factures")
+          .select("id, numero_facture, etablissement_id, montant_ttc, statut")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle();
+
+        if (facture && facture.statut !== "PAYEE") {
+          await supabaseAdmin
+            .from("factures")
+            .update({ statut: "EN_RETARD", modifie_le: new Date().toISOString() })
+            .eq("id", facture.id);
+
+          // Notif étab
+          try {
+            await supabaseAdmin.functions.invoke("send-email", {
+              body: {
+                type: "CHARGE_FAILED_ETAB",
+                destinataire_id: facture.etablissement_id,
+                data: {
+                  numero_facture: facture.numero_facture,
+                  montant_ttc: Number(facture.montant_ttc || 0).toFixed(2),
+                  failure_message: charge.failure_message || "Erreur carte",
+                  failure_code: charge.failure_code || "",
+                },
+              },
+            });
+          } catch (emailErr) {
+            console.error("send-email CHARGE_FAILED_ETAB failed:", emailErr);
+          }
+        }
+
+        await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+          p_acteur_id: facture?.etablissement_id || "00000000-0000-0000-0000-000000000000",
+          p_type_acteur: "SYSTEME",
+          p_action: "FINANCE_CHARGE_FAILED",
+          p_type_ressource: "facture",
+          p_id_ressource: facture?.id || null,
+          p_cle_s3: null,
+          p_details: {
+            stripe_charge_id: charge.id,
+            stripe_payment_intent_id: paymentIntentId,
+            failure_code: charge.failure_code,
+            failure_message: charge.failure_message,
+            amount: charge.amount,
+          },
+          p_ip: null,
+          p_navigateur: "stripe-webhook",
+        });
+      }
+      console.log(`charge.failed handled: ${charge.id}`);
+    }
+
+    // ── charge.dispute.created : chargeback étab ──
+    if (event.type === "charge.dispute.created") {
+      const dispute = event.data.object as Stripe.Dispute;
+      const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
+
+      const { data: transfer } = await supabaseAdmin
+        .from("stripe_transfers")
+        .select("id, mission_id, soignant_id, etablissement_id, dispute_id")
+        .eq("stripe_charge_id", chargeId)
+        .maybeSingle();
+
+      if (transfer && !transfer.dispute_id) {
+        const evidenceDueBy = dispute.evidence_details?.due_by
+          ? new Date(dispute.evidence_details.due_by * 1000).toISOString()
+          : null;
+
+        await supabaseAdmin
+          .from("stripe_transfers")
+          .update({
+            dispute_id: dispute.id,
+            dispute_statut: "OUVERT",
+            dispute_reason: dispute.reason,
+            dispute_cree_le: new Date().toISOString(),
+          })
+          .eq("id", transfer.id);
+
+        // Notif admin URGENT (tous les admins)
+        const { data: admins } = await supabaseAdmin.rpc("fn_list_admin_user_ids");
+        for (const adminId of (admins || []) as string[]) {
+          try {
+            await supabaseAdmin.functions.invoke("send-email", {
+              body: {
+                type: "DISPUTE_OUVERTE_ADMIN",
+                destinataire_id: adminId,
+                data: {
+                  dispute_id: dispute.id,
+                  mission_id: transfer.mission_id,
+                  montant: (dispute.amount / 100).toFixed(2),
+                  reason: dispute.reason,
+                  evidence_due_by: evidenceDueBy ? new Date(evidenceDueBy).toLocaleDateString("fr-FR") : "—",
+                },
+              },
+            });
+          } catch (emailErr) {
+            console.error("send-email DISPUTE_OUVERTE_ADMIN failed:", emailErr);
+          }
+        }
+      }
+
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: transfer?.etablissement_id || "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_DISPUTE_OUVERTE",
+        p_type_ressource: "mission",
+        p_id_ressource: transfer?.mission_id || null,
+        p_cle_s3: null,
+        p_details: {
+          dispute_id: dispute.id,
+          stripe_charge_id: chargeId,
+          reason: dispute.reason,
+          amount: dispute.amount,
+          status: dispute.status,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`charge.dispute.created handled: ${dispute.id}`);
+    }
+
+    // ── charge.dispute.closed : dispute résolu ──
+    if (event.type === "charge.dispute.closed") {
+      const dispute = event.data.object as Stripe.Dispute;
+      const { data: transfer } = await supabaseAdmin
+        .from("stripe_transfers")
+        .select("id, mission_id, etablissement_id")
+        .eq("dispute_id", dispute.id)
+        .maybeSingle();
+
+      if (transfer) {
+        await supabaseAdmin
+          .from("stripe_transfers")
+          .update({ dispute_statut: `CLOS_${dispute.status}` })
+          .eq("id", transfer.id);
+
+        const { data: admins } = await supabaseAdmin.rpc("fn_list_admin_user_ids");
+        for (const adminId of (admins || []) as string[]) {
+          try {
+            await supabaseAdmin.functions.invoke("send-email", {
+              body: {
+                type: "DISPUTE_CLOSE_ADMIN",
+                destinataire_id: adminId,
+                data: {
+                  dispute_id: dispute.id,
+                  dispute_status: dispute.status,
+                  mission_id: transfer.mission_id,
+                  montant: (dispute.amount / 100).toFixed(2),
+                },
+              },
+            });
+          } catch (emailErr) {
+            console.error("send-email DISPUTE_CLOSE_ADMIN failed:", emailErr);
+          }
+        }
+      }
+
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: transfer?.etablissement_id || "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_DISPUTE_CLOSE",
+        p_type_ressource: "mission",
+        p_id_ressource: transfer?.mission_id || null,
+        p_cle_s3: null,
+        p_details: { dispute_id: dispute.id, status: dispute.status, amount: dispute.amount },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`charge.dispute.closed handled: ${dispute.id} → ${dispute.status}`);
+    }
+
+    // ── charge.refunded : refund exécuté (fondations CP-STRIPE-5) ──
+    if (event.type === "charge.refunded") {
+      const charge = event.data.object as Stripe.Charge;
+      const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+
+      // Si ligne dans stripe_refunds_queue, la marquer TRAITE
+      if (paymentIntentId) {
+        await supabaseAdmin
+          .from("stripe_refunds_queue")
+          .update({ statut: "TRAITE", traite_le: new Date().toISOString() })
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .in("statut", ["EN_ATTENTE", "EN_COURS"]);
+
+        // Si facture_honoraires AVOIR liée : marquer REMBOURSEE
+        await supabaseAdmin
+          .from("factures_honoraires")
+          .update({
+            statut: "REMBOURSEE",
+            date_remboursement: new Date().toISOString(),
+            reference_remboursement: charge.id,
+          })
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .eq("type_document", "AVOIR")
+          .in("statut", ["EMISE", "EN_RETARD"]);
+      }
+
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_CHARGE_REFUNDED",
+        p_type_ressource: "charge",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: {
+          stripe_charge_id: charge.id,
+          stripe_payment_intent_id: paymentIntentId,
+          amount_refunded: charge.amount_refunded,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`charge.refunded handled: ${charge.id}`);
+    }
+
+    // ── transfer.failed : transfert Connect échoué ──
+    if (event.type === "transfer.failed") {
+      const transfer = event.data.object as Stripe.Transfer;
+      const { data: row } = await supabaseAdmin
+        .from("stripe_transfers")
+        .select("id, mission_id, soignant_id, etablissement_id, statut")
+        .eq("stripe_transfer_id", transfer.id)
+        .maybeSingle();
+
+      if (row && row.statut !== "ECHOUE") {
+        const errMsg = (transfer as { failure_message?: string }).failure_message || "transfer.failed";
+        await supabaseAdmin
+          .from("stripe_transfers")
+          .update({ statut: "ECHOUE", erreur: errMsg, modifie_le: new Date().toISOString() })
+          .eq("id", row.id);
+
+        const { data: admins } = await supabaseAdmin.rpc("fn_list_admin_user_ids");
+        for (const adminId of (admins || []) as string[]) {
+          try {
+            await supabaseAdmin.functions.invoke("send-email", {
+              body: {
+                type: "PAYOUT_FAILED_ADMIN", // réutilise template (failure mécanisme proche)
+                destinataire_id: adminId,
+                data: {
+                  soignant_nom: row.soignant_id,
+                  payout_id: transfer.id,
+                  montant: (transfer.amount / 100).toFixed(2),
+                  failure_message: errMsg,
+                  failure_code: (transfer as { failure_code?: string }).failure_code || "",
+                },
+              },
+            });
+          } catch (emailErr) {
+            console.error("send-email PAYOUT_FAILED_ADMIN (transfer.failed) failed:", emailErr);
+          }
+        }
+      }
+
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: row?.soignant_id || "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_TRANSFER_FAILED",
+        p_type_ressource: "mission",
+        p_id_ressource: row?.mission_id || null,
+        p_cle_s3: null,
+        p_details: { stripe_transfer_id: transfer.id, amount: transfer.amount },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`transfer.failed handled: ${transfer.id}`);
+    }
+
+    // ── transfer.reversed : transfer annulé ──
+    if (event.type === "transfer.reversed") {
+      const transfer = event.data.object as Stripe.Transfer;
+      const { data: row } = await supabaseAdmin
+        .from("stripe_transfers")
+        .select("id, mission_id, soignant_id, etablissement_id")
+        .eq("stripe_transfer_id", transfer.id)
+        .maybeSingle();
+
+      if (row) {
+        await supabaseAdmin
+          .from("stripe_transfers")
+          .update({
+            statut: "REMBOURSE",
+            reversed_le: new Date().toISOString(),
+            modifie_le: new Date().toISOString(),
+          })
+          .eq("id", row.id);
+      }
+
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: row?.soignant_id || "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_TRANSFER_REVERSED",
+        p_type_ressource: "mission",
+        p_id_ressource: row?.mission_id || null,
+        p_cle_s3: null,
+        p_details: { stripe_transfer_id: transfer.id, amount: transfer.amount },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`transfer.reversed handled: ${transfer.id}`);
+    }
+
+    // ── transfer.created : audit only ──
+    if (event.type === "transfer.created") {
+      const transfer = event.data.object as Stripe.Transfer;
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_TRANSFER_CREATED",
+        p_type_ressource: "transfer",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: {
+          stripe_transfer_id: transfer.id,
+          destination: transfer.destination,
+          amount: transfer.amount,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`transfer.created audited: ${transfer.id}`);
+    }
+
+    // ── transfer.updated : audit only ──
+    if (event.type === "transfer.updated") {
+      const transfer = event.data.object as Stripe.Transfer;
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_TRANSFER_UPDATED",
+        p_type_ressource: "transfer",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: { stripe_transfer_id: transfer.id, metadata: transfer.metadata },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`transfer.updated audited: ${transfer.id}`);
+    }
+
+    // ── payout.created : stocker stripe_payout_id pour match ultérieur ──
+    if (event.type === "payout.created") {
+      const payout = event.data.object as Stripe.Payout;
+      // Best-effort : tenter de lier au transfer via destination (Connect account)
+      // Le payout Stripe est sur le compte Connect destination ; on ne peut pas facilement
+      // matcher 1:1 à un stripe_transfers (un payout groupe plusieurs transfers).
+      // On audit seulement pour tracer.
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_PAYOUT_CREATED",
+        p_type_ressource: "payout",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: {
+          stripe_payout_id: payout.id,
+          amount: payout.amount,
+          arrival_date: payout.arrival_date,
+          destination: payout.destination,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`payout.created audited: ${payout.id}`);
+    }
+
+    // ── payout.paid : argent arrivé sur compte soignant ──
+    if (event.type === "payout.paid") {
+      const payout = event.data.object as Stripe.Payout;
+      // Match par stripe_payout_id (si déjà défini) ou par destination_account + statut TRANSFERE
+      const { data: transfersToMark } = await supabaseAdmin
+        .from("stripe_transfers")
+        .update({
+          statut: "PAYE",
+          stripe_payout_id: payout.id,
+          paye_le: payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString() : new Date().toISOString(),
+        })
+        .or(`stripe_payout_id.eq.${payout.id},stripe_payout_id.is.null`)
+        .eq("statut", "TRANSFERE")
+        .select("id, soignant_id, montant_soignant, mission_id");
+
+      // Notif soignant pour chaque transfer matched
+      for (const t of (transfersToMark || []) as Array<{
+        id: string;
+        soignant_id: string;
+        montant_soignant: number;
+        mission_id: string;
+      }>) {
+        try {
+          const { data: soignantRow } = await supabaseAdmin
+            .from("soignants")
+            .select("prenom")
+            .eq("id", t.soignant_id)
+            .maybeSingle();
+          const { data: soignantUser } = await supabaseAdmin.auth.admin.getUserById(t.soignant_id);
+          const soignantEmail = soignantUser?.user?.email;
+          if (soignantEmail) {
+            await supabaseAdmin.functions.invoke("send-email", {
+              body: {
+                type: "PAIEMENT_RAPIDE_RECU",
+                destinataire_id: t.soignant_id,
+                destinataire_email: soignantEmail,
+                data: {
+                  contexte: "CONNECT_PAYOUT_PAID",
+                  soignant_prenom: soignantRow?.prenom || "",
+                  montant_ttc: Number(t.montant_soignant).toFixed(2),
+                  iban_last4: "",
+                  arrival_date: payout.arrival_date
+                    ? new Date(payout.arrival_date * 1000).toLocaleDateString("fr-FR")
+                    : "aujourd'hui",
+                },
+              },
+            });
+          }
+        } catch (emailErr) {
+          console.error("send-email PAIEMENT_RAPIDE_RECU (payout.paid) failed:", emailErr);
+        }
+      }
+
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_PAYOUT_PAID",
+        p_type_ressource: "payout",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: {
+          stripe_payout_id: payout.id,
+          amount: payout.amount,
+          arrival_date: payout.arrival_date,
+          transfers_marked: (transfersToMark || []).length,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`payout.paid handled: ${payout.id} → ${(transfersToMark || []).length} transfers marked PAYE`);
+    }
+
+    // ── payout.failed : payout échoué (RIB invalide, compte fermé, etc.) ──
+    if (event.type === "payout.failed") {
+      const payout = event.data.object as Stripe.Payout;
+      const errMsg = payout.failure_message || "payout.failed";
+      const { data: transfersFailed } = await supabaseAdmin
+        .from("stripe_transfers")
+        .update({
+          statut: "ECHOUE",
+          erreur: errMsg,
+          stripe_payout_id: payout.id,
+          modifie_le: new Date().toISOString(),
+        })
+        .or(`stripe_payout_id.eq.${payout.id},stripe_payout_id.is.null`)
+        .eq("statut", "TRANSFERE")
+        .select("id, soignant_id, montant_soignant, mission_id");
+
+      // Notif admin + soignant
+      const { data: admins } = await supabaseAdmin.rpc("fn_list_admin_user_ids");
+      const transfersArr = (transfersFailed || []) as Array<{
+        id: string;
+        soignant_id: string;
+        montant_soignant: number;
+        mission_id: string;
+      }>;
+
+      for (const t of transfersArr) {
+        const { data: soignantRow } = await supabaseAdmin
+          .from("soignants")
+          .select("prenom, nom")
+          .eq("id", t.soignant_id)
+          .maybeSingle();
+        const soignantNom = soignantRow ? `${soignantRow.prenom || ""} ${soignantRow.nom || ""}`.trim() : t.soignant_id;
+
+        // Admin
+        for (const adminId of (admins || []) as string[]) {
+          try {
+            await supabaseAdmin.functions.invoke("send-email", {
+              body: {
+                type: "PAYOUT_FAILED_ADMIN",
+                destinataire_id: adminId,
+                data: {
+                  soignant_nom: soignantNom,
+                  payout_id: payout.id,
+                  montant: Number(t.montant_soignant).toFixed(2),
+                  failure_message: errMsg,
+                  failure_code: payout.failure_code || "",
+                },
+              },
+            });
+          } catch (emailErr) {
+            console.error("send-email PAYOUT_FAILED_ADMIN failed:", emailErr);
+          }
+        }
+
+        // Soignant
+        try {
+          const { data: soignantUser } = await supabaseAdmin.auth.admin.getUserById(t.soignant_id);
+          const soignantEmail = soignantUser?.user?.email;
+          if (soignantEmail) {
+            await supabaseAdmin.functions.invoke("send-email", {
+              body: {
+                type: "PAYOUT_FAILED_SOIGNANT",
+                destinataire_id: t.soignant_id,
+                destinataire_email: soignantEmail,
+                data: {
+                  soignant_prenom: soignantRow?.prenom || "",
+                  montant: Number(t.montant_soignant).toFixed(2),
+                  failure_message: errMsg,
+                  raison_simplifiee: payout.failure_code === "account_closed"
+                    ? "Votre compte bancaire semble fermé."
+                    : payout.failure_code === "invalid_account_number"
+                    ? "Votre IBAN est invalide."
+                    : "Problème avec votre compte bancaire (KYC, solde, etc.)",
+                },
+              },
+            });
+          }
+        } catch (emailErr) {
+          console.error("send-email PAYOUT_FAILED_SOIGNANT failed:", emailErr);
+        }
+      }
+
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_PAYOUT_FAILED",
+        p_type_ressource: "payout",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: {
+          stripe_payout_id: payout.id,
+          failure_code: payout.failure_code,
+          failure_message: errMsg,
+          amount: payout.amount,
+          transfers_marked: transfersArr.length,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`payout.failed handled: ${payout.id} → ${transfersArr.length} transfers marked ECHOUE`);
+    }
+
+    // ── payout.canceled : payout annulé ──
+    if (event.type === "payout.canceled") {
+      const payout = event.data.object as Stripe.Payout;
+      const { data: transfersCancelled } = await supabaseAdmin
+        .from("stripe_transfers")
+        .update({ statut: "ANNULEE", stripe_payout_id: payout.id, modifie_le: new Date().toISOString() })
+        .or(`stripe_payout_id.eq.${payout.id}`)
+        .select("id, soignant_id, montant_soignant, mission_id");
+
+      const { data: admins } = await supabaseAdmin.rpc("fn_list_admin_user_ids");
+      const first = ((transfersCancelled || []) as Array<{ id: string; soignant_id: string; montant_soignant: number }>)[0];
+      if (first) {
+        const { data: soignantRow } = await supabaseAdmin
+          .from("soignants")
+          .select("prenom, nom")
+          .eq("id", first.soignant_id)
+          .maybeSingle();
+        const soignantNom = soignantRow ? `${soignantRow.prenom || ""} ${soignantRow.nom || ""}`.trim() : first.soignant_id;
+        for (const adminId of (admins || []) as string[]) {
+          try {
+            await supabaseAdmin.functions.invoke("send-email", {
+              body: {
+                type: "PAYOUT_CANCELED_ADMIN",
+                destinataire_id: adminId,
+                data: {
+                  payout_id: payout.id,
+                  soignant_nom: soignantNom,
+                  montant: Number(first.montant_soignant).toFixed(2),
+                },
+              },
+            });
+          } catch (emailErr) {
+            console.error("send-email PAYOUT_CANCELED_ADMIN failed:", emailErr);
+          }
+        }
+      }
+
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_PAYOUT_CANCELED",
+        p_type_ressource: "payout",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: { stripe_payout_id: payout.id, amount: payout.amount },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`payout.canceled handled: ${payout.id}`);
+    }
+
+    // ── charge.pending : charge en attente (SEPA) — audit only ──
+    if (event.type === "charge.pending") {
+      const charge = event.data.object as Stripe.Charge;
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_CHARGE_PENDING",
+        p_type_ressource: "charge",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: {
+          stripe_charge_id: charge.id,
+          payment_method_type: charge.payment_method_details?.type,
+          amount: charge.amount,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`charge.pending audited: ${charge.id}`);
+    }
+
+    // ── charge.expired : charge non-capturée expirée — audit only ──
+    if (event.type === "charge.expired") {
+      const charge = event.data.object as Stripe.Charge;
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: "00000000-0000-0000-0000-000000000000",
+        p_type_acteur: "SYSTEME",
+        p_action: "FINANCE_CHARGE_EXPIRED",
+        p_type_ressource: "charge",
+        p_id_ressource: null,
+        p_cle_s3: null,
+        p_details: { stripe_charge_id: charge.id, amount: charge.amount },
+        p_ip: null,
+        p_navigateur: "stripe-webhook",
+      });
+      console.log(`charge.expired audited: ${charge.id}`);
+    }
+
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
