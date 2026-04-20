@@ -6,6 +6,45 @@
 **Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant) + G (Audit 6 Statuts factures REMPLACEE) + H (Audit 7 Stripe Connect) + I (Migrations Sub-PR 2 quater) + J (Smoke tests) + K (Audit 8 RLS global) + L (Audit commission flow Jolene)
 **Inventaire complet**. Prochaine étape : planification des Sub-PR.
 
+## 🎯 Sub-PR D — Stripe Connect Prod-Ready : CLOSE ✅
+
+**Livrée en 6 CP le 20 avril 2026.**
+
+- **Scope réalisé** : ~71h (vs 53h initial, surcharge justifiée : H14 ajouté, H6 sous-estimé 4h→22h)
+- **Tickets résolus** : 14 (H1-H14, certains via faux positifs ou cumuls)
+- **Nouveaux tickets émergents** : H15 (UI admin disputes P2, suivi), H16 (email STRIPE_COMPTE_SUPPRIME P2, suivi), UI-1a/b/c (bugs + manque admin remontés par smoke test Gabrielle), UI-2a-j (10 tickets refonte UX étab + soignant)
+
+### Livrables Sub-PR D
+
+**Backend** :
+- 5 edge functions Stripe refactorées/étendues : `stripe-connect-onboard`, `stripe-connect-status`, `stripe-connect-pay-mission`, `stripe-webhook`, `process-stripe-refunds`
+- 1 helper partagé : `_shared/stripe-errors.ts` (mapStripeError typed)
+- 2 migrations DDL : `20260420130000` (dispute_* + reversed_le + ANNULEE) + `20260420140000` (statut SUPPRIME)
+- 7 templates email : CHARGE_FAILED_ETAB, DISPUTE_OUVERTE_ADMIN/CLOSE_ADMIN, PAYOUT_FAILED_ADMIN/SOIGNANT, PAYOUT_CANCELED_ADMIN, REFUND_ECHEC_ADMIN
+- 1 template étendu : PAIEMENT_RAPIDE_RECU (3 contextes : CONNECT_MISSION_PAYMENT, CONNECT_PAYOUT_PAID, legacy factor)
+- 1 cron pg_cron actif : `process-stripe-refunds-15min` (jobid 17)
+
+**Frontend** :
+- 3 call-sites pay-mission adaptés (gestion FACTURE_NON_GENEREE) : FacturationEtablissement, ObligationsFinancieres, DetailMission
+- PageStripeConnect.tsx + ProfilSoignant.tsx : branche SUPPRIME + bouton refresh `?force=true`
+
+**Tests** :
+- 5 fichiers SQL automatisables (cp-stripe-2/3/4/5/6.test.sql, ~30 scénarios)
+- 5 docs checklists manuelles (~40 scénarios end-to-end)
+
+### Détail CPs
+
+| CP | Tickets résolus | Commit |
+|----|-----------------|--------|
+| CP-STRIPE-1 (audit uniquement) | H12, H13 (faux positifs) | — |
+| CP-STRIPE-2 (propagation PI + PAYEE + notif) | H1, A20, H7, H14 | `a1d0932f` |
+| CP-STRIPE-3 (guards + compensation) | H4, H5, H8 | `37deadbd` |
+| CP-STRIPE-4 (13 webhook events) | H6 | `dbe2ecc3` |
+| CP-STRIPE-5 (process-stripe-refunds full) | H3, A21/T13 | `658acc11` |
+| CP-STRIPE-6 (typed errors + cache + SUPPRIME) | H2, H9, H10, H11 | `9c219ad4` |
+
+---
+
 ## Légende
 
 - **Priorité** : `P0` (bloquant go-live/critique) · `P1` (bloquant beta/acceptation clients) · `P2` (amélioration notable) · `DIFFÉRÉ` (post-lancement ou dépendance module futur)
@@ -111,6 +150,19 @@
 | H14  | Transition EMISE → PAYEE de factures_honoraires manquante dans flow CONNECT | P1 | RÉSOLU | Audit CP-STRIPE-2                | 3         | SP-D-stripe-connect-prod-ready    |
 | H15  | UI admin disputes (chargebacks Stripe) — tableau de bord dédié         | P2       | OUVERT   | Audit CP-STRIPE-4 (suivi)       | 8         | SP-admin-ui-disputes (futur)      |
 | H16  | Template email STRIPE_COMPTE_SUPPRIME_SOIGNANT (notif soignant quand compte Stripe détecté supprimé) | P2 | OUVERT | Audit CP-STRIPE-6 (suivi)        | 2         | SP-B-templates-email-critiques    |
+| UI-1a | Route `/admin/cohort-economics` manquante dans App.tsx (404) — page AdminCohortEconomics.tsx existe | P0 | OUVERT | Smoke test CP-STRIPE-6 Gabrielle | 0.5       | SP-UI-1-bugs-admin                |
+| UI-1b | KPI "Prélever SEPA" toujours vide — vérifier query RPC + data test | P1       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 1         | SP-UI-1-bugs-admin                |
+| UI-1c | Créer page `/admin/stripe` sidebar dédiée (stats Connect + paiements + onboarding) | P2 | OUVERT | Smoke test CP-STRIPE-6 Gabrielle | 4         | SP-UI-1-bugs-admin                |
+| UI-2a | Refonte UI `LitigesEtablissement.tsx` (alignement qualité AdminModeration) | P1 | OUVERT | Smoke test CP-STRIPE-6 Gabrielle | 15        | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-2b | Refonte UI `LitigesSoignant.tsx` (même qualité que refonte étab) | P1       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 15        | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-2c | Audit + refonte UI `FacturationEtablissement.tsx`                      | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 10        | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-2d | Audit + refonte UI `ObligationsFinancieres.tsx`                        | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 8         | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-2e | Audit + refonte UI `DashboardEtablissement.tsx`                        | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 10        | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-2f | Audit + refonte UI `DashboardRH.tsx`                                   | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 8         | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-2g | Audit + refonte UI `MesFacturesHonoraires.tsx`                         | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 6         | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-2h | Audit + refonte UI `DashboardSoignant.tsx`                             | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 10        | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-2i | Polish UI `PageStripeConnect.tsx` + `ProfilSoignant.tsx`               | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 4         | SP-UI-2-refonte-ux-etab-soignant  |
+| UI-2j | Refonte `BarreNavigation` (cohérence visuelle globale si nécessaire)   | P2       | OUVERT   | Smoke test CP-STRIPE-6 Gabrielle | 3         | SP-UI-2-refonte-ux-etab-soignant  |
 | I1   | Migration orpheline prod `20260417102123` — FAUX POSITIF (version correcte = 20260417120000, fichier local OK) | P2 | RÉSOLU | Audit CP-STRIPE-1 / post-merge | 0         | SP-F-bugs-latents-nettoyage       |
 | I2   | Cohabitation 2 versions `fn_admin_resoudre_litige` (5-arg legacy + 6-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
 | I3   | Cohabitation 2 versions `fn_ouvrir_litige_rate_limited` (2-arg + 3-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
@@ -135,20 +187,20 @@
 
 ## Comptage automatique
 
-**Total tickets** : 112
+**Total tickets** : 125
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 23     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3 |
+| P0 OUVERTS      | 24     | B1, B2, B3a, D1, D2, D3, E1, E2, E3, E4, E10, E11, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
 | P0 RÉSOLUS      | 6      | A24, A25, H1, H2, H3, H4                                                |
-| P1 OUVERTS      | 23     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5 |
+| P1 OUVERTS      | 26     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, E5, E6, E7, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 11     | A4, A20, A21, A23, A26, H5, H6, H7, H8, H13, H14                        |
-| P2 OUVERTS      | 36     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8 |
+| P2 OUVERTS      | 45     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, E8, E9, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j |
 | P2 RÉSOLUS      | 7      | A22, B5, H9, H10, H11, H12, I1                                          |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 23 + 6 + 23 + 1 + 11 + 36 + 7 + 5 = **112** ✓
+**Validation somme** : 24 + 6 + 26 + 1 + 11 + 45 + 7 + 5 = **125** ✓
 
 **Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable : 430.75 - 15 = 415.75 h**.
 
