@@ -238,8 +238,16 @@ export default function FacturationEtablissement() {
   const lancerPaiementStripeConnect = async (missionId: string) => {
     setConnectPayingId(missionId);
     try {
+      // Force header Authorization explicite (fix 401 "header manquant" sur invoke)
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        toast.error('Session expirée, veuillez vous reconnecter');
+        return;
+      }
       const { data, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
         body: { mission_id: missionId },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (data?.already_paid) {
         toast.info(data.message || 'Ce paiement a déjà été effectué');

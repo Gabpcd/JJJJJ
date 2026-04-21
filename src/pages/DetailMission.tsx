@@ -515,8 +515,17 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   soignantHasConnect={soignantHasConnect}
                   onStartConnectPay={async () => {
                     setConnectPayLoading(true);
+                    // Force header Authorization explicite (fix 401 "header manquant" sur invoke)
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const accessToken = sessionData?.session?.access_token;
+                    if (!accessToken) {
+                      toast.error('Session expirée, veuillez vous reconnecter');
+                      setConnectPayLoading(false);
+                      return;
+                    }
                     const { data, error: fnErr } = await supabase.functions.invoke('stripe-connect-pay-mission', {
                       body: { mission_id: m.id },
+                      headers: { Authorization: `Bearer ${accessToken}` },
                     });
                     if (data?.already_paid) {
                       toast.info(data.message || 'Ce paiement a déjà été effectué');
