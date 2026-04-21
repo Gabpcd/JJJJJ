@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 function getCorsOrigin(req: Request): string {
@@ -48,7 +47,7 @@ async function loadDocumentWithRetry(supabase: any, documentId: string, attempts
   throw new Error("Document introuvable");
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
 
   try {

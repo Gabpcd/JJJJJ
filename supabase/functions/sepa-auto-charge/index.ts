@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -7,7 +6,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  * For each EMISE facture of a SEPA-enabled établissement,
  * creates a PaymentIntent and charges the default SEPA payment method.
  */
-serve(async (req) => {
+Deno.serve(async (req) => {
   const corsHeaders = {
     "Access-Control-Allow-Origin": "https://jolene.app",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",

@@ -8,7 +8,6 @@
 //   VAPID_PRIVATE_KEY (à générer, voir ci-dessous)
 //   VAPID_SUBJECT     (= mailto:contact@jolene.app)
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
@@ -25,7 +24,7 @@ function getCorsOrigin(req: Request): string {
   return "https://jolene.app";
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const corsHeaders = {
     "Access-Control-Allow-Origin": getCorsOrigin(req),
     "Content-Type": "application/json",
