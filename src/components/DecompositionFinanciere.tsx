@@ -1,10 +1,36 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Info } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Info, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+
+/**
+ * DecompositionFinanciere — affichage selon type_contrat_applique
+ *
+ * Règles issues de docs/logique-paiements-v1.md :
+ *
+ * - LIBERAL : brut honoraires = taux × heures + majorations. Pas de IFM/ICP/
+ *   cotisations. Le soignant touche 100 % du brut honoraires. Commission
+ *   Jolene visible uniquement côté ÉTAB/ADMIN (§5.5 : soignant ne voit JAMAIS
+ *   la commission).
+ *
+ * - SALARIE (Modèle A CDDU) : NET en évidence (= ce que l'étab vire au
+ *   soignant). Détail brut + IFM + ICP + cotisations salariales dans
+ *   accordéon fermé par défaut ("Détail comptable"). Super brut pas en avant
+ *   (éviter surpaiement). Commission idem LIBERAL côté ÉTAB/ADMIN uniquement.
+ *
+ * - type_contrat_applique = null (mission pas encore assignée) : placeholder.
+ *
+ * Roles :
+ *   ETAB/ADMIN : voient la commission Jolene (payeur)
+ *   SOIGNANT   : ne voit JAMAIS la commission (§5.5)
+ */
+
+export type DecompositionFinanciereRole = 'ETAB' | 'SOIGNANT' | 'ADMIN';
 
 interface DecompositionFinanciereProps {
   mission: any;
   etablissement?: any;
+  role?: DecompositionFinanciereRole;
 }
 
 function fmt(v: number | null | undefined): string {
@@ -12,142 +38,291 @@ function fmt(v: number | null | undefined): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 }
 
-export function DecompositionFinanciere({ mission, etablissement }: DecompositionFinanciereProps) {
+export function DecompositionFinanciere({ mission, role = 'ETAB' }: DecompositionFinanciereProps) {
   const m = mission;
-  const etab = etablissement || m.etablissements;
+  const typeContrat = (m.type_contrat_applique ?? null) as 'LIBERAL' | 'SALARIE' | null;
+  const isEtabOrAdmin = role === 'ETAB' || role === 'ADMIN';
+
   const duree = m.duree_heures ?? 0;
   const tauxEffectif = m.taux_rist_plafonne || m.taux_horaire_base;
   const heuresNormales = Math.max(0, duree - (m.heures_nuit || 0) - (m.heures_dimanche || 0) - (m.heures_ferie || 0));
   const brutBase = tauxEffectif * duree;
   const totalMajorations = (m.montant_majoration_nuit || 0) + (m.montant_majoration_dimanche || 0) + (m.montant_majoration_ferie || 0);
-  const totalBrut = m.total_brut || (brutBase + totalMajorations);
+  const totalBrut = m.total_brut ?? (brutBase + totalMajorations);
   const ifm = m.montant_ifm || 0;
   const icp = m.montant_icp || 0;
   const superBrut = totalBrut + ifm + icp;
   const cotisationsEstimees = superBrut * 0.22;
-  const netEstime = m.net_estime || (superBrut * 0.78);
+  const netSalarie = m.net_a_payer ?? m.net_estime ?? (superBrut * 0.78);
+  const commissionTtc = m.montant_commission_ttc || 0;
 
-  return (
-    <div className="bg-gradient-to-br from-primary/5 to-info/5 border border-primary/20 rounded-2xl p-5 shadow-sm">
-      <h3 className="text-lg font-bold text-foreground mb-4">💰 Décomposition financière</h3>
-
-      <div className="space-y-3 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Taux horaire</span>
-          <span className="font-medium text-foreground">{tauxEffectif?.toFixed(2)} €/h</span>
-        </div>
-
-        {m.rist_plafond_applique && (
-          <div className="bg-warning/10 border-l-4 border-warning p-3 rounded-r-lg">
-            <p className="text-xs font-semibold text-warning">⚠️ PLAFOND LOI RIST APPLIQUÉ</p>
-            <p className="text-xs text-warning/80 mt-1">
-              Taux demandé : {m.taux_horaire_base?.toFixed(2)} €/h → Plafonné : {m.taux_rist_plafonne?.toFixed(2)} €/h
-            </p>
-            <p className="text-[10px] text-warning/60 mt-0.5">(Décret 2023-920)</p>
-          </div>
-        )}
-
-        <div className="border-t border-border pt-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Heures</p>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Heures totales</span>
-            <span className="font-medium">{duree.toFixed(1)}h</span>
-          </div>
-          {heuresNormales !== duree && (
-            <div className="flex justify-between mt-1">
-              <span className="text-muted-foreground pl-3">dont normales</span>
-              <span className="font-medium">{heuresNormales.toFixed(1)}h</span>
-            </div>
-          )}
-          {(m.heures_nuit || 0) > 0 && (
-            <div className="flex justify-between mt-1">
-              <span className="text-muted-foreground pl-3">🌙 nuit</span>
-              <span className="font-medium">{m.heures_nuit?.toFixed(1)}h</span>
-            </div>
-          )}
-          {(m.heures_dimanche || 0) > 0 && (
-            <div className="flex justify-between mt-1">
-              <span className="text-muted-foreground pl-3">☀️ dimanche</span>
-              <span className="font-medium">{m.heures_dimanche?.toFixed(1)}h</span>
-            </div>
-          )}
-          {(m.heures_ferie || 0) > 0 && (
-            <div className="flex justify-between mt-1">
-              <span className="text-muted-foreground pl-3">🎌 jour férié</span>
-              <span className="font-medium">{m.heures_ferie?.toFixed(1)}h</span>
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-border pt-3 space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Calcul</p>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Brut de base ({duree.toFixed(1)}h × {tauxEffectif?.toFixed(2)}€)</span>
-            <span className="font-medium">{fmt(brutBase)}</span>
-          </div>
-
-          {totalMajorations > 0 && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Majorations</span>
-              <span className="font-medium text-primary">+{fmt(totalMajorations)}</span>
-            </div>
-          )}
-
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Total brut</span>
-            <span className="font-bold">{fmt(totalBrut)}</span>
-          </div>
-
-          {ifm > 0 && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">IFM (10%)</span>
-              <span className="font-medium text-primary">+{fmt(ifm)}</span>
-            </div>
-          )}
-          {icp > 0 && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">ICP (10%)</span>
-              <span className="font-medium text-primary">+{fmt(icp)}</span>
-            </div>
-          )}
-
-          {(ifm > 0 || icp > 0) && (
-            <div className="flex justify-between border-t border-border pt-2">
-              <span className="text-muted-foreground">Super brut</span>
-              <span className="font-bold">{fmt(superBrut)}</span>
-            </div>
-          )}
-
-          <div className="flex justify-between text-destructive/80">
-            <span>Cotisations salariales estimées (~22%)</span>
-            <span className="font-medium">-{fmt(cotisationsEstimees)}</span>
-          </div>
-        </div>
-
-        <div className="border-t-2 border-primary/30 pt-3">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-foreground flex items-center gap-1">
-              NET ESTIMÉ*
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs text-xs">
-                    Estimation après cotisations salariales (~22%). Le montant exact dépend de votre situation personnelle et sera calculé par l'établissement sur votre bulletin de paie.
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </span>
-            <span className="text-2xl font-bold text-primary">{fmt(netEstime)}</span>
+  // Placeholder : type_contrat non encore figé
+  if (!typeContrat) {
+    return (
+      <div className="bg-muted/30 border border-border rounded-2xl p-5">
+        <h3 className="text-lg font-bold text-foreground mb-3">💰 Décomposition financière</h3>
+        <div className="flex items-start gap-3 text-sm text-muted-foreground">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            <p>Type de contrat à définir à l'acceptation de la mission.</p>
+            <p className="mt-1 text-xs">Taux horaire : <span className="font-medium text-foreground">{tauxEffectif?.toFixed(2)} €/h</span> · Durée : <span className="font-medium text-foreground">{duree.toFixed(1)} h</span></p>
           </div>
         </div>
       </div>
+    );
+  }
 
-      <p className="text-[10px] text-muted-foreground/60 italic mt-4">
-        Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
-        Montants indicatifs hors charges patronales légales (CFP, taxe d'apprentissage). L'établissement reste responsable de ses déclarations sociales.
+  const rappelPlafondRist = m.rist_plafond_applique && (
+    <div className="bg-warning/10 border-l-4 border-warning p-3 rounded-r-lg">
+      <p className="text-xs font-semibold text-warning flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> PLAFOND LOI RIST APPLIQUÉ</p>
+      <p className="text-xs text-warning/80 mt-1">
+        Taux demandé : {m.taux_horaire_base?.toFixed(2)} €/h → Plafonné : {m.taux_rist_plafonne?.toFixed(2)} €/h
       </p>
+      <p className="text-[10px] text-warning/60 mt-0.5">(Décret 2023-920)</p>
     </div>
   );
+
+  const detailHeures = (
+    <div className="border-t border-border pt-3">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Heures</p>
+      <div className="flex justify-between">
+        <span className="text-muted-foreground">Heures totales</span>
+        <span className="font-medium">{duree.toFixed(1)}h</span>
+      </div>
+      {heuresNormales !== duree && (
+        <div className="flex justify-between mt-1">
+          <span className="text-muted-foreground pl-3">dont normales</span>
+          <span className="font-medium">{heuresNormales.toFixed(1)}h</span>
+        </div>
+      )}
+      {(m.heures_nuit || 0) > 0 && (
+        <div className="flex justify-between mt-1">
+          <span className="text-muted-foreground pl-3">🌙 nuit</span>
+          <span className="font-medium">{m.heures_nuit?.toFixed(1)}h</span>
+        </div>
+      )}
+      {(m.heures_dimanche || 0) > 0 && (
+        <div className="flex justify-between mt-1">
+          <span className="text-muted-foreground pl-3">☀️ dimanche</span>
+          <span className="font-medium">{m.heures_dimanche?.toFixed(1)}h</span>
+        </div>
+      )}
+      {(m.heures_ferie || 0) > 0 && (
+        <div className="flex justify-between mt-1">
+          <span className="text-muted-foreground pl-3">🎌 jour férié</span>
+          <span className="font-medium">{m.heures_ferie?.toFixed(1)}h</span>
+        </div>
+      )}
+    </div>
+  );
+
+  // ─────────────────────────────────────────────
+  // Branche LIBERAL — brut honoraires = ce que touche le soignant.
+  // Pas d'IFM/ICP/cotisations (géré en libéral par le soignant lui-même
+  // via URSSAF libérale et sa caisse de retraite CARPIMKO/CIPAV).
+  // ─────────────────────────────────────────────
+  if (typeContrat === 'LIBERAL') {
+    return (
+      <div className="bg-gradient-to-br from-emerald-500/5 to-primary/5 border border-emerald-500/20 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-foreground">💰 Décomposition financière</h3>
+          <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-1 rounded-full">
+            Contrat libéral
+          </span>
+        </div>
+
+        <div className="space-y-3 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Taux horaire</span>
+            <span className="font-medium text-foreground">{tauxEffectif?.toFixed(2)} €/h</span>
+          </div>
+
+          {rappelPlafondRist}
+          {detailHeures}
+
+          <div className="border-t border-border pt-3 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Calcul</p>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Brut de base ({duree.toFixed(1)}h × {tauxEffectif?.toFixed(2)}€)</span>
+              <span className="font-medium">{fmt(brutBase)}</span>
+            </div>
+            {totalMajorations > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Majorations</span>
+                <span className="font-medium text-primary">+{fmt(totalMajorations)}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t-2 border-emerald-500/30 pt-3">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-foreground">Brut honoraires soignant</span>
+              <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{fmt(totalBrut)}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Montant à verser au soignant (100 % du brut honoraires, aucune retenue par Jolene)
+            </p>
+          </div>
+
+          {/* Commission Jolene — uniquement côté étab/admin (logique-paiements-v1 §5.5) */}
+          {isEtabOrAdmin && commissionTtc > 0 && (
+            <div className="border-t border-border pt-3">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-sm">Commission Jolene (facturée séparément)</span>
+                <span className="font-medium text-foreground">{fmt(commissionTtc)}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Payée EN PLUS par l'établissement. Ne diminue jamais le brut du soignant.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[10px] text-muted-foreground/60 italic mt-4">
+          Contrat libéral : le soignant déclare ses revenus et cotise auprès de l'URSSAF libérale / CARPIMKO ou CIPAV.
+        </p>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Branche SALARIE (Modèle A CDDU) — NET en évidence (= ce que l'étab vire
+  // au soignant via virement SEPA). Détails comptables dans accordéon fermé
+  // par défaut pour éviter que l'étab vire le super brut par erreur.
+  // ─────────────────────────────────────────────
+  const DecompoSalarie = () => {
+    const [detailOuvert, setDetailOuvert] = useState(false);
+
+    return (
+      <div className="bg-gradient-to-br from-blue-500/5 to-primary/5 border border-blue-500/20 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-foreground">💰 Décomposition financière</h3>
+          <span className="text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-1 rounded-full">
+            Contrat salarié (CDDU)
+          </span>
+        </div>
+
+        {/* NET en évidence (mise en garde surpaiement) */}
+        <div className="bg-blue-500/10 border-2 border-blue-500/40 rounded-xl p-4 mb-4">
+          <div className="flex justify-between items-center">
+            <span className="font-bold text-foreground text-base">
+              {role === 'SOIGNANT' ? 'Votre NET' : 'À verser au soignant'}
+            </span>
+            <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">{fmt(netSalarie)}</span>
+          </div>
+          {isEtabOrAdmin && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Virement SEPA direct au soignant. L'établissement déclare ensuite ses cotisations (salariales + patronales) à l'URSSAF.
+            </p>
+          )}
+          {role === 'SOIGNANT' && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Montant versé par l'établissement (virement SEPA). Bulletin de paie généré par Jolene.
+            </p>
+          )}
+        </div>
+
+        {rappelPlafondRist}
+
+        {/* Accordéon détail comptable */}
+        <Collapsible open={detailOuvert} onOpenChange={setDetailOuvert}>
+          <CollapsibleTrigger className="w-full flex items-center justify-between text-sm py-2 text-muted-foreground hover:text-foreground transition-colors">
+            <span className="font-medium">Détail comptable (brut, IFM, ICP, cotisations)</span>
+            {detailOuvert ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="text-sm">
+            <div className="pt-2 space-y-3">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Taux horaire</span>
+                <span className="font-medium text-foreground">{tauxEffectif?.toFixed(2)} €/h</span>
+              </div>
+
+              {detailHeures}
+
+              <div className="border-t border-border pt-3 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Calcul</p>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Brut de base ({duree.toFixed(1)}h × {tauxEffectif?.toFixed(2)}€)</span>
+                  <span className="font-medium">{fmt(brutBase)}</span>
+                </div>
+                {totalMajorations > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Majorations</span>
+                    <span className="font-medium text-primary">+{fmt(totalMajorations)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total brut</span>
+                  <span className="font-bold">{fmt(totalBrut)}</span>
+                </div>
+                {ifm > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">IFM (10%)</span>
+                    <span className="font-medium text-primary">+{fmt(ifm)}</span>
+                  </div>
+                )}
+                {icp > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">ICP (10%)</span>
+                    <span className="font-medium text-primary">+{fmt(icp)}</span>
+                  </div>
+                )}
+                {(ifm > 0 || icp > 0) && (
+                  <div className="flex justify-between border-t border-border pt-2">
+                    <span className="text-muted-foreground">Super brut (avant cotisations)</span>
+                    <span className="font-bold">{fmt(superBrut)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-destructive/80">
+                  <span className="flex items-center gap-1">
+                    Cotisations salariales estimées (~22%)
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs text-xs">
+                          Estimation à titre indicatif. Le détail exact figure sur le bulletin de paie généré par Jolene.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </span>
+                  <span className="font-medium">-{fmt(cotisationsEstimees)}</span>
+                </div>
+                <div className="flex justify-between border-t-2 border-blue-500/30 pt-2">
+                  <span className="font-bold text-foreground">= NET</span>
+                  <span className="font-bold text-blue-600 dark:text-blue-400">{fmt(netSalarie)}</span>
+                </div>
+              </div>
+
+              {isEtabOrAdmin && (
+                <p className="text-[10px] text-muted-foreground/80 italic border-t border-border pt-2 mt-2">
+                  Pour référence URSSAF. L'établissement déclare ses cotisations directement à l'URSSAF (DSN mensuelle). Jolene n'intervient pas dans le paiement URSSAF.
+                </p>
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Commission Jolene — uniquement côté étab/admin (logique-paiements-v1 §5.5) */}
+        {isEtabOrAdmin && commissionTtc > 0 && (
+          <div className="border-t border-border pt-3 mt-3">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground text-sm">Commission Jolene (facturée séparément)</span>
+              <span className="font-medium text-foreground">{fmt(commissionTtc)}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Payée EN PLUS par l'établissement. Facture commission Jolene distincte du virement au soignant.
+            </p>
+          </div>
+        )}
+
+        <p className="text-[10px] text-muted-foreground/60 italic mt-4">
+          Bulletin de paie généré par Jolene (service prestation). Employeur URSSAF : {m.etablissements?.nom ? `« ${m.etablissements.nom} »` : "l'établissement"}.
+        </p>
+      </div>
+    );
+  };
+
+  return <DecompoSalarie />;
 }

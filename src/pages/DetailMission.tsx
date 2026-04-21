@@ -494,7 +494,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             </div>
 
             <div className="space-y-4">
-              <DecompositionFinanciere mission={m} />
+              <DecompositionFinanciere mission={m} role={isAdmin ? 'ADMIN' : 'ETAB'} />
               {/* Payment mode indicator */}
               {m.montant_commission_ttc > 0 && (
                 <div className="card-base flex items-center gap-2 text-xs text-muted-foreground">

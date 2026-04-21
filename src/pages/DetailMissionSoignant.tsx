@@ -482,7 +482,7 @@ export default function DetailMissionSoignant() {
               }}
             />
           ) : (
-            <DecompositionFinanciere mission={mission} />
+            <DecompositionFinanciere mission={mission} role="SOIGNANT" />
           )}
           <p className="text-xs text-muted-foreground/60 italic text-center">
             Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
