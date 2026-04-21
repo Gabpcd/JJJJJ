@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     if (fhErr || !fh) return json({ error: 'Facture honoraire introuvable', detail: fhErr?.message }, 404);
 
     // Idempotence : ne pas re-soumettre si déjà en cours
-    if (fh.chorus_submission_id && ['SUBMITTED', 'ACCEPTED'].includes(fh.chorus_submission_status ?? '')) {
+    if (fh.chorus_submission_id && ['submitted', 'accepted'].includes(fh.chorus_submission_status ?? '')) {
       return json({
         accepted: true,
         skipped: true,
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
         .from('chorus_submissions')
         .insert({
           invoice_id: facture_honoraire_id,
-          submission_type: 'DEPOT_PDF_FACTURX',
+          submission_type: 'DEPOT_PDF_API',
           type_document: docType,
           avoir_reference_invoice: avoirReferenceInvoice,
           status: 'pending_credentials',
@@ -170,10 +170,10 @@ Deno.serve(async (req) => {
       .from('chorus_submissions')
       .insert({
         invoice_id: facture_honoraire_id,
-        submission_type: 'DEPOT_PDF_FACTURX',
+        submission_type: 'DEPOT_PDF_API',
         type_document: docType,
         avoir_reference_invoice: avoirReferenceInvoice,
-        status: 'submitting',
+        status: 'pending',
         submitted_at: new Date().toISOString(),
       })
       .select('id')
