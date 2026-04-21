@@ -235,8 +235,9 @@ Deno.serve(async (req) => {
       payment_intent_data: {
         metadata: { facture_id: facture.id },
         description: `Facture ${facture.numero_facture}`,
+        // Stripe : statement_descriptor doit contenir au moins 1 lettre Latin, 5-22 chars, pas de caractères spéciaux.
+        // "JOLENE" suffit — pas de suffix (qui doit aussi respecter les règles Latin + ne pas dépasser combiné).
         statement_descriptor: "JOLENE",
-        statement_descriptor_suffix: facture.numero_facture?.slice(-10) || undefined,
       },
     };
 
