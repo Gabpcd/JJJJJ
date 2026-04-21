@@ -380,8 +380,19 @@ Deno.serve(async (req) => {
         },
       },
       metadata: {
+        // BUG-BOUCLE-PAIEMENT Fix D.1 — metadata COMPLÈTE niveau session Checkout.
+        // Avant ce fix, seuls type/mission_id/facture_honoraires_id étaient au
+        // niveau session ; les champs soignant_id/connected_account_id/soignant_cents
+        // n'étaient que sur payment_intent_data.metadata. Le webhook lisait
+        // session.metadata → condition L93 false → branche CONNECT_MISSION_PAYMENT
+        // skippée silencieusement après paiement réussi.
+        // Maintenant : redondance sender-side + fallback defensive côté webhook.
         type: "CONNECT_MISSION_PAYMENT",
         mission_id,
+        soignant_id: soignantId,
+        connected_account_id: connectOnboarding.stripe_account_id,
+        soignant_cents: soignantCents.toString(),
+        commission_cents: commissionCents.toString(),
         facture_honoraires_id: factureHonoraires.id,
       },
       return_url: `${origin}/etablissement/facturation?paiement=succes`,
