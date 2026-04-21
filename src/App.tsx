@@ -21,6 +21,7 @@ const MesFacturesHonoraires = lazy(() => import("./pages/MesFacturesHonoraires")
 const MesAvances = lazy(() => import("./pages/MesAvances"));
 const AdminMandatsFacturation = lazy(() => import("./pages/admin/AdminMandatsFacturation"));
 const AdminAffacturage = lazy(() => import("./pages/admin/AdminAffacturage"));
+const AdminChorusPro = lazy(() => import("./pages/admin/AdminChorusPro"));
 const ConfirmerEmail = lazy(() => import("./pages/ConfirmerEmail"));
 const InscriptionSoignant = lazy(() => import("./pages/InscriptionSoignant"));
 const InscriptionEtablissement = lazy(() => import("./pages/InscriptionEtablissement"));
@@ -236,6 +237,7 @@ function AppRoutes() {
           <Route path="/admin/groupes" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminGroupes /></RouteProtegee>} />
           <Route path="/admin/mandats-facturation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMandatsFacturation /></RouteProtegee>} />
           <Route path="/admin/affacturage" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAffacturage /></RouteProtegee>} />
+          <Route path="/admin/chorus-pro" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminChorusPro /></RouteProtegee>} />
           <Route path="/admin/missions" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminMissions /></RouteProtegee>} />
           <Route path="/admin/calendrier" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCalendrier /></RouteProtegee>} />
           <Route path="/admin/reclamations" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminReclamations /></RouteProtegee>} />

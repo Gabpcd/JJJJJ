@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown } from 'lucide-react';
+import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -37,6 +37,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
       { icone: AlertTriangle, label: 'Impayées', route: '/admin/impayees' },
       { icone: FileCheck, label: 'Mandats facturation', route: '/admin/mandats-facturation' },
       { icone: Zap, label: 'Affacturage', route: '/admin/affacturage' },
+      { icone: FileStack, label: 'Chorus Pro', route: '/admin/chorus-pro' },
       { icone: TrendingUp, label: 'Cohort & Economics', route: '/admin/cohort' },
     ],
   },
