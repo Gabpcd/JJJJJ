@@ -20,7 +20,7 @@ import { ENTREPRISE } from '@/constantes/entreprise';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { extraireMessageErreur, extraireErreurEdgeFn } from '@/lib/erreurs';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
@@ -249,31 +249,34 @@ export default function FacturationEtablissement() {
         body: { mission_id: missionId },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
+
+      // FIX 2 — parse le body même si la fn a retourné 4xx/5xx (data null dans ce cas)
+      const payload = await extraireErreurEdgeFn(data, error);
+      const code = payload?.error as string | undefined;
+      const message = payload?.message as string | undefined;
+
+      if (code === 'FACTURE_NON_GENEREE') {
+        toast.error(message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", { duration: 8000 });
+        return;
+      }
+      if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
+        toast.error(message || "Les missions salariées doivent être payées par virement SEPA (bulletin de paie).", { duration: 8000 });
+        return;
+      }
+
       if (data?.already_paid) {
         toast.info(data.message || 'Ce paiement a déjà été effectué');
         charger();
         return;
       }
-      // [CP-STRIPE-2] Facture honoraires pas encore générée : message explicite
-      if (data?.error === 'FACTURE_NON_GENEREE') {
-        toast.error(data.message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", {
-          duration: 8000,
-        });
+
+      if (error || code) {
+        toast.error(message || code || error?.message || 'Erreur lors du paiement');
         return;
       }
-      if (error) {
-        toast.error(data?.message || data?.error || error.message || 'Erreur lors du paiement');
-        return;
-      }
-      if (data?.error) throw new Error(data.message || data.error);
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
-      }
-      if (data?.client_secret) {
-        setConnectClientSecret(data.client_secret);
-        return;
-      }
+
+      if (data?.url) { window.location.href = data.url; return; }
+      if (data?.client_secret) { setConnectClientSecret(data.client_secret); return; }
       toast.error('Aucune URL de paiement reçue');
     } catch (e: any) {
       const msg = e?.message || 'Erreur lors du paiement Stripe Connect';

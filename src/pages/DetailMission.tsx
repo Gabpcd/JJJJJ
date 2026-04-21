@@ -28,7 +28,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getLabelProfession } from '@/lib/constantes';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { extraireMessageErreur, extraireErreurEdgeFn } from '@/lib/erreurs';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -527,25 +527,36 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       body: { mission_id: m.id },
                       headers: { Authorization: `Bearer ${accessToken}` },
                     });
+
+                    // FIX 2 — parse body même sur status non-2xx (data null dans ce cas)
+                    const payload = await extraireErreurEdgeFn(data, fnErr);
+                    const code = payload?.error as string | undefined;
+                    const message = payload?.message as string | undefined;
+
+                    if (code === 'FACTURE_NON_GENEREE') {
+                      toast.error(message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", { duration: 8000 });
+                      setConnectPayLoading(false);
+                      return;
+                    }
+                    if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
+                      toast.error(message || "Les missions salariées doivent être payées par virement SEPA (bulletin de paie).", { duration: 8000 });
+                      setConnectPayLoading(false);
+                      return;
+                    }
+
                     if (data?.already_paid) {
                       toast.info(data.message || 'Ce paiement a déjà été effectué');
                       navigate(0);
                       setConnectPayLoading(false);
                       return;
                     }
-                    // [CP-STRIPE-2] Facture honoraires pas encore générée : message explicite
-                    if (data?.error === 'FACTURE_NON_GENEREE') {
-                      toast.error(data.message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", {
-                        duration: 8000,
-                      });
+
+                    if (fnErr || code || !data?.client_secret) {
+                      toast.error(message || code || fnErr?.message || 'Erreur lors du paiement');
                       setConnectPayLoading(false);
                       return;
                     }
-                    if (fnErr || !data?.client_secret) {
-                      toast.error(data?.message || data?.error || fnErr?.message || 'Erreur lors du paiement');
-                      setConnectPayLoading(false);
-                      return;
-                    }
+
                     setConnectClientSecret(data.client_secret);
                     setConnectDecomposition({ commission_ttc: data.commission_ttc, salaire_brut: data.salaire_brut, total: data.total });
                     setShowConnectCheckout(true);
