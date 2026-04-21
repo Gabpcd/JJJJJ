@@ -687,12 +687,29 @@ Deno.serve(async (req) => {
     // 1. Vérifier mission TERMINEE
     const { data: mission, error: mErr } = await supabaseAdmin
       .from('missions')
-      .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer, montant_commission_ht, soignant_assigne_id, etablissement_id, statut')
+      .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer, montant_commission_ht, soignant_assigne_id, etablissement_id, statut, type_contrat_applique')
       .eq('id', mission_id)
       .single();
 
     if (mErr || !mission) return json(req, { error: 'Mission introuvable' }, 404);
     if (mission.statut !== 'TERMINEE') return json(req, { error: `Mission en statut ${mission.statut}, doit être TERMINEE` }, 400);
+
+    // Fix E — garde type_contrat_applique selon docs/logique-paiements-v1 §1.
+    // Jolene est mandataire de facturation UNIQUEMENT pour les missions LIBERAL
+    // (art. 289 I-2 CGI). Les missions SALARIE passent par bulletin de paie,
+    // pas par facture honoraires (sinon risque de requalification intérim).
+    if (mission.type_contrat_applique === 'SALARIE') {
+      return json(req, {
+        error: 'CONTRAT_SALARIE_NON_FACTURE_HONORAIRES',
+        message: "Les missions en contrat salarié passent par bulletin de paie, pas par facture honoraires. Seules les missions libérales génèrent une facture honoraires (mandat de facturation art. 289 I-2 CGI).",
+      }, 400);
+    }
+    if (mission.type_contrat_applique == null) {
+      return json(req, {
+        error: 'CONTRAT_NON_FIGE',
+        message: "Le type de contrat doit être figé (mission assignée) avant de générer une facture honoraires. Assignez un soignant d'abord.",
+      }, 400);
+    }
 
     // 1b. Garde-fou pré-facturation CP5b (créneaux ouverts + écart > 10%)
     const { data: preCheck, error: preCheckErr } = await supabaseAdmin
