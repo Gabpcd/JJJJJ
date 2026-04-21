@@ -199,6 +199,8 @@
 | BUG-RLS-1 | 403 sur tables reclamations, shifts, equipes dans console navigateur étab (RLS ou tables inexistantes à investiguer) | P2 | OUVERT | Smoke test session CP-C-5 | 1 | SP-H-rls-consolidation |
 | UI-C5-badge-etab | Badge statut Chorus Pro (DEPOSEE/ACCEPTEE/PAYEE/REJETEE) sur factures honoraires côté UI étab + soignant | P2 | OUVERT | C5-D hors scope MVP | 2 | SP-UI-2-refonte-ux-etab-soignant |
 | BUG-UI-CHORUS-CONFIG | Page /admin/chorus-pro tab Config : ChorusConfigEtabDialog sans validation format numero_structure (devrait valider SIRET 14 chiffres ou format Chorus Pro) | P2 | OUVERT | Découverte session BUG-UI-STRIPE-1.2 | 1 | SP-UI-1-bugs-admin |
+| BUG-UI-EVAL-1 | Fiche mission étab : bandeau "Évaluer le soignant" s'affiche même si évaluation déjà faite (condition d'affichage ne vérifie pas EXISTS evaluations pour le couple mission/soignant/évaluateur) | P1 | OUVERT | Smoke test session 22/04/2026 | 2 | SP-UI-1-bugs-admin |
+| UI-MISSION-FICHE-RICHE | Fiche mission TERMINEE (étab + soignant) trop pauvre : manque heures pointage exactes, codes pointage, pauses, timeline déroulement, DPAE référence, évaluations cross. Enrichir DetailMission post-TERMINEE avec section/onglet "Déroulement" complet | P2 | OUVERT | Smoke test session 22/04/2026 | 8 | SP-UI-2-refonte-ux-etab-soignant |
 | I1   | Migration orpheline prod `20260417102123` — FAUX POSITIF (version correcte = 20260417120000, fichier local OK) | P2 | RÉSOLU | Audit CP-STRIPE-1 / post-merge | 0         | SP-F-bugs-latents-nettoyage       |
 | I2   | Cohabitation 2 versions `fn_admin_resoudre_litige` (5-arg legacy + 6-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
 | I3   | Cohabitation 2 versions `fn_ouvrir_litige_rate_limited` (2-arg + 3-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
@@ -223,20 +225,20 @@
 
 ## Comptage automatique
 
-**Total tickets** : 138
+**Total tickets** : 140
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
 | P0 OUVERTS      | 21     | B1, B2, B3a, D1, D2, D3, E3, E4, E10, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
 | P0 RÉSOLUS      | 12     | A24, A25, E1, E2, E11, E12, E15, E16, H1, H2, H3, H4                    |
-| P1 OUVERTS      | 25     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b, BUG-UI-OBLIG-1, BUG-UI-STRIPE-1 |
+| P1 OUVERTS      | 26     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b, BUG-UI-OBLIG-1, BUG-UI-STRIPE-1, BUG-UI-EVAL-1 |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 16     | A4, A20, A21, A23, A26, E5, E6, E7, E13, E14, H5, H6, H7, H8, H13, H14  |
-| P2 OUVERTS      | 49     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j, UI-E16-1, UI-E16-2, UI-C4-email, BUG-RLS-1, UI-C5-badge-etab, BUG-UI-CHORUS-CONFIG |
+| P2 OUVERTS      | 50     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j, UI-E16-1, UI-E16-2, UI-C4-email, BUG-RLS-1, UI-C5-badge-etab, BUG-UI-CHORUS-CONFIG, UI-MISSION-FICHE-RICHE |
 | P2 RÉSOLUS      | 9      | A22, B5, E8, E9, H9, H10, H11, H12, I1                                  |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 21 + 12 + 25 + 1 + 16 + 49 + 9 + 5 = **138** ✓
+**Validation somme** : 21 + 12 + 26 + 1 + 16 + 50 + 9 + 5 = **140** ✓
 
 **Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable post-Sub-PR D : 430.75 - 15 = 415.75 h**.
 
