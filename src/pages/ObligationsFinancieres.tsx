@@ -15,7 +15,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { ENTREPRISE } from '@/constantes/entreprise';
-import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink, ChevronDown, ChevronRight, Scale } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -385,13 +385,13 @@ export default function ObligationsFinancieres() {
                     : isLiberal
                     ? (m.mode_paiement_soignant === 'STRIPE_CONNECT' ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
                     : null;
-                  // BUG-UI-OBLIG-1 Fix#3 — Stripe réservé aux missions LIBERAL
-                  // avec mode de paiement STRIPE_CONNECT et soignant onboardé.
-                  // Les missions SALARIE passent toujours par virement SEPA (bulletin).
-                  const peutPayerStripe =
+                  const peutPayerStripeBase =
                     isLiberal
                     && m.mode_paiement_soignant === 'STRIPE_CONNECT'
                     && m.soignant_stripe_connect;
+                  // Bug 1 — mission avec paiement CONTESTE : badge litige + boutons désactivés
+                  const enLitige = Boolean(m.a_paiement_conteste);
+                  const peutPayerStripe = peutPayerStripeBase && !enLitige;
                   return (
                   <div key={m.mission_id} className="p-4 rounded-lg border space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -429,6 +429,23 @@ export default function ObligationsFinancieres() {
                             )}
                           </div>
                         )}
+                        {enLitige && (
+                          <div className="mt-2 flex items-center gap-2 flex-wrap rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
+                            <Scale className="h-4 w-4 text-destructive shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-destructive">⚠️ Litige en cours sur un paiement</p>
+                              <p className="text-xs text-destructive/80">
+                                Les paiements sont désactivés tant que le litige n'est pas résolu.
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
+                              className="text-xs font-medium text-destructive hover:underline shrink-0"
+                            >
+                              Voir le litige →
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="text-right shrink-0">
                         {peutPayerStripe ? (
@@ -454,7 +471,7 @@ export default function ObligationsFinancieres() {
                       <Button
                         size="sm"
                         onClick={() => payerStripeConnect(m.mission_id)}
-                        disabled={connectPayingId === m.mission_id}
+                        disabled={connectPayingId === m.mission_id || enLitige}
                         className="w-full"
                       >
                         <CreditCard className="w-4 h-4 mr-2" />
@@ -464,11 +481,11 @@ export default function ObligationsFinancieres() {
                       <Button
                         size="sm"
                         onClick={() => ouvrirDialogDeclarer(m)}
-                        disabled={declaringId === m.mission_id}
+                        disabled={declaringId === m.mission_id || enLitige}
                         className="w-full"
                       >
                         <Banknote className="w-4 h-4 mr-2" />
-                        Déclarer un paiement
+                        {enLitige ? 'Paiement bloqué (litige)' : 'Déclarer un paiement'}
                       </Button>
                     )}
                   </div>
