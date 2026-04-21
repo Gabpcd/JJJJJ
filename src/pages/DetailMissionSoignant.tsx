@@ -94,7 +94,8 @@ export default function DetailMissionSoignant() {
           taux_ifm, taux_icp, montant_ifm, montant_icp,
           total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
-          type_paiement_soignant, numero_note_honoraires,
+          type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
+          numero_note_honoraires,
           yousign_statut, mode_attribution
         `).eq('id', id).single(),
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
