@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Banknote, FileText, Loader2, Eye, CheckCircle, Edit2 } from 'lucide-react';
+import { CreditCard, Banknote, FileText, Loader2, Eye, CheckCircle, Edit2, AlertTriangle, Scale, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 
 interface Props {
   missionId: string;
@@ -31,6 +34,7 @@ const isRefValid = (ref: string) => {
 };
 
 export function WorkflowPaiementMission({ missionId, soignantAssigneId, etablissementId, onStartConnectPay, soignantHasConnect }: Props) {
+  const navigate = useNavigate();
   const [info, setInfo] = useState<InfoPaiement | null>(null);
   const [loading, setLoading] = useState(true);
   const [declaring, setDeclaring] = useState(false);
@@ -50,7 +54,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
         supabase.from('paiements_soignant')
           .select('*')
           .eq('mission_id', missionId)
-          .in('statut', ['DECLARE', 'CONFIRME', 'CONTESTE'])
+          .in('statut', ['DECLARE', 'CONFIRME', 'CONTESTE', 'RESOLU'])
           .order('cree_le', { ascending: false })
           .limit(1),
         supabase.from('stripe_transfers')
@@ -123,7 +127,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       // Reload payment status
       const { data: pData } = await supabase.from('paiements_soignant')
         .select('*').eq('mission_id', missionId)
-        .in('statut', ['DECLARE', 'CONFIRME', 'CONTESTE'])
+        .in('statut', ['DECLARE', 'CONFIRME', 'CONTESTE', 'RESOLU'])
         .order('cree_le', { ascending: false }).limit(1);
       if (pData?.length) setPaiementExistant(pData[0]);
     } catch (e: any) {
@@ -166,21 +170,111 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   // If payment already declared, show status
   if (paiementExistant) {
     const p = paiementExistant;
-    const statutLabel = p.statut === 'CONFIRME' ? 'Confirmé ✅' : p.statut === 'CONTESTE' ? 'Contesté ⚠️' : 'En attente de confirmation du soignant';
-    const statutColor = p.statut === 'CONFIRME' ? 'text-success' : p.statut === 'CONTESTE' ? 'text-warning' : 'text-muted-foreground';
     const canModifyRef = p.statut === 'DECLARE' && !p.confirme_par_soignant;
+    const fmtDate = (iso: string | null | undefined) =>
+      iso ? format(new Date(iso), "d MMM yyyy 'à' HH'h'mm", { locale: fr }) : null;
+
+    // Mapping statut → affichage (cohérent avec docs/logique-paiements-v1.md §6)
+    const statutUI = (() => {
+      switch (p.statut) {
+        case 'CONFIRME':
+          return {
+            icon: CheckCircle,
+            iconClass: 'text-success',
+            borderClass: 'border-success/30',
+            bgClass: 'bg-success/5',
+            titre: 'Paiement confirmé par le soignant',
+            sousTitre: p.confirme_par_soignant_le
+              ? `Confirmé le ${fmtDate(p.confirme_par_soignant_le)}`
+              : 'Le soignant a confirmé avoir reçu le paiement',
+            badgeLabel: 'CONFIRMÉ',
+            badgeClass: 'bg-success/10 text-success border-success/30',
+          };
+        case 'CONTESTE':
+          return {
+            icon: AlertTriangle,
+            iconClass: 'text-warning',
+            borderClass: 'border-warning/40',
+            bgClass: 'bg-warning/5',
+            titre: 'Paiement contesté — litige en cours',
+            sousTitre: p.motif_contestation
+              ? `Motif : ${p.motif_contestation}`
+              : 'Le soignant conteste ce paiement',
+            badgeLabel: 'CONTESTÉ',
+            badgeClass: 'bg-warning/10 text-warning border-warning/40',
+          };
+        case 'RESOLU':
+          return {
+            icon: Scale,
+            iconClass: 'text-muted-foreground',
+            borderClass: 'border-border',
+            bgClass: 'bg-muted/30',
+            titre: 'Litige résolu',
+            sousTitre: p.modifie_le
+              ? `Résolu le ${fmtDate(p.modifie_le)}`
+              : 'Le litige a été résolu entre les parties',
+            badgeLabel: 'RÉSOLU',
+            badgeClass: 'bg-muted text-muted-foreground border-border',
+          };
+        case 'DECLARE':
+        default:
+          return {
+            icon: Clock,
+            iconClass: 'text-primary',
+            borderClass: 'border-primary/30',
+            bgClass: 'bg-primary/5',
+            titre: 'Paiement déclaré — en attente du soignant',
+            sousTitre: p.date_paiement
+              ? `Déclaré pour le ${format(new Date(p.date_paiement), 'd MMM yyyy', { locale: fr })}`
+              : 'Le soignant doit confirmer ou contester',
+            badgeLabel: 'EN ATTENTE',
+            badgeClass: 'bg-primary/10 text-primary border-primary/30',
+          };
+      }
+    })();
+
+    const StatutIcon = statutUI.icon;
 
     return (
-      <div className="card-base border-success/20 space-y-2">
-        <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <CheckCircle className="h-4 w-4 text-success" /> Paiement déclaré
-        </p>
-        <div className="text-xs space-y-1">
-          <p className="text-muted-foreground">Méthode : <span className="text-foreground font-medium">{p.methode === 'NOTE_HONORAIRES' ? "Note d'honoraires" : 'Virement'}</span></p>
-          <p className="text-muted-foreground">Référence : <span className="text-foreground font-medium">{p.reference_virement}</span></p>
-          <p className="text-muted-foreground">Montant : <span className="text-foreground font-medium">{fmt(p.montant_net)}</span></p>
-          <p className={`font-medium ${statutColor}`}>Statut : {statutLabel}</p>
+      <div className={`card-base ${statutUI.borderClass} ${statutUI.bgClass} space-y-3`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2 min-w-0">
+            <StatutIcon className={`h-4 w-4 ${statutUI.iconClass} shrink-0 mt-0.5`} />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">{statutUI.titre}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{statutUI.sousTitre}</p>
+            </div>
+          </div>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${statutUI.badgeClass}`}>
+            {statutUI.badgeLabel}
+          </span>
         </div>
+
+        <div className="text-xs space-y-1 border-t border-border/60 pt-2">
+          <p className="text-muted-foreground">
+            Méthode : <span className="text-foreground font-medium">{p.methode === 'NOTE_HONORAIRES' ? "Note d'honoraires" : p.methode === 'STRIPE_CONNECT' ? 'Stripe Connect' : 'Virement'}</span>
+          </p>
+          {p.reference_virement && (
+            <p className="text-muted-foreground">
+              Référence : <span className="text-foreground font-mono font-medium">{p.reference_virement}</span>
+            </p>
+          )}
+          <p className="text-muted-foreground">
+            Montant : <span className="text-foreground font-medium">{fmt(p.montant_net)}</span>
+          </p>
+        </div>
+
+        {p.statut === 'CONTESTE' && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-xs border-warning/40 text-warning hover:bg-warning/10"
+            onClick={() => navigate('/etablissement/litiges')}
+          >
+            <Scale className="h-3 w-3" /> Voir le litige
+          </Button>
+        )}
+
         {canModifyRef && (
           <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => { setNewRef(p.reference_virement || ''); setShowModifRef(true); }}>
             <Edit2 className="h-3 w-3" /> Modifier la référence
