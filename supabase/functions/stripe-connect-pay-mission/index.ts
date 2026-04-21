@@ -34,15 +34,22 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } }
   );
 
+  let step = "init";
+
   try {
+    step = "1_auth_header";
     const authHeader = req.headers.get("Authorization");
+    const hasAuth = !!authHeader;
+    const authLen = authHeader?.length ?? 0;
+    console.log(`[stripe-connect-pay-mission] step=1 hasAuth=${hasAuth} len=${authLen}`);
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
+      return new Response(JSON.stringify({ error: "Non autorisé — header manquant" }), {
         status: 401,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
+    step = "2_auth_user";
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? ""
@@ -52,11 +59,16 @@ Deno.serve(async (req) => {
       error: authError,
     } = await supabaseClient.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
+      console.error(`[stripe-connect-pay-mission] step=2 getUser failed: authError=${authError?.message ?? "null"} user=${!!user}`);
+      return new Response(JSON.stringify({
+        error: "Non autorisé",
+        reason: authError?.message || "user_not_found",
+      }), {
         status: 401,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
+    console.log(`[stripe-connect-pay-mission] step=2 user=${user.id}`);
 
     const { mission_id } = await req.json();
     if (!mission_id) {
@@ -491,12 +503,12 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     // [CP-STRIPE-6 H9] Mapping typed Stripe errors
     const mapped = mapStripeError(error);
-    console[mapped.logLevel]("stripe-connect-pay-mission error:", {
+    console[mapped.logLevel](`[stripe-connect-pay-mission] step=${step} ERROR:`, {
       code: mapped.code,
       raw: error instanceof Error ? error.message : String(error),
     });
     return new Response(
-      JSON.stringify({ error: mapped.code, message: mapped.userMessage }),
+      JSON.stringify({ error: mapped.code, message: mapped.userMessage, failed_at_step: step }),
       {
         status: mapped.status,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
