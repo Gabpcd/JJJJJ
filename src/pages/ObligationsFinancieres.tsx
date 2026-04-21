@@ -507,11 +507,16 @@ export default function ObligationsFinancieres() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {paiementsEnAttente.map((p: any) => (
-                  <div key={p.paiement_id} className="flex items-center justify-between gap-3 p-3 rounded-lg border">
+                  <button
+                    type="button"
+                    key={p.paiement_id}
+                    onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)}
+                    className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border hover:border-primary/50 hover:bg-muted/30 transition-colors cursor-pointer text-left"
+                  >
                     <div className="min-w-0 flex-1">
-                      <button onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)} className="font-medium text-sm text-primary hover:underline text-left">
+                      <p className="font-medium text-sm text-primary">
                         {p.mission_intitule}
-                      </button>
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {p.soignant_nom} · {p.soignant_profession} · {p.methode} · Réf: {p.reference_virement}
                       </p>
@@ -519,11 +524,14 @@ export default function ObligationsFinancieres() {
                         Déclaré le {p.date_paiement && new Date(p.date_paiement).toLocaleDateString('fr-FR')}
                       </p>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-bold">{fmt(p.montant_net)}</p>
-                      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">En attente</Badge>
+                    <div className="text-right shrink-0 flex items-center gap-2">
+                      <div>
+                        <p className="font-bold">{fmt(p.montant_net)}</p>
+                        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">En attente</Badge>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
-                  </div>
+                  </button>
                 ))}
               </CardContent>
             </Card>
@@ -604,8 +612,12 @@ export default function ObligationsFinancieres() {
                       </thead>
                       <tbody>
                         {facturesCommissionHistorique.map((f: any) => (
-                          <tr key={f.facture_id} className="border-b last:border-0">
-                            <td className="py-2 pr-3 font-medium">{f.numero_facture}</td>
+                          <tr
+                            key={f.facture_id}
+                            onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
+                            className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                          >
+                            <td className="py-2 pr-3 font-medium text-primary">{f.numero_facture}</td>
                             <td className="py-2 pr-3 text-xs">{f.date_emission && new Date(f.date_emission).toLocaleDateString('fr-FR')}</td>
                             <td className="py-2 pr-3 text-xs">{f.date_paiement ? new Date(f.date_paiement).toLocaleDateString('fr-FR') : '—'}</td>
                             <td className="py-2 pr-3 text-xs">{f.nombre_missions ?? '—'}</td>
@@ -617,14 +629,7 @@ export default function ObligationsFinancieres() {
                                 <Badge className="bg-muted text-muted-foreground">{f.statut}</Badge>
                               )}
                             </td>
-                            <td className="py-2">
-                              <button
-                                onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
-                                className="text-xs text-primary hover:underline"
-                              >
-                                Voir détail
-                              </button>
-                            </td>
+                            <td className="py-2"><ChevronRight className="h-4 w-4 text-muted-foreground" /></td>
                           </tr>
                         ))}
                       </tbody>
@@ -665,22 +670,31 @@ export default function ObligationsFinancieres() {
                         <th className="pb-2 pr-3">Montant</th>
                         <th className="pb-2 pr-3">Réf.</th>
                         <th className="pb-2">Confirmé</th>
+                        <th className="pb-2"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {paiementsConfirmes.map((p: any) => (
-                        <tr key={p.paiement_id} className="border-b last:border-0">
+                        <tr
+                          key={p.paiement_id}
+                          onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
+                          className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                        >
                           <td className="py-2 pr-3 text-xs">{p.confirme_par_soignant_le && new Date(p.confirme_par_soignant_le).toLocaleDateString('fr-FR')}</td>
                           <td className="py-2 pr-3">{p.soignant_nom}</td>
-                          <td className="py-2 pr-3">{p.mission_intitule}</td>
+                          <td className="py-2 pr-3 text-primary">{p.mission_intitule}</td>
                           <td className="py-2 pr-3 font-medium">{fmt(p.montant_net)}</td>
                           <td className="py-2 pr-3 text-xs text-muted-foreground">{p.reference_virement}</td>
                           <td className="py-2"><Badge className="bg-success/10 text-success">✅</Badge></td>
+                          <td className="py-2"><ChevronRight className="h-4 w-4 text-muted-foreground" /></td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                <p className="text-[11px] text-muted-foreground mt-3">
+                  Cliquez sur une ligne pour voir le détail mission + paiement.
+                </p>
               </CardContent>
             </Card>
           </FadeInView>

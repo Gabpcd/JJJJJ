@@ -1022,18 +1022,27 @@ export default function FacturationEtablissement() {
               <h2 className="font-bold text-foreground mb-3">🏦 Historique des prélèvements</h2>
               <div className="space-y-2">
                 {prelevements.map((p: any) => (
-                  <div key={p.id} className="card-base flex items-center justify-between">
+                  <button
+                    type="button"
+                    key={p.id}
+                    onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
+                    disabled={!p.mission_id}
+                    className="card-base w-full flex items-center justify-between cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors text-left disabled:cursor-default"
+                  >
                     <div>
                       <p className="text-sm font-medium text-foreground">{(p.missions as any)?.intitule || 'Mission'}</p>
                       <p className="text-xs text-muted-foreground">{p.capture_le ? format(new Date(p.capture_le), 'dd/MM/yyyy', { locale: fr }) : '—'}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-foreground">{(p.montant_ttc ?? 0).toFixed(2)} €</p>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.statut === 'CAPTURE' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
-                        {p.statut === 'CAPTURE' ? 'Prélevé' : p.statut}
-                      </span>
+                    <div className="text-right flex items-center gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{(p.montant_ttc ?? 0).toFixed(2)} €</p>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.statut === 'CAPTURE' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
+                          {p.statut === 'CAPTURE' ? 'Prélevé' : p.statut}
+                        </span>
+                      </div>
+                      {p.mission_id && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
