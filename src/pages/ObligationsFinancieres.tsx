@@ -12,9 +12,9 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { useNotification } from '@/contexts/NotificationContext';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { extraireMessageErreur, extraireErreurEdgeFn } from '@/lib/erreurs';
 import { ENTREPRISE } from '@/constantes/entreprise';
-import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink } from 'lucide-react';
+import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -90,6 +90,8 @@ export default function ObligationsFinancieres() {
   const [declaringId, setDeclaringId] = useState<string | null>(null);
   const [declaringRef, setDeclaringRef] = useState<Record<string, string>>({});
   const [connectPayingId, setConnectPayingId] = useState<string | null>(null);
+  // FIX 1 URGENT 2 Option B — historique factures commission collapsible
+  const [historiqueOuvert, setHistoriqueOuvert] = useState<boolean>(false);
 
   const charger = async () => {
     if (!user || !etablissementId) return;
@@ -229,23 +231,33 @@ export default function ObligationsFinancieres() {
         body: { mission_id: missionId },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
+
+      // FIX 2 — si la fn retourne 4xx/5xx, supabase-js met `error` et `result=null`.
+      // Le JSON body se trouve dans error.context. On parse pour récupérer le code métier.
+      const payload = await extraireErreurEdgeFn(result, error);
+      const code = payload?.error as string | undefined;
+      const message = payload?.message as string | undefined;
+
+      if (code === 'FACTURE_NON_GENEREE') {
+        toast.error(message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", { duration: 8000 });
+        return;
+      }
+      if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
+        toast.error(message || "Les missions salariées doivent être payées par virement SEPA (bulletin de paie).", { duration: 8000 });
+        return;
+      }
+
       if (result?.already_paid) {
         toast.info(result.message || 'Ce paiement a déjà été effectué');
         if (typeof charger === 'function') charger();
         return;
       }
-      // [CP-STRIPE-2] Facture honoraires pas encore générée : message explicite
-      if (result?.error === 'FACTURE_NON_GENEREE') {
-        toast.error(result.message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", {
-          duration: 8000,
-        });
+
+      if (error || code) {
+        toast.error(message || code || error?.message || 'Erreur lors du paiement');
         return;
       }
-      if (error) {
-        toast.error(result?.message || result?.error || error.message || 'Erreur lors du paiement');
-        return;
-      }
-      if (result?.error) throw new Error(result.message || result.error);
+
       if (result?.url) { window.location.href = result.url; return; }
       if (result?.client_secret) { setConnectClientSecret(result.client_secret); return; }
       toast.error('Aucune URL de paiement reçue');
@@ -290,6 +302,8 @@ export default function ObligationsFinancieres() {
   const paiementsEnAttente = data.paiements_soignants_en_attente || [];
   const paiementsConfirmes = data.paiements_soignants_confirmes || [];
   const facturesImpayees = data.factures_impayees || [];
+  const facturesCommissionHistorique = data.factures_commission_historique || [];
+  const nbFacturesHistorique: number = data.nb_factures_commission_historique || 0;
   const missionsNonFacturees = data.missions_non_facturees || [];
 
   const sectionTotal = missionsNonPayees.length > 0
@@ -308,11 +322,15 @@ export default function ObligationsFinancieres() {
       ? 'section-paiements-en-attente'
       : undefined;
 
+  // Le KPI "Commissions Jolene" pointe toujours vers la section commissions
+  // (factures impayées OU historique si aucune impayée).
   const sectionCommissions = facturesImpayees.length > 0
     ? 'section-factures-impayees'
-    : missionsNonFacturees.length > 0
-      ? 'section-commissions-a-venir'
-      : undefined;
+    : nbFacturesHistorique > 0
+      ? 'section-factures-historique'
+      : missionsNonFacturees.length > 0
+        ? 'section-commissions-a-venir'
+        : undefined;
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -337,12 +355,19 @@ export default function ObligationsFinancieres() {
               detail="Voir les paiements soignants"
               onClick={sectionSoignants ? () => allerSection(sectionSoignants) : undefined}
             />
-            <ResumeCard
-              value={fmt(data.total_commissions_du)}
-              label={`Commissions Jolene · ${data.nb_factures_impayees} facture(s)`}
-              detail="Voir les commissions impayées"
-              onClick={sectionCommissions ? () => allerSection(sectionCommissions) : undefined}
-            />
+            <div className="flex flex-col gap-1">
+              <ResumeCard
+                value={fmt(data.total_commissions_du)}
+                label={`Commissions Jolene · ${data.nb_factures_impayees} facture(s)`}
+                detail={facturesImpayees.length > 0 ? 'Voir les commissions impayées' : 'Voir l\'historique des factures'}
+                onClick={sectionCommissions ? () => allerSection(sectionCommissions) : undefined}
+              />
+              {nbFacturesHistorique > 0 && (
+                <p className="text-[11px] text-muted-foreground text-center">
+                  {nbFacturesHistorique} facture{nbFacturesHistorique > 1 ? 's' : ''} payée{nbFacturesHistorique > 1 ? 's' : ''} dans l'historique
+                </p>
+              )}
+            </div>
           </div>
         </FadeInView>
 
@@ -528,6 +553,82 @@ export default function ObligationsFinancieres() {
                   </div>
                 ))}
               </CardContent>
+            </Card>
+          </FadeInView>
+        )}
+
+        {/* FIX 1 URGENT 2 Option B — Historique factures commission (collapsible) */}
+        {nbFacturesHistorique > 0 && (
+          <FadeInView delay={350}>
+            <Card id="section-factures-historique">
+              <CardHeader>
+                <button
+                  type="button"
+                  onClick={() => setHistoriqueOuvert(v => !v)}
+                  className="w-full flex items-center justify-between text-left"
+                  aria-expanded={historiqueOuvert}
+                >
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-success" />
+                    Historique factures commission ({nbFacturesHistorique} payée{nbFacturesHistorique > 1 ? 's' : ''})
+                  </CardTitle>
+                  {historiqueOuvert ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
+                </button>
+              </CardHeader>
+              {historiqueOuvert && (
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-2 pr-3">Numéro</th>
+                          <th className="pb-2 pr-3">Émise le</th>
+                          <th className="pb-2 pr-3">Payée le</th>
+                          <th className="pb-2 pr-3">Missions</th>
+                          <th className="pb-2 pr-3">Montant</th>
+                          <th className="pb-2 pr-3">Statut</th>
+                          <th className="pb-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {facturesCommissionHistorique.map((f: any) => (
+                          <tr key={f.facture_id} className="border-b last:border-0">
+                            <td className="py-2 pr-3 font-medium">{f.numero_facture}</td>
+                            <td className="py-2 pr-3 text-xs">{f.date_emission && new Date(f.date_emission).toLocaleDateString('fr-FR')}</td>
+                            <td className="py-2 pr-3 text-xs">{f.date_paiement ? new Date(f.date_paiement).toLocaleDateString('fr-FR') : '—'}</td>
+                            <td className="py-2 pr-3 text-xs">{f.nombre_missions ?? '—'}</td>
+                            <td className="py-2 pr-3 font-medium">{fmt(f.montant_ttc)}</td>
+                            <td className="py-2 pr-3">
+                              {f.statut === 'PAYEE' ? (
+                                <Badge className="bg-success/10 text-success">Payée</Badge>
+                              ) : (
+                                <Badge className="bg-muted text-muted-foreground">{f.statut}</Badge>
+                              )}
+                            </td>
+                            <td className="py-2">
+                              <button
+                                onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
+                                className="text-xs text-primary hover:underline"
+                              >
+                                Voir détail
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Affiche les 10 dernières factures payées.{' '}
+                    <button
+                      onClick={() => navigate('/etablissement/facturation?tab=commissions')}
+                      className="text-primary hover:underline"
+                    >
+                      Voir tout l'historique →
+                    </button>
+                  </p>
+                </CardContent>
+              )}
             </Card>
           </FadeInView>
         )}

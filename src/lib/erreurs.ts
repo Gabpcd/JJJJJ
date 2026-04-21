@@ -68,6 +68,33 @@ export function extraireMessageErreur(error: any): string {
   return 'Une erreur est survenue. Veuillez réessayer.';
 }
 
+/**
+ * Extrait le payload JSON d'une réponse edge function, même quand la fn
+ * a retourné un status HTTP >= 400 (supabase-js v2 met alors `data=null`
+ * et `error.context` = Response object avec le body JSON).
+ *
+ * Retourne un objet combiné { error, message, ... } ou null si aucun
+ * payload exploitable n'est disponible.
+ */
+export async function extraireErreurEdgeFn(data: any, error: any): Promise<Record<string, any> | null> {
+  if (data && typeof data === 'object') return data;
+  if (!error) return null;
+  const ctx = (error as any)?.context;
+  if (!ctx) return null;
+  try {
+    if (typeof ctx.json === 'function') {
+      return await ctx.clone().json();
+    }
+    if (typeof ctx.text === 'function') {
+      const txt = await ctx.clone().text();
+      try { return JSON.parse(txt); } catch { return { message: txt }; }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export function estBlocageCodeTravail(error: any): boolean {
   const msg = error?.message || '';
   return msg.includes('[CODE DU TRAVAIL]');
