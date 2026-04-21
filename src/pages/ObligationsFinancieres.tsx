@@ -357,6 +357,13 @@ export default function ObligationsFinancieres() {
                     : isLiberal
                     ? (m.mode_paiement_soignant === 'STRIPE_CONNECT' ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
                     : null;
+                  // BUG-UI-OBLIG-1 Fix#3 — Stripe réservé aux missions LIBERAL
+                  // avec mode de paiement STRIPE_CONNECT et soignant onboardé.
+                  // Les missions SALARIE passent toujours par virement SEPA (bulletin).
+                  const peutPayerStripe =
+                    isLiberal
+                    && m.mode_paiement_soignant === 'STRIPE_CONNECT'
+                    && m.soignant_stripe_connect;
                   return (
                   <div key={m.mission_id} className="p-4 rounded-lg border space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -403,7 +410,7 @@ export default function ObligationsFinancieres() {
                       </div>
                     </div>
 
-                    {m.soignant_stripe_connect ? (
+                    {peutPayerStripe ? (
                       <Button
                         size="sm"
                         onClick={() => payerStripeConnect(m.mission_id)}

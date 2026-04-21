@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     const { data: mission } = await supabaseAdmin
       .from("missions")
       .select(
-        "id, etablissement_id, soignant_assigne_id, statut, montant_commission_ttc, net_a_payer"
+        "id, etablissement_id, soignant_assigne_id, statut, montant_commission_ttc, net_a_payer, type_contrat_applique"
       )
       .eq("id", mission_id)
       .single();
@@ -85,6 +85,22 @@ Deno.serve(async (req) => {
     if (mission.statut !== "TERMINEE") {
       return new Response(
         JSON.stringify({ error: "La mission doit être terminée" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // BUG-UI-OBLIG-1 Fix#3 — défense en profondeur : les missions SALARIE
+    // ne peuvent pas être payées via Stripe (bulletin de paie + virement SEPA).
+    if (mission.type_contrat_applique === "SALARIE") {
+      return new Response(
+        JSON.stringify({
+          error: "CONTRAT_SALARIE_NON_STRIPE",
+          message:
+            "Les missions en contrat salarié doivent être payées par virement SEPA (bulletin de paie). Utilisez le flux 'Déclarer virement' à la place.",
+        }),
         {
           status: 400,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
