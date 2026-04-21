@@ -238,6 +238,66 @@ Couvre 5 scénarios :
 
 Résultats exécution MCP (session) : **7/7 OK**.
 
+## Tests UI admin AdminChorusPro (C5-D)
+
+### M12 — Accès page admin
+
+**Étapes** : login admin → naviguer `/admin/chorus-pro`
+
+**Vérifications** :
+- [ ] Page charge sans erreur
+- [ ] 3 tabs visibles : Dashboard / Submissions / Config établissements
+- [ ] Bouton "Sync maintenant" présent en haut à droite
+- [ ] Breadcrumb "Chorus Pro"
+- [ ] Entrée sidebar Finances > Chorus Pro active
+
+### M13 — Dashboard KPIs
+
+**Vérifications** :
+- [ ] 6 KPI cards : Total submissions, En cours, Acceptées, Rejetées/Err, Erreurs 7j, Étabs configs
+- [ ] "Dernière sync : —" (null si jamais syncé)
+- [ ] Table "10 dernières submissions" (message "Aucune soumission" si vide)
+
+### M14 — Sync manuel
+
+**Étapes** : cliquer bouton "Sync maintenant"
+
+**Vérifications** :
+- [ ] Bouton loading (spinner)
+- [ ] Toast : "Sync OK : 0 vérifiées, 0 mises à jour, 0 notifs" (mode simulation ou prod selon config)
+- [ ] Bouton ré-activé
+
+### M15 — Tab Submissions
+
+**Vérifications** :
+- [ ] Table vide avec message "Aucune soumission"
+- [ ] Filtre recherche fonctionnel (aucune erreur au typing)
+- [ ] Filtre select status avec les 6 options
+
+### M16 — Tab Config étabs + dialog
+
+**Étapes** :
+1. Ouvrir tab "Config établissements"
+2. Cliquer "Éditer" sur un étab secteur public
+3. Remplir numero_structure, code_service, identifiant_cpro
+4. Toggle actif ON
+5. Enregistrer
+
+**Vérifications** :
+- [ ] Liste des 2 étabs est_secteur_public=TRUE
+- [ ] Dialog s'ouvre avec les champs
+- [ ] Submit : toast "Configuration Chorus Pro mise à jour"
+- [ ] Table rafraîchie avec nouvelle config
+- [ ] SELECT manuel : 1 ligne dans chorus_pro_config pour cet étab
+
+### M17 — Accès refusé non-admin
+
+**Étapes** : login soignant → tenter `/admin/chorus-pro`
+
+**Vérifications** :
+- [ ] Redirection ou message "accès refusé"
+- [ ] `fn_admin_chorus_stats()` retourne `{"error":"Acces refuse"}` si appelé sans admin
+
 ## Vérifications post-prod
 
 ```sql

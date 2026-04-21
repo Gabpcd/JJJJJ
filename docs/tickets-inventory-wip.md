@@ -6,29 +6,26 @@
 **Sources couvertes** : A (héritage) + B (Audit 1 Crons) + C (Audit 2 Objets fantômes) + D (Audit 3 Templates email) + E (Audit 4 Paiement salarié) + F (Audit 5 Scoring soignant) + G (Audit 6 Statuts factures REMPLACEE) + H (Audit 7 Stripe Connect) + I (Migrations Sub-PR 2 quater) + J (Smoke tests) + K (Audit 8 RLS global) + L (Audit commission flow Jolene)
 **Inventaire complet**. Prochaine étape : planification des Sub-PR.
 
-## 🎯 Sub-PR C — Paiement salarié + commission + Chorus Pro : EN COURS 🚧
+## 🎯 Sub-PR C — Paiement salarié + commission + Chorus Pro : COMPLÈTE ✅
 
-**Chantier principal Q2 2026** (~88h estimé, ~67h livrés).
+**Chantier principal Q2 2026** livré intégralement le 21 avril 2026.
 
-### CP livrés
+### 6 CPs livrés
 
-| CP | Tickets résolus | Commit principal |
-|----|-----------------|-----------------|
+| CP | Tickets résolus | Commits |
+|----|-----------------|---------|
 | CP-C-1 (déclaration paiement + attestation URSSAF) | E12, E13 | `5845901e` |
 | CP-C-1.5 (E16 bug critique MIXTE×TOUS) | E16 | `0e308bdd..6ee88090` (9 commits) |
 | CP-C-2 (templates email + cron relances) | E2, E6, E11 | `1e6bd1cb..9de62dd6` (5 commits) |
 | CP-C-3 (blocage auto J+45 + unfreeze + UI bandeau) | E1, E7, E9 | `82c5cc25..7435d8db` (5 commits) |
 | CP-C-4 (statut EXPIREE + transition auto) | E5, E8, E14 | `cd803211..50bc30fa` (2 commits) |
+| CP-C-5 (Chorus Pro complet, mode simulation) | E15 | `2b1d0757..4fc624a4` (12 commits) |
 
-**Scope réalisé** : E12 (12h) + E13 (0h) + E16 (8h) + E2 (8h) + E6 (3h) + E11 (6h) + E1 (6h) + E7 (6h) + E9 (6h) + E5 (8h) + E8 (4h) + E14 (0h) = **67h** (vs 88h total). Scope réel CP-C-4 : **4h** (vs 14h estimé).
+**Scope réalisé** : E12 (12h) + E13 (0h) + E16 (8h) + E2 (8h) + E6 (3h) + E11 (6h) + E1 (6h) + E7 (6h) + E9 (6h) + E5 (8h) + E8 (4h) + E14 (0h) + E15 (30h) = **97h** (inclut E16 émergent et E15 complet).
 
-### CP restant
+**Note CP-C-5** : code complet + mode simulation actif. Activation réelle Chorus Pro bloquée par support PISTE (403 sur credentials, ticket Gabrielle 21/04/2026).
 
-| CP | Tickets | Scope (h) | Dépendances |
-|----|---------|-----------|-------------|
-| CP-C-5 (Chorus Pro full + fallback Stripe/SEPA) | E15 | 30 | PISTE credentials |
-
-**Reste Sub-PR C** : ~30h (Chorus Pro uniquement).
+**Sub-PR C : 13 tickets résolus** (E1, E2, E5, E6, E7, E8, E9, E11, E12, E13, E14, E15, E16).
 
 ---
 
@@ -145,7 +142,7 @@
 | E13  | Audit source historique des 14 lignes `paiements_soignant` existantes — mix seed + usage réel minime | P1 | RÉSOLU | Audit Sub-PR C / CP-C-1 audit intégré       | 0         | SP-C-paiement-salarie-refonte     |
 | E14  | Ajouter `EXPIREE` à enum `statut_mission` (scope inclus dans E5)        | P1       | RÉSOLU   | Audit Sub-PR C / CP-C-4 A commit cd803211 | 0 (⇔ E5)  | SP-C-paiement-salarie-refonte     |
 | UI-C4-email | Template email MISSION_EXPIREE pour étab (notif in-app déjà OK, email optionnel nice-to-have) | P2 | OUVERT | CP-C-4 émergent | 2 | SP-B-templates-email-critiques    |
-| E15  | Chorus Pro full : PISTE OAuth2 + API DeposerPDFacture + sync-chorus-status + UI admin + fallback Stripe/SEPA | P0 | OUVERT | Audit Sub-PR C (Q11 confirmé scope) | 30 | SP-C-paiement-salarie-refonte     |
+| E15  | Chorus Pro full : PISTE OAuth2 + deposer/flux + sync-chorus-status + UI admin + mention subrogation art. 289 I-2 CGI | P0 | RÉSOLU | Audit Sub-PR C / CP-C-5 commits 2b1d0757..4fc624a4 (12 commits) | 30 | SP-C-paiement-salarie-refonte     |
 | E16  | Bug URSSAF critique : choix contrat SALARIE/LIBERAL pour soignant MIXTE × mission TOUS non persisté (5 RPCs + 3 front) | P0 | RÉSOLU | Investigation Passe 2 Sub-PR C / E16 backend 1A-1E + frontend 2B-2D | 8 | SP-C-paiement-salarie-refonte     |
 | F1   | Triple pénalité annulation soignant (dec_penalite + dec_fiabilite + RPC, cumul -15 à -35) | P0 | OUVERT | Audit 5 : Scoring soignant | 6 | SP-E-scoring-refonte              |
 | F2   | Deux moteurs de score s'écrasent (compteurs vs évaluation, dernier trigger gagne) | P0 | OUVERT | Audit 5 : Scoring soignant    | 8         | SP-E-scoring-refonte              |
@@ -200,6 +197,7 @@
 | BUG-UI-OBLIG-1 | ObligationsFinancieres étab : paiements déjà effectués restent dans "missions à payer aux soignants" (filtre à corriger) | P1 | OUVERT | Smoke test session CP-C-5 | 2 | SP-UI-2-refonte-ux-etab-soignant |
 | BUG-UI-STRIPE-1 | Payer commission Jolene par carte via UI étab : erreur 500 sur create-invoice-payment (régression Sub-PR D ou nouveau bug à investiguer) | P1 | OUVERT | Smoke test session CP-C-5 | 3 | SP-UI-1-bugs-admin |
 | BUG-RLS-1 | 403 sur tables reclamations, shifts, equipes dans console navigateur étab (RLS ou tables inexistantes à investiguer) | P2 | OUVERT | Smoke test session CP-C-5 | 1 | SP-H-rls-consolidation |
+| UI-C5-badge-etab | Badge statut Chorus Pro (DEPOSEE/ACCEPTEE/PAYEE/REJETEE) sur factures honoraires côté UI étab + soignant | P2 | OUVERT | C5-D hors scope MVP | 2 | SP-UI-2-refonte-ux-etab-soignant |
 | I1   | Migration orpheline prod `20260417102123` — FAUX POSITIF (version correcte = 20260417120000, fichier local OK) | P2 | RÉSOLU | Audit CP-STRIPE-1 / post-merge | 0         | SP-F-bugs-latents-nettoyage       |
 | I2   | Cohabitation 2 versions `fn_admin_resoudre_litige` (5-arg legacy + 6-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
 | I3   | Cohabitation 2 versions `fn_ouvrir_litige_rate_limited` (2-arg + 3-arg) → DROP après vérif usages | P2 | OUVERT | Migrations : Sub-PR 2 quater | 3         | SP-F-bugs-latents-nettoyage       |
@@ -224,20 +222,20 @@
 
 ## Comptage automatique
 
-**Total tickets** : 136
+**Total tickets** : 137
 
 | Catégorie       | Nombre | IDs                                                                     |
 |-----------------|--------|-------------------------------------------------------------------------|
-| P0 OUVERTS      | 22     | B1, B2, B3a, D1, D2, D3, E3, E4, E10, E15, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
-| P0 RÉSOLUS      | 11     | A24, A25, E1, E2, E11, E12, E16, H1, H2, H3, H4                         |
+| P0 OUVERTS      | 21     | B1, B2, B3a, D1, D2, D3, E3, E4, E10, F1, F2, F3, F4, F13, F15, G1, G2, L1, L2, L3, UI-1a |
+| P0 RÉSOLUS      | 12     | A24, A25, E1, E2, E11, E12, E15, E16, H1, H2, H3, H4                    |
 | P1 OUVERTS      | 25     | A5, A7, A8, A16, D4, D5, D6, D7, D11, D12, F5, F6, F7, F8, F9, F14, G3, K1, L4, L5, UI-1b, UI-2a, UI-2b, BUG-UI-OBLIG-1, BUG-UI-STRIPE-1 |
 | P1 EN COURS     | 1      | B4                                                                      |
 | P1 RÉSOLUS      | 16     | A4, A20, A21, A23, A26, E5, E6, E7, E13, E14, H5, H6, H7, H8, H13, H14  |
-| P2 OUVERTS      | 47     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j, UI-E16-1, UI-E16-2, UI-C4-email, BUG-RLS-1 |
+| P2 OUVERTS      | 48     | A1, A2, A3, A6, A9, A10, A11, A12, A14, A15, A19, B3b, C1, D8, D9, D10, F10, F11, F12, G4, H15, H16, I2, I3, I4, I5, J1, J2, J3, K2, K3, L6, L7, L8, UI-1c, UI-2c, UI-2d, UI-2e, UI-2f, UI-2g, UI-2h, UI-2i, UI-2j, UI-E16-1, UI-E16-2, UI-C4-email, BUG-RLS-1, UI-C5-badge-etab |
 | P2 RÉSOLUS      | 9      | A22, B5, E8, E9, H9, H10, H11, H12, I1                                  |
 | DIFFÉRÉS        | 5      | A13, A17, A18, C2, C3                                                   |
 
-**Validation somme** : 22 + 11 + 25 + 1 + 16 + 47 + 9 + 5 = **136** ✓
+**Validation somme** : 21 + 12 + 25 + 1 + 16 + 48 + 9 + 5 = **137** ✓
 
 **Scope résolu CP-STRIPE-2** : H1 (0h dédup A20) + A20 (8h) + H7 (3h) + H14 (3h) = **14h** de scope éliminé (plus partiellement H4 : -1h). **Scope actionnable post-Sub-PR D : 430.75 - 15 = 415.75 h**.
 
@@ -250,6 +248,8 @@
 **Scope résolu CP-C-3** : E1 (6h) + E7 (6h) + E9 (6h) = **18h** de scope éliminé. **Scope actionnable post-CP-C-3 : 396.75 - 18 = 378.75 h**.
 
 **Scope résolu CP-C-4** : E5 (8h) + E8 (4h) + E14 (0h) = **12h** éliminés. **+2h** émergent UI-C4-email (P2). **Scope actionnable post-CP-C-4 : 378.75 - 12 + 2 = 368.75 h**.
+
+**Scope résolu CP-C-5** : E15 (30h) = **30h** éliminé (scope réel ~18h grâce aux helpers existants). **+2h** émergent UI-C5-badge-etab (P2). **Scope actionnable post-CP-C-5 : 368.75 - 30 + 2 = 340.75 h**. **Sub-PR C 100% complète**.
 
 **Scope total OUVERTS + EN COURS** (hors RÉSOLUS, hors DIFFÉRÉS) :
 - P0 OUVERTS (27 tickets, dont H1/H3 scope=0 dédupliqués) : 121.5 + L1=3 + L2=1 + L3=6 = **131.5 h**
