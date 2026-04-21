@@ -121,6 +121,47 @@ Deno.serve(async (req) => {
               })
               .eq("mission_id", missionId);
 
+            // BUG-BOUCLE-PAIEMENT Fix A — créer un paiements_soignant pour rendre
+            // la mission comptabilisée comme "payée" côté fn_obligations_financieres.
+            // Avant ce fix, le webhook ne touchait pas paiements_soignant, or la RPC
+            // filtre les missions à payer via NOT EXISTS paiements_soignant → boucle.
+            // Idempotent : on check d'abord si un paiement pour ce transfer existe déjà.
+            const nowIso = new Date().toISOString();
+            const { data: existingPayment } = await supabaseAdmin
+              .from("paiements_soignant")
+              .select("id")
+              .eq("stripe_transfer_id", transfer.id)
+              .maybeSingle();
+
+            if (!existingPayment) {
+              const { data: missionRow } = await supabaseAdmin
+                .from("missions")
+                .select("etablissement_id")
+                .eq("id", missionId)
+                .single();
+
+              const { error: paiementInsertErr } = await supabaseAdmin
+                .from("paiements_soignant")
+                .insert({
+                  mission_id: missionId,
+                  soignant_id: soignantId,
+                  etablissement_id: missionRow?.etablissement_id,
+                  montant_net: soignantCents / 100,
+                  methode: "NOTE_HONORAIRES",
+                  reference_virement: `STRIPE-${transfer.id}`,
+                  date_paiement: nowIso.split("T")[0],
+                  statut: "CONFIRME",
+                  confirme_par_etablissement: true,
+                  confirme_par_etablissement_le: nowIso,
+                  confirme_par_soignant: true,
+                  confirme_par_soignant_le: nowIso,
+                  stripe_transfer_id: transfer.id,
+                });
+              if (paiementInsertErr) {
+                console.error("paiements_soignant insert failed:", paiementInsertErr);
+              }
+            }
+
             // Mark mission: soignant paid via Connect + commission included in same payment
             await supabaseAdmin
               .from("missions")
