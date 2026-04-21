@@ -12,7 +12,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { useNotification } from '@/contexts/NotificationContext';
-import { extraireMessageErreur, extraireErreurEdgeFn } from '@/lib/erreurs';
+import { extraireMessageErreur } from '@/lib/erreurs';
+import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -219,50 +220,44 @@ export default function ObligationsFinancieres() {
 
   const payerStripeConnect = async (missionId: string) => {
     setConnectPayingId(missionId);
+    const loadingToastId = toast.loading('Préparation du paiement…');
     try {
-      // Force header Authorization explicite (fix 401 "header manquant" sur invoke)
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) {
-        toast.error('Session expirée, veuillez vous reconnecter');
+        toast.error('Session expirée, veuillez vous reconnecter', { id: loadingToastId });
         return;
       }
-      const { data: result, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
-        body: { mission_id: missionId },
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
 
-      // FIX 2 — si la fn retourne 4xx/5xx, supabase-js met `error` et `result=null`.
-      // Le JSON body se trouve dans error.context. On parse pour récupérer le code métier.
-      const payload = await extraireErreurEdgeFn(result, error);
-      const code = payload?.error as string | undefined;
-      const message = payload?.message as string | undefined;
+      // FIX 3 Option B — génération facture honoraires à la volée si absente.
+      const { result, error, code, message, factureGenereeAuto } =
+        await payerMissionStripeConnectAvecGenerationAuto(missionId, accessToken, (msg) => toast.loading(msg, { id: loadingToastId }));
 
-      if (code === 'FACTURE_NON_GENEREE') {
-        toast.error(message || "Facture honoraires non générée. Cliquez sur 'Générer facture' avant de payer.", { duration: 8000 });
-        return;
-      }
       if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
-        toast.error(message || "Les missions salariées doivent être payées par virement SEPA (bulletin de paie).", { duration: 8000 });
+        toast.error(message || "Les missions salariées doivent être payées par virement SEPA (bulletin de paie).", { id: loadingToastId, duration: 8000 });
         return;
       }
 
       if (result?.already_paid) {
-        toast.info(result.message || 'Ce paiement a déjà été effectué');
+        toast.info(result.message || 'Ce paiement a déjà été effectué', { id: loadingToastId });
         if (typeof charger === 'function') charger();
         return;
       }
 
       if (error || code) {
-        toast.error(message || code || error?.message || 'Erreur lors du paiement');
+        toast.error(message || code || error?.message || 'Erreur lors du paiement', { id: loadingToastId });
         return;
       }
 
+      toast.dismiss(loadingToastId);
+      if (factureGenereeAuto) {
+        toast.success('Facture honoraires générée automatiquement');
+      }
       if (result?.url) { window.location.href = result.url; return; }
       if (result?.client_secret) { setConnectClientSecret(result.client_secret); return; }
       toast.error('Aucune URL de paiement reçue');
     } catch (e: any) {
-      toast.error(extraireMessageErreur(e));
+      toast.error(extraireMessageErreur(e), { id: loadingToastId });
     } finally {
       setConnectPayingId(null);
     }
