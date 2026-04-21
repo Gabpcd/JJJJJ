@@ -55,6 +55,8 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
   const cotisationsEstimees = superBrut * 0.22;
   const netSalarie = m.net_a_payer ?? m.net_estime ?? (superBrut * 0.78);
   const commissionTtc = m.montant_commission_ttc || 0;
+  const commissionHt = m.montant_commission_ht || 0;
+  const tauxCommission = Number(m.taux_commission_fige ?? m.taux_commission ?? 15);
 
   // Placeholder : type_contrat non encore figé
   if (!typeContrat) {
@@ -168,11 +170,17 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
           {isEtabOrAdmin && commissionTtc > 0 && (
             <div className="border-t border-border pt-3">
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm">Commission Jolene (facturée séparément)</span>
-                <span className="font-medium text-foreground">{fmt(commissionTtc)}</span>
+                <span className="text-sm font-semibold text-foreground">Commission Jolene</span>
+                <span className="font-semibold text-foreground">{fmt(commissionTtc)} TTC</span>
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">
-                Payée EN PLUS par l'établissement. Ne diminue jamais le brut du soignant.
+                {fmt(commissionHt)} HT + TVA 20 %
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                <span className="font-medium">Calcul : </span>{tauxCommission}% × {fmt(totalBrut)} honoraires bruts (selon contrat Jolene)
+              </p>
+              <p className="text-[11px] text-primary mt-2">
+                ℹ️ Facturée séparément à l'établissement, sur facture Jolene distincte — à ne pas ajouter au virement honoraires soignant.
               </p>
             </div>
           )}
@@ -308,11 +316,17 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
         {isEtabOrAdmin && commissionTtc > 0 && (
           <div className="border-t border-border pt-3 mt-3">
             <div className="flex justify-between items-center">
-              <span className="text-muted-foreground text-sm">Commission Jolene (facturée séparément)</span>
-              <span className="font-medium text-foreground">{fmt(commissionTtc)}</span>
+              <span className="text-sm font-semibold text-foreground">Commission Jolene</span>
+              <span className="font-semibold text-foreground">{fmt(commissionTtc)} TTC</span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
-              Payée EN PLUS par l'établissement. Facture commission Jolene distincte du virement au soignant.
+              {fmt(commissionHt)} HT + TVA 20 %
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              <span className="font-medium">Calcul : </span>{tauxCommission}% × {fmt(superBrut)} brut total (base + IFM + ICP)
+            </p>
+            <p className="text-[11px] text-primary mt-2">
+              ℹ️ Facturée séparément à l'établissement, sur facture Jolene distincte — ne réduit pas la rémunération du soignant.
             </p>
           </div>
         )}
