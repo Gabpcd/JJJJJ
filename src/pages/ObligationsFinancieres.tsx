@@ -348,7 +348,16 @@ export default function ObligationsFinancieres() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {missionsNonPayees.map((m: any) => (
+                {missionsNonPayees.map((m: any) => {
+                  const typeContratMission = m.type_contrat_applique as 'SALARIE' | 'LIBERAL' | null | undefined;
+                  const isSalarie = typeContratMission === 'SALARIE';
+                  const isLiberal = typeContratMission === 'LIBERAL';
+                  const modePaiementLabel = isSalarie
+                    ? 'Bulletin de paie (virement SEPA)'
+                    : isLiberal
+                    ? (m.mode_paiement_soignant === 'STRIPE_CONNECT' ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
+                    : null;
+                  return (
                   <div key={m.mission_id} className="p-4 rounded-lg border space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
@@ -372,6 +381,19 @@ export default function ObligationsFinancieres() {
                         <p className="text-xs text-muted-foreground">
                           {m.debut_le && new Date(m.debut_le).toLocaleDateString('fr-FR')} → {m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}
                         </p>
+                        {typeContratMission && (
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <Badge className={isSalarie
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}
+                            >
+                              Contrat {isSalarie ? 'salarié (CDDU)' : 'libéral'}
+                            </Badge>
+                            {modePaiementLabel && (
+                              <span className="text-xs text-muted-foreground">→ {modePaiementLabel}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="text-right shrink-0">
                         <p className="font-bold">{fmt(m.net_a_payer)}</p>
@@ -403,7 +425,8 @@ export default function ObligationsFinancieres() {
                       </Button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           </FadeInView>
