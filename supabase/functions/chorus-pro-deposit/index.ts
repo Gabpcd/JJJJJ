@@ -10,9 +10,12 @@
  * 3. GET /cpro/factures/v1/consulter/flux/{id} → suivi de statut
  *
  * Env vars requises :
- * - CHORUS_PRO_CLIENT_ID     : client_id PISTE (obtenu sur developer.aife.economie.gouv.fr)
- * - CHORUS_PRO_CLIENT_SECRET : client_secret PISTE
- * - CHORUS_PRO_SANDBOX       : "true" pour le bac à sable, "false" ou absent pour la prod
+ * - PISTE_CLIENT_ID     : client_id PISTE (obtenu sur developer.aife.economie.gouv.fr)
+ * - PISTE_CLIENT_SECRET : client_secret PISTE
+ * - PISTE_ENV           : "sandbox" (défaut) ou "prod"
+ * - CHORUS_TECH_USER_LOGIN / CHORUS_TECH_USER_PASSWORD : compte technique Chorus Pro (header cpro-account)
+ *
+ * Fallback legacy : CHORUS_PRO_CLIENT_ID / CHORUS_PRO_CLIENT_SECRET / CHORUS_PRO_SANDBOX supportés pour compat.
  *
  * Si les credentials sont absents → mode simulation (SIM-*), identique à l'ancien comportement.
  */
@@ -59,18 +62,40 @@ const PISTE_URLS = {
 };
 
 function getPisteConfig() {
-  const clientId = Deno.env.get('CHORUS_PRO_CLIENT_ID');
-  const clientSecret = Deno.env.get('CHORUS_PRO_CLIENT_SECRET');
-  const isSandbox = (Deno.env.get('CHORUS_PRO_SANDBOX') ?? 'true') === 'true';
+  // Naming harmonisé PISTE_* (préféré), fallback CHORUS_PRO_* pour compat legacy
+  const clientId = Deno.env.get('PISTE_CLIENT_ID') ?? Deno.env.get('CHORUS_PRO_CLIENT_ID');
+  const clientSecret = Deno.env.get('PISTE_CLIENT_SECRET') ?? Deno.env.get('CHORUS_PRO_CLIENT_SECRET');
+  const env = Deno.env.get('PISTE_ENV');
+  // PISTE_ENV='sandbox' => sandbox. Fallback CHORUS_PRO_SANDBOX legacy.
+  const isSandbox = env
+    ? env === 'sandbox'
+    : (Deno.env.get('CHORUS_PRO_SANDBOX') ?? 'true') === 'true';
+  const techLogin = Deno.env.get('CHORUS_TECH_USER_LOGIN');
+  const techPassword = Deno.env.get('CHORUS_TECH_USER_PASSWORD');
 
   if (!clientId || !clientSecret) return null;
 
   return {
     clientId,
     clientSecret,
+    techLogin,
+    techPassword,
     urls: isSandbox ? PISTE_URLS.sandbox : PISTE_URLS.prod,
     isSandbox,
   };
+}
+
+/** Headers d'appel API Chorus Pro (Bearer OAuth + cpro-account si tech user configuré) */
+function buildChorusHeaders(config: NonNullable<ReturnType<typeof getPisteConfig>>, token: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  if (config.techLogin && config.techPassword) {
+    headers['cpro-account'] = btoa(`${config.techLogin}:${config.techPassword}`);
+  }
+  return headers;
 }
 
 /** OAuth2 client_credentials → access_token */
@@ -160,11 +185,7 @@ async function deposerFlux(
 
   const res = await fetch(`${config.urls.api}/soumettre/facture`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
+    headers: buildChorusHeaders(config, token),
     body: JSON.stringify(payload),
   });
 
@@ -198,11 +219,7 @@ async function consulterStatut(
 ) {
   const res = await fetch(`${config.urls.api}/consulter/facture`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
+    headers: buildChorusHeaders(config, token),
     body: JSON.stringify({
       idUtilisateurCourant: 0,
       identifiantFactureCPP: Number(identifiantFactureCPP),
@@ -319,7 +336,7 @@ Deno.serve(async (req) => {
         return jsonResponse(req, {
           success: true,
           simulation: true,
-          message: 'Mode simulation : facture marquée comme déposée. Configurez CHORUS_PRO_CLIENT_ID et CHORUS_PRO_CLIENT_SECRET pour le mode réel (API PISTE).',
+          message: 'Mode simulation : facture marquée comme déposée. Configurez PISTE_CLIENT_ID et PISTE_CLIENT_SECRET pour le mode réel (API PISTE).',
           statut: 'DEPOSEE',
           numero_flux: fluxId,
         });
