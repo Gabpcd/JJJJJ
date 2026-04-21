@@ -218,8 +218,16 @@ export default function ObligationsFinancieres() {
   const payerStripeConnect = async (missionId: string) => {
     setConnectPayingId(missionId);
     try {
+      // Force header Authorization explicite (fix 401 "header manquant" sur invoke)
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        toast.error('Session expirée, veuillez vous reconnecter');
+        return;
+      }
       const { data: result, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
         body: { mission_id: missionId },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (result?.already_paid) {
         toast.info(result.message || 'Ce paiement a déjà été effectué');
@@ -403,9 +411,21 @@ export default function ObligationsFinancieres() {
                         )}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-bold">{fmt(m.net_a_payer)}</p>
-                        {m.montant_commission_ttc > 0 && (
-                          <p className="text-[10px] text-muted-foreground">+ {fmt(m.montant_commission_ttc)} com.</p>
+                        {peutPayerStripe ? (
+                          <>
+                            {/* LIBERAL+Stripe Connect : Stripe capture commission à la source, afficher montant total */}
+                            <p className="font-bold">{fmt((m.net_a_payer || 0) + (m.montant_commission_ttc || 0))}</p>
+                            {m.montant_commission_ttc > 0 && (
+                              <p className="text-[10px] text-muted-foreground">
+                                dont {fmt(m.montant_commission_ttc)} commission Jolene
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {/* SALARIE ou LIBERAL sans Stripe : commission facturée séparément — masquer pour éviter double-comptage */}
+                            <p className="font-bold">{fmt(m.net_a_payer)}</p>
+                          </>
                         )}
                       </div>
                     </div>
