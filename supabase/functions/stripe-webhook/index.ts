@@ -85,10 +85,64 @@ Deno.serve(async (req) => {
           });
         }
 
-        const missionId = session.metadata?.mission_id;
-        const soignantId = session.metadata?.soignant_id;
-        const connectedAccountId = session.metadata?.connected_account_id;
-        const soignantCents = parseInt(session.metadata?.soignant_cents || "0", 10);
+        let missionId = session.metadata?.mission_id;
+        let soignantId = session.metadata?.soignant_id;
+        let connectedAccountId = session.metadata?.connected_account_id;
+        let soignantCents = parseInt(session.metadata?.soignant_cents || "0", 10);
+
+        // BUG-BOUCLE-PAIEMENT Fix D.2 — fallback defensive sur payment_intent.metadata.
+        // Les sessions Checkout legacy (avant Fix D.1) ont les metadata critiques
+        // uniquement sur payment_intent_data.metadata, pas sur session.metadata.
+        // Si un champ critique manque, retrieve le payment_intent pour récupérer.
+        if (!missionId || !connectedAccountId || !soignantCents) {
+          const paymentIntentIdForLookup = typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : session.payment_intent?.id;
+          if (paymentIntentIdForLookup) {
+            try {
+              const pi = await stripe.paymentIntents.retrieve(paymentIntentIdForLookup);
+              missionId = missionId ?? pi.metadata?.mission_id;
+              soignantId = soignantId ?? pi.metadata?.soignant_id;
+              connectedAccountId = connectedAccountId ?? pi.metadata?.connected_account_id;
+              if (!soignantCents) {
+                soignantCents = parseInt(pi.metadata?.soignant_cents || "0", 10);
+              }
+              console.log(`CONNECT_MISSION_PAYMENT metadata fallback depuis payment_intent ${paymentIntentIdForLookup}`);
+            } catch (piErr) {
+              console.error("payment_intent.retrieve fallback failed:", piErr);
+            }
+          }
+        }
+
+        // BUG-BOUCLE-PAIEMENT Fix D.3 — logging + audit anomalie si metadata toujours incomplet après fallback.
+        // Avant ce fix, la branche était skippée silencieusement (return 200 sans UPDATE DB ni log).
+        // Maintenant, on trace explicitement pour que l'admin puisse investiguer.
+        if (!missionId || !connectedAccountId || !soignantCents) {
+          const champsManquants: string[] = [];
+          if (!missionId) champsManquants.push("mission_id");
+          if (!connectedAccountId) champsManquants.push("connected_account_id");
+          if (!soignantCents) champsManquants.push("soignant_cents");
+
+          console.error(
+            `CONNECT_METADATA_MANQUANTE session ${session.id}: champs manquants=${champsManquants.join(",")}, session.metadata=${JSON.stringify(session.metadata)}`
+          );
+          await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+            p_acteur_id: "00000000-0000-0000-0000-000000000000",
+            p_type_acteur: "SYSTEME",
+            p_action: "CONNECT_METADATA_MANQUANTE",
+            p_type_ressource: "checkout_session",
+            p_id_ressource: missionId ?? null,
+            p_cle_s3: null,
+            p_details: {
+              stripe_session_id: session.id,
+              stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
+              champs_manquants: champsManquants,
+              session_metadata: session.metadata,
+            },
+            p_ip: null,
+            p_navigateur: "stripe-webhook",
+          });
+        }
 
         if (missionId && connectedAccountId && soignantCents > 0) {
           try {
