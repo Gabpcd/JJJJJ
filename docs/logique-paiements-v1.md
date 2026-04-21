@@ -142,15 +142,32 @@ Sur la **fiche mission détaillée** (`DetailMission`) :
 
 ## 4. Commission Jolene (unifiée)
 
-### 4.1. Calcul
+### 4.1. Calcul — définition EXACTE du brut
 
 ```
-Commission = % × Brut
+Commission = taux × Brut
 ```
 
-Où `%` est `mission.taux_commission_fige` (figé à l'assignation) et `Brut` est :
-- Brut honoraires si LIBERAL
-- Brut salarial (hors IFM/ICP/cotisations) si SALARIE — **à confirmer/documenter précisément selon version actuelle, historiquement le taux a pu s'appliquer sur net_a_payer**
+Où `taux` est `mission.taux_commission_fige` (figé à l'assignation), **identique pour LIBERAL et SALARIE**.
+
+**Définition EXACTE du `Brut` utilisé pour calculer la commission** :
+
+| Type contrat | Brut = | Remarque |
+|--------------|--------|----------|
+| **LIBERAL** | `taux_horaire × heures + majorations` (= brut honoraires = ce que touche le soignant) | Pas de IFM/ICP en libéral |
+| **SALARIE** | `(base + majorations) + IFM (10%) + ICP (10%)` = **brut salarial TOTAL** (AVANT déduction cotisations salariales) | Le brut de référence pour la commission inclut IFM + ICP |
+
+**Exemple LIBERAL** :
+- Honoraires : 250 €
+- Commission 15 % × 250 € = **37,50 €** (facturée à l'étab EN PLUS des 250 € versés au soignant)
+- Total étab : 250 + 37,50 = 287,50 €
+
+**Exemple SALARIE** :
+- Base : 360 € + IFM 36 € + ICP 39,60 € = **Brut 435,60 €**
+- Commission 15 % × 435,60 € = **65,34 €** (facturée à l'étab EN PLUS du NET versé au soignant)
+- Total étab : NET versé au soignant + cotisations patronales URSSAF + 65,34 € commission
+
+> ⚠️ **Cette définition est IMMUABLE**. Toute modification future (taux différenciés LIBERAL/SALARIE, application sur base hors IFM/ICP, etc.) nécessite une **v2** du document et une migration de `mission.taux_commission_fige` existant.
 
 ### 4.2. Facturation
 
@@ -181,6 +198,36 @@ Documentées et déployées via **E16** (CP-C-1.5) :
 ### 5.2. Invariant post-figement
 
 Une fois `type_contrat_applique` figé, il **ne change plus** pour la durée de la mission. Toute incohérence ultérieure (paiement NOTE_HONORAIRES sur mission SALARIE par exemple) est un bug côté code à corriger, jamais côté data.
+
+### 5.5. Affichage commission côté soignant — Option A validée
+
+Le soignant **ne voit JAMAIS rien** sur la commission Jolene, **nulle part** :
+
+- ❌ Pas dans la fiche mission (`DetailMission` rôle SOIGNANT)
+- ❌ Pas dans les emails reçus par le soignant (PAIEMENT_RAPIDE_RECU, MISSION_CONFIRMEE, etc.)
+- ❌ Pas dans les notifications in-app soignant
+- ❌ Pas dans le dashboard "Mes revenus" soignant
+- ❌ Pas dans les exports PDF/CSV soignant (récap activité, attestations URSSAF)
+
+**Raison** : la commission ne concerne pas comptablement le soignant (elle est payée **EN PLUS** par l'étab, **jamais déduite** de sa rémunération). La mentionner créerait de la confusion potentielle et pourrait faire croire à tort au soignant qu'il paye la commission.
+
+**Le soignant voit uniquement** :
+- **SALARIE** : brut (avec détail IFM + ICP), cotisations salariales, NET, statut paiement, bulletin de paie téléchargeable
+- **LIBERAL** : honoraires (brut = net), statut paiement, facture honoraires PDF + XML Factur-X téléchargeables
+
+**Côté ÉTAB par contre**, la commission est **TRÈS VISIBLE** :
+- Section dédiée "Commissions Jolene" sur `/etablissement/obligations`
+- Carte mission LIBERAL+Stripe : affichage "dont X € commission Jolene" (mode Cas A explicite)
+- Factures commission séparées téléchargeables avec détail ligne par ligne
+- Dashboard `/etablissement/facturation` avec historique + filtrage par statut
+- Audit trail des paiements commission (transfert / virement SEPA / carte Stripe)
+
+**Cette asymétrie est VOULUE** et cohérente avec le modèle économique : l'étab est le **payeur** de la commission, le soignant n'est **pas concerné** comptablement. Afficher la commission côté soignant ouvrirait la porte à :
+- Confusion sur le montant réel à percevoir
+- Présomption de marchandage (soignant pensant qu'il "paye" la commission)
+- Risque URSSAF / requalification en portage
+
+> **Règle invariant** : en cas de doute lors d'une PR, si un composant ou email côté soignant mentionne `montant_commission_*`, c'est un bug. Lecture seule de ce champ autorisée uniquement côté étab / admin plateforme.
 
 ---
 
