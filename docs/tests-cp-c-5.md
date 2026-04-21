@@ -155,6 +155,89 @@ curl -X POST "https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/submit-to-ch
 - [ ] `factures.chorus_pro_statut='DEPOSEE'`, `chorus_pro_date_depot`, `chorus_pro_numero_flux`
 - [ ] XML généré à la volée **ne contient PAS** `IncludedNote AAB` (factures commission propres Jolene, pas de subrogation)
 
+## Tests sync-chorus-status (C5-C)
+
+### M8 — Simulation sans credentials PISTE
+
+**Étapes** :
+1. Retirer temporairement `PISTE_CLIENT_ID` du Dashboard Secrets
+2. Invoquer :
+   ```bash
+   curl -X POST "https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/sync-chorus-status" \
+     -H "Authorization: Bearer $SRK"
+   ```
+
+**Vérifications** :
+- [ ] Retour 200 `{ success: true, mode: 'simulation', synced: 0 }`
+- [ ] Aucun UPDATE sur chorus_submissions
+- [ ] Aucune notification créée
+
+### M9 — Sync live post-déblocage PISTE
+
+**Pré-requis** : au moins 1 submission `status IN ('pending','submitted')` avec `piste_request_id` renseigné, `last_checked_at` > 1h ou NULL.
+
+**Étapes** : invocation manuelle identique M8.
+
+**Vérifications** :
+- [ ] Retour 200 `{ success: true, sandbox: true, synced: N, updates: M, errors: X, notifs_emitted: Y }`
+- [ ] `chorus_submissions.last_checked_at` mis à jour (= NOW()) pour les submissions traitées
+- [ ] `response_raw` contient le JSON PISTE brut
+- [ ] Si statut changé : `chorus_submissions.status` mis à jour + `factures_honoraires.chorus_submission_status` + `chorus_last_sync_at`
+- [ ] Notifications créées selon nouveau statut (voir mapping ci-dessous)
+
+Mapping statuts Chorus Pro → notifications émises :
+| Chorus Pro | Notification émise | Destinataire |
+|---|---|---|
+| DEPOSEE | CHORUS_DEPOSEE | soignant |
+| MISE_A_DISPOSITION / PRISE_EN_COMPTE | CHORUS_MISE_A_DISPOSITION | étab |
+| MANDATEE / MISE_EN_PAIEMENT | CHORUS_PAIEMENT_EN_COURS | soignant |
+| COMPTABILISEE | CHORUS_PAIEMENT_COMPTABILISE | soignant + étab |
+| REJETEE / A_RECYCLER / REFUSEE | CHORUS_REJETEE | soignant + tous ADMIN_SAAS |
+
+### M10 — Anti-spam notifications
+
+**Étapes** :
+1. Provoquer 2 runs consécutifs sync-chorus-status sur une submission dont le statut ne change pas
+2. Vérifier la table notifications
+
+**Vérifications** :
+- [ ] Pas de doublon notification même `type` + `id_ressource` dans les 24h
+- [ ] Fenêtre 24h glissante : après 24h, nouvelle notif possible si statut persistant
+
+### M11 — Cron auto-run
+
+**Vérification horaire** :
+```sql
+-- Dernières exécutions cron
+SELECT jobid, runid, start_time, end_time, status, return_message
+FROM cron.job_run_details
+WHERE jobid = (SELECT jobid FROM cron.job WHERE jobname='sync-chorus-status-hourly')
+ORDER BY start_time DESC LIMIT 10;
+```
+
+**Vérifications** :
+- [ ] Schedule correct : `0 7-22/2 * * *` (toutes les 2h entre 7h et 22h UTC)
+- [ ] Runs réguliers toutes les 2h pendant plage horaire
+- [ ] `status='succeeded'`
+- [ ] Logs edge function sync-chorus-status (Dashboard) contiennent `[sync-chorus-status] done: synced=X, ...`
+
+## Tests SQL C5-C automatisables
+
+```bash
+psql "$DB_URL" -f tests/chorus/cp-c-5-c.test.sql
+```
+
+Couvre 5 scénarios :
+- [1.1] 5 types CHORUS_* acceptés par notifications_type_check
+- [1.2] Type inventé (ex. CHORUS_INVENTE) → CHECK violation (preuve filtrage)
+- [2.1] Anti-spam 24h : détecte notif récente (1h)
+- [2.2] Anti-spam 24h : ignore notif ancienne (25h, hors fenêtre)
+- [3.1] Query éligibilité sync : filtre correctement (A+D retournés, B+C exclus)
+- [5.1] Cron `sync-chorus-status-hourly` actif
+- [5.2] Schedule `0 7-22/2 * * *` correct
+
+Résultats exécution MCP (session) : **7/7 OK**.
+
 ## Vérifications post-prod
 
 ```sql
