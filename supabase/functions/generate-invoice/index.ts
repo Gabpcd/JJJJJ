@@ -67,6 +67,18 @@ function json(req: Request, body: unknown, status = 200) {
 }
 
 /* ── XML CII Generator (EN16931 BASIC WL) ── */
+
+/**
+ * Construire la mention légale de subrogation (art. 289 I-2 CGI + 242 nonies A).
+ * Jolene émet la facture au nom et pour le compte du soignant mandataire.
+ */
+function buildSubrogationMention(soignant: { prenom: string; nom: string; siret_liberal?: string | null }): string {
+  const joleneSiret = Deno.env.get('JOLENE_SIRET') || '';
+  const soignantFullName = `${soignant.prenom} ${soignant.nom}`.trim();
+  const soignantSiret = soignant.siret_liberal || '(SIRET non renseigne)';
+  return `Facture emise par JOLENE SAS (SIRET ${joleneSiret}) en qualite de mandataire de facturation au nom et pour le compte de ${soignantFullName} (SIRET ${soignantSiret}), conformement a l'article 289 I-2 du CGI et a l'article 242 nonies A du CGI.`;
+}
+
 function generateCiiXml(inv: {
   invoiceNumber: string;
   issueDate: string;
@@ -567,6 +579,8 @@ Deno.serve(async (req) => {
         ? `Avoir sur facture ${precedingNumero ?? ''}${motifAvoir ? ' — ' + motifAvoir.substring(0, 100) : ''}`
         : `Honoraires — ${ms?.intitule || 'Mission'} (${ms?.service || ''}) du ${ms?.debut_le || ''} au ${ms?.fin_le || ''} — ${ms?.duree_heures || 0}h`;
 
+      const subrogationMention = buildSubrogationMention(sg);
+
       const xmlCii = generateCiiXml({
         invoiceNumber: facture.numero_facture,
         issueDate: facture.date_emission,
@@ -593,6 +607,7 @@ Deno.serve(async (req) => {
         vatExempt: !!facture.exoneration_tva,
         vatExemptionReason: facture.exoneration_tva ? 'TVA non applicable — art. 261, 4-1° du CGI (actes médicaux et paramédicaux)' : '',
         currencyCode: 'EUR',
+        subrogationMention,
         isAvoir,
         precedingInvoiceNumber: precedingNumero ?? undefined,
         precedingInvoiceIssueDate: precedingDate ?? undefined,
@@ -618,6 +633,7 @@ Deno.serve(async (req) => {
         vatExempt: !!facture.exoneration_tva,
         vatExemptionReason: facture.exoneration_tva ? 'TVA non applicable - art. 261, 4-1 du CGI (actes medicaux et paramedicaux)' : '',
         mandatVersion: facture.mandat_version || '1.1',
+        subrogationMention,
         isAvoir,
         precedingInvoiceNumber: precedingNumero ?? undefined,
         precedingInvoiceIssueDate: precedingDate ?? undefined,
@@ -758,6 +774,8 @@ Deno.serve(async (req) => {
     const buyerAddress = [etab.adresse_rue, etab.adresse_code_postal, etab.adresse_ville].filter(Boolean).join(', ');
     const description = `Honoraires — ${mission.intitule || 'Mission'} (${mission.service || ''}) du ${mission.debut_le || ''} au ${mission.fin_le || ''} — ${mission.duree_heures || 0}h`;
 
+    subrogationMention = buildSubrogationMention(soignant);
+
     const xmlCii = generateCiiXml({
       invoiceNumber: invoiceNumber as string,
       issueDate,
@@ -784,6 +802,7 @@ Deno.serve(async (req) => {
       vatExempt,
       vatExemptionReason: vatExempt ? 'TVA non applicable — art. 261, 4-1° du CGI (actes médicaux et paramédicaux)' : '',
       currencyCode: 'EUR',
+      subrogationMention,
     });
 
     // 10. Generate real PDF binary via pdf-lib
@@ -807,6 +826,7 @@ Deno.serve(async (req) => {
       vatExempt,
       vatExemptionReason: vatExempt ? 'TVA non applicable - art. 261, 4-1 du CGI (actes medicaux et paramedicaux)' : '',
       mandatVersion: soignant.mandat_facturation_version || '1.1',
+      subrogationMention,
     });
 
     // 11. Upload to Supabase Storage
