@@ -224,25 +224,68 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check idempotency
+    // BUG-UI-OBLIG-1 Fix#2 — idempotence avec fenêtre de 15 min pour
+    // éviter qu'un transfer `EN_ATTENTE` orphelin (Checkout abandonné, session
+    // expirée, erreur Stripe non propagée) bloque indéfiniment la re-tentative.
+    //   - TRANSFERE / CHARGE_REUSSI / PAYE  : paiement réellement abouti → bloquer.
+    //   - EN_ATTENTE < 15 min               : paiement Stripe possiblement en vol → bloquer, message timing.
+    //   - EN_ATTENTE >= 15 min              : orphelin → marquer ECHOUE puis laisser repartir une nouvelle session.
     const { data: existingTransfer } = await supabaseAdmin
       .from("stripe_transfers")
-      .select("id, statut")
+      .select("id, statut, cree_le")
       .eq("mission_id", mission_id)
+      .order("cree_le", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (existingTransfer?.statut === "TRANSFERE" || existingTransfer?.statut === "EN_ATTENTE") {
+    const FENETRE_ORPHELIN_MINUTES = 15;
+    const statutBloquantDefinitif = ["TRANSFERE", "CHARGE_REUSSI", "PAYE"];
+
+    if (existingTransfer && statutBloquantDefinitif.includes(existingTransfer.statut)) {
       return new Response(
         JSON.stringify({
           already_paid: true,
           statut: existingTransfer.statut,
-          message: existingTransfer.statut === "TRANSFERE" ? "Ce paiement a déjà été effectué" : "Un paiement est déjà en cours pour cette mission",
+          message: "Ce paiement a déjà été effectué",
         }),
         {
           status: 200,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         }
       );
+    }
+
+    let transferAReutiliserId: string | null = existingTransfer?.id ?? null;
+
+    if (existingTransfer?.statut === "EN_ATTENTE") {
+      const ageMs = Date.now() - new Date(existingTransfer.cree_le).getTime();
+      const ageMinutes = Math.floor(ageMs / 60000);
+
+      if (ageMinutes < FENETRE_ORPHELIN_MINUTES) {
+        const minutesRestantes = FENETRE_ORPHELIN_MINUTES - ageMinutes;
+        return new Response(
+          JSON.stringify({
+            already_paid: true,
+            statut: "EN_ATTENTE",
+            message: `Paiement en cours de traitement Stripe, réessayez dans ${minutesRestantes} minute${minutesRestantes > 1 ? "s" : ""}.`,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Orphelin > 15 min : marquer ECHOUE et autoriser une nouvelle session.
+      await supabaseAdmin
+        .from("stripe_transfers")
+        .update({
+          statut: "ECHOUE",
+          erreur: `Orphelin auto-cleanup (>${FENETRE_ORPHELIN_MINUTES} min sans webhook) — BUG-UI-OBLIG-1`,
+        })
+        .eq("id", existingTransfer.id);
+
+      transferAReutiliserId = null;
     }
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
@@ -339,7 +382,7 @@ Deno.serve(async (req) => {
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || null;
 
     try {
-      if (existingTransfer) {
+      if (transferAReutiliserId) {
         const { error: updErr } = await supabaseAdmin
           .from("stripe_transfers")
           .update({
@@ -349,7 +392,7 @@ Deno.serve(async (req) => {
             montant_total: totalCents / 100,
             statut: "EN_ATTENTE",
           })
-          .eq("id", existingTransfer.id);
+          .eq("id", transferAReutiliserId);
         if (updErr) throw updErr;
       } else {
         const { error: insErr } = await supabaseAdmin.from("stripe_transfers").insert({
