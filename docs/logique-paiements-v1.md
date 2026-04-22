@@ -254,7 +254,42 @@ Issus du diagnostic des sessions 21-22/04/2026 :
 
 ---
 
-## 7. Glossaire rapide
+## 7. Statuts mission et rémunération
+
+Enum `statut_mission` (valeurs au 22/04/2026) :
+`OUVERTE, ASSIGNEE, EN_COURS, TERMINEE, ANNULEE_PAR_ETABLISSEMENT, ANNULEE_PAR_SOIGNANT, ABSENCE, LITIGE, EXPIREE`.
+
+Comportement attendu par statut :
+
+| Statut | Mission effectuée ? | Rémunération due ? | Facture honoraires | Commission Jolene | Affichage UI |
+|--------|---------------------|--------------------|--------------------|--------------------|-------------|
+| `OUVERTE` | Non (pas encore assignée) | — | — | — | Fiche mission + carte "à attribuer" |
+| `ASSIGNEE` | Pas encore | En attente | — | — | Décomposition prévisionnelle + bouton démarrer |
+| `EN_COURS` | En cours | En attente | — | — | Décomposition prévisionnelle |
+| `TERMINEE` | **Oui** | **Oui** | Générée | Facturée | Décomposition complète + workflow paiement |
+| `ANNULEE_PAR_ETABLISSEMENT` | Non | **Non** | **Aucune** | **Aucune** | Bloc "Mission annulée — aucune rémunération" |
+| `ANNULEE_PAR_SOIGNANT` | Non | **Non** | **Aucune** | **Aucune** | Bloc "Mission annulée — aucune rémunération" |
+| `ABSENCE` | Non (no-show soignant) | **Non** | **Aucune** | **Aucune** | Bloc "Mission non honorée — absence" + recherche remplaçant |
+| `LITIGE` | Oui (mais contestée) | En instance | Générée (éventuellement annulée/remplacée) | En instance | Décomposition + bandeau ⚖️ Litige |
+| `EXPIREE` | Non (aucun soignant trouvé) | **Non** | **Aucune** | **Aucune** | Bloc "Mission expirée" |
+
+**Règle d'or** : si la mission n'est pas `TERMINEE` ou `LITIGE`, **aucun flux financier** ne doit être déclenché. Les statuts `ABSENCE`/`ANNULEE_PAR_*`/`EXPIREE` sont strictement *non-rémunérés*.
+
+### Gardes backend en place (défense en profondeur)
+
+- **`supabase/functions/generate-invoice/index.ts`** (L695) : rejette si `mission.statut !== 'TERMINEE'`
+- **`fn_declarer_paiement_soignant`** (2 overloads) : `IF v_mission.statut != 'TERMINEE' THEN error`
+- **`supabase/functions/stripe-connect-pay-mission/index.ts`** (L97) : rejette si `mission.statut !== 'TERMINEE'`
+- **`fn_auto_facturation_mensuelle`** (cron commission) : filtre `WHERE statut = 'TERMINEE'`
+- **`fn_obligations_financieres`** : filtre `AND m.statut = 'TERMINEE'` sur toutes les sous-requêtes missions à payer
+
+### Garde frontend (22/04/2026 — Bug 6)
+
+- **`src/components/DecompositionFinanciere.tsx`** : early-return avec bloc dédié si `mission.statut ∈ {ABSENCE, ANNULEE_PAR_ETABLISSEMENT, ANNULEE_PAR_SOIGNANT, EXPIREE}`. Avant : affichait la décomposition complète comme si la mission était payable → risque de déclaration de paiement erronée par l'établissement.
+
+---
+
+## 8. Glossaire rapide
 
 | Terme | Définition |
 |-------|-----------|
@@ -271,7 +306,7 @@ Issus du diagnostic des sessions 21-22/04/2026 :
 
 ---
 
-## 8. Références
+## 9. Références
 
 - `supabase/migrations/20260421134646_fix_obligations_filtre_resolu.sql` — filtre paiements_soignant
 - `supabase/migrations/20260421154817_obligations_filtre_stripe_transfers.sql` — filtre stripe_transfers (défense en profondeur)

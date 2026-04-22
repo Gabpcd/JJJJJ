@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Info, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Info, ChevronDown, ChevronRight, AlertTriangle, Ban } from 'lucide-react';
 
 /**
  * DecompositionFinanciere — affichage selon type_contrat_applique
@@ -42,6 +42,7 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
   const m = mission;
   const typeContrat = (m.type_contrat_applique ?? null) as 'LIBERAL' | 'SALARIE' | null;
   const isEtabOrAdmin = role === 'ETAB' || role === 'ADMIN';
+  const statutMission = (m.statut ?? null) as string | null;
 
   const duree = m.duree_heures ?? 0;
   const tauxEffectif = m.taux_rist_plafonne || m.taux_horaire_base;
@@ -57,6 +58,54 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
   const commissionTtc = m.montant_commission_ttc || 0;
   const commissionHt = m.montant_commission_ht || 0;
   const tauxCommission = Number(m.taux_commission_fige ?? m.taux_commission ?? 15);
+
+  // Statuts pour lesquels la mission n'est PAS rémunérée.
+  // Aucune facture honoraires, aucune commission Jolene, aucun paiement
+  // soignant ne doit être déclenché (gardes backend en place :
+  // generate-invoice §695, fn_declarer_paiement_soignant, stripe-connect-pay-mission §97,
+  // fn_auto_facturation_mensuelle). Voir docs/logique-paiements-v1.md §7.
+  const statutsNonRemuneres = ['ABSENCE', 'ANNULEE_PAR_ETABLISSEMENT', 'ANNULEE_PAR_SOIGNANT', 'EXPIREE'] as const;
+  if (statutsNonRemuneres.includes(statutMission as any)) {
+    const libelle = (() => {
+      switch (statutMission) {
+        case 'ABSENCE': return {
+          titre: 'Mission non honorée — Absence du soignant',
+          detail: "Le soignant ne s'est pas présenté. Aucune rémunération n'est due pour cette mission.",
+        };
+        case 'ANNULEE_PAR_ETABLISSEMENT': return {
+          titre: "Mission annulée par l'établissement",
+          detail: "La mission a été annulée. Aucune rémunération n'est due.",
+        };
+        case 'ANNULEE_PAR_SOIGNANT': return {
+          titre: 'Mission annulée par le soignant',
+          detail: "La mission a été annulée par le soignant. Aucune rémunération n'est due.",
+        };
+        case 'EXPIREE': return {
+          titre: 'Mission expirée',
+          detail: "La mission n'a pas trouvé de soignant. Aucune rémunération n'est due.",
+        };
+        default: return { titre: 'Mission non honorée', detail: "Aucune rémunération n'est due." };
+      }
+    })();
+
+    return (
+      <div className="bg-muted/30 border border-border rounded-2xl p-5">
+        <h3 className="text-lg font-bold text-foreground mb-3">💰 Décomposition financière</h3>
+        <div className="flex items-start gap-3">
+          <Ban className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">{libelle.titre}</p>
+            <p className="text-xs text-muted-foreground mt-1">{libelle.detail}</p>
+            {isEtabOrAdmin && commissionTtc > 0 && (
+              <p className="text-[11px] text-muted-foreground/80 italic mt-2">
+                ℹ️ La commission Jolene ({tauxCommission}%) ne sera pas facturée pour cette mission.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Placeholder : type_contrat non encore figé
   if (!typeContrat) {
