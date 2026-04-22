@@ -300,7 +300,7 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
         didParseCell: (data) => {
           if (data.section === 'body') {
             const label = String(data.row.cells[0]?.raw || '');
-            if (label.includes('NET à verser')) {
+            if (label.includes('NET a verser')) {
               data.cell.styles.fillColor = JOLENE_COLORS.primary as any;
               data.cell.styles.textColor = [255, 255, 255] as any;
               data.cell.styles.fontStyle = 'bold';

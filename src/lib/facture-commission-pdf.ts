@@ -340,18 +340,34 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
             `+${fmtEur(m.montant_majoration_ferie || 0)}`,
           ]);
         }
+        // ── PASSE 5 : décompo SALARIE complète + assiette commission explicite ──
         decompoRows.push(['Brut soignant', '', fmtEur(totalBrut)]);
 
+        let assiette: number;
+        let assietteLabel: string;
         if (m.type_contrat_applique === 'SALARIE') {
           const ifm = Number(m.montant_ifm || 0);
           const icp = Number(m.montant_icp || 0);
           const superBrut = totalBrut + ifm + icp;
-          decompoRows.push(['IFM (10%)', '', `+${fmtEur(ifm)}`]);
-          decompoRows.push(['ICP (10%)', '', `+${fmtEur(icp)}`]);
-          decompoRows.push(['Super brut (assiette commission)', '', fmtEur(superBrut)]);
+          const net = Number(m.net_a_payer || m.net_estime || superBrut * 0.78);
+          const cotisations = superBrut - net;
+          const tauxIFM = Number(m.taux_ifm || 10);
+          const tauxICP = Number(m.taux_icp || 10);
+          decompoRows.push([`IFM (${tauxIFM}%)`, '', `+${fmtEur(ifm)}`]);
+          decompoRows.push([`ICP (${tauxICP}%)`, '', `+${fmtEur(icp)}`]);
+          decompoRows.push(['Super brut', '', fmtEur(superBrut)]);
+          decompoRows.push(['Cotisations salariales (~22%)', '', `-${fmtEur(cotisations)}`]);
+          decompoRows.push(['NET a verser au soignant', '', fmtEur(net)]);
+          decompoRows.push(['', '', '']);
+          assiette = superBrut;
+          assietteLabel = `${tauxCommission}% x ${fmtEur(superBrut)} super brut (base + IFM + ICP)`;
+        } else {
+          decompoRows.push(['', '', '']);
+          assiette = totalBrut;
+          assietteLabel = `${tauxCommission}% x ${fmtEur(totalBrut)} honoraires bruts`;
         }
 
-        decompoRows.push([`Commission Jolene (${tauxCommission}%)`, '', fmtEur(m.montant_commission_ht || 0)]);
+        decompoRows.push([`Commission Jolene`, assietteLabel, fmtEur(m.montant_commission_ht || 0)]);
         decompoRows.push(['TVA 20%', '', fmtEur(m.montant_commission_tva || 0)]);
         decompoRows.push(['Commission TTC mission', '', fmtEur(m.montant_commission_ttc || 0)]);
 
@@ -370,6 +386,10 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
               const label = String(data.row.cells[0]?.raw || '');
               if (label.includes('Commission TTC mission')) {
                 data.cell.styles.fillColor = JOLENE_COLORS.primary as any;
+                data.cell.styles.textColor = [255, 255, 255] as any;
+                data.cell.styles.fontStyle = 'bold';
+              } else if (label.includes('NET a verser')) {
+                data.cell.styles.fillColor = JOLENE_COLORS.teal as any;
                 data.cell.styles.textColor = [255, 255, 255] as any;
                 data.cell.styles.fontStyle = 'bold';
               } else if (label.includes('Commission Jolene') || label.includes('Super brut') || label.includes('Brut soignant')) {
