@@ -15,7 +15,7 @@ import { ENTREPRISE } from '@/constantes/entreprise';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
-import type jsPDF from 'jspdf';
+import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
 
 const STATUT_COLORS: Record<string, string> = {
   BROUILLON: 'bg-muted text-muted-foreground',
@@ -299,117 +299,10 @@ export default function DetailFacture() {
   useEffect(() => { charger(); }, [user, id, etablissementId]);
 
   const genererPDF = async () => {
-    if (!facture || !etab) return;
+    if (!facture) return;
     setGeneratingPdf(true);
     try {
-      const { default: jsPDF } = await import('jspdf');
-      const { default: autoTable } = await import('jspdf-autotable');
-      const doc = new jsPDF();
-      const pw = doc.internal.pageSize.getWidth();
-
-      doc.setFillColor(23, 162, 184);
-      doc.rect(0, 0, pw, 32, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(18);
-      doc.text('FACTURE', 14, 16);
-      doc.setFontSize(11);
-      doc.text(facture.numero_facture || '', 14, 26);
-      doc.setFontSize(9);
-      doc.text(`Statut : ${STATUT_LABELS[facture.statut] ?? facture.statut}`, pw - 14, 16, { align: 'right' });
-
-      doc.setTextColor(0, 0, 0);
-      let y = 42;
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text(ENTREPRISE.nom, 14, y);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text('Plateforme de mise en relation soignants', 14, y + 5);
-      doc.text(ENTREPRISE.adresse_ligne1, 14, y + 10);
-      doc.text(`${ENTREPRISE.adresse_code_postal} ${ENTREPRISE.adresse_ville}`, 14, y + 15);
-      doc.text(`SIRET : ${ENTREPRISE.siret_formate}`, 14, y + 20);
-      doc.text(`TVA intra : ${ENTREPRISE.tva_intra}`, 14, y + 25);
-
-      doc.setFontSize(9);
-      doc.text('Facturé à :', pw - 80, y);
-      doc.setFont('helvetica', 'bold');
-      doc.text(etab.nom, pw - 80, y + 5);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text(etab.adresse_rue || '', pw - 80, y + 10);
-      doc.text(`${etab.adresse_code_postal || ''} ${etab.adresse_ville || ''}`, pw - 80, y + 15);
-      doc.text(`SIRET : ${etab.siret}`, pw - 80, y + 20);
-
-      y += 32;
-      doc.setFontSize(8);
-      if (facture.date_emission) {
-        doc.text(`Date d'émission : ${format(new Date(facture.date_emission), 'dd/MM/yyyy')}`, 14, y);
-        y += 5;
-      }
-      if (facture.date_echeance) {
-        doc.text(`Échéance : ${format(new Date(facture.date_echeance), 'dd/MM/yyyy')}`, 14, y);
-        y += 5;
-      }
-      y += 5;
-
-      const tableData = missions.map(m => [
-        m.debut_le ? format(new Date(m.debut_le), 'dd/MM') : '—',
-        m.intitule?.substring(0, 25) || '—',
-        m.soignant_nom || '—',
-        m.debut_le && m.fin_le ? calcHeures(m.debut_le, m.fin_le) : '—',
-        formatEur(m.taux_horaire_base ?? 0),
-        formatEur(m.total_brut ?? 0),
-        `${m.taux_commission ?? 0}%`,
-        formatEur(m.montant_commission_ht ?? 0),
-      ]);
-
-      autoTable(doc, {
-        startY: y,
-        head: [['Date', 'Mission', 'Soignant', 'Heures', 'Taux/h', 'Brut', 'Tx Com.', 'Com. HT']],
-        body: tableData,
-        styles: { fontSize: 7, cellPadding: 2 },
-        headStyles: { fillColor: [23, 162, 184], textColor: 255, fontStyle: 'bold' },
-        margin: { left: 14, right: 14 },
-      });
-
-      y = (doc as any).lastAutoTable?.finalY ?? y + 30;
-      y += 10;
-
-      if (y > 240) { doc.addPage(); y = 20; }
-      doc.setDrawColor(200, 200, 200);
-      doc.line(pw - 100, y, pw - 14, y);
-      y += 8;
-      doc.setFontSize(9);
-      doc.text('Total HT', pw - 100, y);
-      doc.text(formatEur(facture.montant_ht), pw - 14, y, { align: 'right' });
-      y += 6;
-      doc.text(`TVA (${facture.taux_tva ?? 20}%)`, pw - 100, y);
-      doc.text(formatEur(facture.montant_tva), pw - 14, y, { align: 'right' });
-      y += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text('Total TTC', pw - 100, y);
-      doc.text(formatEur(facture.montant_ttc), pw - 14, y, { align: 'right' });
-
-      const ph = doc.internal.pageSize.getHeight();
-      doc.setFontSize(6.5);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(140, 140, 140);
-      doc.text(
-        `${ENTREPRISE.nom} · ${ENTREPRISE.forme_juridique} · Capital ${ENTREPRISE.capital_social} · ${ENTREPRISE.rcs} · SIRET ${ENTREPRISE.siret_formate} · TVA ${ENTREPRISE.tva_intra}`,
-        pw / 2,
-        ph - 12,
-        { align: 'center' },
-      );
-      doc.text(
-        `${ENTREPRISE.adresse} — Facture générée le ${format(new Date(), 'dd/MM/yyyy à HH:mm')}`,
-        pw / 2,
-        ph - 8,
-        { align: 'center' },
-      );
-
-      doc.save(`facture_${facture.numero_facture}.pdf`);
-      afficherNotification({ type: 'succes', message: 'PDF téléchargé' });
+      await telechargerFactureCommissionPDF(facture.id);
     } catch (err) {
       capturerErreurSentry(err, 'DetailFacture', 'generer_pdf');
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la génération du PDF' });
