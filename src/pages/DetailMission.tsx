@@ -215,7 +215,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit,
           montant_majoration_dimanche, montant_majoration_ferie,
           heures_nuit, heures_dimanche, heures_ferie,
-          montant_commission_ttc,
+          montant_commission_ttc, commission_facturee,
           statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
           mode_attribution,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
@@ -496,10 +496,15 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
             <div className="space-y-4">
               <DecompositionFinanciere mission={m} role={isAdmin ? 'ADMIN' : 'ETAB'} />
-              {/* Payment mode indicator */}
+              {/* Payment mode indicator — ordre priorité :
+                  1. mode_paiement_soignant=STRIPE_CONNECT + commission_facturee : commission capturée à la source, déjà réglée
+                  2. etablissements.mode_paiement_commission (STRIPE_RESERVATION / CHORUS_PRO)
+                  3. fallback : facturée en fin de mois */}
               {m.montant_commission_ttc > 0 && (
                 <div className="card-base flex items-center gap-2 text-xs text-muted-foreground">
-                  {(m.etablissements as any)?.mode_paiement_commission === 'STRIPE_RESERVATION' ? (
+                  {m.mode_paiement_soignant === 'STRIPE_CONNECT' && m.commission_facturee ? (
+                    <><CreditCard className="h-3.5 w-3.5 text-success" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — ✅ Capturée à la source par Stripe lors du paiement (déjà réglée)</span></>
+                  ) : (m.etablissements as any)?.mode_paiement_commission === 'STRIPE_RESERVATION' ? (
                     <><CreditCard className="h-3.5 w-3.5 text-primary" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — 💳 Prélevée à la réservation</span></>
                   ) : (m.etablissements as any)?.mode_paiement_commission === 'CHORUS_PRO' ? (
                     <><span>🏛️ Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Chorus Pro</span></>
