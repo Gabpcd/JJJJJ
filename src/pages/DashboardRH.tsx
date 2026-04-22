@@ -142,8 +142,7 @@ export default function DashboardRH() {
         <div className={`card-base text-center cursor-pointer hover:shadow-md transition-shadow ${detailMois === 'prec' ? 'ring-2 ring-primary' : ''}`} onClick={() => setDetailMois(detailMois === 'prec' ? null : 'prec')}>
           <Coins className="h-5 w-5 text-primary mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalMoisPrec)}</p>
-          <p className="text-xs text-muted-foreground">Coût mois précédent</p>
-          <p className="text-[10px] text-muted-foreground">{stats.mois_precedent}</p>
+          <p className="text-xs text-muted-foreground">Coût {stats.mois_precedent || 'mois précédent'}</p>
           {(stats.commission_mois_prec ?? 0) > 0 && (
             <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_mois_prec)} de commission Jolene</p>
           )}
@@ -151,8 +150,7 @@ export default function DashboardRH() {
         <div className={`card-base text-center cursor-pointer hover:shadow-md transition-shadow ${detailMois === 'courant' ? 'ring-2 ring-primary' : ''}`} onClick={() => setDetailMois(detailMois === 'courant' ? null : 'courant')}>
           <Coins className="h-5 w-5 text-info mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalCeMois)}</p>
-          <p className="text-xs text-muted-foreground">Coût ce mois</p>
-          <p className="text-[10px] text-muted-foreground">{stats.mois_en_cours}</p>
+          <p className="text-xs text-muted-foreground">Coût {stats.mois_en_cours || 'mois en cours'}</p>
           {(stats.commission_ce_mois ?? 0) > 0 && (
             <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_ce_mois)} de commission Jolene</p>
           )}
@@ -190,7 +188,7 @@ export default function DashboardRH() {
           : 'Budget prévisionnel';
         const messageVide = isPrev
           ? 'Aucune mission planifiée'
-          : `Aucune mission terminée ${detailMois === 'prec' ? 'le mois précédent' : 'ce mois'}`;
+          : `Aucune mission terminée ${detailMois === 'prec' ? `en ${stats.mois_precedent || 'mois précédent'}` : `en ${stats.mois_en_cours || 'mois en cours'}`}`;
 
         const missionsConfirmees = isPrev ? (detailMissions || []).filter((m: any) => m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') : [];
         const missionsOuvertes = isPrev ? (detailMissions || []).filter((m: any) => m.statut === 'OUVERTE') : [];
@@ -288,7 +286,7 @@ export default function DashboardRH() {
             <span className="font-semibold text-foreground">Missions terminées</span>
           </div>
           <p className="text-xl sm:text-3xl font-bold text-foreground">{stats.terminees_total}</p>
-          <p className="text-xs text-muted-foreground">{stats.terminees_mois_prec} le mois précédent</p>
+          <p className="text-xs text-muted-foreground">{stats.terminees_mois_prec} en {stats.mois_precedent || 'mois précédent'}</p>
         </div>
       </div>
 
