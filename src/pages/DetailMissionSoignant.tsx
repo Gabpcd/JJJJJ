@@ -12,6 +12,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
+import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
 import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatMission } from '@/components/ChatMission';
@@ -488,6 +489,11 @@ export default function DetailMissionSoignant() {
           <p className="text-xs text-muted-foreground/60 italic text-center">
             Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
           </p>
+
+          {/* Facture honoraires — visible dès que mission TERMINEE (facture générée) */}
+          {estTerminee && (
+            <FactureHonorairesCard missionId={mission.id} viewerRole="SOIGNANT" />
+          )}
 
           {/* Bloc de conformité (missions ouvertes) */}
           {estOuverte && peutPostuler && (

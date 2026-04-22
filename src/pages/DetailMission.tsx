@@ -11,6 +11,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
 import { ChatConversation } from '@/components/ChatConversation';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
+import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
 import { CodesPointageMission } from '@/components/CodesPointageMission';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -512,6 +513,12 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     <><span>📄 Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Facturée en fin de mois</span></>
                   )}
                 </div>
+              )}
+              {/* Facture honoraires — visible quand mission TERMINEE (une facture
+                  a été générée à la déclaration paiement ou via generate-invoice).
+                  L'étab doit pouvoir télécharger la facture comme preuve comptable. */}
+              {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
+                <FactureHonorairesCard missionId={m.id} viewerRole={isAdmin ? 'ADMIN' : 'ETAB'} />
               )}
               {/* Workflow paiement mission */}
               {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && (
