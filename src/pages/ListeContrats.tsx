@@ -75,7 +75,13 @@ export default function ListeContrats({ role }: { role: UserRole }) {
       </div>
 
       {filtered.length === 0 ? (
-        <EtatVide illustration={<IllustrationStylo />} titre="Aucun contrat" sousTitre="Vos contrats apparaîtront ici après avoir accepté une mission." />
+        <EtatVide
+          illustration={<IllustrationStylo />}
+          titre="Aucun contrat"
+          sousTitre={role === 'ADMIN_ETABLISSEMENT'
+            ? "Les contrats apparaîtront ici après qu'un soignant ait accepté une de vos missions."
+            : "Vos contrats apparaîtront ici après avoir accepté une mission."}
+        />
       ) : (
         <div className="space-y-3">
           {filtered.map((c: any) => (
