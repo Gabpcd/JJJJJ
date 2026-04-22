@@ -305,24 +305,40 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
           y += 7;
         }
 
-        // Décomposition financière mission (table compacte)
+        // ── PASSE 4 : Décomposition financière mission (majorations détaillées) ──
         const totalBrut = Number(m.total_brut || 0);
+        const tauxHoraire = Number(m.taux_horaire_base_fige || m.taux_horaire_base || 0);
         const majorations =
           Number(m.montant_majoration_nuit || 0) +
           Number(m.montant_majoration_dimanche || 0) +
           Number(m.montant_majoration_ferie || 0);
         const tauxCommission = Number(m.taux_commission_fige || 15);
         const decompoRows: (string | number)[][] = [
-          ['Brut de base', `${m.duree_heures || 0} h × ${Number(m.taux_horaire_base || 0).toFixed(2)} €`, fmtEur(totalBrut - majorations)],
+          ['Brut de base', `${m.duree_heures || 0} h x ${tauxHoraire.toFixed(2)} E/h`, fmtEur(totalBrut - majorations)],
         ];
         if (m.heures_nuit && Number(m.heures_nuit) > 0) {
-          decompoRows.push(['Maj. nuit', `${m.heures_nuit} h`, `+${fmtEur(m.montant_majoration_nuit || 0)}`]);
+          const tauxMajNuit = Number(m.taux_majoration_nuit_fige || 25);
+          decompoRows.push([
+            'Maj. nuit',
+            `${Number(m.heures_nuit).toFixed(1)} h x ${tauxHoraire.toFixed(2)} E x ${tauxMajNuit}%`,
+            `+${fmtEur(m.montant_majoration_nuit || 0)}`,
+          ]);
         }
         if (m.heures_dimanche && Number(m.heures_dimanche) > 0) {
-          decompoRows.push(['Maj. dimanche', `${m.heures_dimanche} h`, `+${fmtEur(m.montant_majoration_dimanche || 0)}`]);
+          const tauxMajDim = Number(m.taux_majoration_dimanche_fige || 25);
+          decompoRows.push([
+            'Maj. dimanche',
+            `${Number(m.heures_dimanche).toFixed(1)} h x ${tauxHoraire.toFixed(2)} E x ${tauxMajDim}%`,
+            `+${fmtEur(m.montant_majoration_dimanche || 0)}`,
+          ]);
         }
         if (m.heures_ferie && Number(m.heures_ferie) > 0) {
-          decompoRows.push(['Maj. férié', `${m.heures_ferie} h`, `+${fmtEur(m.montant_majoration_ferie || 0)}`]);
+          const tauxMajFerie = Number(m.taux_majoration_ferie_fige || 50);
+          decompoRows.push([
+            'Maj. férié',
+            `${Number(m.heures_ferie).toFixed(1)} h x ${tauxHoraire.toFixed(2)} E x ${tauxMajFerie}%`,
+            `+${fmtEur(m.montant_majoration_ferie || 0)}`,
+          ]);
         }
         decompoRows.push(['Brut soignant', '', fmtEur(totalBrut)]);
 

@@ -262,24 +262,31 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
         Number(mission.montant_majoration_dimanche || 0) +
         Number(mission.montant_majoration_ferie || 0);
 
+      // ── PASSE 4 : majorations détaillées avec taux figés ──
+      const tauxHoraire = Number(mission.taux_horaire_base_fige || mission.taux_horaire_base || 0);
       const rows: (string | number)[][] = [
-        ['Brut de base', `${mission.duree_heures || 0} h × ${Number(mission.taux_horaire_base || 0).toFixed(2)} €`, fmtEur(totalBrut - majorations)],
+        ['Brut de base', `${mission.duree_heures || 0} h x ${tauxHoraire.toFixed(2)} E/h`, fmtEur(totalBrut - majorations)],
       ];
       if (mission.heures_nuit && Number(mission.heures_nuit) > 0) {
-        rows.push(['Majoration nuit', `${mission.heures_nuit} h`, `+${fmtEur(mission.montant_majoration_nuit || 0)}`]);
+        const tauxMajNuit = Number(mission.taux_majoration_nuit_fige || 25);
+        rows.push(['Majoration nuit', `${Number(mission.heures_nuit).toFixed(1)} h x ${tauxHoraire.toFixed(2)} E x ${tauxMajNuit}%`, `+${fmtEur(mission.montant_majoration_nuit || 0)}`]);
       }
       if (mission.heures_dimanche && Number(mission.heures_dimanche) > 0) {
-        rows.push(['Majoration dimanche', `${mission.heures_dimanche} h`, `+${fmtEur(mission.montant_majoration_dimanche || 0)}`]);
+        const tauxMajDim = Number(mission.taux_majoration_dimanche_fige || 25);
+        rows.push(['Majoration dimanche', `${Number(mission.heures_dimanche).toFixed(1)} h x ${tauxHoraire.toFixed(2)} E x ${tauxMajDim}%`, `+${fmtEur(mission.montant_majoration_dimanche || 0)}`]);
       }
       if (mission.heures_ferie && Number(mission.heures_ferie) > 0) {
-        rows.push(['Majoration férié', `${mission.heures_ferie} h`, `+${fmtEur(mission.montant_majoration_ferie || 0)}`]);
+        const tauxMajFerie = Number(mission.taux_majoration_ferie_fige || 50);
+        rows.push(['Majoration férié', `${Number(mission.heures_ferie).toFixed(1)} h x ${tauxHoraire.toFixed(2)} E x ${tauxMajFerie}%`, `+${fmtEur(mission.montant_majoration_ferie || 0)}`]);
       }
       rows.push(['Brut total', '', fmtEur(totalBrut)]);
-      rows.push(['IFM (10%)', '', `+${fmtEur(ifm)}`]);
-      rows.push(['ICP (10%)', '', `+${fmtEur(icp)}`]);
-      rows.push(['Super brut (coût employeur)', '', fmtEur(superBrut)]);
-      rows.push(['Cotisations salariales estimées', '', `-${fmtEur(cotisations)}`]);
-      rows.push(['NET à verser au soignant', '', fmtEur(net)]);
+      const tauxIFM = Number(mission.taux_ifm || 10);
+      const tauxICP = Number(mission.taux_icp || 10);
+      rows.push([`IFM (${tauxIFM}%)`, '', `+${fmtEur(ifm)}`]);
+      rows.push([`ICP (${tauxICP}%)`, '', `+${fmtEur(icp)}`]);
+      rows.push(['Super brut (cout employeur)', '', fmtEur(superBrut)]);
+      rows.push([`Cotisations salariales estimees (~22%)`, '', `-${fmtEur(cotisations)}`]);
+      rows.push(['NET a verser au soignant', '', fmtEur(net)]);
 
       autoTable(doc, {
         startY: y,
@@ -320,17 +327,22 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
         Number(mission.montant_majoration_dimanche || 0) +
         Number(mission.montant_majoration_ferie || 0);
 
+      // ── PASSE 4 : majorations détaillées (branche LIBERAL) ──
+      const tauxHoraireLib = Number(mission.taux_horaire_base_fige || mission.taux_horaire_base || 0);
       const rows: (string | number)[][] = [
-        ['Brut de base', `${mission.duree_heures || 0} h × ${Number(mission.taux_horaire_base || 0).toFixed(2)} €`, fmtEur(totalBrut - majorations)],
+        ['Brut de base', `${mission.duree_heures || 0} h x ${tauxHoraireLib.toFixed(2)} E/h`, fmtEur(totalBrut - majorations)],
       ];
       if (mission.heures_nuit && Number(mission.heures_nuit) > 0) {
-        rows.push(['Majoration nuit', `${mission.heures_nuit} h`, `+${fmtEur(mission.montant_majoration_nuit || 0)}`]);
+        const tauxMajNuit = Number(mission.taux_majoration_nuit_fige || 25);
+        rows.push(['Majoration nuit', `${Number(mission.heures_nuit).toFixed(1)} h x ${tauxHoraireLib.toFixed(2)} E x ${tauxMajNuit}%`, `+${fmtEur(mission.montant_majoration_nuit || 0)}`]);
       }
       if (mission.heures_dimanche && Number(mission.heures_dimanche) > 0) {
-        rows.push(['Majoration dimanche', `${mission.heures_dimanche} h`, `+${fmtEur(mission.montant_majoration_dimanche || 0)}`]);
+        const tauxMajDim = Number(mission.taux_majoration_dimanche_fige || 25);
+        rows.push(['Majoration dimanche', `${Number(mission.heures_dimanche).toFixed(1)} h x ${tauxHoraireLib.toFixed(2)} E x ${tauxMajDim}%`, `+${fmtEur(mission.montant_majoration_dimanche || 0)}`]);
       }
       if (mission.heures_ferie && Number(mission.heures_ferie) > 0) {
-        rows.push(['Majoration férié', `${mission.heures_ferie} h`, `+${fmtEur(mission.montant_majoration_ferie || 0)}`]);
+        const tauxMajFerie = Number(mission.taux_majoration_ferie_fige || 50);
+        rows.push(['Majoration férié', `${Number(mission.heures_ferie).toFixed(1)} h x ${tauxHoraireLib.toFixed(2)} E x ${tauxMajFerie}%`, `+${fmtEur(mission.montant_majoration_ferie || 0)}`]);
       }
       rows.push(['Brut honoraires soignant', '', fmtEur(totalBrut)]);
 
