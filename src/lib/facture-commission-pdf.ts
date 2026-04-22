@@ -51,46 +51,77 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
 
     // Missions rattachées : soit la seule mission_id (facture par-mission), soit
     // celles reliées via facture_id pour les factures mensuelles groupées.
+    // Enrichissement PASSE 1 : récupérer tous les champs nécessaires au rendu
+    // détaillé (service, net_estime, taux IFM/ICP, taux majorations figés).
+    const missionSelect =
+      'id, intitule, service, profession_requise, debut_le, fin_le, duree_heures, ' +
+      'taux_horaire_base, taux_horaire_base_fige, total_brut, net_a_payer, net_estime, ' +
+      'montant_ifm, montant_icp, taux_ifm, taux_icp, ' +
+      'montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, ' +
+      'heures_nuit, heures_dimanche, heures_ferie, ' +
+      'taux_majoration_nuit_fige, taux_majoration_dimanche_fige, taux_majoration_ferie_fige, ' +
+      'type_contrat_applique, taux_commission_fige, ' +
+      'montant_commission_ht, montant_commission_tva, montant_commission_ttc, soignant_assigne_id';
     let missions: any[] = [];
     if ((f as any).mission_id) {
       const { data: m } = await supabase
         .from('missions')
-        .select(
-          'id, intitule, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer, montant_ifm, montant_icp, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, heures_nuit, heures_dimanche, heures_ferie, type_contrat_applique, taux_commission_fige, montant_commission_ht, montant_commission_tva, montant_commission_ttc, soignant_assigne_id',
-        )
+        .select(missionSelect)
         .eq('id', (f as any).mission_id);
       missions = m || [];
     } else {
       const { data: m } = await supabase
         .from('missions')
-        .select(
-          'id, intitule, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer, montant_ifm, montant_icp, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, heures_nuit, heures_dimanche, heures_ferie, type_contrat_applique, taux_commission_fige, montant_commission_ht, montant_commission_tva, montant_commission_ttc, soignant_assigne_id',
-        )
+        .select(missionSelect)
         .eq('facture_id', (f as any).id);
       missions = m || [];
     }
 
-    // Enrichir avec nom du soignant + pointages
+    // Enrichir avec soignant (nom + profession + spécialités) + pointages +
+    // créneaux prévisionnels (fallback quand pas de pointages réels).
     const soignantIds = [...new Set(missions.map((m) => m.soignant_assigne_id).filter(Boolean))];
     const missionIds = missions.map((m) => m.id);
-    const [{ data: soignants }, { data: allPresences }] = await Promise.all([
+    const [{ data: soignants }, { data: allPresences }, { data: allCreneaux }] = await Promise.all([
       soignantIds.length > 0
-        ? supabase.from('soignants').select('id, prenom, nom').in('id', soignantIds)
+        ? supabase.from('soignants').select('id, prenom, nom, profession, specialites').in('id', soignantIds)
         : Promise.resolve({ data: [] as any[] }),
       missionIds.length > 0
         ? supabase
             .from('presences')
-            .select('mission_id, pointage_arrivee_le, pointage_depart_le, duree_pause_min, heures_reelles')
+            .select('mission_id, pointage_arrivee_le, pointage_depart_le, pause_debut_le, pause_fin_le, duree_pause_min, heures_reelles')
             .in('mission_id', missionIds)
             .order('pointage_arrivee_le', { ascending: true })
         : Promise.resolve({ data: [] as any[] }),
+      missionIds.length > 0
+        ? supabase
+            .from('mission_creneaux')
+            .select('mission_id, debut_le, fin_le, type_creneau, duree_heures')
+            .in('mission_id', missionIds)
+            .eq('type_creneau', 'PREVISIONNEL')
+            .order('debut_le', { ascending: true })
+        : Promise.resolve({ data: [] as any[] }),
     ]);
-    const soignantMap = new Map((soignants || []).map((s: any) => [s.id, `${s.prenom || ''} ${s.nom || ''}`.trim()]));
+    const soignantMap = new Map(
+      (soignants || []).map((s: any) => [
+        s.id,
+        {
+          nom: `${s.prenom || ''} ${s.nom || ''}`.trim(),
+          profession: s.profession || null,
+          specialites: (s.specialites || []) as string[],
+        },
+      ]),
+    );
     const presencesByMission = new Map<string, any[]>();
     for (const p of (allPresences as any[] | null) || []) {
       const list = presencesByMission.get(p.mission_id) || [];
       list.push(p);
       presencesByMission.set(p.mission_id, list);
+    }
+    const creneauxByMission = new Map<string, any[]>();
+    for (const c of (allCreneaux as any[] | null) || []) {
+      const list = creneauxByMission.get(c.mission_id) || [];
+      list.push(c);
+      creneauxByMission.set(c.mission_id, list);
     }
 
     const { default: jsPDF } = await import('jspdf');
@@ -191,7 +222,8 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...JOLENE_COLORS.textMuted);
         doc.setFontSize(8);
-        const soignantNom = soignantMap.get(m.soignant_assigne_id) || 'Soignant';
+        const soignantInfo = soignantMap.get(m.soignant_assigne_id);
+        const soignantNom = soignantInfo?.nom || 'Soignant';
         const dateStr = m.debut_le ? format(new Date(m.debut_le), 'dd/MM/yyyy', { locale: fr }) : '-';
         doc.text(`${soignantNom} - ${dateStr} - ${m.profession_requise || '-'}`, PAGE.width - PAGE.margin - 2, y + 5.5, { align: 'right' });
         y += 10;

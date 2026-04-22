@@ -53,10 +53,13 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       }
     }
 
-    const [{ data: sg }, { data: etab }, { data: mission }, { data: presences }] = await Promise.all([
+    // PASSE 1 enrichissement : charger tous les champs nécessaires au rendu
+    // détaillé (taux majorations figés, taux IFM/ICP, spécialités soignant,
+    // créneaux prévisionnels fallback).
+    const [{ data: sg }, { data: etab }, { data: mission }, { data: presences }, { data: creneaux }] = await Promise.all([
       supabase
         .from('soignants')
-        .select('prenom, nom, profession, numero_rpps, numero_adeli, email, telephone, adresse_rue, adresse_code_postal, adresse_ville')
+        .select('prenom, nom, profession, specialites, numero_rpps, numero_adeli, email, telephone, adresse_rue, adresse_code_postal, adresse_ville')
         .eq('id', (f as any).soignant_id)
         .maybeSingle(),
       supabase
@@ -67,7 +70,15 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       (f as any).mission_id
         ? supabase
             .from('missions')
-            .select('intitule, service, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, heures_nuit, heures_dimanche, heures_ferie, type_contrat_applique, taux_commission_fige')
+            .select(
+              'intitule, service, profession_requise, debut_le, fin_le, duree_heures, ' +
+              'taux_horaire_base, taux_horaire_base_fige, total_brut, net_a_payer, net_estime, ' +
+              'montant_ifm, montant_icp, taux_ifm, taux_icp, ' +
+              'montant_majoration_nuit, montant_majoration_dimanche, montant_majoration_ferie, ' +
+              'heures_nuit, heures_dimanche, heures_ferie, ' +
+              'taux_majoration_nuit_fige, taux_majoration_dimanche_fige, taux_majoration_ferie_fige, ' +
+              'type_contrat_applique, taux_commission_fige',
+            )
             .eq('id', (f as any).mission_id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
@@ -77,6 +88,14 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
             .select('pointage_arrivee_le, pointage_depart_le, pause_debut_le, pause_fin_le, duree_pause_min, heures_reelles')
             .eq('mission_id', (f as any).mission_id)
             .order('pointage_arrivee_le', { ascending: true })
+        : Promise.resolve({ data: null as any }),
+      (f as any).mission_id
+        ? supabase
+            .from('mission_creneaux')
+            .select('debut_le, fin_le, type_creneau, duree_heures')
+            .eq('mission_id', (f as any).mission_id)
+            .eq('type_creneau', 'PREVISIONNEL')
+            .order('debut_le', { ascending: true })
         : Promise.resolve({ data: null as any }),
     ]);
 
