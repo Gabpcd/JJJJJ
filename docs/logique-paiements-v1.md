@@ -289,7 +289,50 @@ Comportement attendu par statut :
 
 ---
 
-## 8. Glossaire rapide
+## 8. Tests Stripe Connect — cartes test spécifiques
+
+**Piège documenté le 22/04/2026** suite au diagnostic du paiement M2 bloqué.
+
+En **mode TEST** Stripe Connect, les paiements carte **`4242 4242 4242 4242`** (carte "Visa OK" classique) créditent le solde **`pending`** de la plateforme et **PAS** le solde **`available`**. Or `stripe.transfers.create()` vers un compte Connect puise **uniquement dans `available`** — pas `pending`. Conséquence : chaque paiement Checkout Connect en test échoue côté webhook avec :
+
+```
+StripeInvalidRequestError: balance_insufficient — You have insufficient
+available funds in your Stripe account. Try adding funds directly to your
+available balance by creating Charges using the 4000000000000077 test card.
+```
+
+Côté Jolene, le webhook ne retourne jamais d'erreur user-visible (retour 200 normal pour respect Stripe retry logic), donc symptôme côté UI :
+- Checkout "Payé" vert côté Stripe Dashboard
+- Mission reste à payer à l'infini dans `ObligationsFinancieres`
+- Boucle Payer → blocage → Refund → rebelote
+
+### Cartes test à utiliser pour vérifier Stripe Connect
+
+| Besoin | Carte test | Comportement |
+|--------|-----------|--------------|
+| **Tester Connect end-to-end** (transfer vers compte soignant) | `4000 0000 0000 0077` | Crédite `available` immédiatement → `transfers.create()` OK |
+| Tester paiement échec | `4000 0000 0000 0002` | Décliné |
+| Tester 3DS | `4000 0025 0000 3155` | 3DS required |
+| Tester insufficient funds (hors Connect) | `4000 0000 0000 9995` | Refuse charge |
+
+**Référence** : [stripe.com/docs/testing#available-balance](https://stripe.com/docs/testing#available-balance)
+
+### En production
+
+**Non concerné**. Les vrais paiements carte sont instantanément crédités sur `available` (hors cas spécifiques : SEPA, disputes). La bascule `pending → available` en test est un garde-fou Stripe pour éviter que des développeurs testent des transfers sans solde réel.
+
+### Protection côté code (22/04/2026)
+
+Le webhook `stripe-webhook/index.ts` contenait un catch cassé autour de `stripe.transfers.create()` qui tentait un UPDATE avec une colonne `modifie_le` inexistante dans `stripe_transfers` → UPDATE fail silencieux → row reste EN_ATTENTE + 0 audit. Fix 22/04 :
+
+- Retrait de `modifie_le` (colonne inexistante)
+- Remplissage `stripe_transfers.erreur` avec code + message Stripe
+- Audit `FINANCE_TRANSFER_FAILED` systématique avec détails (code, message, type, montant, IDs)
+- `console.error` explicite pour observabilité Supabase logs
+
+---
+
+## 9. Glossaire rapide
 
 | Terme | Définition |
 |-------|-----------|
@@ -306,7 +349,7 @@ Comportement attendu par statut :
 
 ---
 
-## 9. Références
+## 10. Références
 
 - `supabase/migrations/20260421134646_fix_obligations_filtre_resolu.sql` — filtre paiements_soignant
 - `supabase/migrations/20260421154817_obligations_filtre_stripe_transfers.sql` — filtre stripe_transfers (défense en profondeur)

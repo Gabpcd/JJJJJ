@@ -342,12 +342,61 @@ Deno.serve(async (req) => {
             });
 
             console.log(`Connect transfer ${transfer.id} created for mission ${missionId}`);
-          } catch (transferErr) {
-            console.error("Connect transfer failed:", transferErr);
-            await supabaseAdmin
+          } catch (transferErr: any) {
+            // BUG-WEBHOOK-CATCH-SILENT — catch précédent mettait statut=ECHOUE
+            // avec une colonne `modifie_le` INEXISTANTE dans stripe_transfers →
+            // UPDATE échouait silencieusement côté PostgREST (pas de throw sans
+            // .throwOnError()), et la row restait en EN_ATTENTE. Aucun audit
+            // n'était écrit. Webhook retournait 200. Diagnostic impossible.
+            // Observé in-situ sur M2 (pi_3TOwlQ, 22/04/2026 09:08) :
+            // balance_insufficient en mode TEST → stripe.transfers.create throw
+            // → catch entered → UPDATE modifie_le silently fails → M2 reste à
+            // l'infini en "à payer" avec transfer EN_ATTENTE invisible côté ops.
+            //
+            // Fix : (1) retirer modifie_le, (2) remplir `erreur` avec code+msg
+            // Stripe, (3) audit explicite STRIPE_TRANSFER_ECHOUE, (4) log loud.
+            const stripeErrCode = transferErr?.code || transferErr?.raw?.code || null;
+            const stripeErrMsg = transferErr?.message || String(transferErr);
+            const errorLabel = stripeErrCode
+              ? `${stripeErrCode} — ${stripeErrMsg}`
+              : stripeErrMsg;
+
+            console.error(
+              `STRIPE_TRANSFER_ECHOUE mission=${missionId} amount_cents=${soignantCents} destination=${connectedAccountId} code=${stripeErrCode} message=${stripeErrMsg}`
+            );
+
+            const { error: updateErr } = await supabaseAdmin
               .from("stripe_transfers")
-              .update({ statut: "ECHOUE", modifie_le: new Date().toISOString() })
+              .update({
+                statut: "ECHOUE",
+                erreur: errorLabel.substring(0, 2000),
+              })
               .eq("mission_id", missionId);
+            if (updateErr) {
+              console.error("stripe_transfers update to ECHOUE failed:", updateErr);
+            }
+
+            await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+              p_acteur_id: "00000000-0000-0000-0000-000000000000",
+              p_type_acteur: "SYSTEME",
+              p_action: "FINANCE_TRANSFER_FAILED",
+              p_type_ressource: "stripe_transfer",
+              p_id_ressource: missionId,
+              p_cle_s3: null,
+              p_details: {
+                mission_id: missionId,
+                soignant_id: soignantId,
+                connected_account_id: connectedAccountId,
+                stripe_session_id: session.id,
+                stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
+                montant_cents: soignantCents,
+                stripe_error_code: stripeErrCode,
+                stripe_error_message: stripeErrMsg,
+                stripe_error_type: transferErr?.type || null,
+              },
+              p_ip: null,
+              p_navigateur: "stripe-webhook",
+            });
           }
         }
 
