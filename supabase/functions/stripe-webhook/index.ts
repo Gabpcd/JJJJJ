@@ -187,13 +187,14 @@ Deno.serve(async (req) => {
               .eq("stripe_transfer_id", transfer.id)
               .maybeSingle();
 
-            if (!existingPayment) {
-              const { data: missionRow } = await supabaseAdmin
-                .from("missions")
-                .select("etablissement_id")
-                .eq("id", missionId)
-                .single();
+            // Fetch mission data une fois (utilisé pour paiements_soignant + facture commission)
+            const { data: missionRow } = await supabaseAdmin
+              .from("missions")
+              .select("etablissement_id, intitule, montant_commission_ht, montant_commission_tva, montant_commission_ttc, type_contrat_applique")
+              .eq("id", missionId)
+              .single();
 
+            if (!existingPayment) {
               const { error: paiementInsertErr } = await supabaseAdmin
                 .from("paiements_soignant")
                 .insert({
@@ -225,6 +226,74 @@ Deno.serve(async (req) => {
                 modifie_le: new Date().toISOString(),
               })
               .eq("id", missionId);
+
+            // Phase 2 Option Y — créer la facture commission PAYEE directement.
+            // Commission capturée à la source par Stripe (via le split transfer :
+            // charge total = honoraires soignant + commission, transfer = honoraires
+            // seuls, la commission reste sur le compte plateforme). On émet donc une
+            // facture commission avec statut PAYEE immédiatement pour cohérence
+            // comptable étab (cf. docs/logique-paiements-v1.md §2.3).
+            //
+            // Idempotent : numero_facture déterministe FACT-STRIPE-YYYY-MM-DD-<mission8>
+            // garantit unicité par mission ; ON CONFLICT numero_facture DO NOTHING
+            // côté PostgreSQL via le check préalable.
+            const commissionTtc = Number(missionRow?.montant_commission_ttc || 0);
+            const commissionHt = Number(missionRow?.montant_commission_ht || 0);
+            const commissionTva = Number(missionRow?.montant_commission_tva || 0);
+            if (commissionTtc > 0 && missionRow?.etablissement_id) {
+              const numeroFactureCommission = `FACT-STRIPE-${nowIso.split("T")[0]}-${missionId.split("-")[0]}`;
+              const { data: existingFactCom } = await supabaseAdmin
+                .from("factures")
+                .select("id")
+                .eq("mission_id", missionId)
+                .maybeSingle();
+              if (!existingFactCom) {
+                const { data: factCreated, error: factErr } = await supabaseAdmin
+                  .from("factures")
+                  .insert({
+                    etablissement_id: missionRow.etablissement_id,
+                    mission_id: missionId,
+                    numero_facture: numeroFactureCommission,
+                    montant_ht: commissionHt,
+                    montant_tva: commissionTva,
+                    montant_ttc: commissionTtc,
+                    taux_tva: 20,
+                    nombre_missions: 1,
+                    statut: "PAYEE",
+                    date_emission: nowIso,
+                    date_paiement: nowIso,
+                    mode_paiement: "STRIPE",
+                    stripe_payment_intent_id: paymentIntentId,
+                    type_document: "FACTURE",
+                  })
+                  .select("id, numero_facture")
+                  .maybeSingle();
+                if (factErr) {
+                  console.error("factures (commission) insert failed:", factErr);
+                } else if (factCreated) {
+                  console.log(`Facture commission ${factCreated.numero_facture} créée (PAYEE) pour mission ${missionId}`);
+                  await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+                    p_acteur_id: "00000000-0000-0000-0000-000000000000",
+                    p_type_acteur: "SYSTEME",
+                    p_action: "FACTURE_COMMISSION_CREATED_VIA_STRIPE",
+                    p_type_ressource: "facture",
+                    p_id_ressource: factCreated.id,
+                    p_cle_s3: null,
+                    p_details: {
+                      mission_id: missionId,
+                      mission_intitule: missionRow.intitule,
+                      etablissement_id: missionRow.etablissement_id,
+                      numero_facture: factCreated.numero_facture,
+                      montant_ttc: commissionTtc,
+                      stripe_payment_intent_id: paymentIntentId,
+                      stripe_transfer_id: transfer.id,
+                    },
+                    p_ip: null,
+                    p_navigateur: "stripe-webhook",
+                  });
+                }
+              }
+            }
 
             // [CP-STRIPE-2 H1/H7/H14] Propagation du paiement vers factures_honoraires :
             // - stripe_payment_intent_id rempli pour les avoirs AUTO_STRIPE futurs

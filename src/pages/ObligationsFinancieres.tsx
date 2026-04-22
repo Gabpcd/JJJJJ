@@ -606,12 +606,24 @@ export default function ObligationsFinancieres() {
                           <th className="pb-2 pr-3">Payée le</th>
                           <th className="pb-2 pr-3">Missions</th>
                           <th className="pb-2 pr-3">Montant</th>
+                          <th className="pb-2 pr-3">Mode paiement</th>
                           <th className="pb-2 pr-3">Statut</th>
                           <th className="pb-2"></th>
                         </tr>
                       </thead>
                       <tbody>
-                        {facturesCommissionHistorique.map((f: any) => (
+                        {facturesCommissionHistorique.map((f: any) => {
+                          const modeLabel =
+                            f.mode_paiement === 'STRIPE' && f.stripe_payment_intent_id
+                              ? '💳 Stripe (à la source)'
+                              : f.mode_paiement === 'STRIPE'
+                              ? '💳 Stripe'
+                              : f.mode_paiement === 'VIREMENT'
+                              ? '🏦 Virement'
+                              : f.mode_paiement === 'CHORUS_PRO'
+                              ? '🏛️ Chorus Pro'
+                              : '—';
+                          return (
                           <tr
                             key={f.facture_id}
                             onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
@@ -622,6 +634,7 @@ export default function ObligationsFinancieres() {
                             <td className="py-2 pr-3 text-xs">{f.date_paiement ? new Date(f.date_paiement).toLocaleDateString('fr-FR') : '—'}</td>
                             <td className="py-2 pr-3 text-xs">{f.nombre_missions ?? '—'}</td>
                             <td className="py-2 pr-3 font-medium">{fmt(f.montant_ttc)}</td>
+                            <td className="py-2 pr-3 text-xs">{modeLabel}</td>
                             <td className="py-2 pr-3">
                               {f.statut === 'PAYEE' ? (
                                 <Badge className="bg-success/10 text-success">Payée</Badge>
@@ -631,7 +644,8 @@ export default function ObligationsFinancieres() {
                             </td>
                             <td className="py-2"><ChevronRight className="h-4 w-4 text-muted-foreground" /></td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
