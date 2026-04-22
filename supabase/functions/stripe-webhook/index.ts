@@ -652,7 +652,7 @@ Deno.serve(async (req) => {
         // Reset the transfer so user can retry
         await supabaseAdmin
           .from("stripe_transfers")
-          .update({ statut: "ECHOUE", erreur: "Checkout expiré", modifie_le: new Date().toISOString() })
+          .update({ statut: "ECHOUE", erreur: "Checkout expiré" })
           .eq("mission_id", expiredMissionId)
           .eq("statut", "EN_ATTENTE");
 
@@ -940,7 +940,7 @@ Deno.serve(async (req) => {
         const errMsg = (transfer as { failure_message?: string }).failure_message || "transfer.failed";
         await supabaseAdmin
           .from("stripe_transfers")
-          .update({ statut: "ECHOUE", erreur: errMsg, modifie_le: new Date().toISOString() })
+          .update({ statut: "ECHOUE", erreur: errMsg })
           .eq("id", row.id);
 
         const { data: admins } = await supabaseAdmin.rpc("fn_list_admin_user_ids");
@@ -994,7 +994,6 @@ Deno.serve(async (req) => {
           .update({
             statut: "REMBOURSE",
             reversed_le: new Date().toISOString(),
-            modifie_le: new Date().toISOString(),
           })
           .eq("id", row.id);
       }
@@ -1159,7 +1158,6 @@ Deno.serve(async (req) => {
           statut: "ECHOUE",
           erreur: errMsg,
           stripe_payout_id: payout.id,
-          modifie_le: new Date().toISOString(),
         })
         .or(`stripe_payout_id.eq.${payout.id},stripe_payout_id.is.null`)
         .eq("statut", "TRANSFERE")
@@ -1256,7 +1254,7 @@ Deno.serve(async (req) => {
       const payout = event.data.object as Stripe.Payout;
       const { data: transfersCancelled } = await supabaseAdmin
         .from("stripe_transfers")
-        .update({ statut: "ANNULEE", stripe_payout_id: payout.id, modifie_le: new Date().toISOString() })
+        .update({ statut: "ANNULEE", stripe_payout_id: payout.id })
         .or(`stripe_payout_id.eq.${payout.id}`)
         .select("id, soignant_id, montant_soignant, mission_id");
 
