@@ -134,7 +134,7 @@ export default function FacturationEtablissement() {
       supabase.from('stripe_transfers')
         .select('mission_id, statut')
         .eq('etablissement_id', user.id)
-        .in('statut', ['EN_ATTENTE', 'TRANSFERE']),
+        .in('statut', ['TRANSFERE']),
     ]);
 
     if (resEtab.data) setEtab(resEtab.data);
