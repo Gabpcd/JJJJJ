@@ -15,7 +15,9 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { ENTREPRISE } from '@/constantes/entreprise';
-import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink, ChevronDown, ChevronRight, Scale } from 'lucide-react';
+import { AlertTriangle, CheckCircle, CreditCard, Clock, FileText, Banknote, ExternalLink, ChevronDown, ChevronRight, Scale, Download } from 'lucide-react';
+import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
+import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -562,12 +564,15 @@ export default function ObligationsFinancieres() {
                         <p className="text-[10px] text-muted-foreground">{fmt(f.montant_ht)} HT + {fmt(f.montant_tva)} TVA</p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button size="sm" onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}>
                         <CreditCard className="w-4 h-4 mr-1" /> Payer par carte
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => navigate(`/etablissement/facturation?tab=commissions`)}>
                         <Banknote className="w-4 h-4 mr-1" /> Virement
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
+                        <Download className="w-4 h-4 mr-1" /> PDF
                       </Button>
                     </div>
                   </div>
@@ -642,7 +647,23 @@ export default function ObligationsFinancieres() {
                                 <Badge className="bg-muted text-muted-foreground">{f.statut}</Badge>
                               )}
                             </td>
-                            <td className="py-2"><ChevronRight className="h-4 w-4 text-muted-foreground" /></td>
+                            <td className="py-2">
+                              <div className="flex items-center gap-1 justify-end">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  title="Télécharger la facture PDF"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    telechargerFactureCommissionPDF(f.facture_id);
+                                  }}
+                                >
+                                  <Download className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            </td>
                           </tr>
                           );
                         })}
@@ -700,7 +721,25 @@ export default function ObligationsFinancieres() {
                           <td className="py-2 pr-3 font-medium">{fmt(p.montant_net)}</td>
                           <td className="py-2 pr-3 text-xs text-muted-foreground">{p.reference_virement}</td>
                           <td className="py-2"><Badge className="bg-success/10 text-success">✅</Badge></td>
-                          <td className="py-2"><ChevronRight className="h-4 w-4 text-muted-foreground" /></td>
+                          <td className="py-2">
+                            <div className="flex items-center gap-1 justify-end">
+                              {p.facture_honoraires_id && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  title="Télécharger la facture honoraires PDF"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    telechargerFactureHonorairesPDF(p.facture_honoraires_id);
+                                  }}
+                                >
+                                  <Download className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                              )}
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
