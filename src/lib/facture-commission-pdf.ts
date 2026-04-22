@@ -211,22 +211,99 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
       y = createSectionTitle(doc, y, 'Missions facturées');
 
       for (const m of missions) {
-        // Bandeau mission : intitulé + soignant + dates
-        if (y > 240) { doc.addPage(); y = 20; }
+        // ── PASSE 2 : Header mission enrichi ──
+        if (y > 230) { doc.addPage(); y = 20; }
+        const soignantInfo = soignantMap.get(m.soignant_assigne_id);
+        const soignantNom = soignantInfo?.nom || 'Soignant';
+        const soignantProf = soignantInfo?.profession || m.profession_requise || '';
+        const soignantSpec = (soignantInfo?.specialites || []).join(', ');
+
+        // Bandeau rose-light
         doc.setFillColor(...JOLENE_COLORS.roseLight);
-        doc.rect(PAGE.margin, y, PAGE.contentWidth, 8, 'F');
+        doc.rect(PAGE.margin, y, PAGE.contentWidth, 16, 'F');
+        doc.setDrawColor(...JOLENE_COLORS.primary);
+        doc.setLineWidth(0.4);
+        doc.line(PAGE.margin, y, PAGE.margin, y + 16);
+
         doc.setTextColor(...JOLENE_COLORS.primaryDark);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
-        doc.text(sanitizeForPdf(m.intitule || '(mission)'), PAGE.margin + 2, y + 5.5);
+        doc.text(sanitizeForPdf(m.intitule || '(mission)'), PAGE.margin + 3, y + 5);
+
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...JOLENE_COLORS.text);
+        doc.setFontSize(7.5);
+        const profLine = soignantSpec ? `${soignantNom} - ${soignantProf} - ${soignantSpec}` : `${soignantNom} - ${soignantProf}`;
+        doc.text(sanitizeForPdf(profLine), PAGE.margin + 3, y + 10);
+
+        const serviceLine = m.service ? `Service : ${m.service}` : '';
+        const debutStr = m.debut_le ? format(new Date(m.debut_le), "dd/MM/yyyy HH'h'mm", { locale: fr }) : '-';
+        const finStr = m.fin_le ? format(new Date(m.fin_le), "dd/MM/yyyy HH'h'mm", { locale: fr }) : '-';
+        const dureeStr = m.duree_heures ? `${Number(m.duree_heures).toFixed(1)} h` : '';
+        const periodeLine = `${debutStr} -> ${finStr} (${dureeStr})`;
+        doc.setFontSize(7);
         doc.setTextColor(...JOLENE_COLORS.textMuted);
-        doc.setFontSize(8);
-        const soignantInfo = soignantMap.get(m.soignant_assigne_id);
-        const soignantNom = soignantInfo?.nom || 'Soignant';
-        const dateStr = m.debut_le ? format(new Date(m.debut_le), 'dd/MM/yyyy', { locale: fr }) : '-';
-        doc.text(`${soignantNom} - ${dateStr} - ${m.profession_requise || '-'}`, PAGE.width - PAGE.margin - 2, y + 5.5, { align: 'right' });
-        y += 10;
+        doc.text(sanitizeForPdf(serviceLine ? `${serviceLine}  |  ${periodeLine}` : periodeLine), PAGE.margin + 3, y + 14.5);
+        y += 19;
+
+        // ── PASSE 3 : Section pointages ──
+        const pres = presencesByMission.get(m.id) || [];
+        const cren = creneauxByMission.get(m.id) || [];
+        if (pres.length > 0) {
+          doc.setTextColor(...JOLENE_COLORS.text);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.text('Pointages', PAGE.margin, y + 3);
+          y += 4;
+          autoTable(doc, {
+            startY: y,
+            head: [['Date', 'Arrivée', 'Départ', 'Pause', 'Heures eff.']],
+            body: pres.map((p) => {
+              const arr = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
+              const dep = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
+              return [
+                arr ? format(arr, 'dd/MM', { locale: fr }) : '-',
+                arr ? format(arr, "HH'h'mm", { locale: fr }) : '-',
+                dep ? format(dep, "HH'h'mm", { locale: fr }) : '-',
+                Number(p.duree_pause_min ?? 0) > 0 ? `${p.duree_pause_min} min` : '-',
+                Number(p.heures_reelles ?? 0) > 0 ? `${Number(p.heures_reelles).toFixed(2)} h` : '-',
+              ];
+            }),
+            styles: { fontSize: 7, cellPadding: 1.5, textColor: JOLENE_COLORS.text as any },
+            headStyles: { fillColor: JOLENE_COLORS.teal as any, textColor: [255, 255, 255] as any, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [245, 250, 249] as any },
+            margin: { left: PAGE.margin + 4, right: PAGE.margin },
+            tableWidth: PAGE.contentWidth - 4,
+          });
+          y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 3 : y + 15;
+        } else if (cren.length > 0) {
+          doc.setTextColor(...JOLENE_COLORS.textMuted);
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(7);
+          doc.text(sanitizeForPdf('Aucun pointage enregistre - creneaux previsionnels utilises :'), PAGE.margin, y + 3);
+          y += 5;
+          autoTable(doc, {
+            startY: y,
+            head: [['Date', 'Début', 'Fin', 'Durée prév.']],
+            body: cren.map((c) => [
+              c.debut_le ? format(new Date(c.debut_le), 'dd/MM', { locale: fr }) : '-',
+              c.debut_le ? format(new Date(c.debut_le), "HH'h'mm", { locale: fr }) : '-',
+              c.fin_le ? format(new Date(c.fin_le), "HH'h'mm", { locale: fr }) : '-',
+              c.duree_heures ? `${Number(c.duree_heures).toFixed(1)} h` : '-',
+            ]),
+            styles: { fontSize: 7, cellPadding: 1.5, textColor: JOLENE_COLORS.textMuted as any },
+            headStyles: { fillColor: JOLENE_COLORS.border as any, textColor: JOLENE_COLORS.text as any, fontStyle: 'bold' },
+            margin: { left: PAGE.margin + 4, right: PAGE.margin },
+            tableWidth: PAGE.contentWidth - 4,
+          });
+          y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 3 : y + 15;
+        } else {
+          doc.setTextColor(...JOLENE_COLORS.textMuted);
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(7);
+          doc.text(sanitizeForPdf('Aucun pointage enregistre (duree previsionnelle utilisee).'), PAGE.margin, y + 3);
+          y += 7;
+        }
 
         // Décomposition financière mission (table compacte)
         const totalBrut = Number(m.total_brut || 0);
@@ -286,41 +363,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
             }
           },
         });
-        y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 3 : y + 30;
-
-        // Pointages détaillés (si présents)
-        const pres = presencesByMission.get(m.id) || [];
-        if (pres.length > 0) {
-          if (y > 250) { doc.addPage(); y = 20; }
-          doc.setTextColor(...JOLENE_COLORS.textMuted);
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(7.5);
-          doc.text(sanitizeForPdf(`Pointages (${pres.length})`), PAGE.margin + 2, y + 3);
-          y += 4;
-          autoTable(doc, {
-            startY: y,
-            head: [['Date', 'Arrivée', 'Départ', 'Pause', 'Heures']],
-            body: pres.map((p) => {
-              const arr = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
-              const dep = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
-              return [
-                arr ? format(arr, 'dd/MM', { locale: fr }) : '-',
-                arr ? format(arr, "HH'h'mm", { locale: fr }) : '-',
-                dep ? format(dep, "HH'h'mm", { locale: fr }) : '-',
-                Number(p.duree_pause_min ?? 0) > 0 ? `${p.duree_pause_min} min` : '-',
-                Number(p.heures_reelles ?? 0) > 0 ? `${Number(p.heures_reelles).toFixed(2)} h` : '-',
-              ];
-            }),
-            styles: { fontSize: 7, cellPadding: 1.5, textColor: JOLENE_COLORS.text as any },
-            headStyles: { fillColor: JOLENE_COLORS.teal as any, textColor: [255, 255, 255] as any, fontStyle: 'bold' },
-            alternateRowStyles: { fillColor: [245, 250, 249] as any },
-            margin: { left: PAGE.margin + 6, right: PAGE.margin },
-            tableWidth: PAGE.contentWidth - 6,
-          });
-          y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 4 : y + 20;
-        } else {
-          y += 3;
-        }
+        y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 5 : y + 30;
       }
     }
 

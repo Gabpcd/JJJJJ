@@ -168,38 +168,38 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
     }
     y += 6;
 
+    // ── PASSE 2 : Mission info enrichi (service, dates complètes, profession, spécialité) ──
     if (mission) {
+      const sgSpec = ((sg as any)?.specialites || []).join(', ');
       addInfoRow(doc, PAGE.margin, y, 'Mission :', mission.intitule || '-');
       y += 5;
       if (mission.service) {
         addInfoRow(doc, PAGE.margin, y, 'Service :', mission.service);
         y += 5;
       }
-      addInfoRow(doc, PAGE.margin, y, 'Profession :', mission.profession_requise || '-');
+      const profLabel = sgSpec ? `${mission.profession_requise || '-'} - ${sgSpec}` : (mission.profession_requise || '-');
+      addInfoRow(doc, PAGE.margin, y, 'Profession :', profLabel);
       y += 5;
-      addInfoRow(doc, PAGE.margin, y, 'Type contrat :', mission.type_contrat_applique || 'LIBERAL');
+      addInfoRow(doc, PAGE.margin, y, 'Type contrat :', mission.type_contrat_applique === 'SALARIE' ? 'Salarié (CDDU)' : 'Libéral');
       y += 5;
       if (mission.debut_le && mission.fin_le) {
-        addInfoRow(
-          doc,
-          PAGE.margin,
-          y,
-          'Période :',
-          `${format(new Date(mission.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })} -> ${format(new Date(mission.fin_le), 'dd/MM/yyyy HH:mm', { locale: fr })}`,
-          22,
-        );
+        const debutStr = format(new Date(mission.debut_le), "dd/MM/yyyy HH'h'mm", { locale: fr });
+        const finStr = format(new Date(mission.fin_le), "dd/MM/yyyy HH'h'mm", { locale: fr });
+        const dureeStr = mission.duree_heures ? ` (${Number(mission.duree_heures).toFixed(1)} h)` : '';
+        addInfoRow(doc, PAGE.margin, y, 'Période :', `${debutStr} -> ${finStr}${dureeStr}`, 22);
         y += 5;
       }
       y += 3;
     }
 
-    // Détail des pointages (si présent)
+    // ── PASSE 3 : Section pointages avec fallback ──
     const presList = (presences as any[] | null) || [];
+    const creneauxList = (creneaux as any[] | null) || [];
     if (presList.length > 0) {
       y = createSectionTitle(doc, y, 'Détail des pointages');
       autoTable(doc, {
         startY: y,
-        head: [['Date', 'Arrivée', 'Départ', 'Pause', 'Durée nette']],
+        head: [['Date', 'Arrivée', 'Départ', 'Pause', 'Heures eff.']],
         body: presList.map((p) => {
           const arr = p.pointage_arrivee_le ? new Date(p.pointage_arrivee_le) : null;
           const dep = p.pointage_depart_le ? new Date(p.pointage_depart_le) : null;
@@ -214,11 +214,38 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
           ];
         }),
         styles: { fontSize: 8, cellPadding: 2, textColor: JOLENE_COLORS.text as any },
-        headStyles: { fillColor: JOLENE_COLORS.primary as any, textColor: [255, 255, 255] as any, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: JOLENE_COLORS.roseLight as any },
+        headStyles: { fillColor: JOLENE_COLORS.teal as any, textColor: [255, 255, 255] as any, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [245, 250, 249] as any },
         margin: { left: PAGE.margin, right: PAGE.margin },
       });
       y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 6 : y + 30;
+    } else if (creneauxList.length > 0) {
+      y = createSectionTitle(doc, y, 'Créneaux prévisionnels');
+      doc.setTextColor(...JOLENE_COLORS.textMuted);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7);
+      doc.text(sanitizeForPdf('Aucun pointage enregistre - creneaux previsionnels :'), PAGE.margin, y);
+      y += 3;
+      autoTable(doc, {
+        startY: y,
+        head: [['Date', 'Début', 'Fin', 'Durée prév.']],
+        body: creneauxList.map((c) => [
+          c.debut_le ? format(new Date(c.debut_le), 'dd/MM/yyyy', { locale: fr }) : '-',
+          c.debut_le ? format(new Date(c.debut_le), "HH'h'mm", { locale: fr }) : '-',
+          c.fin_le ? format(new Date(c.fin_le), "HH'h'mm", { locale: fr }) : '-',
+          c.duree_heures ? `${Number(c.duree_heures).toFixed(1)} h` : '-',
+        ]),
+        styles: { fontSize: 7.5, cellPadding: 1.5, textColor: JOLENE_COLORS.textMuted as any },
+        headStyles: { fillColor: JOLENE_COLORS.border as any, textColor: JOLENE_COLORS.text as any, fontStyle: 'bold' },
+        margin: { left: PAGE.margin, right: PAGE.margin },
+      });
+      y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 6 : y + 20;
+    } else {
+      doc.setTextColor(...JOLENE_COLORS.textMuted);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7.5);
+      doc.text(sanitizeForPdf('Aucun pointage enregistre (duree previsionnelle utilisee).'), PAGE.margin, y + 3);
+      y += 10;
     }
 
     // Section décomposition financière adaptée au type de contrat
