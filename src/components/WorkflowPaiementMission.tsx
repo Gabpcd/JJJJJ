@@ -252,16 +252,30 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
 
         <div className="text-xs space-y-1 border-t border-border/60 pt-2">
           <p className="text-muted-foreground">
-            Méthode : <span className="text-foreground font-medium">{p.methode === 'NOTE_HONORAIRES' ? "Note d'honoraires" : p.methode === 'STRIPE_CONNECT' ? 'Stripe Connect' : 'Virement'}</span>
+            Méthode : <span className="text-foreground font-medium">{p.stripe_transfer_id ? 'Stripe Connect' : p.methode === 'NOTE_HONORAIRES' ? "Note d'honoraires" : p.methode === 'STRIPE_CONNECT' ? 'Stripe Connect' : 'Virement'}</span>
           </p>
           {p.reference_virement && (
             <p className="text-muted-foreground">
               Référence : <span className="text-foreground font-mono font-medium">{p.reference_virement}</span>
             </p>
           )}
-          <p className="text-muted-foreground">
-            Montant : <span className="text-foreground font-medium">{fmt(p.montant_net)}</span>
-          </p>
+          {/* Si paiement Stripe Connect : afficher le montant TOTAL débité à l'étab
+              (honoraires soignant + commission Jolene capturée à la source), pas
+              juste le net soignant — évite la confusion "seul 132€ a été débité". */}
+          {p.stripe_transfer_id && info ? (
+            <>
+              <p className="text-muted-foreground">
+                Montant débité : <span className="text-foreground font-semibold">{fmt(p.montant_net + info.commission_ttc)}</span>
+              </p>
+              <p className="text-[10px] text-muted-foreground/80 pl-1">
+                = {fmt(p.montant_net)} honoraires soignant + {fmt(info.commission_ttc)} commission Jolene
+              </p>
+            </>
+          ) : (
+            <p className="text-muted-foreground">
+              Montant : <span className="text-foreground font-medium">{fmt(p.montant_net)}</span>
+            </p>
+          )}
         </div>
 
         {p.statut === 'CONTESTE' && (
