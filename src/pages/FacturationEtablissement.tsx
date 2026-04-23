@@ -607,8 +607,39 @@ export default function FacturationEtablissement() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 space-y-3">
-              {/* B.3.3.b — contenu migré depuis OF-5 */}
-              <p className="text-sm text-muted-foreground p-4 card-base">Contenu migré en B.3.3.b</p>
+              {paiementsEnAttente.length === 0 ? (
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Aucun paiement en attente de confirmation soignant.
+                  </CardContent>
+                </Card>
+              ) : (
+                paiementsEnAttente.map((p: any) => (
+                  <button
+                    type="button"
+                    key={p.paiement_id}
+                    onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)}
+                    className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border hover:border-primary/50 hover:bg-muted/30 transition-colors cursor-pointer text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm text-primary">{p.mission_intitule}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {p.soignant_nom} · {p.soignant_profession} · {p.methode} · Réf : {p.reference_virement}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Déclaré le {p.date_paiement && new Date(p.date_paiement).toLocaleDateString('fr-FR')}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0 flex items-center gap-2">
+                      <div>
+                        <p className="font-bold">{fmt(p.montant_net)}</p>
+                        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">En attente</Badge>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           </CollapsibleContent>
         </Collapsible>
