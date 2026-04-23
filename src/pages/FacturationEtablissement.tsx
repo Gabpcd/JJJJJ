@@ -873,7 +873,93 @@ export default function FacturationEtablissement() {
                   </p>
                 </div>
               )}
-              {/* Section 4.4 SEPA + IBAN Jolene + Chorus Pro + Prélèvements migrée en B.3.3.b.5 */}
+              {/* 4.4 — Bandeau SEPA + IBAN Jolene + Chorus Pro + Prélèvements SEPA */}
+
+              {/* 4.4.a — Bandeau SEPA actif */}
+              {etab?.mode_paiement_commission === 'SEPA_DEBIT' && (
+                <div className="rounded-lg border border-info/30 bg-info/5 p-3 flex items-start gap-2">
+                  <Info className="h-4 w-4 text-info shrink-0 mt-0.5" />
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-semibold text-info mb-0.5">🏦 Mandat SEPA actif</p>
+                    <p>Les factures commission sont prélevées automatiquement chaque mois sur le compte bancaire enregistré.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* 4.4.b — IBAN Jolene (pour virements classiques) */}
+              {etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
+                <div className="rounded-lg border bg-muted/20 p-3">
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                    <Building2 className="h-4 w-4 text-primary" /> Coordonnées bancaires Jolene
+                  </p>
+                  <div className="text-xs text-muted-foreground space-y-1 font-mono">
+                    <p>IBAN : {ENTREPRISE.iban || 'FR76 XXXX XXXX XXXX XXXX XXXX XXX'}</p>
+                    <p>BIC : {ENTREPRISE.bic || 'XXXXXXXX'}</p>
+                    <p className="text-[10px] text-muted-foreground/70 font-sans italic">
+                      Référence obligatoire : numéro de la facture commission (ex: FACT-2026-04-0001)
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* 4.4.c — Chorus Pro (si établissement secteur public) */}
+              {etab?.est_secteur_public && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-start gap-2">
+                  <Building2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-semibold text-primary mb-0.5">🏛️ Secteur public — Chorus Pro</p>
+                    <p>Vos factures commission sont déposées sur Chorus Pro. Le paiement suit le cycle de mandatement habituel (30 à 60 jours).</p>
+                    <button
+                      onClick={() => navigate('/etablissement/chorus-config')}
+                      className="mt-1 text-primary hover:underline font-medium"
+                    >
+                      Configurer Chorus Pro →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 4.4.d — Historique prélèvements SEPA */}
+              {etab?.mode_paiement_commission === 'SEPA_DEBIT' && prelevements.length > 0 && (
+                <div className="pt-4 border-t border-border">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                    <Banknote className="h-4 w-4 text-info" />
+                    Historique des prélèvements ({prelevements.length})
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-2 pr-3">Date</th>
+                          <th className="pb-2 pr-3">Mission</th>
+                          <th className="pb-2 pr-3 text-right">Montant</th>
+                          <th className="pb-2 pr-3">Statut</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {prelevements.map((p: any) => (
+                          <tr
+                            key={p.id}
+                            onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
+                            className={`border-b last:border-0 transition-colors ${p.mission_id ? 'cursor-pointer hover:bg-muted/40' : 'cursor-default'}`}
+                          >
+                            <td className="py-2 pr-3 text-xs">{p.capture_le && new Date(p.capture_le).toLocaleDateString('fr-FR')}</td>
+                            <td className="py-2 pr-3 text-primary">{(p.missions as any)?.intitule || '—'}</td>
+                            <td className="py-2 pr-3 text-right font-medium">{fmt(p.montant_ttc)}</td>
+                            <td className="py-2 pr-3">
+                              {p.statut === 'PRELEVE' ? (
+                                <Badge className="bg-success/10 text-success">Prélevé</Badge>
+                              ) : (
+                                <Badge className="bg-muted text-muted-foreground">{p.statut}</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </CollapsibleContent>
         </Collapsible>
