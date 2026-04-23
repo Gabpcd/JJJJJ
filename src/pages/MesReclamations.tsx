@@ -40,6 +40,18 @@ interface Reclamation {
 
 export default function MesReclamations({ role }: { role: 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' }) {
   usePageTitle('Mes réclamations');
+  return (
+    <LayoutApp role={role}>
+      <ReclamationsContent role={role} />
+    </LayoutApp>
+  );
+}
+
+/**
+ * Contenu "Réclamations" sans LayoutApp — réutilisable dans les Tabs
+ * de LitigesEtablissement (fusion B.1).
+ */
+export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN_ETABLISSEMENT' }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
@@ -89,10 +101,10 @@ export default function MesReclamations({ role }: { role: 'SOIGNANT' | 'ADMIN_ET
     setSubmitting(false);
   };
 
-  if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role={role}>
+    <>
       <div className="max-w-3xl mx-auto space-y-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -202,6 +214,6 @@ export default function MesReclamations({ role }: { role: 'SOIGNANT' | 'ADMIN_ET
           </div>
         </DialogContent>
       </Dialog>
-    </LayoutApp>
+    </>
   );
 }

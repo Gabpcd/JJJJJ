@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -213,7 +213,7 @@ function AppRoutes() {
           <Route path="/etablissement/obligations" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ObligationsFinancieres /></RouteProtegee>} />
           <Route path="/etablissement/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageMessagerie role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><LitigesEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/reclamations" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MesReclamations role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
+          <Route path="/etablissement/reclamations" element={<Navigate to="/etablissement/litiges?tab=reclamations" replace />} />
           <Route path="/etablissement/presences/mission/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailPresencesMission /></RouteProtegee>} />
 
           {/* Contrat (accessible par soignant et établissement) */}

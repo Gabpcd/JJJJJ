@@ -109,8 +109,7 @@ function getEtablissementSidebar(): SidebarEntry[] {
       icone: ClipboardCheck, label: 'Gestion', items: [
         { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
         { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
-        { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
-        { icone: MessageCircle, label: 'Réclamations', route: '/etablissement/reclamations' },
+        { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
         { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
         { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
         { icone: Activity, label: 'Analytics', route: '/etablissement/analytics' },

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
@@ -12,11 +12,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
+import { ReclamationsContent } from './MesReclamations';
 
 const STATUT_COLORS: Record<string, string> = {
   OUVERT: 'bg-warning/10 text-warning',
@@ -30,8 +32,11 @@ const STATUT_COLORS: Record<string, string> = {
 };
 
 export default function LitigesEtablissement() {
-  usePageTitle('Litiges');
+  usePageTitle('Litiges & contestations');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'reclamations' ? 'reclamations' : 'litiges';
+  const [activeTab, setActiveTab] = useState<'litiges' | 'reclamations'>(initialTab);
   const { user, etablissementId } = useEtablissementScope();
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,16 +106,37 @@ export default function LitigesEtablissement() {
     charger();
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
-
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+          <Scale className="h-6 w-6 text-primary" /> Litiges & contestations
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">Gérez les litiges mission et vos réclamations générales</p>
+      </div>
+
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          setActiveTab(v as 'litiges' | 'reclamations');
+          if (v === 'reclamations') setSearchParams({ tab: 'reclamations' }, { replace: true });
+          else setSearchParams({}, { replace: true });
+        }}
+      >
+        <TabsList className="mb-4">
+          <TabsTrigger value="litiges" className="gap-1.5">
+            <Scale className="h-4 w-4" /> Litiges mission
+          </TabsTrigger>
+          <TabsTrigger value="reclamations" className="gap-1.5">
+            <MessageCircle className="h-4 w-4" /> Réclamations générales
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="litiges">
+      {loading ? <ChargementPage /> : (<>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Scale className="h-6 w-6 text-primary" /> Litiges
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Gérez les contestations de vos missions</p>
+          <p className="text-sm text-muted-foreground">Contestations sur vos missions (pointage, paiement, qualité)</p>
         </div>
         <Button onClick={openNewLitige} className="gap-1.5">
           <PlusCircle className="h-4 w-4" /> Ouvrir un litige
@@ -188,6 +214,13 @@ export default function LitigesEtablissement() {
           })}
         </div>
       )}
+      </>)}
+        </TabsContent>
+
+        <TabsContent value="reclamations">
+          <ReclamationsContent role="ADMIN_ETABLISSEMENT" />
+        </TabsContent>
+      </Tabs>
 
       {/* Modal nouveau litige */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
