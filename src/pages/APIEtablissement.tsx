@@ -30,6 +30,14 @@ const METHOD_COLORS: Record<string, string> = {
 
 export default function APIEtablissement() {
   usePageTitle('API');
+  return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <APIContent />
+    </LayoutApp>
+  );
+}
+
+export function APIContent() {
   const { user } = useAuth();
   const [keys, setKeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,13 +81,13 @@ export default function APIEtablissement() {
   };
   const masquer = (cle: string, revealed: boolean) => revealed ? cle : cle.slice(0, 12) + '••••••••••••';
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <h1 className="text-xl font-bold text-foreground flex items-center gap-2 mb-1">
+    <>
+      <h2 className="text-lg font-bold text-foreground flex items-center gap-2 mb-1">
         <Code2 className="h-5 w-5 text-primary" /> API REST Jolene
-      </h1>
+      </h2>
       <p className="text-sm text-muted-foreground mb-6">Intégrez vos outils RH avec notre API</p>
 
       {/* Doc */}
@@ -172,6 +180,6 @@ export default function APIEtablissement() {
           )}
         </DialogContent>
       </Dialog>
-    </LayoutApp>
+    </>
   );
 }

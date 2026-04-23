@@ -11,6 +11,14 @@ import { toast } from 'sonner';
 
 export default function MonGroupe() {
   usePageTitle('Mon Groupe');
+  return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <MonGroupeContent />
+    </LayoutApp>
+  );
+}
+
+export function MonGroupeContent() {
   const { user } = useAuth();
   const [etab, setEtab] = useState<any>(null);
   const [groupe, setGroupe] = useState<any>(null);
@@ -47,23 +55,21 @@ export default function MonGroupe() {
     load();
   }, [user]);
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   if (!etab?.groupe_sante_id || !groupe) {
     return (
-      <LayoutApp role="ADMIN_ETABLISSEMENT">
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Building2 className="h-16 w-16 text-primary/30 mb-4" />
-          <h2 className="text-lg font-bold text-foreground mb-2">Établissement indépendant</h2>
-          <p className="text-sm text-muted-foreground max-w-md mb-4">
-            Votre établissement n'appartient à aucun groupe de santé.
-            Contactez-nous pour rattacher votre établissement à un groupe existant.
-          </p>
-          <Button className="gap-2" onClick={() => window.location.href = 'mailto:contact@jolene.fr?subject=Rejoindre un groupe de santé'}>
-            <Mail className="h-4 w-4" /> Contacter Jolene
-          </Button>
-        </div>
-      </LayoutApp>
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Building2 className="h-16 w-16 text-primary/30 mb-4" />
+        <h2 className="text-lg font-bold text-foreground mb-2">Établissement indépendant</h2>
+        <p className="text-sm text-muted-foreground max-w-md mb-4">
+          Votre établissement n'appartient à aucun groupe de santé.
+          Contactez-nous pour rattacher votre établissement à un groupe existant.
+        </p>
+        <Button className="gap-2" onClick={() => window.location.href = 'mailto:contact@jolene.fr?subject=Rejoindre un groupe de santé'}>
+          <Mail className="h-4 w-4" /> Contacter Jolene
+        </Button>
+      </div>
     );
   }
 
@@ -77,8 +83,7 @@ export default function MonGroupe() {
   });
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
-      {/* En-tête groupe */}
+    <>
       <div className="card-base bg-gradient-to-r from-primary/5 to-info/5 mb-6">
         <h1 className="text-2xl font-bold text-foreground">{groupe.nom}</h1>
         <div className="flex items-center gap-3 mt-2 flex-wrap text-sm text-muted-foreground">
@@ -92,19 +97,17 @@ export default function MonGroupe() {
         </div>
       </div>
 
-      {/* Filtres */}
       <div className="flex gap-2 flex-wrap mb-4">
-        <select value={filtreDepartement} onChange={(e) => setFiltreDepartement(e.target.value)} className="input-base text-sm flex-1 flex-1 min-w-0 sm:min-w-[150px]">
+        <select value={filtreDepartement} onChange={(e) => setFiltreDepartement(e.target.value)} className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]">
           <option value="">Tous les départements</option>
           {departements.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
-        <select value={filtreType} onChange={(e) => setFiltreType(e.target.value)} className="input-base text-sm flex-1 flex-1 min-w-0 sm:min-w-[150px]">
+        <select value={filtreType} onChange={(e) => setFiltreType(e.target.value)} className="input-base text-sm flex-1 min-w-0 sm:min-w-[150px]">
           <option value="">Tous les types</option>
           {types.map(t => <option key={t} value={t}>{getLabelTypeEtablissement(t)}</option>)}
         </select>
       </div>
 
-      {/* Liste */}
       <h2 className="text-lg font-bold text-foreground mb-3">Établissements du groupe ({etabsFiltres.length})</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {etabsFiltres.map(e => (
@@ -122,6 +125,6 @@ export default function MonGroupe() {
           </div>
         ))}
       </div>
-    </LayoutApp>
+    </>
   );
 }
