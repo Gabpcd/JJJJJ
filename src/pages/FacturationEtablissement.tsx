@@ -24,8 +24,11 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DialogFooter } from '@/components/ui/dialog';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -41,6 +44,20 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 const fmt = (v: number | null | undefined) =>
   v != null ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v) : '—';
+
+type MethodePaiement = 'VIREMENT' | 'CHEQUE' | 'BULLETIN_PAIE' | 'NOTE_HONORAIRES';
+
+const isRefValid = (ref: string) => {
+  const t = ref.trim();
+  return t.length >= 6 && /\d{2,}/.test(t) && /[A-Za-z]/.test(t);
+};
+
+const METHODE_LABELS: Record<MethodePaiement, string> = {
+  VIREMENT: 'Virement bancaire',
+  CHEQUE: 'Chèque',
+  BULLETIN_PAIE: 'Bulletin de paie',
+  NOTE_HONORAIRES: 'Note d\'honoraires',
+};
 
 // ─── Helpers cards missions ───
 function RetardBadge({ jours }: { jours: number }) {
@@ -107,8 +124,13 @@ export default function FacturationEtablissement() {
   const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [declarerDialogMission, setDeclarerDialogMission] = useState<any>(null);
-  const [declarerForm, setDeclarerForm] = useState({ montant: '', methode: 'VIREMENT', reference: '', date: new Date().toISOString().split('T')[0], attestation: false });
-  const [declarerLoading, setDeclarerLoading] = useState(false);
+  const [declarerMontant, setDeclarerMontant] = useState<string>('');
+  const [declarerMethode, setDeclarerMethode] = useState<MethodePaiement>('VIREMENT');
+  const [declarerReference, setDeclarerReference] = useState<string>('');
+  const [declarerDatePaiement, setDeclarerDatePaiement] = useState<string>('');
+  const [declarerAttestation, setDeclarerAttestation] = useState<boolean>(false);
+  const [declaringId, setDeclaringId] = useState<string | null>(null);
+  const [connectPayingId, setConnectPayingId] = useState<string | null>(null);
   const [generatingFacture, setGeneratingFacture] = useState(false);
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
 
@@ -169,6 +191,150 @@ export default function FacturationEtablissement() {
   };
 
   useEffect(() => { charger(); }, [user]);
+
+  // ── Handlers dialogs paiement ──
+  const ouvrirDialogDeclarer = (mission: any) => {
+    setDeclarerDialogMission(mission);
+    setDeclarerMontant(String(Number(mission.net_a_payer || 0).toFixed(2)));
+    setDeclarerMethode('VIREMENT');
+    setDeclarerReference('');
+    setDeclarerDatePaiement(new Date().toISOString().split('T')[0]);
+    setDeclarerAttestation(false);
+  };
+
+  const fermerDialogDeclarer = () => {
+    setDeclarerDialogMission(null);
+    setDeclaringId(null);
+  };
+
+  const validerDeclarationPaiement = async () => {
+    if (!declarerDialogMission) return;
+    const missionId = declarerDialogMission.mission_id;
+    const montantNum = Number(declarerMontant);
+    if (!montantNum || montantNum <= 0) {
+      toast.error('Montant invalide');
+      return;
+    }
+    const refRequired = declarerMethode !== 'BULLETIN_PAIE';
+    if (refRequired && !isRefValid(declarerReference)) {
+      toast.error('La référence doit contenir au moins 5 caractères dont un chiffre.');
+      return;
+    }
+    if (!declarerAttestation) {
+      toast.error('Vous devez cocher l\'attestation sur l\'honneur.');
+      return;
+    }
+
+    setDeclaringId(missionId);
+    try {
+      const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
+        p_mission_id: missionId,
+        p_montant: montantNum,
+        p_methode: declarerMethode,
+        p_reference: declarerReference.trim(),
+        p_date_paiement: declarerDatePaiement,
+        p_attestation_sur_l_honneur: true,
+      });
+      if (error) throw error;
+      const res = data as any;
+      if (res?.error === 'ATTESTATION_REQUISE') {
+        toast.error('Attestation sur l\'honneur obligatoire');
+        return;
+      }
+      if (res?.error === 'use_stripe_connect') {
+        toast.info('Ce soignant a Stripe Connect actif — utilisez le paiement Stripe');
+        fermerDialogDeclarer();
+        return;
+      }
+      if (res?.error) throw new Error(res.message || res.error);
+
+      // Invoke send-email PAIEMENT_SOIGNANT_DECLARE (non-bloquant)
+      try {
+        await supabase.functions.invoke('send-email', {
+          body: {
+            type: 'PAIEMENT_SOIGNANT_DECLARE',
+            destinataire_id: res.soignant_id,
+            data: {
+              soignant_prenom: declarerDialogMission.soignant_prenom || declarerDialogMission.soignant_nom?.split(' ')[0] || '',
+              montant_formatte: montantNum.toFixed(2),
+              methode: declarerMethode,
+              methode_libelle: METHODE_LABELS[declarerMethode],
+              reference_virement: declarerReference || '',
+              date_paiement: declarerDatePaiement,
+              date_paiement_fr: new Date(declarerDatePaiement).toLocaleDateString('fr-FR'),
+              etablissement_nom: (data as any)?.etablissement_nom || '',
+              mission_intitule: res.mission_intitule || declarerDialogMission.intitule || '',
+              deep_link: '/soignant/mes-gains',
+            },
+          },
+        });
+      } catch (emailErr) {
+        // eslint-disable-next-line no-console
+        console.error('send-email PAIEMENT_SOIGNANT_DECLARE failed:', emailErr);
+      }
+
+      toast.success('Paiement déclaré — le soignant a été notifié pour confirmation');
+      fermerDialogDeclarer();
+      charger();
+    } catch (e: any) {
+      toast.error(extraireMessageErreur(e));
+    } finally {
+      setDeclaringId(null);
+    }
+  };
+
+  const payerStripeConnect = async (missionId: string) => {
+    setConnectPayingId(missionId);
+    const loadingToastId = toast.loading('Préparation du paiement…');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        toast.error('Session expirée, veuillez vous reconnecter', { id: loadingToastId });
+        return;
+      }
+
+      const { result, error, code, message, factureGenereeAuto } =
+        await payerMissionStripeConnectAvecGenerationAuto(missionId, accessToken, (msg) => toast.loading(msg, { id: loadingToastId }));
+
+      if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
+        toast.error(message || 'Les missions salariées doivent être payées par virement SEPA (bulletin de paie).', { id: loadingToastId, duration: 8000 });
+        return;
+      }
+
+      if (result?.already_paid) {
+        toast.info(result.message || 'Ce paiement a déjà été effectué', { id: loadingToastId });
+        charger();
+        return;
+      }
+
+      if (error || code) {
+        toast.error(message || code || error?.message || 'Erreur lors du paiement', { id: loadingToastId });
+        return;
+      }
+
+      toast.dismiss(loadingToastId);
+      if (factureGenereeAuto) {
+        toast.success('Facture honoraires générée automatiquement');
+      }
+      if (result?.url) { window.location.href = result.url; return; }
+      if (result?.client_secret) {
+        setConnectClientSecret(result.client_secret);
+        setShowConnectCheckout(true);
+        setConnectDecomposition({
+          commission_ttc: result.commission_ttc,
+          salaire_brut: result.salaire_brut,
+          total: result.total,
+        });
+        return;
+      }
+      toast.error('Aucune URL de paiement reçue');
+    } catch (e: any) {
+      toast.error(extraireMessageErreur(e), { id: loadingToastId });
+    } finally {
+      setConnectPayingId(null);
+    }
+  };
 
   // ── Loading ──
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
@@ -376,25 +542,18 @@ export default function FacturationEtablissement() {
                       {peutPayerStripe ? (
                         <Button
                           size="sm"
-                          onClick={() => {
-                            // B.3.3.a.2 : wiring dialog Stripe Connect
-                            console.log('TODO B.3.3.a.2 — Stripe Connect mission', m.mission_id);
-                          }}
-                          disabled={enLitige}
+                          onClick={() => payerStripeConnect(m.mission_id)}
+                          disabled={connectPayingId === m.mission_id || enLitige}
                           className="w-full"
                         >
                           <CreditCard className="w-4 h-4 mr-2" />
-                          💳 Payer via Stripe
+                          {connectPayingId === m.mission_id ? 'Redirection…' : '💳 Payer via Stripe'}
                         </Button>
                       ) : (
                         <Button
                           size="sm"
-                          onClick={() => {
-                            // B.3.3.a.2 : wiring dialog Déclaration paiement
-                            console.log('TODO B.3.3.a.2 — Déclarer paiement mission', m.mission_id);
-                            setDeclarerDialogMission(m);
-                          }}
-                          disabled={enLitige}
+                          onClick={() => ouvrirDialogDeclarer(m)}
+                          disabled={declaringId === m.mission_id || enLitige}
                           className="w-full"
                         >
                           <Banknote className="w-4 h-4 mr-2" />
@@ -543,16 +702,118 @@ export default function FacturationEtablissement() {
         </Dialog>
       )}
 
-      {/* Dialog Déclaration paiement soignant (fullscreen mobile) */}
+      {/* Dialog Déclaration paiement soignant (form complet OF-11, fullscreen mobile) */}
       {declarerDialogMission && (
-        <Dialog open={!!declarerDialogMission} onOpenChange={(open) => { if (!open) { setDeclarerDialogMission(null); } }}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <Dialog open={!!declarerDialogMission} onOpenChange={(open) => { if (!open) fermerDialogDeclarer(); }}>
+          <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Déclarer un paiement</DialogTitle>
-              <DialogDescription>Mission : {declarerDialogMission?.intitule}</DialogDescription>
+              <DialogTitle>Déclarer un paiement au soignant</DialogTitle>
+              <DialogDescription>
+                {declarerDialogMission.intitule || 'Mission'} — {declarerDialogMission.soignant_nom || ''}
+              </DialogDescription>
             </DialogHeader>
-            {/* B.3.3.a — formulaire complet migré depuis OF-11 */}
-            <p className="text-sm text-muted-foreground">Formulaire migré en B.3.3.a</p>
+
+            <div className="space-y-4 py-2">
+              <div>
+                <Label htmlFor="declarer-montant">Montant payé (€ net)</Label>
+                <Input
+                  id="declarer-montant"
+                  type="number"
+                  step="0.01"
+                  value={declarerMontant}
+                  onChange={(e) => setDeclarerMontant(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Montant estimé : {fmt(Number(declarerDialogMission.net_a_payer || 0))}
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="declarer-methode">Méthode de paiement</Label>
+                <Select
+                  value={declarerMethode}
+                  onValueChange={(v) => setDeclarerMethode(v as MethodePaiement)}
+                >
+                  <SelectTrigger id="declarer-methode">
+                    <SelectValue placeholder="Choisir une méthode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
+                    <SelectItem value="CHEQUE">Chèque</SelectItem>
+                    <SelectItem value="BULLETIN_PAIE">Bulletin de paie</SelectItem>
+                    <SelectItem value="NOTE_HONORAIRES">Note d'honoraires</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="declarer-reference">
+                  Référence {declarerMethode === 'BULLETIN_PAIE' ? '(optionnelle)' : '(obligatoire, min. 5 car. + 1 chiffre)'}
+                </Label>
+                <Input
+                  id="declarer-reference"
+                  value={declarerReference}
+                  onChange={(e) => setDeclarerReference(e.target.value)}
+                  placeholder={
+                    declarerMethode === 'VIREMENT' ? 'Réf. virement bancaire'
+                      : declarerMethode === 'CHEQUE' ? 'N° chèque'
+                      : declarerMethode === 'BULLETIN_PAIE' ? 'N° bulletin (facultatif)'
+                      : 'Réf. note d\'honoraires'
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="declarer-date">Date du paiement</Label>
+                <Input
+                  id="declarer-date"
+                  type="date"
+                  value={declarerDatePaiement}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setDeclarerDatePaiement(e.target.value)}
+                />
+              </div>
+
+              <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="declarer-attestation"
+                    checked={declarerAttestation}
+                    onCheckedChange={(c) => setDeclarerAttestation(c === true)}
+                    className="mt-0.5"
+                  />
+                  <Label
+                    htmlFor="declarer-attestation"
+                    className="text-xs text-foreground leading-relaxed cursor-pointer"
+                  >
+                    <strong>J'atteste sur l'honneur</strong> avoir effectivement payé ce soignant conformément au
+                    Code du travail (pour un salarié) ou au Code de commerce (pour un libéral) en contrepartie
+                    de la prestation effectuée dans le cadre de cette mission. Cette déclaration m'engage au
+                    regard de l'URSSAF et de l'administration fiscale. Une déclaration frauduleuse m'expose à
+                    des sanctions pénales (article 441-1 du Code pénal).
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={fermerDialogDeclarer}>
+                Annuler
+              </Button>
+              <Button
+                onClick={validerDeclarationPaiement}
+                disabled={
+                  !declarerAttestation ||
+                  declaringId === declarerDialogMission.mission_id ||
+                  !declarerMontant ||
+                  Number(declarerMontant) <= 0 ||
+                  (declarerMethode !== 'BULLETIN_PAIE' && !isRefValid(declarerReference))
+                }
+              >
+                {declaringId === declarerDialogMission.mission_id ? 'Envoi…' : 'Valider la déclaration'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
