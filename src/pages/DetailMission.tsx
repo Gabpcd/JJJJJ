@@ -340,8 +340,14 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     }
   };
 
-  const backUrl = isAdmin ? '/admin/calendrier' : '/etablissement/missions';
-  const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour aux missions';
+  const handleBack = () => {
+    if (window.history.length > 2) {
+      navigate(-1);
+    } else {
+      navigate(isAdmin ? '/admin/calendrier' : '/etablissement/missions');
+    }
+  };
+  const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour';
 
   if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
   if (!loading && !mission) return <LayoutApp role={role}><div className="text-center py-20"><p className="text-lg font-semibold text-foreground">Mission introuvable</p><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate(-1)} className="btn-primary mt-4">Retour</button></div></LayoutApp>;
@@ -353,7 +359,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
   return (
     <LayoutApp role={role}>
-      <button onClick={() => navigate(backUrl)} className="text-sm text-primary hover:underline mb-4 inline-block">
+      <button onClick={handleBack} className="text-sm text-primary hover:underline mb-4 inline-block">
         {backLabel}
       </button>
 
