@@ -77,7 +77,7 @@ export function BandeauBlocageAuto({ raisons, bloque_le }: Props) {
           <div className="flex flex-col sm:flex-row gap-2 mt-4">
             {paiementsNb > 0 && (
               <button
-                onClick={() => navigate('/etablissement/obligations-financieres')}
+                onClick={() => navigate('/etablissement/facturation')}
                 className="btn-primary text-sm flex-1"
               >
                 Déclarer paiements soignants

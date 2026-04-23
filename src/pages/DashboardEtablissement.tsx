@@ -445,7 +445,7 @@ export default function DashboardEtablissement() {
                 sousLabel={sousLabelParts.length > 0 ? sousLabelParts.join(' + ') : undefined}
                 couleurIcone={hasImpayes ? 'text-destructive' : 'text-success'}
                 couleurFond={hasImpayes ? 'bg-destructive/10' : 'bg-success/10'}
-                lien="/etablissement/obligations"
+                lien="/etablissement/facturation"
               />
             );
           })()}
