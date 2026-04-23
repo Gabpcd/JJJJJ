@@ -982,9 +982,75 @@ export default function FacturationEtablissement() {
             </Card>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="mt-2 space-y-3">
-              {/* B.3.3.c — contenu migré depuis OF-8 + FE-6/FE-7 */}
-              <p className="text-sm text-muted-foreground p-4 card-base">Contenu migré en B.3.3.c</p>
+            <div className="mt-2">
+              {paiementsConfirmes.length === 0 ? (
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Aucun paiement confirmé pour l'instant.
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-muted-foreground">
+                            <th className="pb-2 pr-3">Date</th>
+                            <th className="pb-2 pr-3">Soignant</th>
+                            <th className="pb-2 pr-3">Mission</th>
+                            <th className="pb-2 pr-3 text-right">Montant</th>
+                            <th className="pb-2 pr-3">Réf.</th>
+                            <th className="pb-2">Confirmé</th>
+                            <th className="pb-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paiementsConfirmes.map((p: any) => (
+                            <tr
+                              key={p.paiement_id}
+                              onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
+                              className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                            >
+                              <td className="py-2 pr-3 text-xs">{p.confirme_par_soignant_le && new Date(p.confirme_par_soignant_le).toLocaleDateString('fr-FR')}</td>
+                              <td className="py-2 pr-3">{p.soignant_nom}</td>
+                              <td className="py-2 pr-3 text-primary">{p.mission_intitule}</td>
+                              <td className="py-2 pr-3 text-right font-medium">{fmt(p.montant_net)}</td>
+                              <td className="py-2 pr-3 text-xs text-muted-foreground">{p.reference_virement}</td>
+                              <td className="py-2"><Badge className="bg-success/10 text-success">✅</Badge></td>
+                              <td className="py-2">
+                                <div className="flex items-center gap-1 justify-end">
+                                  {p.facture_honoraires_id && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-9 w-9"
+                                      title="Télécharger la facture honoraires PDF"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        telechargerFactureHonorairesPDF(p.facture_honoraires_id);
+                                      }}
+                                    >
+                                      <Download className="h-4 w-4 text-muted-foreground" />
+                                    </Button>
+                                  )}
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-3">
+                      Les 10 derniers paiements confirmés par le soignant. Cliquez sur une ligne pour voir le détail mission.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+              {/* Note : les paiements CONTESTE ne sont pas exposés par fn_obligations_financieres
+                  (seulement DECLARE et CONFIRME). Pour voir les contestations en cours :
+                  navigate vers /etablissement/litiges ou fiche mission concernée. */}
             </div>
           </CollapsibleContent>
         </Collapsible>
