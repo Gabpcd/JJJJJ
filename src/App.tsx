@@ -196,7 +196,7 @@ function AppRoutes() {
           <Route path="/etablissement/contrats" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ListeContrats role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/facturation" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FacturationEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
-          <Route path="/etablissement/analytics" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><AnalyticsEtablissement /></RouteProtegee>} />
+          <Route path="/etablissement/analytics" element={<Navigate to="/etablissement/rh?tab=analytics" replace />} />
           <Route path="/etablissement/shifts" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><GestionShifts /></RouteProtegee>} />
           <Route path="/etablissement/assurance" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><AssuranceMission /></RouteProtegee>} />
           <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />

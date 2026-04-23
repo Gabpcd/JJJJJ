@@ -112,7 +112,6 @@ function getEtablissementSidebar(): SidebarEntry[] {
         { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
         { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
         { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
-        { icone: Activity, label: 'Analytics', route: '/etablissement/analytics' },
         { icone: Clock, label: 'Shifts', route: '/etablissement/shifts' },
       ],
     },
