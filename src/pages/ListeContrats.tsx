@@ -18,6 +18,14 @@ const FILTRES_STATUT = ['Tous', 'EN_ATTENTE_SIGNATURES', 'SIGNE_COMPLET', 'ANNUL
 
 export default function ListeContrats({ role }: { role: UserRole }) {
   usePageTitle('Contrats');
+  return (
+    <LayoutApp role={role}>
+      <ListeContratsContent role={role} />
+    </LayoutApp>
+  );
+}
+
+export function ListeContratsContent({ role }: { role: UserRole }) {
   const { user, etablissementId } = useEtablissementScope();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -52,10 +60,10 @@ export default function ListeContrats({ role }: { role: UserRole }) {
 
   const filtered = filtre === 'Tous' ? contrats : contrats.filter(c => c.statut === filtre);
 
-  if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role={role}>
+    <>
       <h1 className="text-xl font-bold text-foreground mb-4">{role === 'SOIGNANT' ? 'Mes contrats' : 'Contrats'}</h1>
 
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -129,6 +137,6 @@ export default function ListeContrats({ role }: { role: UserRole }) {
           ))}
         </div>
       )}
-    </LayoutApp>
+    </>
   );
 }

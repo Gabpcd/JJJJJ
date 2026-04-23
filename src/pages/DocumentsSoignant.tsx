@@ -129,6 +129,14 @@ function AttestationSante({ userId }: { userId: string }) {
 
 export default function DocumentsSoignant() {
   usePageTitle('Documents');
+  return (
+    <LayoutApp role="SOIGNANT">
+      <DocumentsSoignantContent />
+    </LayoutApp>
+  );
+}
+
+export function DocumentsSoignantContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [soignant, setSoignant] = useState<any>(null);
@@ -359,7 +367,7 @@ export default function DocumentsSoignant() {
     charger();
   };
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   // Organize: critiques first, then optionnels
   const typesOrdonnes = [
@@ -368,8 +376,8 @@ export default function DocumentsSoignant() {
   ];
 
   return (
-    <LayoutApp role="SOIGNANT">
-      <h1 className="text-xl font-bold text-foreground mb-1">📂 Mes documents professionnels</h1>
+    <>
+      <h2 className="text-lg font-bold text-foreground mb-1">Mes documents professionnels</h2>
       <p className="text-sm text-muted-foreground mb-4">
         Téléversez et gérez vos documents. Les documents marqués ★ sont obligatoires pour postuler aux missions.
       </p>
@@ -580,6 +588,6 @@ export default function DocumentsSoignant() {
         labelConfirmer="Supprimer"
         variante="danger"
       />
-    </LayoutApp>
+    </>
   );
 }

@@ -30,6 +30,14 @@ function statutBadge(statut: string) {
 
 export default function LitigesSoignant() {
   usePageTitle('Mes litiges');
+  return (
+    <LayoutApp role="SOIGNANT">
+      <LitigesSoignantContent />
+    </LayoutApp>
+  );
+}
+
+export function LitigesSoignantContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [litiges, setLitiges] = useState<any[]>([]);
@@ -116,10 +124,10 @@ export default function LitigesSoignant() {
     charger();
   };
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role="SOIGNANT">
+    <>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -265,6 +273,6 @@ export default function LitigesSoignant() {
           </div>
         </DialogContent>
       </Dialog>
-    </LayoutApp>
+    </>
   );
 }

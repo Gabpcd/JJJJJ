@@ -42,6 +42,8 @@ const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
 const Telecharger = lazy(() => import("./pages/Telecharger"));
 
 /* ─── Soignant pages ─── */
+const MesDocuments = lazy(() => import("./pages/MesDocuments"));
+const LitigesContestationsSoignant = lazy(() => import("./pages/LitigesContestationsSoignant"));
 const DashboardSoignant = lazy(() => import("./pages/DashboardSoignant"));
 const ProfilSoignant = lazy(() => import("./pages/ProfilSoignant"));
 const ProfilSoignantEtablissement = lazy(() => import("./pages/ProfilSoignantEtablissement"));
@@ -152,9 +154,10 @@ function AppRoutes() {
           <Route path="/soignant/recherche-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><RechercheMissions /></RouteProtegee>} />
           <Route path="/soignant/missions/serie/:serieId" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailSerieSoignant /></RouteProtegee>} />
           <Route path="/soignant/missions/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailMissionSoignant /></RouteProtegee>} />
-          <Route path="/soignant/documents" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DocumentsSoignant /></RouteProtegee>} />
+          <Route path="/soignant/mes-documents" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesDocuments /></RouteProtegee>} />
+          <Route path="/soignant/documents" element={<Navigate to="/soignant/mes-documents?tab=justificatifs" replace />} />
           <Route path="/soignant/planning" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PlanningSoignant /></RouteProtegee>} />
-          <Route path="/soignant/calendrier-sync" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><SyncCalendrier /></RouteProtegee>} />
+          <Route path="/soignant/calendrier-sync" element={<Navigate to="/soignant/planning" replace />} />
           <Route path="/soignant/conformite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ConformiteSoignant /></RouteProtegee>} />
           <Route path="/soignant/presences" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PresencesSoignant /></RouteProtegee>} />
           <Route path="/soignant/presences/mission/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DetailPresencesMission role="SOIGNANT" /></RouteProtegee>} />
@@ -162,21 +165,21 @@ function AppRoutes() {
           <Route path="/soignant/mandat-facturation" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MandatFacturation /></RouteProtegee>} />
           <Route path="/soignant/mes-factures-honoraires" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesFacturesHonoraires /></RouteProtegee>} />
           <Route path="/soignant/mes-avances" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesAvances /></RouteProtegee>} />
-          <Route path="/soignant/historique-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><HistoriqueMissions /></RouteProtegee>} />
+          <Route path="/soignant/historique-missions" element={<Navigate to="/soignant/planning?tab=historique" replace />} />
           <Route path="/soignant/fiabilite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><FiabiliteSoignant /></RouteProtegee>} />
           <Route path="/soignant/parcours-3200h" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><Parcours3200h /></RouteProtegee>} />
           <Route path="/soignant/prevoyance" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PrevoyanceSoignant /></RouteProtegee>} />
           <Route path="/soignant/attestation-heures" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><AttestationHeures /></RouteProtegee>} />
-          <Route path="/soignant/reclamations" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesReclamations role="SOIGNANT" /></RouteProtegee>} />
+          <Route path="/soignant/reclamations" element={<Navigate to="/soignant/litiges?tab=reclamations" replace />} />
           <Route path="/soignant/passer-en-liberal" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PasserEnLiberal /></RouteProtegee>} />
           <Route path="/soignant/exclusions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ExclusionsSoignant /></RouteProtegee>} />
-          <Route path="/soignant/contrats" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ListeContrats role="SOIGNANT" /></RouteProtegee>} />
+          <Route path="/soignant/contrats" element={<Navigate to="/soignant/mes-documents?tab=contrats" replace />} />
           <Route path="/soignant/premium" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PremiumSoignant /></RouteProtegee>} />
           <Route path="/soignant/charges" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ChargesSociales /></RouteProtegee>} />
           <Route path="/soignant/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageNotifications role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/parrainage" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParrainage /></RouteProtegee>} />
           <Route path="/soignant/messagerie" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageMessagerie role="SOIGNANT" /></RouteProtegee>} />
-          <Route path="/soignant/litiges" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><LitigesSoignant /></RouteProtegee>} />
+          <Route path="/soignant/litiges" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><LitigesContestationsSoignant /></RouteProtegee>} />
           <Route path="/soignant/stripe-connect" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageStripeConnect /></RouteProtegee>} />
 
           {/* Établissement */}
