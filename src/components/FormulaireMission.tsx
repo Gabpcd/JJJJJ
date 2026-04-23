@@ -312,6 +312,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           p_est_urgente: payload.est_urgente,
           p_niveau_urgence: payload.niveau_urgence,
           p_mode_attribution: modeAttribution,
+          p_specialite_medicale_requise: payload.specialite_medicale_requise,
+          p_accepte_non_specialises: payload.accepte_non_specialises,
         });
 
         if (error) {
@@ -331,15 +333,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
         const missionId = (rpcResult as any)?.mission_id;
 
-        // Set type_contrat_recherche + specialite_medicale_requise + accepte_non_specialises
-        if (missionId) {
-          const updates: Record<string, unknown> = {};
-          if (contratPreference !== 'TOUS') updates.type_contrat_recherche = contratPreference;
-          if (payload.specialite_medicale_requise) updates.specialite_medicale_requise = payload.specialite_medicale_requise;
-          if (profession === 'IBODE' || profession === 'IADE') updates.accepte_non_specialises = payload.accepte_non_specialises;
-          if (Object.keys(updates).length > 0) {
-            await supabase.from('missions').update(updates as any).eq('id', missionId);
-          }
+        // type_contrat_recherche still needs UPDATE (not in fn_creer_mission)
+        if (missionId && contratPreference !== 'TOUS') {
+          await supabase.from('missions').update({ type_contrat_recherche: contratPreference } as any).eq('id', missionId);
         }
         await supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: role, p_action: 'MISSION_CREATION',
