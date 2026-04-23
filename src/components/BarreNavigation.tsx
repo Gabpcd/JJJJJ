@@ -28,9 +28,9 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
   { icone: ClipboardList, label: 'Missions', route: '/etablissement/missions' },
+  { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+  { icone: Users, label: 'Mon équipe', route: '/etablissement/rh' },
   { icone: MessageCircle, label: 'Messages', route: '/etablissement/messagerie' },
-  { icone: Users, label: 'Pool', route: '/etablissement/pool-urgence' },
-  { icone: Building2, label: 'Profil', route: '/etablissement/profil' },
 ];
 
 /* ── Desktop sidebars (grouped) ── */
