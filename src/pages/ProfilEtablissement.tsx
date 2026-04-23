@@ -170,6 +170,14 @@ const CONVENTIONS_COLLECTIVES = [
 
 export default function ProfilEtablissement() {
   usePageTitle('Profil');
+  return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <ProfilEtablissementContent />
+    </LayoutApp>
+  );
+}
+
+export function ProfilEtablissementContent() {
   const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
@@ -321,10 +329,10 @@ export default function ProfilEtablissement() {
       });
   }, [user]);
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
+    <>
       <div className="flex items-center gap-4 mb-6">
         <AvatarUpload
           src={(form as any).logoUrl}
@@ -334,7 +342,7 @@ export default function ProfilEtablissement() {
           mode="etablissement"
           onUploaded={(url) => setForm(prev => ({ ...prev, logoUrl: url } as any))}
         />
-        <h1 className="text-xl font-bold text-foreground">Profil de l'établissement</h1>
+        <h2 className="text-lg font-bold text-foreground">Profil de l'établissement</h2>
       </div>
 
       {noteMoyenne && noteMoyenne.total > 0 && (
@@ -745,6 +753,6 @@ export default function ProfilEtablissement() {
           <LogOut className="h-4 w-4" /> Se déconnecter
         </button>
       </div>
-    </LayoutApp>
+    </>
   );
 }
