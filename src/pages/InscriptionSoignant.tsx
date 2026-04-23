@@ -103,7 +103,7 @@ export default function InscriptionSoignant() {
 
   // RPPS verification state
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
-  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string } | null>(null);
+  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string; specialite_code?: string | null; specialite_label?: string | null } | null>(null);
 
   const normaliser = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
 
@@ -173,7 +173,12 @@ export default function InscriptionSoignant() {
           const nomAffiche = data.nom_api || data.nom || '';
           const prenomAffiche = data.prenom || '';
           const label = [prenomAffiche, nomAffiche].filter(Boolean).join(' ') || nomAffiche;
-          setRppsResultat({ trouve: !!data.trouve, nom_affiche: label });
+          setRppsResultat({
+            trouve: !!data.trouve,
+            nom_affiche: label,
+            specialite_code: data.specialite_code ?? null,
+            specialite_label: data.specialite_label ?? null,
+          });
         } else {
           setRppsResultat({ trouve: false });
         }
@@ -307,9 +312,17 @@ export default function InscriptionSoignant() {
                 </div>
                 {rppsVerifiant && <p className="text-xs text-primary mt-1">Vérification en cours...</p>}
                 {rppsResultat && rppsResultat.trouve && rppsMatch === true && (
-                  <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    ✅ RPPS Vérifié — {rppsResultat.nom_affiche}
+                  <div className="mt-1.5 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      ✅ RPPS Vérifié — {rppsResultat.nom_affiche}
+                    </div>
+                    {rppsResultat.specialite_label && (
+                      <div className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary rounded-lg px-2 py-1.5">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Spécialité récupérée automatiquement : <span className="font-medium">{rppsResultat.specialite_label}</span>
+                      </div>
+                    )}
                   </div>
                 )}
                 {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && (

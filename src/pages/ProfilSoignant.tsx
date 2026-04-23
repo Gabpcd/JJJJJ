@@ -27,6 +27,8 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
+import { ShieldCheck } from 'lucide-react';
 
 function StripeConnectBanner({ userId }: { userId?: string }) {
   const [status, setStatus] = useState<any>(null);
@@ -140,6 +142,9 @@ export default function ProfilSoignant() {
   const [saving, setSaving] = useState(false);
   const [email, setEmail] = useState('');
   const [profession, setProfession] = useState('');
+  const [specialiteMedicale, setSpecialiteMedicale] = useState<string>('');
+  const [specialiteVerifiee, setSpecialiteVerifiee] = useState(false);
+  const [specialiteSource, setSpecialiteSource] = useState<string>('MANUEL');
   const [rppsVerifie, setRppsVerifie] = useState(false);
   const [form, setForm] = useState({
     prenom: '', nom: '', telephone: '', dateNaissance: '',
@@ -196,6 +201,9 @@ export default function ProfilSoignant() {
         });
         setEmail(data.email);
         setProfession(data.profession);
+        setSpecialiteMedicale((data as any).specialite_medicale || '');
+        setSpecialiteVerifiee(!!(data as any).specialite_verifiee);
+        setSpecialiteSource((data as any).specialite_source || 'MANUEL');
         setRppsVerifie(!!data.rpps_verifie);
         setHeuresCumulees(data.heures_cumulees || 0);
         setStatutLiberal(data.statut_liberal || '');
@@ -301,6 +309,13 @@ export default function ProfilSoignant() {
       p_attestation_cumul_activite: attestationCumul,
       p_taux_horaire_minimum: form.tauxHoraireMinimum,
     });
+
+    // Save specialite_medicale only if user edited manually (not RPPS-verified)
+    if ((profession === 'MEDECIN' || profession === 'IDE') && !specialiteVerifiee) {
+      await supabase.from('soignants')
+        .update({ specialite_medicale: specialiteMedicale || null, specialite_code: specialiteMedicale || null, specialite_source: 'MANUEL' } as any)
+        .eq('id', user!.id);
+    }
 
     if (error || exError) {
       afficherNotification({ type: 'erreur', message: extraireMessageErreur(error || exError) });
@@ -509,6 +524,30 @@ export default function ProfilSoignant() {
                 </p>
               )}
             </div>
+            {(profession === 'MEDECIN' || profession === 'IDE') && (
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-2">
+                  <span>Spécialité {profession === 'IDE' ? '(IPA uniquement)' : ''}</span>
+                  {specialiteVerifiee && specialiteSource === 'RPPS' && (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-success font-semibold">
+                      <ShieldCheck className="h-3 w-3" /> Vérifiée RPPS
+                    </span>
+                  )}
+                </label>
+                <SelectSpecialiteMedicale
+                  value={specialiteMedicale}
+                  onChange={setSpecialiteMedicale}
+                  professionParent={profession === 'IDE' ? 'IDE' : 'MEDECIN'}
+                  disabled={specialiteVerifiee && specialiteSource === 'RPPS'}
+                  placeholder={profession === 'IDE' ? 'IPA uniquement (optionnel)' : 'Sélectionnez votre spécialité'}
+                />
+                {!specialiteVerifiee && specialiteMedicale && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Vérifiable lors de la prochaine vérification RPPS
+                  </p>
+                )}
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés</label>
               <p className="text-xs text-muted-foreground mb-2">Cochez tous les types de contrat que vous acceptez</p>
