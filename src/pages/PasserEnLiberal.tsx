@@ -10,6 +10,9 @@ import { useParcoursLiberal } from '@/hooks/useParcoursLiberal';
 import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
 import { CategorieIDE } from '@/components/parcours-liberal/CategorieIDE';
 import { CategorieKine } from '@/components/parcours-liberal/CategorieKine';
+import { CategorieIPA } from '@/components/parcours-liberal/CategorieIPA';
+import { CategorieSansHeuresCPAM } from '@/components/parcours-liberal/CategorieSansHeuresCPAM';
+import { CategorieSansHeuresCIPAV } from '@/components/parcours-liberal/CategorieSansHeuresCIPAV';
 
 export default function PasserEnLiberal() {
   usePageTitle('Passer en libéral');
@@ -99,28 +102,30 @@ export default function PasserEnLiberal() {
         />
       )}
 
-      {(regle.categorie === 'AVEC_HEURES_IPA'
-        || regle.categorie === 'SANS_HEURES_CPAM'
-        || regle.categorie === 'SANS_HEURES_CIPAV') && (
-        <div className="card-base text-center py-12">
-          <h2 className="text-xl font-bold text-foreground mb-2">Votre parcours libéral</h2>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            L'interface pour votre profession sera disponible très prochainement.
-          </p>
-          <p className="text-xs text-muted-foreground mt-3">
-            En attendant, consultez vos démarches officielles :
-          </p>
-          {regle.lien_cpam && (
-            <a
-              href={regle.lien_cpam}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-3 text-sm text-primary hover:underline font-medium"
-            >
-              {regle.label_ordre || 'Démarches CPAM'} →
-            </a>
-          )}
-        </div>
+      {regle.categorie === 'AVEC_HEURES_IPA' && (
+        <CategorieIPA
+          parcours={parcours}
+          regle={regle}
+          majEtape={majEtape}
+        />
+      )}
+
+      {regle.categorie === 'SANS_HEURES_CPAM' && (
+        <CategorieSansHeuresCPAM
+          parcours={parcours}
+          regle={regle}
+          majEtape={majEtape}
+          soignantProfession={profession}
+        />
+      )}
+
+      {regle.categorie === 'SANS_HEURES_CIPAV' && (
+        <CategorieSansHeuresCIPAV
+          parcours={parcours}
+          regle={regle}
+          majEtape={majEtape}
+          soignantProfession={profession}
+        />
       )}
     </LayoutApp>
   );
