@@ -351,6 +351,16 @@ export default function FacturationEtablissement() {
   const toggleSection = (id: string) =>
     setSectionsOpen(prev => ({ ...prev, [id]: !prev[id] }));
 
+  /**
+   * Ouvre l'accordéon cible puis scroll smooth.
+   * Timeout pour laisser React render l'accordéon avant que scrollIntoView
+   * calcule la position (sinon saut incorrect si section initialement fermée).
+   */
+  const openAndScrollTo = (id: string) => {
+    setSectionsOpen(prev => ({ ...prev, [id]: true }));
+    setTimeout(() => scrollTo(id), 50);
+  };
+
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       {/* ── HEADER : titre + badge palier ── */}
@@ -385,27 +395,37 @@ export default function FacturationEtablissement() {
       {/* ── SECTION 1 : KPIs toujours visibles ── */}
       <FadeInView>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-          <div
-            className="card-base cursor-pointer hover:shadow-md transition-shadow border-destructive/20"
-            onClick={() => { toggleSection(SECTIONS.payer); scrollTo(SECTIONS.payer); }}
-          >
+          {/* KPI "Total à régler" — informatif uniquement (somme des 2 autres) */}
+          <div className="card-base border-destructive/20">
             <p className="text-2xl font-bold text-foreground">{fmt(data?.total_du)}</p>
             <p className="text-xs text-muted-foreground">Total à régler</p>
           </div>
-          <div
-            className="card-base cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => { toggleSection(SECTIONS.payer); scrollTo(SECTIONS.payer); }}
+
+          {/* KPI "Soignants" — cliquable → section Missions à payer */}
+          <button
+            type="button"
+            onClick={() => openAndScrollTo(SECTIONS.payer)}
+            className="card-base text-left cursor-pointer hover:shadow-md transition-shadow flex items-start justify-between gap-2"
           >
-            <p className="text-2xl font-bold text-foreground">{fmt(data?.total_soignants_du)}</p>
-            <p className="text-xs text-muted-foreground">Soignants à régler · {data?.nb_missions_non_payees || 0} mission(s)</p>
-          </div>
-          <div
-            className="card-base cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => { toggleSection(SECTIONS.commissions); scrollTo(SECTIONS.commissions); }}
+            <div>
+              <p className="text-2xl font-bold text-foreground">{fmt(data?.total_soignants_du)}</p>
+              <p className="text-xs text-muted-foreground">Soignants à régler · {data?.nb_missions_non_payees || 0} mission(s)</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
+          </button>
+
+          {/* KPI "Commissions" — cliquable → section Commissions Jolene */}
+          <button
+            type="button"
+            onClick={() => openAndScrollTo(SECTIONS.commissions)}
+            className="card-base text-left cursor-pointer hover:shadow-md transition-shadow flex items-start justify-between gap-2"
           >
-            <p className="text-2xl font-bold text-foreground">{fmt(data?.total_commissions_du)}</p>
-            <p className="text-xs text-muted-foreground">Commissions Jolene · {data?.nb_factures_impayees || 0} facture(s)</p>
-          </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{fmt(data?.total_commissions_du)}</p>
+              <p className="text-xs text-muted-foreground">Commissions Jolene · {data?.nb_factures_impayees || 0} facture(s)</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
+          </button>
         </div>
       </FadeInView>
 
@@ -420,7 +440,7 @@ export default function FacturationEtablissement() {
         ].map(s => (
           <button
             key={s.id}
-            onClick={() => { setSectionsOpen(prev => ({ ...prev, [s.id]: true })); scrollTo(s.id); }}
+            onClick={() => openAndScrollTo(s.id)}
             className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
           >
             {s.label}{s.count > 0 && ` (${s.count})`}
