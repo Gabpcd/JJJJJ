@@ -123,7 +123,7 @@ export default function LitigesEtablissement() {
           else setSearchParams({}, { replace: true });
         }}
       >
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 w-full grid grid-cols-2">
           <TabsTrigger value="litiges" className="gap-1.5">
             <Scale className="h-4 w-4" /> Litiges mission
           </TabsTrigger>

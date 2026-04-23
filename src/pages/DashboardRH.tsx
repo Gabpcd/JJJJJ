@@ -149,7 +149,7 @@ export default function DashboardRH() {
           else setSearchParams({}, { replace: true });
         }}
       >
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 w-full grid grid-cols-2">
           <TabsTrigger value="rh" className="gap-1.5">
             <BarChart3 className="h-4 w-4" /> Statistiques RH
           </TabsTrigger>
