@@ -663,8 +663,57 @@ export default function FacturationEtablissement() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 space-y-4">
-              {/* B.3.3.b — contenu migré depuis OF-6/OF-7 + FE-11/14/17/18/19 */}
-              <p className="text-sm text-muted-foreground p-4 card-base">Contenu migré en B.3.3.b</p>
+              {/* 4.1 — Factures Jolene impayées */}
+              {facturesImpayees.length > 0 ? (
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-destructive" /> Factures impayées ({facturesImpayees.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {facturesImpayees.map((f: any) => (
+                      <div key={f.facture_id} className="p-4 rounded-lg border space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-sm">{f.numero_facture}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {f.nombre_missions} mission(s) · Échéance : {f.date_echeance && new Date(f.date_echeance).toLocaleDateString('fr-FR')}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-bold">{fmt(f.montant_ttc)}</p>
+                            <p className="text-[10px] text-muted-foreground">{fmt(f.montant_ht)} HT + {fmt(f.montant_tva)} TVA</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          <Button
+                            size="sm"
+                            onClick={() => { setCheckoutFactureId(f.facture_id); setShowCheckout(true); }}
+                          >
+                            <CreditCard className="w-4 h-4 mr-1" /> Payer par carte
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
+                          >
+                            <Banknote className="w-4 h-4 mr-1" /> Virement
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
+                            <Download className="w-4 h-4 mr-1" /> PDF
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Aucune facture commission impayée.
+                  </CardContent>
+                </Card>
+              )}
+              {/* Sections 4.2, 4.3, 4.4 migrées en sous-passes suivantes B.3.3.b.3-5 */}
             </div>
           </CollapsibleContent>
         </Collapsible>
