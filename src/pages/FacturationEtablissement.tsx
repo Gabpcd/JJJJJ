@@ -1074,8 +1074,61 @@ export default function FacturationEtablissement() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 space-y-3">
-              {/* B.3.3.c — contenu migré depuis FE-20 */}
-              <p className="text-sm text-muted-foreground p-4 card-base">Contenu migré en B.3.3.c</p>
+              <Card>
+                <CardContent className="pt-4 space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Téléchargez vos données financières pour votre comptabilité.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button
+                      variant="outline"
+                      className="h-auto py-3 justify-start gap-2"
+                      onClick={() => navigate('/etablissement/export-paie')}
+                    >
+                      <FileText className="h-5 w-5 text-primary shrink-0" />
+                      <div className="text-left">
+                        <p className="font-medium text-sm">Export FEC / Paie</p>
+                        <p className="text-xs text-muted-foreground">
+                          Fichier comptable (Silae, Sage, ADP, FEC)
+                        </p>
+                      </div>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="h-auto py-3 justify-start gap-2"
+                      onClick={() => {
+                        // Ouvre un onglet par facture commission PAYEE (historique)
+                        if (facturesCommissionHistorique.length === 0) {
+                          toast.info('Aucune facture à télécharger.');
+                          return;
+                        }
+                        facturesCommissionHistorique.forEach((f: any, i: number) => {
+                          setTimeout(() => telechargerFactureCommissionPDF(f.facture_id), i * 200);
+                        });
+                        toast.success(`Téléchargement de ${facturesCommissionHistorique.length} facture(s)…`);
+                      }}
+                    >
+                      <Download className="h-5 w-5 text-primary shrink-0" />
+                      <div className="text-left">
+                        <p className="font-medium text-sm">Toutes les factures commission</p>
+                        <p className="text-xs text-muted-foreground">
+                          Télécharge les {facturesCommissionHistorique.length} dernières payées
+                        </p>
+                      </div>
+                    </Button>
+                  </div>
+
+                  <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
+                    <p className="font-semibold text-foreground mb-1">💡 À savoir</p>
+                    <p>
+                      Les factures honoraires soignants (mandat art. 289 I-2 CGI) sont accessibles
+                      individuellement depuis la section 5 (historique paiements).
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </CollapsibleContent>
         </Collapsible>
