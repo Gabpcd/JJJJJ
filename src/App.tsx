@@ -73,8 +73,6 @@ const PageStripeConnect = lazy(() => import("./pages/PageStripeConnect"));
 
 /* ─── Établissement pages ─── */
 const DashboardEtablissement = lazy(() => import("./pages/DashboardEtablissement"));
-const APIEtablissement = lazy(() => import("./pages/APIEtablissement"));
-const ProfilEtablissement = lazy(() => import("./pages/ProfilEtablissement"));
 const ListeMissions = lazy(() => import("./pages/ListeMissions"));
 const CreerMission = lazy(() => import("./pages/CreerMission"));
 const DetailMission = lazy(() => import("./pages/DetailMission"));
@@ -83,17 +81,14 @@ const PresencesEtablissement = lazy(() => import("./pages/PresencesEtablissement
 const FacturationEtablissement = lazy(() => import("./pages/FacturationEtablissement"));
 const AnalyticsEtablissement = lazy(() => import("./pages/AnalyticsEtablissement"));
 const GestionShifts = lazy(() => import("./pages/GestionShifts"));
-const AssuranceMission = lazy(() => import("./pages/AssuranceMission"));
 const DetailFacture = lazy(() => import("./pages/DetailFacture"));
 const ExportPaie = lazy(() => import("./pages/ExportPaie"));
 const DashboardRH = lazy(() => import("./pages/DashboardRH"));
-const MonGroupe = lazy(() => import("./pages/MonGroupe"));
-const ExclusionsEtablissement = lazy(() => import("./pages/ExclusionsEtablissement"));
 const PremiumEtablissement = lazy(() => import("./pages/PremiumEtablissement"));
 const ChorusConfig = lazy(() => import("./pages/ChorusConfig"));
 const PoolUrgenceEtablissement = lazy(() => import("./pages/PoolUrgenceEtablissement"));
-const ContratPlateforme = lazy(() => import("./pages/ContratPlateforme"));
 const DetailPresencesMission = lazy(() => import("./pages/DetailPresencesMission"));
+const Parametres = lazy(() => import("./pages/Parametres"));
 
 
 /* ─── Shared protected ─── */
@@ -186,7 +181,8 @@ function AppRoutes() {
 
           {/* Établissement */}
           <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/profil" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ProfilEtablissement /></RouteProtegee>} />
+          <Route path="/etablissement/parametres" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><Parametres /></RouteProtegee>} />
+          <Route path="/etablissement/profil" element={<Navigate to="/etablissement/parametres?tab=profil" replace />} />
           <Route path="/etablissement/soignants/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ProfilSoignantEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/missions" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ListeMissions /></RouteProtegee>} />
           <Route path="/etablissement/missions/creer" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><CreerMission /></RouteProtegee>} />
@@ -198,18 +194,18 @@ function AppRoutes() {
           <Route path="/etablissement/facturation/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DetailFacture /></RouteProtegee>} />
           <Route path="/etablissement/analytics" element={<Navigate to="/etablissement/rh?tab=analytics" replace />} />
           <Route path="/etablissement/shifts" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><GestionShifts /></RouteProtegee>} />
-          <Route path="/etablissement/assurance" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><AssuranceMission /></RouteProtegee>} />
+          <Route path="/etablissement/assurance" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
           <Route path="/etablissement/export-paie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExportPaie /></RouteProtegee>} />
           <Route path="/etablissement/rh" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardRH /></RouteProtegee>} />
-          <Route path="/etablissement/mon-groupe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MonGroupe /></RouteProtegee>} />
-          <Route path="/etablissement/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageNotifications role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
-          <Route path="/etablissement/exclusions" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ExclusionsEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/api" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><APIEtablissement /></RouteProtegee>} />
+          <Route path="/etablissement/mon-groupe" element={<Navigate to="/etablissement/parametres?tab=groupe" replace />} />
+          <Route path="/etablissement/notifications" element={<Navigate to="/etablissement/parametres?tab=config" replace />} />
+          <Route path="/etablissement/exclusions" element={<Navigate to="/etablissement/parametres?tab=exclusions" replace />} />
+          <Route path="/etablissement/api" element={<Navigate to="/etablissement/parametres?tab=config" replace />} />
           <Route path="/etablissement/premium" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PremiumEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/chorus-config" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ChorusConfig /></RouteProtegee>} />
           <Route path="/etablissement/pool-urgence" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PoolUrgenceEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/dashboard" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
-          <Route path="/etablissement/contrat-plateforme" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ContratPlateforme /></RouteProtegee>} />
+          <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
           <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation" replace />} />
           <Route path="/etablissement/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageMessagerie role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><LitigesEtablissement /></RouteProtegee>} />

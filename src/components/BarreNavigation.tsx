@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap, Shield, RefreshCw, Menu, X } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, Crown, BarChart3, Calculator, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap, Shield, RefreshCw, Menu, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -118,21 +118,11 @@ function getEtablissementSidebar(): SidebarEntry[] {
     {
       icone: Banknote, label: 'Finances', items: [
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
-        { icone: Shield, label: 'Assurance', route: '/etablissement/assurance' },
-        { icone: FileText, label: 'Contrat plateforme', route: '/etablissement/contrat-plateforme' },
         { icone: Building2, label: 'Chorus Pro', route: '/etablissement/chorus-config' },
       ],
     },
     { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
-    {
-      icone: Settings, label: 'Paramètres', items: [
-        { icone: Building2, label: 'Profil établissement', route: '/etablissement/profil' },
-        { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
-        { icone: Code2, label: 'API', route: '/etablissement/api' },
-        { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
-        { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
-      ],
-    },
+    { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
   ];
 }
 
