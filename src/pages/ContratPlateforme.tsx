@@ -24,6 +24,14 @@ interface ContratInfo {
 
 export default function ContratPlateforme() {
   usePageTitle('Contrat plateforme');
+  return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <ContratPlateformeContent />
+    </LayoutApp>
+  );
+}
+
+export function ContratPlateformeContent() {
   const { user, etablissementId } = useEtablissementScope();
   const [contrat, setContrat] = useState<ContratInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +68,6 @@ export default function ContratPlateforme() {
 
     setUploading(true);
     try {
-      // Use etablissementId for storage path (RLS requires user ID as first path segment)
       const path = `${etablissementId}/contrats-plateforme/contrat_${Date.now()}.pdf`;
       const { error: uploadError } = await supabase.storage
         .from('jolene-documents')
@@ -73,7 +80,6 @@ export default function ContratPlateforme() {
       if (rpcError) throw rpcError;
       if ((rpcData as any)?.error) throw new Error((rpcData as any).error);
 
-      // Try AI verification (non-blocking)
       try {
         await supabase.functions.invoke('verify-document', {
           body: { document_id: `contrat-plateforme-${etablissementId}`, path, type: 'CONTRAT_PLATEFORME' },
@@ -103,154 +109,87 @@ export default function ContratPlateforme() {
     }
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   // State 1: No contract uploaded
   if (!contrat?.contrat_url) {
     return (
-      <LayoutApp role="ADMIN_ETABLISSEMENT">
-        <div className="max-w-2xl mx-auto space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Contrat plateforme</h1>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl p-2.5 bg-warning/10">
-                  <FileText className="h-6 w-6 text-warning" />
-                </div>
-                <CardTitle className="text-lg">Contrat d'utilisation</CardTitle>
+      <div className="max-w-2xl mx-auto space-y-6">
+        <h2 className="text-lg font-bold text-foreground">Contrat plateforme</h2>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl p-2.5 bg-warning/10">
+                <FileText className="h-6 w-6 text-warning" />
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Vous n'avez pas encore téléversé votre contrat d'utilisation de la plateforme Jolene. 
-                Téléchargez le modèle, signez-le, et uploadez-le ici.
-              </p>
-              <div className="bg-muted/50 rounded-xl p-4 space-y-3">
-                <p className="text-sm font-medium text-foreground">📋 Étapes :</p>
-                <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-                  <li>Téléchargez le modèle de contrat</li>
-                  <li>Imprimez, signez et scannez le document</li>
-                  <li>Uploadez le PDF signé ci-dessous</li>
-                </ol>
-              </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="application/pdf"
-                onChange={handleUpload}
-                className="hidden"
-                aria-label="Téléverser le contrat signé"
-              />
-              <Button
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                className="w-full gap-2"
-              >
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {uploading ? 'Envoi en cours…' : 'Téléverser le contrat signé (PDF, max 10 Mo)'}
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </LayoutApp>
+              <CardTitle className="text-lg">Contrat d'utilisation</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Vous n'avez pas encore téléversé votre contrat d'utilisation de la plateforme Jolene.
+              Téléchargez le modèle, signez-le, et uploadez-le ici.
+            </p>
+            <div className="bg-muted/50 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-medium text-foreground">📋 Étapes :</p>
+              <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                <li>Téléchargez le modèle de contrat</li>
+                <li>Imprimez, signez et scannez le document</li>
+                <li>Uploadez le PDF signé ci-dessous</li>
+              </ol>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf"
+              onChange={handleUpload}
+              className="hidden"
+              aria-label="Téléverser le contrat signé"
+            />
+            <Button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="w-full gap-2"
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {uploading ? 'Envoi en cours…' : 'Téléverser le contrat signé (PDF, max 10 Mo)'}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   // State 2: Uploaded but not yet validated
   if (!contrat.contrat_valide) {
     return (
-      <LayoutApp role="ADMIN_ETABLISSEMENT">
-        <div className="max-w-2xl mx-auto space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Contrat plateforme</h1>
-          <Card className="border-warning/30">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl p-2.5 bg-warning/10">
-                  <Clock className="h-6 w-6 text-warning" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">En cours de vérification</CardTitle>
-                  <Badge variant="secondary" className="mt-1 text-xs">En attente</Badge>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Votre contrat a été téléversé le{' '}
-                <span className="font-medium text-foreground">
-                  {contrat.contrat_uploade_le
-                    ? format(new Date(contrat.contrat_uploade_le), 'dd MMMM yyyy', { locale: fr })
-                    : '—'}
-                </span>.
-                Il est en cours de vérification par notre équipe. Vous serez notifié dès qu'il sera validé.
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={telechargerContrat} className="gap-2">
-                  <ExternalLink className="h-4 w-4" /> Voir le contrat téléversé
-                </Button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleUpload}
-                  className="hidden"
-                  aria-label="Remplacer le contrat"
-                />
-                <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} className="gap-2">
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {uploading ? 'Envoi…' : 'Remplacer le contrat'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </LayoutApp>
-    );
-  }
-
-  // State 3: Validated
-  return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="max-w-2xl mx-auto space-y-6">
-        <h1 className="text-2xl font-bold text-foreground">Contrat plateforme</h1>
-        <Card className="border-success/30">
+        <h2 className="text-lg font-bold text-foreground">Contrat plateforme</h2>
+        <Card className="border-warning/30">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="rounded-xl p-2.5 bg-success/10">
-                <CheckCircle className="h-6 w-6 text-success" />
+              <div className="rounded-xl p-2.5 bg-warning/10">
+                <Clock className="h-6 w-6 text-warning" />
               </div>
               <div>
-                <CardTitle className="text-lg">Contrat actif</CardTitle>
-                <Badge className="mt-1 text-xs bg-success text-success-foreground">Validé</Badge>
+                <CardTitle className="text-lg">En cours de vérification</CardTitle>
+                <Badge variant="secondary" className="mt-1 text-xs">En attente</Badge>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground">Établissement</p>
-                <p className="text-sm font-medium text-foreground">{contrat.nom}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">SIRET</p>
-                <p className="text-sm font-medium text-foreground">{contrat.siret}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Taux de commission</p>
-                <p className="text-sm font-medium text-foreground">{contrat.taux_commission_negocie}%</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Date de téléversement</p>
-                <p className="text-sm font-medium text-foreground">
-                  {contrat.contrat_uploade_le
-                    ? format(new Date(contrat.contrat_uploade_le), 'dd MMMM yyyy', { locale: fr })
-                    : '—'}
-                </p>
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Votre contrat a été téléversé le{' '}
+              <span className="font-medium text-foreground">
+                {contrat.contrat_uploade_le
+                  ? format(new Date(contrat.contrat_uploade_le), 'dd MMMM yyyy', { locale: fr })
+                  : '—'}
+              </span>.
+              Il est en cours de vérification par notre équipe. Vous serez notifié dès qu'il sera validé.
+            </p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={telechargerContrat} className="gap-2">
-                <Download className="h-4 w-4" /> Télécharger le contrat
+                <ExternalLink className="h-4 w-4" /> Voir le contrat téléversé
               </Button>
               <input
                 ref={fileRef}
@@ -268,6 +207,67 @@ export default function ContratPlateforme() {
           </CardContent>
         </Card>
       </div>
-    </LayoutApp>
+    );
+  }
+
+  // State 3: Validated
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <h2 className="text-lg font-bold text-foreground">Contrat plateforme</h2>
+      <Card className="border-success/30">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl p-2.5 bg-success/10">
+              <CheckCircle className="h-6 w-6 text-success" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Contrat actif</CardTitle>
+              <Badge className="mt-1 text-xs bg-success text-success-foreground">Validé</Badge>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Établissement</p>
+              <p className="text-sm font-medium text-foreground">{contrat.nom}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">SIRET</p>
+              <p className="text-sm font-medium text-foreground">{contrat.siret}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Taux de commission</p>
+              <p className="text-sm font-medium text-foreground">{contrat.taux_commission_negocie}%</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Date de téléversement</p>
+              <p className="text-sm font-medium text-foreground">
+                {contrat.contrat_uploade_le
+                  ? format(new Date(contrat.contrat_uploade_le), 'dd MMMM yyyy', { locale: fr })
+                  : '—'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={telechargerContrat} className="gap-2">
+              <Download className="h-4 w-4" /> Télécharger le contrat
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf"
+              onChange={handleUpload}
+              className="hidden"
+              aria-label="Remplacer le contrat"
+            />
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} className="gap-2">
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {uploading ? 'Envoi…' : 'Remplacer le contrat'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
