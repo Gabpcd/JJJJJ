@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
-import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
+import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { supabase } from '@/integrations/supabase/client';
 import { BadgeNotification } from '@/components/PanneauNotifications';
 import { AvatarDisplay } from '@/components/AvatarUpload';
@@ -218,7 +218,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           if (!data) return;
           setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
           if (data.statut_liberal === 'ACTIF') setIsLiberal(true);
-          if (!PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
+          if (estEligibleLiberal(data.profession) && data.statut_liberal !== 'ACTIF') {
             setShowLiberalPath(true);
           }
         });

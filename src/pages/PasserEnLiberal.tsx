@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ConfettiMini } from '@/components/ConfettiMini';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import type jsPDF from 'jspdf';
 
 const STORAGE_KEY = 'liberal_parcours_checks';
@@ -99,7 +100,13 @@ export default function PasserEnLiberal() {
         supabase.rpc('fn_calculer_taux_free_transition_safe', { p_soignant_id: user.id }),
         supabase.from('documents_soignants').select('type_document, statut_verification').eq('soignant_id', user.id).is('supprime_le', null),
       ]);
-      if (sg) setSoignant(sg);
+      if (sg) {
+        if (!estEligibleLiberal(sg.profession)) {
+          navigate('/soignant/tableau-de-bord', { replace: true });
+          return;
+        }
+        setSoignant(sg);
+      }
       if (prof) {
         const match = (prof as any[]).find((p: any) => p.profession === sg?.profession);
         setProfData(match || null);
