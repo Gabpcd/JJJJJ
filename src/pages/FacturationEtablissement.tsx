@@ -42,6 +42,24 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 const fmt = (v: number | null | undefined) =>
   v != null ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v) : '—';
 
+// ─── Helpers cards missions ───
+function RetardBadge({ jours }: { jours: number }) {
+  if (jours < 15) return null;
+  if (jours < 30) return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">⏳ {jours}j</Badge>;
+  if (jours < 60) return <Badge className="bg-destructive/10 text-destructive">🔴 {jours}j de retard</Badge>;
+  return <Badge className="bg-destructive text-destructive-foreground">⛔ {jours}j — risque de suspension</Badge>;
+}
+
+function TypeExerciceBadge({ type }: { type: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    SALARIE: { label: 'Salarié', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    LIBERAL: { label: 'Libéral', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    MIXTE: { label: 'Mixte', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+  };
+  const info = map[type] || { label: type, cls: 'bg-muted text-muted-foreground' };
+  return <Badge className={info.cls}>{info.label}</Badge>;
+}
+
 // Section IDs pour navigation rapide
 const SECTIONS = {
   payer: 'section-a-payer',
@@ -262,8 +280,131 @@ export default function FacturationEtablissement() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 space-y-3">
-              {/* B.3.3.a — contenu migré depuis OF-3 */}
-              <p className="text-sm text-muted-foreground p-4 card-base">Contenu migré en B.3.3.a</p>
+              {missionsNonPayees.length === 0 ? (
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Aucune mission en attente de paiement soignant.
+                  </CardContent>
+                </Card>
+              ) : (
+                missionsNonPayees.map((m: any) => {
+                  const typeContratMission = m.type_contrat_applique as 'SALARIE' | 'LIBERAL' | null | undefined;
+                  const isSalarie = typeContratMission === 'SALARIE';
+                  const isLiberal = typeContratMission === 'LIBERAL';
+                  const modePaiementLabel = isSalarie
+                    ? 'Bulletin de paie (virement SEPA)'
+                    : isLiberal
+                    ? (m.mode_paiement_soignant === 'STRIPE_CONNECT' ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
+                    : null;
+                  const peutPayerStripeBase =
+                    isLiberal
+                    && m.mode_paiement_soignant === 'STRIPE_CONNECT'
+                    && m.soignant_stripe_connect;
+                  const enLitige = Boolean(m.a_paiement_conteste);
+                  const peutPayerStripe = peutPayerStripeBase && !enLitige;
+                  return (
+                    <div key={m.mission_id} className="card-base space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)} className="font-semibold text-sm text-primary hover:underline text-left">
+                              {m.intitule}
+                            </button>
+                            {m.soignant_id ? (
+                              <button onClick={() => navigate(`/etablissement/soignants/${m.soignant_id}`)} className="text-xs text-muted-foreground hover:text-primary hover:underline text-left">
+                                {m.soignant_nom}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">{m.soignant_nom}</span>
+                            )}
+                            <TypeExerciceBadge type={m.soignant_type_exercice} />
+                            <RetardBadge jours={m.jours_depuis_fin} />
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {m.soignant_profession} · {Math.round(m.heures || 0)}h pointées
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {m.debut_le && new Date(m.debut_le).toLocaleDateString('fr-FR')} → {m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}
+                          </p>
+                          {typeContratMission && (
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                              <Badge className={isSalarie
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}
+                              >
+                                Contrat {isSalarie ? 'salarié (CDDU)' : 'libéral'}
+                              </Badge>
+                              {modePaiementLabel && (
+                                <span className="text-xs text-muted-foreground">→ {modePaiementLabel}</span>
+                              )}
+                            </div>
+                          )}
+                          {enLitige && (
+                            <div className="mt-2 flex items-center gap-2 flex-wrap rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
+                              <Scale className="h-4 w-4 text-destructive shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-destructive">⚠️ Litige en cours sur un paiement</p>
+                                <p className="text-xs text-destructive/80">
+                                  Les paiements sont désactivés tant que le litige n'est pas résolu.
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
+                                className="text-xs font-medium text-destructive hover:underline shrink-0"
+                              >
+                                Voir le litige →
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          {peutPayerStripe ? (
+                            <>
+                              <p className="font-bold">{fmt((m.net_a_payer || 0) + (m.montant_commission_ttc || 0))}</p>
+                              {m.montant_commission_ttc > 0 && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  dont {fmt(m.montant_commission_ttc)} commission Jolene
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="font-bold">{fmt(m.net_a_payer)}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {peutPayerStripe ? (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            // B.3.3.a.2 : wiring dialog Stripe Connect
+                            console.log('TODO B.3.3.a.2 — Stripe Connect mission', m.mission_id);
+                          }}
+                          disabled={enLitige}
+                          className="w-full"
+                        >
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          💳 Payer via Stripe
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            // B.3.3.a.2 : wiring dialog Déclaration paiement
+                            console.log('TODO B.3.3.a.2 — Déclarer paiement mission', m.mission_id);
+                            setDeclarerDialogMission(m);
+                          }}
+                          disabled={enLitige}
+                          className="w-full"
+                        >
+                          <Banknote className="w-4 h-4 mr-2" />
+                          {enLitige ? 'Paiement bloqué (litige)' : 'Déclarer un paiement'}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </CollapsibleContent>
         </Collapsible>
