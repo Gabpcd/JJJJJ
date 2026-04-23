@@ -76,6 +76,10 @@ function mapProfessionCode(code: string | undefined): string {
  * Interroge l'API FHIR officielle de l'Annuaire Santé (ANS).
  * Endpoint : https://gateway.api.esante.gouv.fr/fhir/v1/Practitioner
  * Documentation : https://ansforge.github.io/annuaire-sante-fhir-documentation/
+ *
+ * Parse TOUTES les qualifications d'un practitioner :
+ *  - Code profession JRA (TRE-G15) : 2 chiffres (ex: "10" médecin, "60" IDE)
+ *  - Code spécialité ordinale (TRE-R38) : préfixe SM/SC/SF/SI + chiffres
  */
 async function queryFhirAnnuaire(rpps: string): Promise<{
   trouve: boolean;
@@ -83,6 +87,8 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
   prenom?: string;
   professionCode?: string;
   professionLabel?: string;
+  specialiteCode?: string;
+  specialiteLabel?: string;
   actif?: boolean;
 }> {
   const FHIR_BASE = 'https://gateway.api.esante.gouv.fr/fhir/v1';
@@ -103,28 +109,42 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
 
   const bundle = await response.json();
 
-  // FHIR Bundle — check if any entries match
   if (!bundle.entry || bundle.entry.length === 0) {
     return { trouve: false };
   }
 
   const practitioner = bundle.entry[0].resource;
 
-  // Extract name (FHIR HumanName)
   const officialName = practitioner.name?.find((n: any) => n.use === 'official') || practitioner.name?.[0];
   const nom = officialName?.family || '';
   const prenom = officialName?.given?.[0] || '';
 
-  // Extract profession from qualification
+  // Parse toutes les qualifications : profession (2 chiffres) + spécialité (SM/SC/SF/SI)
   let professionCode: string | undefined;
   let professionLabel: string | undefined;
-  if (practitioner.qualification) {
+  let specialiteCode: string | undefined;
+  let specialiteLabel: string | undefined;
+
+  if (Array.isArray(practitioner.qualification)) {
     for (const q of practitioner.qualification) {
       const coding = q.code?.coding?.[0];
-      if (coding) {
-        professionCode = coding.code;
-        professionLabel = coding.display;
-        break;
+      if (!coding?.code) continue;
+
+      const code = String(coding.code);
+      const display = coding.display as string | undefined;
+
+      if (/^\d{2}$/.test(code)) {
+        // Code profession JRA
+        if (!professionCode) {
+          professionCode = code;
+          professionLabel = display;
+        }
+      } else if (/^(SM|SC|SF|SI)\d+$/.test(code)) {
+        // Code spécialité ordinale (TRE-R38)
+        if (!specialiteCode) {
+          specialiteCode = code;
+          specialiteLabel = display;
+        }
       }
     }
   }
@@ -135,6 +155,8 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
     prenom,
     professionCode,
     professionLabel,
+    specialiteCode,
+    specialiteLabel,
     actif: practitioner.active !== false,
   };
 }
@@ -245,13 +267,21 @@ Deno.serve(async (req) => {
           const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
           const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
           const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-          await supabaseAdmin.from('soignants').update({
+          const updateFields: Record<string, unknown> = {
             rpps_verifie: true,
             rpps_verifie_le: new Date().toISOString(),
             rpps_nom_api: result.nom,
             rpps_prenom_api: result.prenom,
             rpps_profession_api: result.professionLabel || mapProfessionCode(result.professionCode),
-          } as any).eq('id', soignant_id);
+          };
+          if (result.specialiteCode) {
+            updateFields.specialite_medicale = result.specialiteCode;
+            updateFields.specialite_code = result.specialiteCode;
+            updateFields.specialite_source = 'RPPS';
+            updateFields.specialite_verifiee = true;
+            updateFields.specialite_verifiee_le = new Date().toISOString();
+          }
+          await supabaseAdmin.from('soignants').update(updateFields as any).eq('id', soignant_id);
         } catch (dbErr) {
           console.error('Erreur sauvegarde RPPS sur soignant:', dbErr);
         }
@@ -263,6 +293,8 @@ Deno.serve(async (req) => {
         nom_api: result.nom,
         prenom_api: result.prenom,
         profession_api: result.professionLabel || mapProfessionCode(result.professionCode),
+        specialite_code: result.specialiteCode ?? null,
+        specialite_label: result.specialiteLabel ?? null,
         actif: result.actif,
         source: 'FHIR Annuaire Santé',
       }), {
