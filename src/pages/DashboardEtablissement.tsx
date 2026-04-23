@@ -25,7 +25,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
-import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
+import { SectionPlanning } from '@/components/dashboard/SectionPlanning';
 
 
 export default function DashboardEtablissement() {
@@ -178,10 +178,12 @@ export default function DashboardEtablissement() {
             supabase.from('missions').select('total_brut, duree_heures, soignant_assigne_id')
               .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
             supabase.from('missions')
-              .select('id, intitule, debut_le, statut, soignant_assigne_id')
-              .eq('etablissement_id', etablissementId).gte('debut_le', now.toISOString())
+              .select('id, intitule, debut_le, fin_le, statut, duree_heures, profession_requise, soignant_assigne_id')
+              .eq('etablissement_id', etablissementId)
+              .gte('debut_le', now.toISOString())
+              .lte('debut_le', new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString())
               .in('statut', ['OUVERTE', 'ASSIGNEE', 'EN_COURS'])
-              .order('debut_le', { ascending: true }).limit(5),
+              .order('debut_le', { ascending: true }),
           ]);
 
           if (resCout.data) {
@@ -452,13 +454,15 @@ export default function DashboardEtablissement() {
         </FadeInView>
       </div>
 
-      {/* Top soignants + Prochaines missions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <FadeInView delay={600}>
-          <TopSoignants soignants={topSoignants} etablissementId={etablissementId!} onSelectSoignant={(soignantId) => navigate(`/etablissement/soignants/${soignantId}`)} />
-        </FadeInView>
+      {/* Planning missions à venir (30j) */}
+      <FadeInView delay={600}>
+        <SectionPlanning missions={prochaines} />
+      </FadeInView>
+
+      {/* Top soignants */}
+      <div className="mb-6">
         <FadeInView delay={650}>
-          <ProchaineMissions missions={prochaines} />
+          <TopSoignants soignants={topSoignants} etablissementId={etablissementId!} onSelectSoignant={(soignantId) => navigate(`/etablissement/soignants/${soignantId}`)} />
         </FadeInView>
       </div>
 
