@@ -192,6 +192,26 @@ export default function FacturationEtablissement() {
 
   useEffect(() => { charger(); }, [user]);
 
+  // ── Handler : générer facture commission mensuelle ──
+  const genererFactureMensuelle = async () => {
+    setGeneratingFacture(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_generer_facture_rate_limited' as any);
+      if (error) throw error;
+      const res = data as any;
+      if (res?.error) {
+        toast.error(res.message || res.error);
+      } else {
+        toast.success('Facture commission générée');
+        charger();
+      }
+    } catch (e: any) {
+      toast.error(extraireMessageErreur(e));
+    } finally {
+      setGeneratingFacture(false);
+    }
+  };
+
   // ── Handlers dialogs paiement ──
   const ouvrirDialogDeclarer = (mission: any) => {
     setDeclarerDialogMission(mission);
@@ -805,7 +825,55 @@ export default function FacturationEtablissement() {
                   )}
                 </div>
               )}
-              {/* Sections 4.3 et 4.4 migrées en B.3.3.b.4 et b.5 */}
+              {/* 4.3 — Missions à facturer (bouton générer facture mensuelle) */}
+              {missionsNonFacturees.length > 0 && (
+                <div className="pt-4 border-t border-border">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-warning" />
+                      Missions à facturer ({missionsNonFacturees.length})
+                    </h3>
+                    <Button
+                      size="sm"
+                      onClick={genererFactureMensuelle}
+                      disabled={generatingFacture}
+                      className="gap-1.5"
+                    >
+                      {generatingFacture ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                      {generatingFacture ? 'Génération…' : 'Générer la facture du mois'}
+                    </Button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-2 pr-3">Fin</th>
+                          <th className="pb-2 pr-3">Mission</th>
+                          <th className="pb-2 pr-3 text-right">Commission HT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {missionsNonFacturees.map((m: any) => (
+                          <tr
+                            key={m.id}
+                            onClick={() => navigate(`/etablissement/missions/${m.id}`)}
+                            className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                          >
+                            <td className="py-2 pr-3 text-xs">{m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}</td>
+                            <td className="py-2 pr-3 text-primary">{m.intitule}</td>
+                            <td className="py-2 pr-3 text-right font-medium">{fmt(m.montant_commission_ht)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Commissions non encore facturées à votre établissement. Le bouton génère une facture mensuelle groupée
+                    pour toutes les missions terminées sans facture (hors LIBERAL+Stripe qui sont facturées à la source).
+                  </p>
+                </div>
+              )}
+              {/* Section 4.4 SEPA + IBAN Jolene + Chorus Pro + Prélèvements migrée en B.3.3.b.5 */}
             </div>
           </CollapsibleContent>
         </Collapsible>
