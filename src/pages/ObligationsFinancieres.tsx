@@ -652,7 +652,7 @@ export default function ObligationsFinancieres() {
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="h-7 w-7"
+                                  className="h-9 w-9"
                                   title="Télécharger la facture PDF"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -727,7 +727,7 @@ export default function ObligationsFinancieres() {
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="h-7 w-7"
+                                  className="h-9 w-9"
                                   title="Télécharger la facture honoraires PDF"
                                   onClick={(e) => {
                                     e.stopPropagation();
