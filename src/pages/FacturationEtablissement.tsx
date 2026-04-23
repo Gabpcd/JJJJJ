@@ -713,7 +713,99 @@ export default function FacturationEtablissement() {
                   </CardContent>
                 </Card>
               )}
-              {/* Sections 4.2, 4.3, 4.4 migrées en sous-passes suivantes B.3.3.b.3-5 */}
+              {/* 4.2 — Historique factures commission (collapsible) */}
+              {nbFacturesHistorique > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setHistoriqueOuvert(v => !v)}
+                    className="w-full flex items-center justify-between text-left py-2"
+                    aria-expanded={historiqueOuvert}
+                  >
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-success" />
+                      Historique factures commission ({nbFacturesHistorique} payée{nbFacturesHistorique > 1 ? 's' : ''})
+                    </h3>
+                    {historiqueOuvert ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  </button>
+                  {historiqueOuvert && (
+                    <div className="mt-2">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b text-left text-muted-foreground">
+                              <th className="pb-2 pr-3">Numéro</th>
+                              <th className="pb-2 pr-3">Émise le</th>
+                              <th className="pb-2 pr-3">Payée le</th>
+                              <th className="pb-2 pr-3">Missions</th>
+                              <th className="pb-2 pr-3">Montant</th>
+                              <th className="pb-2 pr-3">Mode paiement</th>
+                              <th className="pb-2 pr-3">Statut</th>
+                              <th className="pb-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {facturesCommissionHistorique.map((f: any) => {
+                              const modeLabel =
+                                f.mode_paiement === 'STRIPE' && f.stripe_payment_intent_id
+                                  ? '💳 Stripe (à la source)'
+                                  : f.mode_paiement === 'STRIPE'
+                                  ? '💳 Stripe'
+                                  : f.mode_paiement === 'VIREMENT'
+                                  ? '🏦 Virement'
+                                  : f.mode_paiement === 'CHORUS_PRO'
+                                  ? '🏛️ Chorus Pro'
+                                  : '—';
+                              return (
+                                <tr
+                                  key={f.facture_id}
+                                  onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
+                                  className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                                >
+                                  <td className="py-2 pr-3 font-medium text-primary">{f.numero_facture}</td>
+                                  <td className="py-2 pr-3 text-xs">{f.date_emission && new Date(f.date_emission).toLocaleDateString('fr-FR')}</td>
+                                  <td className="py-2 pr-3 text-xs">{f.date_paiement ? new Date(f.date_paiement).toLocaleDateString('fr-FR') : '—'}</td>
+                                  <td className="py-2 pr-3 text-xs">{f.nombre_missions ?? '—'}</td>
+                                  <td className="py-2 pr-3 font-medium">{fmt(f.montant_ttc)}</td>
+                                  <td className="py-2 pr-3 text-xs">{modeLabel}</td>
+                                  <td className="py-2 pr-3">
+                                    {f.statut === 'PAYEE' ? (
+                                      <Badge className="bg-success/10 text-success">Payée</Badge>
+                                    ) : (
+                                      <Badge className="bg-muted text-muted-foreground">{f.statut}</Badge>
+                                    )}
+                                  </td>
+                                  <td className="py-2">
+                                    <div className="flex items-center gap-1 justify-end">
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-9 w-9"
+                                        title="Télécharger la facture PDF"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          telechargerFactureCommissionPDF(f.facture_id);
+                                        }}
+                                      >
+                                        <Download className="h-4 w-4 text-muted-foreground" />
+                                      </Button>
+                                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-3">
+                        Affiche les 10 dernières factures payées.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Sections 4.3 et 4.4 migrées en B.3.3.b.4 et b.5 */}
             </div>
           </CollapsibleContent>
         </Collapsible>
