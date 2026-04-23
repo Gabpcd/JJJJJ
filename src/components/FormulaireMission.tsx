@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { extraireContratPreference, injecterContratTag, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
+import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { WarningRist } from '@/components/WarningRist';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressif';
@@ -32,6 +33,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [intitule, setIntitule] = useState('');
   const [description, setDescription] = useState('');
   const [profession, setProfession] = useState('');
+  const [specialiteMedicaleRequise, setSpecialiteMedicaleRequise] = useState('');
+  const [accepteNonSpecialises, setAccepteNonSpecialises] = useState(true);
   const [service, setService] = useState('');
   const [debutLe, setDebutLe] = useState('');
   const [finLe, setFinLe] = useState('');
@@ -106,7 +109,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     const dupId = searchParams.get('dupliquer');
     if (dupId && !missionSource) {
-      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche').eq('id', dupId).single().then(({ data, error }) => {
+      supabase.from('missions').select('intitule, description, profession_requise, service, taux_horaire_base, est_urgente, niveau_urgence, type_contrat_recherche, specialite_medicale_requise, accepte_non_specialises').eq('id', dupId).single().then(({ data, error }) => {
         if (error) {
           console.warn('FormulaireMission: mission duplication fetch error', error);
           return;
@@ -120,6 +123,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           setTauxHoraire(String(data.taux_horaire_base));
           setEstUrgente(data.est_urgente || false);
           setNiveauUrgence(data.niveau_urgence || 1);
+          setSpecialiteMedicaleRequise(((data as any).specialite_medicale_requise as string) || '');
+          setAccepteNonSpecialises((data as any).accepte_non_specialises !== false);
           setDupliquerInfo(data.intitule);
         }
       });
@@ -139,6 +144,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       setEstUrgente(missionSource.est_urgente || false);
       setNiveauUrgence(missionSource.niveau_urgence || 1);
       setModeAttribution(missionSource.mode_attribution || 'PREMIER_ARRIVE');
+      setSpecialiteMedicaleRequise(missionSource.specialite_medicale_requise || '');
+      setAccepteNonSpecialises(missionSource.accepte_non_specialises !== false);
     }
   }, [missionSource]);
 
@@ -268,6 +275,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         taux_horaire_base: parseFloat(tauxHoraire),
         est_urgente: estUrgente,
         niveau_urgence: estUrgente ? niveauUrgence : 0,
+        specialite_medicale_requise: profession === 'MEDECIN' ? (specialiteMedicaleRequise || null) : null,
+        accepte_non_specialises: (profession === 'IBODE' || profession === 'IADE') ? accepteNonSpecialises : true,
       };
 
       if (modeEdition && missionSource) {
@@ -322,9 +331,15 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
         const missionId = (rpcResult as any)?.mission_id;
 
-        // Set type_contrat_recherche column
-        if (missionId && contratPreference !== 'TOUS') {
-          await supabase.from('missions').update({ type_contrat_recherche: contratPreference } as any).eq('id', missionId);
+        // Set type_contrat_recherche + specialite_medicale_requise + accepte_non_specialises
+        if (missionId) {
+          const updates: Record<string, unknown> = {};
+          if (contratPreference !== 'TOUS') updates.type_contrat_recherche = contratPreference;
+          if (payload.specialite_medicale_requise) updates.specialite_medicale_requise = payload.specialite_medicale_requise;
+          if (profession === 'IBODE' || profession === 'IADE') updates.accepte_non_specialises = payload.accepte_non_specialises;
+          if (Object.keys(updates).length > 0) {
+            await supabase.from('missions').update(updates as any).eq('id', missionId);
+          }
         }
         await supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: role, p_action: 'MISSION_CREATION',
@@ -405,6 +420,46 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             <p className="text-[10px] text-muted-foreground mt-1">🏥 Pharmacie : seuls les pharmaciens et préparateurs sont proposés.</p>
           )}
         </div>
+
+        {/* Spécialité médecin (optionnelle) */}
+        {profession === 'MEDECIN' && (
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1 block">
+              Spécialité requise (optionnel)
+            </label>
+            <SelectSpecialiteMedicale
+              value={specialiteMedicaleRequise}
+              onChange={setSpecialiteMedicaleRequise}
+              professionParent="MEDECIN"
+              placeholder="Toutes spécialités acceptées"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Laissez vide pour accepter tous les médecins, ou choisissez une spécialité spécifique.
+            </p>
+          </div>
+        )}
+
+        {/* Tolérance IDE non spécialisés pour IBODE/IADE */}
+        {(profession === 'IBODE' || profession === 'IADE') && (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={accepteNonSpecialises}
+                onChange={(e) => setAccepteNonSpecialises(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+              />
+              <div className="flex-1">
+                <span className="text-sm font-medium text-foreground">
+                  Accepter aussi les IDE non spécialisés
+                </span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Élargit le vivier aux IDE motivés qui peuvent assister un {profession === 'IBODE' ? 'IBODE' : 'IADE'}.
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
 
         {/* Service */}
         <div>
