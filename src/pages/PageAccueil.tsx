@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, HeartPulse, ArrowRight, Search, Loader2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { PROFESSIONS } from '@/lib/constantes';
+import { SelectProfession } from '@/components/SelectProfession';
 import { useDebounce } from '@/hooks/useDebounce';
 import { publicSupabase } from '@/integrations/supabase/public-client';
 import { supabase } from '@/integrations/supabase/client';
@@ -152,16 +152,13 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto mb-8">
-            <select
-              value={profession}
-              onChange={(e) => setProfession(e.target.value)}
-              className="flex-1 h-12 rounded-xl border border-input bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Toutes les professions</option>
-              {PROFESSIONS.map((p) => (
-                <option key={p.valeur} value={p.valeur}>{p.label}</option>
-              ))}
-            </select>
+            <div className="flex-1">
+              <SelectProfession
+                value={profession}
+                onChange={setProfession}
+                placeholder="Toutes les professions"
+              />
+            </div>
             <input
               type="text"
               placeholder="Ville ou code postal (optionnel)"
