@@ -39,6 +39,7 @@ import { TYPES_DOCUMENTS } from '@/lib/documents';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { BadgeStats } from '@/components/BadgesGamification';
+import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
 
 interface SoignantData {
   prenom: string; nom: string; telephone: string | null;
@@ -177,6 +178,7 @@ export default function DashboardSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
+      {!soignantWithCounts?.profession && <BandeauProfilIncomplet />}
       <BandeauEvaluationsEnAttente role="SOIGNANT" />
       <OnboardingGuide role="SOIGNANT" userId={user!.id} />
 
