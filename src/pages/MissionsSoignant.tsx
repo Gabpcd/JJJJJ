@@ -11,6 +11,7 @@ import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
 import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
+import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -91,7 +92,8 @@ export default function MissionsSoignant() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || !soignant) return;
+    if (!user) return;
+    if (!soignant && onglet !== 'disponibles') return;
     setLoading(true);
     const fetchMissions = async () => {
       const maintenantIso = new Date().toISOString();
@@ -103,7 +105,10 @@ export default function MissionsSoignant() {
       `);
 
       if (onglet === 'disponibles') {
-        query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any).gte('debut_le', maintenantIso);
+        query = query.eq('statut', 'OUVERTE').gte('debut_le', maintenantIso);
+        if (soignant.profession) {
+          query = query.eq('profession_requise', soignant.profession as any);
+        }
         // Contract type compatibility is handled client-side via missionCompatibleContrat
         query = query.order('est_urgente', { ascending: false }).order('niveau_urgence', { ascending: false }).order('debut_le', { ascending: true });
         if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);
@@ -134,11 +139,10 @@ export default function MissionsSoignant() {
   useEffect(() => { setNbAffiche(20); setPage(0); }, [onglet, filtres]);
 
   const missionsAvecDistance = useMemo(() => {
-    if (!soignant) return [];
-    const typesContrat = getTypesContratSoignant(soignant);
+    const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
     let result = missions.map(m => ({
       ...m,
-      distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
+      distance_km: calculerDistanceKm(soignant?.adresse_lat ?? null, soignant?.adresse_lng ?? null, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
     }));
 
     // Filter by contract type compatibility (only for available missions)
@@ -205,7 +209,8 @@ export default function MissionsSoignant() {
     <LayoutApp role="SOIGNANT">
       <h1 className="text-xl font-bold text-foreground mb-4">Missions</h1>
 
-      <BandeauDocumentsManquants tousDocumentsValides={!!soignant.tous_documents_valides} rcpExpiree={rcpExpiree} />
+      {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
+      {soignant && <BandeauDocumentsManquants tousDocumentsValides={!!soignant.tous_documents_valides} rcpExpiree={rcpExpiree} />}
       <div className="flex border-b border-border mb-4 overflow-x-auto">
         {onglets.map(o => (
           <button key={o.id} onClick={() => setOnglet(o.id)}

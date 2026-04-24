@@ -10,6 +10,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
+import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
@@ -119,7 +120,7 @@ export default function RechercheMissions() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || !soignant) return;
+    if (!user) return;
     setLoading(true);
     const fetchMissions = async () => {
       let query = supabase.from('missions').select(`
@@ -130,10 +131,14 @@ export default function RechercheMissions() {
       `)
         .eq('statut', 'OUVERTE')
         .gte('debut_le', new Date().toISOString())
-        .eq('profession_requise', (profession || soignant.profession) as any)
         .order('est_urgente', { ascending: false })
         .order('debut_le', { ascending: true })
         .limit(500);
+
+      const professionFiltre = profession || soignant?.profession;
+      if (professionFiltre) {
+        query = query.eq('profession_requise', professionFiltre as any);
+      }
 
       if (tauxMin > 0) query = query.gte('taux_horaire_base', tauxMin);
       if (urgentesOnly) query = query.eq('est_urgente', true);
@@ -151,14 +156,13 @@ export default function RechercheMissions() {
   }, [user, soignant, profession, tauxMin, urgentesOnly]);
 
   const filtered = useMemo(() => {
-    if (!soignant) return [];
-    const typesContrat = getTypesContratSoignant(soignant);
+    const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
     const villeSearch = debouncedVille.trim().toLowerCase();
 
     return missions
       .map(m => ({
         ...m,
-        distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
+        distance_km: calculerDistanceKm(soignant?.adresse_lat ?? null, soignant?.adresse_lng ?? null, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
       }))
       .filter(m => {
         if (villeSearch) {
@@ -246,6 +250,7 @@ export default function RechercheMissions() {
 
   return (
     <LayoutApp role="SOIGNANT">
+      {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-foreground">Recherche avancée</h1>
