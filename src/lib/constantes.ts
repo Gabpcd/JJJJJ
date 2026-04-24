@@ -109,8 +109,9 @@ export function missionCompatibleContrat(pref: ContratPreference | string, types
   return true;
 }
 
-/** Parse the types_contrat_acceptes (JSON array or comma-separated) or fall back to type_exercice/type_contrat */
-export function getTypesContratSoignant(soignant: { type_contrat?: string | null; types_contrat_acceptes?: string | null; type_exercice?: string | null }): string[] {
+/** Parse the types_contrat_acceptes (JSON array or comma-separated) or fall back to type_exercice/type_contrat. Returns all types if nothing defined (profil incomplet). */
+export function getTypesContratSoignant(soignant: { type_contrat?: string | null; types_contrat_acceptes?: string | null; type_exercice?: string | null } | null | undefined): string[] {
+  if (!soignant) return ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
   if (soignant.types_contrat_acceptes) {
     // Handle both JSON array and comma-separated string
     const raw = soignant.types_contrat_acceptes.trim();
@@ -127,5 +128,5 @@ export function getTypesContratSoignant(soignant: { type_contrat?: string | null
   // Fallback based on type_exercice
   if (soignant.type_exercice === 'MIXTE') return ['CDDU', 'LIBERAL'];
   if (soignant.type_exercice === 'LIBERAL') return ['LIBERAL'];
-  return soignant.type_contrat ? [soignant.type_contrat] : ['CDDU'];
+  return soignant.type_contrat ? [soignant.type_contrat] : ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
 }
