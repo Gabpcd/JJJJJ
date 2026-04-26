@@ -7,7 +7,7 @@ import { FadeInView } from '@/components/FadeInView';
 import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell, TrendingUp, Activity, GraduationCap, Home, CalendarDays, CreditCard, FileText } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CarteProposition } from '@/components/CarteProposition';
-import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
+import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { RappelsFiscaux } from '@/components/RappelsFiscaux';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
@@ -458,7 +458,7 @@ export default function DashboardSoignant() {
           </div>
 
           {/* Progression 3200h + Prochain badge */}
-          {!PROFESSIONS_NON_LIBERAL.includes(soignantWithCounts.profession) && (
+          {soignantWithCounts.profession && estEligibleLiberal(soignantWithCounts.profession) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               <FadeInView delay={0}>
                 <ProgressionCirculaire3200h heures={heures} />
@@ -554,7 +554,7 @@ export default function DashboardSoignant() {
                 Gérer mon profil libéral →
               </button>
             </div>
-          ) : !PROFESSIONS_NON_LIBERAL.includes(soignantWithCounts.profession) ? (
+          ) : soignantWithCounts.profession && estEligibleLiberal(soignantWithCounts.profession) ? (
             <div className="space-y-4">
               <div className="rounded-2xl bg-gradient-to-r from-rose-light to-rose/5 dark:from-rose/10 dark:to-rose/5 border border-rose/20 p-4 md:p-6 cursor-pointer" onClick={() => navigate('/soignant/parcours-3200h')}>
                 <div className="flex items-center justify-between mb-1">
