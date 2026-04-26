@@ -171,7 +171,7 @@ export default function DashboardSoignant() {
   const hasEvaluations = missionsTerminees > 0;
   const heures = soignantWithCounts.heures_cumulees ?? 0;
 
-  const aDocuments = !!(soignantWithCounts as any).tous_documents_valides || missions.length > 0;
+  const aDocuments = !!(soignantWithCounts as any).tous_documents_valides;
 
   return (
     <LayoutApp role="SOIGNANT">

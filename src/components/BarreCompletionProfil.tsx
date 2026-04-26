@@ -22,7 +22,7 @@ export function BarreCompletionProfil({
   const criteres: [boolean, string][] = [
     [nom, 'Nom rempli'],
     [rppsVerifie, 'RPPS vérifié'],
-    [auMoinsUnDocument, 'Document uploadé'],
+    [auMoinsUnDocument, 'Documents obligatoires'],
     [adresseRenseignee, 'Adresse renseignée'],
     [telephoneRenseigne, 'Téléphone renseigné'],
   ];

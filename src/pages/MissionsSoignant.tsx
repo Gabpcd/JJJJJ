@@ -61,21 +61,27 @@ export default function MissionsSoignant() {
       .eq('id', user.id).maybeSingle()
       .then(({ data }) => { if (data) setSoignant(data as any); }).then(undefined, () => {});
 
-    supabase.from('documents_soignants')
-      .select('statut_verification, valide_jusqua')
-      .eq('soignant_id', user.id)
-      .eq('type_document', 'RCP_ASSURANCE')
-      .order('televerse_le', { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        if (!data || data.length === 0) {
-          setRcpExpiree(true);
-        } else {
-          const doc = data[0];
-          const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
-          setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
-        }
-      }).then(undefined, () => { setRcpExpiree(true); });
+    // RCP check only for LIBERAL/MIXTE
+    supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle()
+      .then(({ data: sg }) => {
+        const isLiberalOrMixte = sg?.type_exercice === 'LIBERAL' || sg?.type_exercice === 'MIXTE';
+        if (!isLiberalOrMixte) { setRcpExpiree(false); return; }
+        supabase.from('documents_soignants')
+          .select('statut_verification, valide_jusqua')
+          .eq('soignant_id', user.id)
+          .eq('type_document', 'RCP_ASSURANCE')
+          .order('televerse_le', { ascending: false })
+          .limit(1)
+          .then(({ data }) => {
+            if (!data || data.length === 0) {
+              setRcpExpiree(true);
+            } else {
+              const doc = data[0];
+              const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
+              setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
+            }
+          });
+      }).then(undefined, () => {});
 
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
     const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
