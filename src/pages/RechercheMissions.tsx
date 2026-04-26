@@ -91,7 +91,7 @@ export default function RechercheMissions() {
     if (!user) return;
     supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
-      .eq('id', user.id).single()
+      .eq('id', user.id).maybeSingle()
       .then(({ data }) => {
         if (data) {
           const s = data as any;
@@ -246,7 +246,7 @@ export default function RechercheMissions() {
     }, 100);
   };
 
-  if (!soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  // No blocking guard — render even without soignant profile
 
   return (
     <LayoutApp role="SOIGNANT">

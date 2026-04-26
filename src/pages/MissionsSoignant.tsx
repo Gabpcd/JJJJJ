@@ -58,8 +58,8 @@ export default function MissionsSoignant() {
     if (!user) return;
     supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
-      .eq('id', user.id).single()
-      .then(({ data, error }) => { if (data) setSoignant(data as any); if (error) console.warn('Profil soignant:', error.message); }).then(undefined, () => {});
+      .eq('id', user.id).maybeSingle()
+      .then(({ data }) => { if (data) setSoignant(data as any); }).then(undefined, () => {});
 
     supabase.from('documents_soignants')
       .select('statut_verification, valide_jusqua')
@@ -93,7 +93,7 @@ export default function MissionsSoignant() {
 
   useEffect(() => {
     if (!user) return;
-    if (!soignant && onglet !== 'disponibles') return;
+    if (!soignant && onglet !== 'disponibles') { setLoading(false); setMissions([]); return; }
     setLoading(true);
     const fetchMissions = async () => {
       const maintenantIso = new Date().toISOString();
@@ -196,8 +196,6 @@ export default function MissionsSoignant() {
     }
     return result;
   }, [missionsAvecDistance, onglet]);
-
-  if (!soignant) return <LayoutApp role="SOIGNANT"><SkeletonList count={4} /></LayoutApp>;
 
   const onglets: { id: Onglet; label: string; count?: number }[] = [
     { id: 'disponibles', label: 'Disponibles' },

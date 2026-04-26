@@ -75,7 +75,7 @@ export default function DashboardSoignant() {
     queryKey: ['dashboard-soignant', user?.id],
     queryFn: async () => {
       const { data } = await supabase.rpc('fn_dashboard_soignant_complet' as any);
-      if (!data) return null;
+      if (!data) return { profil: null, missions_ouvertes: [], mes_missions: [], documents: [], heures_semaine: 0, gains_mois: { net_total: 0, brut_total: 0, nb_missions: 0 }, gains_6mois: [], missions_semaine_cal: [], propositions: [], heures_totales_terminees: 0, missions_oubliees_count: 0, notifs_non_lues: 0, hasStripeConnect: true };
 
       // Vérifier Stripe Connect
       const { data: connectData } = await supabase.from('stripe_connect_onboarding').select('statut').eq('soignant_id', user!.id).maybeSingle();
@@ -142,10 +142,9 @@ export default function DashboardSoignant() {
   }, [dashboard?.heures_totales_terminees, soignant]);
 
   const badgeStats = useMemo<BadgeStats | null>(() => {
-    if (!soignant) return null;
     return {
       missionsTerminees: missionsTermineesCount,
-      scoreFiabilite: soignant.score_fiabilite || 0,
+      scoreFiabilite: soignant?.score_fiabilite || 0,
       heuresCumulees: heuresCumuleesTotal,
       annulations: 0,
       missionsNuit: 0,
@@ -157,19 +156,17 @@ export default function DashboardSoignant() {
   }, [soignant, missionsTermineesCount, heuresCumuleesTotal]);
 
   // Override soignant counts with real computed values
-  const soignantWithCounts = useMemo(() => {
-    if (!soignant) return null;
-    return {
-      ...soignant,
-      total_missions_terminees: missionsTermineesCount,
-      heures_cumulees: heuresCumuleesTotal,
-    } as SoignantData;
-  }, [soignant, missionsTermineesCount, heuresCumuleesTotal]);
+  const emptySoignant = { prenom: '', nom: '', telephone: '', profession: null, rpps_verifie: false, adresse_lat: null, adresse_lng: null, tous_documents_valides: false, identite_verifiee: false, score_fiabilite: 0, total_missions_terminees: 0, heures_cumulees: 0, type_exercice: 'SALARIE' } as unknown as SoignantData;
+  const soignantWithCounts = useMemo(() => ({
+    ...(soignant ?? emptySoignant),
+    total_missions_terminees: missionsTermineesCount,
+    heures_cumulees: heuresCumuleesTotal,
+  }) as SoignantData, [soignant, missionsTermineesCount, heuresCumuleesTotal]);
 
-  if (isLoading || !soignantWithCounts) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
+  if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
   const profil = calculerCompletionProfil(soignantWithCounts);
-  const missionsTerminees = soignantWithCounts.total_missions_terminees ?? 0;
+  const missionsTerminees = soignantWithCounts?.total_missions_terminees ?? 0;
   const score = soignantWithCounts.score_fiabilite;
   const hasEvaluations = missionsTerminees > 0;
   const heures = soignantWithCounts.heures_cumulees ?? 0;
