@@ -63,6 +63,19 @@ export default function PrevoyanceSoignant() {
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
+  if (!soignant) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="card-base text-center py-12">
+          <p className="text-lg font-bold text-foreground mb-2">Prévoyance Jolene</p>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            Complétez votre profil pour accéder aux plans de prévoyance.
+          </p>
+        </div>
+      </LayoutApp>
+    );
+  }
+
   const heures = soignant?.heures_cumulees ?? 0;
   const souscrit = souscriptions.some(s => s.statut === 'ACTIF');
 
