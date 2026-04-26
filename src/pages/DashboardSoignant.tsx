@@ -589,10 +589,20 @@ export default function DashboardSoignant() {
                 </div>
               )}
             </div>
+          ) : soignantWithCounts.profession ? (
+            <div className="card-base text-center py-8">
+              <p className="text-sm text-muted-foreground">
+                Votre profession ({getLabelProfession(soignantWithCounts.profession)}) n'est pas éligible à l'exercice libéral via Jolene.
+              </p>
+            </div>
           ) : (
-            <div className="rounded-2xl bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-900/10 border border-blue-200 dark:border-blue-800 p-4">
-              <p className="text-sm font-semibold text-foreground">💊 Vous exercez en pharmacie d'officine</p>
-              <p className="text-xs text-muted-foreground mt-1">Les missions sont en CDD de remplacement.</p>
+            <div className="card-base text-center py-8">
+              <p className="text-sm text-muted-foreground">
+                Vérifiez votre RPPS pour débloquer votre parcours professionnel.
+              </p>
+              <button onClick={() => navigate('/soignant/profil')} className="btn-primary mt-3 text-sm">
+                Compléter mon profil
+              </button>
             </div>
           )}
           </SectionErrorBoundary>
