@@ -142,6 +142,22 @@ export default function ChargesSociales() {
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
+  if (!soignant || (soignant.statut_liberal !== 'ACTIF' && soignant.statut_liberal !== 'EN_COURS')) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="card-base text-center py-12">
+          <p className="text-lg font-bold text-foreground mb-2">Charges sociales libérales</p>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            Cette page est réservée aux soignants en exercice libéral ou mixte.
+          </p>
+          <button onClick={() => navigate('/soignant/tableau-de-bord')} className="btn-primary mt-4 text-sm">
+            Retour au dashboard
+          </button>
+        </div>
+      </LayoutApp>
+    );
+  }
+
   return (
     <LayoutApp role="SOIGNANT">
       {/* Header with back link */}
