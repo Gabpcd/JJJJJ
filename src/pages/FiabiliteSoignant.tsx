@@ -26,7 +26,7 @@ export default function FiabiliteSoignant() {
     if (!user) return;
     supabase.from('soignants')
       .select('score_fiabilite, total_missions_terminees, total_missions_annulees, total_absences, total_retards_pointage')
-      .eq('id', user.id).single()
+      .eq('id', user.id).maybeSingle()
       .then(({ data }) => {
         setSoignant(data); setLoading(false);
         supabase.rpc('fn_ecrire_audit_safe', {

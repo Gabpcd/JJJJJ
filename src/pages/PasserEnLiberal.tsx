@@ -23,7 +23,7 @@ export default function PasserEnLiberal() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('profession').eq('id', user.id).single()
+    supabase.from('soignants').select('profession').eq('id', user.id).maybeSingle()
       .then(({ data }) => {
         const prof = data?.profession || null;
         setProfession(prof);

@@ -89,7 +89,7 @@ export default function ChargesSociales() {
           .is('supprime_le', null)
           .order('valide_jusqua', { ascending: false })
           .limit(1),
-        supabase.from('soignants').select('prenom, nom, profession, statut_liberal, assujetti_tva').eq('id', user.id).single(),
+        supabase.from('soignants').select('prenom, nom, profession, statut_liberal, assujetti_tva').eq('id', user.id).maybeSingle(),
       ]);
 
       const enriched = missionData ? await enrichirEtablissements(missionData as any) : [];

@@ -55,7 +55,7 @@ export default function MesGains() {
           .eq('statut', 'TERMINEE')
           .order('debut_le', { ascending: false })
           .range(0, (page + 1) * PAGE_SIZE - 1),
-        supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).single(),
+        supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).maybeSingle(),
         supabase.from('paiements_soignant' as any)
           .select('mission_id, statut, montant_net, methode, reference_virement, date_paiement')
           .eq('soignant_id', user.id) as any,

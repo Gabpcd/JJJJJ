@@ -41,7 +41,7 @@ export default function PresencesSoignant() {
   // Load GPS consent on mount
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('consentement_gps').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('soignants').select('consentement_gps').eq('id', user.id).maybeSingle().then(({ data }) => {
       setConsentementGPS(data?.consentement_gps ?? null);
       setConsentementCharge(true);
     }).then(undefined, () => {});

@@ -61,7 +61,7 @@ export default function PageStripeConnect() {
       // Load soignant type first
       const { data: sg } = await supabase.from('soignants')
         .select('prenom, nom, type_exercice, statut_liberal')
-        .eq('id', user.id).single();
+        .eq('id', user.id).maybeSingle();
 
       if (sg) {
         setTypeExercice((sg.type_exercice as TypeExercice) || 'SALARIE');
