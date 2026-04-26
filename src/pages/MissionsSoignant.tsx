@@ -106,7 +106,7 @@ export default function MissionsSoignant() {
 
       if (onglet === 'disponibles') {
         query = query.eq('statut', 'OUVERTE').gte('debut_le', maintenantIso);
-        if (soignant.profession) {
+        if (soignant?.profession) {
           query = query.eq('profession_requise', soignant.profession as any);
         }
         // Contract type compatibility is handled client-side via missionCompatibleContrat
@@ -222,7 +222,7 @@ export default function MissionsSoignant() {
       {onglet === 'disponibles' && (
         <>
           <BandeauAlerte48h heuresSemaine={heuresSemaine} />
-          <FiltresMissions rayonDefaut={soignant.rayon_deplacement_km} onFiltreChange={setFiltres} />
+          <FiltresMissions rayonDefaut={soignant?.rayon_deplacement_km} onFiltreChange={setFiltres} />
         </>
       )}
 
