@@ -28,6 +28,7 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
+import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { ShieldCheck } from 'lucide-react';
 
 function StripeConnectBanner({ userId }: { userId?: string }) {
@@ -517,8 +518,8 @@ export default function ProfilSoignant() {
           <div className="space-y-3">
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Profession</label>
-              <input value={getLabelProfession(profession)} disabled className="input-base bg-muted cursor-not-allowed" />
-              {statutLiberal !== 'ACTIF' && heuresCumulees < 3200 && (
+              <input value={profession ? getLabelProfession(profession) : 'Non définie — vérifiez votre RPPS'} disabled className="input-base bg-muted cursor-not-allowed" />
+              {profession && estEligibleLiberal(profession) && statutLiberal !== 'ACTIF' && heuresCumulees < 3200 && (
                 <p className="text-xs text-muted-foreground mt-1">
                   🔒 Passage en libéral disponible à 3 200h — actuellement <span className="font-semibold text-primary">{heuresCumulees}h</span>/3 200h
                 </p>
@@ -572,7 +573,8 @@ export default function ProfilSoignant() {
           </div>
         </div>
 
-        {/* Type d'exercice */}
+        {/* Type d'exercice — masqué si profession non définie */}
+        {profession && (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-4">Type d'exercice</h2>
           {uniqueType ? (
@@ -646,6 +648,7 @@ export default function ProfilSoignant() {
             </>
           )}
         </div>
+        )}
 
         {/* Taux horaire minimum */}
         <div className="card-base">
