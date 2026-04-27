@@ -31,28 +31,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
+import { calculerCompletionProfil } from '@/lib/profil-soignant';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import type { Database } from '@/integrations/supabase/types';
 
-interface SoignantData {
-  prenom: string; nom: string; telephone: string | null;
-  date_naissance: string | null; profession: string; type_contrat: string | null;
-  numero_rpps: string | null; numero_adeli: string | null;
-  adresse_lat: number | null; adresse_lng: number | null;
-  tous_documents_valides: boolean | null; identite_verifiee: boolean | null;
-}
-
-function calculerCompletionProfil(s: SoignantData) {
-  // Only count fields the user can actually fill in — not verification statuses
-  const checks: boolean[] = [
-    !!s.prenom, !!s.nom, !!s.telephone, !!s.date_naissance,
-    !!s.profession, !!s.type_contrat,
-    !!(s.numero_rpps || s.numero_adeli),
-    !!(s.adresse_lat && s.adresse_lng),
-  ];
-  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-}
+type SoignantData = Database['public']['Tables']['soignants']['Row'];
 
 export default function DetailMissionSoignant() {
   usePageTitle('Détail mission');
@@ -157,15 +142,16 @@ export default function DetailMissionSoignant() {
     soignant.adresse_lat, soignant.adresse_lng,
     etablissement?.adresse_lat, etablissement?.adresse_lng
   );
-  const completionProfil = calculerCompletionProfil(soignant);
+  const resumeCompletion = calculerCompletionProfil(soignant as any);
+  const completionProfil = resumeCompletion.pourcentage;
   const premiereMissionLe = (soignant as any).premiere_mission_le;
   const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
-  const enPeriodeGrace = !premiereMissionLe || 
+  const enPeriodeGrace = !premiereMissionLe ||
     (new Date(premiereMissionLe).getTime() + SEPT_JOURS_MS > Date.now());
   const missionLaisseLeTemps = mission.debut_le &&
     (new Date(mission.debut_le).getTime() - Date.now() > SEPT_JOURS_MS);
   const docsOk = soignant.tous_documents_valides || enPeriodeGrace || missionLaisseLeTemps;
-  const peutPostuler = completionProfil >= 100 && docsOk;
+  const peutPostuler = resumeCompletion.peut_candidater && docsOk;
   const estAssigne = mission.soignant_assigne_id === user!.id;
   const estOuverte = mission.statut === 'OUVERTE';
   const estTerminee = mission.statut === 'TERMINEE';
