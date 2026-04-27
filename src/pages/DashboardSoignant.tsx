@@ -4,7 +4,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
-import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell, TrendingUp, Activity, GraduationCap, Home, CalendarDays, CreditCard, FileText } from 'lucide-react';
+import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell, TrendingUp, Activity, GraduationCap, Home, CalendarDays, CreditCard, FileText } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CarteProposition } from '@/components/CarteProposition';
 import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
@@ -20,7 +20,7 @@ import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { OnboardingGuide } from '@/components/OnboardingGuide';
-import { BarreCompletionProfil } from '@/components/BarreCompletionProfil';
+import { BandeauCompletionProfil } from '@/components/profil-soignant/BandeauCompletionProfil';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
@@ -39,8 +39,6 @@ import { TYPES_DOCUMENTS } from '@/lib/documents';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { BadgeStats } from '@/components/BadgesGamification';
-import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
-
 interface SoignantData {
   prenom: string; nom: string; telephone: string | null;
   date_naissance: string | null; profession: string; type_contrat: string | null;
@@ -50,19 +48,6 @@ interface SoignantData {
   score_fiabilite: number | null; total_missions_terminees: number | null;
   heures_cumulees: number | null; eligible_conversion_3200h: boolean | null;
   type_exercice: string | null;
-}
-
-function calculerCompletionProfil(s: SoignantData) {
-  const checks: [boolean, string][] = [
-    [!!s.prenom, 'Prénom'], [!!s.nom, 'Nom'], [!!s.telephone, 'Téléphone'],
-    [!!s.date_naissance, 'Date de naissance'], [!!s.profession, 'Profession'],
-    [!!s.type_contrat, 'Type de contrat'], [!!(s.numero_rpps || s.numero_adeli), 'Numéro RPPS/ADELI'],
-    [!!(s.adresse_lat && s.adresse_lng), 'Adresse géolocalisée'],
-    [!!s.tous_documents_valides, 'Documents validés'], [!!s.identite_verifiee, 'Identité vérifiée'],
-  ];
-  const completes = checks.filter(([ok]) => ok).map(([, l]) => l);
-  const manquants = checks.filter(([ok]) => !ok).map(([, l]) => l);
-  return { pourcentage: Math.round((completes.length / checks.length) * 100), manquants, completes };
 }
 
 export default function DashboardSoignant() {
@@ -165,7 +150,6 @@ export default function DashboardSoignant() {
 
   if (isLoading) return <LayoutApp role="SOIGNANT"><SkeletonDashboard /></LayoutApp>;
 
-  const profil = calculerCompletionProfil(soignantWithCounts);
   const missionsTerminees = soignantWithCounts?.total_missions_terminees ?? 0;
   const score = soignantWithCounts.score_fiabilite;
   const hasEvaluations = missionsTerminees > 0;
@@ -177,17 +161,26 @@ export default function DashboardSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      {!soignantWithCounts?.profession && <BandeauProfilIncomplet />}
+      <BandeauCompletionProfil soignant={soignant as any} variant="detaille" />
       <BandeauEvaluationsEnAttente role="SOIGNANT" />
       <OnboardingGuide role="SOIGNANT" userId={user!.id} />
 
-      <BarreCompletionProfil
-        nom={!!soignantWithCounts.nom}
-        rppsVerifie={!!(soignantWithCounts as any).rpps_verifie}
-        auMoinsUnDocument={aDocuments}
-        adresseRenseignee={!!(soignantWithCounts.adresse_lat && soignantWithCounts.adresse_lng)}
-        telephoneRenseigne={!!soignantWithCounts.telephone}
-      />
+      {/* Raccourci centre documents si non validés */}
+      {soignant && !aDocuments && (
+        <div
+          onClick={() => navigate('/soignant/mes-documents')}
+          className="rounded-xl border border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors"
+        >
+          <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-foreground">Documents requis</p>
+            <p className="text-sm text-muted-foreground">
+              Téléversez vos documents (CNI, diplôme, RC Pro) pour pouvoir candidater à toutes les missions.
+            </p>
+          </div>
+          <span className="text-sm text-primary font-medium shrink-0">Aller au centre →</span>
+        </div>
+      )}
 
       {/* Bannières d'action urgentes */}
       {!hasStripeConnect && (soignantWithCounts as any)?.type_exercice !== 'SALARIE' && (
@@ -319,23 +312,6 @@ export default function DashboardSoignant() {
         </div>
       ))}
 
-      {profil.pourcentage < 100 ? (
-        <div className="rounded-2xl bg-gradient-to-r from-primary/5 to-info/5 border border-primary/20 p-4 md:p-6 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-foreground">Profil complété à {profil.pourcentage}%</h2>
-            <button onClick={() => navigate('/soignant/profil')} className="text-xs text-primary font-medium hover:underline">Compléter →</button>
-          </div>
-          <JaugeProgression valeur={profil.pourcentage} max={100} couleurBarre="bg-primary" couleurFond="bg-primary/10" />
-          <div className="mt-3 grid grid-cols-2 gap-1.5">
-            {profil.completes.map(c => <div key={c} className="flex items-center gap-1.5 text-xs text-primary"><CheckCircle2 className="h-3.5 w-3.5" />{c}</div>)}
-            {profil.manquants.map(m => <div key={m} className="flex items-center gap-1.5 text-xs text-muted-foreground"><Circle className="h-3.5 w-3.5" />{m}</div>)}
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-2xl bg-gradient-to-r from-success/5 to-primary/5 border border-success/20 p-4 mb-6 text-center">
-          <p className="text-sm font-semibold text-success">✨ Profil complet — Vous êtes prêt(e) à postuler !</p>
-        </div>
-      )}
 
       {/* Tabs */}
       <Tabs defaultValue="accueil" className="mb-6">
