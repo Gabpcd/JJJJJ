@@ -10,7 +10,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { SelectProfession } from '@/components/SelectProfession';
 import { FooterLegal } from '@/components/FooterLegal';
-import { CONTRATS, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
+import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
 import { logger } from '@/lib/logger';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
@@ -130,6 +130,26 @@ export default function InscriptionSoignant() {
       return { ...prev, typesContrat: next };
     });
   };
+
+  // Auto-décocher LIBERAL/VACATION si la profession ne peut pas exercer en libéral
+  const peutEtreLiberal = !!form.profession && !PROFESSIONS_NON_LIBERAL.includes(form.profession);
+  useEffect(() => {
+    if (!form.profession) return;
+    if (peutEtreLiberal) return;
+    setForm(prev => {
+      const cleaned = prev.typesContrat.filter(v => v !== 'LIBERAL' && v !== 'VACATION');
+      if (cleaned.length === prev.typesContrat.length) return prev;
+      return { ...prev, typesContrat: cleaned };
+    });
+  }, [form.profession, peutEtreLiberal]);
+
+  // Vider le RPPS si la profession ne le requiert pas (AS / AES)
+  useEffect(() => {
+    if (!form.profession) return;
+    if (PROFESSIONS_SANS_RPPS.includes(form.profession) && form.rpps) {
+      setForm(prev => ({ ...prev, rpps: '' }));
+    }
+  }, [form.profession]);
 
   // L1: Date de naissance obligatoire
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
@@ -290,7 +310,7 @@ export default function InscriptionSoignant() {
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés * <span className="text-xs text-muted-foreground font-normal">(au moins 1)</span></label>
                 <div className="grid grid-cols-2 gap-2 mt-1">
-                  {CONTRATS.map(c => (
+                  {CONTRATS.filter(c => peutEtreLiberal || (c.valeur !== 'LIBERAL' && c.valeur !== 'VACATION')).map(c => (
                     <label key={c.valeur} className="flex items-center gap-2 cursor-pointer rounded-lg border border-input px-3 py-2.5 hover:bg-accent/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                       <Checkbox
                         checked={form.typesContrat.includes(c.valeur)}
@@ -300,44 +320,57 @@ export default function InscriptionSoignant() {
                     </label>
                   ))}
                 </div>
+                {form.profession && !peutEtreLiberal && (
+                  <p className="text-[10px] text-muted-foreground mt-1.5">
+                    Votre profession ne peut pas exercer en libéral. Seuls CDDU et Salarié sont disponibles.
+                  </p>
+                )}
                 {form.typesContrat.length === 0 && (
                   <p className="text-xs text-muted-foreground mt-1">Cochez au moins un type de contrat</p>
                 )}
               </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS {rppsRequis && '*'}</label>
-                <div className="relative">
-                  <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base pr-10" />
-                  {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
-                </div>
-                {rppsVerifiant && <p className="text-xs text-primary mt-1">Vérification en cours...</p>}
-                {rppsResultat && rppsResultat.trouve && rppsMatch === true && (
-                  <div className="mt-1.5 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                      ✅ RPPS Vérifié — {rppsResultat.nom_affiche}
-                    </div>
-                    {rppsResultat.specialite_label && (
-                      <div className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary rounded-lg px-2 py-1.5">
+              {rppsRequis ? (
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS *</label>
+                  <div className="relative">
+                    <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base pr-10" inputMode="numeric" autoComplete="off" />
+                    {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+                  </div>
+                  {rppsVerifiant && <p className="text-xs text-primary mt-1">Vérification en cours...</p>}
+                  {rppsResultat && rppsResultat.trouve && rppsMatch === true && (
+                    <div className="mt-1.5 space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
                         <ShieldCheck className="h-3.5 w-3.5" />
-                        Spécialité récupérée automatiquement : <span className="font-medium">{rppsResultat.specialite_label}</span>
+                        ✅ RPPS Vérifié — {rppsResultat.nom_affiche}
                       </div>
-                    )}
-                  </div>
-                )}
-                {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && (
-                  <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
-                    <ShieldAlert className="h-3.5 w-3.5" />
-                    ❌ Ce RPPS ne correspond pas à votre identité
-                  </div>
-                )}
-                {rppsResultat && !rppsResultat.trouve && form.rpps.length === 11 && (
-                  <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
-                    <ShieldAlert className="h-3.5 w-3.5" />
-                    ❌ RPPS non trouvé dans l'annuaire
-                  </div>
-                )}
-              </div>
+                      {rppsResultat.specialite_label && (
+                        <div className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary rounded-lg px-2 py-1.5">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          Spécialité récupérée automatiquement : <span className="font-medium">{rppsResultat.specialite_label}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {rppsResultat && rppsResultat.trouve && rppsMatch === false && form.rpps.length === 11 && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      ❌ Ce RPPS ne correspond pas à votre identité
+                    </div>
+                  )}
+                  {rppsResultat && !rppsResultat.trouve && form.rpps.length === 11 && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      ❌ RPPS non trouvé dans l'annuaire
+                    </div>
+                  )}
+                </div>
+              ) : form.profession && (
+                <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                  <p className="text-xs text-foreground">
+                    ℹ️ Votre profession ne nécessite pas de numéro RPPS. Vous pourrez renseigner votre numéro ADELI (optionnel) plus tard depuis votre profil.
+                  </p>
+                </div>
+              )}
               {/* Question salarié établissement */}
               <ExerciceTypeSection profession={form.profession} estSalarieEtablissement={form.estSalarieEtablissement} onChangeSalarie={(v) => maj('estSalarieEtablissement', v)} />
               <div>
