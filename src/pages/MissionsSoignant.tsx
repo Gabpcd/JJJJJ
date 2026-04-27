@@ -18,6 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
+import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -113,7 +114,12 @@ export default function MissionsSoignant() {
       if (onglet === 'disponibles') {
         query = query.eq('statut', 'OUVERTE').gte('debut_le', maintenantIso);
         if (soignant?.profession) {
-          query = query.eq('profession_requise', soignant.profession as any);
+          const orFiltre = getMissionsCompatiblesFilter(soignant.profession);
+          if (orFiltre) {
+            query = query.or(orFiltre);
+          } else {
+            query = query.eq('profession_requise', soignant.profession as any);
+          }
         }
         // Contract type compatibility is handled client-side via missionCompatibleContrat
         query = query.order('est_urgente', { ascending: false }).order('niveau_urgence', { ascending: false }).order('debut_le', { ascending: true });

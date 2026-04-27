@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { PROFESSIONS, getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
+import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -142,7 +143,16 @@ export default function RechercheMissions() {
 
       const professionFiltre = profession || soignant?.profession;
       if (professionFiltre) {
-        query = query.eq('profession_requise', professionFiltre as any);
+        // Si l'utilisateur n'a pas explicitement choisi une profession dans le
+        // filtre (utilise sa propre profession), on élargit la recherche aux
+        // missions hiérarchiquement compatibles (IBODE/IADE peuvent voir les
+        // missions IDE ; IDE voit les missions IBODE/IADE si accepte_non_spec).
+        const orFiltre = !profession ? getMissionsCompatiblesFilter(professionFiltre) : null;
+        if (orFiltre) {
+          query = query.or(orFiltre);
+        } else {
+          query = query.eq('profession_requise', professionFiltre as any);
+        }
       }
 
       if (tauxMin > 0) query = query.gte('taux_horaire_base', tauxMin);
