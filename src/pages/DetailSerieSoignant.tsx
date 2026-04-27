@@ -62,7 +62,7 @@ export default function DetailSerieSoignant() {
           debut_le, fin_le, duree_heures, taux_horaire_base, net_a_payer,
           est_urgente, niveau_urgence, statut, soignant_assigne_id, cree_le, etablissement_id
         `).ilike('description', `%[SERIE_ID:${decoded}]%`).order('debut_le', { ascending: true }),
-        supabase.from('soignants').select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides').eq('id', user.id).single(),
+        supabase.from('soignants').select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides').eq('id', user.id).maybeSingle(),
         supabase.from('missions').select('id, intitule, debut_le, fin_le, duree_heures, statut')
           .eq('soignant_assigne_id', user.id).in('statut', ['ASSIGNEE', 'EN_COURS', 'TERMINEE']).order('debut_le'),
       ]);

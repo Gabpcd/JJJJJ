@@ -27,7 +27,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onEr
   useEffect(() => {
     if (actif !== undefined) return; // props-driven, skip
     if (!user) return;
-    supabase.from('soignants').select('pool_urgence_actif, rayon_deplacement_km').eq('id', user.id).single()
+    supabase.from('soignants').select('pool_urgence_actif, rayon_deplacement_km').eq('id', user.id).maybeSingle()
       .then(({ data }: any) => {
         if (data) {
           setLocalActif(data.pool_urgence_actif ?? false);

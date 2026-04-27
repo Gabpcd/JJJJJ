@@ -32,7 +32,7 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
   useEffect(() => {
     if (!user) return;
     // Load type_exercice
-    supabase.from('soignants').select('type_exercice').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle().then(({ data }) => {
       if (data) setTypeExercice((data as any).type_exercice || 'SALARIE');
     });
   }, [user]);

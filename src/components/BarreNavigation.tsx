@@ -213,7 +213,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   useEffect(() => {
     if (!user) return;
     if (role === 'SOIGNANT') {
-      supabase.from('soignants').select('profession, heures_cumulees, statut_liberal, prenom, nom, avatar_url').eq('id', user.id).single()
+      supabase.from('soignants').select('profession, heures_cumulees, statut_liberal, prenom, nom, avatar_url').eq('id', user.id).maybeSingle()
         .then(({ data }) => {
           if (!data) return;
           setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
