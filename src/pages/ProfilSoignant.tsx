@@ -1,197 +1,103 @@
-import React, { useState, useEffect } from 'react';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import React, { useState, useEffect, useCallback } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
-import { handleErrorSilent } from '@/lib/handleError';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { CONTRATS, getLabelProfession, getTypesContratSoignant } from '@/lib/constantes';
-import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
-import { useRole } from '@/hooks/useRole';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { supabase } from '@/integrations/supabase/client';
-import { capturerErreurSentry } from '@/lib/sentry';
-import { MapPin, Loader2, Download, Trash2, MapPinOff, Copy, Gift, CheckCircle, CreditCard, AlertTriangle, ExternalLink, LogOut } from 'lucide-react';
+import { Copy, Gift, CheckCircle, LogOut } from 'lucide-react';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
-import { SectionBio } from '@/components/SectionBio';
 import { EncartInvitation } from '@/components/EncartInvitation';
 import { BadgesGamification, BadgeStats } from '@/components/BadgesGamification';
 import { AvatarUpload } from '@/components/AvatarUpload';
-import { Switch } from '@/components/ui/switch';
-import { PoolUrgenceToggle } from '@/components/PoolUrgenceToggle';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
-import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
-import { ShieldCheck } from 'lucide-react';
+import { getLabelProfession, getTypesContratSoignant } from '@/lib/constantes';
+import { calculerCompletionProfil } from '@/lib/profil-soignant';
+import type { Database } from '@/integrations/supabase/types';
+import { SectionProfilPrincipal } from '@/components/profil-soignant/SectionProfilPrincipal';
+import { SectionPaiements } from '@/components/profil-soignant/SectionPaiements';
+import { SectionPreferences } from '@/components/profil-soignant/SectionPreferences';
+import { SectionConfidentialite } from '@/components/profil-soignant/SectionConfidentialite';
 
-function StripeConnectBanner({ userId }: { userId?: string }) {
-  const [status, setStatus] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!userId) return;
-    supabase.functions.invoke('stripe-connect-status').then(({ data }) => {
-      setStatus(data);
-      setLoading(false);
-    }).then(undefined, () => setLoading(false));
-  }, [userId]);
-
-  if (loading || !status) return null;
-
-  const lancerOnboarding = async () => {
-    setActionLoading(true);
-    const { data, error } = await supabase.functions.invoke('stripe-connect-onboard');
-    if (error || !data?.url) {
-      const is403 = data?.error?.includes('libéral') || error?.message?.includes('403') || error?.status === 403;
-      if (is403) {
-        toast('La connexion Stripe sera disponible au lancement.', { icon: 'ℹ️' });
-      } else {
-        toast.error('Erreur lors de la connexion à Stripe.');
-      }
-      setActionLoading(false);
-      return;
-    }
-    import('@/lib/platform').then(m => m.ouvrirLienExterne(data.url));
-    setActionLoading(false);
-  };
-
-  // Onboarding complet
-  if (status.statut === 'COMPLET' && status.charges_enabled && status.payouts_enabled) {
-    return (
-      <div className="mt-4 p-3 rounded-xl border border-success/30 bg-success/5 flex items-center gap-3">
-        <CheckCircle className="h-5 w-5 text-success shrink-0" />
-        <div>
-          <p className="text-sm font-semibold text-success">✅ Stripe Connect actif</p>
-          <p className="text-xs text-muted-foreground">Vos honoraires sont versés automatiquement.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Onboarding en cours (compte existe mais pas finalisé)
-  if (status.statut === 'EN_COURS' || status.statut === 'SUSPENDU') {
-    return (
-      <div className="mt-4 p-3 rounded-xl border border-warning/30 bg-warning/5 space-y-2">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-warning">⚠️ Votre compte Stripe Connect n'est pas finalisé.</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Finalisez-le pour recevoir vos honoraires automatiquement.</p>
-          </div>
-        </div>
-        <Button size="sm" variant="outline" onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
-          {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-          Finaliser mon compte Stripe
-        </Button>
-      </div>
-    );
-  }
-
-  // [CP-STRIPE-6 H11] Compte Stripe supprimé — recommencer onboarding
-  if (status.statut === 'SUPPRIME') {
-    return (
-      <div className="mt-4 p-3 rounded-xl border border-destructive/30 bg-destructive/5 space-y-2">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-destructive">❌ Compte Stripe supprimé</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Recommencez l'onboarding pour recevoir vos paiements.</p>
-          </div>
-        </div>
-        <Button size="sm" variant="destructive" onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
-          {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-          Recommencer l'onboarding
-        </Button>
-      </div>
-    );
-  }
-
-  // Pas de compte
-  return (
-    <div className="mt-4 p-3 rounded-xl border border-border bg-muted/30 space-y-2">
-      <div className="flex items-start gap-3">
-        <CreditCard className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-semibold text-foreground">💳 Activez Stripe Connect pour recevoir vos honoraires automatiquement.</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Sans Stripe Connect, les établissements vous paieront par virement.</p>
-        </div>
-      </div>
-      <Button size="sm" onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
-        {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-        Activer Stripe Connect
-      </Button>
-    </div>
-  );
-}
+type SoignantRow = Database['public']['Tables']['soignants']['Row'];
 
 export default function ProfilSoignant() {
   usePageTitle('Profil');
   const { user, deconnexion } = useAuth();
   const { afficherNotification } = useNotification();
-  const { role } = useRole();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Soignant raw row (for completion helper)
+  const [soignantRow, setSoignantRow] = useState<SoignantRow | null>(null);
+
+  // Page-level state
   const [email, setEmail] = useState('');
   const [profession, setProfession] = useState('');
-  const [specialiteMedicale, setSpecialiteMedicale] = useState<string>('');
+  const [specialiteMedicale, setSpecialiteMedicale] = useState('');
   const [specialiteVerifiee, setSpecialiteVerifiee] = useState(false);
   const [specialiteSource, setSpecialiteSource] = useState<string>('MANUEL');
   const [rppsVerifie, setRppsVerifie] = useState(false);
-  const [form, setForm] = useState({
-    prenom: '', nom: '', telephone: '', dateNaissance: '',
-    typeContrat: '', rpps: '', adeli: '',
-    lat: '', lng: '', rayon: 30,
-    bio: '', anneesExperience: 0,
-    avatarUrl: '',
-    tauxHoraireMinimum: null as number | null,
-  });
+  const [rppsVerifieLe, setRppsVerifieLe] = useState<string | null>(null);
+  const [mandatFacturationSigne, setMandatFacturationSigne] = useState(false);
+  const [mandatFacturationSigneLe, setMandatFacturationSigneLe] = useState<string | null>(null);
+
+  // Form fields
+  const [prenom, setPrenom] = useState('');
+  const [nom, setNom] = useState('');
+  const [telephone, setTelephone] = useState('');
+  const [dateNaissance, setDateNaissance] = useState('');
+  const [rpps, setRpps] = useState('');
+  const [adeli, setAdeli] = useState('');
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [rayon, setRayon] = useState(30);
+  const [bio, setBio] = useState('');
+  const [anneesExperience, setAnneesExperience] = useState(0);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [tauxHoraireMinimum, setTauxHoraireMinimum] = useState<number | null>(null);
+  const [villeRecherche, setVilleRecherche] = useState('');
   const [specialites, setSpecialites] = useState<string[]>([]);
   const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
   const [consentementGPS, setConsentementGPS] = useState(true);
   const [gpsToggling, setGpsToggling] = useState(false);
   const [consentementSMS, setConsentementSMS] = useState(false);
   const [smsToggling, setSmsToggling] = useState(false);
-
-  // RGPD states
-  const [exportLoading, setExportLoading] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-  // Parrainage
+  const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
+  const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
+  const [typeExercice, setTypeExercice] = useState('SALARIE');
+  const [attestationCumul, setAttestationCumul] = useState(false);
+  const [heuresCumulees, setHeuresCumulees] = useState(0);
+  const [statutLiberal, setStatutLiberal] = useState('');
   const [codeParrainage, setCodeParrainage] = useState('');
   const [codeRecu, setCodeRecu] = useState('');
   const [parrainageLoading, setParrainageLoading] = useState(false);
   const [parrainageSucces, setParrainageSucces] = useState(false);
   const [filleuls, setFilleuls] = useState<any[]>([]);
   const [codeCopied, setCodeCopied] = useState(false);
-   const [poolUrgenceActif, setPoolUrgenceActif] = useState(false);
-   const [poolUrgenceRayon, setPoolUrgenceRayon] = useState(15);
-   const [typeExercice, setTypeExercice] = useState('SALARIE');
-   const [attestationCumul, setAttestationCumul] = useState(false);
-   const { typesAutorises, uniqueType } = useTypesExerciceAutorises(profession);
-   useEffect(() => { if (uniqueType) setTypeExercice(uniqueType); }, [uniqueType]);
-  const [heuresCumulees, setHeuresCumulees] = useState(0);
-  const [statutLiberal, setStatutLiberal] = useState('');
+
+  // Évaluations / badges
+  const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
+  const [evaluations, setEvaluations] = useState<any[]>([]);
+  const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
+
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
   useEffect(() => {
     if (!user) return;
+    setLoading(true);
     supabase.rpc('fn_mon_profil_soignant_complet' as any).then(({ data, error }: any) => {
       if (error) {
         afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
         setLoading(false);
         return;
       }
-
       if (data) {
         supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
@@ -199,212 +105,53 @@ export default function ProfilSoignant() {
           p_type_ressource: 'soignant', p_id_ressource: user.id,
           p_cle_s3: null, p_details: { page: 'profil' },
           p_ip: null, p_navigateur: navigator.userAgent,
-        });
-        setEmail(data.email);
-        setProfession(data.profession);
-        setSpecialiteMedicale((data as any).specialite_medicale || '');
-        setSpecialiteVerifiee(!!(data as any).specialite_verifiee);
-        setSpecialiteSource((data as any).specialite_source || 'MANUEL');
+        }).then(undefined, () => {});
+
+        setEmail(data.email || '');
+        setProfession(data.profession || '');
+        setSpecialiteMedicale(data.specialite_medicale || '');
+        setSpecialiteVerifiee(!!data.specialite_verifiee);
+        setSpecialiteSource(data.specialite_source || 'MANUEL');
         setRppsVerifie(!!data.rpps_verifie);
+        setRppsVerifieLe(data.rpps_verifie_le || null);
+        setMandatFacturationSigne(!!data.mandat_facturation_signe);
+        setMandatFacturationSigneLe(data.mandat_facturation_signe_le || null);
         setHeuresCumulees(data.heures_cumulees || 0);
         setStatutLiberal(data.statut_liberal || '');
         setTypeExercice(data.type_exercice || 'SALARIE');
         setAttestationCumul(data.attestation_cumul_activite || false);
         setCodeParrainage(data.code_parrainage || '');
-        setForm({
-          prenom: data.prenom || '',
-          nom: data.nom || '',
-          telephone: data.telephone || '',
-          dateNaissance: data.date_naissance || '',
-          typeContrat: data.type_contrat || '',
-          rpps: data.numero_rpps || '',
-          adeli: data.numero_adeli || '',
-          lat: data.adresse_lat?.toString() || '',
-          lng: data.adresse_lng?.toString() || '',
-          rayon: data.rayon_deplacement_km ?? 30,
-          bio: data.bio || '',
-          anneesExperience: data.annees_experience || 0,
-          avatarUrl: data.avatar_url || '',
-          tauxHoraireMinimum: data.taux_horaire_minimum ?? null,
-        });
+
+        setPrenom(data.prenom || '');
+        setNom(data.nom || '');
+        setTelephone(data.telephone || '');
+        setDateNaissance(data.date_naissance || '');
+        setRpps(data.numero_rpps || '');
+        setAdeli(data.numero_adeli || '');
+        setLat(data.adresse_lat?.toString() || '');
+        setLng(data.adresse_lng?.toString() || '');
+        setRayon(data.rayon_deplacement_km ?? 30);
+        setBio(data.bio || '');
+        setAnneesExperience(data.annees_experience || 0);
+        setAvatarUrl(data.avatar_url || '');
+        setTauxHoraireMinimum(data.taux_horaire_minimum ?? null);
+        setVilleRecherche(data.ville_recherche || '');
         setSpecialites(Array.isArray(data.specialites) ? data.specialites : (data.specialites ? JSON.parse(data.specialites) : []));
-        setTypesContrat(getTypesContratSoignant(data as any));
+        setTypesContrat(getTypesContratSoignant(data));
         setConsentementGPS(data.consentement_gps !== false);
         setConsentementSMS(data.sms_actif === true);
         setPoolUrgenceActif(data.disponible_urgence || false);
         setPoolUrgenceRayon(data.urgence_rayon_km || 15);
+
+        setSoignantRow(data as SoignantRow);
       }
       setLoading(false);
     });
 
-    // Load filleuls
     supabase.rpc('fn_mes_filleuls' as any).then(({ data }: any) => {
       if (Array.isArray(data)) setFilleuls(data);
     }).then(undefined, () => {});
-  }, [user]);
 
-  const [geoLoading, setGeoLoading] = useState(false);
-  const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
-
-  const toggleContrat = (valeur: string) => {
-    setTypesContrat(prev => {
-      if (prev.includes(valeur)) {
-        if (prev.length <= 1) return prev;
-        return prev.filter(v => v !== valeur);
-      }
-      return [...prev, valeur];
-    });
-  };
-
-  const demanderGeolocalisation = () => {
-    if (!navigator.geolocation) {
-      afficherNotification({ type: 'erreur', message: 'La géolocalisation n\'est pas supportée par votre navigateur.' });
-      return;
-    }
-    setGeoLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        maj('lat', position.coords.latitude.toString());
-        maj('lng', position.coords.longitude.toString());
-        setGeoLoading(false);
-        afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
-      },
-      () => {
-        setGeoLoading(false);
-        afficherNotification({ type: 'erreur', message: 'Localisation refusée. Vous pouvez saisir votre adresse manuellement.' });
-      }
-    );
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    if (!form.anneesExperience && form.anneesExperience !== 0) {
-      afficherNotification({ type: 'erreur', message: 'Le nombre d\'années d\'expérience est obligatoire.' });
-      return;
-    }
-    // Validate attestation for MIXTE/LIBERAL
-    if ((typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && !attestationCumul) {
-      afficherNotification({ type: 'erreur', message: 'Vous devez attester la conformité de votre cumul d\'activités (article L1222-5).' });
-      return;
-    }
-    setSaving(true);
-    const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
-      p_telephone: form.telephone || null,
-      p_adresse_rue: null, p_adresse_ville: null, p_adresse_code_postal: null,
-      p_rayon_deplacement_km: form.rayon,
-      p_prenom: form.prenom || null, p_nom: form.nom || null,
-      p_date_naissance: form.dateNaissance || null,
-      p_types_contrat: typesContrat,
-      p_numero_rpps: form.rpps || null, p_numero_adeli: form.adeli || null,
-      p_adresse_lat: form.lat ? parseFloat(form.lat) : null,
-      p_adresse_lng: form.lng ? parseFloat(form.lng) : null,
-      p_bio: form.bio || null,
-      p_annees_experience: form.anneesExperience,
-      p_specialites: specialites,
-    });
-
-    // Also update type_exercice via RPC
-    const { error: exError } = await supabase.rpc('fn_modifier_mon_profil' as any, {
-      p_type_exercice: typeExercice,
-      p_attestation_cumul_activite: attestationCumul,
-      p_taux_horaire_minimum: form.tauxHoraireMinimum,
-    });
-
-    // Save specialite_medicale only if user edited manually (not RPPS-verified)
-    if ((profession === 'MEDECIN' || profession === 'IDE') && !specialiteVerifiee) {
-      await supabase.from('soignants')
-        .update({ specialite_medicale: specialiteMedicale || null, specialite_code: specialiteMedicale || null, specialite_source: 'MANUEL' } as any)
-        .eq('id', user!.id);
-    }
-
-    if (error || exError) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error || exError) });
-    } else if (rpcResult?.error) {
-      afficherNotification({ type: 'erreur', message: rpcResult.error });
-    } else {
-      afficherNotification({ type: 'succes', message: 'Profil mis à jour avec succès !' });
-    }
-    setSaving(false);
-  };
-
-  // B2: Export RGPD (JSON + CSV)
-  const handleExportRGPD = async (format: 'json' | 'csv' = 'json') => {
-    setExportLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('fn_rgpd_exporter_rate_limited' as any);
-      if (error) throw error;
-      await supabase.rpc('fn_ecrire_audit_safe', {
-        p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
-        p_action: 'RGPD_EXPORT_DONNEES',
-        p_type_ressource: 'soignant', p_id_ressource: user!.id,
-        p_cle_s3: null, p_details: { format },
-        p_ip: null, p_navigateur: navigator.userAgent,
-      });
-
-      let blob: Blob;
-      let filename: string;
-      if (format === 'csv') {
-        // Flatten data to CSV
-        const rows: string[][] = [];
-        const flatten = (obj: any, prefix = '') => {
-          for (const [k, v] of Object.entries(obj || {})) {
-            const key = prefix ? `${prefix}.${k}` : k;
-            if (Array.isArray(v)) rows.push([key, JSON.stringify(v)]);
-            else if (typeof v === 'object' && v !== null) flatten(v, key);
-            else rows.push([key, String(v ?? '')]);
-          }
-        };
-        flatten(data);
-        const csv = 'Champ,Valeur\n' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-        blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-        filename = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.csv`;
-      } else {
-        blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        filename = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      afficherNotification({ type: 'succes', message: `Données exportées en ${format.toUpperCase()}.` });
-    } catch (err: any) {
-      capturerErreurSentry(err, 'ProfilSoignant', 'export_rgpd');
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-    }
-    setExportLoading(false);
-  };
-
-  // B3: Suppression compte
-  const handleSupprimerCompte = async () => {
-    setDeleteLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('fn_supprimer_compte_rate_limited' as any);
-      if (error) throw error;
-      if (data?.error) {
-        afficherNotification({ type: 'erreur', message: data.error });
-        setDeleteLoading(false);
-        return;
-      }
-      afficherNotification({ type: 'succes', message: 'Compte supprimé. Redirection...' });
-      await supabase.auth.signOut();
-      navigate('/');
-    } catch (err: any) {
-      capturerErreurSentry(err, 'ProfilSoignant', 'supprimer_compte');
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-    }
-    setDeleteLoading(false);
-    setShowDeleteModal(false);
-  };
-
-  const [noteMoyenne, setNoteMoyenne] = useState<{ moyenne: number; total: number } | null>(null);
-  const [evaluations, setEvaluations] = useState<any[]>([]);
-  const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
     supabase.rpc('fn_note_moyenne' as any, { p_user_id: user.id })
       .then(({ data }: any) => {
         if (Array.isArray(data) && data.length > 0) setNoteMoyenne(data[0]);
@@ -414,7 +161,6 @@ export default function ProfilSoignant() {
       .then(({ data }: any) => {
         if (Array.isArray(data)) setEvaluations(data);
       }).then(undefined, () => {});
-    // Load badge stats — map RPC response fields to BadgeStats interface
     supabase.rpc('fn_badge_stats' as any).then(({ data }: any) => {
       if (data) {
         setBadgeStats({
@@ -429,8 +175,70 @@ export default function ProfilSoignant() {
           totalMissions: data.total_missions ?? data.missionsTerminees ?? 0,
         });
       }
+    }).then(undefined, () => {});
+  }, [user, refreshKey, afficherNotification]);
+
+  const toggleContrat = (valeur: string) => {
+    setTypesContrat((prev) => {
+      if (prev.includes(valeur)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((v) => v !== valeur);
+      }
+      return [...prev, valeur];
     });
-  }, [user]);
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+    if (!anneesExperience && anneesExperience !== 0) {
+      afficherNotification({ type: 'erreur', message: 'Le nombre d\'années d\'expérience est obligatoire.' });
+      return;
+    }
+    if ((typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && !attestationCumul) {
+      afficherNotification({ type: 'erreur', message: 'Vous devez attester la conformité de votre cumul d\'activités (article L1222-5).' });
+      return;
+    }
+    setSaving(true);
+    const { data: rpcResult, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
+      p_telephone: telephone || null,
+      p_adresse_rue: null, p_adresse_ville: null, p_adresse_code_postal: null,
+      p_rayon_deplacement_km: rayon,
+      p_prenom: prenom || null, p_nom: nom || null,
+      p_date_naissance: dateNaissance || null,
+      p_types_contrat: typesContrat,
+      p_numero_rpps: rpps || null, p_numero_adeli: adeli || null,
+      p_adresse_lat: lat ? parseFloat(lat) : null,
+      p_adresse_lng: lng ? parseFloat(lng) : null,
+      p_bio: bio || null,
+      p_annees_experience: anneesExperience,
+      p_specialites: specialites,
+      p_ville_recherche: villeRecherche || null,
+    });
+
+    const { error: exError } = await supabase.rpc('fn_modifier_mon_profil' as any, {
+      p_type_exercice: typeExercice,
+      p_attestation_cumul_activite: attestationCumul,
+      p_taux_horaire_minimum: tauxHoraireMinimum,
+    });
+
+    if ((profession === 'MEDECIN' || profession === 'IDE') && !specialiteVerifiee) {
+      await supabase.from('soignants')
+        .update({ specialite_medicale: specialiteMedicale || null, specialite_code: specialiteMedicale || null, specialite_source: 'MANUEL' } as any)
+        .eq('id', user.id);
+    }
+
+    if (error || exError) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error || exError) });
+    } else if ((rpcResult as any)?.error) {
+      afficherNotification({ type: 'erreur', message: (rpcResult as any).error });
+    } else {
+      afficherNotification({ type: 'succes', message: 'Profil mis à jour avec succès !' });
+      refresh();
+    }
+    setSaving(false);
+  };
+
+  const resumeCompletion = calculerCompletionProfil(soignantRow);
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
@@ -438,18 +246,18 @@ export default function ProfilSoignant() {
     <LayoutApp role="SOIGNANT">
       <div className="flex items-center gap-4 mb-6">
         <AvatarUpload
-          src={(form as any).avatarUrl}
-          prenom={form.prenom}
-          nom={form.nom}
+          src={avatarUrl}
+          prenom={prenom}
+          nom={nom}
           size={96}
           mode="soignant"
-          onUploaded={(url) => setForm(prev => ({ ...prev, avatarUrl: url } as any))}
+          onUploaded={(url) => setAvatarUrl(url)}
         />
         <div>
-          <h1 className="text-xl font-bold text-foreground">{form.prenom} {form.nom}</h1>
+          <h1 className="text-xl font-bold text-foreground">{prenom} {nom}</h1>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-sm text-muted-foreground">{getLabelProfession(profession)}</span>
-            <BadgeRPPS rppsVerifie={rppsVerifie} rpps={form.rpps} profession={profession} />
+            <BadgeRPPS rppsVerifie={rppsVerifie} rpps={rpps} profession={profession} />
           </div>
         </div>
       </div>
@@ -474,364 +282,116 @@ export default function ProfilSoignant() {
         </div>
       )}
 
-      {/* Badges Gamification */}
       {badgeStats && (
         <div className="max-w-2xl mb-6">
           <BadgesGamification stats={badgeStats} />
         </div>
       )}
 
-      <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
-        {/* Bio / Présentation */}
-        <SectionBio
-          bio={form.bio}
-          onBioChange={(val) => maj('bio', val)}
-          anneesExperience={form.anneesExperience}
-          onAnneesChange={(val) => maj('anneesExperience', val)}
-          specialites={specialites}
-          onSpecialitesChange={setSpecialites}
-        />
+      <div className="max-w-2xl">
+        <Tabs defaultValue="principal" className="w-full">
+          <TabsList className="grid grid-cols-4 w-full mb-4">
+            <TabsTrigger value="principal">Profil principal</TabsTrigger>
+            <TabsTrigger value="paiements">Paiements</TabsTrigger>
+            <TabsTrigger value="preferences">Préférences</TabsTrigger>
+            <TabsTrigger value="confidentialite">Confidentialité</TabsTrigger>
+          </TabsList>
 
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">Identité</h2>
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Prénom <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
-                <input value={form.prenom} readOnly className="input-base bg-muted cursor-not-allowed" />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Nom <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
-                <input value={form.nom} readOnly className="input-base bg-muted cursor-not-allowed" />
-              </div>
-            </div>
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} className="input-base" /></div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
-              <input type="date" value={form.dateNaissance} readOnly className="input-base bg-muted cursor-not-allowed" />
-            </div>
-            <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email</label><input value={email} disabled className="input-base bg-muted cursor-not-allowed" /></div>
-          </div>
-        </div>
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">Professionnel</h2>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Profession</label>
-              <input value={profession ? getLabelProfession(profession) : 'Non définie — vérifiez votre RPPS'} disabled className="input-base bg-muted cursor-not-allowed" />
-              {profession && estEligibleLiberal(profession) && statutLiberal !== 'ACTIF' && heuresCumulees < 3200 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  🔒 Passage en libéral disponible à 3 200h — actuellement <span className="font-semibold text-primary">{heuresCumulees}h</span>/3 200h
-                </p>
-              )}
-            </div>
-            {(profession === 'MEDECIN' || profession === 'IDE') && (
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-2">
-                  <span>Spécialité {profession === 'IDE' ? '(IPA uniquement)' : ''}</span>
-                  {specialiteVerifiee && specialiteSource === 'RPPS' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-success font-semibold">
-                      <ShieldCheck className="h-3 w-3" /> Vérifiée RPPS
-                    </span>
-                  )}
-                </label>
-                <SelectSpecialiteMedicale
-                  value={specialiteMedicale}
-                  onChange={setSpecialiteMedicale}
-                  professionParent={profession === 'IDE' ? 'IDE' : 'MEDECIN'}
-                  disabled={specialiteVerifiee && specialiteSource === 'RPPS'}
-                  placeholder={profession === 'IDE' ? 'IPA uniquement (optionnel)' : 'Sélectionnez votre spécialité'}
-                />
-                {!specialiteVerifiee && specialiteMedicale && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Vérifiable lors de la prochaine vérification RPPS
-                  </p>
-                )}
-              </div>
-            )}
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés</label>
-              <p className="text-xs text-muted-foreground mb-2">Cochez tous les types de contrat que vous acceptez</p>
-              <div className="space-y-2">
-                {CONTRATS.map(c => (
-                  <label key={c.valeur} className="flex items-center gap-3 cursor-pointer group">
-                    <input type="checkbox" checked={typesContrat.includes(c.valeur)} onChange={() => toggleContrat(c.valeur)} className="h-4 w-4 rounded border-border text-primary focus:ring-primary accent-primary" />
-                    <span className="text-sm text-foreground group-hover:text-primary transition-colors">{c.label}</span>
-                  </label>
-                ))}
-              </div>
-              {typesContrat.length === 0 && <p className="text-xs text-destructive mt-1">Sélectionnez au moins un type de contrat</p>}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">RPPS <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span></label>
-                <input value={form.rpps} readOnly className="input-base bg-muted cursor-not-allowed" />
-                {rppsVerifie && <p className="text-[10px] text-success mt-1">✓ Vérifié via l'Annuaire Santé</p>}
-              </div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">ADELI</label><input value={form.adeli} onChange={e => maj('adeli', e.target.value)} className="input-base" /></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Type d'exercice — masqué si profession non définie */}
-        {profession && (
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">Type d'exercice</h2>
-          {uniqueType ? (
-            <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
-              <p className="text-sm text-foreground">
-                En tant que <strong>{getLabelProfession(profession)}</strong>, votre type d'exercice est automatiquement défini comme <strong>{uniqueType === 'SALARIE' ? 'salarié' : uniqueType === 'LIBERAL' ? 'libéral' : 'mixte'}</strong>.
-              </p>
-            </div>
-          ) : (
-          <RadioGroup value={typeExercice} onValueChange={(v) => {
-            setTypeExercice(v);
-            if (v === 'SALARIE') setAttestationCumul(false);
-          }} className="space-y-3">
-            {(!typesAutorises || typesAutorises.includes('SALARIE')) && (
-            <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-input px-4 py-3 hover:bg-accent/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-              <RadioGroupItem value="SALARIE" id="ex-salarie" className="mt-0.5" />
-              <div>
-                <Label htmlFor="ex-salarie" className="font-medium cursor-pointer">Salarié(e)</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">Je suis salarié(e) dans un établissement</p>
-              </div>
-            </label>
-            )}
-            {(!typesAutorises || typesAutorises.includes('LIBERAL')) && (
-            <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${statutLiberal === 'ACTIF' ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
-              <RadioGroupItem value="LIBERAL" id="ex-liberal" className="mt-0.5" disabled={statutLiberal !== 'ACTIF'} />
-              <div>
-                <Label htmlFor="ex-liberal" className={`font-medium ${statutLiberal !== 'ACTIF' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>Libéral</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">J'exerce en libéral</p>
-                {statutLiberal !== 'ACTIF' && (
-                  <p className="text-xs text-destructive mt-1">
-                    ⚠️ Vous devez d'abord faire valider vos 3200h via la page Parcours.{' '}
-                    <button type="button" onClick={() => navigate('/soignant/parcours-3200h')} className="text-primary underline">Accéder au Parcours →</button>
-                  </p>
-                )}
-              </div>
-            </label>
-            )}
-            {(!typesAutorises || typesAutorises.includes('MIXTE')) && (
-            <label className={`flex items-start gap-3 rounded-lg border border-input px-4 py-3 transition-colors ${statutLiberal === 'ACTIF' ? 'cursor-pointer hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5' : 'opacity-50 cursor-not-allowed'}`}>
-              <RadioGroupItem value="MIXTE" id="ex-mixte" className="mt-0.5" disabled={statutLiberal !== 'ACTIF'} />
-              <div>
-                <Label htmlFor="ex-mixte" className={`font-medium ${statutLiberal !== 'ACTIF' ? 'cursor-not-allowed' : 'cursor-pointer'}`}>Mixte</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">Je cumule salarié et libéral</p>
-                {statutLiberal !== 'ACTIF' && (
-                  <p className="text-xs text-destructive mt-1">
-                    ⚠️ Validation 3200h requise.{' '}
-                    <button type="button" onClick={() => navigate('/soignant/parcours-3200h')} className="text-primary underline">Parcours →</button>
-                  </p>
-                )}
-              </div>
-            </label>
-            )}
-          </RadioGroup>
-          )}
-
-          {(typeExercice === 'MIXTE' || typeExercice === 'LIBERAL') && !uniqueType && (
-            <>
-              <div className="mt-4 p-3 bg-warning/5 border border-warning/20 rounded-xl">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <Checkbox
-                    checked={attestationCumul}
-                    onCheckedChange={(v) => setAttestationCumul(!!v)}
-                    className="mt-0.5"
-                  />
-                  <span className="text-sm text-foreground">
-                    ✅ J'atteste avoir vérifié que mon contrat de travail actuel autorise le cumul d'activités conformément à l'article L1222-5 du Code du travail.
-                  </span>
-                </label>
-              </div>
-              <StripeConnectBanner userId={user?.id} />
-            </>
-          )}
-        </div>
-        )}
-
-        {/* Taux horaire minimum */}
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">💰 Taux horaire minimum accepté</h2>
-          <p className="text-xs text-muted-foreground mb-3">Les missions en dessous de ce taux seront grisées dans vos résultats.</p>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-foreground font-medium">
-                {form.tauxHoraireMinimum ? `${form.tauxHoraireMinimum} €/h` : 'Non défini'}
-              </span>
-              {form.tauxHoraireMinimum && (
-                <button type="button" onClick={() => maj('tauxHoraireMinimum', null)} className="text-xs text-destructive hover:underline">Supprimer</button>
-              )}
-            </div>
-            <input
-              type="range"
-              min={10}
-              max={100}
-              step={1}
-              value={form.tauxHoraireMinimum ?? 10}
-              onChange={e => maj('tauxHoraireMinimum', Number(e.target.value))}
-              className="w-full accent-primary"
+          <TabsContent value="principal">
+            <SectionProfilPrincipal
+              userId={user!.id}
+              email={email}
+              rppsVerifie={rppsVerifie}
+              rppsVerifieLe={rppsVerifieLe}
+              rpps={rpps}
+              setRpps={setRpps}
+              prenom={prenom}
+              setPrenom={setPrenom}
+              nom={nom}
+              setNom={setNom}
+              dateNaissance={dateNaissance}
+              setDateNaissance={setDateNaissance}
+              telephone={telephone}
+              setTelephone={setTelephone}
+              profession={profession}
+              specialiteMedicale={specialiteMedicale}
+              setSpecialiteMedicale={setSpecialiteMedicale}
+              specialiteVerifiee={specialiteVerifiee}
+              specialiteSource={specialiteSource}
+              adeli={adeli}
+              setAdeli={setAdeli}
+              lat={lat}
+              setLat={setLat}
+              lng={lng}
+              setLng={setLng}
+              rayon={rayon}
+              villeRecherche={villeRecherche}
+              setVilleRecherche={setVilleRecherche}
+              typeExercice={typeExercice}
+              setTypeExercice={setTypeExercice}
+              attestationCumul={attestationCumul}
+              setAttestationCumul={setAttestationCumul}
+              statutLiberal={statutLiberal}
+              heuresCumulees={heuresCumulees}
+              resumeCompletion={resumeCompletion}
+              onRefresh={refresh}
+              onSave={handleSave}
+              saving={saving}
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground"><span>10 €/h</span><span>100 €/h</span></div>
-          </div>
-        </div>
+          </TabsContent>
 
-        {/* Géolocalisation */}
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">📍 Géolocalisation</h2>
-          <div className="space-y-3">
-            <button type="button" onClick={demanderGeolocalisation} disabled={geoLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/5 border-2 border-dashed border-primary/30 rounded-xl text-primary font-semibold hover:bg-primary/10 transition disabled:opacity-50">
-              {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-              {geoLoading ? 'Récupération en cours…' : '📍 Utiliser ma position actuelle'}
-            </button>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Latitude</label><input type="number" step="any" value={form.lat} onChange={e => maj('lat', e.target.value)} className="input-base" /></div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Longitude</label><input type="number" step="any" value={form.lng} onChange={e => maj('lng', e.target.value)} className="input-base" /></div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon de déplacement : <span className="text-primary font-bold">{form.rayon} km</span></label>
-              <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full accent-primary" />
-              <div className="flex justify-between text-[10px] text-muted-foreground"><span>5 km</span><span>100 km</span></div>
-            </div>
-            {/* Ville de recherche fallback */}
-            <div className="pt-2 border-t border-border">
-              <label className="text-sm font-medium text-foreground mb-1.5 block">🏙️ Ville de recherche</label>
-              <p className="text-xs text-muted-foreground mb-2">Indiquez la ville où vous cherchez des missions. Utile si vous êtes en déplacement ou en vacances.</p>
-              <input value={(form as any).villeRecherche || ''} onChange={e => maj('villeRecherche', e.target.value)} placeholder="Ex : Lyon, Paris..." className="input-base" />
-            </div>
-          </div>
-        </div>
-
-        {/* Consentement GPS */}
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">Consentement GPS</h2>
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm text-foreground font-medium">Autoriser la géolocalisation lors des pointages</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {consentementGPS
-                  ? 'Votre position sera capturée uniquement au moment de l\'arrivée et du départ.'
-                  : '⚠️ Sans GPS, vos pointages nécessiteront une vérification manuelle par l\'établissement.'}
-              </p>
-            </div>
-            <Switch
-              checked={consentementGPS}
-              disabled={gpsToggling}
-              onCheckedChange={async (checked) => {
-                setGpsToggling(true);
-                const { data, error } = await supabase.rpc('fn_consentir_gps' as any, { p_accepte: checked });
-                if (error) {
-                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-                } else if (data && (data as any).error) {
-                  afficherNotification({ type: 'erreur', message: (data as any).error });
-                } else {
-                  setConsentementGPS(checked);
-                  // L4: Audit GPS consent change
-                  await supabase.rpc('fn_ecrire_audit_safe', {
-                    p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
-                    p_action: checked ? 'GPS_CONSENTEMENT_ACTIVE' : 'GPS_CONSENTEMENT_RETIRE',
-                    p_type_ressource: 'soignant', p_id_ressource: user!.id,
-                    p_cle_s3: null, p_details: { consentement_gps: checked },
-                    p_ip: null, p_navigateur: navigator.userAgent,
-                  });
-                  afficherNotification({
-                    type: checked ? 'succes' : 'avertissement',
-                    message: checked ? 'Consentement GPS activé.' : 'Consentement GPS retiré. Vérification manuelle requise.',
-                  });
-                }
-                setGpsToggling(false);
-              }}
+          <TabsContent value="paiements">
+            <SectionPaiements
+              userId={user!.id}
+              typeExercice={typeExercice}
+              mandatFacturationSigne={mandatFacturationSigne}
+              mandatFacturationSigneLe={mandatFacturationSigneLe}
             />
-          </div>
-        </div>
+          </TabsContent>
 
-        {/* Consentement SMS */}
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">Notifications SMS</h2>
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm text-foreground font-medium">Recevoir les alertes par SMS</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {consentementSMS
-                  ? 'Vous recevrez un SMS pour les missions urgentes et les annulations tardives.'
-                  : 'Activez pour recevoir les notifications critiques par SMS (missions urgentes, annulations).'}
-              </p>
-            </div>
-            <Switch
-              checked={consentementSMS}
-              disabled={smsToggling}
-              onCheckedChange={async (checked) => {
-                setSmsToggling(true);
-                const { error } = await supabase
-                  .from('soignants')
-                  .update({ sms_actif: checked, sms_consent_le: checked ? new Date().toISOString() : null })
-                  .eq('id', user!.id);
-                if (error) {
-                  afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-                } else {
-                  setConsentementSMS(checked);
-                  await supabase.rpc('fn_ecrire_audit_safe', {
-                    p_acteur_id: user!.id, p_type_acteur: role || 'SOIGNANT',
-                    p_action: checked ? 'SMS_CONSENTEMENT_ACTIVE' : 'SMS_CONSENTEMENT_RETIRE',
-                    p_type_ressource: 'soignant', p_id_ressource: user!.id,
-                    p_cle_s3: null, p_details: { sms_actif: checked },
-                    p_ip: null, p_navigateur: navigator.userAgent,
-                  });
-                  afficherNotification({
-                    type: checked ? 'succes' : 'avertissement',
-                    message: checked ? 'Notifications SMS activées.' : 'Notifications SMS désactivées.',
-                  });
-                }
-                setSmsToggling(false);
-              }}
+          <TabsContent value="preferences">
+            <SectionPreferences
+              userId={user!.id}
+              bio={bio}
+              onBioChange={setBio}
+              anneesExperience={anneesExperience}
+              onAnneesChange={setAnneesExperience}
+              specialites={specialites}
+              onSpecialitesChange={setSpecialites}
+              typesContrat={typesContrat}
+              onToggleContrat={toggleContrat}
+              rayon={rayon}
+              onRayonChange={setRayon}
+              tauxHoraireMinimum={tauxHoraireMinimum}
+              onTauxChange={setTauxHoraireMinimum}
+              poolUrgenceActif={poolUrgenceActif}
+              poolUrgenceRayon={poolUrgenceRayon}
+              onPoolUrgenceUpdate={(a, r) => { setPoolUrgenceActif(a); setPoolUrgenceRayon(r); }}
+              consentementGPS={consentementGPS}
+              onConsentementGPSChange={setConsentementGPS}
+              gpsToggling={gpsToggling}
+              setGpsToggling={setGpsToggling}
+              consentementSMS={consentementSMS}
+              onConsentementSMSChange={setConsentementSMS}
+              smsToggling={smsToggling}
+              setSmsToggling={setSmsToggling}
             />
-          </div>
-        </div>
-
-        {/* Notifications push opt-out */}
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">Notifications push</h2>
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm text-foreground font-medium">Recevoir les notifications push</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Missions urgentes, nouvelles candidatures, rappels de pointage.
-              </p>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="btn-primary disabled:opacity-50"
+              >
+                {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
+              </button>
             </div>
-            <Switch
-              checked={typeof Notification !== 'undefined' && Notification.permission === 'granted'}
-              onCheckedChange={async (checked) => {
-                if (checked) {
-                  const perm = await Notification.requestPermission();
-                  if (perm === 'granted') {
-                    afficherNotification({ type: 'succes', message: 'Notifications push activées.' });
-                  } else {
-                    afficherNotification({ type: 'avertissement', message: 'Notifications refusées par le navigateur. Vérifiez les paramètres.' });
-                  }
-                } else {
-                  // Delete push tokens to stop receiving
-                  await supabase.from('tokens_push').delete().eq('utilisateur_id', user!.id);
-                  afficherNotification({ type: 'avertissement', message: 'Notifications push désactivées. Vos tokens ont été supprimés.' });
-                }
-              }}
-            />
-          </div>
-        </div>
+          </TabsContent>
 
-        <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto disabled:opacity-50">
-          {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
-        </button>
-      </form>
-
-      {/* Pool Urgence */}
-      <div className="max-w-2xl mt-6">
-        <PoolUrgenceToggle
-          actif={poolUrgenceActif}
-          rayonKm={poolUrgenceRayon}
-          onUpdate={(a, r) => { setPoolUrgenceActif(a); setPoolUrgenceRayon(r); }}
-          onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
-          onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
-        />
+          <TabsContent value="confidentialite">
+            <SectionConfidentialite userId={user!.id} />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Inviter des collègues */}
@@ -873,7 +433,7 @@ export default function ProfilSoignant() {
             <div className="flex gap-2">
               <input
                 value={codeRecu}
-                onChange={e => setCodeRecu(e.target.value.toUpperCase())}
+                onChange={(e) => setCodeRecu(e.target.value.toUpperCase())}
                 placeholder="Ex: SOIN-ABCD"
                 className="input-base flex-1"
                 disabled={parrainageSucces}
@@ -885,8 +445,8 @@ export default function ProfilSoignant() {
                   const { data, error } = await supabase.rpc('fn_appliquer_parrainage' as any, { p_code: codeRecu.trim() });
                   if (error) {
                     afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-                  } else if (data?.error) {
-                    afficherNotification({ type: 'erreur', message: data.error });
+                  } else if ((data as any)?.error) {
+                    afficherNotification({ type: 'erreur', message: (data as any).error });
                   } else {
                     setParrainageSucces(true);
                     afficherNotification({ type: 'succes', message: 'Parrainage enregistré ! 🎉' });
@@ -920,39 +480,8 @@ export default function ProfilSoignant() {
         </div>
       </div>
 
-      {/* RGPD Section */}
-      <div className="max-w-2xl mt-12 space-y-4">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Données personnelles (RGPD)</h2>
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => handleExportRGPD('json')}
-            disabled={exportLoading}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" />
-            {exportLoading ? 'Export…' : 'Exporter JSON'}
-          </button>
-          <button
-            onClick={() => handleExportRGPD('csv')}
-            disabled={exportLoading}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" />
-            {exportLoading ? 'Export…' : 'Exporter CSV'}
-          </button>
-        </div>
-
-        <button
-          onClick={() => setShowDeleteModal(true)}
-          className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition"
-        >
-          <Trash2 className="h-4 w-4" /> Supprimer mon compte
-        </button>
-      </div>
-
-      {/* Déconnexion — visible uniquement sur mobile (sidebar gère le desktop) */}
-      <div className="md:hidden mt-6 pt-6 border-t border-border">
+      {/* Déconnexion mobile */}
+      <div className="md:hidden mt-6 pt-6 border-t border-border max-w-2xl">
         <button
           onClick={async () => { await deconnexion(); navigate('/'); }}
           className="btn-secondary w-full flex items-center justify-center gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
@@ -960,35 +489,6 @@ export default function ProfilSoignant() {
           <LogOut className="h-4 w-4" /> Se déconnecter
         </button>
       </div>
-
-      {/* B3: Modal suppression */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
-          <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full">
-            <h3 className="text-lg font-bold text-destructive mb-2">🗑️ Supprimer mon compte</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Cette action est irréversible. Vos données seront anonymisées conformément au RGPD. Tapez <strong>SUPPRIMER</strong> pour confirmer.
-            </p>
-            <input
-              value={deleteConfirmText}
-              onChange={e => setDeleteConfirmText(e.target.value)}
-              placeholder="Tapez SUPPRIMER"
-              className="input-base mb-4"
-            />
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); }} className="btn-secondary text-sm px-4 py-2">Annuler</button>
-              <button
-                onClick={handleSupprimerCompte}
-                disabled={deleteConfirmText !== 'SUPPRIMER' || deleteLoading}
-                className="btn-danger text-sm px-4 py-2 disabled:opacity-50"
-              >
-                {deleteLoading ? 'Suppression…' : 'Supprimer définitivement'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </LayoutApp>
   );
 }
