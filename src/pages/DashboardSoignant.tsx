@@ -548,8 +548,8 @@ export default function DashboardSoignant() {
             </div>
           )}
 
-          {/* Rappels fiscaux libéral */}
-          {soignantWithCounts.type_contrat === 'LIBERAL' && (
+          {/* Rappels fiscaux libéral (LIBERAL ou MIXTE) */}
+          {((soignantWithCounts as any).type_exercice === 'LIBERAL' || (soignantWithCounts as any).type_exercice === 'MIXTE') && (
             <RappelsFiscaux />
           )}
           </SectionErrorBoundary>

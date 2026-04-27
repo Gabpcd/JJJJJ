@@ -226,4 +226,30 @@ Le `fn_dashboard_soignant_complet` retourne `profil: null` quand aucune row soig
 
 ---
 
-*Audit genere le 26 avril 2026. Base pour sessions R2/R3/R4.*
+## 8. Champ type_contrat vs type_exercice — investigation R2.5
+
+### Schema actuel (table soignants)
+
+| Colonne | Type | Defaut | Sens |
+|---------|------|--------|------|
+| `type_contrat` | enum `type_contrat` | `'CDDU'` | Type de contrat signe pour les missions (CDDU, CDDU_USAGE, VACATION, LIBERAL, SALARIE) |
+| `type_exercice` | text | `'SALARIE'` | Mode d'exercice global (SALARIE, LIBERAL, MIXTE) |
+| `types_contrat_acceptes` | text | NULL | Array stringifie des contrats acceptes (modele evolue) |
+
+### Decision
+
+`type_contrat` est progressivement deprecied au profit de :
+- `types_contrat_acceptes` (array) pour les contrats que le soignant accepte
+- `type_exercice` (mode global) pour les conditions metier (rappels fiscaux, mandat facturation, RCP, etc.)
+
+Dans le code applicatif, il est preferable d'utiliser `type_exercice` partout pour les checks metier.
+
+### Action R3 ou R4
+
+- Auditer tous les usages de `type_contrat` dans le code (`grep -rn "type_contrat" src/`)
+- Migrer vers `type_exercice` ou `types_contrat_acceptes` selon le cas
+- Migration DB : marquer `type_contrat` comme deprecated, prevoir suppression apres migration complete des donnees
+
+---
+
+*Audit genere le 26 avril 2026. Mis a jour R2.5 (type_contrat vs type_exercice). Base pour sessions R2/R3/R4.*
