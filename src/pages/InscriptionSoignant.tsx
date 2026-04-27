@@ -367,7 +367,7 @@ export default function InscriptionSoignant() {
               ) : form.profession && (
                 <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
                   <p className="text-xs text-foreground">
-                    ℹ️ Votre profession ne nécessite pas de numéro RPPS. Vous pourrez renseigner votre numéro ADELI (optionnel) plus tard depuis votre profil.
+                    ℹ️ Votre profession ne nécessite pas de numéro d'identification professionnelle. Votre diplôme et votre carte d'identité seront vérifiés à la première mission.
                   </p>
                 </div>
               )}
