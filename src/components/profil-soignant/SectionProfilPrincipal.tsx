@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, MapPin, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, MapPin, ShieldCheck, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { getLabelProfession } from '@/lib/constantes';
+import { getLabelProfession, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -34,8 +34,6 @@ interface Props {
   setSpecialiteMedicale: (v: string) => void;
   specialiteVerifiee: boolean;
   specialiteSource: string;
-  adeli: string;
-  setAdeli: (v: string) => void;
   lat: string;
   setLat: (v: string) => void;
   lng: string;
@@ -282,7 +280,6 @@ export function SectionProfilPrincipal(props: Props) {
     telephone, setTelephone,
     profession, specialiteMedicale, setSpecialiteMedicale,
     specialiteVerifiee, specialiteSource,
-    adeli, setAdeli,
     lat, setLat, lng, setLng, villeRecherche, setVilleRecherche,
     typeExercice, setTypeExercice, attestationCumul, setAttestationCumul,
     statutLiberal, heuresCumulees,
@@ -318,12 +315,30 @@ export function SectionProfilPrincipal(props: Props) {
     );
   };
 
+  const sansRPPS = profession && PROFESSIONS_SANS_RPPS.includes(profession);
+
   return (
     <div className="space-y-4">
       <BandeauCompletionProfil resume={resumeCompletion} />
 
-      {/* RPPS — en TÊTE */}
-      {!rppsVerifie ? (
+      {/* Identification professionnelle — en TÊTE */}
+      {sansRPPS ? (
+        <div className="card-base">
+          <h2 className="text-base font-semibold text-foreground mb-2 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" /> Identification professionnelle
+          </h2>
+          <p className="text-sm text-foreground mb-3">
+            Votre profession (<strong>{getLabelProfession(profession)}</strong>) ne nécessite pas de numéro RPPS. Votre identification professionnelle se fait par votre diplôme et votre carte d'identité.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/soignant/mes-documents')}
+            className="btn-primary text-sm py-2 px-4 inline-flex items-center gap-2"
+          >
+            Téléverser mes documents <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : !rppsVerifie ? (
         <RppsVerifierInline
           userId={userId}
           rpps={rpps}
@@ -393,21 +408,11 @@ export function SectionProfilPrincipal(props: Props) {
                 )}
               </div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">
-                  RPPS <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span>
-                </label>
-                <input value={rpps} readOnly className="input-base bg-muted cursor-not-allowed" />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">ADELI</label>
-                <input
-                  value={adeli}
-                  onChange={(e) => setAdeli(e.target.value)}
-                  className="input-base"
-                />
-              </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                RPPS <span className="text-xs text-muted-foreground">(vérifié — non modifiable)</span>
+              </label>
+              <input value={rpps} readOnly className="input-base bg-muted cursor-not-allowed" />
             </div>
           </div>
         </div>

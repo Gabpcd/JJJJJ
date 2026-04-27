@@ -54,7 +54,6 @@ export default function ProfilSoignant() {
   const [telephone, setTelephone] = useState('');
   const [dateNaissance, setDateNaissance] = useState('');
   const [rpps, setRpps] = useState('');
-  const [adeli, setAdeli] = useState('');
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
   const [rayon, setRayon] = useState(30);
@@ -127,7 +126,6 @@ export default function ProfilSoignant() {
         setTelephone(data.telephone || '');
         setDateNaissance(data.date_naissance || '');
         setRpps(data.numero_rpps || '');
-        setAdeli(data.numero_adeli || '');
         setLat(data.adresse_lat?.toString() || '');
         setLng(data.adresse_lng?.toString() || '');
         setRayon(data.rayon_deplacement_km ?? 30);
@@ -206,7 +204,7 @@ export default function ProfilSoignant() {
       p_prenom: prenom || null, p_nom: nom || null,
       p_date_naissance: dateNaissance || null,
       p_types_contrat: typesContrat,
-      p_numero_rpps: rpps || null, p_numero_adeli: adeli || null,
+      p_numero_rpps: rpps || null,
       p_adresse_lat: lat ? parseFloat(lat) : null,
       p_adresse_lng: lng ? parseFloat(lng) : null,
       p_bio: bio || null,
@@ -318,8 +316,6 @@ export default function ProfilSoignant() {
               setSpecialiteMedicale={setSpecialiteMedicale}
               specialiteVerifiee={specialiteVerifiee}
               specialiteSource={specialiteSource}
-              adeli={adeli}
-              setAdeli={setAdeli}
               lat={lat}
               setLat={setLat}
               lng={lng}

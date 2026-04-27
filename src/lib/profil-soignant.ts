@@ -1,4 +1,5 @@
 import type { Database } from '@/integrations/supabase/types';
+import { PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 
 type Soignant = Database['public']['Tables']['soignants']['Row'];
 
@@ -41,6 +42,8 @@ export function calculerCompletionProfil(
     };
   }
 
+  const sansRPPS = !!soignant.profession && PROFESSIONS_SANS_RPPS.includes(soignant.profession);
+
   const items: ItemCompletion[] = [
     {
       cle: 'prenom',
@@ -74,7 +77,9 @@ export function calculerCompletionProfil(
       ordre: 4,
       action_route: '/soignant/profil',
     },
-    {
+    // RPPS uniquement pour les professions concernées (AS/AES en sont exemptés —
+    // identification par diplôme + CNI). ADELI obsolète depuis 2024, plus utilisé.
+    ...(sansRPPS ? [] : [{
       cle: 'rpps',
       label: 'RPPS vérifié',
       rempli: !!soignant.rpps_verifie,
@@ -82,7 +87,7 @@ export function calculerCompletionProfil(
       ordre: 5,
       action_label: 'Vérifier mon RPPS',
       action_route: '/soignant/profil',
-    },
+    }]),
     {
       cle: 'profession',
       label: 'Profession',
