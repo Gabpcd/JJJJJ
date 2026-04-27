@@ -40,7 +40,8 @@ export const TYPES_ETABLISSEMENT = [
 // Professions NON éligibles au libéral
 export const PROFESSIONS_NON_LIBERAL = ['PHARMACIEN', 'PREPARATEUR_PHARMA', 'AS', 'AES', 'MANIPULATEUR_RADIO'];
 
-// Professions sans RPPS (ADELI uniquement)
+// Professions sans numéro d'identification professionnelle (RPPS).
+// Vérification par diplôme + CNI uniquement (ADELI obsolète depuis 2024).
 export const PROFESSIONS_SANS_RPPS = ['AS', 'AES'];
 
 // Professions limitées pour pharmacies

@@ -6,7 +6,8 @@ interface BadgeRPPSProps {
   profession?: string;
 }
 
-// Professions sans RPPS (ADELI uniquement)
+// Professions sans numéro d'identification professionnelle (AS, AES).
+// Vérification par diplôme + CNI uniquement.
 const PROFESSIONS_SANS_RPPS = ['AS', 'AES'];
 
 export function BadgeRPPS({ rppsVerifie, rpps, profession }: BadgeRPPSProps) {
