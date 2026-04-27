@@ -8,7 +8,7 @@ import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale'
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { getLabelProfession, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
-import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
+import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import type { ResumeCompletion } from '@/lib/profil-soignant';
@@ -377,12 +377,18 @@ export function SectionProfilPrincipal(props: Props) {
                 disabled
                 className="input-base bg-muted cursor-not-allowed"
               />
-              {profession && estEligibleLiberal(profession) && statutLiberal !== 'ACTIF' && heuresCumulees < 3200 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  🔒 Passage en libéral disponible à 3 200h — actuellement{' '}
-                  <span className="font-semibold text-primary">{heuresCumulees}h</span>/3 200h
-                </p>
-              )}
+              {(() => {
+                if (!profession || !estEligibleLiberal(profession) || statutLiberal === 'ACTIF') return null;
+                const regle = getRegleInstallation(profession);
+                const seuil = regle?.heures_requises;
+                if (!seuil || heuresCumulees >= seuil) return null;
+                return (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    🔒 Passage en libéral disponible à {seuil.toLocaleString('fr-FR')}h — actuellement{' '}
+                    <span className="font-semibold text-primary">{heuresCumulees}h</span>/{seuil.toLocaleString('fr-FR')}h
+                  </p>
+                );
+              })()}
             </div>
             {(profession === 'MEDECIN' || profession === 'IDE') && (
               <div>
