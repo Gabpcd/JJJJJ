@@ -7,7 +7,7 @@ import { FadeInView } from '@/components/FadeInView';
 import { CheckCircle, Star, Clock, ShieldCheck, ShieldAlert, Circle, CheckCircle2, Search, Info, X, AlertCircle, Banknote, Rocket, MapPin, Bell, TrendingUp, Activity, GraduationCap, Home, CalendarDays, CreditCard, FileText } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CarteProposition } from '@/components/CarteProposition';
-import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
+import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
 import { RappelsFiscaux } from '@/components/RappelsFiscaux';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
@@ -170,6 +170,8 @@ export default function DashboardSoignant() {
   const score = soignantWithCounts.score_fiabilite;
   const hasEvaluations = missionsTerminees > 0;
   const heures = soignantWithCounts.heures_cumulees ?? 0;
+  const regleInstallation = soignantWithCounts.profession ? getRegleInstallation(soignantWithCounts.profession) : null;
+  const seuilHeures = regleInstallation?.heures_requises ?? null;
 
   const aDocuments = !!(soignantWithCounts as any).tous_documents_valides;
 
@@ -366,8 +368,16 @@ export default function DashboardSoignant() {
               )}
             </FadeInView>
             <FadeInView delay={200}>
-              <div className="cursor-pointer" onClick={() => navigate('/soignant/historique-missions')}>
-                <CarteKPI icone={Clock} valeur={`${heures}h`} label="Heures cumulées" sousLabel="sur 3 200h objectif" couleurIcone="text-purple-600" couleurFond="bg-purple-100" lien="/soignant/parcours-3200h" />
+              <div className="cursor-pointer" onClick={() => navigate('/soignant/planning?tab=historique')}>
+                <CarteKPI
+                  icone={Clock}
+                  valeur={`${heures}h`}
+                  label="Heures cumulées"
+                  sousLabel={seuilHeures ? `sur ${seuilHeures.toLocaleString('fr-FR')}h objectif` : undefined}
+                  couleurIcone="text-purple-600"
+                  couleurFond="bg-purple-100"
+                  lien={seuilHeures ? '/soignant/passer-en-liberal' : '/soignant/planning?tab=historique'}
+                />
               </div>
             </FadeInView>
             <FadeInView delay={300}>
@@ -457,14 +467,21 @@ export default function DashboardSoignant() {
             <CompteurHebdomadaire />
           </div>
 
-          {/* Progression 3200h + Prochain badge */}
-          {soignantWithCounts.profession && estEligibleLiberal(soignantWithCounts.profession) && (
+          {/* Progression 3200h — IDE/IBODE/IADE uniquement */}
+          {regleInstallation?.categorie === 'AVEC_HEURES_IDE' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               <FadeInView delay={0}>
                 <ProgressionCirculaire3200h heures={heures} />
               </FadeInView>
               <FadeInView delay={100}>
                 {badgeStats && <ProchainBadgeWidget stats={badgeStats} />}
+              </FadeInView>
+            </div>
+          )}
+          {regleInstallation?.categorie !== 'AVEC_HEURES_IDE' && badgeStats && (
+            <div className="mb-6">
+              <FadeInView delay={100}>
+                <ProchainBadgeWidget stats={badgeStats} />
               </FadeInView>
             </div>
           )}
