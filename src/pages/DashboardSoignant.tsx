@@ -197,7 +197,7 @@ export default function DashboardSoignant() {
           </div>
         </div>
       )}
-      {!hasMandatFacturation && (
+      {((soignantWithCounts as any).type_exercice === 'LIBERAL' || (soignantWithCounts as any).type_exercice === 'MIXTE') && !hasMandatFacturation && (
         <div className="rounded-xl border-2 border-warning/30 bg-warning/5 p-4 mb-4 flex items-start gap-3 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => navigate('/soignant/mandat-facturation')}>
           <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
           <div>
