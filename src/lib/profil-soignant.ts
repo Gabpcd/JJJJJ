@@ -79,11 +79,14 @@ export function calculerCompletionProfil(
     },
     // RPPS uniquement pour les professions concernées (AS/AES en sont exemptés —
     // identification par diplôme + CNI). ADELI obsolète depuis 2024, plus utilisé.
+    // Quand applicable, RPPS est OBLIGATOIRE car requis pour toute candidature
+    // (les missions filtrent strictement par profession_requise renseignée par
+    // l'API ANS lors de la vérification RPPS).
     ...(sansRPPS ? [] : [{
       cle: 'rpps',
       label: 'RPPS vérifié',
       rempli: !!soignant.rpps_verifie,
-      obligatoire: false,
+      obligatoire: true,
       ordre: 5,
       action_label: 'Vérifier mon RPPS',
       action_route: '/soignant/profil',
