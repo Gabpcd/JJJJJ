@@ -584,18 +584,26 @@ export default function DashboardSoignant() {
                 <p className="text-sm font-semibold text-foreground mt-3"><span className="text-rose">{heures}h</span> / 3 200h</p>
               </div>
 
-              {heures >= 800 && (soignantWithCounts as any).statut_liberal !== 'ACTIF' && (
-                <div className="rounded-2xl bg-gradient-to-r from-rose/5 to-rose-light dark:to-rose/10 border border-rose/20 p-4 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/passer-en-liberal')}>
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-xl p-2.5 bg-primary/10"><Rocket className="h-5 w-5 text-primary" /></div>
-                    <div>
-                      <p className="text-sm font-bold text-foreground">🎉 Passer en libéral</p>
-                      <p className="text-xs text-muted-foreground">Vous êtes éligible ! Découvrez le module Free Transition.</p>
-                      <p className="text-xs text-primary mt-0.5">Commencer →</p>
+              {(() => {
+                if ((soignantWithCounts as any).statut_liberal === 'ACTIF') return null;
+                // Sans heures requises (médecin, sage-femme, orthophoniste...) : toujours afficher
+                // Avec heures requises (IDE 3200, KINE 2240) : afficher dès 25% du seuil
+                const seuil = regleInstallation?.heures_requises;
+                const seuilAtteint = !seuil || heures >= seuil * 0.25;
+                if (!seuilAtteint) return null;
+                return (
+                  <div className="rounded-2xl bg-gradient-to-r from-rose/5 to-rose-light dark:to-rose/10 border border-rose/20 p-4 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate('/soignant/passer-en-liberal')}>
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-xl p-2.5 bg-primary/10"><Rocket className="h-5 w-5 text-primary" /></div>
+                      <div>
+                        <p className="text-sm font-bold text-foreground">🎉 Passer en libéral</p>
+                        <p className="text-xs text-muted-foreground">Vous êtes éligible ! Découvrez le module Free Transition.</p>
+                        <p className="text-xs text-primary mt-0.5">Commencer →</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Prévoyance CTA */}
               {!(soignantWithCounts as any).prevoyance_inscrit && (
