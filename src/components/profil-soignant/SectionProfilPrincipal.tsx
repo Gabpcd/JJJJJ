@@ -129,7 +129,10 @@ function RppsVerifierInline(props: {
         p_numero_rpps: rpps || null,
       });
       if (errSave) {
-        afficherNotification({ type: 'erreur', message: extraireMessageErreur(errSave) });
+        afficherNotification({
+          type: 'erreur',
+          message: `Impossible d'enregistrer vos informations : ${extraireMessageErreur(errSave)}`,
+        });
         setVerifying(false);
         return;
       }
@@ -218,9 +221,15 @@ function RppsVerifierInline(props: {
             placeholder="11 chiffres"
             className="input-base"
             inputMode="numeric"
+            autoComplete="off"
           />
+          {rpps.length > 0 && rpps.length < 11 && (
+            <p className="text-[10px] text-warning mt-1">
+              {rpps.length}/11 chiffres
+            </p>
+          )}
           <p className="text-[10px] text-muted-foreground mt-1">
-            Numéro à 11 chiffres délivré par l'ARS et inscrit sur votre carte CPS.
+            Numéro à 11 chiffres délivré par l'ARS et inscrit sur votre carte CPS. La validation se fait via l'Annuaire Santé (ANS).
           </p>
         </div>
 
