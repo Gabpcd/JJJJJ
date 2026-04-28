@@ -3,6 +3,15 @@
 Ce fichier contient les règles et patterns à appliquer 
 systématiquement lors des sessions de développement Jolene.
 
+## Source de vérité stack & outils
+
+Avant d'ajouter un nouvel outil ou service, consulter 
+`docs/audit-stack-existante.md` qui inventorie les 14 outils 
+opérationnels (Sentry, Resend, Twilio, Stripe, Stripe Connect, 
+YouSign, Chorus-Pro, Piste, Defacto, ProSantéConnect, Web Push 
+VAPID, Capacitor, Vercel, Supabase Auth) et les secrets déjà 
+configurés. Ne pas réinventer ce qui existe.
+
 ## Principe de travail
 
 **Pas de tickets ni backlog.** Tout bug ou amélioration 
@@ -123,6 +132,57 @@ ADELI est OBSOLÈTE depuis 2024 (basculé RPPS). Ne plus
 proposer de saisie ADELI dans les nouveaux UIs. AS/AES 
 n'ont jamais eu d'ADELI : leur identification se fait 
 par diplôme + CNI uniquement.
+
+## Captcha Turnstile (anti-bot)
+
+Cloudflare Turnstile est intégré sur :
+
+- Inscription Soignant (`InscriptionSoignant`)
+- Inscription Établissement (`InscriptionEtablissement`)
+- Wizard RPPS (`SectionProfilPrincipal` → `RppsVerifierInline`)
+- Mot de passe oublié (`PageConnexion`)
+
+Côté backend, le helper `supabase/functions/_shared/verify-turnstile.ts` 
+valide le token via l'API Cloudflare. Tant que la secret 
+`TURNSTILE_SECRET_KEY` n'est pas configurée, la vérification 
+retourne success=true (mode dev), de sorte que le code peut 
+être déployé avant l'activation côté Cloudflare. Idem côté 
+frontend : sans `VITE_TURNSTILE_SITE_KEY`, le widget 
+`<CaptchaTurnstile />` ne rend rien et appelle `onVerify('')` 
+immédiatement.
+
+Variables à configurer pour activer en prod :
+
+| Variable                      | Où                  | Valeur                |
+| ----------------------------- | ------------------- | --------------------- |
+| `VITE_TURNSTILE_SITE_KEY`     | Vercel (prod+preview) | Site key Turnstile  |
+| `TURNSTILE_SECRET_KEY`        | Supabase secrets    | Secret key Turnstile  |
+
+Création des clés : 
+[dash.cloudflare.com → Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile).
+
+Bypass interne : la fonction `verify-rpps` accepte 3 types 
+d'auth (service_role, anon key, user JWT). Le captcha est 
+demandé uniquement quand un utilisateur authentifié appelle 
+avec `soignant_id` (cas wizard profil). Les pré-checks pendant 
+l'inscription (anon key sans `soignant_id`) sont exemptés pour 
+ne pas bloquer la frappe en temps réel.
+
+## Source maps Sentry
+
+Le plugin `@sentry/vite-plugin` upload les source maps à chaque 
+build prod si `SENTRY_AUTH_TOKEN` est présente. À ajouter dans 
+les env vars Vercel.
+
+| Variable             | Où     | Valeur                                                           |
+| -------------------- | ------ | ---------------------------------------------------------------- |
+| `SENTRY_AUTH_TOKEN`  | Vercel | Sentry → Settings → Account → API → Auth tokens (scope project)  |
+| `SENTRY_ORG`         | Vercel | `jolene` (par défaut)                                            |
+| `SENTRY_PROJECT`     | Vercel | `jolene-frontend` (par défaut)                                   |
+
+Sans token, le build se fait normalement, juste sans upload des 
+source maps. Les stacks production restent illisibles tant que 
+le token n'est pas configuré.
 
 ## Comptes test audit
 
