@@ -84,7 +84,7 @@ export default function AdminChorusPro() {
 
   return (
     <LayoutAdmin>
-      <BreadcrumbAdmin items={[{ label: 'Chorus Pro' }]} />
+      <BreadcrumbAdmin pageName="Chorus Pro" />
       <div className="flex items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <FileStack className="h-7 w-7 text-primary" />

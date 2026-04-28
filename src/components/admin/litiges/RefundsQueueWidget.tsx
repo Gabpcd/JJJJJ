@@ -45,7 +45,7 @@ export function RefundsQueueWidget() {
         setLoading(false);
         return;
       }
-      const rows = (data ?? []) as Array<{ cree_le: string }>;
+      const rows = (data ?? []) as unknown as Array<{ cree_le: string }>;
       const count = (data as any)?.length != null && (data as any)?.count == null
         ? rows.length
         : ((data as any)?.count ?? rows.length);

@@ -360,7 +360,7 @@ export default function PresencesSoignant() {
 
     if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
 
-    const missionData = missions.find((m: any) => m.id === missionId);
+    const missionData = missions.find((m: any) => m.id === missionId) as any;
     if (missionData) {
       supabase.functions.invoke('send-email', {
         body: {
