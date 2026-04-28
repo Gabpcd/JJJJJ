@@ -27,7 +27,7 @@ function AttestationSante({ userId }: { userId: string }) {
     supabase.from('soignants')
       .select('attestation_sante_signee_le')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data && (data as any).attestation_sante_signee_le) {
           setSignedAt((data as any).attestation_sante_signee_le);

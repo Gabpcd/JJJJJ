@@ -39,7 +39,7 @@ export default function PageParrainage() {
       .from('soignants')
       .select('code_parrainage, badge_ambassadeur, priorite_missions_urgentes')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     if (soignant) {
       setCodeParrainage(soignant.code_parrainage || '');
