@@ -329,6 +329,7 @@ export default function ProfilSoignant() {
               setAttestationCumul={setAttestationCumul}
               statutLiberal={statutLiberal}
               heuresCumulees={heuresCumulees}
+              tousDocumentsValides={!!soignantRow?.tous_documents_valides}
               resumeCompletion={resumeCompletion}
               onRefresh={refresh}
               onSave={handleSave}

@@ -48,6 +48,7 @@ interface Props {
   setAttestationCumul: (v: boolean) => void;
   statutLiberal: string;
   heuresCumulees: number;
+  tousDocumentsValides: boolean;
   resumeCompletion: ResumeCompletion;
   onRefresh: () => void;
   onSave: () => Promise<void>;
@@ -326,6 +327,76 @@ function ChoixProfessionInline(props: { onChosen: () => void }) {
   );
 }
 
+function BoutonModifierProfession({ rppsVerifie, tousDocumentsValides, onChanged }: {
+  rppsVerifie: boolean;
+  tousDocumentsValides: boolean;
+  onChanged: () => void;
+}) {
+  const { afficherNotification } = useNotification();
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  // Caché dès qu'un RPPS est vérifié OU qu'un document a été validé
+  if (rppsVerifie || tousDocumentsValides) return null;
+
+  const reset = async () => {
+    setResetting(true);
+    const { error } = await supabase
+      .from('soignants')
+      .update({ profession: null } as any)
+      .eq('id', (await supabase.auth.getUser()).data.user?.id || '');
+    if (error) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+      setResetting(false);
+      setShowConfirm(false);
+      return;
+    }
+    afficherNotification({ type: 'succes', message: 'Profession réinitialisée. Choisissez votre profession.' });
+    setResetting(false);
+    setShowConfirm(false);
+    onChanged();
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setShowConfirm(true)}
+        className="text-xs text-muted-foreground hover:text-foreground hover:underline mt-3 inline-flex items-center gap-1"
+      >
+        ← Modifier ma profession
+      </button>
+      {showConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => !resetting && setShowConfirm(false)} />
+          <div className="relative bg-card rounded-2xl shadow-xl p-6 mx-4 max-w-md w-full">
+            <h3 className="text-base font-bold text-foreground mb-2">Changer de profession ?</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Vous allez réinitialiser votre profession et revenir au sélecteur. Vous pourrez choisir une nouvelle profession.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={resetting}
+                className="btn-secondary text-sm px-4 py-2"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={reset}
+                disabled={resetting}
+                className="btn-primary text-sm px-4 py-2 disabled:opacity-50"
+              >
+                {resetting ? 'Réinitialisation…' : 'Continuer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function SectionProfilPrincipal(props: Props) {
   const {
     userId, email,
@@ -337,6 +408,7 @@ export function SectionProfilPrincipal(props: Props) {
     lat, setLat, lng, setLng, villeRecherche, setVilleRecherche,
     typeExercice, setTypeExercice, attestationCumul, setAttestationCumul,
     statutLiberal, heuresCumulees,
+    tousDocumentsValides,
     resumeCompletion, onRefresh, onSave, saving,
   } = props;
 
@@ -393,20 +465,34 @@ export function SectionProfilPrincipal(props: Props) {
           >
             Téléverser mes documents <ArrowRight className="h-3.5 w-3.5" />
           </button>
+          <BoutonModifierProfession
+            rppsVerifie={rppsVerifie}
+            tousDocumentsValides={tousDocumentsValides}
+            onChanged={onRefresh}
+          />
         </div>
       ) : !rppsVerifie ? (
-        <RppsVerifierInline
-          userId={userId}
-          rpps={rpps}
-          setRpps={setRpps}
-          prenom={prenom}
-          setPrenom={setPrenom}
-          nom={nom}
-          setNom={setNom}
-          dateNaissance={dateNaissance}
-          setDateNaissance={setDateNaissance}
-          onVerified={onRefresh}
-        />
+        <div>
+          <RppsVerifierInline
+            userId={userId}
+            rpps={rpps}
+            setRpps={setRpps}
+            prenom={prenom}
+            setPrenom={setPrenom}
+            nom={nom}
+            setNom={setNom}
+            dateNaissance={dateNaissance}
+            setDateNaissance={setDateNaissance}
+            onVerified={onRefresh}
+          />
+          <div className="px-4 mt-1">
+            <BoutonModifierProfession
+              rppsVerifie={rppsVerifie}
+              tousDocumentsValides={tousDocumentsValides}
+              onChanged={onRefresh}
+            />
+          </div>
+        </div>
       ) : (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-2 flex items-center gap-2">
