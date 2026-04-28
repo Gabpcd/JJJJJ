@@ -19,6 +19,7 @@ const PscCallback = lazy(() => import("./pages/PscCallback"));
 const MandatFacturation = lazy(() => import("./pages/MandatFacturation"));
 const MesFacturesHonoraires = lazy(() => import("./pages/MesFacturesHonoraires"));
 const MesAvances = lazy(() => import("./pages/MesAvances"));
+const BulletinsPaie = lazy(() => import("./pages/BulletinsPaie"));
 const AdminMandatsFacturation = lazy(() => import("./pages/admin/AdminMandatsFacturation"));
 const AdminAffacturage = lazy(() => import("./pages/admin/AdminAffacturage"));
 const AdminChorusPro = lazy(() => import("./pages/admin/AdminChorusPro"));
@@ -164,6 +165,7 @@ function AppRoutes() {
           <Route path="/soignant/mandat-facturation" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MandatFacturation /></RouteProtegee>} />
           <Route path="/soignant/mes-factures-honoraires" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesFacturesHonoraires /></RouteProtegee>} />
           <Route path="/soignant/mes-avances" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesAvances /></RouteProtegee>} />
+          <Route path="/soignant/bulletins-paie" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><BulletinsPaie /></RouteProtegee>} />
           <Route path="/soignant/historique-missions" element={<Navigate to="/soignant/planning?tab=historique" replace />} />
           <Route path="/soignant/fiabilite" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><FiabiliteSoignant /></RouteProtegee>} />
           <Route path="/soignant/parcours-3200h" element={<Navigate to="/soignant/passer-en-liberal" replace />} />
