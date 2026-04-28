@@ -129,3 +129,40 @@ par diplôme + CNI uniquement.
 Préfixe email : audit-{profession}@jolene-test.dev
 Mot de passe : auditTest2026!
 À ne pas supprimer (utilisés pour tests SQL futurs).
+
+## RPPS test (mode hybride dev)
+
+L'edge function `verify-rpps` détecte les RPPS commençant 
+par `00100` et les résout depuis la table `rpps_test` au 
+lieu d'appeler l'API ANS. Activé hors production (gardé 
+par `Deno.env.get('ENVIRONMENT') !== 'production'`).
+
+Justification du préfixe : aucun vrai RPPS ne commence 
+par `00100` (IDE → 1, médecins → 8, etc.), donc aucune 
+collision possible.
+
+RPPS test disponibles :
+
+| RPPS          | Prénom   | Nom              | Profession    | Spécialité |
+|---------------|----------|------------------|---------------|------------|
+| 00100000001   | Marie    | TEST-IDE         | IDE           | —          |
+| 00100000002   | Pierre   | TEST-MED-GEN     | MEDECIN       | —          |
+| 00100000003   | Sophie   | TEST-MED-CARDIO  | MEDECIN       | SM48       |
+| 00100000004   | Lucas    | TEST-KINE        | KINE          | —          |
+| 00100000005   | Camille  | TEST-SF          | SAGE_FEMME    | —          |
+| 00100000006   | Théo     | TEST-ORTHO       | ORTHOPHONISTE | —          |
+
+Legacy (rétrocompat) : `00000000001` (PICARD Gabrielle, 
+IDE) reste hardcodé dans la fonction.
+
+Pour activer/désactiver : variable `ENVIRONMENT` dans 
+les secrets Supabase. Default = `development` (test 
+mode actif). Mettre à `production` pour bloquer le 
+préfixe `00100` et forcer 100% API ANS.
+
+Ajouter un nouveau RPPS test :
+
+```sql
+INSERT INTO public.rpps_test (rpps, prenom, nom, profession, specialite_medicale)
+VALUES ('00100000007', 'Prenom', 'NOM', 'PROFESSION', NULL);
+```
