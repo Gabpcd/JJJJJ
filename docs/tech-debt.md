@@ -316,7 +316,7 @@ Attention : ne PAS toucher les missions facturées (trigger `trg_protect_creneau
 
 ---
 
-## T12 — Câblage stripe_payment_intent_id sur factures_honoraires (Stripe Connect)
+## [RÉSOLU] T12 — Câblage stripe_payment_intent_id sur factures_honoraires (2026-04-28)
 
 **Contexte** : La colonne `factures_honoraires.stripe_payment_intent_id` a été ajoutée par CP-LITIGES-3 comme placeholder pour le refund auto (<120j) des avoirs. Actuellement, `stripe-connect-pay-mission` écrit `stripe_payment_intent_id` sur la table `stripe_transfers` (ligne 293-309) mais ne le propage PAS vers `factures_honoraires`. Résultat : `fn_admin_resoudre_litige` cas AVOIR tombera toujours sur `mode_remboursement = VIREMENT_MANUEL` même pour des factures payées via Stripe il y a moins de 120j.
 
@@ -331,9 +331,33 @@ Ma recommandation : **B** (webhook = source de vérité la plus fiable, cohéren
 
 **Date** : 2026-04-17
 
+**Résolution 2026-04-28 (option B simplifiée — trigger SQL, plus
+robuste qu'un appel webhook)** :
+- Migration `20260428230000_t12_propagate_stripe_payment_intent.sql`.
+- Trigger `trg_propage_stripe_payment_intent` AFTER INSERT OR UPDATE
+  OF stripe_payment_intent_id, mission_id sur stripe_transfers.
+- Fonction `fn_propage_stripe_payment_intent_trg` SECURITY DEFINER
+  qui propage `stripe_transfers.stripe_payment_intent_id` →
+  `factures_honoraires.stripe_payment_intent_id` via `mission_id`
+  (note : `stripe_transfers.facture_id` pointe vers `factures` —
+  commission Jolene → étab — pas vers `factures_honoraires`,
+  d'où la jointure par `mission_id`).
+- Filtre sur `type_document='FACTURE'` (pas les AVOIRs).
+- Backfill exécuté pour les `stripe_transfers` existants qui
+  avaient un PI mais n'avaient pas propagé.
+- L'immutabilité `factures_honoraires` post-EMISE NE bloque PAS
+  `stripe_payment_intent_id` (vérifié dans
+  `fn_protect_facture_honoraire_immutability`).
+
+Tests SQL via MCP (compte audit-medecin LIBERAL) :
+1. INSERT stripe_transfer avec PI → FACTURE reçoit le PI, AVOIR
+   sur même mission reste NULL. PASS.
+2. UPDATE stripe_transfer pour ajouter le PI a posteriori →
+   propagation immédiate. PASS.
+
 ---
 
-## T13 — Edge function process-stripe-refunds à finaliser
+## [RÉSOLU] T13 — Edge function process-stripe-refunds à finaliser (2026-04-28)
 
 **Contexte** : CP-LITIGES-4 livre un squelette d'edge function `process-stripe-refunds` qui :
 - Authentifie par `service_role`.
@@ -352,6 +376,37 @@ Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_inte
 **Priorité** : P1 — couplé à T12
 
 **Date** : 2026-04-17
+
+**Résolution constatée 2026-04-28** : la fonction `process-stripe-refunds`
+(version 85 actuellement déployée) est en réalité **entièrement
+implémentée** depuis CP-STRIPE-5 (H3+A21/T13). Audit du code source
+côté Supabase confirme :
+- Auth Bearer service_role.
+- SELECT EN_ATTENTE avec `tentatives < MAX (3)` et
+  `dernier_essai_le.lt now() - 15min` (anti-burst).
+- Lock atomique `EN_ATTENTE → EN_COURS` par UPDATE conditionnel
+  (idempotent multi-cron).
+- `stripe.refunds.create({ payment_intent, amount, reason, metadata })`
+  avec metadata `avoir_id`, `facture_origine_id`, `queue_id`,
+  `source: 'jolene_refunds_cron'`.
+- Gestion erreurs : permanents (`payment_intent_unexpected_state`,
+  `amount_too_large`, `charge_disputed`, `charge_expired`,
+  `missing_source`, `resource_missing`, `StripeAuthenticationError`)
+  → ECHEC + alert admin via send-email type
+  `REFUND_ECHEC_ADMIN`. Retryables → EN_ATTENTE + tentatives+1.
+- Idempotence Stripe via `charge_already_refunded` → TRAITE.
+- 3e tentative échouée → ECHEC permanent + alert admin.
+- Audit trail `FINANCE_REFUND_TRAITE_IDEMPOTENT` /
+  `FINANCE_REFUND_ECHEC` / `FINANCE_REFUND_RETRY` via
+  `fn_ecrire_audit_safe`.
+- Webhook `charge.refunded` (CP-STRIPE-4) fait UPDATE TRAITE
+  idempotent en filet de sécurité.
+
+Action restante côté Gabrielle : configurer le **schedule cron**
+(Supabase Dashboard → Project → Edge Functions → process-stripe-refunds
+→ Schedule, par ex. `*/30 * * * *`). Sans cron, la queue ne sera
+consommée que par appel manuel. Couplé à T12 (résolu) : les avoirs
+AUTO_STRIPE peuvent désormais cibler le bon `stripe_payment_intent_id`.
 
 ---
 
@@ -459,7 +514,8 @@ manuel. Tickets RÉSOLU précédés de [RÉSOLU] dans le titre.
 | T1 | Validation juridique planchers CCN 🔧 | Consultation avocat | externe |
 | Sub-PR 2bis | Multi-étabs taux commission | Session dédiée | ~4h |
 | T9 | Gel facture par période | Dépend Partie 2 facturation hebdo | bloqué |
-| T12 + T13 | Stripe payment_intent + process-stripe-refunds | **Couplé**, 1 session | ~3h |
+| T12 (RÉSOLU 2026-04-28) | Stripe payment_intent propagation | Trigger SQL stripe_transfers→factures_honoraires (option B simplifiée). Backfill exécuté. | — |
+| T13 (RÉSOLU 2026-04-28) | process-stripe-refunds finalisée | Constat : fn déjà implémentée v85 (auth, lock atomique, retry, idempotence, alert admin, audit). Reste action manuelle Gabrielle : configurer schedule cron `*/30 * * * *`. | manuel cron |
 | T15 (RÉSOLU) | RELANCE_FACTURE → RAPPEL_FACTURE | — | — |
 
 ### P2 — qualité / robustesse
