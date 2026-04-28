@@ -118,7 +118,7 @@ Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
 
 ---
 
-## Hardening anti-seed-incohérent — empêcher les INSERT qui bypassent les triggers financiers
+## [RÉSOLU] Hardening anti-seed-incohérent (2026-04-28)
 
 **Contexte** : 223/268 missions en base ont un `total_brut` incohérent (n'inclut pas les majorations). Toutes sont issues de seed batches Lovable. Les 17 missions créées via le flow normal (RPC + triggers) sont 100% cohérentes. Le problème : les INSERT seed bypassent `fn_calculer_financier_mission`.
 
@@ -133,6 +133,42 @@ Supprimer le fallback `COALESCE(NEW.duree_heures, span)`.
 **Priorité** : P1 — à traiter avant lancement public (CP6 ou post-CP6)
 
 **Date** : 2026-04-16
+
+**Résolution 2026-04-28** :
+
+Audit MCP : actions 1 et 2 sont **déjà en place** en prod (découvertes
+en testant) :
+
+- `fn_anti_seed_facture_honoraire` (trigger BEFORE INSERT/UPDATE sur
+  `factures_honoraires`) : bloque si `montant_ht` diverge de
+  `mission.net_a_payer` de plus de 0.50€. Bypass via contexte
+  `jolene.generate_invoice_context='true'` ou override admin
+  `jolene.admin_seed_override_reason`. Les overrides sont audités
+  (`OVERRIDE_ANTI_SEED` dans `journaux_audit`).
+
+- `fn_anti_seed_mission` (trigger sur `missions`) : vérifie que
+  `total_brut`/`net_a_payer` sont cohérents avec `taux × heures +
+  majorations` ET que `taux`/`heures` sont renseignés. Mêmes
+  mécanismes de bypass.
+
+Action 3 ajoutée par migration
+`20260428240000_hardening_anti_seed_incoherent.sql` :
+- RPC `fn_diagnostic_coherence_financiere()` SECURITY DEFINER
+  admin-only retourne JSONB :
+  - `missions_incoherentes` : count + échantillon (10) des missions
+    où `total_brut` diverge de l'attendu calculé.
+  - `factures_ecart_mission` : count + échantillon des factures
+    `FACTURE` non-BROUILLON/REMPLACEE/ANNULEE où `montant_ht` diverge
+    de `mission.net_a_payer` de plus de max(1%, 1€).
+  - `stripe_transfers_orphelins` : count + échantillon des transferts
+    pointant vers une mission qui n'a pas de FACTURE active.
+- Test instantané sur la prod (28/04/2026) : `missions_incoherentes=3`
+  (les 3 missions audit-* test seed historiques), `factures=0`,
+  `transfers=0`.
+
+Pour activer un cron mensuel, Gabrielle peut programmer l'appel via
+Supabase Dashboard → Database → Cron jobs ou via une edge function
+dédiée qui appelle la RPC + envoie un email aux admins si non-zéro.
 
 ---
 
@@ -510,7 +546,7 @@ manuel. Tickets RÉSOLU précédés de [RÉSOLU] dans le titre.
 
 | # | Ticket | Action | Charge estimée |
 |---|---|---|---|
-| Hardening anti-seed | Triggers cohérence factures + cron diag | Session dédiée | ~3h |
+| Hardening anti-seed (RÉSOLU 2026-04-28) | Triggers anti-seed factures+missions DÉJÀ en place + RPC diagnostic ajoutée. Cron mensuel reste manuel Gabrielle. | — | — |
 | T1 | Validation juridique planchers CCN 🔧 | Consultation avocat | externe |
 | Sub-PR 2bis | Multi-étabs taux commission | Session dédiée | ~4h |
 | T9 | Gel facture par période | Dépend Partie 2 facturation hebdo | bloqué |
