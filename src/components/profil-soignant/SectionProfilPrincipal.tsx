@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, MapPin, ShieldCheck, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Loader2, MapPin, ShieldCheck, AlertCircle, CheckCircle2, ArrowRight, UserCog } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
+import { SelectProfession } from '@/components/SelectProfession';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { getLabelProfession, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
@@ -272,6 +273,59 @@ function RppsVerifierInline(props: {
   );
 }
 
+function ChoixProfessionInline(props: { onChosen: () => void }) {
+  const { onChosen } = props;
+  const { afficherNotification } = useNotification();
+  const [profession, setProfessionLocal] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const enregistrer = async () => {
+    if (!profession) return;
+    setSaving(true);
+    const { data, error } = await supabase.rpc('fn_modifier_mon_profil' as any, {
+      p_profession: profession,
+    });
+    if (error) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+      setSaving(false);
+      return;
+    }
+    if ((data as any)?.error) {
+      afficherNotification({ type: 'erreur', message: (data as any).error });
+      setSaving(false);
+      return;
+    }
+    afficherNotification({ type: 'succes', message: 'Profession enregistrée.' });
+    setSaving(false);
+    onChosen();
+  };
+
+  return (
+    <div className="card-base">
+      <h2 className="text-base font-semibold text-foreground mb-2 flex items-center gap-2">
+        <UserCog className="h-4 w-4 text-primary" /> Choisissez votre profession
+      </h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Pour finaliser votre profil et accéder aux missions, sélectionnez votre profession.
+        Le formulaire s'adaptera ensuite (vérification RPPS pour les professions à numéro,
+        ou identification par diplôme pour les aides-soignants).
+      </p>
+      <div className="space-y-3">
+        <SelectProfession value={profession} onChange={setProfessionLocal} placeholder="Sélectionnez votre profession" />
+        <button
+          type="button"
+          onClick={enregistrer}
+          disabled={!profession || saving}
+          className="btn-primary text-sm py-2 px-4 inline-flex items-center gap-2 disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+          {saving ? 'Enregistrement…' : 'Continuer'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function SectionProfilPrincipal(props: Props) {
   const {
     userId, email,
@@ -322,7 +376,9 @@ export function SectionProfilPrincipal(props: Props) {
       <BandeauCompletionProfil resume={resumeCompletion} />
 
       {/* Identification professionnelle — en TÊTE */}
-      {sansRPPS ? (
+      {!profession ? (
+        <ChoixProfessionInline onChosen={onRefresh} />
+      ) : sansRPPS ? (
         <div className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-2 flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-primary" /> Identification professionnelle
