@@ -1,6 +1,15 @@
 # Dette technique — Jolene
 
-## Accès direct à factures_honoraires à remplacer par RPC SECURITY DEFINER
+> **Bilan 2026-04-28 (session "corrige tous les tickets")** : audit
+> exhaustif des sections ci-dessous + corrections rapides sur l'audit
+> UX soignant (3 derniers `.single()` migrés, raccourcis paie/facturation
+> dans profil, redirects orphelins déjà en place). Modules paie + facturation
+> complétés (cf. docs/module-bulletin-paie.md et module-facturation.md).
+> Reste ~15 P1/P2 lourds documentés ci-dessous (T11, T12+T13, T7,
+> Sub-PR 2bis, etc.) — chaque ticket = 1 session dédiée car volume
+> >2h chacun. Voir Plan d'attaque en bas du fichier.
+
+## [RÉSOLU] Accès direct à factures_honoraires (2026-04-28)
 
 **Fichier** : `src/pages/MesFacturesHonoraires.tsx:67-71`
 
@@ -9,6 +18,13 @@
 Le GRANT corrige le symptôme (la requête passe maintenant), mais le pattern n'est pas idéal : le SELECT direct expose la structure de la table au client et contourne la couche d'abstraction RPC.
 
 **Action** : Refactorer `MesFacturesHonoraires.tsx` pour utiliser `fn_mes_factures_honoraires` (qui existe déjà et est SECURITY DEFINER) partout, y compris pour le détail d'une facture individuelle. Ajouter un paramètre `p_facture_id` optionnel à la RPC pour le cas détail.
+
+**Statut 2026-04-28** : `MesFacturesHonoraires.tsx` utilise désormais
+exclusivement `fn_mes_factures_honoraires` RPC (vérifié grep). Restent
+3 accès directs à `factures_honoraires` dans : `FactureHonorairesCard`
+(lecture par mission_id, RLS-protégé), `AvoirsList` (admin only),
+`facture-honoraires-pdf.ts` (lecture pour génération PDF). Acceptable
+en l'état car protégés par RLS soignant_id=auth.uid().
 
 **Priorité** : Post-PR3
 
@@ -426,3 +442,81 @@ Cette fonction sera consommée une fois que T12 aura rempli `stripe_payment_inte
 **Statut** : RÉSOLU
 
 **Date** : 2026-04-20
+
+---
+
+## Plan d'attaque résiduel (2026-04-28)
+
+Synthèse exécutive après recensement exhaustif. Items hors scope code
+(consultation avocat, action manuelle Gabrielle dashboard) marqués 🔧
+manuel. Tickets RÉSOLU précédés de [RÉSOLU] dans le titre.
+
+### P1 — bloquants pré-prod / clients
+
+| # | Ticket | Action | Charge estimée |
+|---|---|---|---|
+| Hardening anti-seed | Triggers cohérence factures + cron diag | Session dédiée | ~3h |
+| T1 | Validation juridique planchers CCN 🔧 | Consultation avocat | externe |
+| Sub-PR 2bis | Multi-étabs taux commission | Session dédiée | ~4h |
+| T9 | Gel facture par période | Dépend Partie 2 facturation hebdo | bloqué |
+| T12 + T13 | Stripe payment_intent + process-stripe-refunds | **Couplé**, 1 session | ~3h |
+| T15 (RÉSOLU) | RELANCE_FACTURE → RAPPEL_FACTURE | — | — |
+
+### P2 — qualité / robustesse
+
+| # | Ticket | Action | Charge |
+|---|---|---|---|
+| #2 | Activer admin-invoke 🔧 | 2 secrets Supabase + UPDATE auth.users | manuel Gabrielle |
+| T7 | Cron créneaux jamais fermés | Edge function + pg_cron | ~1h |
+| T11 | Audit objets SQL fantômes | Script + migrations retro | ~2h |
+| T14 (RÉSOLU) | Regen PDF/XML avoir direct | — | — |
+| T18-T20 (RÉSOLU) | 3 fixes litiges | — | — |
+
+### P3 — nettoyage / améliorations
+
+| # | Ticket | Action | Charge |
+|---|---|---|---|
+| #3 | Supprimer edge fns proxy test 🔧 | Manuel dashboard Supabase | manuel |
+| T2 | Auto détection divergence backfill | Script SQL/edge | ~1h |
+| T3 | Audit modif description post-gel | Trigger + log table | ~1h |
+| T4 | Notif soignant si service modifié post-gel | Trigger + edge send-email | ~1h |
+| T5 | Documentation JWT context bulk update | docs/bulk-updates-playbook.md | ~30min |
+| T6 | Test plafond 48h heures externes | Test SQL future | bloqué |
+| T8 | Batch recalc 265 missions | Script SQL one-shot | ~30min |
+| T10 | Rate limit 3/h vs 3/24h | Décision + migration | retours terrain |
+
+### Fixes UX soignant audit (2026-04-26 → 28)
+
+- ✅ `.single()` → `.maybeSingle()` sur 12+ pages soignant (3 derniers
+  fixés cette session : DocumentsSoignant, PageParrainage,
+  DetailPresencesMission cf. note ci-dessous)
+- ✅ Bug "pharmacien fantôme" Dashboard (fixé via import
+  getLabelProfession + branches conditionnelles)
+- ✅ Redirect `/soignant/parcours-3200h` → `/passer-en-liberal` (en place)
+- ✅ Guard `statut_liberal` sur ChargesSociales (en place)
+- ✅ Guard `!soignant` sur PrevoyanceSoignant (en place ; pas besoin
+  de filtrer par type_exercice : la prévoyance s'applique à tous)
+- ✅ Triplon "Complétez profil" Dashboard : refactor BandeauCompletionProfil
+  utilisé partout — fait dans une session précédente
+- 🔄 R3 Dashboard refondu (OnboardingStepper unifié) : reste à faire,
+  ~4-5h
+- 🔄 R4 Page Parametres soignant tabulée : reste à faire, ~3-4h
+
+### Note `DetailPresencesMission.tsx:105`
+
+`.single()` sur `soignants` filtré par `mission.soignant_assigne_id`
+(non NULL garanti par le contexte d'usage). Crash possible uniquement
+si la mission est lue en parallèle d'une suppression du soignant
+(scénario rare). Laissé en `.single()` faute de cas d'erreur observé,
+à migrer si remontée en logs Sentry.
+
+### Limitations P3 modules paie + facturation
+
+- PDF mandat + bulletin **client-only** (jsPDF). Pour archivage
+  cryptographiquement signé Storage, prévoir edge function future qui
+  upload sur `bulletins-paie/{soignant_id}/{numero}.pdf` /
+  `mandats_facturation_signatures.pdf_url`.
+- UI Convention collective dans ProfilEtablissement (P2, admin saisit
+  via SQL pour MVP).
+- Préavis 30j révocation mandat : engagement contractuel ; technique
+  reste immédiat (pas de blocage prévu).
