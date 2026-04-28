@@ -14,6 +14,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { PDFDocument, StandardFonts, rgb, degrees } from 'npm:pdf-lib@1.17.1';
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
 /* ── Rate limit state (in-memory, per isolate) ── */
 const serviceRoleCallLog: number[] = [];
@@ -469,6 +470,12 @@ async function generateInvoicePdf(inv: {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(req) });
+
+  // Rate-limit IP : 30 générations facture/min/IP (en plus du rate-limit
+  // service_role spécifique plus bas pour les appels cron).
+  if (applyRateLimit('generate-invoice', getClientIp(req), { max: 30, windowMs: 60_000 })) {
+    return json(req, { error: 'Trop de demandes. Réessayez dans 1 minute.' }, 429);
+  }
 
   try {
     const authHeader = req.headers.get('Authorization');

@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -997,6 +998,14 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
+  }
+
+  // Rate-limit IP : 5 envois email par minute par IP (anti-spam).
+  if (applyRateLimit('send-email', getClientIp(req), { max: 5, windowMs: 60_000 })) {
+    return new Response(JSON.stringify({ error: 'Trop d\'emails envoyés. Réessayez dans 1 minute.' }), {
+      status: 429,
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+    });
   }
 
   // Vérification stricte du JWT

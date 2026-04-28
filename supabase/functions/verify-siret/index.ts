@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -113,6 +114,14 @@ function buildResult(matching: any, matchingEtab: any): VerificationResult {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
+  }
+
+  // Rate-limit IP : 20 vérifs SIRET/min/IP (API INSEE quota partagé).
+  if (applyRateLimit('verify-siret', getClientIp(req), { max: 20, windowMs: 60_000 })) {
+    return new Response(JSON.stringify({ error: 'Trop de vérifications. Réessayez dans 1 minute.' }), {
+      status: 429,
+      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+    });
   }
 
   try {

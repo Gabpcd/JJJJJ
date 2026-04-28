@@ -12,6 +12,7 @@
 //                           {"LITIGE_SECURITE":"Jolene-URGENT: "}
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
 // ═══ [FIX 20] Préfixe SMS configurable ═══════════════════════════
 // Appelé par le handler et testé unitairement (export via globalThis).
@@ -74,6 +75,14 @@ Deno.serve(async (req) => {
     const bodyRaw = await req.clone().json().catch(() => ({}));
     if (bodyRaw?.warm === true) {
       return new Response(JSON.stringify({ warm: true }), { headers: corsHeaders(req) });
+    }
+
+    // Rate-limit IP : 5 SMS/min/IP (anti-spam, coût direct Twilio).
+    if (applyRateLimit('send-sms', getClientIp(req), { max: 5, windowMs: 60_000 })) {
+      return new Response(JSON.stringify({ error: 'Trop de SMS envoyés. Réessayez dans 1 minute.' }), {
+        status: 429,
+        headers: corsHeaders(req),
+      });
     }
 
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
