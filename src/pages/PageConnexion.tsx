@@ -19,6 +19,7 @@ import {
 } from '@/lib/biometric';
 import { hapticNotification } from '@/lib/haptics';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
+import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 
 export default function PageConnexion() {
   usePageTitle('Connexion');
@@ -31,6 +32,9 @@ export default function PageConnexion() {
   const [submitting, setSubmitting] = useState(false);
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioLoading, setBioLoading] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
+  const [resetTurnstileToken, setResetTurnstileToken] = useState<string | null>(null);
+  const [resetSubmitting, setResetSubmitting] = useState(false);
 
   useEffect(() => {
     if (isNative()) {
@@ -195,29 +199,62 @@ export default function PageConnexion() {
             <button onClick={() => navigate('/inscription/etablissement')} className="btn-secondary w-full text-sm">Créer un compte établissement</button>
           </div>
 
-          <p className="text-center mt-4">
-            <button
-              type="button"
-              onClick={async () => {
-                if (!email) {
-                  afficherNotification({ type: 'erreur', message: 'Saisissez votre email avant de demander une réinitialisation.' });
-                  return;
-                }
-                const { supabase } = await import('@/integrations/supabase/client');
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                  redirectTo: 'https://jolene.app/connexion',
-                });
-                if (error) {
-                  afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });
-                } else {
-                  afficherNotification({ type: 'succes', message: 'Email de réinitialisation envoyé. Vérifiez votre boîte mail.' });
-                }
-              }}
-              className="text-sm text-primary hover:underline"
-            >
-              Mot de passe oublié ?
-            </button>
-          </p>
+          <div className="text-center mt-4">
+            {!resetMode ? (
+              <button
+                type="button"
+                onClick={() => setResetMode(true)}
+                className="text-sm text-primary hover:underline"
+              >
+                Mot de passe oublié ?
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Confirmez le captcha pour recevoir un email de réinitialisation à <strong>{email || '...'}</strong></p>
+                <CaptchaTurnstile className="flex justify-center" onVerify={setResetTurnstileToken} onExpire={() => setResetTurnstileToken(null)} onError={() => setResetTurnstileToken(null)} />
+                <div className="flex gap-2 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => { setResetMode(false); setResetTurnstileToken(null); }}
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    disabled={resetSubmitting || !email}
+                    onClick={async () => {
+                      if (!email) {
+                        afficherNotification({ type: 'erreur', message: 'Saisissez votre email avant de demander une réinitialisation.' });
+                        return;
+                      }
+                      setResetSubmitting(true);
+                      try {
+                        const { supabase } = await import('@/integrations/supabase/client');
+                        const opts: { redirectTo: string; captchaToken?: string } = {
+                          redirectTo: 'https://jolene.app/connexion',
+                        };
+                        if (resetTurnstileToken) opts.captchaToken = resetTurnstileToken;
+                        const { error } = await supabase.auth.resetPasswordForEmail(email, opts);
+                        if (error) {
+                          afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });
+                        } else {
+                          afficherNotification({ type: 'succes', message: 'Email de réinitialisation envoyé. Vérifiez votre boîte mail.' });
+                          setResetMode(false);
+                        }
+                      } finally {
+                        setResetSubmitting(false);
+                        setResetTurnstileToken(null);
+                      }
+                    }}
+                    className="text-xs text-primary hover:underline disabled:opacity-50"
+                  >
+                    {resetSubmitting ? 'Envoi…' : 'Envoyer'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <FooterLegal />

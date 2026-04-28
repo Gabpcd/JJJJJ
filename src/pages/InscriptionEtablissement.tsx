@@ -10,6 +10,7 @@ import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
 import { supabase } from '@/integrations/supabase/client';
 import { FooterLegal } from '@/components/FooterLegal';
+import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
   const [asked, setAsked] = useState(false);
@@ -47,6 +48,7 @@ export default function InscriptionEtablissement() {
   const [cgu, setCgu] = useState(false);
   const [cgv, setCgv] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     email: '', motDePasse: '', confirmMdp: '',
@@ -118,7 +120,7 @@ export default function InscriptionEtablissement() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await inscriptionEtablissement(form);
+      await inscriptionEtablissement({ ...form, turnstileToken });
       const autoVerifie = inseeCheck?.statut === 'VERIFIE';
       if (autoVerifie) {
         afficherNotification({ type: 'succes', message: 'Établissement créé et vérifié automatiquement ! Vous pouvez publier des missions.' });
@@ -248,6 +250,7 @@ export default function InscriptionEtablissement() {
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email contact</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
               </div>
+              <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
                 <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">

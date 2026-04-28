@@ -111,7 +111,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: signUpData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.motDePasse,
-        options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
+        options: {
+          data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom },
+          ...(data.turnstileToken ? { captchaToken: data.turnstileToken } : {}),
+        },
       });
       if (authError) {
         logger.error('[INSCRIPTION] ERREUR signUp', authError);
@@ -147,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       lat: data.lat || null,
       lng: data.lng || null,
       navigateur: navigator.userAgent,
+      turnstileToken: data.turnstileToken || null,
     };
 
     try {
@@ -197,7 +201,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.motDePasse,
-      options: { data: { role: 'ETABLISSEMENT', nom_etablissement: data.nom } },
+      options: {
+        data: { role: 'ETABLISSEMENT', nom_etablissement: data.nom },
+        ...(data.turnstileToken ? { captchaToken: data.turnstileToken } : {}),
+      },
     });
     if (authError) {
       logger.error('Inscription établissement auth échouée', authError);
@@ -220,6 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         adresse_lng: data.lng || null,
         numero_licence: data.numeroLicence || null,
         navigateur: navigator.userAgent,
+        turnstileToken: data.turnstileToken || null,
       },
     });
 

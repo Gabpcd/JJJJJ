@@ -9,6 +9,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
+import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 import { SelectProfession } from '@/components/SelectProfession';
 import { FooterLegal } from '@/components/FooterLegal';
 import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -93,6 +94,7 @@ export default function InscriptionSoignant() {
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [cgu, setCgu] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     email: '', motDePasse: '', confirmMdp: '',
@@ -184,6 +186,7 @@ export default function InscriptionSoignant() {
               numero_rpps: rppsValue,
               prenom: form.prenom,
               nom: form.nom,
+              turnstileToken,
             }),
           }
         );
@@ -220,7 +223,7 @@ export default function InscriptionSoignant() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await inscriptionSoignant(form);
+      await inscriptionSoignant({ ...form, turnstileToken });
       afficherNotification({ type: 'succes', message: 'Compte créé avec succès ! Bienvenue sur Jolene.' });
       navigate('/soignant/tableau-de-bord');
     } catch (err) {
@@ -383,6 +386,7 @@ export default function InscriptionSoignant() {
                 <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full h-2 bg-primary/20 rounded-full appearance-none cursor-pointer accent-primary" />
                 <div className="flex justify-between text-[10px] text-muted-foreground"><span>5 km</span><span>100 km</span></div>
               </div>
+              <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
                 <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">

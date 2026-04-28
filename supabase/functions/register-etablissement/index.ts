@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { verifyTurnstileToken } from '../_shared/verify-turnstile.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -78,7 +79,16 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
       adresse_departement, telephone_contact, email_contact, adresse_lat, adresse_lng,
-      numero_licence } = body;
+      numero_licence, turnstileToken } = body;
+
+    // Captcha anti-bot Cloudflare Turnstile (no-op tant que TURNSTILE_SECRET_KEY non configurée)
+    const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
+    if (!captcha.success) {
+      return new Response(JSON.stringify({ error: captcha.error }), {
+        status: 403,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
 
     // Validate required fields
     if (!nom || !siret || !type || !adresse_ville) {

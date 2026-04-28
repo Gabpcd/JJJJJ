@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { SelectProfession } from '@/components/SelectProfession';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
+import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 import { getLabelProfession, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
@@ -113,6 +114,7 @@ function RppsVerifierInline(props: {
   const { afficherNotification } = useNotification();
   const [verifying, setVerifying] = useState(false);
   const [resultat, setResultat] = useState<null | { trouve: boolean; correspond?: boolean; nom_api?: string; prenom_api?: string; profession_api?: string }>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const peutVerifier = rpps.length === 11 && !!prenom && !!nom;
 
@@ -153,6 +155,7 @@ function RppsVerifierInline(props: {
           prenom,
           nom,
           soignant_id: userId,
+          turnstileToken,
         }),
       });
       const data = await response.json();
@@ -238,6 +241,8 @@ function RppsVerifierInline(props: {
             Numéro à 11 chiffres délivré par l'ARS et inscrit sur votre carte CPS. La validation se fait via l'Annuaire Santé (ANS).
           </p>
         </div>
+
+        <CaptchaTurnstile className="flex justify-center" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
 
         <button
           type="button"

@@ -162,6 +162,7 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
 }
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyTurnstileToken } from "../_shared/verify-turnstile.ts";
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -209,8 +210,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { numero_rpps, rpps, prenom, nom, soignant_id } = await req.json();
+    const { numero_rpps, rpps, prenom, nom, soignant_id, turnstileToken } = await req.json();
     const numeroRpps = String(numero_rpps || rpps || '').trim();
+
+    // Captcha anti-bot Cloudflare Turnstile (no-op tant que TURNSTILE_SECRET_KEY non configurée).
+    // Bypass pour service_role (usage interne) et pour l'anon key sans soignant_id
+    // (cas pré-check temps réel pendant l'inscription, sans écriture DB). Les
+    // utilisateurs authentifiés (wizard profil) et les appels avec soignant_id
+    // doivent valider un captcha.
+    const captchaRequis = !isServiceRole && (!isAnonKey || !!soignant_id);
+    if (captchaRequis) {
+      const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
+      if (!captcha.success) {
+        return new Response(JSON.stringify({ error: captcha.error }), {
+          status: 403,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
     if (!numeroRpps || !/^\d{11}$/.test(numeroRpps)) {
       return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
