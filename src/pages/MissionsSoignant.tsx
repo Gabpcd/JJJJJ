@@ -106,6 +106,7 @@ export default function MissionsSoignant() {
       const maintenantIso = new Date().toISOString();
       let query = supabase.from('missions').select(`
         id, intitule, description, service, profession_requise,
+        specialite_medicale_requise, accepte_non_specialises,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
         soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche

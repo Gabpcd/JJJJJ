@@ -36,3 +36,76 @@ export function getMissionsCompatiblesFilter(soignantProfession: string | null |
   // Autres professions : pas de hiérarchie, match strict uniquement
   return null;
 }
+
+export type MatchType = 'EXACT' | 'HIERARCHIE_NATURELLE' | 'HIERARCHIE_SOUPLE' | 'SPECIALITE_SOUPLE';
+
+export interface MatchInfo {
+  type: MatchType;
+  /** Libellé court à afficher dans un badge */
+  badgeLabel: string;
+  /** Tailwind classes à appliquer au badge */
+  badgeClasses: string;
+  /** Tooltip / description longue */
+  tooltip: string;
+}
+
+/**
+ * Détermine la nature du match entre soignant et mission. Mirror local de la
+ * règle métier fn_soignant_compatible_mission, utilisé pour afficher un badge
+ * contextuel sur les cartes mission côté soignant.
+ *
+ * Retourne null si la mission est en match exact + sans spécialité (cas
+ * trivial — pas besoin de badge).
+ */
+export function getMissionMatchInfo(
+  soignantProfession: string | null | undefined,
+  soignantSpecialite: string | null | undefined,
+  missionProfession: string | null | undefined,
+  missionSpecialite: string | null | undefined,
+  accepteNonSpecialises: boolean | null | undefined,
+): MatchInfo | null {
+  if (!soignantProfession || !missionProfession) return null;
+
+  // Cas hiérarchie naturelle : IBODE/IADE sur mission IDE
+  if (missionProfession === 'IDE' && (soignantProfession === 'IBODE' || soignantProfession === 'IADE')) {
+    return {
+      type: 'HIERARCHIE_NATURELLE',
+      badgeLabel: '↓ Mission IDE — accessible',
+      badgeClasses: 'bg-success/10 text-success',
+      tooltip: `Votre diplôme ${soignantProfession} couvre les missions IDE.`,
+    };
+  }
+
+  // Cas hiérarchie souple : IDE sur mission IBODE/IADE acceptant non-spec
+  if (
+    soignantProfession === 'IDE' &&
+    (missionProfession === 'IBODE' || missionProfession === 'IADE') &&
+    accepteNonSpecialises !== false
+  ) {
+    return {
+      type: 'HIERARCHIE_SOUPLE',
+      badgeLabel: `🩺 Mission ${missionProfession} — ouverte aux IDE`,
+      badgeClasses: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
+      tooltip: `L'établissement accepte les IDE pour cette mission ${missionProfession}.`,
+    };
+  }
+
+  // Cas spécialité souple : médecin sans la spécialité requise mais accepté
+  if (
+    missionProfession === 'MEDECIN' &&
+    soignantProfession === 'MEDECIN' &&
+    missionSpecialite &&
+    accepteNonSpecialises !== false &&
+    (soignantSpecialite || '') !== missionSpecialite
+  ) {
+    return {
+      type: 'SPECIALITE_SOUPLE',
+      badgeLabel: '🩺 Spécialité souhaitée — ouverte',
+      badgeClasses: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
+      tooltip: `L'établissement préfère un médecin spécialisé mais accepte les généralistes.`,
+    };
+  }
+
+  return null;
+}
+
