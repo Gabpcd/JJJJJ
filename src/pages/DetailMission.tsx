@@ -212,6 +212,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         .from('missions')
         .select(`
           id, intitule, description, service, profession_requise,
+          specialite_medicale_requise, accepte_non_specialises,
           debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
           total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit,
           montant_majoration_dimanche, montant_majoration_ferie,
@@ -378,6 +379,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           <h2 className="text-lg font-bold text-foreground mb-3">Candidatures {nbCandidatures > 0 ? `(${nbCandidatures})` : ''}</h2>
           <ListeCandidatures
             missionId={m.id}
+            missionProfession={m.profession_requise}
+            missionSpecialiteMedicale={(m as any).specialite_medicale_requise}
+            missionAccepteNonSpecialises={(m as any).accepte_non_specialises}
             modePaiement={(m.etablissements as any)?.mode_paiement_commission}
             onAccepted={() => navigate(0)}
             onError={(msg) => toast.error(msg)}
