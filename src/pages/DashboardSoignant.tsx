@@ -36,6 +36,7 @@ import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS } from '@/lib/documents';
+import { getLabelProfession } from '@/lib/constantes';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { BadgeStats } from '@/components/BadgesGamification';
