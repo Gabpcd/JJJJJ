@@ -410,6 +410,94 @@ export type Database = {
           },
         ]
       }
+      bulletins_paie: {
+        Row: {
+          cree_le: string
+          date_emission: string
+          date_paiement: string | null
+          etablissement_id: string
+          icp: number
+          id: string
+          ifm: number
+          mission_id: string
+          modifie_le: string
+          net_avant_impot: number
+          numero_bulletin: string
+          pdf_s3_key: string | null
+          periode_debut: string
+          periode_fin: string
+          salaire_brut: number
+          soignant_id: string
+          statut: string
+          total_cotisations_patronales: number
+          total_cotisations_salariales: number
+        }
+        Insert: {
+          cree_le?: string
+          date_emission?: string
+          date_paiement?: string | null
+          etablissement_id: string
+          icp?: number
+          id?: string
+          ifm?: number
+          mission_id: string
+          modifie_le?: string
+          net_avant_impot: number
+          numero_bulletin: string
+          pdf_s3_key?: string | null
+          periode_debut: string
+          periode_fin: string
+          salaire_brut: number
+          soignant_id: string
+          statut?: string
+          total_cotisations_patronales?: number
+          total_cotisations_salariales?: number
+        }
+        Update: {
+          cree_le?: string
+          date_emission?: string
+          date_paiement?: string | null
+          etablissement_id?: string
+          icp?: number
+          id?: string
+          ifm?: number
+          mission_id?: string
+          modifie_le?: string
+          net_avant_impot?: number
+          numero_bulletin?: string
+          pdf_s3_key?: string | null
+          periode_debut?: string
+          periode_fin?: string
+          salaire_brut?: number
+          soignant_id?: string
+          statut?: string
+          total_cotisations_patronales?: number
+          total_cotisations_salariales?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulletins_paie_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulletins_paie_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: true
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulletins_paie_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_connections: {
         Row: {
           access_token: string | null
@@ -4609,6 +4697,7 @@ export type Database = {
           numero_adeli: string | null
           numero_rpps: string | null
           numero_secu: string | null
+          numero_securite_sociale: string | null
           numero_tva: string | null
           parraine_par: string | null
           premiere_mission_le: string | null
@@ -4714,6 +4803,7 @@ export type Database = {
           numero_adeli?: string | null
           numero_rpps?: string | null
           numero_secu?: string | null
+          numero_securite_sociale?: string | null
           numero_tva?: string | null
           parraine_par?: string | null
           premiere_mission_le?: string | null
@@ -4819,6 +4909,7 @@ export type Database = {
           numero_adeli?: string | null
           numero_rpps?: string | null
           numero_secu?: string | null
+          numero_securite_sociale?: string | null
           numero_tva?: string | null
           parraine_par?: string | null
           premiere_mission_le?: string | null
@@ -5702,6 +5793,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_creer_bulletin_paie: { Args: { p_mission_id: string }; Returns: Json }
       fn_creer_litige: {
         Args: { p_mission_id: string; p_motif?: string; p_presence_id?: string }
         Returns: Json
@@ -5747,6 +5839,10 @@ export type Database = {
           p_service?: string
           p_taux_horaire_base?: number
         }
+        Returns: Json
+      }
+      fn_cumul_annuel_paie: {
+        Args: { p_annee?: number; p_jusqu_au?: string; p_soignant_id: string }
         Returns: Json
       }
       fn_dashboard_soignant_complet: { Args: never; Returns: Json }
@@ -6138,6 +6234,29 @@ export type Database = {
           statut: string
         }[]
       }
+      fn_mes_bulletins_paie: {
+        Args: never
+        Returns: {
+          cree_le: string
+          date_emission: string
+          date_paiement: string
+          etablissement_id: string
+          etablissement_nom: string
+          icp: number
+          id: string
+          ifm: number
+          mission_id: string
+          mission_intitule: string
+          net_avant_impot: number
+          numero_bulletin: string
+          pdf_s3_key: string
+          periode_debut: string
+          periode_fin: string
+          salaire_brut: number
+          statut: string
+          total_cotisations_salariales: number
+        }[]
+      }
       fn_mes_etablissements_soignant: {
         Args: never
         Returns: {
@@ -6292,6 +6411,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_modifier_mon_nir: { Args: { p_nir: string }; Returns: Json }
       fn_modifier_mon_profil: {
         Args: {
           p_adresse_code_postal?: string
@@ -6373,6 +6493,10 @@ export type Database = {
       fn_nettoyer_partages_rib_expires: { Args: never; Returns: undefined }
       fn_nettoyer_psc_sessions_expirees: { Args: never; Returns: undefined }
       fn_nettoyer_tokens_push: { Args: never; Returns: number }
+      fn_next_bulletin_paie_number: {
+        Args: { p_soignant_id: string }
+        Returns: string
+      }
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
       fn_obligations_financieres: { Args: never; Returns: Json }
@@ -6547,6 +6671,10 @@ export type Database = {
         Returns: Json
       }
       fn_retirer_exclusion: { Args: { p_exclu_id: string }; Returns: Json }
+      fn_revoquer_mandat_facturation: {
+        Args: { p_motif?: string }
+        Returns: Json
+      }
       fn_rgpd_exporter_donnees_soignant: {
         Args: { p_soignant_id: string }
         Returns: Json

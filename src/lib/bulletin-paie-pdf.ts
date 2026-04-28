@@ -68,7 +68,7 @@ interface SoignantSnapshot {
   adresse_rue: string | null;
   adresse_code_postal: string | null;
   adresse_ville: string | null;
-  numero_securite_sociale?: string | null;
+  numero_securite_sociale: string | null;
 }
 
 interface EtablissementSnapshot {
@@ -100,17 +100,21 @@ export async function telechargerBulletinPaiePdf(bulletinId: string): Promise<vo
   if (bErr || !bulletin) throw new Error(bErr?.message || 'Bulletin introuvable');
   const b = bulletin as unknown as BulletinSnapshot;
 
-  const [{ data: cotisations }, { data: soignant }, { data: etablissement }, { data: mission }] = await Promise.all([
+  const [{ data: cotisations }, { data: soignant }, { data: etablissement }, { data: mission }, { data: cumul }] = await Promise.all([
     supabase.from('cotisations_sociales').select('*').eq('mission_id', b.mission_id).maybeSingle(),
     supabase.from('soignants')
-      .select('prenom, nom, email, date_naissance, profession, adresse_rue, adresse_code_postal, adresse_ville')
+      .select('prenom, nom, email, date_naissance, profession, adresse_rue, adresse_code_postal, adresse_ville, numero_securite_sociale')
       .eq('id', b.soignant_id).single(),
-    supabase.from('etablissements')
-      .select('nom, siret, adresse_rue, adresse_code_postal, adresse_ville')
+    supabase.from('etablissements' as any)
+      .select('nom, siret, adresse_rue, adresse_code_postal, adresse_ville, convention_collective')
       .eq('id', b.etablissement_id).single(),
     supabase.from('missions')
       .select('intitule, service, duree_heures, taux_horaire_base, debut_le, fin_le')
       .eq('id', b.mission_id).single(),
+    supabase.rpc('fn_cumul_annuel_paie' as any, {
+      p_soignant_id: b.soignant_id,
+      p_jusqu_au: b.periode_fin,
+    }),
   ]);
 
   if (!cotisations) throw new Error('Cotisations introuvables');
@@ -124,8 +128,21 @@ export async function telechargerBulletinPaiePdf(bulletinId: string): Promise<vo
     soignant as unknown as SoignantSnapshot,
     etablissement as unknown as EtablissementSnapshot,
     mission as unknown as MissionSnapshot,
+    (cumul as any) || null,
   );
   doc.save(`bulletin-${b.numero_bulletin}.pdf`);
+}
+
+interface CumulAnnuel {
+  annee: number;
+  jusqu_au: string;
+  nombre_bulletins: number;
+  cumul_brut: number;
+  cumul_cotisations_salariales: number;
+  cumul_cotisations_patronales: number;
+  cumul_net_avant_impot: number;
+  cumul_ifm: number;
+  cumul_icp: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -136,6 +153,7 @@ export function genererBulletinPaiePdf(
   soignant: SoignantSnapshot,
   etab: EtablissementSnapshot,
   mission: MissionSnapshot,
+  cumul?: CumulAnnuel | null,
 ): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const margin = PAGE.margin;
@@ -243,6 +261,41 @@ export function genererBulletinPaiePdf(
   doc.text('NET A PAYER (versé au salarié)', margin + 3, y + 5.5);
   doc.text(sanitizeForPdf(fmtEur(b.net_avant_impot)), margin + contentWidth - 3, y + 5.5, { align: 'right' });
   y += 14;
+
+  // ─── Cumul annuel (mention R3243-1) ─────────────────────────────────
+  if (cumul && Number(cumul.nombre_bulletins) > 0) {
+    if (y > PAGE.height - 60) { doc.addPage(); y = margin; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...JOLENE_COLORS.primaryDark);
+    doc.text(sanitizeForPdf(`CUMUL ANNUEL ${cumul.annee} (au ${formatDate(cumul.jusqu_au)})`), margin, y);
+    y += 4;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...JOLENE_COLORS.text);
+    const colWidth = contentWidth / 2;
+    const rows: Array<[string, string]> = [
+      [`Bulletins émis (${cumul.annee})`, String(cumul.nombre_bulletins)],
+      ['Cumul brut', fmtEur(Number(cumul.cumul_brut))],
+      ['Cumul cotisations salariales', fmtEur(-Number(cumul.cumul_cotisations_salariales))],
+      ['Cumul cotisations patronales', fmtEur(Number(cumul.cumul_cotisations_patronales))],
+      ['Cumul IFM', fmtEur(Number(cumul.cumul_ifm))],
+      ['Cumul ICP', fmtEur(Number(cumul.cumul_icp))],
+      ['Cumul NET avant impôt', fmtEur(Number(cumul.cumul_net_avant_impot))],
+    ];
+    const startY = y;
+    rows.forEach((r, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const xLabel = margin + col * colWidth;
+      doc.setFont('helvetica', 'normal');
+      doc.text(sanitizeForPdf(r[0]), xLabel, startY + row * 4);
+      doc.setFont('helvetica', 'bold');
+      doc.text(sanitizeForPdf(r[1]), xLabel + colWidth - 2, startY + row * 4, { align: 'right' });
+    });
+    y = startY + Math.ceil(rows.length / 2) * 4 + 4;
+  }
 
   // ─── Mentions légales ──────────────────────────────────────────────
   if (y > PAGE.height - 50) { doc.addPage(); y = margin; }

@@ -408,6 +408,129 @@ function BoutonModifierProfession({ rppsVerifie, tousDocumentsValides, onChanged
   );
 }
 
+function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; userId: string }) {
+  const navigate = useNavigate();
+  const { afficherNotification } = useNotification();
+  const [nir, setNir] = useState('');
+  const [nirInitial, setNirInitial] = useState('');
+  const [savingNir, setSavingNir] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('soignants')
+        .select('numero_securite_sociale')
+        .eq('id', userId)
+        .maybeSingle();
+      if (cancelled) return;
+      const v = ((data as any)?.numero_securite_sociale ?? '') as string;
+      setNir(v);
+      setNirInitial(v);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const enregistrerNir = async () => {
+    setSavingNir(true);
+    const cleaned = nir.replace(/[^0-9]/g, '');
+    const { data, error } = await supabase.rpc('fn_modifier_mon_nir' as any, { p_nir: cleaned || null });
+    setSavingNir(false);
+    if (error || (data as any)?.success === false) {
+      afficherNotification({
+        type: 'erreur',
+        message: (data as any)?.error || error?.message || 'Erreur lors de l\'enregistrement du NIR',
+      });
+      return;
+    }
+    setNirInitial(cleaned);
+    afficherNotification({ type: 'succes', message: 'Numéro de sécurité sociale enregistré' });
+  };
+
+  const peutLiberal = typeExercice === 'LIBERAL' || typeExercice === 'MIXTE';
+  const peutSalarie = typeExercice === 'SALARIE' || typeExercice === 'MIXTE';
+
+  return (
+    <div className="card-base">
+      <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-primary" /> Paie et facturation
+      </h2>
+      <div className="space-y-3">
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            Numéro de sécurité sociale (NIR)
+            {peutSalarie && <span className="text-xs text-warning ml-2">requis pour le bulletin de paie</span>}
+          </label>
+          <div className="flex gap-2">
+            <input
+              value={nir}
+              onChange={(e) => setNir(e.target.value)}
+              placeholder="13 ou 15 chiffres"
+              className="input-base flex-1"
+              inputMode="numeric"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={enregistrerNir}
+              disabled={savingNir || nir === nirInitial}
+              className="btn-primary text-sm px-4 disabled:opacity-50"
+            >
+              {savingNir ? '...' : 'Enregistrer'}
+            </button>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Mention obligatoire art. R3243-1 CTW. Donnée chiffrée et accessible
+            uniquement à vous + l'admin Jolene. 13 chiffres (sans clé) ou 15 (avec clé).
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+          {peutLiberal && (
+            <button
+              type="button"
+              onClick={() => navigate('/soignant/mandat-facturation')}
+              className="text-left rounded-xl border border-border hover:border-primary/40 bg-muted/30 hover:bg-muted/50 p-3 transition-colors"
+            >
+              <p className="text-xs font-bold text-primary mb-0.5">Mandat de facturation</p>
+              <p className="text-xs text-muted-foreground">
+                Signez ou révoquez votre mandat (LIBERAL — art. 289 I-2 CGI).
+              </p>
+              <span className="text-[11px] text-primary font-medium mt-1.5 inline-block">Ouvrir →</span>
+            </button>
+          )}
+          {peutSalarie && (
+            <button
+              type="button"
+              onClick={() => navigate('/soignant/bulletins-paie')}
+              className="text-left rounded-xl border border-border hover:border-primary/40 bg-muted/30 hover:bg-muted/50 p-3 transition-colors"
+            >
+              <p className="text-xs font-bold text-primary mb-0.5">Mes bulletins de paie</p>
+              <p className="text-xs text-muted-foreground">
+                Bulletins SALARIE émis par Jolene à chaque mission terminée.
+              </p>
+              <span className="text-[11px] text-primary font-medium mt-1.5 inline-block">Ouvrir →</span>
+            </button>
+          )}
+          {peutLiberal && (
+            <button
+              type="button"
+              onClick={() => navigate('/soignant/mes-factures-honoraires')}
+              className="text-left rounded-xl border border-border hover:border-primary/40 bg-muted/30 hover:bg-muted/50 p-3 transition-colors"
+            >
+              <p className="text-xs font-bold text-primary mb-0.5">Mes factures d'honoraires</p>
+              <p className="text-xs text-muted-foreground">
+                Factures émises par Jolene en votre nom (LIBERAL).
+              </p>
+              <span className="text-[11px] text-primary font-medium mt-1.5 inline-block">Ouvrir →</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SectionProfilPrincipal(props: Props) {
   const {
     userId, email,
@@ -640,6 +763,8 @@ export function SectionProfilPrincipal(props: Props) {
           </div>
         </div>
       </div>
+
+      <BlocPaieFacturation typeExercice={typeExercice} userId={userId} />
 
       {/* Adresse */}
       <div className="card-base">

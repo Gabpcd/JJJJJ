@@ -183,6 +183,13 @@ migrations `20260413140000_invoicing_module_schema.sql`.
 
 ## Limitations connues / à approfondir
 
+**Tickets traités le 28/04/2026 :**
+- ✅ **Raccourci dans profil** : bloc "Paie et facturation" ajouté dans
+  `/soignant/profil` (composant `BlocPaieFacturation` dans
+  `SectionProfilPrincipal.tsx`) avec liens vers mandat, factures
+  honoraires et bulletins de paie selon `type_exercice`.
+
+**Restant (P2/P3) :**
 - Le bouton « Révocation » est **immédiat techniquement**. Le mandat
   v1.1 mentionne 30 jours de préavis : c'est un engagement
   contractuel, pas une contrainte technique. Si l'on souhaite imposer
@@ -191,6 +198,3 @@ migrations `20260413140000_invoicing_module_schema.sql`.
 - Le PDF du mandat est généré **côté client** (jsPDF). Pour archivage
   cryptographiquement signé, prévoir une edge function future qui
   génère le PDF côté serveur et upload sur `mandats_facturation_signatures.pdf_url`.
-- La page `/soignant/parametres` ne contient pas encore de raccourci
-  vers `/soignant/mandat-facturation` (accès via dashboard ou URL
-  directe).

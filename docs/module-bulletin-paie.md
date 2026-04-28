@@ -161,22 +161,30 @@ Tests via MCP avec compte audit-as.
 
 ## Limitations connues
 
-- **N° de Sécurité sociale** : pas encore stocké côté soignants (placeholder
-  « à renseigner sur votre profil » dans le PDF). À ajouter en colonne
-  `numero_securite_sociale` quand le module profil sera étendu.
-- **PDF côté serveur** : actuellement client-only. Pour archivage
-  cryptographiquement signé + URL signée Storage, prévoir une edge
-  function future qui upload le PDF dans `bulletins-paie/{soignant_id}/{numero}.pdf`
-  et met à jour `bulletins_paie.pdf_s3_key`.
-- **Statut PAYE** : pas encore wiré au flux de paiement Stripe Connect.
-  À ajouter via trigger sur `paiements_soignant` quand confirmé.
-- **Convention collective** : non stockée par établissement. Le PDF
-  affiche un placeholder générique ("CCN établissements de santé
-  applicable"). À enrichir côté `etablissements` si besoin.
-- **Cumul annuel** : la mention art. R3243-1 demande le cumul annuel sur
-  le bulletin. Actuellement non affiché ; à calculer par
-  `SUM(salaire_brut)` over (`partition by soignant_id, EXTRACT(year FROM
-  periode_debut)`) côté UI ou RPC dédiée.
+**Tickets traités le 28/04/2026 (session "corrige tous les tickets") :**
+- ✅ **N° Sécurité sociale** : colonne `soignants.numero_securite_sociale`
+  ajoutée (CHECK 13/15 chiffres). RPC `fn_modifier_mon_nir(p_nir)` avec
+  audit. Champ exposé dans `/soignant/profil` (bloc "Paie et facturation").
+- ✅ **Convention collective** : colonne
+  `etablissements.convention_collective` ajoutée. Le PDF utilise la
+  valeur si renseignée, sinon placeholder "CCN établissements de santé
+  applicable". Saisie via dashboard Supabase admin pour MVP, UI dédiée
+  à venir.
+- ✅ **Statut PAYE auto** : trigger `trg_bp_passage_paye` sur
+  `paiements_soignant` flippe `bulletins_paie.statut='PAYE'` quand
+  `confirme_par_soignant` devient true (ou statut='CONFIRME').
+- ✅ **Cumul annuel** : RPC `fn_cumul_annuel_paie(p_soignant_id, p_annee,
+  p_jusqu_au)` retourne brut/cotisations/net cumulés. Section "CUMUL
+  ANNUEL" affichée dans le PDF entre le NET A PAYER et les mentions
+  légales.
+
+**Restant (P2) :**
+- **PDF côté serveur** : actuellement client-only. Pour archivage signé
+  Storage, prévoir une edge function future qui upload sur
+  `bulletins-paie/{soignant_id}/{numero}.pdf` et met à jour
+  `bulletins_paie.pdf_s3_key`.
+- **UI Convention collective** : champ à exposer dans
+  `ProfilEtablissement` (admin peut l'éditer via dashboard SQL pour MVP).
 
 ## Déploiement
 
