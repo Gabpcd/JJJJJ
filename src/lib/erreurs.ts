@@ -30,13 +30,26 @@ export function extraireMessageErreur(error: any): string {
     'Email not confirmed': 'Veuillez confirmer votre adresse email avant de vous connecter.',
     'User already registered': 'Un compte existe déjà avec cette adresse email.',
     'Signup requires a valid password': 'Le mot de passe n\'est pas valide.',
-    'Password should be at least 6 characters': 'Le mot de passe doit contenir au moins 8 caractères.',
+    'Password should be at least': 'Mot de passe trop court : il doit contenir au moins 8 caractères.',
+    'Password is too short': 'Mot de passe trop court : il doit contenir au moins 8 caractères.',
+    'weak_password': 'Mot de passe trop faible. Utilisez au moins 8 caractères avec majuscules, minuscules, chiffres et caractères spéciaux.',
+    'Password should contain': 'Mot de passe trop faible : ajoutez majuscules, minuscules, chiffres et caractères spéciaux (8+ caractères).',
+    'Password should be one of the following': 'Mot de passe trop faible : ajoutez majuscules, minuscules, chiffres et caractères spéciaux (8+ caractères).',
+    'pwned': 'Ce mot de passe a été compromis dans une fuite de données connue. Choisissez-en un autre.',
     'Email rate limit exceeded': 'Trop de tentatives. Veuillez patienter quelques minutes.',
     'For security purposes, you can only request this once every 60 seconds': 'Pour des raisons de sécurité, veuillez patienter 60 secondes.',
+    'captcha verification process failed': 'La vérification anti-bot a échoué. Rafraîchissez la page et réessayez.',
+    'captcha protection: request disallowed': 'La vérification anti-bot a échoué. Rafraîchissez la page et réessayez.',
   };
 
   for (const [en, fr] of Object.entries(traductions)) {
     if (msg.toLowerCase().includes(en.toLowerCase())) return fr;
+  }
+
+  // Supabase peut renvoyer un code d'erreur structuré
+  const errorCode = (error as any)?.code || (error as any)?.error_code || '';
+  if (errorCode === 'weak_password' || errorCode === 'invalid_password') {
+    return 'Mot de passe trop faible. Utilisez au moins 8 caractères avec majuscules, minuscules, chiffres et caractères spéciaux.';
   }
 
   if (msg.includes('duplicate key value violates unique constraint')) {
