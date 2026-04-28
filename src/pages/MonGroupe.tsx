@@ -66,7 +66,7 @@ export function MonGroupeContent() {
           Votre établissement n'appartient à aucun groupe de santé.
           Contactez-nous pour rattacher votre établissement à un groupe existant.
         </p>
-        <Button className="gap-2" onClick={() => window.location.href = 'mailto:contact@jolene.fr?subject=Rejoindre un groupe de santé'}>
+        <Button className="gap-2" onClick={() => window.location.href = 'mailto:contact@jolene.app?subject=Rejoindre un groupe de santé'}>
           <Mail className="h-4 w-4" /> Contacter Jolene
         </Button>
       </div>

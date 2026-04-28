@@ -53,7 +53,7 @@ jobs:
           fi
           echo "::endgroup::"
 
-          echo "::group::Scanning for '#17A2B8' (old Soin Direct turquoise) in code"
+          echo "::group::Scanning for '#17A2B8' (ancien turquoise legacy) in code"
           # Scope: only real source files (not docs that may legitimately mention drift)
           HITS=$(grep -rn --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.css' --include='*.html' "#17A2B8" src/ supabase/functions/ public/ 2>/dev/null \
             | grep -v "^[[:space:]]*//" \
