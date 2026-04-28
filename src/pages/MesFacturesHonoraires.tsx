@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Download, ArrowLeft, Loader2, CheckCircle, Clock, AlertTriangle, Info, Zap } from 'lucide-react';
+import { FileText, Download, ArrowLeft, Loader2, CheckCircle, Clock, AlertTriangle, Info, Zap, X } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,6 +44,37 @@ export default function MesFacturesHonoraires() {
   }, [user]);
 
   const [cessionModal, setCessionModal] = useState<{ id: string; numero: string; montant: number } | null>(null);
+  const [filtreStatut, setFiltreStatut] = useState<string>('tous');
+  const [filtreAnnee, setFiltreAnnee] = useState<string>('toutes');
+  const [filtreMois, setFiltreMois] = useState<string>('tous');
+
+  const anneesDisponibles = useMemo(() => {
+    const annees = new Set<string>();
+    factures.forEach(f => { if (f.date_emission) annees.add(String(new Date(f.date_emission).getFullYear())); });
+    return Array.from(annees).sort((a, b) => b.localeCompare(a));
+  }, [factures]);
+
+  const facturesFiltrees = useMemo(() => {
+    return factures.filter((f: any) => {
+      if (filtreStatut !== 'tous' && f.statut !== filtreStatut) return false;
+      if (filtreAnnee !== 'toutes' && f.date_emission) {
+        const annee = String(new Date(f.date_emission).getFullYear());
+        if (annee !== filtreAnnee) return false;
+      }
+      if (filtreMois !== 'tous' && f.date_emission) {
+        const mois = String(new Date(f.date_emission).getMonth() + 1).padStart(2, '0');
+        if (mois !== filtreMois) return false;
+      }
+      return true;
+    });
+  }, [factures, filtreStatut, filtreAnnee, filtreMois]);
+
+  const filtreActif = filtreStatut !== 'tous' || filtreAnnee !== 'toutes' || filtreMois !== 'tous';
+  const reinitialiserFiltres = () => {
+    setFiltreStatut('tous');
+    setFiltreAnnee('toutes');
+    setFiltreMois('tous');
+  };
 
   const ouvrirCession = (facture: any) => {
     setCessionModal({
@@ -69,9 +100,9 @@ export default function MesFacturesHonoraires() {
     );
   }
 
-  const totalFacture = factures.reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
-  const totalPaye = factures.filter(f => f.statut === 'PAYEE' || f.statut === 'FACTORISEE').reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
-  const totalAttente = factures.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD').reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
+  const totalFacture = facturesFiltrees.reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
+  const totalPaye = facturesFiltrees.filter(f => f.statut === 'PAYEE' || f.statut === 'FACTORISEE').reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
+  const totalAttente = facturesFiltrees.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD').reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
 
   return (
     <LayoutApp role="SOIGNANT">
@@ -120,6 +151,64 @@ export default function MesFacturesHonoraires() {
           </div>
         </div>
 
+        {factures.length > 0 && (
+          <div className="card-base flex flex-wrap items-center gap-2 py-2.5">
+            <span className="text-xs font-semibold text-muted-foreground mr-1">Filtres :</span>
+            <select
+              value={filtreStatut}
+              onChange={e => setFiltreStatut(e.target.value)}
+              className="text-xs border border-border rounded-md px-2 py-1 bg-background"
+            >
+              <option value="tous">Tous statuts</option>
+              <option value="BROUILLON">Brouillon</option>
+              <option value="EMISE">Émise</option>
+              <option value="EN_RETARD">En retard</option>
+              <option value="PAYEE">Payée</option>
+              <option value="FACTORISEE">Avance reçue</option>
+              <option value="ANNULEE">Annulée</option>
+            </select>
+            <select
+              value={filtreAnnee}
+              onChange={e => setFiltreAnnee(e.target.value)}
+              className="text-xs border border-border rounded-md px-2 py-1 bg-background"
+            >
+              <option value="toutes">Toutes années</option>
+              {anneesDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <select
+              value={filtreMois}
+              onChange={e => setFiltreMois(e.target.value)}
+              className="text-xs border border-border rounded-md px-2 py-1 bg-background"
+            >
+              <option value="tous">Tous mois</option>
+              <option value="01">Janvier</option>
+              <option value="02">Février</option>
+              <option value="03">Mars</option>
+              <option value="04">Avril</option>
+              <option value="05">Mai</option>
+              <option value="06">Juin</option>
+              <option value="07">Juillet</option>
+              <option value="08">Août</option>
+              <option value="09">Septembre</option>
+              <option value="10">Octobre</option>
+              <option value="11">Novembre</option>
+              <option value="12">Décembre</option>
+            </select>
+            {filtreActif && (
+              <button
+                type="button"
+                onClick={reinitialiserFiltres}
+                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 ml-1"
+              >
+                <X className="h-3 w-3" /> Réinitialiser
+              </button>
+            )}
+            <span className="text-[10px] text-muted-foreground ml-auto">
+              {facturesFiltrees.length} / {factures.length} facture{factures.length > 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
+
         {factures.length === 0 ? (
           <div className="card-base text-center py-10">
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
@@ -130,9 +219,17 @@ export default function MesFacturesHonoraires() {
                 : 'Signez d\'abord le mandat de facturation pour commencer à recevoir des factures automatiques.'}
             </p>
           </div>
+        ) : facturesFiltrees.length === 0 ? (
+          <div className="card-base text-center py-10">
+            <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="font-semibold text-foreground">Aucune facture ne correspond aux filtres</p>
+            <button type="button" onClick={reinitialiserFiltres} className="text-sm text-primary hover:underline mt-2">
+              Réinitialiser les filtres
+            </button>
+          </div>
         ) : (
           <div className="space-y-2">
-            {factures.map((f: any) => {
+            {facturesFiltrees.map((f: any) => {
               const config = STATUT_CONFIG[f.statut] || STATUT_CONFIG.EMISE;
               return (
                 <div key={f.id} className="card-base hover:border-primary/30 transition-colors">
