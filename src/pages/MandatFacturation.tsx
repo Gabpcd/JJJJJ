@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, CheckCircle, ShieldCheck, Loader2, ArrowLeft, ExternalLink } from 'lucide-react';
+import { FileText, CheckCircle, ShieldCheck, Loader2, ArrowLeft, ExternalLink, Download, AlertTriangle } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
   hashMandatTexte,
   type SoignantMandatInfo,
 } from '@/constantes/mandatFacturation';
+import { telechargerMandatFacturationPdf, type MandatPdfMetadata } from '@/lib/mandat-facturation-pdf';
 
 // Conversion markdown-like basique pour affichage
 function renderMarkdown(texte: string) {
@@ -78,6 +79,9 @@ export default function MandatFacturation() {
   const [signatureVersion, setSignatureVersion] = useState<string | null>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [soignantInfo, setSoignantInfo] = useState<SoignantMandatInfo | null>(null);
+  const [signatureMeta, setSignatureMeta] = useState<MandatPdfMetadata | null>(null);
+  const [showConfirmRevoke, setShowConfirmRevoke] = useState(false);
+  const [revoking, setRevoking] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -105,6 +109,24 @@ export default function MandatFacturation() {
           setAlreadySigned(true);
           setSignatureDate((data as any).mandat_facturation_signe_le);
           setSignatureVersion((data as any).mandat_facturation_version);
+          // Récupère les métadonnées techniques de la signature pour le PDF
+          const { data: sig } = await supabase
+            .from('mandats_facturation_signatures' as any)
+            .select('signed_at, version, ip_address, user_agent, contenu_hash')
+            .eq('soignant_id', user.id)
+            .is('revoked_at', null)
+            .order('signed_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (sig) {
+            setSignatureMeta({
+              signed_at: (sig as any).signed_at,
+              version: (sig as any).version,
+              ip_address: (sig as any).ip_address,
+              user_agent: (sig as any).user_agent,
+              contenu_hash: (sig as any).contenu_hash,
+            });
+          }
         }
       }
       setLoading(false);
@@ -143,12 +165,54 @@ export default function MandatFacturation() {
 
       toast.success('Mandat signé avec succès');
       setAlreadySigned(true);
-      setSignatureDate(new Date().toISOString());
+      const now = new Date().toISOString();
+      setSignatureDate(now);
       setSignatureVersion(MANDAT_FACTURATION_VERSION);
+      setSignatureMeta({
+        signed_at: now,
+        version: MANDAT_FACTURATION_VERSION,
+        ip_address: null,
+        user_agent: navigator.userAgent,
+        contenu_hash: hash,
+      });
     } catch (err: any) {
       toast.error(err?.message || 'Erreur lors de la signature');
     } finally {
       setSigning(false);
+    }
+  };
+
+  const telechargerPdf = () => {
+    if (!soignantInfo || !signatureMeta) {
+      toast.error('Impossible de générer le PDF : signature introuvable.');
+      return;
+    }
+    try {
+      telechargerMandatFacturationPdf(soignantInfo, signatureMeta);
+    } catch (err: any) {
+      toast.error('Erreur lors de la génération du PDF.');
+    }
+  };
+
+  const revoquer = async () => {
+    setRevoking(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_revoquer_mandat_facturation' as any, { p_motif: null });
+      if (error) throw error;
+      if ((data as any)?.success === false) throw new Error((data as any)?.error || 'Erreur révocation');
+
+      toast.success('Mandat révoqué. Aucune facture ne sera plus émise tant que vous ne signez pas un nouveau mandat.');
+      setAlreadySigned(false);
+      setSignatureDate(null);
+      setSignatureVersion(null);
+      setSignatureMeta(null);
+      setAccepted(false);
+      setHasScrolledToBottom(false);
+      setShowConfirmRevoke(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erreur lors de la révocation');
+    } finally {
+      setRevoking(false);
     }
   };
 
@@ -188,8 +252,31 @@ export default function MandatFacturation() {
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 Jolene peut désormais émettre des factures d'honoraires en votre nom à chaque mission terminée.
-                Vous pouvez retirer votre consentement à tout moment en contactant le support, avec un préavis de 30 jours.
+                Vous pouvez révoquer ce mandat à tout moment depuis cette page : aucune nouvelle facture ne
+                sera émise après révocation. Les factures déjà émises restent valides et exigibles.
               </p>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={telechargerPdf}
+                  disabled={!signatureMeta}
+                  className="gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Télécharger mon mandat (PDF)
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowConfirmRevoke(true)}
+                  className="gap-2 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
+                >
+                  Révoquer mon mandat
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -256,6 +343,37 @@ export default function MandatFacturation() {
           )}
         </div>
       </div>
+
+      {showConfirmRevoke && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !revoking && setShowConfirmRevoke(false)}>
+          <div className="bg-background rounded-xl shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-6 w-6 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Révoquer le mandat de facturation ?</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Cette action est immédiate. Aucune nouvelle facture d'honoraires ne pourra plus
+                  être émise par Jolene en votre nom à partir de maintenant.
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Les factures déjà émises restent valides et exigibles : la révocation n'a pas
+                  d'effet rétroactif (cohérent avec l'art. 289 I-2 CGI). Vous pourrez signer un
+                  nouveau mandat à tout moment.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button type="button" variant="outline" disabled={revoking} onClick={() => setShowConfirmRevoke(false)}>
+                Annuler
+              </Button>
+              <Button type="button" variant="destructive" disabled={revoking} onClick={revoquer} className="gap-2">
+                {revoking && <Loader2 className="h-4 w-4 animate-spin" />}
+                {revoking ? 'Révocation…' : 'Confirmer la révocation'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutApp>
   );
 }
