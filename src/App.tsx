@@ -115,6 +115,7 @@ const AdminCalendrier = lazy(() => import("./pages/admin/AdminCalendrier"));
 const AdminMissions = lazy(() => import("./pages/admin/AdminMissions"));
 const AdminReclamations = lazy(() => import("./pages/admin/AdminReclamations"));
 const AdminFinances = lazy(() => import("./pages/admin/AdminFinances"));
+const AdminTauxCommission = lazy(() => import("./pages/admin/AdminTauxCommission"));
 
 const queryClient = new QueryClient();
 
@@ -246,6 +247,7 @@ function AppRoutes() {
           <Route path="/admin/presences/mission/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><DetailPresencesMission role="ADMIN_PLATEFORME" /></RouteProtegee>} />
           <Route path="/admin/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><PageMessagerie role="ADMIN_PLATEFORME" /></RouteProtegee>} />
           <Route path="/admin/finances" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminFinances /></RouteProtegee>} />
+          <Route path="/admin/taux-commission" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminTauxCommission /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />

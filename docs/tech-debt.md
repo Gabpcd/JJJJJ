@@ -282,7 +282,7 @@ Attention : ne PAS toucher les missions facturées (trigger `trg_protect_creneau
 
 ---
 
-## Sub-PR 2bis — Gestion admin des taux commission
+## [RÉSOLU] Sub-PR 2bis — Gestion admin des taux commission (2026-04-28)
 
 **Contexte** : Le taux commission est aujourd'hui fixé par `etablissements.taux_commission_negocie` (défaut 15%). Aucune gestion multi-étabs/groupe ni UI admin de modification. Bloquant avant acceptation de clients multi-établissements sous contrat-cadre.
 
@@ -297,6 +297,42 @@ Attention : ne PAS toucher les missions facturées (trigger `trg_protect_creneau
 **Priorité** : P1 — à faire avant acceptation de clients multi-étabs
 
 **Date** : 2026-04-16
+
+**Résolution 2026-04-28** : migration
+`20260428250000_subpr2bis_taux_commission_groupes.sql` :
+
+- Colonnes ajoutées sur `groupes_sante` : `taux_commission_negocie`
+  (CHECK 0..100), `contrat_debut`, `contrat_fin`.
+- Modification de `fn_geler_mission_a_assignation` pour cascade
+  STRICTE `etab.taux_commission_negocie > groupe.taux_commission_negocie
+  > 15` (correction d'un piège : `missions.taux_commission` a un
+  default 15.00 qui aurait court-circuité la cascade groupe ; le
+  trigger ignore désormais ce champ et lit directement la cascade).
+- Audit `GEL_APPLIED` enrichi avec `taux_commission_source`
+  (`etablissement` | `groupe` | `defaut_15`).
+- RPC `fn_admin_modifier_taux_commission(p_etablissement_id?,
+  p_groupe_id?, p_nouveau_taux, p_raison)` : guard admin + raison
+  obligatoire + audit `TAUX_COMMISSION_MODIFIE` + bornes 0..100.
+- RPC `fn_admin_lister_taux_commission()` : retourne JSONB groupes +
+  établissements avec taux résolu et source pour la page admin.
+- Page UI `/admin/taux-commission` (`AdminTauxCommission.tsx`) :
+  liste groupes + établissements avec source colorée
+  (Étab/Groupe/Défaut), modal d'édition avec champ raison
+  obligatoire, lien dans sidebar Finances.
+
+**Tests SQL via MCP** (3 cas cascade + 1 listing + 4 guards) :
+1. Cascade etab > groupe : étab=8% → fige 8%. PASS.
+2. Cascade groupe : étab=NULL, groupe=10% → fige 10%. PASS.
+3. Cascade défaut : étab=NULL, groupe=NULL → fige 15%. PASS.
+4. RPC `fn_admin_lister_taux_commission` retourne `success:true`. PASS.
+5. Guards : non-admin → "Admin requis", raison vide → "Raison
+   obligatoire", taux >100 → "hors bornes", les deux IDs → "exactement
+   un".
+
+**Application** : conformément à la spec, les changements de taux
+n'impactent que les **futures missions assignées**. Les missions déjà
+gelées (`fige_le IS NOT NULL`) conservent leur `taux_commission_fige`
+historique intact.
 
 ---
 
@@ -548,7 +584,7 @@ manuel. Tickets RÉSOLU précédés de [RÉSOLU] dans le titre.
 |---|---|---|---|
 | Hardening anti-seed (RÉSOLU 2026-04-28) | Triggers anti-seed factures+missions DÉJÀ en place + RPC diagnostic ajoutée. Cron mensuel reste manuel Gabrielle. | — | — |
 | T1 | Validation juridique planchers CCN 🔧 | Consultation avocat | externe |
-| Sub-PR 2bis | Multi-étabs taux commission | Session dédiée | ~4h |
+| Sub-PR 2bis (RÉSOLU 2026-04-28) | Multi-étabs taux commission | Cascade etab>groupe>15 + RPC admin + UI /admin/taux-commission | — |
 | T9 | Gel facture par période | Dépend Partie 2 facturation hebdo | bloqué |
 | T12 (RÉSOLU 2026-04-28) | Stripe payment_intent propagation | Trigger SQL stripe_transfers→factures_honoraires (option B simplifiée). Backfill exécuté. | — |
 | T13 (RÉSOLU 2026-04-28) | process-stripe-refunds finalisée | Constat : fn déjà implémentée v85 (auth, lock atomique, retry, idempotence, alert admin, audit). Reste action manuelle Gabrielle : configurer schedule cron `*/30 * * * *`. | manuel cron |

@@ -39,6 +39,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
       { icone: Zap, label: 'Affacturage', route: '/admin/affacturage' },
       { icone: FileStack, label: 'Chorus Pro', route: '/admin/chorus-pro' },
       { icone: TrendingUp, label: 'Cohort & Economics', route: '/admin/cohort' },
+      { icone: Coins, label: 'Taux commission', route: '/admin/taux-commission' },
     ],
   },
   { icone: MessageCircle, label: 'Messagerie', route: '/admin/messagerie' },
