@@ -28,7 +28,13 @@ jobs:
         run: npm ci
 
       - name: TypeScript strict check
-        run: npx tsc --noEmit
+        # `tsc --noEmit` sans -p ne vérifie RIEN car tsconfig.json racine
+        # contient `"files": []` + des `references`. Il faut `tsc -b`
+        # pour traverser les references (tsconfig.app.json + tsconfig.node.json).
+        # Sans ça, des bugs comme "Cannot find name 'getLabelProfession'"
+        # passent silencieusement en prod et provoquent des ReferenceError
+        # runtime dans les chemins peu fréquentés.
+        run: npx tsc -b
 
       - name: Build
         run: npm run build

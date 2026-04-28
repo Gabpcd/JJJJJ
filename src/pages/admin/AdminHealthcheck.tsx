@@ -83,10 +83,10 @@ export default function AdminHealthcheck() {
     // 7. Email (send-email warm)
     const emailStart = Date.now();
     try {
-      const { data } = await supabase.functions.invoke('send-email', { body: { warm: true } });
+      await supabase.functions.invoke('send-email', { body: { warm: true } });
       results.push({ name: 'Resend Email', icon: Mail, status: 'ok', latency: Date.now() - emailStart, detail: 'Warm ping OK' });
     } catch (e: any) {
-      results.push({ name: 'Resend Email', icon: Mail, status: data ? 'ok' : 'error', latency: Date.now() - emailStart, detail: e.message });
+      results.push({ name: 'Resend Email', icon: Mail, status: 'error', latency: Date.now() - emailStart, detail: e.message });
     }
 
     // 8. Sentry
