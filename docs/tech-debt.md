@@ -336,20 +336,48 @@ historique intact.
 
 ---
 
-## T9 — Gel de facture par période (pas mission entière)
+## [PARTIEL] T9 — Gel de facture par période (2026-04-28)
 
-**Contexte** : `CP-LITIGES-2` (trigger `trg_litige_gel_degel_facture`) gèle **toutes** les factures non-PAYEE d'une mission quand un litige de catégorie `PRESENCE`, `CONDITIONS` ou `COMPORTEMENT` est ouvert. La granularité par période n'est pas possible tant que les colonnes `periode_debut` / `periode_fin` n'existent pas sur `factures_honoraires` (elles arrivent avec Partie 2 — facturation hebdomadaire libérale).
+**Contexte initial** : `CP-LITIGES-2` (trigger `trg_litige_gel_degel_facture`) gèle **toutes** les factures non-PAYEE d'une mission quand un litige de catégorie `PRESENCE`, `CONDITIONS` ou `COMPORTEMENT` est ouvert. La granularité par période n'est pas possible tant que les colonnes `periode_debut` / `periode_fin` n'existent pas sur `factures_honoraires` (elles arrivent avec Partie 2 — facturation hebdomadaire libérale).
 
 **Exemple du problème** : mission libérale de 4 semaines, soignant conteste ses heures sur la semaine 1. Aujourd'hui → factures S1, S2, S3, S4 toutes gelées. Attendu → seule S1 gelée, S2-S4 continuent.
 
-**Action** : une fois Partie 2 livrée avec `periode_debut` / `periode_fin` :
-1. Étendre `trg_litige_gel_degel_facture` pour accepter une période (lue depuis le contexte du litige — à définir : champ `periode_debut`/`periode_fin` sur `litiges`, ou déduction via `presence.pointage_arrivee_le` / `pointage_depart_le`).
-2. Ne geler que les factures dont `[periode_debut, periode_fin]` chevauche la période litigieuse.
-3. Exception conservée : `SECURITE_DANGER` ou `COMPORTEMENT` avec gravité confirmée par admin → gèle toute la mission (cf. audit Sub-PR 2 quater, précision 14).
+### Pourquoi T9 dans sa forme définitive est BLOQUÉ par Partie 2
 
-**Priorité** : P1 — à traiter dès livraison Partie 2
+Audit DB confirmé le 2026-04-28 :
+1. `factures_honoraires` n'a **pas** de colonnes `periode_debut` / `periode_fin` (elles arriveraient avec Partie 2).
+2. Aucune table `facturation_periodes` n'existe — le découpage hebdomadaire n'est pas modélisé.
+3. Modèle actuel = **1 facture par mission** (FK directe `factures_honoraires.mission_id`, contrainte UNIQUE sur les factures FACTURE). Il n'y a structurellement pas plusieurs factures à filtrer par chevauchement de période.
+4. `generate-invoice` produit 1 facture pour la mission entière, pas une par semaine.
+5. `litiges` n'a pas de colonnes `periode_*` non plus — il n'y a aucun moyen de stocker la période litigieuse côté contexte du litige.
 
-**Date** : 2026-04-17
+Tant que ces 5 points ne sont pas livrés (Partie 2), filtrer par chevauchement de période n'a pas d'objet.
+
+### Amélioration intermédiaire livrée (2026-04-28)
+
+Migration `20260428260000_t9_gel_facture_scope.sql` — permet à l'admin de moduler **manuellement** le scope du gel sans attendre Partie 2 :
+
+- Colonne `litiges.gel_facture_scope text NOT NULL DEFAULT 'MISSION_ENTIERE'` avec CHECK :
+  - `MISSION_ENTIERE` (défaut, comportement historique)
+  - `FACTURE_UNIQUE` (force gel uniquement de `litige.facture_id`, même pour PRESENCE/CONDITIONS/COMPORTEMENT)
+  - `AUCUN` (litige informatif/réputationnel, pas de gel financier)
+- `fn_trg_litige_gel_degel_facture` mis à jour pour respecter le scope (FINANCIER reste sur `facture_id` ; les 3 autres catégories suivent le scope).
+- RPC `fn_admin_modifier_gel_scope_litige(p_litige_id, p_nouveau_scope, p_raison)` SECURITY DEFINER admin-only :
+  - Validation guard admin + scope autorisé + raison obligatoire.
+  - Dégèle les factures actuellement gelées par le litige puis re-gèle selon le nouveau scope (atomique).
+  - Audit `LITIGE_GEL_SCOPE_MODIFIE` via `fn_ecrire_audit_safe`.
+
+### Action restante (post-Partie 2)
+
+Quand Partie 2 sera livrée :
+1. Ajouter une 4ᵉ valeur `'PERIODE_LITIGIEUSE'` au CHECK `litiges_gel_facture_scope_check`.
+2. Ajouter colonnes `periode_debut` / `periode_fin` sur `litiges` (ou déduction via `presence.pointage_arrivee_le` / `pointage_depart_le`).
+3. Étendre `fn_trg_litige_gel_degel_facture` pour la branche `PERIODE_LITIGIEUSE` : ne geler que les factures dont `[periode_debut, periode_fin]` chevauche `[litige.periode_debut, litige.periode_fin]`.
+4. Exception conservée : `SECURITE_DANGER` ou `COMPORTEMENT` avec gravité confirmée par admin → gèle toute la mission (cf. audit Sub-PR 2 quater, précision 14).
+
+**Priorité** : P1 — amélioration intermédiaire LIVRÉE, scope définitif reste à traiter dès livraison Partie 2
+
+**Date** : 2026-04-17 (création) / 2026-04-28 (amélioration intermédiaire)
 
 ---
 
@@ -585,7 +613,7 @@ manuel. Tickets RÉSOLU précédés de [RÉSOLU] dans le titre.
 | Hardening anti-seed (RÉSOLU 2026-04-28) | Triggers anti-seed factures+missions DÉJÀ en place + RPC diagnostic ajoutée. Cron mensuel reste manuel Gabrielle. | — | — |
 | T1 | Validation juridique planchers CCN 🔧 | Consultation avocat | externe |
 | Sub-PR 2bis (RÉSOLU 2026-04-28) | Multi-étabs taux commission | Cascade etab>groupe>15 + RPC admin + UI /admin/taux-commission | — |
-| T9 | Gel facture par période | Dépend Partie 2 facturation hebdo | bloqué |
+| T9 (PARTIEL 2026-04-28) | Gel facture par période | Amélioration intermédiaire livrée : `gel_facture_scope` (MISSION_ENTIERE/FACTURE_UNIQUE/AUCUN) + RPC admin. Scope définitif `PERIODE_LITIGIEUSE` reste bloqué par Partie 2. | — |
 | T12 (RÉSOLU 2026-04-28) | Stripe payment_intent propagation | Trigger SQL stripe_transfers→factures_honoraires (option B simplifiée). Backfill exécuté. | — |
 | T13 (RÉSOLU 2026-04-28) | process-stripe-refunds finalisée | Constat : fn déjà implémentée v85 (auth, lock atomique, retry, idempotence, alert admin, audit). Reste action manuelle Gabrielle : configurer schedule cron `*/30 * * * *`. | manuel cron |
 | T15 (RÉSOLU) | RELANCE_FACTURE → RAPPEL_FACTURE | — | — |
