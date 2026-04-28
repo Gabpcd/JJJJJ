@@ -213,7 +213,95 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Mode test explicite
+    // Mode test hybride : préfixe 00100xxxxxx → lookup table rpps_test
+    // Activé hors production. ENVIRONMENT="production" désactive ce mode.
+    // Justification du préfixe : les vrais RPPS ne commencent jamais par
+    // 00100 (IDE commencent par 1, médecins par 8...). Aucune collision.
+    const TEST_PREFIX = '00100';
+    const ENVIRONMENT = Deno.env.get('ENVIRONMENT') || 'development';
+    const testModeActif = ENVIRONMENT !== 'production';
+
+    if (numeroRpps.startsWith(TEST_PREFIX) && testModeActif) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+      const { data: testRow, error: testErr } = await supabaseAdmin
+        .from('rpps_test')
+        .select('rpps, prenom, nom, profession, specialite_medicale')
+        .eq('rpps', numeroRpps)
+        .maybeSingle();
+
+      if (testErr) {
+        console.error('Erreur lookup rpps_test:', testErr);
+        return new Response(JSON.stringify({ error: 'Erreur consultation rpps_test' }), {
+          status: 500,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (!testRow) {
+        return new Response(JSON.stringify({
+          trouve: false,
+          correspond: false,
+          nom_api: null,
+          prenom_api: null,
+          profession_api: null,
+          source: 'Mode test (rpps_test)',
+        }), {
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Vérification correspondance identité saisie (même règle que ANS)
+      const nomNorm = normalize(testRow.nom);
+      const prenomNorm = normalize(testRow.prenom);
+      const nomFourni = normalize(nom || '');
+      const prenomFourni = normalize(prenom || '');
+      const nomCorrespond = !nomFourni || nomNorm.includes(nomFourni) || nomFourni.includes(nomNorm);
+      const prenomCorrespond = !prenomFourni || prenomNorm.slice(0, 3) === prenomFourni.slice(0, 3);
+      const correspond = nomCorrespond && prenomCorrespond;
+
+      // Persister sur soignant si correspondance + soignant_id fourni
+      if (soignant_id && correspond) {
+        try {
+          const updateFields: Record<string, unknown> = {
+            rpps_verifie: true,
+            rpps_verifie_le: new Date().toISOString(),
+            rpps_nom_api: testRow.nom,
+            rpps_prenom_api: testRow.prenom,
+            rpps_profession_api: testRow.profession,
+          };
+          if (testRow.specialite_medicale) {
+            updateFields.specialite_medicale = testRow.specialite_medicale;
+            updateFields.specialite_code = testRow.specialite_medicale;
+            updateFields.specialite_source = 'RPPS';
+            updateFields.specialite_verifiee = true;
+            updateFields.specialite_verifiee_le = new Date().toISOString();
+          }
+          await supabaseAdmin.from('soignants').update(updateFields as any).eq('id', soignant_id);
+        } catch (dbErr) {
+          console.error('Erreur sauvegarde RPPS test sur soignant:', dbErr);
+        }
+      }
+
+      return new Response(JSON.stringify({
+        trouve: true,
+        correspond,
+        rpps: numeroRpps,
+        nom_api: testRow.nom,
+        prenom_api: testRow.prenom,
+        profession_api: testRow.profession,
+        specialite_code: testRow.specialite_medicale ?? null,
+        specialite_label: testRow.specialite_medicale ?? null,
+        actif: true,
+        source: 'Mode test (rpps_test)',
+      }), {
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Mode test legacy (hardcodé) — RPPS 00000000001 maintenu pour
+    // rétrocompatibilité des tests existants.
     if (numeroRpps === '00000000001') {
       return new Response(JSON.stringify({
         trouve: true,
@@ -223,7 +311,7 @@ Deno.serve(async (req) => {
         prenom_api: 'Gabrielle',
         profession_api: 'IDE',
         actif: true,
-        source: 'Mode test',
+        source: 'Mode test (legacy)',
       }), {
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
