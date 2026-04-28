@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { SelectProfession } from '@/components/SelectProfession';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { getLabelProfession, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
@@ -138,9 +138,15 @@ function RppsVerifierInline(props: {
       }
 
       // 2) Vérifier via l'edge function (qui écrit rpps_verifie=true si correspond)
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token || SUPABASE_PUBLISHABLE_KEY;
       const response = await fetch(`${SUPABASE_URL}/functions/v1/verify-rpps`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': SUPABASE_PUBLISHABLE_KEY,
+        },
         body: JSON.stringify({
           rpps,
           numero_rpps: rpps,

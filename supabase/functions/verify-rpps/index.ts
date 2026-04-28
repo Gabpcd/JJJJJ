@@ -178,9 +178,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth: verify JWT user or service_role
+    // Auth tolérante : accepte service_role OU anon key OU user JWT.
+    // - Inscription : pas de session, le frontend envoie l'anon key.
+    // - Wizard profil : user authentifié, le frontend envoie son access_token.
+    // - Service interne : service_role.
+    // L'abus est limité par le rate-limiting IP (10 req/min).
     const authHeader = req.headers.get('Authorization');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Non autorisé' }), {
         status: 401,
@@ -189,10 +194,11 @@ Deno.serve(async (req) => {
     }
     const token = authHeader.replace('Bearer ', '');
     const isServiceRole = token === serviceRoleKey;
-    if (!isServiceRole) {
+    const isAnonKey = token === anonKey;
+    if (!isServiceRole && !isAnonKey) {
       const supabaseAuth = createClient(
         Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_ANON_KEY')!,
+        anonKey,
       );
       const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(token);
       if (authErr || !user) {

@@ -8,6 +8,7 @@ import { getLabelProfession } from '@/lib/constantes';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
+import { SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { SelectProfession } from '@/components/SelectProfession';
 import { FooterLegal } from '@/components/FooterLegal';
 import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -173,7 +174,11 @@ export default function InscriptionSoignant() {
           'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/verify-rpps',
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+              'apikey': SUPABASE_PUBLISHABLE_KEY,
+            },
             body: JSON.stringify({
               rpps: rppsValue,
               numero_rpps: rppsValue,
