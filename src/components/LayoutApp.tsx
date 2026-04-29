@@ -5,6 +5,7 @@ import { DemandePermissionPush } from '@/components/DemandePermissionPush';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { SyncHorsLigne } from '@/components/SyncHorsLigne';
 import { BandeauInstallerPWA } from '@/components/BandeauInstallerPWA';
+import { BandeauOnboardingEtab } from '@/components/BandeauOnboardingEtab';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -41,6 +42,7 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
       <a href="#main-content" className="skip-to-main">Aller au contenu principal</a>
       <BandeauHorsLigne />
       <SyncHorsLigne />
+      {role === 'ADMIN_ETABLISSEMENT' && <BandeauOnboardingEtab />}
       <BarreNavigation role={role} />
       <main
         id="main-content"

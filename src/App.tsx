@@ -17,6 +17,7 @@ const PageAccueil = lazy(() => import("./pages/PageAccueil"));
 const PageConnexion = lazy(() => import("./pages/PageConnexion"));
 const PscCallback = lazy(() => import("./pages/PscCallback"));
 const MandatFacturation = lazy(() => import("./pages/MandatFacturation"));
+const FinaliserInscriptionEtab = lazy(() => import("./pages/FinaliserInscriptionEtab"));
 const MesFacturesHonoraires = lazy(() => import("./pages/MesFacturesHonoraires"));
 const MesAvances = lazy(() => import("./pages/MesAvances"));
 const BulletinsPaie = lazy(() => import("./pages/BulletinsPaie"));
@@ -186,6 +187,7 @@ function AppRoutes() {
 
           {/* Établissement */}
           <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
+          <Route path="/etablissement/finaliser-inscription" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FinaliserInscriptionEtab /></RouteProtegee>} />
           <Route path="/etablissement/parametres" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><Parametres /></RouteProtegee>} />
           <Route path="/etablissement/profil" element={<Navigate to="/etablissement/parametres?tab=profil" replace />} />
           <Route path="/etablissement/soignants/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ProfilSoignantEtablissement /></RouteProtegee>} />
