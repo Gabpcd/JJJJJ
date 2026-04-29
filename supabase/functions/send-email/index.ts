@@ -104,6 +104,8 @@ const ALLOWED_TYPES = new Set([
   'RAPPEL_PAIEMENT_J7', 'PAIEMENT_RETARD_J21', 'PUBLICATION_SUSPENDUE',
   // [CP-C-3] déblocage auto post-régularisation
   'PUBLICATION_REACTIVEE',
+  // [J2.1.B.2.3] contrat de travail SALARIE étab → soignant
+  'CONTRAT_TRAVAIL_DEPOSE', 'CONTRAT_TRAVAIL_RAPPEL_ETAB', 'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -985,6 +987,42 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             Cette suspension intervient en application de notre obligation de vigilance (article L8222-1 Code du travail + article L441-10 Code de commerce). Jolene, en tant qu'intermédiaire, est tenu de garantir la régularité des paiements entre établissements et soignants.
           </p>
           ${SECURITY_NOTE}
+        `),
+      };
+
+    case 'CONTRAT_TRAVAIL_DEPOSE':
+      return {
+        subject: 'Votre contrat de travail a été déposé',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Contrat de travail déposé</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+          <p style="color:#334155;">Votre établissement <strong>${data.nom_etablissement || ''}</strong> a déposé votre contrat de travail pour la mission <strong>${data.intitule_mission || 'à venir'}</strong>${data.date_debut ? ` qui débute le <strong>${data.date_debut}</strong>` : ''}.</p>
+          ${INFO_BOX(`Vous pouvez télécharger votre contrat depuis le détail de la mission sur la plateforme Jolene.`)}
+          ${BUTTON('Accéder à ma mission →', `${APP_URL}/soignant/missions/${data.mission_id || ''}`)}
+        `),
+      };
+
+    case 'CONTRAT_TRAVAIL_RAPPEL_ETAB':
+      return {
+        subject: `Rappel : déposez le contrat de travail — ${data.intitule_mission || 'mission'}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Contrat de travail à déposer</h2>
+          <p style="color:#334155;">Bonjour,</p>
+          <p style="color:#334155;">La mission <strong>${data.intitule_mission || ''}</strong> assignée à <strong>${data.prenom_soignant || ''} ${data.nom_soignant || ''}</strong> commence <strong>${data.date_debut ? `le ${data.date_debut}` : 'demain'}</strong>.</p>
+          ${INFO_BOX(`Le contrat de travail CDDU n'a pas encore été déposé sur la plateforme. En tant qu'employeur, vous devez le téléverser au plus tard le premier jour de mission.`)}
+          ${BUTTON('Déposer le contrat →', `${APP_URL}/etablissement/missions/${data.mission_id || ''}`)}
+        `),
+      };
+
+    case 'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT':
+      return {
+        subject: 'Contrat de travail en attente',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Contrat de travail en attente</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+          <p style="color:#334155;">Votre établissement <strong>${data.nom_etablissement || ''}</strong> n'a pas encore déposé votre contrat de travail pour la mission <strong>${data.intitule_mission || ''}</strong> qui débute <strong>${data.date_debut ? `le ${data.date_debut}` : 'demain'}</strong>.</p>
+          ${INFO_BOX(`Vous pouvez contacter directement votre établissement pour le rappeler. Le contrat doit être signé au plus tard le premier jour de mission.`)}
+          ${BUTTON('Voir ma mission →', `${APP_URL}/soignant/missions/${data.mission_id || ''}`)}
         `),
       };
 

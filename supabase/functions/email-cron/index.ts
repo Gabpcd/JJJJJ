@@ -27,6 +27,58 @@ Deno.serve(async (req) => {
     const { data: v5 } = await sb.rpc("fn_nettoyer_tokens_push");
     results.tokens_push = v5 || 0;
 
+    // [J2.1.B.2.3.B] Rappels J-1 contrat de travail SALARIE
+    let contratTravailRappels = 0;
+    try {
+      const { data: missionsManquantes } = await sb.rpc("fn_lister_missions_contrat_travail_manquant");
+      for (const mission of (missionsManquantes as any[]) || []) {
+        const dateDebut = mission.debut_le ? new Date(mission.debut_le).toLocaleDateString('fr-FR') : 'demain';
+        const intitule = mission.intitule || 'mission';
+        // Email étab
+        try {
+          await sb.functions.invoke('send-email', {
+            body: {
+              type: 'CONTRAT_TRAVAIL_RAPPEL_ETAB',
+              destinataire_id: mission.etablissement_id,
+              data: {
+                intitule_mission: intitule,
+                prenom_soignant: mission.prenom_soignant,
+                nom_soignant: mission.nom_soignant,
+                date_debut: dateDebut,
+                mission_id: mission.mission_id,
+              },
+            },
+          });
+        } catch (e) { console.warn('email étab fail', e); }
+        // Email soignant
+        try {
+          await sb.functions.invoke('send-email', {
+            body: {
+              type: 'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT',
+              destinataire_id: mission.soignant_id,
+              data: {
+                prenom: mission.prenom_soignant,
+                nom_etablissement: mission.nom_etablissement,
+                intitule_mission: intitule,
+                date_debut: dateDebut,
+                mission_id: mission.mission_id,
+              },
+            },
+          });
+        } catch (e) { console.warn('email soignant fail', e); }
+        // Marquer comme envoyé (idempotence)
+        await sb.rpc('fn_marquer_rappel_contrat_travail_envoye', {
+          p_mission_id: mission.mission_id,
+          p_cible_etab: true,
+          p_cible_soignant: true,
+        });
+        contratTravailRappels++;
+      }
+    } catch (err) {
+      console.error('Erreur rappels contrat travail:', err);
+    }
+    results.contrat_travail_rappels = contratTravailRappels;
+
     // Traiter la queue d'emails ET SMS (notifications automatiques des triggers DB)
     // [CP-C-3 D] Source de vérité : statut='EN_ATTENTE' (colonne envoye deprecated)
     let emailQueueCount = 0;
