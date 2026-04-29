@@ -79,6 +79,115 @@ Deno.serve(async (req) => {
     }
     results.contrat_travail_rappels = contratTravailRappels;
 
+    // [J2.3.B.2] Cron envoi série email onboarding J0-J7
+    let serieEnvoyes = 0, serieSkipped = 0, serieErreurs = 0;
+    try {
+      const { data: aTraiter } = await sb
+        .from('serie_email_envois')
+        .select('id, utilisateur_id, serie, etape, tentatives')
+        .eq('statut', 'PLANIFIE')
+        .lt('planifie_le', new Date().toISOString())
+        .lt('tentatives', 3)
+        .order('planifie_le', { ascending: true })
+        .limit(50);
+
+      for (const envoi of (aTraiter as any[]) || []) {
+        try {
+          // 1. Vérifier conditions de skip métier
+          const { data: skipCheck } = await sb.rpc('fn_verifier_skip_serie_onboarding', { p_envoi_id: envoi.id });
+          if (skipCheck && (skipCheck as any).skip === true) {
+            await sb.from('serie_email_envois').update({
+              statut: 'SKIPPED',
+              skip_raison: (skipCheck as any).raison,
+            }).eq('id', envoi.id);
+            await sb.from('journaux_audit').insert({
+              acteur_id: null, type_acteur: 'SYSTEME',
+              action: 'SERIE_EMAIL_SKIPPED', type_ressource: 'serie_email_envois',
+              id_ressource: envoi.id,
+              details: { serie: envoi.serie, etape: envoi.etape, raison: (skipCheck as any).raison },
+            }).then(() => {}).catch(() => {});
+            serieSkipped++;
+            continue;
+          }
+
+          // 2. Vérifier préférences notifications utilisateur
+          const { data: shouldNotify } = await sb.rpc('fn_doit_notifier', {
+            p_utilisateur_id: envoi.utilisateur_id,
+            p_type_evenement: 'SERIE_ONBOARDING',
+            p_canal: 'EMAIL',
+          });
+          if (shouldNotify === false) {
+            await sb.from('serie_email_envois').update({
+              statut: 'SKIPPED', skip_raison: 'NOTIFICATION_DESACTIVEE',
+            }).eq('id', envoi.id);
+            await sb.from('journaux_audit').insert({
+              acteur_id: null, type_acteur: 'SYSTEME',
+              action: 'SERIE_EMAIL_SKIPPED', type_ressource: 'serie_email_envois',
+              id_ressource: envoi.id,
+              details: { serie: envoi.serie, etape: envoi.etape, raison: 'NOTIFICATION_DESACTIVEE' },
+            }).then(() => {}).catch(() => {});
+            serieSkipped++;
+            continue;
+          }
+
+          // 3. Récupérer les données dynamiques pour le template
+          const { data: tplData } = await sb.rpc('fn_obtenir_donnees_template_serie', { p_envoi_id: envoi.id });
+
+          // 4. Construire le type Resend
+          const audience = envoi.serie === 'SOIGNANT_ONBOARDING' ? 'SOIGNANT' : 'ETAB';
+          const emailType = `SERIE_${audience}_${envoi.etape}`;
+
+          // 5. Invoke send-email
+          const { error: emailErr } = await sb.functions.invoke('send-email', {
+            body: {
+              type: emailType,
+              destinataire_id: envoi.utilisateur_id,
+              data: tplData || {},
+            },
+          });
+
+          if (emailErr) throw new Error(emailErr.message || 'invoke error');
+
+          await sb.from('serie_email_envois').update({
+            statut: 'ENVOYE',
+            envoye_le: new Date().toISOString(),
+            tentatives: (envoi.tentatives || 0) + 1,
+          }).eq('id', envoi.id);
+          await sb.from('journaux_audit').insert({
+            acteur_id: null, type_acteur: 'SYSTEME',
+            action: 'SERIE_EMAIL_ENVOYE', type_ressource: 'serie_email_envois',
+            id_ressource: envoi.id,
+            details: { serie: envoi.serie, etape: envoi.etape, type: emailType },
+          }).then(() => {}).catch(() => {});
+          serieEnvoyes++;
+
+        } catch (err: any) {
+          serieErreurs++;
+          const newTentatives = (envoi.tentatives || 0) + 1;
+          const definitif = newTentatives >= 3;
+          await sb.from('serie_email_envois').update({
+            statut: definitif ? 'ERREUR' : 'PLANIFIE',
+            tentatives: newTentatives,
+            erreur_message: err?.message || String(err),
+          }).eq('id', envoi.id);
+          if (definitif) {
+            await sb.from('journaux_audit').insert({
+              acteur_id: null, type_acteur: 'SYSTEME',
+              action: 'ADMIN_ACTION', type_ressource: 'serie_email_envois',
+              id_ressource: envoi.id,
+              details: { event: 'SERIE_EMAIL_ERREUR_DEFINITIVE', serie: envoi.serie, etape: envoi.etape, error: err?.message },
+            }).then(() => {}).catch(() => {});
+          }
+          console.error(`[email-cron] Erreur série email ${envoi.id}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error('[email-cron] Erreur globale série email:', err);
+    }
+    results.serie_envoyes = serieEnvoyes;
+    results.serie_skipped = serieSkipped;
+    results.serie_erreurs = serieErreurs;
+
     // Traiter la queue d'emails ET SMS (notifications automatiques des triggers DB)
     // [CP-C-3 D] Source de vérité : statut='EN_ATTENTE' (colonne envoye deprecated)
     let emailQueueCount = 0;
