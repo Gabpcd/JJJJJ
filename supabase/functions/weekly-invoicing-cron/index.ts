@@ -36,10 +36,18 @@ Deno.serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-    // Vérifier que c'est un appel service_role
-    const authHeader = req.headers.get('authorization') || '';
+    // Auth résiliente : legacy JWT OU nouveau secret asymétrique (env / vault).
+    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || '';
     const token = authHeader.replace('Bearer ', '');
-    if (token !== serviceRoleKey) {
+    const newSecretKey = Deno.env.get('SUPABASE_SECRET_KEY') || Deno.env.get('SB_SECRET_KEY') || '';
+    let isServiceRole = (token === serviceRoleKey) || (!!newSecretKey && token === newSecretKey);
+    if (!isServiceRole) {
+      try {
+        const { data: vaultSecret } = await supabase.rpc('fn_lire_secret_cron');
+        if (vaultSecret && token === vaultSecret) isServiceRole = true;
+      } catch { /* ignore */ }
+    }
+    if (!isServiceRole) {
       return new Response(JSON.stringify({ error: 'Service role requis' }), { status: 403, headers: corsHeaders });
     }
 

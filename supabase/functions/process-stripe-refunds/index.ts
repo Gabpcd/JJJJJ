@@ -57,20 +57,37 @@ interface StripeErrorLike {
   raw?: { code?: string; message?: string };
 }
 
+// Auth résiliente : accepte legacy JWT ou nouveau secret asymétrique (vault).
+let _vaultSecret: string | null = null;
+async function getVaultSecret(sb: any): Promise<string> {
+  if (_vaultSecret) return _vaultSecret;
+  const env = Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SB_SECRET_KEY") || "";
+  if (env) { _vaultSecret = env; return env; }
+  try {
+    const { data } = await sb.rpc('fn_lire_secret_cron');
+    if (data) { _vaultSecret = data; return data; }
+  } catch { /* ignore */ }
+  return "";
+}
+
 Deno.serve(async (req) => {
   const t0 = Date.now();
 
   try {
-    // 1. Auth : Bearer service_role_key
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader !== `Bearer ${KEY}`) {
+    const sb = createClient(URL, KEY);
+
+    // 1. Auth : Bearer service_role (legacy JWT OU vault secret)
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    const vaultSecret = await getVaultSecret(sb);
+    const validBearers = [KEY, vaultSecret].filter(Boolean);
+    if (!bearer || !validBearers.includes(bearer)) {
       return new Response(JSON.stringify({ error: "Non autorisé" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    const sb = createClient(URL, KEY);
     const stripe = new Stripe(STRIPE_KEY, { apiVersion: "2025-08-27.basil" });
 
     // 2. SELECT des lignes éligibles (max 10 / run)

@@ -16,18 +16,36 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Auth résiliente : accepte legacy JWT (KEY env) ou nouveau secret asymétrique
+// (sb_secret_…) stocké en vault. Cf. docs/audit-infrastructure-production.md.
+let _vaultSecret: string | null = null;
+async function getVaultSecret(sb: any): Promise<string> {
+  if (_vaultSecret) return _vaultSecret;
+  const env = Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SB_SECRET_KEY") || "";
+  if (env) { _vaultSecret = env; return env; }
+  try {
+    const { data } = await sb.rpc('fn_lire_secret_cron');
+    if (data) { _vaultSecret = data; return data; }
+  } catch { /* ignore */ }
+  return "";
+}
+
 Deno.serve(async (req) => {
   try {
-    // Auth service_role uniquement
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader !== `Bearer ${KEY}`) {
+    const sb = createClient(URL, KEY);
+
+    // Auth service_role : legacy JWT OU vault secret
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    const vaultSecret = await getVaultSecret(sb);
+    const validBearers = [KEY, vaultSecret].filter(Boolean);
+    if (!bearer || !validBearers.includes(bearer)) {
       return new Response(JSON.stringify({ error: "Non autorisé" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    const sb = createClient(URL, KEY);
     const results: Record<string, unknown> = {};
     const t0 = Date.now();
 
