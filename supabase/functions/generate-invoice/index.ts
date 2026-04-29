@@ -490,10 +490,24 @@ Deno.serve(async (req) => {
     const isServiceRole = token === serviceRoleKey;
 
     const body = await req.json();
-    const { mission_id, facture_id, service_role_reason } = body;
+    const {
+      mission_id,
+      facture_id,
+      service_role_reason,
+      // Partie 2 — facturation hebdomadaire libérale (optionnels)
+      // Quand fournis, génère une facture hebdo intermédiaire ou finale partielle
+      // pour la période donnée. Quand absents, comportement actuel (mission entière).
+      periode_debut,        // 'YYYY-MM-DD' ou undefined
+      periode_fin,          // 'YYYY-MM-DD' ou undefined
+      numero_semaine_iso,   // smallint ou undefined (NULL pour finale unique)
+      annee_iso,            // smallint ou undefined
+      est_facture_finale_mission, // boolean (default true si périodes absentes)
+    } = body;
     if (!mission_id && !facture_id) {
       return json(req, { error: 'mission_id ou facture_id requis' }, 400);
     }
+    const isHebdoMode = !!(mission_id && periode_debut && periode_fin);
+    const isFinaleFromHebdo = !!(mission_id && periode_debut && periode_fin && est_facture_finale_mission === true);
 
     // ── Service_role bypass: validate reason + rate limit ──
     if (isServiceRole) {
@@ -719,8 +733,11 @@ Deno.serve(async (req) => {
     }
 
     // 1b. Garde-fou pré-facturation CP5b (créneaux ouverts + écart > 10%)
+    //     Partie 2 : passe la période si mode hebdo, sinon mission entière.
     const { data: preCheck, error: preCheckErr } = await supabaseAdmin
-      .rpc('fn_verifier_pre_facturation', { p_mission_id: mission_id });
+      .rpc('fn_verifier_pre_facturation', isHebdoMode
+        ? { p_mission_id: mission_id, p_periode_debut: periode_debut, p_periode_fin: periode_fin }
+        : { p_mission_id: mission_id });
 
     if (preCheckErr) {
       console.warn(`[generate-invoice] pré-facturation bloquée: ${preCheckErr.message}`);
@@ -749,15 +766,25 @@ Deno.serve(async (req) => {
     if (!etab) return json(req, { error: 'Établissement introuvable' }, 404);
 
     // 4. Vérifier pas de doublon
-    const { data: existing } = await supabaseAdmin
-      .from('factures_honoraires')
-      .select('id, numero_facture')
-      .eq('mission_id', mission_id)
-      .not('statut', 'eq', 'ANNULEE')
-      .maybeSingle();
-
-    if (existing) {
-      return json(req, { error: `Une facture existe déjà pour cette mission : ${existing.numero_facture}`, facture_id: existing.id }, 409);
+    //    - Mode finale unique (mission entière) : un seul est_facture_finale_mission=true par mission
+    //    - Mode hebdo : un seul (mission, annee_iso, num_sem) avec est_facture_finale_mission=false
+    {
+      let q = supabaseAdmin
+        .from('factures_honoraires')
+        .select('id, numero_facture, est_facture_finale_mission, periode_debut, periode_fin')
+        .eq('mission_id', mission_id)
+        .not('statut', 'in', '("ANNULEE","REMPLACEE","ERREUR_GENERATION")');
+      if (isHebdoMode && est_facture_finale_mission !== true) {
+        // doublon hebdo
+        q = q.eq('annee_iso', annee_iso).eq('numero_semaine_iso', numero_semaine_iso).eq('est_facture_finale_mission', false);
+      } else {
+        // doublon finale (FINALE_UNIQUE ou facture finale partielle d'une mission HEBDO_ET_FINALE)
+        q = q.eq('est_facture_finale_mission', true);
+      }
+      const { data: existing } = await q.maybeSingle();
+      if (existing) {
+        return json(req, { error: `Une facture existe déjà : ${existing.numero_facture}`, facture_id: existing.id }, 409);
+      }
     }
 
     // 5. Générer le numéro de facture
@@ -767,7 +794,25 @@ Deno.serve(async (req) => {
     if (numErr || !invoiceNumber) return json(req, { error: 'Erreur génération numéro de facture' }, 500);
 
     // 6. Calculer les montants
-    const amountHt = Number(mission.net_a_payer) || Number(mission.total_brut) || 0;
+    //    - Mode finale unique : amountHt = mission.net_a_payer (comme avant)
+    //    - Mode hebdo / finale partielle : appel fn_calculer_montant_periode
+    let amountHt: number;
+    let cumulHt = 0;
+    let cumulNbFactures = 0;
+    if (isHebdoMode) {
+      const { data: calc, error: calcErr } = await supabaseAdmin
+        .rpc('fn_calculer_montant_periode', {
+          p_mission_id: mission_id, p_periode_debut: periode_debut, p_periode_fin: periode_fin,
+        });
+      if (calcErr) return json(req, { error: `Erreur calcul montant période : ${calcErr.message}` }, 500);
+      amountHt = Number((calc as any)?.montant_ht_periode) || 0;
+      const { data: cumul } = await supabaseAdmin
+        .rpc('fn_cumul_factures_mission', { p_mission_id: mission_id, p_jusqu_au: periode_debut });
+      cumulHt = Number((cumul as any)?.cumul_ht) || 0;
+      cumulNbFactures = Number((cumul as any)?.nb_factures) || 0;
+    } else {
+      amountHt = Number(mission.net_a_payer) || Number(mission.total_brut) || 0;
+    }
     const vatExempt = !soignant.assujetti_tva;
     const vatRate = vatExempt ? 0 : 20;
     const amountTva = vatExempt ? 0 : Math.round(amountHt * vatRate) / 100;
@@ -796,7 +841,21 @@ Deno.serve(async (req) => {
     // 9. Generate XML CII
     const sellerAddress = [soignant.adresse_rue, soignant.adresse_code_postal, soignant.adresse_ville].filter(Boolean).join(', ');
     const buyerAddress = [etab.adresse_rue, etab.adresse_code_postal, etab.adresse_ville].filter(Boolean).join(', ');
-    const description = `Honoraires — ${mission.intitule || 'Mission'} (${mission.service || ''}) du ${mission.debut_le || ''} au ${mission.fin_le || ''} — ${mission.duree_heures || 0}h`;
+    // Description avec mention hebdo + cumul si applicable
+    let description: string;
+    if (isHebdoMode && est_facture_finale_mission !== true) {
+      const cumulMention = cumulNbFactures > 0
+        ? ` — Cumul mission depuis début : ${cumulHt.toFixed(2)} EUR HT (${cumulNbFactures} facture(s) precedente(s))`
+        : '';
+      description = `Facture hebdomadaire S${numero_semaine_iso}/${annee_iso} — ${mission.intitule || 'Mission'} — Periode du ${periode_debut} au ${periode_fin}${cumulMention}`;
+    } else if (isFinaleFromHebdo) {
+      const cumulMention = cumulNbFactures > 0
+        ? ` — Cumul deja facture : ${cumulHt.toFixed(2)} EUR HT (${cumulNbFactures} facture(s) hebdo)`
+        : '';
+      description = `Facture finale — ${mission.intitule || 'Mission'} — Periode du ${periode_debut} au ${periode_fin}${cumulMention}`;
+    } else {
+      description = `Honoraires — ${mission.intitule || 'Mission'} (${mission.service || ''}) du ${mission.debut_le || ''} au ${mission.fin_le || ''} — ${mission.duree_heures || 0}h`;
+    }
 
     subrogationMention = buildSubrogationMention(soignant);
 
@@ -857,18 +916,25 @@ Deno.serve(async (req) => {
     const storagePath = `invoices/${soignant.id}/${invoiceNumber}.pdf`;
     const xmlPath = `invoices/${soignant.id}/${invoiceNumber}.xml`;
 
-    const { error: uploadErr } = await supabaseAdmin.storage
-      .from('jolene-documents')
-      .upload(storagePath, new Blob([pdfBytes], { type: 'application/pdf' }), { upsert: true });
+    // 11b. Lookup facture précédente pour chaînage hebdo (Partie 2)
+    let facturePrecedenteId: string | null = null;
+    if (isHebdoMode) {
+      const { data: prev } = await supabaseAdmin
+        .from('factures_honoraires')
+        .select('id')
+        .eq('mission_id', mission_id)
+        .not('statut', 'in', '("ANNULEE","REMPLACEE","ERREUR_GENERATION","EN_GENERATION")')
+        .lt('periode_fin', periode_debut)
+        .order('periode_fin', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      facturePrecedenteId = prev?.id ?? null;
+    }
 
-    const { error: xmlUploadErr } = await supabaseAdmin.storage
-      .from('jolene-documents')
-      .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: true });
-
-    if (uploadErr) console.error('PDF upload error:', uploadErr);
-    if (xmlUploadErr) console.error('XML upload error:', xmlUploadErr);
-
-    // 12. Insert facture honoraire
+    // 12. Insert facture en statut EN_GENERATION (D11) — réserve le slot
+    //     et empêche tout doublon hebdo concurrent. Sera passée à EMISE
+    //     après succès upload PDF/XML, ou ERREUR_GENERATION sinon.
+    const finalFlag = isHebdoMode ? (est_facture_finale_mission === true) : true;
     const { data: facture, error: insertErr } = await supabaseAdmin
       .from('factures_honoraires')
       .insert({
@@ -883,14 +949,18 @@ Deno.serve(async (req) => {
         exoneration_tva: vatExempt,
         date_emission: issueDate,
         date_echeance: dueDate,
-        statut: 'EMISE',
+        statut: 'EN_GENERATION',
         mandat_version: soignant.mandat_facturation_version || '1.1',
         template_version: 'v2_facturx',
-        pdf_s3_key: storagePath,
-        facturx_xml_url: xmlPath,
         is_public_sector: etab.est_secteur_public || false,
         siret_client: etab.siret || null,
         service_code_chorus: serviceCodeChorus,
+        periode_debut: isHebdoMode ? periode_debut : (mission.debut_le ? String(mission.debut_le).slice(0,10) : issueDate),
+        periode_fin: isHebdoMode ? periode_fin : (mission.fin_le ? String(mission.fin_le).slice(0,10) : issueDate),
+        numero_semaine_iso: (isHebdoMode && !finalFlag) ? numero_semaine_iso : null,
+        annee_iso: (isHebdoMode && !finalFlag) ? annee_iso : null,
+        est_facture_finale_mission: finalFlag,
+        facture_precedente_id: facturePrecedenteId,
       })
       .select('id, numero_facture')
       .single();
@@ -898,6 +968,42 @@ Deno.serve(async (req) => {
     if (insertErr) {
       console.error('Insert facture error:', insertErr);
       return json(req, { error: `Erreur insertion facture : ${insertErr.message}` }, 500);
+    }
+
+    // Upload PDF + XML, puis UPDATE → EMISE. En cas d'échec, ERREUR_GENERATION.
+    const { error: uploadErr } = await supabaseAdmin.storage
+      .from('jolene-documents')
+      .upload(storagePath, new Blob([pdfBytes], { type: 'application/pdf' }), { upsert: true });
+
+    const { error: xmlUploadErr } = await supabaseAdmin.storage
+      .from('jolene-documents')
+      .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: true });
+
+    if (uploadErr || xmlUploadErr) {
+      console.error('Upload error:', uploadErr || xmlUploadErr);
+      await supabaseAdmin.from('factures_honoraires').update({
+        statut: 'ERREUR_GENERATION',
+      }).eq('id', facture!.id);
+      // Audit alerte admin
+      await supabaseAdmin.from('journaux_audit').insert({
+        acteur_id: null, type_acteur: 'SYSTEME',
+        action: 'ADMIN_ACTION', type_ressource: 'facture_honoraire',
+        id_ressource: facture!.id,
+        details: { event: 'GENERATION_INVOICE_FAIL', error: String(uploadErr || xmlUploadErr), mission_id, periode_debut, periode_fin },
+      });
+      return json(req, { error: 'Echec upload PDF/XML — facture en ERREUR_GENERATION', facture_id: facture!.id }, 500);
+    }
+
+    // Tout est ok → passage en EMISE avec pdf/xml paths
+    const { error: updErr } = await supabaseAdmin
+      .from('factures_honoraires')
+      .update({
+        statut: 'EMISE', pdf_s3_key: storagePath, facturx_xml_url: xmlPath,
+      })
+      .eq('id', facture!.id);
+    if (updErr) {
+      console.error('Update EMISE error:', updErr);
+      return json(req, { error: `Erreur passage EMISE : ${updErr.message}`, facture_id: facture!.id }, 500);
     }
 
     // 13. If public sector, trigger Chorus submission (stub)
