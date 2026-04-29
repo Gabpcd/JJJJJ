@@ -1418,20 +1418,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Resolve email server-side from destinataire_id
+    // Resolve email server-side from destinataire_id.
+    // Order de fallback (auth.admin.getUserById ne marche plus avec sb_secret_
+    // bearer côté Supabase platform — régression observée 2026-04-29) :
+    //   1. soignants.email (table denormalisée)
+    //   2. etablissements.email_contact
+    //   3. auth.users.email (via SQL direct, plus auth.admin)
     const supabaseService = createClient(supabaseUrl, serviceRoleKey);
-
-    // Try auth.users first, then etablissements
     let resolvedEmail: string | null = null;
 
-    const { data: authUser } = await supabaseService.auth.admin.getUserById(destinataire_id);
-    if (authUser?.user?.email) {
-      resolvedEmail = authUser.user.email;
+    const { data: soignant } = await supabaseService
+      .from('soignants').select('email').eq('id', destinataire_id).maybeSingle();
+    if (soignant?.email) {
+      resolvedEmail = soignant.email;
     } else {
-      // Could be an etablissement_id
-      const { data: etab } = await supabaseService.from('etablissements').select('email_contact').eq('id', destinataire_id).single();
+      const { data: etab } = await supabaseService
+        .from('etablissements').select('email_contact').eq('id', destinataire_id).maybeSingle();
       if (etab?.email_contact) {
         resolvedEmail = etab.email_contact;
+      } else {
+        // Dernier fallback : auth.admin (peut échouer avec sb_secret_)
+        try {
+          const { data: authUser } = await supabaseService.auth.admin.getUserById(destinataire_id);
+          if (authUser?.user?.email) resolvedEmail = authUser.user.email;
+        } catch (_e) { /* silently fall through to 404 */ }
       }
     }
 
