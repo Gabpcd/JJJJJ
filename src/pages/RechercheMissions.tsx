@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { FiltresSauvegardes } from '@/components/FiltresSauvegardes';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -277,6 +278,31 @@ export default function RechercheMissions() {
         </div>
 
         <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} />
+
+        {/* Mes recherches sauvegardées (J2.3.C) */}
+        <FiltresSauvegardes
+          audience="SOIGNANT_RECHERCHE_MISSIONS"
+          filtresCourants={{
+            profession,
+            rayonKm,
+            tauxMin,
+            typeContrat,
+            urgentesOnly,
+            horaire,
+            villeRecherche,
+          }}
+          onCharger={(f) => {
+            const obj = f as Record<string, any>;
+            if (typeof obj.profession === 'string') setProfession(obj.profession);
+            if (typeof obj.rayonKm === 'number') setRayonKm(obj.rayonKm);
+            if (typeof obj.tauxMin === 'number') setTauxMin(obj.tauxMin);
+            if (typeof obj.typeContrat === 'string') setTypeContrat(obj.typeContrat);
+            if (typeof obj.urgentesOnly === 'boolean') setUrgentesOnly(obj.urgentesOnly);
+            if (typeof obj.horaire === 'string') setHoraire(obj.horaire as Horaire);
+            if (typeof obj.villeRecherche === 'string') setVilleRecherche(obj.villeRecherche);
+            setShowFilters(true);
+          }}
+        />
 
         {/* Filters */}
         <div className={`${showFilters ? 'block' : 'hidden md:block'} card-base space-y-4`}>
