@@ -275,7 +275,7 @@ Deno.serve(async (req) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              from: 'Jolene Ops <noreply@jolene.app>',
+              from: 'Jolene Ops <bonjour@jolene.app>',
               to: ['gabrielle@jolene.app'],
               subject: `[OPS] admin-invoke → ${target_function} par ${userEmail}`,
               html: `<p><strong>admin-invoke</strong> <code>${requestId}</code></p>

@@ -1462,7 +1462,7 @@ Deno.serve(async (req) => {
     }
 
     const emailPayload: Record<string, unknown> = {
-      from: 'Jolene <noreply@jolene.app>',
+      from: 'Jolene <bonjour@jolene.app>',
       to: [resolvedEmail],
       subject,
       html,
