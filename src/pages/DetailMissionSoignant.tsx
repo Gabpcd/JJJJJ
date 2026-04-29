@@ -36,6 +36,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
+import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
 
 type SoignantData = Database['public']['Tables']['soignants']['Row'];
 
@@ -569,6 +570,16 @@ export default function DetailMissionSoignant() {
               <>
                 <div className="bg-success/5 border border-success/20 rounded-xl p-3 mb-4 text-center">
                   <p className="text-sm font-semibold text-success">✅ Vous êtes assigné(e) à cette mission</p>
+                </div>
+                <div className="mb-4">
+                  <BlocContratTravailMission
+                    missionId={mission.id}
+                    typeContratApplique={(mission as any).type_contrat_applique}
+                    soignantAssigneId={mission.soignant_assigne_id}
+                    etablissementId={mission.etablissement_id}
+                    debutLe={mission.debut_le}
+                    role="SOIGNANT"
+                  />
                 </div>
                 <button
                   type="button"

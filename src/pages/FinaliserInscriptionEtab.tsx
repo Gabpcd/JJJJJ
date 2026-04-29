@@ -131,9 +131,9 @@ export default function FinaliserInscriptionEtab() {
 
     setUploading(true);
     try {
-      const path = `${user.id}/rib.${ext}`;
+      const path = `etablissements/${user.id}/rib.${ext}`;
       const { error: upErr } = await supabase.storage
-        .from('etablissement-documents')
+        .from('jolene-documents')
         .upload(path, ribFile, { upsert: true });
       if (upErr) throw upErr;
 

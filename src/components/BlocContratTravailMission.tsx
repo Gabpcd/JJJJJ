@@ -1,0 +1,302 @@
+import { useEffect, useState } from 'react';
+import { FileText, Upload, Download, AlertTriangle, Loader2, CheckCircle, RefreshCw } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+
+interface Props {
+  missionId: string;
+  typeContratApplique: string | null;
+  soignantAssigneId: string | null;
+  etablissementId: string;
+  debutLe: string | null;
+  role: 'ETABLISSEMENT' | 'SOIGNANT';
+}
+
+interface ContratTravail {
+  id: string;
+  pdf_s3_key: string;
+  nom_fichier: string | null;
+  taille_octets: number | null;
+  uploaded_at: string;
+  uploaded_by: string;
+}
+
+const BUCKET = 'jolene-documents';
+const PATH_PREFIX = 'contrats-travail';
+
+export function BlocContratTravailMission({
+  missionId,
+  typeContratApplique,
+  soignantAssigneId,
+  etablissementId,
+  debutLe,
+  role,
+}: Props) {
+  const { user } = useAuth();
+  const [contrat, setContrat] = useState<ContratTravail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('contrats_travail_missions' as any)
+        .select('id, pdf_s3_key, nom_fichier, taille_octets, uploaded_at, uploaded_by')
+        .eq('mission_id', missionId)
+        .maybeSingle();
+      if (!cancelled) {
+        setContrat((data as any) || null);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [missionId]);
+
+  // Conditions affichage
+  if (typeContratApplique !== 'SALARIE' || !soignantAssigneId) return null;
+  if (loading) return null;
+
+  const upload = async () => {
+    if (!file || !user) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Seuls les fichiers PDF sont acceptés');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Fichier trop volumineux (max 10 Mo)');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const path = `${PATH_PREFIX}/${missionId}/contrat.pdf`;
+      const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, file, { upsert: true, contentType: 'application/pdf' });
+      if (upErr) throw upErr;
+
+      // Insert ou update row contrats_travail_missions
+      if (contrat) {
+        // Replace : update
+        const { error: updErr } = await supabase
+          .from('contrats_travail_missions' as any)
+          .update({
+            pdf_s3_key: path,
+            nom_fichier: file.name,
+            taille_octets: file.size,
+            uploaded_at: new Date().toISOString(),
+            uploaded_by: user.id,
+          } as any)
+          .eq('mission_id', missionId);
+        if (updErr) throw updErr;
+
+        await supabase.from('journaux_audit').insert({
+          acteur_id: user.id, type_acteur: 'ADMIN_ETABLISSEMENT',
+          action: 'DOCUMENT_TELEVERSEMENT', type_ressource: 'mission', id_ressource: missionId,
+          details: { type: 'contrat_travail_remplace', taille_octets: file.size },
+        });
+        toast.success('Contrat de travail remplacé');
+      } else {
+        const { error: insErr } = await supabase
+          .from('contrats_travail_missions' as any)
+          .insert({
+            mission_id: missionId,
+            etablissement_id: etablissementId,
+            soignant_id: soignantAssigneId,
+            pdf_s3_key: path,
+            nom_fichier: file.name,
+            taille_octets: file.size,
+            uploaded_by: user.id,
+          } as any);
+        if (insErr) throw insErr;
+
+        await supabase.from('journaux_audit').insert({
+          acteur_id: user.id, type_acteur: 'ADMIN_ETABLISSEMENT',
+          action: 'DOCUMENT_TELEVERSEMENT', type_ressource: 'mission', id_ressource: missionId,
+          details: { type: 'contrat_travail_uploade', taille_octets: file.size },
+        });
+
+        // Notification + email soignant (best-effort)
+        try {
+          await supabase.from('notifications').insert({
+            destinataire_id: soignantAssigneId,
+            type_destinataire: 'SOIGNANT',
+            type: 'CONTRAT_GENERE',
+            titre: 'Contrat de travail déposé',
+            corps: 'Votre établissement a déposé votre contrat de travail pour cette mission.',
+            type_ressource: 'mission',
+            id_ressource: missionId,
+            lien: `/soignant/missions/${missionId}`,
+          });
+        } catch (e) { /* best-effort */ }
+
+        try {
+          await supabase.functions.invoke('send-email', {
+            body: {
+              type: 'CONTRAT_TRAVAIL_DEPOSE',
+              destinataire_id: soignantAssigneId,
+              data: { mission_id: missionId, lien: `https://jolene.app/soignant/missions/${missionId}` },
+            },
+          });
+        } catch (e) { /* best-effort */ }
+
+        toast.success('Contrat de travail déposé. Le soignant a été notifié.');
+      }
+
+      // Refresh
+      const { data } = await supabase
+        .from('contrats_travail_missions' as any)
+        .select('id, pdf_s3_key, nom_fichier, taille_octets, uploaded_at, uploaded_by')
+        .eq('mission_id', missionId)
+        .maybeSingle();
+      setContrat((data as any) || null);
+      setFile(null);
+      setShowUpload(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erreur upload');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const download = async () => {
+    if (!contrat) return;
+    setDownloading(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(contrat.pdf_s3_key, 3600);
+      if (error) throw error;
+      window.open(data.signedUrl, '_blank');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erreur téléchargement');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  // Cas SOIGNANT : pas de contrat uploadé
+  if (!contrat && role === 'SOIGNANT') {
+    if (!debutLe) return null;
+    const debut = new Date(debutLe);
+    const now = new Date();
+    const msUntilStart = debut.getTime() - now.getTime();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    if (msUntilStart > oneDayMs) return null; // Pas d'alerte si > J-1
+    return (
+      <div className="rounded-xl border-2 border-warning/40 bg-warning/10 p-4 flex items-start gap-3">
+        <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <p className="font-semibold text-foreground">Contrat de travail manquant</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Votre établissement n'a pas encore déposé votre contrat de travail. Vous pouvez le contacter pour le rappeler.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Cas SOIGNANT avec contrat uploadé
+  if (contrat && role === 'SOIGNANT') {
+    return (
+      <div className="rounded-xl border border-success/30 bg-success/5 p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-5 w-5 text-success" />
+          <p className="font-semibold text-foreground">Mon contrat de travail</p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Déposé le {new Date(contrat.uploaded_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+          {contrat.taille_octets ? ` · ${(contrat.taille_octets / 1024).toFixed(0)} Ko` : ''}
+        </p>
+        <Button size="sm" variant="outline" onClick={download} disabled={downloading} className="gap-2">
+          {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Télécharger
+        </Button>
+      </div>
+    );
+  }
+
+  // Cas ETABLISSEMENT : aucun contrat → prompt upload
+  if (!contrat && role === 'ETABLISSEMENT') {
+    return (
+      <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <FileText className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-foreground">Contrat de travail à déposer</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Vous êtes employeur du soignant pour cette mission salariée. Déposez le contrat de travail CDDU signé par les deux parties au plus tard le premier jour de mission. Format PDF, max 10 Mo.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="file"
+            accept=".pdf,application/pdf"
+            onChange={e => setFile(e.target.files?.[0] || null)}
+            className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+          />
+          <Button onClick={upload} disabled={!file || uploading} className="gap-2 shrink-0">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Déposer
+          </Button>
+        </div>
+        {file && (
+          <p className="text-xs text-muted-foreground">
+            {file.name} ({(file.size / 1024).toFixed(0)} Ko)
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // Cas ETABLISSEMENT avec contrat uploadé
+  if (contrat && role === 'ETABLISSEMENT') {
+    return (
+      <div className="rounded-xl border border-success/30 bg-success/5 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-5 w-5 text-success" />
+          <p className="font-semibold text-foreground">Contrat de travail déposé</p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Déposé le {new Date(contrat.uploaded_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+          {contrat.taille_octets ? ` · ${(contrat.taille_octets / 1024).toFixed(0)} Ko` : ''}
+          {contrat.nom_fichier ? ` · ${contrat.nom_fichier}` : ''}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={download} disabled={downloading} className="gap-2">
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Télécharger
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setShowUpload(s => !s)} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            {showUpload ? 'Annuler' : 'Remplacer'}
+          </Button>
+        </div>
+        {showUpload && (
+          <div className="pt-2 border-t border-border space-y-2">
+            <input
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={e => setFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+            />
+            <Button onClick={upload} disabled={!file || uploading} size="sm" className="gap-2">
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Remplacer
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}

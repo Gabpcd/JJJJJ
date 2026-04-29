@@ -12,6 +12,7 @@ import { ChatMission } from '@/components/ChatMission';
 import { ChatConversation } from '@/components/ChatConversation';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
 import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
+import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
 import { CodesPointageMission } from '@/components/CodesPointageMission';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -522,6 +523,21 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   ) : (
                     <><span>📄 Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Facturée en fin de mois</span></>
                   )}
+                </div>
+              )}
+              {/* Contrat de travail SALARIE (Partie 2 onboarding) — étab uploade
+                  le contrat CDDU pour les missions salariées. Affichage seulement si
+                  type_contrat_applique=SALARIE et soignant assigné. */}
+              {m.soignant_assigne_id && (
+                <div className="mb-4">
+                  <BlocContratTravailMission
+                    missionId={m.id}
+                    typeContratApplique={(m as any).type_contrat_applique}
+                    soignantAssigneId={m.soignant_assigne_id}
+                    etablissementId={m.etablissement_id}
+                    debutLe={m.debut_le}
+                    role="ETABLISSEMENT"
+                  />
                 </div>
               )}
               {/* Facture honoraires — visible quand mission TERMINEE (une facture
