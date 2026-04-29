@@ -248,6 +248,23 @@ Deno.serve(async (req) => {
       navigateur_acteur: body.navigateur || null,
     });
 
+    // 5. Email bienvenue (best-effort — ne bloque pas l'inscription)
+    try {
+      await supabaseAdmin.functions.invoke('send-email', {
+        body: {
+          type: 'BIENVENUE_ETABLISSEMENT',
+          destinataire_id: user.id,
+          data: {
+            nom_etablissement: String(nom).slice(0, 200),
+            type_etablissement: type,
+            lien_dashboard: 'https://jolene.app/etablissement',
+          },
+        },
+      });
+    } catch (emailErr) {
+      console.warn('[register-etablissement] Email bienvenue non envoyé (best-effort):', emailErr);
+    }
+
     return new Response(JSON.stringify({ success: true, etablissement_id: user.id, auto_verifie: autoVerifie, statut_verification: statutVerification }), {
       status: 200,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },

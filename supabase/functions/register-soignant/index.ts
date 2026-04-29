@@ -302,6 +302,24 @@ Deno.serve(async (req) => {
       navigateur_acteur: body.navigateur || null,
     });
 
+    // 5. Email bienvenue (best-effort — ne bloque pas l'inscription)
+    try {
+      await supabaseAdmin.functions.invoke('send-email', {
+        body: {
+          type: 'BIENVENUE_SOIGNANT',
+          destinataire_id: user.id,
+          data: {
+            prenom: String(prenom).slice(0, 100),
+            nom: String(nom).slice(0, 100),
+            profession,
+            lien_dashboard: 'https://jolene.app/soignant',
+          },
+        },
+      });
+    } catch (emailErr) {
+      console.warn('[register-soignant] Email bienvenue non envoyé (best-effort):', emailErr);
+    }
+
     return new Response(JSON.stringify({ success: true, soignant_id: user.id }), {
       status: 200,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
