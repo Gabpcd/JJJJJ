@@ -170,7 +170,7 @@ export default function FinaliserInscriptionEtab() {
   }
 
   return (
-    <LayoutApp role="ETABLISSEMENT">
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="max-w-3xl mx-auto space-y-5">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
