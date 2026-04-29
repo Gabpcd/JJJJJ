@@ -336,7 +336,7 @@ historique intact.
 
 ---
 
-## [PARTIEL] T9 — Gel de facture par période (2026-04-28)
+## [RÉSOLU] T9 — Gel de facture par période (2026-04-29)
 
 **Contexte initial** : `CP-LITIGES-2` (trigger `trg_litige_gel_degel_facture`) gèle **toutes** les factures non-PAYEE d'une mission quand un litige de catégorie `PRESENCE`, `CONDITIONS` ou `COMPORTEMENT` est ouvert. La granularité par période n'est pas possible tant que les colonnes `periode_debut` / `periode_fin` n'existent pas sur `factures_honoraires` (elles arrivent avec Partie 2 — facturation hebdomadaire libérale).
 
@@ -613,7 +613,7 @@ manuel. Tickets RÉSOLU précédés de [RÉSOLU] dans le titre.
 | Hardening anti-seed (RÉSOLU 2026-04-28) | Triggers anti-seed factures+missions DÉJÀ en place + RPC diagnostic ajoutée. Cron mensuel reste manuel Gabrielle. | — | — |
 | T1 | Validation juridique planchers CCN 🔧 | Consultation avocat | externe |
 | Sub-PR 2bis (RÉSOLU 2026-04-28) | Multi-étabs taux commission | Cascade etab>groupe>15 + RPC admin + UI /admin/taux-commission | — |
-| T9 (PARTIEL 2026-04-28) | Gel facture par période | Amélioration intermédiaire livrée : `gel_facture_scope` (MISSION_ENTIERE/FACTURE_UNIQUE/AUCUN) + RPC admin. Scope définitif `PERIODE_LITIGIEUSE` reste bloqué par Partie 2. | — |
+| T9 (RÉSOLU 2026-04-29) | Gel facture par période | Partie 2 livrée : PERIODE_LITIGIEUSE au CHECK + colonnes periode_* litiges + trigger gel par chevauchement factures hebdo. | — |
 | T12 (RÉSOLU 2026-04-28) | Stripe payment_intent propagation | Trigger SQL stripe_transfers→factures_honoraires (option B simplifiée). Backfill exécuté. | — |
 | T13 (RÉSOLU 2026-04-28) | process-stripe-refunds finalisée | Constat : fn déjà implémentée v85 (auth, lock atomique, retry, idempotence, alert admin, audit). Reste action manuelle Gabrielle : configurer schedule cron `*/30 * * * *`. | manuel cron |
 | T15 (RÉSOLU) | RELANCE_FACTURE → RAPPEL_FACTURE | — | — |
