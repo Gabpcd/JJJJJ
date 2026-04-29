@@ -1109,6 +1109,59 @@ Deno.serve(async (req) => {
       });
     }
 
+    // [J2.3.A] Vérification préférences notifications avant envoi
+    // Mapping type Resend → type_evenement_notification (enum DB)
+    const TYPE_TO_EVENT: Record<string, string> = {
+      'BIENVENUE_SOIGNANT': 'SERIE_ONBOARDING',
+      'BIENVENUE_ETABLISSEMENT': 'SERIE_ONBOARDING',
+      'SERIE_SOIGNANT_J0': 'SERIE_ONBOARDING', 'SERIE_SOIGNANT_J1': 'SERIE_ONBOARDING',
+      'SERIE_SOIGNANT_J3': 'SERIE_ONBOARDING', 'SERIE_SOIGNANT_J7': 'SERIE_ONBOARDING',
+      'SERIE_ETAB_J0': 'SERIE_ONBOARDING', 'SERIE_ETAB_J1': 'SERIE_ONBOARDING',
+      'SERIE_ETAB_J3': 'SERIE_ONBOARDING', 'SERIE_ETAB_J7': 'SERIE_ONBOARDING',
+      'MISSION_ACCEPTEE_SOIGNANT': 'CANDIDATURE_ACCEPTEE',
+      'MISSION_ACCEPTEE_ETABLISSEMENT': 'CANDIDATURE_RECUE',
+      'MISSION_PROPOSEE': 'MISSION_ASSIGNEE',
+      'RAPPEL_MISSION': 'RAPPEL_J1_MISSION',
+      'MISSION_TERMINEE': 'MISSION_ASSIGNEE',
+      'MISSION_URGENTE': 'URGENCE',
+      'FACTURE_EMISE': 'FACTURE_EMISE',
+      'FACTURE_PAYEE': 'PAIEMENT_RECU',
+      'PAIEMENT_CONFIRME': 'PAIEMENT_RECU', 'PAIEMENT_RAPIDE_RECU': 'PAIEMENT_RECU',
+      'RAPPEL_FACTURE': 'FACTURE_EMISE',
+      'DOCUMENT_EXPIRANT': 'DOCUMENT_EXPIRANT',
+      'RAPPEL_DOCUMENTS': 'DOCUMENT_EXPIRANT',
+      'CONTRAT_TRAVAIL_DEPOSE': 'CONTRAT_TRAVAIL_DEPOSE',
+      'CONTRAT_TRAVAIL_RAPPEL_ETAB': 'CONTRAT_TRAVAIL_DEPOSE',
+      'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT': 'CONTRAT_TRAVAIL_DEPOSE',
+      'LITIGE_OUVERTURE': 'LITIGE_OUVERT', 'LITIGE_NOUVEAU_MESSAGE': 'LITIGE_OUVERT',
+      'LITIGE_RESOLU_AJUSTE': 'LITIGE_RESOLU', 'LITIGE_RAPPEL_J1': 'LITIGE_OUVERT',
+      'LITIGE_RAPPEL_J3': 'LITIGE_OUVERT', 'LITIGE_RAPPEL_J5': 'LITIGE_OUVERT',
+      'LITIGE_ESCALADE_ADMIN': 'URGENCE', 'LITIGE_MEDIATION_PRIORITAIRE': 'URGENCE',
+    };
+    const typeEvenement = TYPE_TO_EVENT[type] || null;
+
+    if (typeEvenement) {
+      const supabaseCheck = createClient(supabaseUrl, serviceRoleKey);
+      const { data: shouldNotify } = await supabaseCheck.rpc('fn_doit_notifier' as any, {
+        p_utilisateur_id: destinataire_id,
+        p_type_evenement: typeEvenement,
+        p_canal: 'EMAIL',
+      });
+      if (shouldNotify === false) {
+        // Audit le skip pour traçabilité, puis return 200 silent
+        await supabaseCheck.from('journaux_audit').insert({
+          acteur_id: null, type_acteur: 'SYSTEME',
+          action: 'NOTIFICATION_SKIPPED', type_ressource: 'email',
+          id_ressource: destinataire_id,
+          details: { type, type_evenement: typeEvenement, canal: 'EMAIL', raison: 'preference_user_off' },
+        }).then(() => {}).catch(() => {});
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'preference_user_off' }), {
+          status: 200,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Resolve email server-side from destinataire_id
     const supabaseService = createClient(supabaseUrl, serviceRoleKey);
 

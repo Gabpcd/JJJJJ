@@ -106,6 +106,39 @@ Deno.serve(async (req) => {
       });
     }
 
+    // [J2.3.A] Vérification préférences notifications (canal SMS)
+    if (destinataire_id && type) {
+      const TYPE_TO_EVENT: Record<string, string> = {
+        'SMS_MISSION_URGENTE': 'URGENCE',
+        'SMS_ANNULATION_TARDIVE': 'URGENCE',
+        'LITIGE_OUVERTURE': 'LITIGE_OUVERT',
+        'LITIGE_RAPPEL_J1': 'LITIGE_OUVERT',
+        'LITIGE_RAPPEL_J3': 'LITIGE_OUVERT',
+        'LITIGE_RAPPEL_J5': 'LITIGE_OUVERT',
+        'REMBOURSEMENT_CONFIRME': 'PAIEMENT_RECU',
+      };
+      const typeEvenement = TYPE_TO_EVENT[type] || null;
+      if (typeEvenement) {
+        const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+        const { data: should } = await sb.rpc('fn_doit_notifier' as any, {
+          p_utilisateur_id: destinataire_id,
+          p_type_evenement: typeEvenement,
+          p_canal: 'SMS',
+        });
+        if (should === false) {
+          await sb.from('journaux_audit').insert({
+            acteur_id: null, type_acteur: 'SYSTEME',
+            action: 'NOTIFICATION_SKIPPED', type_ressource: 'sms',
+            id_ressource: destinataire_id,
+            details: { type, type_evenement: typeEvenement, canal: 'SMS', raison: 'preference_user_off' },
+          }).then(() => {}).catch(() => {});
+          return new Response(JSON.stringify({ success: true, skipped: true, reason: 'preference_user_off' }), {
+            status: 200, headers: corsHeaders(req),
+          });
+        }
+      }
+    }
+
     // Formater le numéro en E.164
     let to = telephone.replace(/\s/g, "").replace(/^0/, "+33");
     if (!to.startsWith("+")) to = "+33" + to;

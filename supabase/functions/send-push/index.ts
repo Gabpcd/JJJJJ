@@ -48,12 +48,32 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Token invalide" }), { status: 401, headers: corsHeaders });
     }
 
-    const { destinataire_id, titre, corps, lien } = await req.json();
+    const { destinataire_id, titre, corps, lien, type_evenement } = await req.json();
     if (!destinataire_id || !titre) {
       return new Response(JSON.stringify({ error: "destinataire_id et titre requis" }), { status: 400, headers: corsHeaders });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // [J2.3.A] Préférences notifications canal PUSH
+    if (type_evenement) {
+      const { data: should } = await supabaseAdmin.rpc('fn_doit_notifier' as any, {
+        p_utilisateur_id: destinataire_id,
+        p_type_evenement: type_evenement,
+        p_canal: 'PUSH',
+      });
+      if (should === false) {
+        await supabaseAdmin.from('journaux_audit').insert({
+          acteur_id: null, type_acteur: 'SYSTEME',
+          action: 'NOTIFICATION_SKIPPED', type_ressource: 'push',
+          id_ressource: destinataire_id,
+          details: { type_evenement, canal: 'PUSH', raison: 'preference_user_off' },
+        }).then(() => {}).catch(() => {});
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'preference_user_off' }), {
+          status: 200, headers: corsHeaders,
+        });
+      }
+    }
 
     // Récupérer les tokens push (subscriptions Web Push) du destinataire
     const { data: tokens } = await supabaseAdmin
