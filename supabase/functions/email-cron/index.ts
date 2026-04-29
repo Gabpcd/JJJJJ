@@ -1,18 +1,50 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const URL = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+// Cache du secret attendu (lu depuis vault au premier appel)
+let expectedSecret: string | null = null;
+async function loadExpectedSecret(sb: any): Promise<string> {
+  if (expectedSecret) return expectedSecret;
+  // Essayer plusieurs noms d'env (legacy + new asymmetric)
+  const envSecret = Deno.env.get("SUPABASE_SECRET_KEY")
+    || Deno.env.get("SB_SECRET_KEY")
+    || Deno.env.get("CRON_SECRET")
+    || "";
+  if (envSecret) { expectedSecret = envSecret; return envSecret; }
+  // Fallback : lire le secret depuis vault.decrypted_secrets
+  // (nécessite que KEY puisse query vault — ce qui est le cas pour service_role)
+  try {
+    const { data } = await sb.from('vault.decrypted_secrets')
+      .select('decrypted_secret')
+      .eq('name', 'service_role_key')
+      .maybeSingle();
+    if (data?.decrypted_secret) { expectedSecret = data.decrypted_secret; return data.decrypted_secret; }
+  } catch (_e) { /* ignore */ }
+  // Dernier recours : RPC qui lit vault (à créer si besoin)
+  try {
+    const { data } = await sb.rpc('fn_lire_secret_cron');
+    if (data) { expectedSecret = data; return data; }
+  } catch (_e) { /* ignore */ }
+  return "";
+}
+
 Deno.serve(async (req) => {
   try {
-    // Auth: service_role only
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader !== `Bearer ${KEY}`) {
+    const sb = createClient(URL, KEY);
+
+    // Auth: service_role only — accepte legacy JWT (KEY) OU le secret stocké en vault
+    const authHeader = req.headers.get('Authorization') || '';
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    const vaultSecret = await loadExpectedSecret(sb);
+    const validBearers = [KEY, vaultSecret].filter(Boolean);
+    if (!bearer || !validBearers.includes(bearer)) {
       return new Response(JSON.stringify({ error: 'Non autorisé' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    const sb = createClient(URL, KEY);
     const results: Record<string, number> = {};
     const { data: r1 } = await sb.rpc("fn_email_rappels_j1");
     let c = 0;

@@ -1229,9 +1229,19 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  // Nouveau format asymétrique sb_secret_… stocké en vault (pg_cron / RPC).
+  const newSecretKey = Deno.env.get('SUPABASE_SECRET_KEY') || Deno.env.get('SB_SECRET_KEY') || '';
 
-  // C1: Strict equality for service_role validation (prevents partial key match)
-  const isServiceRole = authHeader === `Bearer ${serviceRoleKey}`;
+  // C1: Strict equality for service_role validation (prevents partial key match) —
+  // accepte legacy JWT, nouveau secret asymétrique, ou secret stocké en vault.
+  let isServiceRole = (token === serviceRoleKey) || (!!newSecretKey && token === newSecretKey);
+  if (!isServiceRole) {
+    try {
+      const sbAdmin = createClient(supabaseUrl, serviceRoleKey);
+      const { data: vaultSecret } = await sbAdmin.rpc('fn_lire_secret_cron');
+      if (vaultSecret && token === vaultSecret) isServiceRole = true;
+    } catch (_e) { /* ignore */ }
+  }
 
   let userId: string | null = null;
   let userEmail: string | null = null;
