@@ -10,13 +10,10 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Étendre l'enum type_evenement_notification : NOUVEAU_SOIGNANT_MATCHANT_FILTRE
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid
-                 WHERE t.typname='type_evenement_notification' AND e.enumlabel='NOUVEAU_SOIGNANT_MATCHANT_FILTRE') THEN
-    ALTER TYPE public.type_evenement_notification ADD VALUE 'NOUVEAU_SOIGNANT_MATCHANT_FILTRE';
-  END IF;
-END $$;
+-- ALTER TYPE ADD VALUE IF NOT EXISTS : non transactionnel, idempotent (PG 9.6+).
+-- À sortir d'un DO block car ALTER TYPE … ADD ne peut pas s'exécuter à
+-- l'intérieur d'une transaction commit-after-script.
+ALTER TYPE public.type_evenement_notification ADD VALUE IF NOT EXISTS 'NOUVEAU_SOIGNANT_MATCHANT_FILTRE';
 
 CREATE TABLE IF NOT EXISTS public.filtres_sauvegardes (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
