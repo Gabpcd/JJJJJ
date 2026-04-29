@@ -34,6 +34,14 @@ export default defineConfig(({ mode }) => ({
           project: sentryProject,
           telemetry: false,
           sourcemaps: { assets: './dist/**' },
+          // Si l'org/projet Sentry n'existe pas (ou que le token n'a pas
+          // accès), on log un warning au lieu de polluer les logs Vercel
+          // avec une stack d'erreur. Le build n'est pas bloqué de toutes
+          // façons (le plugin n'est pas critique), mais le warning
+          // explicite est plus clean.
+          errorHandler: (err) => {
+            console.warn('[sentry-vite-plugin] non-bloquant :', err.message);
+          },
         })
       : null,
   ].filter(Boolean) as any[],
