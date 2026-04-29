@@ -5,10 +5,10 @@ Date : 29 avril 2026
 ## Vue d'ensemble
 
 Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
-23 articles disponibles à ce jour, organisés par audience et catégorie.
+24 articles disponibles à ce jour, organisés par audience et catégorie.
 
 - **Recherche full-text** : index GIN PostgreSQL avec `to_tsvector('french')` et `websearch_to_tsquery` (tolérant aux fautes).
-- **Filtre par audience** : SOIGNANT (10), ETABLISSEMENT (8), COMMUN (5 — toujours inclus quel que soit le filtre).
+- **Filtre par audience** : SOIGNANT (10), ETABLISSEMENT (8), COMMUN (6 — toujours inclus quel que soit le filtre).
 - **Bouton aide global** : icône `?` flottante bottom-right présente sur toutes les pages `LayoutApp` (sauf `/aide`).
 - **Lien footer** : « ❓ Centre d'aide » dans `FooterLegal`.
 
@@ -30,7 +30,7 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 - `src/pages/PageAideArticle.tsx` — article unique avec `renderMarkdown` (h1-h3, listes, liens, code, hr).
 - `src/components/BoutonAideGlobal.tsx` — bouton flottant.
 
-## Liste complète des 23 articles
+## Liste complète des 24 articles
 
 ### Soignant (10)
 
@@ -60,7 +60,7 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 | `etab-resoudre-litige` | Litiges | Fenêtres F2/F3, gel scope, médiation admin |
 | `etab-gerer-absence-soignant` | Pointage | 4 cas A/B/C/D, fn_resoudre_absence_mission |
 
-### Commun (5)
+### Commun (6)
 
 | Slug | Catégorie | Sujet |
 |---|---|---|
@@ -69,6 +69,7 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 | `cgu-jolene` | Légal | Résumé CGU + lien `/legal/cgu` |
 | `contacter-support` | Légal | Canaux + délai 48h ouvrées |
 | `pourquoi-je-recois-emails-bienvenue` | Inscription et profil | Série J0/J1/J3/J7 + opt-out via `/parametres/notifications` |
+| `je-n-ai-pas-recu-d-email` | Inscription et profil | Spam Outlook + actions warmup réputation domaine |
 
 ## Comment ajouter un nouvel article
 
@@ -102,12 +103,12 @@ VALUES ('mon-slug', 'Mon titre', 'SOIGNANT', 'Catégorie', 50, $$# Contenu Markd
 
 | Test | Attendu | Obtenu |
 |---|---|---|
-| Total publiés | 23 | 23 ✓ |
+| Total publiés | 24 | 24 ✓ |
 | nb SOIGNANT | 10 | 10 ✓ |
 | nb ETABLISSEMENT | 8 | 8 ✓ |
-| nb COMMUN | 5 | 5 ✓ |
-| Audience SOIGNANT (incl COMMUN) | 15 | 15 ✓ |
-| Audience ETABLISSEMENT (incl COMMUN) | 13 | 13 ✓ |
+| nb COMMUN | 6 | 6 ✓ |
+| Audience SOIGNANT (incl COMMUN) | 16 | 16 ✓ |
+| Audience ETABLISSEMENT (incl COMMUN) | 14 | 14 ✓ |
 | Recherche "RPPS" | ≥1 | 7 ✓ |
 | Recherche "Defacto" | ≥1 | 4 ✓ |
 | Recherche "URSSAF" | ≥1 | 5 ✓ |

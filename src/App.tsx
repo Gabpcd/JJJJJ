@@ -43,6 +43,7 @@ const PageAide = lazy(() => import("./pages/PageAide"));
 const PageAideArticle = lazy(() => import("./pages/PageAideArticle"));
 const PageParametresNotifications = lazy(() => import("./pages/PageParametresNotifications"));
 const PageRecherchesSauvegardees = lazy(() => import("./pages/PageRecherchesSauvegardees"));
+const PageInscriptionSucces = lazy(() => import("./pages/PageInscriptionSucces"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
 const Telecharger = lazy(() => import("./pages/Telecharger"));
@@ -145,6 +146,7 @@ function AppRoutes() {
           <Route path="/confirmer-email" element={<ConfirmerEmail />} />
           <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
           <Route path="/inscription/etablissement" element={<InscriptionEtablissement />} />
+          <Route path="/inscription/succes" element={<PageInscriptionSucces />} />
 
           {/* Pages légales — publiques */}
           <Route path="/cgu" element={<PageCGU />} />

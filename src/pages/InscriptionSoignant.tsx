@@ -224,8 +224,10 @@ export default function InscriptionSoignant() {
     setSubmitting(true);
     try {
       await inscriptionSoignant({ ...form, turnstileToken });
-      afficherNotification({ type: 'succes', message: 'Compte créé avec succès ! Bienvenue sur Jolene.' });
-      navigate('/soignant/tableau-de-bord');
+      // Redirect vers page de succès qui prévient les utilisateurs Outlook
+      // que l'email peut atterrir en spam (réputation domaine récente).
+      // Cf. docs/deliverability-warmup.md.
+      navigate(`/inscription/succes?role=soignant&email=${encodeURIComponent(form.email)}`);
     } catch (err) {
       if (!gererErreurSupabase(err, () => handleSubmit(e))) {
         afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });

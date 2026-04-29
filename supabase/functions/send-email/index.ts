@@ -50,10 +50,20 @@ const WRAPPER = (content: string, opts?: { hasAttachment?: boolean }) => `
     <div style="padding:36px 28px 24px;">
       ${content}
     </div>
-    <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;">
-      <p style="margin:0 0 6px;">Jolene SAS — <a href="${APP_URL}" style="color:#E04590;text-decoration:none;">jolene.app</a></p>
-      <p style="margin:0;"><a href="${APP_URL}/cgu" style="color:#94A3B8;text-decoration:none;">CGU</a> ·
-         <a href="${APP_URL}/confidentialite" style="color:#94A3B8;text-decoration:none;">Confidentialité</a></p>
+    <div style="border-top:1px solid #E2E8F0;padding:20px 24px;text-align:center;font-size:11px;color:#94A3B8;line-height:1.6;">
+      <p style="margin:0 0 6px;">Vous recevez cet email parce que vous êtes inscrit sur <a href="${APP_URL}" style="color:#E04590;text-decoration:none;">jolene.app</a>.</p>
+      <p style="margin:0 0 8px;">
+        <a href="${APP_URL}/soignant/parametres/notifications" style="color:#94A3B8;">Préférences notifications (soignant)</a> ·
+        <a href="${APP_URL}/etablissement/parametres/notifications" style="color:#94A3B8;">Préférences notifications (étab)</a>
+      </p>
+      <p style="margin:0 0 6px;font-size:10px;color:#CBD5E1;">
+        Jolene SASU · 103 rue de Vaugirard, 75006 Paris · RCS Paris 103 305 744
+      </p>
+      <p style="margin:0;font-size:10px;color:#CBD5E1;">
+        <a href="${APP_URL}/cgu" style="color:#CBD5E1;text-decoration:none;">CGU</a> ·
+        <a href="${APP_URL}/confidentialite" style="color:#CBD5E1;text-decoration:none;">Confidentialité</a> ·
+        <a href="mailto:dpo@jolene.app" style="color:#CBD5E1;text-decoration:none;">Contact DPO</a>
+      </p>
       ${opts?.hasAttachment
         ? `<p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">📎 Le document est joint à cet email.</p>`
         : `<p style="margin:8px 0 0;font-size:10px;color:#CBD5E1;">🔒 Aucune pièce jointe — consultez tout dans l'app sécurisée.</p>`}

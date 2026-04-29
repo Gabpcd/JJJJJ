@@ -600,6 +600,34 @@ AUTO_STRIPE peuvent désormais cibler le bon `stripe_payment_intent_id`.
 
 ---
 
+## Warmup réputation Outlook (1-3 mois passive) — 2026-04-29
+
+**Statut** : passif, attente naturelle.
+
+Le domaine `jolene.app` (créé avril 2026) arrive en spam Outlook /
+Hotmail / Live malgré une auth complète (SPF + DKIM Resend × 3 +
+DMARC strict + sender humain `bonjour@jolene.app`). Pas un bug —
+réputation stricte des fournisseurs Microsoft envers les nouveaux
+domaines. Comptez 1 à 3 mois pour normalisation.
+
+**Mitigations en place** (J2.3.C, commits 8c35e439 + ce commit) :
+- Page `/inscription/succes` post-inscription qui prévient les users
+  Outlook + donne actions concrètes (marquer non-spam, ajouter contact,
+  règle Outlook).
+- Article centre d'aide `je-n-ai-pas-recu-d-email`.
+- Footer email enrichi (mention "vous recevez parce que…", lien
+  préférences notifs, RCS Paris, contact DPO).
+- Doc `docs/deliverability-warmup.md` avec plan détaillé court / moyen /
+  long terme + actions à faire si problème persiste après 6 mois.
+
+**À faire si pas résolu après juillet 2026** :
+- Inscription SNDS Microsoft (https://sendersupport.olc.protection.outlook.com/snds/)
+- Investigation headers + content email
+- En dernier recours : changement provider (Postmark) — surtout PAS
+  changer de domaine.
+
+---
+
 ## Plan d'attaque résiduel (2026-04-28)
 
 Synthèse exécutive après recensement exhaustif. Items hors scope code

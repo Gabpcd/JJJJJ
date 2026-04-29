@@ -121,13 +121,8 @@ export default function InscriptionEtablissement() {
     setSubmitting(true);
     try {
       await inscriptionEtablissement({ ...form, turnstileToken });
-      const autoVerifie = inseeCheck?.statut === 'VERIFIE';
-      if (autoVerifie) {
-        afficherNotification({ type: 'succes', message: 'Établissement créé et vérifié automatiquement ! Vous pouvez publier des missions.' });
-      } else {
-        afficherNotification({ type: 'info', message: 'Inscription réussie ! Votre compte est en attente de validation par Jolene (24-48h).', duree: 10000 });
-      }
-      navigate('/etablissement/tableau-de-bord');
+      // Redirect vers page de succès (cf. docs/deliverability-warmup.md).
+      navigate(`/inscription/succes?role=etab&email=${encodeURIComponent(form.email)}`);
     } catch (err) {
       if (!gererErreurSupabase(err, () => handleSubmit(e))) {
         handleError(err, 'inscription établissement');
