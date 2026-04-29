@@ -241,7 +241,21 @@ export default function MandatFacturation() {
           </div>
         </div>
 
-        {alreadySigned && (
+        {alreadySigned && signatureVersion && signatureVersion !== MANDAT_FACTURATION_VERSION && (
+          <div className="rounded-xl border-2 border-warning/50 bg-warning/10 p-4 flex items-start gap-3">
+            <AlertTriangle className="h-6 w-6 text-warning shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-foreground">Mandat mis à jour — re-signature requise</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Votre mandat actuel (version {signatureVersion}) n'est plus à jour.
+                La version {MANDAT_FACTURATION_VERSION} intègre la facturation hebdomadaire pour les missions longues.
+                Veuillez lire et accepter le nouveau mandat ci-dessous pour continuer à recevoir vos factures.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {alreadySigned && (!signatureVersion || signatureVersion === MANDAT_FACTURATION_VERSION) && (
           <div className="rounded-xl border-2 border-success/30 bg-success/5 p-4 flex items-start gap-3">
             <CheckCircle className="h-6 w-6 text-success shrink-0 mt-0.5" />
             <div className="flex-1">
@@ -281,7 +295,7 @@ export default function MandatFacturation() {
           </div>
         )}
 
-        {!alreadySigned && (
+        {(!alreadySigned || (signatureVersion && signatureVersion !== MANDAT_FACTURATION_VERSION)) && (
           <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
             <div className="flex items-start gap-3">
               <ShieldCheck className="h-6 w-6 text-primary shrink-0 mt-0.5" />

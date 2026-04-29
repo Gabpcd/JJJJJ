@@ -414,22 +414,38 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
   const [nir, setNir] = useState('');
   const [nirInitial, setNirInitial] = useState('');
   const [savingNir, setSavingNir] = useState(false);
+  const [defactoOptIn, setDefactoOptIn] = useState(false);
+  const [savingOptIn, setSavingOptIn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from('soignants')
-        .select('numero_securite_sociale')
+        .select('numero_securite_sociale, defacto_opt_in')
         .eq('id', userId)
         .maybeSingle();
       if (cancelled) return;
       const v = ((data as any)?.numero_securite_sociale ?? '') as string;
       setNir(v);
       setNirInitial(v);
+      setDefactoOptIn(!!(data as any)?.defacto_opt_in);
     })();
     return () => { cancelled = true; };
   }, [userId]);
+
+  const toggleDefactoOptIn = async () => {
+    setSavingOptIn(true);
+    const newVal = !defactoOptIn;
+    const { error } = await supabase.from('soignants').update({ defacto_opt_in: newVal } as any).eq('id', userId);
+    setSavingOptIn(false);
+    if (error) {
+      afficherNotification({ type: 'erreur', message: error.message });
+      return;
+    }
+    setDefactoOptIn(newVal);
+    afficherNotification({ type: 'succes', message: newVal ? 'Paiement rapide J+2 activé' : 'Paiement rapide J+2 désactivé' });
+  };
 
   const enregistrerNir = async () => {
     setSavingNir(true);
@@ -526,6 +542,29 @@ function BlocPaieFacturation({ typeExercice, userId }: { typeExercice: string; u
             </button>
           )}
         </div>
+
+        {peutLiberal && (
+          <div className="pt-3 border-t border-border mt-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Paiement rapide J+2 (Defacto)</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {defactoOptIn
+                    ? 'Activé — chaque facture émise est automatiquement cédée pour paiement sous 48h (frais ~1-3 %).'
+                    : 'Désactivé — vos factures sont payées par l\'établissement selon ses délais habituels (30-60 jours).'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleDefactoOptIn}
+                disabled={savingOptIn}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${defactoOptIn ? 'bg-primary' : 'bg-muted-foreground/30'} disabled:opacity-50`}
+              >
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${defactoOptIn ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
