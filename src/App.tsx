@@ -39,6 +39,8 @@ const PageCGU = lazy(() => import("./pages/PageCGU"));
 const PageCGV = lazy(() => import("./pages/PageCGV"));
 const PageConfidentialite = lazy(() => import("./pages/PageConfidentialite"));
 const PageMentionsLegales = lazy(() => import("./pages/PageMentionsLegales"));
+const PageAide = lazy(() => import("./pages/PageAide"));
+const PageAideArticle = lazy(() => import("./pages/PageAideArticle"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
 const Telecharger = lazy(() => import("./pages/Telecharger"));
@@ -148,6 +150,10 @@ function AppRoutes() {
           <Route path="/confidentialite" element={<PageConfidentialite />} />
           <Route path="/politique-confidentialite" element={<PageConfidentialite />} />
           <Route path="/mentions-legales" element={<PageMentionsLegales />} />
+          <Route path="/aide" element={<PageAide />} />
+          <Route path="/aide/:slug" element={<PageAideArticle />} />
+          <Route path="/faq" element={<Navigate to="/aide" replace />} />
+          <Route path="/help" element={<Navigate to="/aide" replace />} />
 
           {/* Soignant */}
           <Route path="/soignant/tableau-de-bord" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />

@@ -10,6 +10,8 @@ export function FooterLegal() {
       />
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
+          <Link to="/aide" className="hover:text-primary hover:underline transition-colors">❓ Centre d'aide</Link>
+          <span className="text-primary/30">•</span>
           <Link to="/cgu" className="hover:text-primary hover:underline transition-colors">📋 CGU</Link>
           <span className="text-primary/30">•</span>
           <Link to="/cgv" className="hover:text-primary hover:underline transition-colors">💰 CGV</Link>

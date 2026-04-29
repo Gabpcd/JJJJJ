@@ -6,6 +6,7 @@ import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { SyncHorsLigne } from '@/components/SyncHorsLigne';
 import { BandeauInstallerPWA } from '@/components/BandeauInstallerPWA';
 import { BandeauOnboardingEtab } from '@/components/BandeauOnboardingEtab';
+import { BoutonAideGlobal } from '@/components/BoutonAideGlobal';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -59,6 +60,7 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
       </main>
       <DemandePermissionPush />
       <BandeauInstallerPWA />
+      <BoutonAideGlobal />
     </div>
   );
 }
