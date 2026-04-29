@@ -320,6 +320,16 @@ Deno.serve(async (req) => {
       console.warn('[register-soignant] Email bienvenue non envoyé (best-effort):', emailErr);
     }
 
+    // 6. Planifier la série onboarding J0/J1/J3/J7 (best-effort)
+    try {
+      await supabaseAdmin.rpc('fn_planifier_serie_onboarding', {
+        p_utilisateur_id: user.id,
+        p_serie: 'SOIGNANT_ONBOARDING',
+      });
+    } catch (serieErr) {
+      console.warn('[register-soignant] Planification série onboarding échouée (best-effort):', serieErr);
+    }
+
     return new Response(JSON.stringify({ success: true, soignant_id: user.id }), {
       status: 200,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },

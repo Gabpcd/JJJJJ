@@ -106,6 +106,9 @@ const ALLOWED_TYPES = new Set([
   'PUBLICATION_REACTIVEE',
   // [J2.1.B.2.3] contrat de travail SALARIE étab → soignant
   'CONTRAT_TRAVAIL_DEPOSE', 'CONTRAT_TRAVAIL_RAPPEL_ETAB', 'CONTRAT_TRAVAIL_MANQUANT_SOIGNANT',
+  // [J2.3.B] série email welcome onboarding J0-J7
+  'SERIE_SOIGNANT_J0','SERIE_SOIGNANT_J1','SERIE_SOIGNANT_J3','SERIE_SOIGNANT_J7',
+  'SERIE_ETAB_J0','SERIE_ETAB_J1','SERIE_ETAB_J3','SERIE_ETAB_J7',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -1023,6 +1026,173 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           <p style="color:#334155;">Votre établissement <strong>${data.nom_etablissement || ''}</strong> n'a pas encore déposé votre contrat de travail pour la mission <strong>${data.intitule_mission || ''}</strong> qui débute <strong>${data.date_debut ? `le ${data.date_debut}` : 'demain'}</strong>.</p>
           ${INFO_BOX(`Vous pouvez contacter directement votre établissement pour le rappeler. Le contrat doit être signé au plus tard le premier jour de mission.`)}
           ${BUTTON('Voir ma mission →', `${APP_URL}/soignant/missions/${data.mission_id || ''}`)}
+        `),
+      };
+
+    // ════════ J2.3.B — Série onboarding SOIGNANT ════════
+    case 'SERIE_SOIGNANT_J0':
+      return {
+        subject: `Bienvenue chez Jolene, ${data.prenom || ''} 🎉`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.prenom || ''} !</h2>
+          <p style="color:#334155;">Votre compte soignant est créé sur Jolene. Voici les <strong>3 étapes</strong> pour démarrer rapidement :</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">1. Complétez votre profil</strong> — RPPS, adresse, téléphone, types de contrat acceptés (libéral, salarié, mixte)<br/>
+            <strong style="color:#0F172A;">2. Téléversez vos documents</strong> — diplôme, RCP, identité (vérifiés sous 24h ouvrées)<br/>
+            <strong style="color:#0F172A;">3. Si libéral : signez votre mandat de facturation</strong> (art. 289 I-2 CGI)
+          `)}
+          <p style="color:#334155;">Une fois ces 3 étapes complètes, vous pouvez candidater à toutes les missions correspondant à votre profession et votre rayon de déplacement.</p>
+          ${BUTTON('Compléter mon profil →', `${APP_URL}/soignant/profil`)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">Besoin d'aide ? Consultez notre <a href="${APP_URL}/aide" style="color:#9333EA;">centre d'aide</a> ou écrivez-nous à <a href="mailto:support@jolene.app" style="color:#9333EA;">support@jolene.app</a>.</p>
+        `),
+      };
+
+    case 'SERIE_SOIGNANT_J1':
+      return {
+        subject: 'Complétez votre profil pour candidater',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">${data.prenom || ''}, finalisez votre profil</h2>
+          <p style="color:#334155;">Vous avez créé votre compte hier. Pour <strong>candidater aux missions</strong> et apparaître dans les recherches des établissements, votre profil doit être complet.</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">Vérifications nécessaires :</strong><br/>
+            ✅ RPPS vérifié (déjà fait à l'inscription si applicable)<br/>
+            ⚠️ Documents requis téléversés (diplôme, RCP, identité)<br/>
+            ⚠️ Mandat de facturation signé (uniquement si libéral)
+          `)}
+          <p style="color:#334155;"><strong>Pourquoi un profil complet ?</strong></p>
+          <ul style="color:#334155;line-height:1.6;">
+            <li>Visibilité maximum auprès des établissements</li>
+            <li>Matching automatique avec les missions adaptées à votre rayon</li>
+            <li>Aucun blocage administratif au moment de la candidature</li>
+          </ul>
+          ${BUTTON('Compléter mon profil →', `${APP_URL}/soignant/parametres`)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">Vous avez déjà tout complété ? Bravo ! Vous pouvez ignorer cet email.</p>
+        `),
+      };
+
+    case 'SERIE_SOIGNANT_J3':
+      return {
+        subject: 'Découvrez les missions disponibles',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Trouvez votre prochaine mission</h2>
+          <p style="color:#334155;">Plusieurs centaines de missions sont publiées chaque semaine sur Jolene par des établissements de santé près de chez vous.</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">Conseils pour bien candidater :</strong><br/>
+            • Filtrez par <strong>rayon de déplacement</strong> et <strong>taux horaire minimum</strong><br/>
+            • Activez <strong>"Missions urgentes"</strong> pour être alerté en priorité<br/>
+            • Ajoutez un <strong>message court et personnalisé</strong> à votre candidature<br/>
+            • <strong>Sauvegardez vos recherches</strong> pour recevoir des alertes automatiques sur les nouvelles missions matchant vos critères
+          `)}
+          <p style="color:#334155;">Exemple de filtre utile : <em>« IDE, Paris, taux ≥ 25 €/h, urgences uniquement »</em>.</p>
+          ${BUTTON('Voir les missions →', `${APP_URL}/soignant/missions`)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">Astuce : la vue Carte (Leaflet) vous permet de visualiser les missions près de chez vous.</p>
+        `),
+      };
+
+    case 'SERIE_SOIGNANT_J7':
+      return {
+        subject: 'Avez-vous des questions ?',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Une semaine déjà sur Jolene !</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''}, vous avez rejoint Jolene il y a une semaine. Comment se passe votre expérience ?</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">Si vous bloquez quelque part, on est là :</strong><br/>
+            • Centre d'aide <a href="${APP_URL}/aide" style="color:#9333EA;">jolene.app/aide</a> — 22 articles répondent aux questions courantes<br/>
+            • Support : <a href="mailto:support@jolene.app" style="color:#9333EA;">support@jolene.app</a> (réponse sous 48h ouvrées)<br/>
+            • DPO (questions RGPD) : <a href="mailto:dpo@jolene.app" style="color:#9333EA;">dpo@jolene.app</a>
+          `)}
+          <p style="color:#334155;"><strong>Quelques articles utiles :</strong></p>
+          <ul style="color:#334155;line-height:1.6;">
+            <li><a href="${APP_URL}/aide/comment-candidater-mission" style="color:#9333EA;">Comment candidater à une mission</a></li>
+            <li><a href="${APP_URL}/aide/comment-fonctionne-pointage" style="color:#9333EA;">Comment fonctionne le pointage</a></li>
+            <li><a href="${APP_URL}/aide/comprendre-ma-facture-honoraires" style="color:#9333EA;">Comprendre ma facture d'honoraires</a></li>
+            <li><a href="${APP_URL}/aide/defacto-paiement-j2" style="color:#9333EA;">Defacto et le paiement J+2</a></li>
+          </ul>
+          ${BUTTON('Ouvrir le centre d\'aide →', `${APP_URL}/aide`)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">Vous pouvez désactiver cette série d'emails dans <a href="${APP_URL}/soignant/parametres/notifications" style="color:#9333EA;">Préférences de notifications</a>.</p>
+        `),
+      };
+
+    // ════════ J2.3.B — Série onboarding ÉTABLISSEMENT ════════
+    case 'SERIE_ETAB_J0':
+      return {
+        subject: `Bienvenue sur Jolene, ${data.nom_etablissement || ''} 🎉`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.nom_etablissement || ''} !</h2>
+          <p style="color:#334155;">Votre établissement est enregistré sur Jolene. Pour publier votre première mission, <strong>2 étapes essentielles</strong> :</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">1. Signer le contrat de service Jolene</strong><br/>
+            Définit la relation Jolene ↔ Établissement (commission, obligations, seul employeur SALARIE).<br/><br/>
+            <strong style="color:#0F172A;">2. Déposer votre RIB</strong><br/>
+            Pour la facturation des commissions Jolene (PDF, JPG ou PNG, max 5 Mo, stockage privé sécurisé).
+          `)}
+          <p style="color:#334155;">Tant que ces 2 étapes ne sont pas finalisées, vous ne pouvez pas publier de missions. Un bandeau vous le rappellera dans l'app.</p>
+          ${BUTTON('Finaliser mon inscription →', `${APP_URL}/etablissement/finaliser-inscription`)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">Besoin d'aide ? <a href="${APP_URL}/aide" style="color:#9333EA;">Centre d'aide</a> ou <a href="mailto:support@jolene.app" style="color:#9333EA;">support@jolene.app</a>.</p>
+        `),
+      };
+
+    case 'SERIE_ETAB_J1':
+      return {
+        subject: 'Conseils pour attirer les meilleurs soignants',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Publier une mission attractive</h2>
+          <p style="color:#334155;">Pour maximiser vos chances de recevoir des candidatures de qualité rapidement :</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">1. Description précise</strong> — Service, équipe, matériel, contexte. Plus vous êtes clair, plus vos candidatures sont pertinentes.<br/><br/>
+            <strong style="color:#0F172A;">2. Taux horaire compétitif</strong> — Comparez avec votre convention collective (FHP, FEHAP, CCU, FPH...) et le marché local.<br/><br/>
+            <strong style="color:#0F172A;">3. Respect des planchers de majoration légaux Jolene :</strong><br/>
+            • Nuit (21h-06h) : minimum <strong>+25 %</strong><br/>
+            • Dimanche : minimum <strong>+25 %</strong><br/>
+            • Jour férié : minimum <strong>+50 %</strong>
+          `)}
+          <p style="color:#334155;">Les missions urgentes (cochez la case lors de la création) bénéficient d'alertes push et SMS auprès des soignants disponibles dans le rayon.</p>
+          ${BUTTON('Publier ma première mission →', `${APP_URL}/etablissement/missions/creer`)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">📖 <a href="${APP_URL}/aide/etab-publier-premiere-mission" style="color:#9333EA;">Article complet : Publier ma première mission</a></p>
+        `),
+      };
+
+    case 'SERIE_ETAB_J3':
+      return {
+        subject: 'Astuces pour gérer vos missions efficacement',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Workflow d'une mission Jolene</h2>
+          <p style="color:#334155;">Le cycle complet d'une mission, de la création au paiement :</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">1.</strong> Création (étab) → <strong>Statut OUVERTE</strong><br/>
+            <strong style="color:#0F172A;">2.</strong> Candidatures soignants (vous recevez emails + push)<br/>
+            <strong style="color:#0F172A;">3.</strong> Acceptation = assignation → <strong>Statut ASSIGNEE</strong>, taux figés<br/>
+            <strong style="color:#0F172A;">4.</strong> Si SALARIE : <strong>upload obligatoire du contrat de travail CDDU</strong> (art. 5.2 contrat de service Jolene)<br/>
+            <strong style="color:#0F172A;">5.</strong> Pointage soignant via code 6 chiffres + GPS → <strong>Statut EN_COURS</strong> puis <strong>TERMINEE</strong><br/>
+            <strong style="color:#0F172A;">6.</strong> Validation des heures (déclaration sous 48h) → facturation auto
+          `)}
+          <p style="color:#334155;"><strong>Gestion des absences soignants :</strong> 4 cas possibles (A/B/C/D), traités via la RPC <code>fn_resoudre_absence_mission</code>. Détails dans l'<a href="${APP_URL}/aide/etab-gerer-absence-soignant" style="color:#9333EA;">article dédié</a>.</p>
+          <p style="color:#334155;"><strong>Important :</strong> déclarez les <strong>heures réellement travaillées dans les 48 heures</strong> (article 5.1 contrat de service). Cela conditionne la facturation et le respect des règles URSSAF.</p>
+          ${BUTTON('Mon tableau de bord →', `${APP_URL}/etablissement/tableau-de-bord`)}
+        `),
+      };
+
+    case 'SERIE_ETAB_J7':
+      return {
+        subject: 'Avez-vous publié votre première mission ?',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Une semaine sur Jolene !</h2>
+          <p style="color:#334155;">${data.nom_etablissement || ''}, vous êtes sur Jolene depuis une semaine. Comment ça se passe de votre côté ?</p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">Si vous bloquez ou hésitez :</strong><br/>
+            • Centre d'aide <a href="${APP_URL}/aide" style="color:#9333EA;">jolene.app/aide</a> — 22 articles dont 8 dédiés aux établissements<br/>
+            • Support : <a href="mailto:support@jolene.app" style="color:#9333EA;">support@jolene.app</a> (réponse sous 48h ouvrées)<br/>
+            • Onboarding personnalisé : nous pouvons organiser un appel 30 min pour vous accompagner sur votre première mission. Répondez simplement à cet email.
+          `)}
+          <p style="color:#334155;"><strong>Quelques articles utiles :</strong></p>
+          <ul style="color:#334155;line-height:1.6;">
+            <li><a href="${APP_URL}/aide/etab-publier-premiere-mission" style="color:#9333EA;">Publier ma première mission</a></li>
+            <li><a href="${APP_URL}/aide/etab-pourquoi-uploader-contrat-travail" style="color:#9333EA;">Pourquoi uploader le contrat de travail SALARIE</a></li>
+            <li><a href="${APP_URL}/aide/etab-comprendre-commission-jolene" style="color:#9333EA;">Comprendre la commission Jolene</a></li>
+            <li><a href="${APP_URL}/aide/etab-resoudre-litige" style="color:#9333EA;">Comment résoudre un litige</a></li>
+          </ul>
+          ${BUTTON('Ouvrir le centre d\'aide →', `${APP_URL}/aide`)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">Vous pouvez désactiver cette série d'emails dans <a href="${APP_URL}/etablissement/parametres/notifications" style="color:#9333EA;">Préférences de notifications</a>.</p>
         `),
       };
 
