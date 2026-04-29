@@ -109,6 +109,8 @@ const ALLOWED_TYPES = new Set([
   // [J2.3.B] série email welcome onboarding J0-J7
   'SERIE_SOIGNANT_J0','SERIE_SOIGNANT_J1','SERIE_SOIGNANT_J3','SERIE_SOIGNANT_J7',
   'SERIE_ETAB_J0','SERIE_ETAB_J1','SERIE_ETAB_J3','SERIE_ETAB_J7',
+  // [J2.3.C] alertes filtres sauvegardés
+  'NOUVELLES_MISSIONS_FILTRE','NOUVEAUX_SOIGNANTS_FILTRE',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -1196,6 +1198,67 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         `),
       };
 
+    // ════════ J2.3.C — Alertes filtres sauvegardés ════════
+
+    case 'NOUVELLES_MISSIONS_FILTRE': {
+      const count = Number(rawData.count) || 0;
+      const items = Array.isArray(rawData.missions) ? (rawData.missions as any[]) : [];
+      const remainingCount = count - items.length;
+      const itemsHtml = items.map((m: any) => `
+        <div style="border:1px solid #E2E8F0;border-radius:8px;padding:12px;margin:8px 0;background:#fff;">
+          <strong style="color:#0F172A;">${escapeHtml(m.intitule || 'Mission')}</strong>
+          ${m.urgente ? ' <span style="background:#DC2626;color:white;padding:2px 6px;border-radius:4px;font-size:11px;">URGENT</span>' : ''}
+          <br/>
+          <span style="color:#334155;">📍 ${escapeHtml(m.etablissement || '—')} · ${escapeHtml(m.ville || '')}</span><br/>
+          <span style="color:#334155;">💰 ${m.taux_horaire ? Number(m.taux_horaire).toFixed(2) + ' €/h' : '—'}</span>
+        </div>
+      `).join('');
+      return {
+        subject: `${count} nouvelle${count > 1 ? 's' : ''} mission${count > 1 ? 's' : ''} pour « ${data.nom_filtre || 'votre recherche'} »`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">🔔 Nouvelles missions pour vous</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+          <p style="color:#334155;"><strong>${count} mission${count > 1 ? 's' : ''} récente${count > 1 ? 's' : ''}</strong> match${count > 1 ? 'ent' : ''} votre recherche sauvegardée <strong>« ${escapeHtml(data.nom_filtre || '')} »</strong>.</p>
+          ${itemsHtml}
+          ${remainingCount > 0 ? `<p style="color:#64748B;font-size:13px;text-align:center;margin:12px 0;">+ ${remainingCount} autre${remainingCount > 1 ? 's' : ''} mission${remainingCount > 1 ? 's' : ''}</p>` : ''}
+          ${BUTTON('Voir toutes les missions →', `${APP_URL}/soignant/recherche-missions`)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">
+            Vous recevez cet email car vous avez activé les alertes pour cette recherche.
+            <a href="${APP_URL}/soignant/parametres/recherches-sauvegardees" style="color:#9333EA;">Gérer mes recherches sauvegardées</a>.
+          </p>
+        `),
+      };
+    }
+
+    case 'NOUVEAUX_SOIGNANTS_FILTRE': {
+      const count = Number(rawData.count) || 0;
+      const items = Array.isArray(rawData.soignants) ? (rawData.soignants as any[]) : [];
+      const remainingCount = count - items.length;
+      const itemsHtml = items.map((s: any) => `
+        <div style="border:1px solid #E2E8F0;border-radius:8px;padding:12px;margin:8px 0;background:#fff;">
+          <strong style="color:#0F172A;">${escapeHtml(s.prenom || '')} ${escapeHtml(s.nom_initiale || '')}</strong>
+          <br/>
+          <span style="color:#334155;">🩺 ${escapeHtml(s.profession || '')}</span>
+          ${s.note_moyenne ? `<br/><span style="color:#334155;">⭐ ${Number(s.note_moyenne).toFixed(1)}/5</span>` : ''}
+        </div>
+      `).join('');
+      return {
+        subject: `${count} nouveau${count > 1 ? 'x' : ''} soignant${count > 1 ? 's' : ''} pour « ${data.nom_filtre || 'votre recherche'} »`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">🔔 Nouveaux soignants pour votre établissement</h2>
+          <p style="color:#334155;">Bonjour ${data.nom_etab || ''},</p>
+          <p style="color:#334155;"><strong>${count} soignant${count > 1 ? 's' : ''} récent${count > 1 ? 's' : ''}</strong> match${count > 1 ? 'ent' : ''} votre recherche <strong>« ${escapeHtml(data.nom_filtre || '')} »</strong>.</p>
+          ${itemsHtml}
+          ${remainingCount > 0 ? `<p style="color:#64748B;font-size:13px;text-align:center;margin:12px 0;">+ ${remainingCount} autre${remainingCount > 1 ? 's' : ''} soignant${remainingCount > 1 ? 's' : ''}</p>` : ''}
+          ${BUTTON('Accéder à mon dashboard →', `${APP_URL}/etablissement/tableau-de-bord`)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">
+            Vous recevez cet email car vous avez activé les alertes pour cette recherche.
+            <a href="${APP_URL}/etablissement/parametres/recherches-sauvegardees" style="color:#9333EA;">Gérer mes recherches sauvegardées</a>.
+          </p>
+        `),
+      };
+    }
+
     default:
       return null;
   }
@@ -1317,6 +1380,9 @@ Deno.serve(async (req) => {
       'LITIGE_RESOLU_AJUSTE': 'LITIGE_RESOLU', 'LITIGE_RAPPEL_J1': 'LITIGE_OUVERT',
       'LITIGE_RAPPEL_J3': 'LITIGE_OUVERT', 'LITIGE_RAPPEL_J5': 'LITIGE_OUVERT',
       'LITIGE_ESCALADE_ADMIN': 'URGENCE', 'LITIGE_MEDIATION_PRIORITAIRE': 'URGENCE',
+      // [J2.3.C] alertes filtres sauvegardés
+      'NOUVELLES_MISSIONS_FILTRE': 'NOUVELLE_MISSION_MATCHANT_FILTRE',
+      'NOUVEAUX_SOIGNANTS_FILTRE': 'NOUVEAU_SOIGNANT_MATCHANT_FILTRE',
     };
     const typeEvenement = TYPE_TO_EVENT[type] || null;
 

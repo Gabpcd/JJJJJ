@@ -89,6 +89,26 @@ export default function RechercheMissions() {
   const leafletMap = useRef<L.Map | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
 
+  // Auto-apply filtres pré-stockés depuis PageRecherchesSauvegardees
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('jolene.filtres_a_appliquer');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      sessionStorage.removeItem('jolene.filtres_a_appliquer');
+      if (parsed?.audience !== 'SOIGNANT_RECHERCHE_MISSIONS') return;
+      const f = parsed.filtres || {};
+      if (typeof f.profession === 'string') setProfession(f.profession);
+      if (typeof f.rayonKm === 'number') setRayonKm(f.rayonKm);
+      if (typeof f.tauxMin === 'number') setTauxMin(f.tauxMin);
+      if (typeof f.typeContrat === 'string') setTypeContrat(f.typeContrat);
+      if (typeof f.urgentesOnly === 'boolean') setUrgentesOnly(f.urgentesOnly);
+      if (typeof f.horaire === 'string') setHoraire(f.horaire as Horaire);
+      if (typeof f.villeRecherche === 'string') setVilleRecherche(f.villeRecherche);
+      if (parsed.nom_source) toast.success(`Filtres « ${parsed.nom_source} » appliqués`);
+    } catch (_e) { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants')
