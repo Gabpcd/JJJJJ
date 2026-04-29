@@ -1,5 +1,11 @@
 -- J2.1.B.2.3.B — Rappels J-1 contrat de travail SALARIE
 -- Table tracking idempotence (1 row par mission par jour)
+--
+-- Note (2026-04-29) : ce fichier + 20260429140000_j2_onboarding_etab_contrat_rib
+-- ont été appliqués via MCP `apply_migration` puis enregistrés manuellement
+-- dans supabase_migrations.schema_migrations pour que `supabase db push`
+-- les skippe sans tenter de les ré-exécuter (CREATE TABLE IF NOT EXISTS
+-- est idempotent mais CREATE POLICY échoue en doublon).
 
 CREATE TABLE IF NOT EXISTS public.rappels_contrat_travail (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
