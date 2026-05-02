@@ -31,6 +31,7 @@ import { BannerAlertesDashboardEtab } from '@/components/dashboard/BannerAlertes
 import { BannerEncourageNotation } from '@/components/BannerEncourageNotation';
 import { GraphiqueEvolutionMissions } from '@/components/dashboard/GraphiqueEvolutionMissions';
 import { IndicateursAvancesEtab } from '@/components/dashboard/IndicateursAvancesEtab';
+import { CardScoreQualiteEtab } from '@/components/dashboard/CardScoreQualiteEtab';
 
 
 export default function DashboardEtablissement() {
@@ -284,6 +285,7 @@ export default function DashboardEtablissement() {
       {etablissementId && <BannerCandidaturesPoolUrgence etablissementId={etablissementId} />}
       <BannerAlertesDashboardEtab />
       <BannerEncourageNotation role="ETAB" />
+      <CardScoreQualiteEtab />
       <OnboardingGuide role="ADMIN_ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">

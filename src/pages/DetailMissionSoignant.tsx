@@ -8,6 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Mail, Building2, MessageCircle } from 'lucide-react';
 import { ChoixContratDialog } from '@/components/ChoixContratDialog';
 import { BoutonNoterMission } from '@/components/BoutonNoterMission';
+import { BadgeScoreEtabPublic } from '@/components/BadgeScoreEtabPublic';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
@@ -343,8 +344,11 @@ export default function DetailMissionSoignant() {
             <div className="flex items-start gap-3">
               <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-semibold text-sm text-foreground">{etablissement?.nom}</h3>
+                  {estAssigne && mission.etablissement_id && (
+                    <BadgeScoreEtabPublic etablissementId={mission.etablissement_id} />
+                  )}
                   {estAssigne && (
                     <button
                       type="button"
