@@ -13,7 +13,7 @@ export function BoutonFavori({ soignantId, etablissementId }: Props) {
   const [bouncing, setBouncing] = useState(false);
 
   useEffect(() => {
-    (supabase.from('favoris' as any) as any)
+    (supabase.from('favoris_etab_soignant' as any) as any)
       .select('id')
       .eq('etablissement_id', etablissementId)
       .eq('soignant_id', soignantId)
@@ -25,13 +25,13 @@ export function BoutonFavori({ soignantId, etablissementId }: Props) {
     e.stopPropagation();
     setLoading(true);
     if (favori) {
-      await (supabase.from('favoris' as any) as any)
+      await (supabase.from('favoris_etab_soignant' as any) as any)
         .delete()
         .eq('etablissement_id', etablissementId)
         .eq('soignant_id', soignantId);
       setFavori(false);
     } else {
-      await (supabase.from('favoris' as any) as any)
+      await (supabase.from('favoris_etab_soignant' as any) as any)
         .insert({ etablissement_id: etablissementId, soignant_id: soignantId });
       setFavori(true);
       setBouncing(true);

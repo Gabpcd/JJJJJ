@@ -3,6 +3,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { BadgeStatut } from '@/components/BadgeStatut';
+import { BoutonFavoriEtab } from '@/components/BoutonFavoriEtab';
 import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge, getTypeContratRechercheBadge } from '@/lib/constantes';
 import { getMissionMatchInfo } from '@/lib/profession-hierarchy';
 
@@ -79,7 +80,10 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
         <span className={`text-[10px] ${temps.couleur}`}>{temps.texte}</span>
       </div>
 
-      <h3 className="font-semibold text-sm text-foreground mb-0.5">{m.intitule}</h3>
+      <div className="flex items-start justify-between gap-2 mb-0.5">
+        <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
+        {m.etablissement_id && <BoutonFavoriEtab etablissementId={m.etablissement_id} />}
+      </div>
       {m.service && <p className="text-[10px] text-muted-foreground mb-1">Service : {m.service}</p>}
       <div className="flex items-center gap-2 mb-1">
         {m.etablissements?.logo_url && (

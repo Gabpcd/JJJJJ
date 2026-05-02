@@ -97,6 +97,8 @@ const PremiumEtablissement = lazy(() => import("./pages/PremiumEtablissement"));
 const ChorusConfig = lazy(() => import("./pages/ChorusConfig"));
 const PoolUrgenceEtablissement = lazy(() => import("./pages/PoolUrgenceEtablissement"));
 const PoolUrgenceSoignant = lazy(() => import("./pages/PoolUrgenceSoignant"));
+const MesFavorisSoignant = lazy(() => import("./pages/MesFavorisSoignant"));
+const MesFavorisEtablissement = lazy(() => import("./pages/MesFavorisEtablissement"));
 const DetailPresencesMission = lazy(() => import("./pages/DetailPresencesMission"));
 const Parametres = lazy(() => import("./pages/Parametres"));
 
@@ -229,6 +231,8 @@ function AppRoutes() {
           <Route path="/etablissement/chorus-config" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ChorusConfig /></RouteProtegee>} />
           <Route path="/etablissement/pool-urgence" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PoolUrgenceEtablissement /></RouteProtegee>} />
           <Route path="/soignant/pool-urgence" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PoolUrgenceSoignant /></RouteProtegee>} />
+          <Route path="/soignant/mes-favoris" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesFavorisSoignant /></RouteProtegee>} />
+          <Route path="/etablissement/mes-favoris" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MesFavorisEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/dashboard" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
           <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation" replace />} />

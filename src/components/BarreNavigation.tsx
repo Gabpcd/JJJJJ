@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
@@ -42,6 +42,7 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
         { icone: Search, label: 'Disponibles', route: '/soignant/missions' },
         { icone: MapPinned, label: 'Recherche avancée', route: '/soignant/recherche-missions' },
         { icone: Flame, label: 'Pool urgence', route: '/soignant/pool-urgence' },
+        { icone: Star, label: 'Mes favoris', route: '/soignant/mes-favoris' },
         { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
       ],
     },
@@ -73,6 +74,7 @@ function getEtablissementSidebar(): SidebarEntry[] {
         { icone: PlusCircle, label: 'Publier une mission', route: '/etablissement/missions/creer' },
         { icone: List, label: 'Liste des missions', route: '/etablissement/missions' },
         { icone: Users, label: 'Annuaire soignants', route: '/etablissement/soignants' },
+        { icone: Star, label: 'Mes favoris', route: '/etablissement/mes-favoris' },
         { icone: Flame, label: 'Pool urgence', route: '/etablissement/pool-urgence' },
       ],
     },
