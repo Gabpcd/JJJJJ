@@ -5,10 +5,10 @@ Date : 29 avril 2026
 ## Vue d'ensemble
 
 Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
-26 articles disponibles à ce jour, organisés par audience et catégorie.
+27 articles disponibles à ce jour, organisés par audience et catégorie.
 
 - **Recherche full-text** : index GIN PostgreSQL avec `to_tsvector('french')` et `websearch_to_tsquery` (tolérant aux fautes).
-- **Filtre par audience** : SOIGNANT (11), ETABLISSEMENT (8), COMMUN (7 — toujours inclus quel que soit le filtre).
+- **Filtre par audience** : SOIGNANT (11), ETABLISSEMENT (9), COMMUN (7 — toujours inclus quel que soit le filtre).
 - **Bouton aide global** : icône `?` flottante bottom-right présente sur toutes les pages `LayoutApp` (sauf `/aide`).
 - **Lien footer** : « ❓ Centre d'aide » dans `FooterLegal`.
 
@@ -30,7 +30,7 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 - `src/pages/PageAideArticle.tsx` — article unique avec `renderMarkdown` (h1-h3, listes, liens, code, hr).
 - `src/components/BoutonAideGlobal.tsx` — bouton flottant.
 
-## Liste complète des 26 articles
+## Liste complète des 27 articles
 
 ### Soignant (11)
 
@@ -48,7 +48,7 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 | `mes-droits-rgpd-soignant` | RGPD | 6 droits, export 21 clés, conservation 10 ans |
 | `parrainage-soignant` | Inscription et profil | Code unique, +50h cumulées, badge Ambassadeur (3 filleuls) |
 
-### Établissement (8)
+### Établissement (9)
 
 | Slug | Catégorie | Sujet |
 |---|---|---|
@@ -60,6 +60,7 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 | `etab-comprendre-commission-jolene` | Facturation | 15 % par défaut, cascade, figement assignation |
 | `etab-resoudre-litige` | Litiges | Fenêtres F2/F3, gel scope, médiation admin |
 | `etab-gerer-absence-soignant` | Pointage | 4 cas A/B/C/D, fn_resoudre_absence_mission |
+| `parrainage-etablissement` | Inscription et profil | Code ETB-XXXXXX, 100€ crédit Jolene par filleul validé, cap 10 |
 
 ### Commun (7)
 
@@ -105,12 +106,12 @@ VALUES ('mon-slug', 'Mon titre', 'SOIGNANT', 'Catégorie', 50, $$# Contenu Markd
 
 | Test | Attendu | Obtenu |
 |---|---|---|
-| Total publiés | 26 | 26 ✓ |
+| Total publiés | 27 | 27 ✓ |
 | nb SOIGNANT | 11 | 11 ✓ |
-| nb ETABLISSEMENT | 8 | 8 ✓ |
+| nb ETABLISSEMENT | 9 | 9 ✓ |
 | nb COMMUN | 7 | 7 ✓ |
 | Audience SOIGNANT (incl COMMUN) | 18 | 18 ✓ |
-| Audience ETABLISSEMENT (incl COMMUN) | 15 | 15 ✓ |
+| Audience ETABLISSEMENT (incl COMMUN) | 16 | 16 ✓ |
 | Recherche "RPPS" | ≥1 | 7 ✓ |
 | Recherche "Defacto" | ≥1 | 4 ✓ |
 | Recherche "URSSAF" | ≥1 | 5 ✓ |

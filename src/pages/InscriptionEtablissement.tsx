@@ -43,6 +43,17 @@ export default function InscriptionEtablissement() {
   const navigate = useNavigate();
   const { inscriptionEtablissement } = useAuth();
   const { afficherNotification } = useNotification();
+
+  // J5.D.2 — Capturer ?ref=ETB-XXXXXX et le stocker en sessionStorage
+  // pour pré-remplir le champ "Code parrainage" dans la page parrainage post-inscription.
+  useEffect(() => {
+    try {
+      const ref = new URLSearchParams(window.location.search).get('ref');
+      if (ref && /^ETB-[A-Z0-9]{4,16}$/i.test(ref)) {
+        sessionStorage.setItem('jolene.parrainage_etab_code', ref.toUpperCase());
+      }
+    } catch { /* noop */ }
+  }, []);
   const [etape, setEtape] = useState(1);
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [cgu, setCgu] = useState(false);
