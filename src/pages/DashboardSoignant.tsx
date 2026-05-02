@@ -32,6 +32,7 @@ import { ProchainBadgeWidget } from '@/components/ProchainBadgeWidget';
 import { CalendrierMiniSemaine } from '@/components/CalendrierMiniSemaine';
 import { CalendrierTogglable } from '@/components/dashboard/CalendrierTogglable';
 import { NotificationsRecentes } from '@/components/dashboard/NotificationsRecentes';
+import { BannerEncourageNotation } from '@/components/BannerEncourageNotation';
 import { SuggestionsMissions } from '@/components/dashboard/SuggestionsMissions';
 import { TopEtablissements } from '@/components/dashboard/TopEtablissements';
 import { GraphiqueRepartitionHeures } from '@/components/dashboard/GraphiqueRepartitionHeures';
@@ -331,6 +332,7 @@ export default function DashboardSoignant() {
         {/* ─── ONGLET ACCUEIL ─── */}
         <TabsContent value="accueil">
           <SectionErrorBoundary section="accueil">
+          <BannerEncourageNotation role="SOIGNANT" />
           <NotificationsRecentes />
 
           {/* KPI */}

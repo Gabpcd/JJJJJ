@@ -7,6 +7,7 @@ import { hapticNotification } from '@/lib/haptics';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Mail, Building2, MessageCircle } from 'lucide-react';
 import { ChoixContratDialog } from '@/components/ChoixContratDialog';
+import { BoutonNoterMission } from '@/components/BoutonNoterMission';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
@@ -480,6 +481,20 @@ export default function DetailMissionSoignant() {
           {/* Facture honoraires — visible dès que mission TERMINEE (facture générée) */}
           {estTerminee && (
             <FactureHonorairesCard missionId={mission.id} viewerRole="SOIGNANT" />
+          )}
+
+          {estTerminee && estAssigne && (
+            <div className="card-base">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-foreground">Notez l'établissement</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Votre notation aide la communauté + améliore votre score (composante "Notation par soignant").
+                  </p>
+                </div>
+                <BoutonNoterMission missionId={mission.id} sens="SOIGNANT_VERS_ETAB" missionIntitule={mission.intitule} variant="primary" />
+              </div>
+            </div>
           )}
 
           {/* Bloc de conformité (missions ouvertes) */}

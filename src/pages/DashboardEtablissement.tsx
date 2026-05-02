@@ -28,6 +28,7 @@ import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { SectionPlanning } from '@/components/dashboard/SectionPlanning';
 import { BannerCandidaturesPoolUrgence } from '@/components/dashboard/BannerCandidaturesPoolUrgence';
 import { BannerAlertesDashboardEtab } from '@/components/dashboard/BannerAlertesDashboardEtab';
+import { BannerEncourageNotation } from '@/components/BannerEncourageNotation';
 import { GraphiqueEvolutionMissions } from '@/components/dashboard/GraphiqueEvolutionMissions';
 import { IndicateursAvancesEtab } from '@/components/dashboard/IndicateursAvancesEtab';
 
@@ -282,6 +283,7 @@ export default function DashboardEtablissement() {
       <BandeauEvaluationsEnAttente role="ETABLISSEMENT" />
       {etablissementId && <BannerCandidaturesPoolUrgence etablissementId={etablissementId} />}
       <BannerAlertesDashboardEtab />
+      <BannerEncourageNotation role="ETAB" />
       <OnboardingGuide role="ADMIN_ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">

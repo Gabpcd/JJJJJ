@@ -22,6 +22,7 @@ import { BandeauRappelDPAE } from '@/components/BandeauRappelDPAE';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 import { BoutonFavori } from '@/components/BoutonFavori';
+import { BoutonNoterMission } from '@/components/BoutonNoterMission';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
 import { WorkflowPaiementMission } from '@/components/WorkflowPaiementMission';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
@@ -440,6 +441,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       </button>
                       {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
                         <BoutonFavori soignantId={m.soignant_assigne_id} etablissementId={m.etablissement_id} />
+                      )}
+                      {m.statut === 'TERMINEE' && m.soignant_assigne_id && !isAdmin && (
+                        <BoutonNoterMission missionId={m.id} sens="ETAB_VERS_SOIGNANT" missionIntitule={m.intitule} variant="secondary" />
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">
