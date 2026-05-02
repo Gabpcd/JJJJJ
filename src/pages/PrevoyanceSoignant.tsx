@@ -1,152 +1,238 @@
 import { useState, useEffect } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
-import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Clock, Calculator, CheckCircle2, Loader2, Mail, Sparkles } from 'lucide-react';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { toast } from 'sonner';
 
-function fmt(v: number): string {
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
+type Niveau = 'BRONZE' | 'ARGENT' | 'OR' | 'INDIFFERENT';
+
+const NIVEAUX: { valeur: Niveau; label: string; tauxRemplacement: number; description: string }[] = [
+  { valeur: 'BRONZE', label: 'Bronze', tauxRemplacement: 30, description: 'Couverture de base, pour démarrer' },
+  { valeur: 'ARGENT', label: 'Argent', tauxRemplacement: 50, description: 'Couverture intermédiaire recommandée' },
+  { valeur: 'OR', label: 'Or', tauxRemplacement: 80, description: 'Couverture maximale, pour les hauts revenus' },
+  { valeur: 'INDIFFERENT', label: 'Indifférent', tauxRemplacement: 0, description: 'Je veux juste être prévenu' },
+];
+
+function fmtEur(v: number): string {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
 }
 
 export default function PrevoyanceSoignant() {
+  usePageTitle('Prévoyance Madelin');
   const { user } = useAuth();
-  const { afficherNotification } = useNotification();
-  const [plans, setPlans] = useState<any[]>([]);
-  const [souscriptions, setSouscriptions] = useState<any[]>([]);
-  const [soignant, setSoignant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [planASouscrire, setPlanASouscrire] = useState<any>(null);
+  const [emailUser, setEmailUser] = useState('');
+  const [dejaInscrit, setDejaInscrit] = useState(false);
+  const [niveauActuel, setNiveauActuel] = useState<Niveau | null>(null);
+
+  // Formulaire
+  const [emailInput, setEmailInput] = useState('');
+  const [niveau, setNiveau] = useState<Niveau>('INDIFFERENT');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Calculateur
+  const [revenuMensuel, setRevenuMensuel] = useState<number>(3500);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) { setLoading(false); return; }
     Promise.all([
-      supabase.from('plans_prevoyance').select('id, nom, type, fournisseur, description, prime_mensuelle, heures_minimum_requises, missions_minimum_requises, subvention_plateforme_pourcent, subvention_max_mensuelle').eq('est_actif', true).order('prime_mensuelle', { ascending: true }),
-      supabase.from('souscriptions_prevoyance').select('id, plan_id, statut, soignant_id, cree_le, plans_prevoyance(id, nom, prime_mensuelle)').eq('soignant_id', user.id),
-      supabase.from('soignants').select('heures_cumulees').eq('id', user.id).maybeSingle(),
-    ]).then(([{ data: p }, { data: s }, { data: sg }]) => {
-      setPlans((p as any[]) || []);
-      setSouscriptions((s as any[]) || []);
-      setSoignant(sg);
+      supabase.from('soignants').select('email').eq('id', user.id).maybeSingle(),
+      supabase.from('prevoyance_liste_attente').select('email, niveau_souhaite').eq('soignant_id', user.id).maybeSingle(),
+    ]).then(([{ data: sg }, { data: la }]) => {
+      const e = (sg as any)?.email ?? '';
+      setEmailUser(e);
+      setEmailInput(e);
+      if (la) {
+        setDejaInscrit(true);
+        setNiveauActuel((la.niveau_souhaite as Niveau) ?? 'INDIFFERENT');
+      }
       setLoading(false);
     });
   }, [user]);
 
-  async function souscrire(plan: any) {
-    if (!user) return;
-    const { data, error } = await supabase.rpc('fn_souscrire_prevoyance' as any, {
-      p_plan_id: plan.id,
-    });
-    if (error || data?.error) {
-      afficherNotification({ type: 'erreur', message: data?.error || error?.message || 'Erreur' });
+  const inscrire = async () => {
+    if (!emailInput.trim()) {
+      toast.error('Email requis');
       return;
     }
-
-    await supabase.rpc('fn_ecrire_audit_safe', {
-      p_acteur_id: user.id, p_type_acteur: 'SOIGNANT',
-      p_action: 'DONNEES_PERSO_MODIFICATION',
-      p_type_ressource: 'soignant', p_id_ressource: user.id,
-      p_cle_s3: null,
-      p_details: { action: 'souscription_prevoyance', plan: plan.nom },
-      p_ip: null, p_navigateur: navigator.userAgent,
+    setSubmitting(true);
+    const { data, error } = await supabase.rpc('fn_inscrire_liste_attente_prevoyance' as any, {
+      p_email: emailInput.trim(),
+      p_niveau: niveau,
     });
+    setSubmitting(false);
+    if (error) { toast.error(error.message); return; }
+    const r = data as any;
+    if (r?.success) {
+      toast.success(r.message ?? 'Inscription enregistrée');
+      setDejaInscrit(true);
+      setNiveauActuel(niveau);
+    } else {
+      toast.error(r?.error ?? 'Erreur');
+    }
+  };
 
-    afficherNotification({ type: 'succes', message: `✅ Souscription au plan ${plan.nom} confirmée !` });
-    setPlanASouscrire(null);
-    // Refresh
-    const { data: s } = await supabase.from('souscriptions_prevoyance').select('id, plan_id, statut, soignant_id, cree_le, plans_prevoyance(id, nom, prime_mensuelle)').eq('soignant_id', user.id);
-    setSouscriptions((s as any[]) || []);
-  }
+  const niveauChoisi = NIVEAUX.find(n => n.valeur === niveau);
+  const perte30j = revenuMensuel; // perte sur 30j d'arrêt = 1 mois de revenu (simplification)
+  const couvertureCalc = niveauChoisi && niveauChoisi.tauxRemplacement > 0
+    ? Math.round((perte30j * niveauChoisi.tauxRemplacement) / 100)
+    : 0;
+  const resteCharge = perte30j - couvertureCalc;
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
-  if (!soignant) {
-    return (
-      <LayoutApp role="SOIGNANT">
-        <div className="card-base text-center py-12">
-          <p className="text-lg font-bold text-foreground mb-2">Prévoyance Jolene</p>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Complétez votre profil pour accéder aux plans de prévoyance.
-          </p>
-        </div>
-      </LayoutApp>
-    );
-  }
-
-  const heures = soignant?.heures_cumulees ?? 0;
-  const souscrit = souscriptions.some(s => s.statut === 'ACTIF');
-
   return (
     <LayoutApp role="SOIGNANT">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">🛡️ Prévoyance</h1>
-        <p className="text-sm text-muted-foreground mt-1">Protégez-vous avec les plans subventionnés Jolene</p>
-      </div>
+      <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground inline-flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 text-primary" /> Prévoyance Madelin
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1 inline-flex items-center gap-2">
+            <Clock className="h-4 w-4 text-warning" /> <strong>Bientôt disponible</strong> — partenariat assureur en cours de finalisation
+          </p>
+        </div>
 
-      {souscrit && (
-        <div className="bg-success/5 border border-success/20 rounded-xl p-4 mb-6 flex items-center gap-3">
-          <ShieldCheck className="h-6 w-6 text-success" />
-          <div>
-            <p className="text-sm font-semibold text-success">Prévoyance active</p>
-            <p className="text-xs text-muted-foreground">Vous bénéficiez de +3 points de fiabilité</p>
+        {/* Pédagogie Madelin */}
+        <div className="card-base">
+          <h2 className="font-semibold text-foreground mb-3">Qu'est-ce que la prévoyance Madelin ?</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+            La <strong>prévoyance Madelin</strong> est une assurance dédiée aux travailleurs indépendants (loi Madelin de 1994) qui couvre les <strong>arrêts de travail, l'invalidité et le décès</strong>. En cas de maladie ou d'accident, vous percevez un revenu de remplacement chaque mois pendant la durée de l'arrêt.
+          </p>
+          <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 text-sm">
+            <p className="font-semibold text-primary mb-1">💡 Avantage fiscal majeur</p>
+            <p className="text-muted-foreground text-xs">
+              Les cotisations Madelin sont <strong>déductibles de votre revenu imposable BNC</strong> dans la limite d'un plafond annuel (≈ 3,75 % du PASS + 7 % du revenu, plafonné). Concrètement, l'État rembourse une partie de votre cotisation via une réduction d'impôts.
+            </p>
           </div>
         </div>
-      )}
 
-      {plans.length > 0 ? (
-        <div className="space-y-4">
-          {plans.map(plan => {
-            const dejasouscrit = souscriptions.some(s => s.plan_id === plan.id);
-            const eligible = heures >= (plan.heures_minimum_requises || 0);
-            const subvention = plan.subvention_plateforme_pourcent || 0;
-            const coutReel = plan.prime_mensuelle * (1 - subvention / 100);
+        {/* Calculateur */}
+        <div className="card-base">
+          <h2 className="font-semibold text-foreground mb-3 inline-flex items-center gap-2">
+            <Calculator className="h-4 w-4 text-primary" /> Calculateur revenu remplacé en cas d'arrêt
+          </h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Estimez ce que vous toucheriez par mois en cas d'arrêt de travail prolongé selon le niveau de couverture choisi. Calcul indicatif basé sur votre revenu mensuel libéral.
+          </p>
 
-            return (
-              <div key={plan.id} className="card-base">
-                <h3 className="text-base font-bold text-foreground mb-1">🛡️ {plan.nom} — {plan.fournisseur}</h3>
-                {(plan.description || '') !== '' && <p className="text-sm text-muted-foreground mb-3">{plan.description}</p>}
-                <div className="space-y-1 text-sm mb-4">
-                  <p>💰 Prime : <span className="font-semibold">{fmt(plan.prime_mensuelle)}/mois</span></p>
-                  {subvention > 0 && (
-                    <>
-                      <p>🎁 Subvention Jolene : <span className="font-semibold text-primary">-{subvention}%</span> (max {fmt(plan.subvention_max_mensuelle || 0)}/mois)</p>
-                      <p>→ Votre coût : <span className="font-bold text-foreground">~{fmt(coutReel)}/mois</span></p>
-                    </>
-                  )}
-                  {(plan.heures_minimum_requises || 0) > 0 && (
-                    <p className="text-xs text-muted-foreground">Conditions : min. {plan.heures_minimum_requises}h travaillées</p>
-                  )}
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="text-xs font-medium text-foreground mb-1 block">Votre revenu mensuel net (€)</label>
+              <input
+                type="number" min={500} max={20000} step={100}
+                value={revenuMensuel}
+                onChange={(e) => setRevenuMensuel(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-foreground mb-1 block">Niveau de couverture</label>
+              <select
+                value={niveau}
+                onChange={(e) => setNiveau(e.target.value as Niveau)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background"
+              >
+                {NIVEAUX.filter(n => n.valeur !== 'INDIFFERENT').map(n => (
+                  <option key={n.valeur} value={n.valeur}>{n.label} ({n.tauxRemplacement}% remplacement)</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-                {dejasouscrit ? (
-                  <div className="badge-base bg-success/10 text-success">✅ Souscrit — Actif</div>
-                ) : !eligible ? (
-                  <div className="badge-base bg-muted text-muted-foreground">🔒 Encore {Math.round((plan.heures_minimum_requises || 0) - heures)}h avant éligibilité</div>
-                ) : (
-                  <button onClick={() => setPlanASouscrire(plan)} className="btn-primary text-sm">Souscrire</button>
-                )}
-              </div>
-            );
-          })}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="rounded-xl border border-border bg-card p-3 text-center">
+              <p className="text-[10px] uppercase font-semibold text-muted-foreground">Perte revenu / mois</p>
+              <p className="text-xl font-extrabold text-destructive mt-1">{fmtEur(perte30j)}</p>
+            </div>
+            <div className="rounded-xl border border-success/30 bg-success/5 p-3 text-center">
+              <p className="text-[10px] uppercase font-semibold text-success">Couverture {niveauChoisi?.label} ({niveauChoisi?.tauxRemplacement}%)</p>
+              <p className="text-xl font-extrabold text-success mt-1">{fmtEur(couvertureCalc)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-3 text-center">
+              <p className="text-[10px] uppercase font-semibold text-muted-foreground">Reste à votre charge</p>
+              <p className="text-xl font-extrabold text-foreground mt-1">{fmtEur(resteCharge)}</p>
+            </div>
+          </div>
         </div>
-      ) : (
-        <EtatVide icone={ShieldCheck} titre="Aucun plan disponible" sousTitre="Les plans de prévoyance seront bientôt disponibles." />
-      )}
 
-      {planASouscrire && (
-        <ModalConfirmation
-          ouvert={true}
-          onFermer={() => setPlanASouscrire(null)}
-          titre={`Souscrire au plan ${planASouscrire.nom} ?`}
-          message={`Vous allez souscrire pour ${fmt(planASouscrire.prime_mensuelle)}/mois. Jolene subventionne ${planASouscrire.subvention_plateforme_pourcent || 0}% de la prime. Votre score de fiabilité gagnera +3 points.`}
-          labelConfirmer="Confirmer la souscription"
-          variante="primaire"
-          onConfirmer={() => souscrire(planASouscrire)}
-        />
-      )}
+        {/* Liste d'attente */}
+        {dejaInscrit ? (
+          <div className="card-base border-l-4 border-l-success bg-success/5">
+            <h2 className="font-semibold text-foreground inline-flex items-center gap-2 mb-2">
+              <CheckCircle2 className="h-5 w-5 text-success" /> Vous êtes sur la liste d'attente
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Vous serez prévenu·e par email à <strong>{emailUser || emailInput}</strong> dès le lancement du programme prévoyance Jolene.
+              {niveauActuel && niveauActuel !== 'INDIFFERENT' && (
+                <> Niveau préféré : <strong>{NIVEAUX.find(n => n.valeur === niveauActuel)?.label}</strong>.</>
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() => setDejaInscrit(false)}
+              className="text-xs text-primary hover:underline mt-2"
+            >
+              Modifier mon niveau préféré
+            </button>
+          </div>
+        ) : (
+          <div className="card-base border-l-4 border-l-primary bg-primary/5">
+            <h2 className="font-semibold text-foreground inline-flex items-center gap-2 mb-2">
+              <Sparkles className="h-5 w-5 text-primary" /> Inscrivez-vous à la liste d'attente
+            </h2>
+            <p className="text-xs text-muted-foreground mb-4">
+              Soyez prévenu·e en avant-première dès que les contrats prévoyance Jolene seront disponibles. Aucune obligation, vous pouvez vous désinscrire à tout moment.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 mb-3">
+              <div className="relative">
+                <Mail className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="votre.email@exemple.fr"
+                  className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-border bg-background"
+                />
+              </div>
+              <select
+                value={niveau}
+                onChange={(e) => setNiveau(e.target.value as Niveau)}
+                className="px-3 py-2 text-sm rounded-lg border border-border bg-background"
+              >
+                {NIVEAUX.map(n => (
+                  <option key={n.valeur} value={n.valeur}>{n.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={inscrire}
+              disabled={submitting || !emailInput.trim()}
+              className="btn-primary text-sm inline-flex items-center gap-2"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {submitting ? 'Inscription...' : 'M\'inscrire à la liste d\'attente'}
+            </button>
+          </div>
+        )}
+
+        {/* Note bas de page */}
+        <div className="text-xs text-muted-foreground bg-muted/30 rounded-xl p-4 border border-border">
+          <p className="font-semibold text-foreground mb-1">Informations</p>
+          <ul className="list-disc list-inside space-y-1">
+            <li>Votre email reste confidentiel et ne sera utilisé que pour vous prévenir du lancement du programme prévoyance.</li>
+            <li>Aucune cotisation n'est prélevée pour l'inscription à la liste d'attente.</li>
+            <li>Les niveaux Bronze/Argent/Or sont indicatifs ; les contrats finaux pourront différer selon le partenaire retenu.</li>
+            <li>Vous pouvez consulter et exporter vos données via votre Centre RGPD.</li>
+          </ul>
+        </div>
+      </div>
     </LayoutApp>
   );
 }

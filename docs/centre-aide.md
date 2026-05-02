@@ -5,10 +5,10 @@ Date : 29 avril 2026
 ## Vue d'ensemble
 
 Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
-27 articles disponibles à ce jour, organisés par audience et catégorie.
+28 articles disponibles à ce jour, organisés par audience et catégorie.
 
 - **Recherche full-text** : index GIN PostgreSQL avec `to_tsvector('french')` et `websearch_to_tsquery` (tolérant aux fautes).
-- **Filtre par audience** : SOIGNANT (11), ETABLISSEMENT (9), COMMUN (7 — toujours inclus quel que soit le filtre).
+- **Filtre par audience** : SOIGNANT (12), ETABLISSEMENT (9), COMMUN (7 — toujours inclus quel que soit le filtre).
 - **Bouton aide global** : icône `?` flottante bottom-right présente sur toutes les pages `LayoutApp` (sauf `/aide`).
 - **Lien footer** : « ❓ Centre d'aide » dans `FooterLegal`.
 
@@ -30,9 +30,9 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 - `src/pages/PageAideArticle.tsx` — article unique avec `renderMarkdown` (h1-h3, listes, liens, code, hr).
 - `src/components/BoutonAideGlobal.tsx` — bouton flottant.
 
-## Liste complète des 27 articles
+## Liste complète des 28 articles
 
-### Soignant (11)
+### Soignant (12)
 
 | Slug | Catégorie | Sujet |
 |---|---|---|
@@ -47,6 +47,7 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 | `comment-ouvrir-litige` | Litiges | 4 catégories, fenêtres F1/F2/F3, gel facture |
 | `mes-droits-rgpd-soignant` | RGPD | 6 droits, export 21 clés, conservation 10 ans |
 | `parrainage-soignant` | Inscription et profil | Code unique, +50h cumulées, badge Ambassadeur (3 filleuls) |
+| `prevoyance-madelin` | Inscription et profil | Madelin + avantage fiscal, 3 niveaux, liste d'attente |
 
 ### Établissement (9)
 
@@ -106,11 +107,11 @@ VALUES ('mon-slug', 'Mon titre', 'SOIGNANT', 'Catégorie', 50, $$# Contenu Markd
 
 | Test | Attendu | Obtenu |
 |---|---|---|
-| Total publiés | 27 | 27 ✓ |
-| nb SOIGNANT | 11 | 11 ✓ |
+| Total publiés | 28 | 28 ✓ |
+| nb SOIGNANT | 12 | 12 ✓ |
 | nb ETABLISSEMENT | 9 | 9 ✓ |
 | nb COMMUN | 7 | 7 ✓ |
-| Audience SOIGNANT (incl COMMUN) | 18 | 18 ✓ |
+| Audience SOIGNANT (incl COMMUN) | 19 | 19 ✓ |
 | Audience ETABLISSEMENT (incl COMMUN) | 16 | 16 ✓ |
 | Recherche "RPPS" | ≥1 | 7 ✓ |
 | Recherche "Defacto" | ≥1 | 4 ✓ |

@@ -1,5 +1,26 @@
 # Dette technique — Jolene
 
+## J5.E — Prévoyance Madelin : RPC interne dépréciée (2026-05-02)
+
+**Contexte** : J5.E refonte page Prévoyance en mode "liste d'attente" (pas de partenariat April actif, décision business). L'ancienne RPC `fn_souscrire_prevoyance` + tables `plans_prevoyance` + `souscriptions_prevoyance` ne sont plus appelées depuis la nouvelle UI.
+
+**État actuel** :
+- `PrevoyanceSoignant.tsx` n'appelle plus `fn_souscrire_prevoyance` (utilise `fn_inscrire_liste_attente_prevoyance` via la nouvelle table `prevoyance_liste_attente`).
+- RPC `fn_souscrire_prevoyance` reste en DB (toujours callable via `types.ts`/admin direct, mais aucun frontend ne l'appelle).
+- Tables `plans_prevoyance` et `souscriptions_prevoyance` conservées (potentielle réactivation rapide si un partenariat se concrétise).
+
+**Action si non réactivé d'ici novembre 2026 (6 mois)** :
+1. `DROP FUNCTION public.fn_souscrire_prevoyance(uuid) CASCADE`
+2. `DROP TABLE public.souscriptions_prevoyance` puis `DROP TABLE public.plans_prevoyance`
+3. Retirer la colonne `soignants.prevoyance_inscrit` (et 2 colonnes adjacentes `prevoyance_fournisseur`, `prevoyance_numero_contrat`) — adapter le bonus +3 pts de fiabilité dans la formule de `dec_mettre_a_jour_fiabilite` (le bonus ne s'applique plus).
+4. Supprimer aussi la mention "+3 points fiabilité" dans la page Prévoyance (déjà retirée dans la refonte J5.E si non réactivé).
+
+**Priorité** : P3 — review novembre 2026.
+
+**Date** : 2026-05-02
+
+---
+
 > **Bilan 2026-04-28 (session "corrige tous les tickets")** : audit
 > exhaustif des sections ci-dessous + corrections rapides sur l'audit
 > UX soignant (3 derniers `.single()` migrés, raccourcis paie/facturation
