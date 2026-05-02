@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { Flame, Shield, Star, Eye } from 'lucide-react';
+import { Flame, Shield, Star, Eye, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -12,29 +12,33 @@ interface PoolUrgenceToggleProps {
   actif?: boolean;
   rayonKm?: number;
   villeUrgence?: string;
+  smsOptIn?: boolean;
   onUpdate?: (actif: boolean, rayonKm: number, villeUrgence?: string) => void;
   onError?: (msg: string) => void;
   onSuccess?: (msg: string) => void;
 }
 
-export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onError, onSuccess }: PoolUrgenceToggleProps) {
+export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUpdate, onError, onSuccess }: PoolUrgenceToggleProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [localActif, setLocalActif] = useState(actif ?? false);
   const [localRayon, setLocalRayon] = useState(rayonKm ?? 15);
+  const [localSms, setLocalSms] = useState(smsOptIn ?? false);
+  const [smsLoading, setSmsLoading] = useState(false);
 
-  // Auto-load state from DB if no props provided (standalone mode)
   useEffect(() => {
-    if (actif !== undefined) return; // props-driven, skip
+    if (actif !== undefined) return;
     if (!user) return;
-    supabase.from('soignants').select('pool_urgence_actif, rayon_deplacement_km').eq('id', user.id).maybeSingle()
+    supabase.from('soignants').select('disponible_urgence, urgence_rayon_km, pool_urgence_sms_opt_in').eq('id', user.id).maybeSingle()
       .then(({ data }: any) => {
         if (data) {
-          setLocalActif(data.pool_urgence_actif ?? false);
-          setLocalRayon(data.rayon_deplacement_km ?? 15);
+          setLocalActif(data.disponible_urgence ?? false);
+          setLocalRayon(data.urgence_rayon_km ?? 15);
+          setLocalSms(data.pool_urgence_sms_opt_in ?? false);
         }
       });
   }, [user, actif]);
+
   const [modeZone, setModeZone] = useState<'position' | 'ville'>(villeUrgence ? 'ville' : 'position');
   const [localVille, setLocalVille] = useState(villeUrgence || '');
 
@@ -55,6 +59,22 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onEr
       (onSuccess ?? ((m: string) => toast.success(m)))(newActif ? 'Pool urgence activé !' : 'Pool urgence désactivé.');
     }
     setLoading(false);
+  };
+
+  const saveSms = async (newSms: boolean) => {
+    setSmsLoading(true);
+    const { data, error } = await supabase.rpc('fn_toggle_pool_urgence_sms' as any, { p_actif: newSms });
+    const result = data as unknown as RpcSuccessOrError | null;
+    if (error) {
+      toast.error(extraireMessageErreur(error));
+      setLocalSms(!newSms);
+    } else if (result?.error) {
+      toast.error(result.error);
+      setLocalSms(!newSms);
+    } else {
+      toast.success(newSms ? 'SMS d\'urgence activés' : 'SMS d\'urgence désactivés');
+    }
+    setSmsLoading(false);
   };
 
   return (
@@ -130,6 +150,28 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, onUpdate, onEr
             />
             <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
               <span>5 km</span><span>50 km</span>
+            </div>
+          </div>
+
+          {/* Toggle SMS opt-in */}
+          <div className="border border-border rounded-xl p-3 mb-3 bg-orange-50/50 dark:bg-orange-950/10">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground inline-flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4 text-orange-600" /> Recevoir les alertes par SMS
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Notification immédiate par SMS en plus des push + email. Recommandé si urgence vraiment urgente.
+                </p>
+              </div>
+              <Switch
+                checked={localSms}
+                disabled={smsLoading}
+                onCheckedChange={(checked) => {
+                  setLocalSms(checked);
+                  saveSms(checked);
+                }}
+              />
             </div>
           </div>
 

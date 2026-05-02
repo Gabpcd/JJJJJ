@@ -26,6 +26,7 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { SectionPlanning } from '@/components/dashboard/SectionPlanning';
+import { BannerCandidaturesPoolUrgence } from '@/components/dashboard/BannerCandidaturesPoolUrgence';
 
 
 export default function DashboardEtablissement() {
@@ -276,6 +277,7 @@ export default function DashboardEtablissement() {
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <BandeauEvaluationsEnAttente role="ETABLISSEMENT" />
+      {etablissementId && <BannerCandidaturesPoolUrgence etablissementId={etablissementId} />}
       <OnboardingGuide role="ADMIN_ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">

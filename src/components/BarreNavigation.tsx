@@ -41,6 +41,7 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
       icone: Search, label: 'Missions', items: [
         { icone: Search, label: 'Disponibles', route: '/soignant/missions' },
         { icone: MapPinned, label: 'Recherche avancée', route: '/soignant/recherche-missions' },
+        { icone: Flame, label: 'Pool urgence', route: '/soignant/pool-urgence' },
         { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
       ],
     },
