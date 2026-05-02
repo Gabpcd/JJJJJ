@@ -3,9 +3,22 @@
 -- 1) Rename ancienne table favoris (étab favorise soignant)
 ALTER TABLE IF EXISTS public.favoris RENAME TO favoris_etab_soignant;
 
-ALTER POLICY IF EXISTS pol_fav_select ON public.favoris_etab_soignant RENAME TO pol_fav_es_select;
-ALTER POLICY IF EXISTS pol_fav_insert ON public.favoris_etab_soignant RENAME TO pol_fav_es_insert;
-ALTER POLICY IF EXISTS pol_fav_delete ON public.favoris_etab_soignant RENAME TO pol_fav_es_delete;
+-- ALTER POLICY ne supporte pas IF EXISTS en SQL standard ; on défensive via DO bloc
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policy WHERE polname='pol_fav_select' AND polrelid='public.favoris_etab_soignant'::regclass) THEN
+    ALTER POLICY pol_fav_select ON public.favoris_etab_soignant RENAME TO pol_fav_es_select;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_policy WHERE polname='pol_fav_insert' AND polrelid='public.favoris_etab_soignant'::regclass) THEN
+    ALTER POLICY pol_fav_insert ON public.favoris_etab_soignant RENAME TO pol_fav_es_insert;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_policy WHERE polname='pol_fav_delete' AND polrelid='public.favoris_etab_soignant'::regclass) THEN
+    ALTER POLICY pol_fav_delete ON public.favoris_etab_soignant RENAME TO pol_fav_es_delete;
+  END IF;
+EXCEPTION WHEN undefined_table THEN
+  -- Si la table n'existe pas (cas où le rename précédent a aussi échoué)
+  NULL;
+END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS favoris_etab_soignant_unique
   ON public.favoris_etab_soignant (etablissement_id, soignant_id);
