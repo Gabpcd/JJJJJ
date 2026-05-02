@@ -27,6 +27,9 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
 import { SectionPlanning } from '@/components/dashboard/SectionPlanning';
 import { BannerCandidaturesPoolUrgence } from '@/components/dashboard/BannerCandidaturesPoolUrgence';
+import { BannerAlertesDashboardEtab } from '@/components/dashboard/BannerAlertesDashboardEtab';
+import { GraphiqueEvolutionMissions } from '@/components/dashboard/GraphiqueEvolutionMissions';
+import { IndicateursAvancesEtab } from '@/components/dashboard/IndicateursAvancesEtab';
 
 
 export default function DashboardEtablissement() {
@@ -278,6 +281,7 @@ export default function DashboardEtablissement() {
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <BandeauEvaluationsEnAttente role="ETABLISSEMENT" />
       {etablissementId && <BannerCandidaturesPoolUrgence etablissementId={etablissementId} />}
+      <BannerAlertesDashboardEtab />
       <OnboardingGuide role="ADMIN_ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
@@ -460,6 +464,12 @@ export default function DashboardEtablissement() {
       <FadeInView delay={600}>
         <SectionPlanning missions={prochaines} />
       </FadeInView>
+
+      {/* Indicateurs avancés (J5.B.2) — turnover, taux remplissage, coût moyen */}
+      <IndicateursAvancesEtab soignantsCeMois={Number(stats.soignants_ce_mois) || 0} />
+
+      {/* Évolution missions 6 mois */}
+      <GraphiqueEvolutionMissions />
 
       {/* Top soignants */}
       <div className="mb-6">
