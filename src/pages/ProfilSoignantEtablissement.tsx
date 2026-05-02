@@ -113,7 +113,7 @@ export default function ProfilSoignantEtablissement() {
                         Vérifié
                       </span>
                     )}
-                    <span className="inline-flex items-center gap-1"><Star className="h-4 w-4 text-primary" /> {soignant.score_fiabilite != null && soignant.total_missions_terminees > 0 ? `${soignant.score_fiabilite}/100` : 'Pas encore d\'évaluation'}</span>
+                    <span className="inline-flex items-center gap-1"><Star className="h-4 w-4 text-primary" /> {soignant.score_fiabilite != null && soignant.total_missions_terminees >= 3 ? `${soignant.score_fiabilite}/100` : 'Pas encore d\'évaluation'}</span>
                     {soignant.note_moyenne != null && soignant.nb_evaluations > 0 && (
                       <span className="inline-flex items-center gap-1">⭐ {Number(soignant.note_moyenne).toFixed(1)}/5 ({soignant.nb_evaluations} avis)</span>
                     )}
@@ -223,7 +223,7 @@ export default function ProfilSoignantEtablissement() {
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Score de fiabilité</span>
-                  <span className="font-bold text-foreground">{soignant.score_fiabilite != null && soignant.total_missions_terminees > 0 ? `${soignant.score_fiabilite}/100` : 'Pas encore d\'évaluation'}</span>
+                  <span className="font-bold text-foreground">{soignant.score_fiabilite != null && soignant.total_missions_terminees >= 3 ? `${soignant.score_fiabilite}/100` : 'Pas encore d\'évaluation'}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Évaluations</span>

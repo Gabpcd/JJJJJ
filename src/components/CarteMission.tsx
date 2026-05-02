@@ -112,7 +112,7 @@ export const CarteMission = React.memo(function CarteMission({ mission, afficher
             />
             <span>
               {m.soignants.prenom} {m.soignants.nom}
-              {m.soignants.score_fiabilite != null && m.soignants.total_missions_terminees > 0 ? (
+              {m.soignants.score_fiabilite != null && m.soignants.total_missions_terminees >= 3 ? (
                 <span className={`ml-1 font-semibold ${scoreColor(m.soignants.score_fiabilite)}`}>
                   (⭐ {m.soignants.score_fiabilite}/100)
                 </span>

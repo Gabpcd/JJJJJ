@@ -221,7 +221,7 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.soignant.bio}</p>
                   )}
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    {c.soignant?.score_fiabilite != null && c.soignant?.total_missions_terminees > 0 ? (
+                    {c.soignant?.score_fiabilite != null && c.soignant?.total_missions_terminees >= 3 ? (
                       <span className={`badge-base text-[10px] ${scoreBadge(c.soignant.score_fiabilite)}`}>
                         ⭐ {c.soignant.score_fiabilite}/100
                       </span>
