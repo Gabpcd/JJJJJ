@@ -164,7 +164,7 @@ export function BreakdownScore({ breakdown }: Props) {
               <p className="text-destructive">🚫 Absence sans prévenir : <strong>{breakdown.absence_sans_prevenir_malus} pts</strong></p>
             )}
             {breakdown.bonus_super_actif > 0 && (
-              <p className="text-success inline-flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Bonus super-actif (>50 missions 12m) : <strong>+{breakdown.bonus_super_actif} pts</strong></p>
+              <p className="text-success inline-flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Bonus super-actif (plus de 50 missions sur 12 mois) : <strong>+{breakdown.bonus_super_actif} pts</strong></p>
             )}
           </div>
         </div>
