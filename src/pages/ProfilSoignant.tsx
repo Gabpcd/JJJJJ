@@ -75,7 +75,20 @@ export default function ProfilSoignant() {
   const [heuresCumulees, setHeuresCumulees] = useState(0);
   const [statutLiberal, setStatutLiberal] = useState('');
   const [codeParrainage, setCodeParrainage] = useState('');
-  const [codeRecu, setCodeRecu] = useState('');
+  const [codeRecu, setCodeRecu] = useState(() => {
+    // J5.D.1 — auto-fill depuis ?ref=CODE (URL inscription) ou sessionStorage
+    try {
+      const urlParam = new URLSearchParams(window.location.search).get('ref');
+      if (urlParam) {
+        sessionStorage.setItem('jolene.parrainage_code', urlParam.toUpperCase());
+        return urlParam.toUpperCase();
+      }
+      const stored = sessionStorage.getItem('jolene.parrainage_code');
+      return stored ?? '';
+    } catch {
+      return '';
+    }
+  });
   const [parrainageLoading, setParrainageLoading] = useState(false);
   const [parrainageSucces, setParrainageSucces] = useState(false);
   const [filleuls, setFilleuls] = useState<any[]>([]);

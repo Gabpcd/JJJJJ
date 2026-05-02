@@ -90,6 +90,17 @@ export default function InscriptionSoignant() {
   const navigate = useNavigate();
   const { inscriptionSoignant } = useAuth();
   const { afficherNotification } = useNotification();
+
+  // J5.D.1 — Capturer ?ref=CODE et le stocker en sessionStorage pour
+  // pré-remplir le champ "Code parrainage" dans le wizard profil après inscription.
+  useEffect(() => {
+    try {
+      const ref = new URLSearchParams(window.location.search).get('ref');
+      if (ref && /^[A-Z0-9-]{4,16}$/i.test(ref)) {
+        sessionStorage.setItem('jolene.parrainage_code', ref.toUpperCase());
+      }
+    } catch { /* noop */ }
+  }, []);
   const [etape, setEtape] = useState(1);
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [cgu, setCgu] = useState(false);
