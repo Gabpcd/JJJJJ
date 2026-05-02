@@ -71,6 +71,7 @@ function getEtablissementSidebar(): SidebarEntry[] {
       icone: ClipboardList, label: 'Missions', items: [
         { icone: PlusCircle, label: 'Publier une mission', route: '/etablissement/missions/creer' },
         { icone: List, label: 'Liste des missions', route: '/etablissement/missions' },
+        { icone: Users, label: 'Annuaire soignants', route: '/etablissement/soignants' },
         { icone: Flame, label: 'Pool urgence', route: '/etablissement/pool-urgence' },
       ],
     },

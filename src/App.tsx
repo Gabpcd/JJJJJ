@@ -54,6 +54,7 @@ const LitigesContestationsSoignant = lazy(() => import("./pages/LitigesContestat
 const DashboardSoignant = lazy(() => import("./pages/DashboardSoignant"));
 const ProfilSoignant = lazy(() => import("./pages/ProfilSoignant"));
 const ProfilSoignantEtablissement = lazy(() => import("./pages/ProfilSoignantEtablissement"));
+const RechercheSoignantsEtab = lazy(() => import("./pages/RechercheSoignantsEtab"));
 const MissionsSoignant = lazy(() => import("./pages/MissionsSoignant"));
 const RechercheMissions = lazy(() => import("./pages/RechercheMissions"));
 const DetailMissionSoignant = lazy(() => import("./pages/DetailMissionSoignant"));
@@ -204,6 +205,7 @@ function AppRoutes() {
           <Route path="/etablissement/parametres/recherches-sauvegardees" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageRecherchesSauvegardees role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/parametres" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><Parametres /></RouteProtegee>} />
           <Route path="/etablissement/profil" element={<Navigate to="/etablissement/parametres?tab=profil" replace />} />
+          <Route path="/etablissement/soignants" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><RechercheSoignantsEtab /></RouteProtegee>} />
           <Route path="/etablissement/soignants/:id" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ProfilSoignantEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/missions" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ListeMissions /></RouteProtegee>} />
           <Route path="/etablissement/missions/creer" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><CreerMission /></RouteProtegee>} />
