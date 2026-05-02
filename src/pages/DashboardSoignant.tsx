@@ -30,6 +30,11 @@ const GraphiqueGains6Mois = lazy(() =>
 import { ProgressionCirculaire3200h } from '@/components/ProgressionCirculaire3200h';
 import { ProchainBadgeWidget } from '@/components/ProchainBadgeWidget';
 import { CalendrierMiniSemaine } from '@/components/CalendrierMiniSemaine';
+import { CalendrierTogglable } from '@/components/dashboard/CalendrierTogglable';
+import { NotificationsRecentes } from '@/components/dashboard/NotificationsRecentes';
+import { SuggestionsMissions } from '@/components/dashboard/SuggestionsMissions';
+import { TopEtablissements } from '@/components/dashboard/TopEtablissements';
+import { GraphiqueRepartitionHeures } from '@/components/dashboard/GraphiqueRepartitionHeures';
 import { JaugeSpeedometer } from '@/components/JaugeSpeedometer';
 import { BoutonAjouterCalendrier } from '@/components/SyncCalendrier';
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
@@ -326,6 +331,8 @@ export default function DashboardSoignant() {
         {/* ─── ONGLET ACCUEIL ─── */}
         <TabsContent value="accueil">
           <SectionErrorBoundary section="accueil">
+          <NotificationsRecentes />
+
           {/* KPI */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <FadeInView delay={0}>
@@ -373,6 +380,8 @@ export default function DashboardSoignant() {
               <Search className="h-4 w-4" /> Chercher des missions
             </button>
           </div>
+
+          <SuggestionsMissions />
 
           {/* Missions disponibles */}
           <div className="mb-6">
@@ -434,10 +443,12 @@ export default function DashboardSoignant() {
         {/* ─── ONGLET ACTIVITÉ ─── */}
         <TabsContent value="activite">
           <SectionErrorBoundary section="activite">
-          {/* Calendrier mini semaine */}
+          {/* Calendrier semaine/mois (toggle persistant) */}
           <FadeInView>
-            <CalendrierMiniSemaine missions={missionsSemaine} />
+            <CalendrierTogglable missionsSemaine={missionsSemaine} />
           </FadeInView>
+
+          <TopEtablissements />
 
           {/* Compteur hebdomadaire */}
           <div className="mb-6">
@@ -511,6 +522,8 @@ export default function DashboardSoignant() {
               </div>
             )}
           </FadeInView>
+
+          <GraphiqueRepartitionHeures />
 
           {/* Gains ce mois */}
           {gainsCeMois.nb > 0 && (
