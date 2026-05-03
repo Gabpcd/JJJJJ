@@ -6,6 +6,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { PROFESSIONS, getLabelProfession } from '@/lib/constantes';
+import { toast } from 'sonner';
 
 interface SoignantResultat {
   id: string;
@@ -124,6 +125,7 @@ export default function RechercheSoignantsEtab() {
       const payload = data as any;
       if (payload?.error) {
         setError(payload.error);
+        toast.error(payload.error);
         return;
       }
       const nouveaux: SoignantResultat[] = payload?.soignants ?? [];
@@ -131,7 +133,9 @@ export default function RechercheSoignantsEtab() {
       setCountTotal(payload?.count_total ?? 0);
       setOffset(newOffset);
     } catch (e: any) {
-      setError(e?.message ?? 'Erreur lors de la recherche');
+      const msg = e?.message ?? 'Erreur lors de la recherche de soignants. Veuillez réessayer.';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
       setLoadingMore(false);

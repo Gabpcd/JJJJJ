@@ -280,7 +280,7 @@ export default function PageParrainageEtab() {
                   <p className="text-muted-foreground text-sm">Aucun filleul pour le moment. Partagez votre lien à vos confrères !</p>
                 </div>
               ) : (
-                <div className="rounded-xl border border-border overflow-hidden">
+                <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -323,7 +323,7 @@ export default function PageParrainageEtab() {
             {credits && credits.credits.length > 0 && (
               <div>
                 <h3 className="font-semibold text-foreground mb-3">Mes crédits</h3>
-                <div className="rounded-xl border border-border overflow-hidden">
+                <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>

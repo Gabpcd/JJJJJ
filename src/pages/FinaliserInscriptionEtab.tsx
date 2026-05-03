@@ -97,12 +97,33 @@ export default function FinaliserInscriptionEtab() {
     if (!user) return;
     setSigning(true);
     try {
+      // Upload signature image (PNG base64 → bucket jolene-documents)
+      let signatureS3Key: string | null = null;
+      try {
+        const matches = signatureBase64.match(/^data:image\/(\w+);base64,(.+)$/);
+        if (matches) {
+          const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+          const binary = atob(matches[2]);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const blob = new Blob([bytes], { type: `image/${matches[1]}` });
+          const path = `etablissements/${user.id}/signatures/contrat-service-${Date.now()}.${ext}`;
+          const { error: upErr } = await supabase.storage
+            .from('jolene-documents')
+            .upload(path, blob, { upsert: false, contentType: `image/${matches[1]}` });
+          if (!upErr) signatureS3Key = path;
+        }
+      } catch {
+        // Best-effort : si upload signature échoue, continue sans bloquer
+      }
+
       const hash = await hashContratTexte(contratTexte);
       const { data, error } = await supabase.rpc('fn_signer_contrat_service' as any, {
         p_version: CONTRAT_SERVICE_VERSION,
         p_ip: '',
         p_user_agent: navigator.userAgent,
         p_contenu_hash: hash,
+        p_signature_s3_key: signatureS3Key,
       });
       if (error) throw error;
       if ((data as any)?.success === false) throw new Error((data as any)?.error);

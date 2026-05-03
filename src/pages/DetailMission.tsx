@@ -197,7 +197,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       return;
     }
     toast.success('Litige ouvert avec succès');
-    navigate(0);
+    refresh();
   };
 
   // Stripe Connect
@@ -206,6 +206,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [showConnectCheckout, setShowConnectCheckout] = useState(false);
   const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
   const [connectDecomposition, setConnectDecomposition] = useState<{ commission_ttc: number; salaire_brut: number; total: number } | null>(null);
+  // Audit étab fix #3 : refreshTick remplace navigate(0) (full page reload).
+  // Incrémente cet état pour re-fetcher les données ciblées sans perdre l'UI.
+  const [refreshTick, setRefreshTick] = useState(0);
+  const refresh = React.useCallback(() => setRefreshTick(t => t + 1), []);
 
   useEffect(() => {
     if (!id) return;
@@ -274,7 +278,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       setLoading(false);
     };
     load();
-  }, [id]);
+  }, [id, refreshTick]);
 
   // Load recommendations when tab is selected
   const chargerRecommandations = async () => {
@@ -385,7 +389,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             missionSpecialiteMedicale={(m as any).specialite_medicale_requise}
             missionAccepteNonSpecialises={(m as any).accepte_non_specialises}
             modePaiement={(m.etablissements as any)?.mode_paiement_commission}
-            onAccepted={() => navigate(0)}
+            onAccepted={() => refresh()}
             onError={(msg) => toast.error(msg)}
             onSuccess={(msg) => toast.success(msg)}
           />
@@ -579,7 +583,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
                       if (data?.already_paid) {
                         toast.info(data.message || 'Ce paiement a déjà été effectué', { id: loadingToastId });
-                        navigate(0);
+                        refresh();
                         return;
                       }
 
@@ -617,7 +621,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         resolution: litigeExistant.resolution,
                         missions: { intitule: m.intitule },
                       }}
-                      onUpdate={() => navigate(0)}
+                      onUpdate={() => refresh()}
                     />
                   </div>
                 ) : (
@@ -836,7 +840,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             afficherNotification({ type: 'erreur', message: (data as any).error || 'Erreur lors de la terminaison.' });
           } else {
             afficherNotification({ type: 'succes', message: 'Mission terminée ✅' });
-            navigate(0);
+            refresh();
           }
           setTerminating(false);
         }}
@@ -863,7 +867,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           onComplete={() => {
             setShowConnectCheckout(false);
             toast.success('Paiement effectué ! Le soignant recevra son salaire via Stripe.');
-            navigate(0);
+            refresh();
           }}
         />
       )}
