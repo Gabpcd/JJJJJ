@@ -12,6 +12,7 @@ Le code est **prêt en production**. Il manque uniquement les variables d'enviro
 |---|---|---|---|
 | `VITE_SENTRY_DSN` | publique | Vercel (Production + Preview) | Point d'envoi des events depuis le navigateur |
 | `SENTRY_AUTH_TOKEN` | secret | Vercel (Production uniquement) | Upload des sourcemaps au build |
+| `SENTRY_UPLOAD_ENABLED` | `"true"` | Vercel (Production uniquement) | **Active réellement l'upload sourcemaps**. À ne mettre qu'APRÈS création du projet Sentry, sinon le build affiche `error: Project not found` (non bloquant mais anxiogène). |
 | `SENTRY_ORG` | (optionnel, défaut `jolene`) | Vercel | Org Sentry |
 | `SENTRY_PROJECT` | (optionnel, défaut `jolene-frontend`) | Vercel | Projet Sentry |
 
@@ -39,8 +40,11 @@ Dashboard Vercel → Project `jolene` → Settings → Environment Variables
 |---|---|---|
 | `VITE_SENTRY_DSN` | `https://abc...@oXX.ingest.sentry.io/XXX` | Production, Preview, Development |
 | `SENTRY_AUTH_TOKEN` | (token créé étape 2) | Production |
+| `SENTRY_UPLOAD_ENABLED` | `true` | Production |
 | `SENTRY_ORG` | `jolene` | Production |
 | `SENTRY_PROJECT` | `jolene-frontend` | Production |
+
+> **Important** : ne définir `SENTRY_UPLOAD_ENABLED=true` qu'après avoir créé le projet Sentry (étape 1). Sinon le build Vercel affiche un log rouge `error: Project not found` (non bloquant — le deploy passe en READY — mais visuellement perturbant).
 
 Redeploy le dernier commit `main` pour appliquer.
 
@@ -172,7 +176,8 @@ Optimisation : si le quota free est dépassé fréquemment, ajuster :
 | Symptôme | Cause probable | Fix |
 |---|---|---|
 | Aucun event en prod | DSN non configurée | Vérifier `VITE_SENTRY_DSN` côté Vercel |
-| Stack traces minifiées | `SENTRY_AUTH_TOKEN` manquant ou release non créée | Vérifier upload sourcemaps dans logs Vercel build |
+| Stack traces minifiées | `SENTRY_AUTH_TOKEN` manquant ou `SENTRY_UPLOAD_ENABLED` non setté | Vérifier upload sourcemaps dans logs Vercel build |
+| Build Vercel affiche `error: Project not found` (rouge) | `SENTRY_UPLOAD_ENABLED=true` mais projet Sentry pas créé | Créer le projet Sentry (étape 1) ou retirer `SENTRY_UPLOAD_ENABLED` temporairement |
 | Release `unknown` | `__APP_VERSION__` non injectée | Vérifier `vite.config.ts` define + redeploy |
 | Tile "Sentry Dégradé" sur `/admin/healthcheck` | DSN non configurée | Voir étape 3 |
 | Trop de bruit ResizeObserver | `ignoreErrors` non appliqué | Vérifier déploiement code récent |

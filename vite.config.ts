@@ -3,9 +3,13 @@ import react from "@vitejs/plugin-react-swc";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import path from "path";
 
-// Upload des source maps Sentry uniquement quand SENTRY_AUTH_TOKEN est dispo
-// (CI prod Vercel). En dev local sans le token, le plugin est désactivé pour
-// ne pas casser le build.
+// Upload des source maps Sentry. Activé UNIQUEMENT quand le projet Sentry
+// est confirmé créé (env SENTRY_UPLOAD_ENABLED=true) ET que le token est
+// présent. Sans le flag, le plugin est désactivé pour éviter un log rouge
+// "Project not found" dans Vercel quand Gabrielle n'a pas encore créé le
+// projet Sentry. Le build reste fonctionnel — Sentry tag les events via
+// `release: __APP_VERSION__` au runtime, sans sourcemaps désobfusquées.
+const sentryUploadEnabled = process.env.SENTRY_UPLOAD_ENABLED === 'true';
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 const sentryOrg = process.env.SENTRY_ORG || 'jolene';
 const sentryProject = process.env.SENTRY_PROJECT || 'jolene-frontend';
@@ -34,7 +38,7 @@ export default defineConfig(({ mode }) => ({
     // Active l'upload des source maps Sentry à chaque build prod si le token
     // est présent. Sans token (dev local, preview Vercel sans secret) le
     // plugin est omis, le build reste rapide.
-    sentryAuthToken
+    sentryUploadEnabled && sentryAuthToken
       ? sentryVitePlugin({
           authToken: sentryAuthToken,
           org: sentryOrg,
