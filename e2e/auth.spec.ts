@@ -8,16 +8,19 @@ test.describe('Authentification', () => {
 
     test('charge la page de connexion correctement', async ({ page }) => {
       await expect(page.getByRole('heading', { name: 'Connexion' })).toBeVisible();
-      await expect(page.locator('text=Jolene')).toBeVisible();
+      // Le mot "Jolene" apparaît plusieurs fois (logo + footer) → .first() est intentionnel
+      await expect(page.getByText('Jolene').first()).toBeVisible();
     });
 
     test('affiche les champs email et mot de passe', async ({ page }) => {
       await expect(page.locator('input[type="email"]')).toBeVisible();
-      await expect(page.locator('input[type="password"]')).toBeVisible();
+      // Plusieurs inputs password (form connexion + reset si visible) → first()
+      await expect(page.locator('input[type="password"]').first()).toBeVisible();
     });
 
     test('affiche le bouton de soumission', async ({ page }) => {
-      await expect(page.getByRole('button', { name: /Se connecter/i })).toBeVisible();
+      // data-testid évite l'ambiguïté avec "Se connecter avec Pro Santé Connect"
+      await expect(page.getByTestId('login-submit')).toBeVisible();
     });
 
     test('affiche les liens d\'inscription soignant et etablissement', async ({ page }) => {
@@ -31,8 +34,8 @@ test.describe('Authentification', () => {
 
     test('une connexion invalide affiche un message d\'erreur', async ({ page }) => {
       await page.locator('input[type="email"]').fill('faux@exemple.fr');
-      await page.locator('input[type="password"]').fill('motdepassefaux');
-      await page.getByRole('button', { name: /Se connecter/i }).click();
+      await page.locator('input[type="password"]').first().fill('motdepassefaux');
+      await page.getByTestId('login-submit').click();
 
       // Sonner toast or notification should appear with an error
       const erreur = page.locator('[data-sonner-toast][data-type="error"], [role="status"]');
@@ -40,10 +43,8 @@ test.describe('Authentification', () => {
     });
 
     test('soumettre sans remplir les champs affiche une erreur', async ({ page }) => {
-      await page.getByRole('button', { name: /Se connecter/i }).click();
-
-      // The HTML5 validation or app-level notification should prevent submission
-      // Check that we are still on the login page
+      await page.getByTestId('login-submit').click();
+      // HTML5 validation ou notif app empêche soumission → reste sur /connexion
       await expect(page).toHaveURL(/\/connexion/);
     });
   });
@@ -51,8 +52,7 @@ test.describe('Authentification', () => {
   test.describe('Page inscription soignant', () => {
     test('charge la page d\'inscription soignant', async ({ page }) => {
       await page.goto('/inscription/soignant');
-      await expect(page.locator('text=Jolene')).toBeVisible();
-      // The signup form should have an email field
+      await expect(page.getByText('Jolene').first()).toBeVisible();
       await expect(page.locator('input[type="email"]')).toBeVisible();
     });
   });
@@ -60,8 +60,7 @@ test.describe('Authentification', () => {
   test.describe('Page inscription etablissement', () => {
     test('charge la page d\'inscription etablissement', async ({ page }) => {
       await page.goto('/inscription/etablissement');
-      await expect(page.locator('text=Jolene')).toBeVisible();
-      // The signup form should have an email field
+      await expect(page.getByText('Jolene').first()).toBeVisible();
       await expect(page.locator('input[type="email"]')).toBeVisible();
     });
   });

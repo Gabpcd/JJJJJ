@@ -11,7 +11,7 @@ test.describe('Page d\'accueil', () => {
 
   test('affiche le logo et le nom Jolene dans le header', async ({ page }) => {
     const header = page.locator('header');
-    await expect(header.locator('text=Jolene')).toBeVisible();
+    await expect(header.getByText('Jolene', { exact: true }).first()).toBeVisible();
   });
 
   test('affiche les liens de navigation principaux', async ({ page }) => {
@@ -22,38 +22,34 @@ test.describe('Page d\'accueil', () => {
   });
 
   test('affiche le bouton de connexion dans le header', async ({ page }) => {
-    const header = page.locator('header');
-    await expect(header.getByText('Se connecter')).toBeVisible();
+    await expect(page.getByTestId('header-cta-connexion')).toBeVisible();
   });
 
   test('le bouton "Se connecter" redirige vers /connexion', async ({ page }) => {
-    await page.locator('header').getByText('Se connecter').click();
+    await page.getByTestId('header-cta-connexion').click();
     await expect(page).toHaveURL(/\/connexion/);
   });
 
   test('affiche les CTA soignant et etablissement dans le hero', async ({ page }) => {
-    const ctaSoignant = page.getByRole('button', { name: /soignant/i });
-    const ctaEtablissement = page.getByRole('button', { name: /établissement/i });
-
-    await expect(ctaSoignant.first()).toBeVisible();
-    await expect(ctaEtablissement.first()).toBeVisible();
+    await expect(page.getByTestId('hero-cta-soignant')).toBeVisible();
+    await expect(page.getByTestId('hero-cta-etab')).toBeVisible();
   });
 
-  test('le CTA soignant redirige vers /inscription/soignant', async ({ page }) => {
-    await page.getByRole('button', { name: /Je suis soignant/i }).click();
+  test('le CTA hero soignant redirige vers /inscription/soignant', async ({ page }) => {
+    await page.getByTestId('hero-cta-soignant').click();
     await expect(page).toHaveURL(/\/inscription\/soignant/);
   });
 
-  test('le CTA etablissement redirige vers /inscription/etablissement', async ({ page }) => {
-    await page.getByRole('button', { name: /Je suis un établissement/i }).click();
+  test('le CTA hero etablissement redirige vers /inscription/etablissement', async ({ page }) => {
+    await page.getByTestId('hero-cta-etab').click();
     await expect(page).toHaveURL(/\/inscription\/etablissement/);
   });
 
   test('affiche la section "Comment ca marche"', async ({ page }) => {
-    await expect(page.getByText('Comment ça marche')).toBeVisible();
+    await expect(page.getByText('Comment ça marche').first()).toBeVisible();
   });
 
   test('affiche la section FAQ', async ({ page }) => {
-    await expect(page.getByText('Comment fonctionne la commission')).toBeVisible();
+    await expect(page.getByText('Comment fonctionne la commission').first()).toBeVisible();
   });
 });

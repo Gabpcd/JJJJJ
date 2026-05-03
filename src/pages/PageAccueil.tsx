@@ -267,7 +267,7 @@ export default function PageAccueil() {
             <a href="/blog" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Blog</a>
             <a href="/a-propos" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">À propos</a>
             <a href="/tarifs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Tarifs</a>
-            <button onClick={() => navigate('/connexion')} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
+            <button onClick={() => navigate('/connexion')} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors" data-testid="header-cta-connexion">
               Se connecter
             </button>
           </div>
@@ -301,6 +301,7 @@ export default function PageAccueil() {
               onClick={() => navigate('/inscription/soignant')}
               className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
               style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
+              data-testid="hero-cta-soignant"
             >
               🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
             </button>
@@ -308,6 +309,7 @@ export default function PageAccueil() {
               onClick={() => navigate('/inscription/etablissement')}
               className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
               style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
+              data-testid="hero-cta-etab"
             >
               🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
             </button>
@@ -513,6 +515,7 @@ export default function PageAccueil() {
                 onClick={() => navigate('/inscription/soignant')}
                 className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
+                data-testid="bottom-cta-soignant"
               >
                 🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
               </button>
@@ -520,6 +523,7 @@ export default function PageAccueil() {
                 onClick={() => navigate('/inscription/etablissement')}
                 className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
+                data-testid="bottom-cta-etab"
               >
                 🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
               </button>

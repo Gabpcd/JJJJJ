@@ -62,7 +62,7 @@ test.describe('Inscription soignant', () => {
 test.describe('Inscription établissement', () => {
   test('charge la page d\'inscription étab', async ({ page }) => {
     await page.goto('/inscription/etablissement');
-    await expect(page.locator('text=Jolene')).toBeVisible();
+    await expect(page.locator('text=Jolene').first()).toBeVisible();
     await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 
@@ -82,7 +82,7 @@ test.describe('Login', () => {
     await page.goto('/connexion');
     await page.locator('input[type="email"]').fill('inexistant@playwright-test.invalid');
     await page.locator('input[type="password"]').fill('mauvais-mot-de-passe');
-    await page.getByRole('button', { name: /Se connecter/i }).click();
+    await page.getByTestId('login-submit').click();
     // Le user reste sur /connexion (pas de redirect)
     await page.waitForTimeout(2_000);
     await expect(page).toHaveURL(/\/connexion/);
@@ -90,7 +90,7 @@ test.describe('Login', () => {
 
   test('soumettre champs vides → reste sur la page (HTML5)', async ({ page }) => {
     await page.goto('/connexion');
-    await page.getByRole('button', { name: /Se connecter/i }).click();
+    await page.getByTestId('login-submit').click();
     await expect(page).toHaveURL(/\/connexion/);
   });
 

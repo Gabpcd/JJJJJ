@@ -69,7 +69,8 @@ test.describe('Régression — UX critiques', () => {
   // commit 02470969 : bouton submit a aria-busy + Loader2 5h taille
   test('Bouton "Se connecter" a aria-busy quand submitting', async ({ page }) => {
     await page.goto('/connexion');
-    const btn = page.getByRole('button', { name: /Se connecter/i });
+    // data-testid évite l'ambiguïté avec "Se connecter avec Pro Santé Connect"
+    const btn = page.getByTestId('login-submit');
     await expect(btn).toBeVisible();
     // Au repos, aria-busy doit être absent ou false
     const busyAtRest = await btn.getAttribute('aria-busy');

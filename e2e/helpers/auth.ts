@@ -37,8 +37,8 @@ export async function loginAs(page: Page, account: TestAccountKey): Promise<void
   const creds = TEST_ACCOUNTS[account];
   await page.goto('/connexion');
   await page.locator('input[type="email"]').fill(creds.email);
-  await page.locator('input[type="password"]').fill(creds.password);
-  await page.getByRole('button', { name: /Se connecter/i }).click();
+  await page.locator('input[type="password"]').first().fill(creds.password);
+  await page.getByTestId('login-submit').click();
 
   const expectedUrl =
     creds.role === 'ADMIN_PLATEFORME'
