@@ -171,8 +171,14 @@ export default function InscriptionEtablissement() {
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</label>
                 <div className="relative">
                   <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required />
-                  <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <button
+                    type="button"
+                    onClick={() => setAfficherMdp(!afficherMdp)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    aria-label={afficherMdp ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                    aria-pressed={afficherMdp}
+                  >
+                    {afficherMdp ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
                   </button>
                 </div>
               </div>

@@ -102,6 +102,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@eslint/js": "^9.32.0",
     "@playwright/test": "^1.57.0",
     "@sentry/vite-plugin": "^4.9.1",

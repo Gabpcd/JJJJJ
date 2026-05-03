@@ -765,6 +765,32 @@
   .card-kpi {
     transition: none !important;
   }
+  /* Couvre les utilitaires Tailwind d'animation (Loader2, indicateurs, etc.) */
+  .animate-spin,
+  .animate-ping,
+  .animate-pulse,
+  .animate-bounce {
+    animation: none !important;
+  }
+}
+
+/* ═══ Skip-to-content link (accessibilité clavier) ═══ */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  z-index: 10000;
+  transition: top 0.2s ease;
+}
+.skip-to-content:focus {
+  top: 8px;
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 @media print {

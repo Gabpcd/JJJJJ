@@ -19,7 +19,9 @@ export function FooterLegal() {
           <Link to="/confidentialite" className="hover:text-primary hover:underline transition-colors">🔒 Confidentialité</Link>
           <span className="text-primary/30">•</span>
           <Link to="/mentions-legales" className="hover:text-primary hover:underline transition-colors">📄 Mentions légales</Link>
-          <span className="text-primary/30">•</span>
+          <span className="text-primary/30" aria-hidden="true">•</span>
+          <Link to="/accessibilite" className="hover:text-primary hover:underline transition-colors">♿ Accessibilité</Link>
+          <span className="text-primary/30" aria-hidden="true">•</span>
           <a href="mailto:contact@jolene.app" className="hover:text-primary hover:underline transition-colors">✉️ Contact</a>
         </div>
         <p className="text-[10px] text-muted-foreground/60 mt-2">© {new Date().getFullYear()} Jolene SASU — Tous droits réservés 🩷</p>

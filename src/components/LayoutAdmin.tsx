@@ -248,7 +248,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ── Content ── */}
-      <main className="flex-1 md:ml-[240px] mt-14 md:mt-0">
+      <main id="main-content" tabIndex={-1} className="flex-1 md:ml-[240px] mt-14 md:mt-0">
         <div className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6">
           {children}
         </div>

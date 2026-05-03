@@ -40,6 +40,7 @@ const PageCGU = lazy(() => import("./pages/PageCGU"));
 const PageCGV = lazy(() => import("./pages/PageCGV"));
 const PageConfidentialite = lazy(() => import("./pages/PageConfidentialite"));
 const PageMentionsLegales = lazy(() => import("./pages/PageMentionsLegales"));
+const PageAccessibilite = lazy(() => import("./pages/PageAccessibilite"));
 const PageAide = lazy(() => import("./pages/PageAide"));
 const PageAideArticle = lazy(() => import("./pages/PageAideArticle"));
 const PageParametresNotifications = lazy(() => import("./pages/PageParametresNotifications"));
@@ -169,6 +170,7 @@ function AppRoutes() {
           <Route path="/confidentialite" element={<PageConfidentialite />} />
           <Route path="/politique-confidentialite" element={<PageConfidentialite />} />
           <Route path="/mentions-legales" element={<PageMentionsLegales />} />
+          <Route path="/accessibilite" element={<PageAccessibilite />} />
           <Route path="/aide" element={<PageAide />} />
           <Route path="/aide/:slug" element={<PageAideArticle />} />
           <Route path="/faq" element={<Navigate to="/aide" replace />} />
@@ -311,6 +313,7 @@ const App = () => (
         <AuthProvider>
           <NotificationProvider>
             <BrowserRouter>
+              <a href="#main-content" className="skip-to-content">Aller au contenu principal</a>
               <AppRoutes />
               <Toaster
                 position="top-center"
