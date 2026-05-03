@@ -6,7 +6,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Scale, PlusCircle, ChevronRight, Clock, CheckCircle, AlertTriangle, MessageCircle, Filter } from 'lucide-react';
+import { Scale, PlusCircle, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,17 +16,12 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
+import { TimelineLitige } from '@/components/litige/TimelineLitige';
+import { CompteARebours7j } from '@/components/litige/CompteARebours7j';
+import { BoutonsActionLitige } from '@/components/litige/BoutonsActionLitige';
+import { statutBadgeV2, estResolu } from '@/lib/statutLitige';
 
-type FiltreStatut = 'TOUS' | 'OUVERT' | 'MEDIATION' | 'FERME';
-
-function statutBadge(statut: string) {
-  switch (statut) {
-    case 'OUVERT': return { label: 'Ouvert', icon: Clock, classes: 'bg-warning/10 text-warning border-warning/30' };
-    case 'MEDIATION': return { label: 'Médiation', icon: AlertTriangle, classes: 'bg-info/10 text-info border-info/30' };
-    case 'FERME': return { label: 'Fermé', icon: CheckCircle, classes: 'bg-success/10 text-success border-success/30' };
-    default: return { label: statut, icon: Scale, classes: 'bg-muted text-muted-foreground border-border' };
-  }
-}
+type FiltreStatut = 'TOUS' | 'OUVERT' | 'MEDIATION' | 'ACTION_ATTENDUE' | 'RESOLU' | 'FERME';
 
 export default function LitigesSoignant() {
   usePageTitle('Mes litiges');
@@ -67,14 +62,16 @@ export function LitigesSoignantContent() {
 
   const filteredLitiges = useMemo(() => {
     if (filtre === 'TOUS') return litiges;
-    return litiges.filter(l => l.statut === filtre);
+    return litiges.filter(l => statutBadgeV2(l.statut).groupe === filtre || (filtre === 'RESOLU' && (statutBadgeV2(l.statut).groupe === 'RESOLU_ACCORD' || statutBadgeV2(l.statut).groupe === 'RESOLU_DECISION')));
   }, [litiges, filtre]);
 
   const counts = useMemo(() => ({
     total: litiges.length,
-    ouvert: litiges.filter(l => l.statut === 'OUVERT').length,
-    mediation: litiges.filter(l => l.statut === 'MEDIATION').length,
-    ferme: litiges.filter(l => l.statut === 'FERME').length,
+    ouvert: litiges.filter(l => statutBadgeV2(l.statut).groupe === 'OUVERT').length,
+    mediation: litiges.filter(l => statutBadgeV2(l.statut).groupe === 'MEDIATION').length,
+    actionAttendue: litiges.filter(l => statutBadgeV2(l.statut).groupe === 'ACTION_ATTENDUE').length,
+    resolu: litiges.filter(l => statutBadgeV2(l.statut).groupe === 'RESOLU_ACCORD' || statutBadgeV2(l.statut).groupe === 'RESOLU_DECISION').length,
+    ferme: litiges.filter(l => statutBadgeV2(l.statut).groupe === 'FERME').length,
   }), [litiges]);
 
   const openNewLitige = async () => {
@@ -147,6 +144,8 @@ export function LitigesSoignantContent() {
             { id: 'TOUS' as FiltreStatut, label: 'Tous', count: counts.total },
             { id: 'OUVERT' as FiltreStatut, label: 'Ouverts', count: counts.ouvert },
             { id: 'MEDIATION' as FiltreStatut, label: 'Médiation', count: counts.mediation },
+            { id: 'ACTION_ATTENDUE' as FiltreStatut, label: 'Revue admin', count: counts.actionAttendue },
+            { id: 'RESOLU' as FiltreStatut, label: 'Résolus', count: counts.resolu },
             { id: 'FERME' as FiltreStatut, label: 'Fermés', count: counts.ferme },
           ].filter(f => f.id === 'TOUS' || f.count > 0).map(f => (
             <button
@@ -173,9 +172,10 @@ export function LitigesSoignantContent() {
       ) : (
         <div className="space-y-3">
           {filteredLitiges.map(l => {
-            const badge = statutBadge(l.statut);
+            const badge = statutBadgeV2(l.statut);
             const isExpanded = expandedId === l.id;
             const mission = l.missions;
+            const showCountdown = l.statut === 'MEDIATION_EN_COURS' && !estResolu(l.statut);
             return (
               <div key={l.id} className="card-base overflow-hidden">
                 {/* Litige header — always visible, clickable */}
@@ -184,7 +184,7 @@ export function LitigesSoignantContent() {
                   onClick={() => setExpandedId(isExpanded ? null : l.id)}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <Badge variant="outline" className={`text-[10px] ${badge.classes}`}>
                         <badge.icon className="h-3 w-3 mr-1" />
                         {badge.label}
@@ -192,6 +192,7 @@ export function LitigesSoignantContent() {
                       <span className="text-[10px] text-muted-foreground">
                         {format(new Date(l.cree_le), "d MMM yyyy", { locale: fr })}
                       </span>
+                      {showCountdown && <CompteARebours7j creeLe={l.cree_le} />}
                     </div>
                     <p className="text-sm font-semibold text-foreground truncate">
                       {mission?.intitule || 'Mission'}
@@ -218,9 +219,11 @@ export function LitigesSoignantContent() {
                   </div>
                 </div>
 
-                {/* Expanded: full discussion thread */}
+                {/* Expanded: timeline + actions + discussion thread */}
                 {isExpanded && (
-                  <div className="border-t border-border mt-3 pt-3">
+                  <div className="border-t border-border mt-3 pt-3 space-y-3">
+                    <TimelineLitige statut={l.statut} />
+                    <BoutonsActionLitige litige={l} role="SOIGNANT" onUpdate={charger} />
                     <FilDiscussionLitige litige={l} onUpdate={charger} />
                   </div>
                 )}

@@ -19,17 +19,10 @@ import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
 import { ReclamationsContent } from './MesReclamations';
-
-const STATUT_COLORS: Record<string, string> = {
-  OUVERT: 'bg-warning/10 text-warning',
-  EN_COURS: 'bg-primary/10 text-primary',
-  EN_DISCUSSION: 'bg-primary/10 text-primary',
-  EN_MEDIATION: 'bg-info/10 text-info',
-  CONTESTEE: 'bg-warning/10 text-warning',
-  RESOLU: 'bg-success/10 text-success',
-  CLOTURE: 'bg-success/10 text-success',
-  FERME: 'bg-muted text-muted-foreground',
-};
+import { TimelineLitige } from '@/components/litige/TimelineLitige';
+import { CompteARebours7j } from '@/components/litige/CompteARebours7j';
+import { BoutonsActionLitige } from '@/components/litige/BoutonsActionLitige';
+import { statutBadgeV2, estResolu } from '@/lib/statutLitige';
 
 export default function LitigesEtablissement() {
   usePageTitle('Litiges & contestations');
@@ -149,6 +142,22 @@ export default function LitigesEtablissement() {
         <div className="space-y-4">
           {litiges.map((l: any) => {
             const isExpanded = expandedId === l.litige_id;
+            const badge = statutBadgeV2(l.statut);
+            const showCountdown = l.statut === 'MEDIATION_EN_COURS' && !estResolu(l.statut);
+            const litigeFull = {
+              id: l.litige_id,
+              statut: l.statut,
+              motif: l.motif,
+              cree_le: l.cree_le,
+              accord_soignant: l.accord_soignant,
+              accord_etablissement: l.accord_etablissement,
+              accord_soignant_le: l.accord_soignant_le,
+              accord_etablissement_le: l.accord_etablissement_le,
+              soignant_id: l.soignant_id,
+              etablissement_id: l.etablissement_id,
+              resolution: l.resolution,
+              missions: { intitule: l.mission_intitule },
+            };
             return (
               <div key={l.litige_id} className="card-base">
                 {/* Summary row */}
@@ -175,7 +184,11 @@ export default function LitigesEtablissement() {
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
-                    <Badge className={STATUT_COLORS[l.statut] || ''}>{l.statut}</Badge>
+                    <Badge variant="outline" className={`text-[10px] ${badge.classes}`}>
+                      <badge.icon className="h-3 w-3 mr-1" />
+                      {badge.label}
+                    </Badge>
+                    {showCountdown && <CompteARebours7j creeLe={l.cree_le} />}
                     {l.nb_messages > 0 && (
                       <span className="text-[10px] text-muted-foreground">{l.nb_messages} message{l.nb_messages > 1 ? 's' : ''}</span>
                     )}
@@ -193,20 +206,10 @@ export default function LitigesEtablissement() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-3">
-                    <FilDiscussionLitige
-                      litige={{
-                        id: l.litige_id,
-                        statut: l.statut,
-                        motif: l.motif,
-                        cree_le: l.cree_le,
-                        accord_soignant: l.accord_soignant,
-                        accord_etablissement: l.accord_etablissement,
-                        resolution: l.resolution,
-                        missions: { intitule: l.mission_intitule },
-                      }}
-                      onUpdate={charger}
-                    />
+                  <div className="mt-3 space-y-3">
+                    <TimelineLitige statut={l.statut} />
+                    <BoutonsActionLitige litige={litigeFull} role="ETABLISSEMENT" onUpdate={charger} />
+                    <FilDiscussionLitige litige={litigeFull} onUpdate={charger} />
                   </div>
                 )}
               </div>
