@@ -232,7 +232,7 @@ export default function PageConnexion() {
                       try {
                         const { supabase } = await import('@/integrations/supabase/client');
                         const opts: { redirectTo: string; captchaToken?: string } = {
-                          redirectTo: 'https://jolene.app/connexion',
+                          redirectTo: `${window.location.origin}/reset-password`,
                         };
                         if (resetTurnstileToken) opts.captchaToken = resetTurnstileToken;
                         const { error } = await supabase.auth.resetPasswordForEmail(email, opts);

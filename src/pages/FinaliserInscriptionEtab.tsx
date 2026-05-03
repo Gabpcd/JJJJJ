@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, CheckCircle, Upload, Loader2, ArrowLeft, Shield, Download } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -56,11 +56,13 @@ export default function FinaliserInscriptionEtab() {
   const [accepte, setAccepte] = useState(false);
   const [certifie, setCertifie] = useState(false);
   const [signing, setSigning] = useState(false);
+  const signLockRef = useRef(false);
 
   // Step 2 state
   const [ribFile, setRibFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [ribUploaded, setRibUploaded] = useState(false);
+  const uploadLockRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -72,12 +74,12 @@ export default function FinaliserInscriptionEtab() {
         .maybeSingle();
       if (data) {
         setEtabInfo(data);
-        setContratSigne(!!(data as any).contrat_service_signe);
-        setRibUploaded(!!((data as any).rib_s3_key && (data as any).rib_s3_key !== 'legacy/auto-backfill'));
-        if ((data as any).contrat_service_signe) setStep(2);
-        if ((data as any).contrat_service_signe && (data as any).rib_s3_key && (data as any).rib_s3_key !== 'legacy/auto-backfill') {
-          setStep(2);
-        }
+        const signe = !!(data as any).contrat_service_signe;
+        const ribOk = !!((data as any).rib_s3_key && (data as any).rib_s3_key !== 'legacy/auto-backfill');
+        setContratSigne(signe);
+        setRibUploaded(ribOk);
+        // Step 2 dès que contrat signé (le user upload son RIB ensuite)
+        if (signe) setStep(2);
       }
       setLoading(false);
     })();
@@ -95,6 +97,8 @@ export default function FinaliserInscriptionEtab() {
 
   const signerContrat = async (signatureBase64: string) => {
     if (!user) return;
+    if (signLockRef.current) return; // synchronous lock anti double-clic
+    signLockRef.current = true;
     setSigning(true);
     try {
       // Upload signature image (PNG base64 → bucket jolene-documents)
@@ -118,6 +122,10 @@ export default function FinaliserInscriptionEtab() {
       }
 
       const hash = await hashContratTexte(contratTexte);
+      // L'IP réelle est récupérée côté serveur (RPC SECURITY DEFINER lit
+      // current_setting('request.headers')::jsonb->>'x-forwarded-for' ou
+      // 'cf-connecting-ip'). Passer '' depuis le frontend est safe : la
+      // RPC override avec l'IP serveur si présente. Cf. fn_signer_contrat_service.
       const { data, error } = await supabase.rpc('fn_signer_contrat_service' as any, {
         p_version: CONTRAT_SERVICE_VERSION,
         p_ip: '',
@@ -133,12 +141,15 @@ export default function FinaliserInscriptionEtab() {
     } catch (err: any) {
       toast.error(err?.message || 'Erreur lors de la signature');
     } finally {
+      signLockRef.current = false;
       setSigning(false);
     }
   };
 
   const uploadRib = async () => {
     if (!ribFile || !user) return;
+    if (uploadLockRef.current) return;
+    uploadLockRef.current = true;
     const ext = ribFile.name.split('.').pop()?.toLowerCase() || 'pdf';
     const allowed = ['pdf', 'jpg', 'jpeg', 'png'];
     if (!allowed.includes(ext)) {
@@ -174,6 +185,7 @@ export default function FinaliserInscriptionEtab() {
     } catch (err: any) {
       toast.error(err?.message || 'Erreur lors de l\'upload');
     } finally {
+      uploadLockRef.current = false;
       setUploading(false);
     }
   };
@@ -296,14 +308,17 @@ export default function FinaliserInscriptionEtab() {
               <p className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Upload className="h-4 w-4 text-primary" /> Relevé d'identité bancaire (RIB)
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground" id="rib-help">
                 Votre RIB est nécessaire pour les opérations de paiement sur la plateforme (prélèvements commission, virements). Format PDF, JPG ou PNG (max 5 Mo). Donnée chiffrée et accessible uniquement par l'admin Jolene.
               </p>
               <input
+                id="rib-file-input"
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png"
                 onChange={e => setRibFile(e.target.files?.[0] || null)}
                 className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                aria-label="Téléverser votre RIB (PDF, JPG ou PNG, 5 Mo max)"
+                aria-describedby="rib-help"
               />
               {ribFile && (
                 <p className="text-xs text-muted-foreground">

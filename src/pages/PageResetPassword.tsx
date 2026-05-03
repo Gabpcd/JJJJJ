@@ -1,0 +1,171 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { HeartPulse, Eye, EyeOff, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useNotification } from '@/contexts/NotificationContext';
+import { extraireMessageErreur } from '@/lib/erreurs';
+import { FooterLegal } from '@/components/FooterLegal';
+import { usePageTitle } from '@/hooks/usePageTitle';
+
+const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
+
+export default function PageResetPassword() {
+  usePageTitle('Réinitialiser le mot de passe');
+  const navigate = useNavigate();
+  const { afficherNotification } = useNotification();
+
+  const [recoverySession, setRecoverySession] = useState<boolean | null>(null);
+  const [motDePasse, setMotDePasse] = useState('');
+  const [confirmMdp, setConfirmMdp] = useState('');
+  const [afficherMdp, setAfficherMdp] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  // Supabase pose les tokens du lien email dans le hash : #access_token=...&type=recovery
+  // Le SDK les consume automatiquement et déclenche un évènement PASSWORD_RECOVERY.
+  useEffect(() => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || (session && window.location.hash.includes('type=recovery'))) {
+        setRecoverySession(true);
+      }
+    });
+    // Fallback : si déjà authentifié au mount avec hash recovery
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session && (window.location.hash.includes('type=recovery') || recoverySession === null)) {
+        setRecoverySession(true);
+      } else if (recoverySession === null) {
+        // Pas de session = lien expiré ou invalide
+        setRecoverySession(false);
+      }
+    });
+    return () => subscription.subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const valide = motDePasse.length >= 8 && motDePasse === confirmMdp;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!valide || submitting) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: motDePasse });
+      if (error) {
+        afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
+        return;
+      }
+      setSuccess(true);
+      afficherNotification({ type: 'succes', message: 'Mot de passe modifié avec succès.' });
+      setTimeout(() => navigate('/connexion'), 2000);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-6">
+            <HeartPulse className="h-10 w-10 text-primary mx-auto mb-2" />
+            <h1 className="text-xl font-bold text-foreground">Réinitialiser le mot de passe</h1>
+          </div>
+
+          {recoverySession === null && (
+            <div className="card-base text-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
+              <p className="text-sm text-muted-foreground mt-2">Vérification du lien…</p>
+            </div>
+          )}
+
+          {recoverySession === false && (
+            <div className="card-base">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-destructive">Lien invalide ou expiré</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Le lien de réinitialisation n'est plus valable. Demandez un nouveau lien depuis la page de connexion.
+                  </p>
+                  <button onClick={() => navigate('/connexion')} className="btn-primary mt-4 w-full">
+                    Retour à la connexion
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {recoverySession && success && (
+            <div className="card-base text-center">
+              <CheckCircle className="h-8 w-8 text-success mx-auto mb-2" />
+              <p className="font-semibold text-foreground">Mot de passe modifié</p>
+              <p className="text-sm text-muted-foreground mt-1">Redirection vers la connexion…</p>
+            </div>
+          )}
+
+          {recoverySession && !success && (
+            <form onSubmit={handleSubmit} className="card-base space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Choisissez un nouveau mot de passe (minimum 8 caractères).
+              </p>
+
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Nouveau mot de passe *</span>
+                <div className="relative">
+                  <input
+                    type={afficherMdp ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={motDePasse}
+                    onChange={(e) => setMotDePasse(e.target.value)}
+                    placeholder="Minimum 8 caractères"
+                    className="input-base pr-10"
+                    required
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAfficherMdp(!afficherMdp)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    aria-label={afficherMdp ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  >
+                    {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Confirmer le mot de passe *</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmMdp}
+                  onChange={(e) => setConfirmMdp(e.target.value)}
+                  className="input-base"
+                  required
+                  minLength={8}
+                />
+                {confirmMdp && confirmMdp !== motDePasse && (
+                  <p className="text-xs text-destructive mt-1" role="alert">Les mots de passe ne correspondent pas</p>
+                )}
+              </label>
+
+              <button
+                type="submit"
+                disabled={!valide || submitting}
+                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                aria-busy={submitting}
+              >
+                {submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />}
+                {submitting ? 'Mise à jour…' : 'Modifier mon mot de passe'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+      <FooterLegal />
+    </div>
+  );
+}
+
+// Helper exporté pour validation au cas où
+export { EMAIL_REGEX };

@@ -15,6 +15,7 @@ import { BandeauCookies } from "@/components/BandeauCookies";
 /* ─── Public pages ─── */
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
 const PageConnexion = lazy(() => import("./pages/PageConnexion"));
+const PageResetPassword = lazy(() => import("./pages/PageResetPassword"));
 const PscCallback = lazy(() => import("./pages/PscCallback"));
 const MandatFacturation = lazy(() => import("./pages/MandatFacturation"));
 const FinaliserInscriptionEtab = lazy(() => import("./pages/FinaliserInscriptionEtab"));
@@ -155,6 +156,7 @@ function AppRoutes() {
           <Route path="/a-propos" element={<APropos />} />
           <Route path="/telecharger" element={<Telecharger />} />
           <Route path="/connexion" element={<PageConnexion />} />
+          <Route path="/reset-password" element={<PageResetPassword />} />
           <Route path="/auth/psc/callback" element={<PscCallback />} />
           <Route path="/confirmer-email" element={<ConfirmerEmail />} />
           <Route path="/inscription/soignant" element={<InscriptionSoignant />} />

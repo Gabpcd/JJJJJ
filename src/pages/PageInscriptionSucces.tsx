@@ -23,8 +23,17 @@ export default function PageInscriptionSucces() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const role = params.get('role') === 'etab' ? 'etab' : 'soignant';
-  const email = params.get('email') || '';
+  // Email récupéré depuis sessionStorage (PII hors URL pour éviter leak via historique navigateur)
+  let email = '';
+  try {
+    email = sessionStorage.getItem('inscription_email') || '';
+  } catch { /* sessionStorage indisponible */ }
   const isOutlook = /outlook\.com$|hotmail\.com$|live\.[a-z]{2,3}$|msn\.com$/i.test(email);
+
+  // Cleanup au démontage : ne garder l'email que pour cette navigation
+  React.useEffect(() => {
+    return () => { try { sessionStorage.removeItem('inscription_email'); } catch { /* noop */ } };
+  }, []);
 
   const target = role === 'etab' ? '/etablissement/tableau-de-bord' : '/soignant/tableau-de-bord';
 

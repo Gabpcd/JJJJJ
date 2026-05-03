@@ -9,7 +9,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
-import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
+import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 import { SelectProfession } from '@/components/SelectProfession';
 import { FooterLegal } from '@/components/FooterLegal';
 import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
@@ -18,7 +18,7 @@ import { logger } from '@/lib/logger';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 
 
-function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => void }) {
+function GeoAutoRequest({ onResult, onRefused }: { onResult: (lat: number, lng: number) => void; onRefused?: () => void }) {
   const [asked, setAsked] = useState(false);
   useEffect(() => {
     if (asked) return;
@@ -26,9 +26,9 @@ function GeoAutoRequest({ onResult }: { onResult: (lat: number, lng: number) => 
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => onResult(pos.coords.latitude, pos.coords.longitude),
-      () => { /* géolocalisation refusée — silencieux */ }
+      () => { onRefused?.(); }
     );
-  }, [asked, onResult]);
+  }, [asked, onResult, onRefused]);
   return null;
 }
 
@@ -43,15 +43,17 @@ function JaugeForce({ motDePasse }: { motDePasse: string }) {
   if (!motDePasse) return null;
   return (
     <div className="mt-1.5">
-      <div className="flex gap-1">
+      <div className="flex gap-1" aria-hidden="true">
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className={`h-1 flex-1 rounded-full ${i <= force ? colors[force] : 'bg-muted'}`} />
         ))}
       </div>
-      <p className="text-[10px] text-muted-foreground mt-0.5">{labels[force]}</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5" role="status" aria-live="polite">Force du mot de passe : {labels[force]}</p>
     </div>
   );
 }
+
+const EMAIL_REGEX = /^[^\s@]{1,64}@[^\s@]{1,255}\.[a-z]{2,}$/i;
 
 function ExerciceTypeSection({ profession, estSalarieEtablissement, onChangeSalarie }: { profession: string; estSalarieEtablissement: boolean | null; onChangeSalarie: (v: boolean) => void }) {
   const { uniqueType } = useTypesExerciceAutorises(profession);
@@ -165,13 +167,21 @@ export default function InscriptionSoignant() {
     }
   }, [form.profession]);
 
-  // L1: Date de naissance obligatoire
-  const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
+  // L1: Date de naissance obligatoire + validation email + 18+ check
+  const emailValide = EMAIL_REGEX.test(form.email.trim());
+  const etape1Valide = emailValide && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu;
   const dateNaissanceRequise = !form.dateNaissance;
+  const dateNaissanceMajeur = (() => {
+    if (!form.dateNaissance) return false;
+    const d = new Date(form.dateNaissance);
+    if (isNaN(d.getTime())) return false;
+    const ageMs = Date.now() - d.getTime();
+    return ageMs >= 18 * 365.25 * 86400000;
+  })();
   const rppsRequis = form.profession && !PROFESSIONS_SANS_RPPS.includes(form.profession);
   const rppsMatch = rppsCorrespond();
   const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && (!rppsResultat.trouve || rppsMatch === false);
-  const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise;
+  const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise && dateNaissanceMajeur && (!TURNSTILE_REQUIRED || !!turnstileToken);
 
   // Verify RPPS when 11 digits entered
   useEffect(() => {
@@ -179,6 +189,7 @@ export default function InscriptionSoignant() {
       setRppsResultat(null);
       return;
     }
+    const controller = new AbortController();
     const timeout = setTimeout(async () => {
       setRppsVerifiant(true);
       try {
@@ -199,10 +210,12 @@ export default function InscriptionSoignant() {
               nom: form.nom,
               turnstileToken,
             }),
+            signal: controller.signal,
           }
         );
 
         const data = await response.json();
+        if (controller.signal.aborted) return;
         logger.debug('RPPS response:', data);
 
         if (!response.ok) {
@@ -221,13 +234,17 @@ export default function InscriptionSoignant() {
         } else {
           setRppsResultat({ trouve: false });
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return; // re-render cancellation, normal
         logger.error('verify-rpps fetch exception', err);
         setRppsResultat(null);
       }
-      setRppsVerifiant(false);
+      if (!controller.signal.aborted) setRppsVerifiant(false);
     }, 500);
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [form.rpps, form.prenom, form.nom]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -235,10 +252,9 @@ export default function InscriptionSoignant() {
     setSubmitting(true);
     try {
       await inscriptionSoignant({ ...form, turnstileToken });
-      // Redirect vers page de succès qui prévient les utilisateurs Outlook
-      // que l'email peut atterrir en spam (réputation domaine récente).
-      // Cf. docs/deliverability-warmup.md.
-      navigate(`/inscription/succes?role=soignant&email=${encodeURIComponent(form.email)}`);
+      // PII (email) hors URL : sessionStorage évite leak via historique/referer
+      try { sessionStorage.setItem('inscription_email', form.email); } catch { /* sessionStorage indisponible */ }
+      navigate('/inscription/succes?role=soignant');
     } catch (err) {
       if (!gererErreurSupabase(err, () => handleSubmit(e))) {
         afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
@@ -286,27 +302,30 @@ export default function InscriptionSoignant() {
           {etape === 1 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label>
-                <input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</label>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Email *</span>
+                <input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required aria-invalid={form.email.length > 0 && !emailValide} aria-describedby={form.email.length > 0 && !emailValide ? 'email-err' : undefined} />
+                {form.email.length > 0 && !emailValide && (
+                  <p id="email-err" className="text-xs text-destructive mt-1 break-words" role="alert">Format d'email invalide</p>
+                )}
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</span>
                 <div className="relative">
-                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required />
-                  <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required minLength={8} />
+                  <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-label={afficherMdp ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>
                     {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
                 <JaugeForce motDePasse={form.motDePasse} />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Confirmer le mot de passe *</label>
-                <input type="password" autoComplete="new-password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Confirmer le mot de passe *</span>
+                <input type="password" autoComplete="new-password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required minLength={8} aria-invalid={!!form.confirmMdp && form.confirmMdp !== form.motDePasse} aria-describedby={form.confirmMdp && form.confirmMdp !== form.motDePasse ? 'confirm-err' : undefined} />
                 {form.confirmMdp && form.confirmMdp !== form.motDePasse && (
-                  <p className="text-xs text-destructive mt-1">Les mots de passe ne correspondent pas</p>
+                  <p id="confirm-err" className="text-xs text-destructive mt-1 break-words" role="alert">Les mots de passe ne correspondent pas</p>
                 )}
-              </div>
+              </label>
               <label className="flex items-start gap-2 cursor-pointer">
                 <input type="checkbox" checked={cgu} onChange={e => setCgu(e.target.checked)} className="mt-1 h-4 w-4 rounded border-input text-primary accent-primary" />
                 <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgu" target="_blank" className="text-primary hover:underline">Conditions Générales d'Utilisation</a> et la <a href="/confidentialite" target="_blank" className="text-primary hover:underline">Politique de confidentialité</a> *</span>
@@ -317,16 +336,20 @@ export default function InscriptionSoignant() {
 
           {etape === 2 && (
             <div className="space-y-4">
-              <GeoAutoRequest onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
+              <GeoAutoRequest
+                onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }}
+                onRefused={() => afficherNotification({ type: 'info', message: 'Géolocalisation refusée — vous pourrez la réactiver depuis votre profil pour voir les missions près de chez vous.' })}
+              />
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre profil professionnel</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Prénom *</label><input value={form.prenom} onChange={e => maj('prenom', e.target.value)} className="input-base" required /></div>
-                <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required /></div>
+                <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Prénom *</span><input value={form.prenom} onChange={e => maj('prenom', e.target.value)} className="input-base" required autoComplete="given-name" /></label>
+                <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Nom *</span><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required autoComplete="family-name" /></label>
               </div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="+33 6 ..." className="input-base" pattern="[\+]?[0-9\s]{8,15}" /></div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</label><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className="input-base" max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required />
-                {dateNaissanceRequise && <p className="text-xs text-destructive mt-1">La date de naissance est obligatoire</p>}
-              </div>
+              <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</span><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="+33 6 ..." className="input-base" pattern="[\+]?[0-9\s]{8,15}" /></label>
+              <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</span><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className="input-base" max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required aria-invalid={!!form.dateNaissance && !dateNaissanceMajeur} aria-describedby={form.dateNaissance && !dateNaissanceMajeur ? 'date-err' : undefined} />
+                {dateNaissanceRequise && <p className="text-xs text-destructive mt-1 break-words">La date de naissance est obligatoire</p>}
+                {form.dateNaissance && !dateNaissanceMajeur && <p id="date-err" className="text-xs text-destructive mt-1 break-words" role="alert">Vous devez avoir 18 ans révolus pour vous inscrire</p>}
+              </label>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Profession *</label><SelectProfession value={form.profession} onChange={v => maj('profession', v)} /></div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés * <span className="text-xs text-muted-foreground font-normal">(au moins 1)</span></label>
@@ -402,8 +425,8 @@ export default function InscriptionSoignant() {
               <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
-                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
-                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" aria-busy={submitting}>
+                  {submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />}
                   {submitting ? 'Création…' : 'Créer mon compte'}
                 </button>
               </div>

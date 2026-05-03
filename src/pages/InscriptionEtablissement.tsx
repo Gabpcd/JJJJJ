@@ -132,8 +132,9 @@ export default function InscriptionEtablissement() {
     setSubmitting(true);
     try {
       await inscriptionEtablissement({ ...form, turnstileToken });
-      // Redirect vers page de succès (cf. docs/deliverability-warmup.md).
-      navigate(`/inscription/succes?role=etab&email=${encodeURIComponent(form.email)}`);
+      // PII (email) hors URL : sessionStorage évite leak via historique navigateur
+      try { sessionStorage.setItem('inscription_email', form.email); } catch { /* sessionStorage indisponible */ }
+      navigate('/inscription/succes?role=etab');
     } catch (err) {
       if (!gererErreurSupabase(err, () => handleSubmit(e))) {
         handleError(err, 'inscription établissement');
