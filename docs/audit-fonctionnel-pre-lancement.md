@@ -237,13 +237,13 @@ Itération 4 ciblée sur 7 patterns nouveaux (edge functions auth, webhooks sign
 | 3 | Table `stripe_webhook_events(event_id PK)` + RLS admin |
 | 4 | RPC `fn_stripe_webhook_event_is_new(event_id, event_type, payload)` — idempotence stricte par event.id |
 
-À brancher dans `supabase/functions/stripe-webhook/index.ts` (action Gabrielle) :
-```typescript
-const { data: isNew } = await sb.rpc('fn_stripe_webhook_event_is_new', {
-  p_event_id: event.id, p_event_type: event.type, p_payload: event.data
-});
-if (!isNew) return new Response('Already processed', { status: 200 });
+**Branchement code TS livré (commit 77611f19)** : `supabase/functions/stripe-webhook/index.ts` patché aux lignes 72-90 (check idempotence après signature) + 1430-1433 (UPDATE `traite_le` à la fin du flow succès). Catch erreur ne marque PAS comme traité (Stripe retentera).
+
+**Action Gabrielle** : redéployer la fonction (60 KB, hors limites MCP & sans token CLI dispo) :
+```bash
+supabase functions deploy stripe-webhook --project-ref flripxtsyegjshnhzjkz --no-verify-jwt
 ```
+ou via Dashboard Supabase > Edge Functions > stripe-webhook > Deploy.
 
 ## Bugs reportés / tech-debt (post-itération 1)
 
