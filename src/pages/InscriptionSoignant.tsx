@@ -350,15 +350,19 @@ export default function InscriptionSoignant() {
                 {dateNaissanceRequise && <p className="text-xs text-destructive mt-1 break-words">La date de naissance est obligatoire</p>}
                 {form.dateNaissance && !dateNaissanceMajeur && <p id="date-err" className="text-xs text-destructive mt-1 break-words" role="alert">Vous devez avoir 18 ans révolus pour vous inscrire</p>}
               </label>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Profession *</label><SelectProfession value={form.profession} onChange={v => maj('profession', v)} /></div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Types de contrat acceptés * <span className="text-xs text-muted-foreground font-normal">(au moins 1)</span></label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
+                <label htmlFor="profession-select" className="text-sm font-medium text-foreground mb-1.5 block">Profession *</label>
+                <SelectProfession value={form.profession} onChange={v => maj('profession', v)} triggerId="profession-select" />
+              </div>
+              <fieldset className="border-0 p-0 m-0">
+                <legend className="text-sm font-medium text-foreground mb-1.5">Types de contrat acceptés * <span className="text-xs text-muted-foreground font-normal">(au moins 1)</span></legend>
+                <div className="grid grid-cols-2 gap-2 mt-1" role="group" aria-label="Types de contrat acceptés">
                   {CONTRATS.filter(c => peutEtreLiberal || (c.valeur !== 'LIBERAL' && c.valeur !== 'VACATION')).map(c => (
                     <label key={c.valeur} className="flex items-center gap-2 cursor-pointer rounded-lg border border-input px-3 py-2.5 hover:bg-accent/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                       <Checkbox
                         checked={form.typesContrat.includes(c.valeur)}
                         onCheckedChange={() => toggleContrat(c.valeur)}
+                        aria-label={c.label}
                       />
                       <span className="text-sm text-foreground">{c.label}</span>
                     </label>
@@ -372,15 +376,15 @@ export default function InscriptionSoignant() {
                 {form.typesContrat.length === 0 && (
                   <p className="text-xs text-muted-foreground mt-1">Cochez au moins un type de contrat</p>
                 )}
-              </div>
+              </fieldset>
               {rppsRequis ? (
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS *</label>
+                <label className="block">
+                  <span className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS *</span>
                   <div className="relative">
-                    <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base pr-10" inputMode="numeric" autoComplete="off" />
-                    {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+                    <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base pr-10" inputMode="numeric" autoComplete="off" aria-describedby={rppsVerifiant ? 'rpps-status' : undefined} />
+                    {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" aria-hidden="true" />}
                   </div>
-                  {rppsVerifiant && <p className="text-xs text-primary mt-1">Vérification en cours...</p>}
+                  {rppsVerifiant && <p id="rpps-status" className="text-xs text-primary mt-1" role="status">Vérification en cours...</p>}
                   {rppsResultat && rppsResultat.trouve && rppsMatch === true && (
                     <div className="mt-1.5 space-y-1.5">
                       <div className="flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1.5">
@@ -402,12 +406,12 @@ export default function InscriptionSoignant() {
                     </div>
                   )}
                   {rppsResultat && !rppsResultat.trouve && form.rpps.length === 11 && (
-                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5">
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5" role="alert">
                       <ShieldAlert className="h-3.5 w-3.5" />
                       ❌ RPPS non trouvé dans l'annuaire
                     </div>
                   )}
-                </div>
+                </label>
               ) : form.profession && (
                 <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl">
                   <p className="text-xs text-foreground">
@@ -417,11 +421,11 @@ export default function InscriptionSoignant() {
               )}
               {/* Question salarié établissement */}
               <ExerciceTypeSection profession={form.profession} estSalarieEtablissement={form.estSalarieEtablissement} onChangeSalarie={(v) => maj('estSalarieEtablissement', v)} />
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon de déplacement : <span className="text-primary font-bold">{form.rayon} km</span></label>
-                <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full h-2 bg-primary/20 rounded-full appearance-none cursor-pointer accent-primary" />
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Rayon de déplacement : <span className="text-primary font-bold">{form.rayon} km</span></span>
+                <input type="range" min={5} max={100} value={form.rayon} onChange={e => maj('rayon', Number(e.target.value))} className="w-full h-2 bg-primary/20 rounded-full appearance-none cursor-pointer accent-primary" aria-valuemin={5} aria-valuemax={100} aria-valuenow={form.rayon} aria-label="Rayon de déplacement en kilomètres" />
                 <div className="flex justify-between text-[10px] text-muted-foreground"><span>5 km</span><span>100 km</span></div>
-              </div>
+              </label>
               <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>

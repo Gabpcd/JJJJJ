@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import * as Sentry from '@sentry/react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Activity, AlertCircle, AlertTriangle, CheckCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, Bug, CheckCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -245,6 +246,45 @@ export default function AdminStatus() {
               <ExternalLink className="h-3 w-3" /> {label}
             </a>
           ))}
+        </CardContent>
+      </Card>
+
+      {/* Outils diagnostic */}
+      <Card className="mb-4 border-warning/30">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Bug className="h-4 w-4 text-warning" /> Outils diagnostic
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">
+              Déclenche une exception volontaire avec tag <code className="bg-muted px-1.5 py-0.5 rounded">test=true</code> pour
+              vérifier la chaîne Sentry (DSN → release → sourcemaps → user context). À filtrer dans les alertes prod.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-warning/30 text-warning hover:bg-warning/5 gap-1.5"
+              onClick={() => {
+                try {
+                  Sentry.captureException(new Error('Sentry test event from /admin/status'), {
+                    tags: { test: 'true', source: 'admin-diagnostic' },
+                    level: 'info',
+                  });
+                  toast.success('Erreur test envoyée à Sentry. Vérifiez le dashboard.');
+                } catch (e: any) {
+                  toast.error(`Échec : ${e?.message || 'Sentry indisponible'}`);
+                }
+              }}
+            >
+              <Bug className="h-3.5 w-3.5" /> Déclencher erreur test Sentry
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground italic">
+            ℹ️ Si la VITE_SENTRY_DSN n'est pas configurée côté Vercel, ce bouton est inactif silencieusement.
+            Voir <code>docs/sentry-setup.md</code> pour activer Sentry.
+          </p>
         </CardContent>
       </Card>
     </LayoutAdmin>

@@ -12,13 +12,14 @@ interface SelectProfessionProps {
   disabled?: boolean;
   filtresProfessions?: string[];
   placeholder?: string;
+  triggerId?: string;
 }
 
 function normalize(s: string): string {
   return s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 }
 
-export function SelectProfession({ value, onChange, disabled, filtresProfessions, placeholder }: SelectProfessionProps) {
+export function SelectProfession({ value, onChange, disabled, filtresProfessions, placeholder, triggerId }: SelectProfessionProps) {
   const [open, setOpen] = useState(false);
 
   const options = useMemo(
@@ -35,6 +36,7 @@ export function SelectProfession({ value, onChange, disabled, filtresProfessions
           type="button"
           variant="outline"
           role="combobox"
+          id={triggerId}
           aria-expanded={open}
           disabled={disabled}
           className={cn(
