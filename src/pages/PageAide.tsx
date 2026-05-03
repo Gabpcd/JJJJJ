@@ -145,7 +145,7 @@ export default function PageAide() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{a.titre}</h3>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${a.audience === 'SOIGNANT' ? 'bg-primary/15 text-primary' : a.audience === 'ETABLISSEMENT' ? 'bg-info/15 text-info' : 'bg-muted text-muted-foreground'}`}>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${a.audience === 'SOIGNANT' ? 'bg-primary text-primary-foreground' : a.audience === 'ETABLISSEMENT' ? 'bg-info text-info-foreground' : 'bg-foreground text-background'}`}>
                               {audienceLabel(a.audience)}
                             </span>
                           </div>
