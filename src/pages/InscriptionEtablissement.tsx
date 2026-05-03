@@ -187,11 +187,11 @@ export default function InscriptionEtablissement() {
               </div>
               <label className="flex items-start gap-2 cursor-pointer">
                 <input type="checkbox" checked={cgu} onChange={e => setCgu(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
-                <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgu" target="_blank" className="text-primary hover:underline">Conditions Générales d'Utilisation</a> et la <a href="/confidentialite" target="_blank" className="text-primary hover:underline">Politique de confidentialité</a> *</span>
+                <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgu" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Conditions Générales d'Utilisation</a> et la <a href="/confidentialite" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Politique de confidentialité</a> *</span>
               </label>
               <label className="flex items-start gap-2 cursor-pointer">
                 <input type="checkbox" checked={cgv} onChange={e => setCgv(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
-                <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgv" target="_blank" className="text-primary hover:underline">Conditions Générales de Vente</a> *</span>
+                <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgv" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Conditions Générales de Vente</a> *</span>
               </label>
               <button type="button" onClick={() => setEtape(2)} disabled={!etape1Valide} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
             </div>

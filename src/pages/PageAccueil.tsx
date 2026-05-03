@@ -153,13 +153,17 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
 
           <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto mb-8">
             <div className="flex-1">
+              <label htmlFor="hero-profession" className="sr-only">Profession à rechercher</label>
               <SelectProfession
                 value={profession}
                 onChange={setProfession}
                 placeholder="Toutes les professions"
+                triggerId="hero-profession"
               />
             </div>
+            <label htmlFor="hero-ville" className="sr-only">Ville ou code postal</label>
             <input
+              id="hero-ville"
               type="text"
               placeholder="Ville ou code postal (optionnel)"
               value={ville}
