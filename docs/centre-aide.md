@@ -1,14 +1,14 @@
 # Centre d'aide Jolene — `/aide`
 
-Date : 29 avril 2026
+Date : 3 mai 2026 (Refonte.E.3 → 32 articles)
 
 ## Vue d'ensemble
 
 Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
-28 articles disponibles à ce jour, organisés par audience et catégorie.
+32 articles disponibles à ce jour, organisés par audience et catégorie.
 
 - **Recherche full-text** : index GIN PostgreSQL avec `to_tsvector('french')` et `websearch_to_tsquery` (tolérant aux fautes).
-- **Filtre par audience** : SOIGNANT (12), ETABLISSEMENT (9), COMMUN (7 — toujours inclus quel que soit le filtre).
+- **Filtre par audience** : SOIGNANT (14), ETABLISSEMENT (10), COMMUN (8 — toujours inclus quel que soit le filtre).
 - **Bouton aide global** : icône `?` flottante bottom-right présente sur toutes les pages `LayoutApp` (sauf `/aide`).
 - **Lien footer** : « ❓ Centre d'aide » dans `FooterLegal`.
 
@@ -30,9 +30,9 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 - `src/pages/PageAideArticle.tsx` — article unique avec `renderMarkdown` (h1-h3, listes, liens, code, hr).
 - `src/components/BoutonAideGlobal.tsx` — bouton flottant.
 
-## Liste complète des 28 articles
+## Liste complète des 32 articles
 
-### Soignant (12)
+### Soignant (14)
 
 | Slug | Catégorie | Sujet |
 |---|---|---|
@@ -48,8 +48,10 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 | `mes-droits-rgpd-soignant` | RGPD | 6 droits, export 21 clés, conservation 10 ans |
 | `parrainage-soignant` | Inscription et profil | Code unique, +50h cumulées, badge Ambassadeur (3 filleuls) |
 | `prevoyance-madelin` | Inscription et profil | Madelin + avantage fiscal, 3 niveaux, liste d'attente |
+| `comment-fonctionne-mon-score` | Inscription et profil | Score fiabilité v2, 6 composantes, niveaux Bronze→Platine, période probatoire |
+| `comment-noter-un-etablissement` | Missions | 4 critères (accueil, encadrement, clarté, paiement), modif 7j, anonymisation |
 
-### Établissement (9)
+### Établissement (10)
 
 | Slug | Catégorie | Sujet |
 |---|---|---|
@@ -62,8 +64,9 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 | `etab-resoudre-litige` | Litiges | Fenêtres F2/F3, gel scope, médiation admin |
 | `etab-gerer-absence-soignant` | Pointage | 4 cas A/B/C/D, fn_resoudre_absence_mission |
 | `parrainage-etablissement` | Inscription et profil | Code ETB-XXXXXX, 100€ crédit Jolene par filleul validé, cap 10 |
+| `comment-noter-un-soignant` | Missions | 4 critères (ponctualité, professionnalisme, qualité, communication), modif 7j, signalement |
 
-### Commun (7)
+### Commun (8)
 
 | Slug | Catégorie | Sujet |
 |---|---|---|
@@ -74,6 +77,7 @@ Le centre d'aide est accessible publiquement sur `/aide` (ou `/faq`, `/help`).
 | `pourquoi-je-recois-emails-bienvenue` | Inscription et profil | Série J0/J1/J3/J7 + opt-out via `/parametres/notifications` |
 | `je-n-ai-pas-recu-d-email` | Inscription et profil | Spam Outlook + actions warmup réputation domaine |
 | `sauvegarder-recherches-alertes` | Missions | Filtres sauvegardés, alertes IMMEDIATE/QUOTIDIENNE/HEBDO, limite 20, désactivation |
+| `mediation-des-litiges` | Litiges | Workflow médiation amiable 7j, accord mutuel, revue admin, conséquences scoring |
 
 ## Comment ajouter un nouvel article
 
@@ -107,15 +111,10 @@ VALUES ('mon-slug', 'Mon titre', 'SOIGNANT', 'Catégorie', 50, $$# Contenu Markd
 
 | Test | Attendu | Obtenu |
 |---|---|---|
-| Total publiés | 28 | 28 ✓ |
-| nb SOIGNANT | 12 | 12 ✓ |
-| nb ETABLISSEMENT | 9 | 9 ✓ |
-| nb COMMUN | 7 | 7 ✓ |
-| Audience SOIGNANT (incl COMMUN) | 19 | 19 ✓ |
-| Audience ETABLISSEMENT (incl COMMUN) | 16 | 16 ✓ |
-| Recherche "RPPS" | ≥1 | 7 ✓ |
-| Recherche "Defacto" | ≥1 | 4 ✓ |
-| Recherche "URSSAF" | ≥1 | 5 ✓ |
-| Recherche "litige" | ≥2 | 13 ✓ |
-| Recherche "absence" | ≥1 | 2 ✓ |
-| Recherche "RGPD" | ≥2 | 8 ✓ |
+| Total publiés | 32 | 32 ✓ |
+| nb SOIGNANT | 14 | 14 ✓ |
+| nb ETABLISSEMENT | 10 | 10 ✓ |
+| nb COMMUN | 8 | 8 ✓ |
+| Recherche "score" SOIGNANT | ≥1 | 4 ✓ |
+| Recherche "noter" | ≥2 | 7 ✓ |
+| Recherche "mediation" | ≥1 | 3 ✓ |

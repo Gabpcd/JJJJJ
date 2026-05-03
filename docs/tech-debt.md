@@ -1,5 +1,28 @@
 # Dette technique — Jolene
 
+## Refonte scoring + médiation litiges complète (2026-05-03)
+
+**Refonte.A → E** livrée et testée (19/19 PASS E2E). Voir docs `module-scoring-v2.md`, `notation-bidirectionnelle.md`, `mediation-litiges.md`.
+
+**Bug prod-critique trouvé en E2E (E.4 S19) — fixé** : `fn_admin_trancher_litige` utilisait `p_action='MISSION_LITIGE'` non présent dans `journaux_audit_action_check`. Migration `20260429430000_refonte_e_4_fix_litige_admin_tranche.sql` ajoute action `LITIGE_ADMIN_TRANCHE` + patch RPC.
+
+**Cleanup v1 livré** (Refonte.E.3, migration `20260429440000_refonte_e_3_cleanup_scoring_v1_inline.sql`) : retiré le calcul score v1 inline dans `dec_mettre_a_jour_fiabilite` (formule `50 + bonus - malus` heuristique). v2 prend complètement le relais via `fn_calculer_score_fiabilite_v2`. Les compteurs (`total_missions_terminees`, `heures_cumulees`, etc.) et la logique badge Ambassadeur restent dans le trigger (utilisés par v2).
+
+### Tech-debt soulevée par la refonte
+
+| Item | Priorité | Cible |
+|---|---|---|
+| **Composantes ponctualité + réactivité** : poids 15% + 10% mais sources données pas branchées (toujours inactives, redistribuées) | P1 | Q3 2026 |
+| **Epsilon floating-point seuil 70** : score `69.999...` (affiché 70.00) classé ARGENT au lieu de OR. À fixer dans `fn_determiner_niveau` ou arrondir avant comparaison | P2 | Q3 2026 |
+| **Compteur dénormalisé `total_missions_terminees`** : `fn_calculer_score_fiabilite_v2` se fie à cette colonne maintenue par trigger `dec_mettre_a_jour_fiabilite`. Refactor possible : utiliser `COUNT(*)` direct dans v2 | P3 | Optionnel |
+| **Suppression colonne `evaluations` legacy** : table conservée pour historique, à archiver/supprimer dans 6 mois si plus d'usage | P3 | Novembre 2026 |
+| **Suppression statuts litiges legacy** (`EN_MEDIATION`, `RESOLU_SOIGNANT`, `RESOLU_ETABLISSEMENT`, `RESOLU_ADMIN`). À retirer du `litiges_statut_check` après migration des litiges historiques | P3 | Novembre 2026 |
+| **Suppression RPCs litige legacy** (`fn_demander_mediation_litige`, `fn_cloturer_litige`) — plus appelées par UI Refonte.E.1, à supprimer dans 6 mois | P3 | Novembre 2026 |
+| **Page admin modération notations** : RPCs `fn_signaler_notation` + `fn_admin_masquer_notation` prêtes, page UI à créer | P2 | Q3 2026 |
+| **Email admin "litige basculé revue"** : actuellement seules les parties sont notifiées | P2 | Selon usage |
+
+---
+
 ## J5.E — Prévoyance Madelin : RPC interne dépréciée (2026-05-02)
 
 **Contexte** : J5.E refonte page Prévoyance en mode "liste d'attente" (pas de partenariat April actif, décision business). L'ancienne RPC `fn_souscrire_prevoyance` + tables `plans_prevoyance` + `souscriptions_prevoyance` ne sont plus appelées depuis la nouvelle UI.
