@@ -37,9 +37,12 @@ test.describe('Authentification', () => {
       await page.locator('input[type="password"]').first().fill('motdepassefaux');
       await page.getByTestId('login-submit').click();
 
-      // Sonner toast or notification should appear with an error
-      const erreur = page.locator('[data-sonner-toast][data-type="error"], [role="status"]');
-      await expect(erreur.first()).toBeVisible({ timeout: 10000 });
+      // Notification erreur affichée (NotificationContext utilise role="alert" pour les erreurs).
+      // Soit toast Sonner (data-sonner-toast), soit notif custom (role="alert" data-notification-type="erreur").
+      const erreur = page.locator('[data-sonner-toast][data-type="error"], [role="alert"], [data-notification-type="erreur"]');
+      await expect(erreur.first()).toBeVisible({ timeout: 15_000 });
+      // Et le user reste sur /connexion (pas de redirection vers dashboard)
+      await expect(page).toHaveURL(/\/connexion/);
     });
 
     test('soumettre sans remplir les champs affiche une erreur', async ({ page }) => {
