@@ -228,7 +228,11 @@ export default function AdminImpayees() {
   };
 
   const marquerEnRetard = async (factureId: string) => {
-    await supabase.from('factures').update({ statut: 'EN_RETARD' } as any).eq('id', factureId);
+    const { data, error } = await supabase.rpc('fn_admin_marquer_facture_en_retard' as any, { p_facture_id: factureId });
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || 'Erreur lors de la mise à jour du statut');
+      return;
+    }
     toast.success('Statut mis à jour : EN_RETARD');
     charger();
   };

@@ -378,14 +378,17 @@ function ConfigEtabsChorus() {
       setEditing({ etab });
       return;
     }
-    const { error } = await supabase.from('chorus_pro_config' as any).upsert({
-      etablissement_id: etab.id,
-      numero_structure: cfg?.numero_structure ?? null,
-      code_service: cfg?.code_service ?? null,
-      identifiant_cpro: cfg?.identifiant_cpro ?? null,
-      actif: nextActif,
-    }, { onConflict: 'etablissement_id' });
-    if (error) { toast.error(error.message); return; }
+    const { data, error } = await supabase.rpc('fn_admin_chorus_config_toggle' as any, {
+      p_etablissement_id: etab.id,
+      p_actif: nextActif,
+      p_numero_structure: cfg?.numero_structure ?? null,
+      p_code_service: cfg?.code_service ?? null,
+      p_identifiant_cpro: cfg?.identifiant_cpro ?? null,
+    });
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || error?.message || 'Erreur');
+      return;
+    }
     toast.success(nextActif ? 'Activé' : 'Désactivé');
     await charger();
   };

@@ -333,9 +333,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
         const missionId = (rpcResult as any)?.mission_id;
 
-        // type_contrat_recherche still needs UPDATE (not in fn_creer_mission)
+        // type_contrat_recherche : passe par RPC dédiée (audit log)
         if (missionId && contratPreference !== 'TOUS') {
-          await supabase.from('missions').update({ type_contrat_recherche: contratPreference } as any).eq('id', missionId);
+          await supabase.rpc('fn_modifier_type_contrat_mission' as any, {
+            p_mission_id: missionId,
+            p_type_contrat: contratPreference,
+          });
         }
         await supabase.rpc('fn_ecrire_audit_safe', {
           p_acteur_id: user.id, p_type_acteur: role, p_action: 'MISSION_CREATION',

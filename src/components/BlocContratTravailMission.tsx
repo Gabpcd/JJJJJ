@@ -82,46 +82,20 @@ export function BlocContratTravailMission({
         .upload(path, file, { upsert: true, contentType: 'application/pdf' });
       if (upErr) throw upErr;
 
-      // Insert ou update row contrats_travail_missions
-      if (contrat) {
-        // Replace : update
-        const { error: updErr } = await supabase
-          .from('contrats_travail_missions' as any)
-          .update({
-            pdf_s3_key: path,
-            nom_fichier: file.name,
-            taille_octets: file.size,
-            uploaded_at: new Date().toISOString(),
-            uploaded_by: user.id,
-          } as any)
-          .eq('mission_id', missionId);
-        if (updErr) throw updErr;
+      // Upsert row contrats_travail_missions + audit via RPC unifiée
+      const wasReplace = !!contrat;
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_uploader_contrat_travail_mission' as any, {
+        p_mission_id: missionId,
+        p_pdf_s3_key: path,
+        p_nom_fichier: file.name,
+        p_taille_octets: file.size,
+      });
+      if (rpcErr) throw rpcErr;
+      if ((rpcData as any)?.error) throw new Error((rpcData as any).error);
 
-        await supabase.from('journaux_audit').insert({
-          acteur_id: user.id, type_acteur: 'ADMIN_ETABLISSEMENT',
-          action: 'DOCUMENT_TELEVERSEMENT', type_ressource: 'mission', id_ressource: missionId,
-          details: { type: 'contrat_travail_remplace', taille_octets: file.size },
-        });
+      if (wasReplace) {
         toast.success('Contrat de travail remplacé');
       } else {
-        const { error: insErr } = await supabase
-          .from('contrats_travail_missions' as any)
-          .insert({
-            mission_id: missionId,
-            etablissement_id: etablissementId,
-            soignant_id: soignantAssigneId,
-            pdf_s3_key: path,
-            nom_fichier: file.name,
-            taille_octets: file.size,
-            uploaded_by: user.id,
-          } as any);
-        if (insErr) throw insErr;
-
-        await supabase.from('journaux_audit').insert({
-          acteur_id: user.id, type_acteur: 'ADMIN_ETABLISSEMENT',
-          action: 'DOCUMENT_TELEVERSEMENT', type_ressource: 'mission', id_ressource: missionId,
-          details: { type: 'contrat_travail_uploade', taille_octets: file.size },
-        });
 
         // Notification + email soignant (best-effort)
         try {
