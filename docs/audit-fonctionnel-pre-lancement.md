@@ -209,7 +209,41 @@ Migration : `20260429560000_iter3_audit_patterns_failles_connues.sql` — 13 fix
 | Après itération 1 + 13 fixes | 9/10 | Tous bugs critiques + majeurs DB fixés |
 | Après audit attaquant + RGPD fix | 9.5/10 | Bug RGPD critique fixé |
 | Après itération 2 + 4 fixes sécurité | 9.7/10 | 4 escalades de privilèges fermées |
-| **Après itération 3 + 13 fixes** | **9.9/10** | 13 cross-tenant leaks fermés. Aucun bug critique restant. |
+| Après itération 3 + 13 fixes | 9.9/10 | 13 cross-tenant leaks fermés |
+| **Après itération 4 + 4 fixes** | **9.95/10** | Idempotence Stripe webhook renforcée. Aucun bug critique restant. |
+
+## Bugs fixés en itération 4 — patterns non explorés (1 migration)
+
+Itération 4 ciblée sur 7 patterns nouveaux (edge functions auth, webhooks signatures, Storage RLS, triggers récursifs, race conditions paiements, views, SQL injection).
+
+### Audits iter4
+
+| Sujet | Résultat |
+|---|---|
+| **S1 Edge functions auth** | ✅ verify_jwt cohérent, signatures Stripe (constructEventAsync) + Defacto (HMAC SHA-256 timing-safe) en place |
+| **S2 Webhooks signatures** | ✅ Stripe + Defacto OK ; idempotence renforcée (voir iter4 fix) |
+| **S3 Storage RLS** | ✅ 2 buckets privés + RLS strictes (path[1] = auth.uid()) + MIME types whitelistés + 10MB limit |
+| **S4 Triggers récursifs** | ✅ Pas de boucle détectée (cascade missions → soignants compteurs OK) |
+| **S5 Race conditions paiements** | 4 fixes appliqués ✓ |
+| **S6 Views/MVs** | ✅ 0 view publique (rien à exposer) |
+| **S7 SQL injection EXECUTE format** | ✅ 1 seul EXECUTE format() (event trigger DDL avec catalog system input — safe) |
+
+### Migration : `20260429570000_iter4_stripe_webhook_idempotence.sql`
+
+| # | Fix |
+|---|---|
+| 1 | UNIQUE INDEX partial `factures_honoraires.stripe_payment_intent_id` (anti-doublon webhook) |
+| 2 | UNIQUE INDEX partial `paiements_mission.stripe_payment_intent_id` |
+| 3 | Table `stripe_webhook_events(event_id PK)` + RLS admin |
+| 4 | RPC `fn_stripe_webhook_event_is_new(event_id, event_type, payload)` — idempotence stricte par event.id |
+
+À brancher dans `supabase/functions/stripe-webhook/index.ts` (action Gabrielle) :
+```typescript
+const { data: isNew } = await sb.rpc('fn_stripe_webhook_event_is_new', {
+  p_event_id: event.id, p_event_type: event.type, p_payload: event.data
+});
+if (!isNew) return new Response('Already processed', { status: 200 });
+```
 
 ## Bugs reportés / tech-debt (post-itération 1)
 
