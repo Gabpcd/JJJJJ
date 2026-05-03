@@ -72,8 +72,8 @@ export default function AdminStatus() {
   }, []);
 
   const resoudre = async (alerteId: string) => {
-    const { error } = await supabase.from('alertes_systeme').update({ resolu_le: new Date().toISOString() }).eq('id', alerteId);
-    if (error) { toast.error('Erreur'); return; }
+    const { data, error } = await supabase.rpc('fn_admin_resoudre_alerte' as any, { p_alerte_id: alerteId });
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Erreur'); return; }
     toast.success('Alerte résolue');
     charger();
   };

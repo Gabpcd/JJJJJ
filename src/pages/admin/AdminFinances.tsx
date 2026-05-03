@@ -44,7 +44,10 @@ export default function AdminFinances() {
       setMissions(mRes.data || []);
       setLoading(false);
     })
-      .catch(() => {});
+      .catch((err) => {
+        setLoading(false);
+        toast.error(err?.message || 'Erreur chargement finances');
+      });
   }, []);
 
   const now = new Date();

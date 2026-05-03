@@ -9,6 +9,7 @@ import { AvatarDisplay } from '@/components/AvatarUpload';
 import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { logger } from '@/lib/logger';
+import { handleErrorSilent } from '@/lib/handleError';
 import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -238,7 +239,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         const msg = payload.new as Message;
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         if (msg.auteur_id !== user?.id) {
-          supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId });
+          supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId })
+            .then(undefined, (err) => handleErrorSilent(err, 'PageMessagerie.marquer_messages_lus'));
         }
       })
       .subscribe();

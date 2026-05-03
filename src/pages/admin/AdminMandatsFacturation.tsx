@@ -11,6 +11,7 @@ import { FileCheck, FileText, Search, CheckCircle, AlertCircle } from 'lucide-re
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
 
@@ -35,7 +36,10 @@ export default function AdminMandatsFacturation() {
       if (uRes.data) setSoignants(uRes.data);
       setLoading(false);
     })
-      .catch(() => {});
+      .catch((err) => {
+        setLoading(false);
+        toast.error(err?.message || 'Erreur chargement mandats');
+      });
   }, []);
 
   const filteredSoignants = soignants.filter((s) => {

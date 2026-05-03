@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { BandeauPaiementDeclare } from '@/components/BandeauPaiementDeclare';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
+import { handleErrorSilent } from '@/lib/handleError';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
@@ -78,7 +79,7 @@ export default function MesGains() {
         p_type_ressource: 'soignant', p_id_ressource: user.id,
         p_cle_s3: null, p_details: { page: 'mes_gains' },
         p_ip: null, p_navigateur: navigator.userAgent,
-      });
+      }).then(undefined, (err) => handleErrorSilent(err, 'MesGains.audit'));
     };
     load();
   }, [user, page]);
@@ -241,7 +242,15 @@ export default function MesGains() {
             const net = netEstime(m);
             const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
             return (
-              <div key={m.id} className="rounded-xl border border-border hover:border-primary/30 hover:bg-muted/20 transition-all cursor-pointer overflow-hidden" onClick={() => navigate(`/soignant/presences/mission/${m.id}`)}>
+              <div
+                key={m.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Voir mission ${m.intitule || ''}`}
+                className="rounded-xl border border-border hover:border-primary/30 hover:bg-muted/20 transition-all cursor-pointer overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary"
+                onClick={() => navigate(`/soignant/presences/mission/${m.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/soignant/presences/mission/${m.id}`); } }}
+              >
                 <div className="flex items-center gap-3 py-3 px-4">
                   {/* Date compact */}
                   <div className="flex flex-col items-center justify-center rounded-lg bg-muted/50 px-2.5 py-1 min-w-[44px]">
