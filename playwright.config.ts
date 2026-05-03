@@ -20,6 +20,11 @@ const IS_CI = !!process.env.CI;
 export default defineConfig({
   testDir: './e2e',
   testMatch: ['**/*.spec.ts'],
+  // visual.spec.ts est exclu de la suite par défaut : il nécessite des
+  // baselines committées. Lancer via le workflow `playwright-visual-update.yml`
+  // (workflow_dispatch) qui génère les baselines puis crée une PR auto.
+  // Pour run en local manuellement : `npx playwright test e2e/visual --project=chromium`.
+  testIgnore: process.env.PLAYWRIGHT_INCLUDE_VISUAL === 'true' ? [] : ['**/visual.spec.ts'],
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,

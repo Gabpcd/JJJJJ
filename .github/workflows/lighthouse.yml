@@ -1,0 +1,48 @@
+name: Lighthouse CI (perf + a11y + best-practices + SEO)
+
+# Audit Lighthouse à chaque PR + push main.
+# Échec si scores en dessous des thresholds définis dans lighthouserc.cjs.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  lighthouse:
+    name: Lighthouse audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build app
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      - name: Start preview server
+        run: |
+          npx vite preview --port 4173 --host 0.0.0.0 &
+          npx wait-on http://127.0.0.1:4173 -t 30000 || true
+      - name: Lighthouse autorun
+        run: npx lhci autorun
+        env:
+          LHCI_BASE_URL: http://127.0.0.1:4173
+      - name: Upload Lighthouse reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci/
+          retention-days: 14

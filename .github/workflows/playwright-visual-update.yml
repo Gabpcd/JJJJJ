@@ -1,0 +1,60 @@
+name: Playwright visual baselines update
+
+# Workflow manuel pour générer/mettre à jour les baselines visuelles
+# (e2e/visual.spec.ts-snapshots/). Crée une PR auto avec les nouvelles
+# baselines à reviewer avant merge.
+#
+# Lancement : Actions tab → "Playwright visual baselines update" → Run workflow
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-baselines:
+    name: Update visual baselines + open PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build app
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      - name: Start preview server
+        run: |
+          npx vite preview --port 4173 --host 0.0.0.0 &
+          npx wait-on http://127.0.0.1:4173 -t 30000 || true
+      - name: Run visual tests with --update-snapshots
+        run: npx playwright test e2e/visual --project=chromium --update-snapshots
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          PLAYWRIGHT_INCLUDE_VISUAL: 'true'
+          CI: 'true'
+      - name: Create PR with updated baselines
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: 'chore(e2e): update Playwright visual baselines'
+          title: 'chore(e2e): update Playwright visual baselines'
+          body: |
+            Auto-generated PR by `playwright-visual-update.yml` workflow.
+
+            Review les screenshots avant de merger.
+          branch: chore/playwright-visual-baselines
+          add-paths: |
+            e2e/visual.spec.ts-snapshots/**

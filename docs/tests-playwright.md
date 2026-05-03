@@ -174,21 +174,69 @@ Sur CI (échec) :
 - Artifacts uploadés : `playwright-report` (HTML) + `playwright-traces` (vidéos, screenshots).
 - Télécharger depuis l'UI GitHub Actions → onglet Artifacts.
 
-## Visual regression (à venir)
+## Visual regression
 
-Pour ajouter des baselines visuelles :
+Tests visuels dans `e2e/visual.spec.ts` (8 pages publiques critiques :
+landing, connexion, reset-password, inscription soignant/étab étape 1,
+aide, accessibilité, 404).
 
-```ts
-test('dashboard soignant — visual', async ({ page }) => {
-  await loginAs(page, 'soignant');
-  await page.goto('/soignant/tableau-de-bord');
-  await page.waitForLoadState('networkidle');
-  await expect(page).toHaveScreenshot('dashboard-soignant.png');
-});
+**Le fichier est exclu de la suite par défaut** (`testIgnore` dans
+`playwright.config.ts`) car il nécessite des baselines commitées.
+
+### Génération / mise à jour des baselines
+
+**Workflow GitHub Actions automatique** (recommandé) :
+1. Aller dans Actions → "Playwright visual baselines update" → Run workflow.
+2. Le workflow lance `npx playwright test e2e/visual --update-snapshots` et
+   crée une PR auto `chore/playwright-visual-baselines` avec les screenshots.
+3. Reviewer les screenshots dans la PR (changements design intentionnels ?).
+4. Merger.
+
+**En local** :
+```bash
+PLAYWRIGHT_INCLUDE_VISUAL=true npx playwright test e2e/visual --project=chromium --update-snapshots
+git add e2e/visual.spec.ts-snapshots/
+git commit -m "chore(e2e): update visual baselines"
 ```
 
-Premier run : `npx playwright test --update-snapshots` pour créer les baselines.
-Update intentionnel : même commande après vérification visuelle.
+### Tolérance configurée
+- `maxDiffPixels: 200` (absorbe le jitter d'antialiasing)
+- `threshold: 0.15` (différence relative max par pixel)
+- `animations: 'disabled'` (pas de race condition sur animate-pulse)
+
+### Quand mettre à jour les baselines
+- Changement design intentionnel sur une page critique
+- Refonte composant partagé (Button, Card, Input) impactant le rendu
+- Changement de couleur dans `--primary`, `--rose`, etc. (déjà fait dans le commit a11y)
+
+## Lighthouse CI (perf + a11y + best-practices + SEO)
+
+Workflow : `.github/workflows/lighthouse.yml` (PR + push main).
+Config : `lighthouserc.cjs` (8 pages publiques auditées).
+
+### Thresholds appliqués
+| Catégorie | Min score | Niveau |
+|---|---|---|
+| Performance | 0.70 | warn (CI runners variables) |
+| Accessibility | 0.95 | **error** (échec CI si <0.95) |
+| Best Practices | 0.85 | warn |
+| SEO | 0.85 | warn |
+
+### Métriques individuelles
+- FCP < 3000ms
+- LCP < 4000ms
+- TBT < 600ms
+- CLS < 0.15
+
+### Lancer en local
+```bash
+npm run build
+npx vite preview --port 4173 &
+npx lhci autorun
+```
+
+### Artifacts
+Rapports HTML uploadés dans `lighthouse-reports` (rétention 14j).
 
 ## CI GitHub Actions
 
