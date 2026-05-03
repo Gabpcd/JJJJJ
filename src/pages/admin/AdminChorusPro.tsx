@@ -116,6 +116,7 @@ function DashboardChorus() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recent, setRecent] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -125,14 +126,30 @@ function DashboardChorus() {
         .order('created_at', { ascending: false })
         .limit(10),
     ]).then(([sRes, rRes]) => {
-      if (sRes.data && !(sRes.data as any).error) setStats(sRes.data as Stats);
+      if (sRes.error) {
+        setErrorMsg(`Erreur RPC fn_admin_chorus_stats : ${sRes.error.message}`);
+      } else if (sRes.data && (sRes.data as any).error) {
+        setErrorMsg(`Accès refusé — connectez-vous avec un compte ADMIN_PLATEFORME (${(sRes.data as any).error}).`);
+      } else if (sRes.data) {
+        setStats(sRes.data as Stats);
+      }
       if (rRes.data) setRecent(rRes.data as unknown as Submission[]);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => {
+      setErrorMsg(`Erreur chargement : ${err?.message || 'inconnue'}`);
+      setLoading(false);
+    });
   }, []);
 
   if (loading) return <p className="text-sm text-muted-foreground text-center py-8">Chargement…</p>;
-  if (!stats) return <p className="text-sm text-destructive text-center py-8">Accès refusé ou erreur chargement stats.</p>;
+  if (errorMsg) return (
+    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+      <p className="font-semibold mb-1">Impossible de charger les stats Chorus Pro</p>
+      <p className="text-xs">{errorMsg}</p>
+      <p className="text-xs text-muted-foreground mt-2">Si vous êtes admin et voyez ce message, vérifiez que <code>raw_app_meta_data-&gt;&gt;'role'</code> = <code>'ADMIN_PLATEFORME'</code> sur votre compte (cf. <code>docs/admin-setup.md</code>).</p>
+    </div>
+  );
+  if (!stats) return <p className="text-sm text-muted-foreground text-center py-8">Aucune donnée Chorus Pro pour le moment.</p>;
 
   const enCours = (stats.par_statut.pending ?? 0) + (stats.par_statut.submitted ?? 0);
   const acceptees = stats.par_statut.accepted ?? 0;
