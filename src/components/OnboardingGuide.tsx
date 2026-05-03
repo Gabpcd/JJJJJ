@@ -88,15 +88,14 @@ export function OnboardingGuide({ role, userId }: OnboardingGuideProps) {
             <span className="text-xs font-semibold text-primary">
               Étape {etapeCourante + 1} / {etapes.length}
             </span>
-            {etapeCourante >= 3 && (
-              <button
-                onClick={fermer}
-                className="text-muted-foreground hover:text-foreground transition-colors rounded-full p-1"
-                aria-label="Passer l'introduction"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            )}
+            <button
+              onClick={fermer}
+              className="text-muted-foreground hover:text-foreground transition-colors rounded-full p-1"
+              aria-label="Passer l'introduction"
+              title="Passer"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
           <Progress value={progression} className="h-1.5" />
         </div>

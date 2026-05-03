@@ -144,7 +144,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
       return {
         subject: `Bienvenue sur Jolene ! 🎉`,
         html: WRAPPER(`
-          <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.prenom} ! 🎉</h2>
+          <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.prenom || ''} ! 🎉</h2>
           <p style="color:#334155;">Votre compte soignant est créé. Voici les prochaines étapes :</p>
           ${INFO_BOX(`
             <strong style="color:#0F172A;">1.</strong> Complétez votre profil (RPPS, adresse)<br/>
@@ -159,7 +159,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
       return {
         subject: 'Bienvenue sur Jolene !',
         html: WRAPPER(`
-          <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.nom} !</h2>
+          <h2 style="color:#0F172A;margin:0 0 12px;">Bienvenue ${data.nom || ''} !</h2>
           <p style="color:#334155;">Votre établissement est enregistré sur Jolene.</p>
           ${INFO_BOX(`
             <strong style="color:#0F172A;">1.</strong> Complétez votre profil (SIRET, FINESS, adresse)<br/>

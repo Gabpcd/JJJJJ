@@ -15,14 +15,22 @@ interface Props {
 function StripeConnectStatus({ userId }: { userId: string }) {
   const [status, setStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
-    supabase.functions.invoke('stripe-connect-status').then(({ data }) => {
-      setStatus(data);
+    supabase.functions.invoke('stripe-connect-status').then(({ data, error }) => {
+      if (error) {
+        setErreur('Service Stripe temporairement indisponible. Réessayez dans quelques instants.');
+      } else {
+        setStatus(data);
+      }
       setLoading(false);
-    }).then(undefined, () => setLoading(false));
+    }).then(undefined, () => {
+      setErreur('Service Stripe temporairement indisponible. Réessayez dans quelques instants.');
+      setLoading(false);
+    });
   }, [userId]);
 
   const lancerOnboarding = async () => {
@@ -43,6 +51,15 @@ function StripeConnectStatus({ userId }: { userId: string }) {
   };
 
   if (loading) return <div className="text-sm text-muted-foreground">Chargement…</div>;
+  if (erreur) return (
+    <div className="p-3 rounded-xl border border-warning/30 bg-warning/5 flex items-start gap-3" role="alert">
+      <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+      <div className="text-sm">
+        <p className="font-semibold text-warning">Statut paiement indisponible</p>
+        <p className="text-xs text-warning/80 mt-1">{erreur}</p>
+      </div>
+    </div>
+  );
   if (!status) return null;
 
   if (status.statut === 'COMPLET' && status.charges_enabled && status.payouts_enabled) {

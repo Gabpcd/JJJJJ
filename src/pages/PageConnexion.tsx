@@ -19,7 +19,7 @@ import {
 } from '@/lib/biometric';
 import { hapticNotification } from '@/lib/haptics';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
-import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
+import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 
 export default function PageConnexion() {
   usePageTitle('Connexion');
@@ -35,6 +35,7 @@ export default function PageConnexion() {
   const [resetMode, setResetMode] = useState(false);
   const [resetTurnstileToken, setResetTurnstileToken] = useState<string | null>(null);
   const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [loginTurnstileToken, setLoginTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (isNative()) {
@@ -117,9 +118,13 @@ export default function PageConnexion() {
       afficherNotification({ type: 'erreur', message: 'Veuillez remplir tous les champs.' });
       return;
     }
+    if (TURNSTILE_REQUIRED && !loginTurnstileToken) {
+      afficherNotification({ type: 'erreur', message: 'Vérification de sécurité en cours, réessayez dans un instant.' });
+      return;
+    }
     setSubmitting(true);
     try {
-      await connexion(email, motDePasse);
+      await connexion(email, motDePasse, loginTurnstileToken || undefined);
       afficherNotification({ type: 'succes', message: 'Connexion réussie !' });
       await navigateToRole();
     } catch (err) {
@@ -161,6 +166,8 @@ export default function PageConnexion() {
                 </button>
               </div>
             </div>
+
+            <CaptchaTurnstile invisible onVerify={setLoginTurnstileToken} onExpire={() => setLoginTurnstileToken(null)} onError={() => setLoginTurnstileToken(null)} />
 
             <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -210,7 +217,22 @@ export default function PageConnexion() {
               </button>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Confirmez le captcha pour recevoir un email de réinitialisation à <strong>{email || '...'}</strong></p>
+                {email ? (
+                  <p className="text-xs text-muted-foreground">Email de réinitialisation envoyé à <strong>{email}</strong></p>
+                ) : (
+                  <label className="block text-left">
+                    <span className="text-xs font-medium text-foreground mb-1 block">Email de votre compte</span>
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="votre@email.com"
+                      className="input-base text-sm"
+                      required
+                    />
+                  </label>
+                )}
                 <CaptchaTurnstile className="flex justify-center" onVerify={setResetTurnstileToken} onExpire={() => setResetTurnstileToken(null)} onError={() => setResetTurnstileToken(null)} />
                 <div className="flex gap-2 justify-center">
                   <button

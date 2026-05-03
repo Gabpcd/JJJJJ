@@ -323,19 +323,20 @@ export default function MandatFacturation() {
           {!alreadySigned && (
             <div className="p-5 space-y-4 bg-muted/20">
               {!hasScrolledToBottom && (
-                <p className="text-xs text-muted-foreground italic text-center">
-                  Faites défiler le document jusqu'en bas pour l'accepter
+                <p className="text-xs text-warning italic text-center font-medium" role="status">
+                  ⚠️ Faites défiler le document jusqu'en bas pour pouvoir l'accepter
                 </p>
               )}
 
-              <div className="flex items-start gap-3">
+              <div className={`flex items-start gap-3 ${!hasScrolledToBottom ? 'opacity-50' : ''}`}>
                 <Checkbox
                   id="accept-mandat"
                   checked={accepted}
                   onCheckedChange={(v) => setAccepted(v === true)}
                   disabled={!hasScrolledToBottom}
+                  aria-disabled={!hasScrolledToBottom}
                 />
-                <label htmlFor="accept-mandat" className="text-sm text-foreground cursor-pointer leading-relaxed">
+                <label htmlFor="accept-mandat" className={`text-sm text-foreground leading-relaxed ${hasScrolledToBottom ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
                   J'ai lu et j'accepte expressément les termes du mandat de facturation ci-dessus. Je confirme donner mandat à Jolene
                   d'émettre des factures en mon nom et pour mon compte, conformément à l'article 289 I-2 du CGI.
                 </label>

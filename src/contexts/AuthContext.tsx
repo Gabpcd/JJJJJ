@@ -60,8 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const connexion = useCallback(async (email: string, motDePasse: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: motDePasse });
+  const connexion = useCallback(async (email: string, motDePasse: string, captchaToken?: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: motDePasse,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
+    });
     if (error) throw error;
 
     const u = data.user;
