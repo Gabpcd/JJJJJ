@@ -1,31 +1,32 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# TypeScript incremental build artefacts (générés par tsc -b)
-*.tsbuildinfo
-
-# Editor directories and files
-.vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
+# Editor directories and files
+# Logs
+# TypeScript incremental build artefacts (générés par tsc -b)
+*.local
+*.log
 *.njsproj
+*.ntvs*
 *.sln
+*.suo
 *.sw?
+*.tsbuildinfo
+.DS_Store
 .env
 .env.local
 .env.production
+.idea
+.vscode/*
+/.env.local
+/playwright-report
+/test-results
+dist
+dist-ssr
+lerna-debug.log*
+logs
+node_modules
+npm-debug.log*
+pnpm-debug.log*
 supabase/.temp/
+yarn-debug.log*
+yarn-error.log*
