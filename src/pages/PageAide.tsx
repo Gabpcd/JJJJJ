@@ -5,6 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
+import { toast } from 'sonner';
 
 interface ArticleResume {
   id: string;
@@ -44,7 +45,10 @@ export default function PageAide() {
         p_query: query.trim() || null,
         p_audience: audParam,
       });
-      if (!error) {
+      if (error) {
+        toast.error('Erreur lors de la recherche. Réessayez.');
+        setArticles([]);
+      } else {
         setArticles((data as any)?.articles || []);
       }
       setLoading(false);

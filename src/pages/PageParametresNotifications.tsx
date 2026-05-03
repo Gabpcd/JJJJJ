@@ -74,7 +74,12 @@ export default function PageParametresNotifications() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase.rpc('fn_obtenir_mes_preferences_notifications' as any);
+      const { data, error } = await supabase.rpc('fn_obtenir_mes_preferences_notifications' as any);
+      if (error) {
+        toast.error('Impossible de charger vos préférences. Vos modifications ne seront pas sauvegardées tant que la page ne charge pas correctement.');
+        setLoading(false);
+        return;
+      }
       if (data && (data as any).global) {
         setGlobal((data as any).global);
         const m = new Map<string, boolean>();
@@ -193,9 +198,12 @@ export default function PageParametresNotifications() {
                       <td key={c} className="text-center px-2">
                         {e.canaux.includes(c) ? (
                           <button
+                            type="button"
+                            role="switch"
+                            aria-checked={isEnabled(e.type, c)}
                             onClick={() => toggle(e.type, c)}
                             className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${isEnabled(e.type, c) ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-                            aria-label={`${c} pour ${e.label}`}
+                            aria-label={`${c} pour ${e.label} : ${isEnabled(e.type, c) ? 'activé' : 'désactivé'}`}
                           >
                             <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isEnabled(e.type, c) ? 'translate-x-4' : 'translate-x-0'}`} />
                           </button>

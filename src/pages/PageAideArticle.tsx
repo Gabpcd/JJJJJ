@@ -15,6 +15,23 @@ interface Article {
   mis_a_jour_le: string;
 }
 
+// Validation URL : refuse javascript:/data:/vbscript: (XSS), accepte http(s)/, mailto:, /relatif.
+// Ajoute target="_blank" + rel="noopener noreferrer" pour les liens externes (sécurité tabnabbing).
+function safeLink(rawUrl: string, text: string): string {
+  const url = rawUrl.trim();
+  // Whitelist explicite pour éviter javascript:/data:/vbscript: et autres schemes dangereux
+  const isHttps = /^https?:\/\//i.test(url);
+  const isMailto = /^mailto:/i.test(url);
+  const isRelative = url.startsWith('/') || url.startsWith('#');
+  if (!isHttps && !isMailto && !isRelative) {
+    // URL non whitelistée → retourner le texte brut sans lien
+    return text;
+  }
+  const isExternal = isHttps && !url.startsWith('https://jolene.app') && !url.startsWith('https://www.jolene.app');
+  const externalAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+  return `<a href="${url}" class="text-primary hover:underline"${externalAttrs}>${text}</a>`;
+}
+
 function renderMarkdown(texte: string) {
   const lines = texte.split('\n');
   const elements: JSX.Element[] = [];
@@ -28,7 +45,7 @@ function renderMarkdown(texte: string) {
             <li key={i} dangerouslySetInnerHTML={{ __html: item
               .replace(/[<>]/g, m => m === '<' ? '&lt;' : '&gt;')
               .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-              .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary hover:underline">$1</a>')
+              .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, url) => safeLink(url, txt))
               .replace(/`([^`]+)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-sm">$1</code>')
             }} />
           ))}
@@ -39,7 +56,7 @@ function renderMarkdown(texte: string) {
   };
   const renderInline = (s: string) => s
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary hover:underline">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, url) => safeLink(url, txt))
     .replace(/`([^`]+)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-sm">$1</code>');
   for (const line of lines) {
     if (line.startsWith('# ')) { flushList(); elements.push(<h1 key={key++} className="text-2xl font-bold text-foreground mb-4 mt-2">{line.substring(2)}</h1>); }

@@ -68,24 +68,34 @@ export default function PageParrainageEtab() {
     if (!etablissementId) return;
     setLoading(true);
 
-    const [{ data: etab }, { data: filleulsData }, { data: creditsData }] = await Promise.all([
+    const [etabRes, filleulsRes, creditsRes] = await Promise.all([
       supabase.from('etablissements').select('code_parrainage').eq('id', etablissementId).maybeSingle(),
       supabase.rpc('fn_mes_filleuls_etab' as any),
       supabase.rpc('fn_mes_credits_etab' as any),
     ]);
 
-    if (etab?.code_parrainage) setCode(etab.code_parrainage);
-    if (Array.isArray(filleulsData)) setFilleuls(filleulsData as Filleul[]);
-    if (creditsData && !(creditsData as any)?.error) setCredits(creditsData as CreditsState);
+    if (etabRes.error) toast.error('Erreur chargement code parrainage');
+    if (filleulsRes.error) toast.error('Erreur chargement filleuls');
+    if (creditsRes.error) toast.error('Erreur chargement crédits');
+
+    if (etabRes.data?.code_parrainage) setCode(etabRes.data.code_parrainage);
+    if (Array.isArray(filleulsRes.data)) setFilleuls(filleulsRes.data as Filleul[]);
+    if (creditsRes.data && !(creditsRes.data as any)?.error) setCredits(creditsRes.data as CreditsState);
     setLoading(false);
   };
 
   useEffect(() => { charger(); }, [etablissementId]);
 
   const appliquerCode = async () => {
-    if (!codeRecu.trim()) return;
+    const code = codeRecu.trim().toUpperCase();
+    if (!code) return;
+    // Format codes Jolene : ETB-XXXXXX ou JO-XXXXXX (préfixe + 4-10 alphanumériques)
+    if (!/^[A-Z]{2,3}-?[A-Z0-9]{4,10}$/i.test(code)) {
+      toast.error('Format de code invalide (ex. ETB-XXXXXX)');
+      return;
+    }
     setAppliying(true);
-    const { data, error } = await supabase.rpc('fn_appliquer_parrainage_etab' as any, { p_code: codeRecu.trim() });
+    const { data, error } = await supabase.rpc('fn_appliquer_parrainage_etab' as any, { p_code: code });
     setAppliying(false);
     if (error) { toast.error(error.message); return; }
     const r = data as any;

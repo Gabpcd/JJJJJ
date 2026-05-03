@@ -75,9 +75,9 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
     }
     if (n.lien) {
-      if (n.lien.startsWith('/') || n.lien.startsWith('https://jolene.app') || n.lien.startsWith('https://jolene.app')) {
+      if (n.lien.startsWith('/') || n.lien.startsWith('https://jolene.app')) {
         onClose();
-        navigate(n.lien.replace('https://jolene.app', '').replace('https://jolene.app', '') || '/');
+        navigate(n.lien.replace('https://jolene.app', '') || '/');
       } else {
         toast.error('Lien non autorisé');
       }
