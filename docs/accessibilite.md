@@ -106,7 +106,7 @@ Avant de merger un nouveau composant, vérifier :
 ## Procédure de signalement (utilisateur final)
 
 Visible sur `/accessibilite` :
-1. Email : `accessibilite@jolene.app`
+1. Email : `support@jolene.app`
 2. Si non-réponse : Défenseur des droits
 
 ## Score actuel

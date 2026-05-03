@@ -84,11 +84,11 @@ export default function PageAccessibilite() {
             ou à une fonctionnalité, vous pouvez nous le signaler :
           </p>
           <a
-            href="mailto:accessibilite@jolene.app?subject=Signalement%20accessibilit%C3%A9"
+            href="mailto:support@jolene.app?subject=Signalement%20accessibilit%C3%A9"
             className="inline-flex items-center gap-2 text-primary hover:underline font-medium"
           >
             <Mail className="h-4 w-4" aria-hidden="true" />
-            accessibilite@jolene.app
+            support@jolene.app
           </a>
           <p className="text-sm text-foreground mt-3">
             Si vous n'obtenez pas de réponse rapide ou satisfaisante, vous pouvez :
