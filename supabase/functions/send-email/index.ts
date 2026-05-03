@@ -121,6 +121,14 @@ const ALLOWED_TYPES = new Set([
   'SERIE_ETAB_J0','SERIE_ETAB_J1','SERIE_ETAB_J3','SERIE_ETAB_J7',
   // [J2.3.C] alertes filtres sauvegardés
   'NOUVELLES_MISSIONS_FILTRE','NOUVEAUX_SOIGNANTS_FILTRE',
+  // [J5.C] pool urgence push email
+  'MISSION_URGENTE_POOL',
+  // [J5.G] favoris bidirectionnels
+  'FAVORI_NOUVELLE_MISSION',
+  // [Refonte.D.2] suspension auto + levée
+  'COMPTE_SUSPENDU','COMPTE_REACTIVE',
+  // [Refonte.D.3] rappel notation J+1
+  'RAPPEL_NOTATION_ETAB','RAPPEL_NOTATION_SOIGNANT',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -1269,6 +1277,107 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
       };
     }
 
+    case 'MISSION_URGENTE_POOL':
+      return {
+        subject: `🚨 Mission urgente : ${data.mission_intitule || data.profession || 'opportunité'}`,
+        html: WRAPPER(`
+          <h2 style="color:#dc2626;margin:0 0 12px;">🚨 Mission urgente près de chez vous</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+          <p style="color:#334155;"><strong>${data.etab_nom || data.ville || 'Un établissement'}</strong> a publié une mission urgente correspondant à votre profil :</p>
+          ${INFO_BOX(`
+            <strong>Mission :</strong> ${data.mission_intitule || data.profession || '-'}<br/>
+            <strong>Profession :</strong> ${data.profession || '-'}<br/>
+            <strong>Lieu :</strong> ${data.ville || '-'}${data.distance_km ? ` (${data.distance_km} km)` : ''}<br/>
+            <strong>Taux :</strong> ${data.taux_horaire || '-'} €/h<br/>
+            <strong>Début :</strong> ${data.debut_le || '-'}
+          `)}
+          <p style="color:#334155;"><strong>Acceptez en 1 clic</strong> sur votre espace pool urgence — l'établissement validera ensuite sous 1h.</p>
+          ${BUTTON('Voir la mission urgente', `${APP_URL}/soignant/pool-urgence`)}
+        `),
+      };
+
+    case 'FAVORI_NOUVELLE_MISSION':
+      return {
+        subject: `⭐ Nouvelle mission chez ${data.etab_nom || 'votre établissement favori'}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⭐ Nouvelle mission d'un établissement favori</h2>
+          <p style="color:#334155;"><strong>${data.etab_nom || 'Un de vos établissements favoris'}</strong> a publié une nouvelle mission :</p>
+          ${INFO_BOX(`
+            <strong>Mission :</strong> ${data.mission_intitule || '-'}<br/>
+            <strong>Lieu :</strong> ${data.etab_ville || '-'}<br/>
+            <strong>Taux :</strong> ${data.taux_horaire || '-'} €/h<br/>
+            <strong>Début :</strong> ${data.debut_le || '-'}
+          `)}
+          <p style="color:#334155;">Cet établissement fait partie de vos favoris — vous êtes notifié·e en priorité avant tous les autres soignants.</p>
+          ${BUTTON('Voir la mission', `${APP_URL}/soignant/missions/${data.mission_id || ''}`)}
+        `),
+      };
+
+    case 'COMPTE_SUSPENDU':
+      return {
+        subject: `🚫 Votre compte Jolene est suspendu`,
+        html: WRAPPER(`
+          <h2 style="color:#dc2626;margin:0 0 12px;">🚫 Compte suspendu</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+          <p style="color:#334155;">Votre compte Jolene a été <strong>suspendu</strong>. Raison : ${data.raison === 'absences_sans_prevenir' ? `${data.nb_absences || 3} absences sans prévenir sur les 6 derniers mois` : (data.raison || 'décision admin')}.</p>
+          <p style="color:#334155;">Pendant la suspension, vous ne pouvez plus candidater à de nouvelles missions. Les missions déjà acceptées restent valides.</p>
+          ${INFO_BOX(`
+            <strong>Pour faire un recours</strong>, écrivez à <a href="mailto:bonjour@jolene.app" style="color:#6366f1;">bonjour@jolene.app</a> en précisant votre nom + raison du recours.<br/>
+            L'équipe examinera votre dossier sous 72h ouvrées.
+          `)}
+        `),
+      };
+
+    case 'COMPTE_REACTIVE':
+      return {
+        subject: `✅ Votre compte Jolene est réactivé`,
+        html: WRAPPER(`
+          <h2 style="color:#10b981;margin:0 0 12px;">✅ Compte réactivé</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+          <p style="color:#334155;">Bonne nouvelle : votre compte Jolene est <strong>réactivé</strong>. Vous pouvez à nouveau candidater aux missions et utiliser toutes les fonctionnalités.</p>
+          ${data.raison ? INFO_BOX(`<strong>Raison :</strong> ${data.raison}`) : ''}
+          ${BUTTON('Retour à mon tableau de bord', `${APP_URL}/soignant/tableau-de-bord`)}
+        `),
+      };
+
+    case 'RAPPEL_NOTATION_ETAB':
+      return {
+        subject: `Notez votre soignant pour la mission "${data.mission_intitule || ''}"`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⭐ Notez votre soignant</h2>
+          <p style="color:#334155;">La mission <strong>"${data.mission_intitule || '-'}"</strong> est terminée depuis hier.</p>
+          <p style="color:#334155;">Votre notation aide à enrichir le profil du soignant et à améliorer la qualité de la communauté Jolene.</p>
+          ${INFO_BOX(`
+            <strong>Vous évaluez 4 critères :</strong><br/>
+            • Ponctualité<br/>
+            • Professionnalisme<br/>
+            • Qualité du soin<br/>
+            • Communication<br/>
+            <em>Anonyme côté soignant — il voit "Établissement anonyme" + 4 étoiles.</em>
+          `)}
+          ${BUTTON('Noter le soignant', `${APP_URL}/etablissement/missions/${data.mission_id || ''}`)}
+        `),
+      };
+
+    case 'RAPPEL_NOTATION_SOIGNANT':
+      return {
+        subject: `Notez l'établissement pour la mission "${data.mission_intitule || ''}"`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">⭐ Notez l'établissement</h2>
+          <p style="color:#334155;">La mission <strong>"${data.mission_intitule || '-'}"</strong> est terminée depuis hier.</p>
+          <p style="color:#334155;">Vos notations améliorent <strong>votre score de fiabilité</strong> (composante "Vous notez les étabs") et alimentent le score qualité de l'établissement.</p>
+          ${INFO_BOX(`
+            <strong>Vous évaluez 4 critères :</strong><br/>
+            • Accueil<br/>
+            • Encadrement<br/>
+            • Clarté des consignes<br/>
+            • Paiement à temps<br/>
+            <em>Anonyme côté étab — il voit "Soignant anonyme" + 4 étoiles.</em>
+          `)}
+          ${BUTTON('Noter l\'établissement', `${APP_URL}/soignant/missions/${data.mission_id || ''}`)}
+        `),
+      };
+
     default:
       return null;
   }
@@ -1393,6 +1502,14 @@ Deno.serve(async (req) => {
       // [J2.3.C] alertes filtres sauvegardés
       'NOUVELLES_MISSIONS_FILTRE': 'NOUVELLE_MISSION_MATCHANT_FILTRE',
       'NOUVEAUX_SOIGNANTS_FILTRE': 'NOUVEAU_SOIGNANT_MATCHANT_FILTRE',
+      // [J5.C] pool urgence
+      'MISSION_URGENTE_POOL': 'URGENCE',
+      // [J5.G] favoris bidirectionnels
+      'FAVORI_NOUVELLE_MISSION': 'FAVORI_NOUVELLE_MISSION',
+      // [Refonte.D.3] rappel notation J+1
+      'RAPPEL_NOTATION_ETAB': 'NOTATION_RAPPEL',
+      'RAPPEL_NOTATION_SOIGNANT': 'NOTATION_RAPPEL',
+      // COMPTE_SUSPENDU / COMPTE_REACTIVE = transactionnel critique, jamais skippé via préférences
     };
     const typeEvenement = TYPE_TO_EVENT[type] || null;
 

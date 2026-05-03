@@ -283,6 +283,27 @@ Deno.serve(async (req) => {
     results.alertes_filtres_envoyees = alertesEnvoyees;
     results.alertes_filtres_erreurs = alertesErreurs;
 
+    // [Refonte.D.1] Médiation litiges : transition automatique MEDIATION_EN_COURS > 7j → REVUE_ADMIN
+    try {
+      const { data: medRes } = await sb.rpc('fn_basculer_litiges_revue_admin_timeout');
+      results.litiges_basculer_revue_admin = (medRes as any)?.count ?? 0;
+    } catch (err: any) {
+      console.error('[email-cron] Erreur fn_basculer_litiges_revue_admin_timeout:', err?.message || err);
+      results.litiges_basculer_revue_admin = -1;
+    }
+
+    // [Refonte.D.3] Email J+1 post-mission notation : scan missions TERMINEE 24-48h
+    // sans notation pour rappel email aux 2 parties (idempotence via notifications_notation_j1).
+    try {
+      const { data: rappRes } = await sb.rpc('fn_envoyer_rappels_notation_j1');
+      results.rappels_notation_etab = (rappRes as any)?.count_etab ?? 0;
+      results.rappels_notation_soignant = (rappRes as any)?.count_soignant ?? 0;
+    } catch (err: any) {
+      console.error('[email-cron] Erreur fn_envoyer_rappels_notation_j1:', err?.message || err);
+      results.rappels_notation_etab = -1;
+      results.rappels_notation_soignant = -1;
+    }
+
     // Traiter la queue d'emails ET SMS (notifications automatiques des triggers DB)
     // [CP-C-3 D] Source de vérité : statut='EN_ATTENTE' (colonne envoye deprecated)
     let emailQueueCount = 0;
