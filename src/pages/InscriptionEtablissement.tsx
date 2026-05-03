@@ -166,11 +166,14 @@ export default function InscriptionEtablissement() {
           {etape === 1 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label><input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required /></div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</label>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Email *</span>
+                <input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</span>
                 <div className="relative">
-                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required />
+                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required minLength={8} />
                   <button
                     type="button"
                     onClick={() => setAfficherMdp(!afficherMdp)}
@@ -181,10 +184,12 @@ export default function InscriptionEtablissement() {
                     {afficherMdp ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
                   </button>
                 </div>
-              </div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Confirmer *</label><input type="password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required />
-                {form.confirmMdp && form.confirmMdp !== form.motDePasse && <p className="text-xs text-destructive mt-1">Les mots de passe ne correspondent pas</p>}
-              </div>
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Confirmer *</span>
+                <input type="password" autoComplete="new-password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required minLength={8} />
+                {form.confirmMdp && form.confirmMdp !== form.motDePasse && <p className="text-xs text-destructive mt-1" role="alert">Les mots de passe ne correspondent pas</p>}
+              </label>
               <label className="flex items-start gap-2 cursor-pointer">
                 <input type="checkbox" checked={cgu} onChange={e => setCgu(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
                 <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgu" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Conditions Générales d'Utilisation</a> et la <a href="/confidentialite" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Politique de confidentialité</a> *</span>

@@ -96,7 +96,7 @@ export default function PageAccessibilite() {
           <ul className="list-disc list-inside text-sm text-foreground space-y-1.5 ml-2">
             <li>
               Écrire au Défenseur des droits :
-              <a href="https://www.defenseurdesdroits.fr/saisir/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
+              <a href="https://www.defenseurdesdroits.fr/saisir/" target="_blank" rel="noopener noreferrer" className="text-primary underline ml-1 font-medium">
                 defenseurdesdroits.fr/saisir
               </a>
             </li>
@@ -117,11 +117,11 @@ export default function PageAccessibilite() {
           <p>Date de la dernière mise à jour : 3 mai 2026</p>
           <p className="mt-2">
             Liens utiles :
-            <a href="https://accessibilite.numerique.gouv.fr/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
+            <a href="https://accessibilite.numerique.gouv.fr/" target="_blank" rel="noopener noreferrer" className="text-primary underline ml-1 font-medium">
               référentiel RGAA
             </a>
             ·
-            <a href="https://www.w3.org/Translations/WCAG21-fr/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
+            <a href="https://www.w3.org/Translations/WCAG21-fr/" target="_blank" rel="noopener noreferrer" className="text-primary underline ml-1 font-medium">
               WCAG 2.1
             </a>
           </p>

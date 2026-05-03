@@ -51,7 +51,8 @@
     --warning: 38 95% 55%;
     --warning-foreground: 38 95% 15%;
 
-    --info: 215 90% 62%;
+    /* info ajusté pour 4.5:1 sur blanc (215 90% 62% → 215 90% 42% = #1565C0 ratio 5.0:1) */
+    --info: 215 90% 42%;
     --info-foreground: 0 0% 100%;
 
     --border: 240 10% 92%;

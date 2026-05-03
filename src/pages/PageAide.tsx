@@ -79,8 +79,8 @@ export default function PageAide() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button onClick={() => user ? navigate(-1) : navigate('/')} className="text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-5 w-5" />
+          <button onClick={() => user ? navigate(-1) : navigate('/')} className="text-muted-foreground hover:text-foreground" aria-label="Retour">
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
           <div className="flex items-center gap-2">
             <HelpCircle className="h-6 w-6 text-primary" />
