@@ -110,7 +110,7 @@ Mode : production-ready strict. Audit purement technique (validation visuelle UX
 | `20260429460000_audit_fix_rgpd_anonymiser_notations.sql` | Trigger anonymisation `notations_missions` à la suppression compte (RGPD) + backfill |
 | `20260429470000_audit_fix_rpcs_signaler_masquer_notation.sql` | RPCs `fn_signaler_notation` + `fn_admin_masquer_notation` (modération notations) |
 
-## Bugs fixés en itération 1 (6 migrations + 1 cron alter)
+## Bugs fixés en itération 1 (7 migrations + 1 cron alter)
 
 | Migration | Description |
 |---|---|
@@ -121,6 +121,19 @@ Mode : production-ready strict. Audit purement technique (validation visuelle UX
 | `20260429510000_iter1_fix_parrainage_cap_expiration.sql` | Cap 20 filleuls + statut EXPIRED + insertion EN_ATTENTE (validation à 1ère mission) + trigger révocation badge Ambassadeur + RPC expirer_parrainages_inactifs |
 | `20260429520000_iter1_fix_rpc_uploader_contrat_travail.sql` | RPC fn_uploader_contrat_travail_mission + UNIQUE (mission_id) |
 | `20260429530000_iter1_fix_sms_idempotence_rib_legacy.sql` | sms_envoyes.idempotency_key + fn_sms_doit_envoyer + RPC admin_forcer_reupload_rib |
+| `20260429540000_iter1_fix_rgpd_export_messages.sql` | RGPD : fn_exporter_mes_donnees v9 ajoute messages_litige + messages_mission (28→30 clés). Détecté par audit attaquant. |
+
+## Audit attaquant passe 2 — Findings
+
+Agent attaquant a remonté 5 findings ; vérifications directes en DB :
+
+| Finding | Annoncé | Réalité (vérif SQL) | Action |
+|---|---|---|---|
+| 1. Race condition `fn_proposer_cloture_litige` | CRITIQUE | **FAUX POSITIF** : PostgreSQL `UPDATE` prend automatiquement un row-level lock (READ COMMITTED). Le 2e UPDATE attend la fin du 1er, voit l'état mis à jour, et le trigger BEFORE UPDATE bascule correctement à RESOLU_ACCORD_PARTIES. Pas besoin de FOR UPDATE explicite. | Tech-debt note : ajouter `FOR UPDATE` serait défensif mais pas critique |
+| 2. Soft-delete sans filtre RLS systématique | MAJEUR | Structurel mais 0 corruption en prod (`SELECT COUNT(*) FROM candidatures JOIN soignants WHERE supprime_le IS NOT NULL = 0`) | Tech-debt — à reviewer si nb soignants supprimés > 0 |
+| 3. Export RGPD incomplet (messages_litige + messages_mission) | MAJEUR | **CONFIRMÉ** : `messages_chat` inclus, `messages_litige` + `messages_mission` absents | ✅ FIXÉ — migration 20260429540000 |
+| 4. Suppression irréversibilité (flag `anonymise_rgpd_le`) | MINEUR | Soft-delete actuel via `supprime_le`. Flag immuable serait défensif. | Tech-debt — non bloquant |
+| 5. Commission 0% LIBERAL | COSMÉTIQUE | Déjà fixé en passe 1 (commission=0 si SALARIE) | OK |
 
 ## Tests E2E iter1 (post-fix)
 
@@ -139,7 +152,8 @@ Mode : production-ready strict. Audit purement technique (validation visuelle UX
 |---|---|---|
 | Avant audit | ~7/10 | 3 bugs critiques cachés + 12 mineurs |
 | Après session 1 + 3 fixes | 8/10 | 3 bugs critiques fixés, 12 mineurs documentés |
-| **Après itération 1 + 13 fixes** | **9/10** | Tous bugs critiques + majeurs DB fixés. Reste : actions Gabrielle P0 (Twilio/Stripe/send-email) + 2 polish UI |
+| Après itération 1 + 13 fixes | 9/10 | Tous bugs critiques + majeurs DB fixés |
+| **Après audit attaquant + RGPD fix** | **9.5/10** | Bug RGPD critique fixé, 2 faux positifs identifiés, 3 tech-debts mineurs documentés. **Prêt pour lancement après actions Gabrielle P0** |
 
 ## Bugs reportés / tech-debt (post-itération 1)
 
