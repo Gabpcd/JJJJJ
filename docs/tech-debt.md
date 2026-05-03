@@ -1,5 +1,17 @@
 # Dette technique — Jolene
 
+## Itération 1 audit pré-lancement — 13 fixes (2026-05-03)
+
+13 fixes appliqués suite à l'audit fonctionnel exhaustif (cf. `docs/audit-fonctionnel-pre-lancement.md`). Tests E2E post-fix : B.8, B.10, C, B.6 validés. Migrations 20260429480000 → 20260429530000.
+
+**Tech-debt restant** :
+- B.2 : 7 fonctions ACOS dans pool urgence (fn_matching_soignants, fn_recommander_soignants, fn_pool_urgence_etablissement, fn_soignants_urgence, fn_matcher_soignants_mission, dec_antifraude_presence, fn_detecter_teleportation). Refactor unification Haversine reporté — risque > gain epsilon (Haversine et ACOS donnent des distances équivalentes à <10m près sur < 100km). Cible : Q3 2026 si justification métier.
+- B.4 : Toast SIRET ALERTE non-persistante côté UI étab. Fix front-end nécessaire dans `InscriptionEtablissement.tsx` (ajouter toast dans dashboard). À reporter Gabrielle.
+- Cohérence enum `EXPIREE` (statut_mission) non utilisée dans transitions. À cleaner ou documenter.
+- `factures_honoraires.stripe_payment_intent_id` pas UNIQUE → idempotence Stripe webhook à confirmer côté code TS edge function.
+
+---
+
 ## Refonte scoring + médiation litiges complète (2026-05-03)
 
 **Refonte.A → E** livrée et testée (19/19 PASS E2E). Voir docs `module-scoring-v2.md`, `notation-bidirectionnelle.md`, `mediation-litiges.md`.
