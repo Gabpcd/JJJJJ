@@ -69,6 +69,26 @@ Deno.serve(async (req) => {
 
     console.log(`Stripe webhook received: ${event.type}`);
 
+    // Idempotence stricte par event.id (iter4 audit fix)
+    // Empêche le re-traitement si Stripe renvoie le même webhook 2x.
+    const { data: isNew, error: idempErr } = await supabaseAdmin.rpc(
+      "fn_stripe_webhook_event_is_new" as never,
+      {
+        p_event_id: event.id,
+        p_event_type: event.type,
+        p_payload: event.data as unknown as Record<string, unknown>,
+      } as never,
+    );
+    if (idempErr) {
+      console.warn(`Idempotence check failed (continuing): ${idempErr.message}`);
+    } else if (isNew === false) {
+      console.log(`Event ${event.id} already processed, skipping`);
+      return new Response(JSON.stringify({ received: true, skipped: "already_processed" }), {
+        status: 200,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     // Handle checkout.session.completed
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -1407,6 +1427,11 @@ Deno.serve(async (req) => {
       console.log(`charge.expired audited: ${charge.id}`);
     }
 
+    // Marquer l'event comme traité (iter4 idempotence)
+    await supabaseAdmin.from("stripe_webhook_events")
+      .update({ traite_le: new Date().toISOString() })
+      .eq("event_id", event.id);
+
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -1414,6 +1439,7 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Erreur inconnue";
     console.error("Erreur stripe-webhook:", message);
+    // Stripe retentera : NE PAS marquer comme traité ; logger l'erreur
     return new Response(JSON.stringify({ error: "Erreur interne" }), {
       status: 500,
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
