@@ -352,7 +352,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     }
   };
 
-  const canSubmit = !siretInvalide && !erreurFactureImpayee && (modeRecurrent
+  const canSubmit = !siretInvalide && !contratNonValide && !erreurFactureImpayee && (modeRecurrent
     ? (!!intitule && !!profession && !!tauxHoraire && recurrenceValide && !publicationEnCours)
     : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading));
 

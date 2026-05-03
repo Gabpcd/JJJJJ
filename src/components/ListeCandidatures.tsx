@@ -246,21 +246,23 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                     </div>
                   )}
                 </div>
-                <div className="flex gap-1.5 shrink-0">
+                <div className="flex gap-2 shrink-0">
                   <button
                     onClick={() => traiterCandidature(c.id, 'ACCEPTEE')}
                     disabled={traitement === c.id}
-                    className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50"
+                    className="btn-primary text-sm py-2.5 px-4 min-h-[44px] flex items-center gap-1 disabled:opacity-50"
+                    aria-label="Accepter cette candidature"
                   >
-                    <CheckCircle className="h-3.5 w-3.5" />
+                    <CheckCircle className="h-4 w-4" />
                     Accepter
                   </button>
                   <button
                     onClick={() => traiterCandidature(c.id, 'REFUSEE')}
                     disabled={traitement === c.id}
-                    className="btn-danger text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50"
+                    className="btn-danger text-sm py-2.5 px-4 min-h-[44px] flex items-center gap-1 disabled:opacity-50"
+                    aria-label="Refuser cette candidature"
                   >
-                    <XCircle className="h-3.5 w-3.5" />
+                    <XCircle className="h-4 w-4" />
                     Refuser
                   </button>
                 </div>

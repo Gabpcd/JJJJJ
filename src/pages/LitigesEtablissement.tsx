@@ -227,7 +227,7 @@ export default function LitigesEtablissement() {
 
       {/* Modal nouveau litige */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent>
+        <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Ouvrir un nouveau litige</DialogTitle>
           </DialogHeader>
