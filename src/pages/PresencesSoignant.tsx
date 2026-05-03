@@ -19,6 +19,7 @@ import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { genererIdTerminal } from '@/lib/terminal';
 import { stockerPointageHorsLigne } from '@/lib/horsLigne';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { handleErrorSilent } from '@/lib/handleError';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash, Eye, Activity } from 'lucide-react';
@@ -44,7 +45,7 @@ export default function PresencesSoignant() {
     supabase.from('soignants').select('consentement_gps').eq('id', user.id).maybeSingle().then(({ data }) => {
       setConsentementGPS(data?.consentement_gps ?? null);
       setConsentementCharge(true);
-    }).then(undefined, () => {});
+    }).then(undefined, (err) => handleErrorSilent(err, 'PresencesSoignant.consentementGPS'));
   }, [user]);
 
   const handleAccepterGPS = async () => {

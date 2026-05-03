@@ -71,14 +71,18 @@ function BandeauCompletionProfil({ resume }: { resume: ResumeCompletion }) {
       </div>
     );
   }
-  const couleur = resume.peut_candidater ? 'warning' : 'destructive';
+  // Audit soignant fix : Tailwind ne compile pas les classes dynamiques.
+  // Map statique pour que les classes existent au build.
+  const couleurClasses = resume.peut_candidater
+    ? { card: 'bg-warning/5 border-warning/30', icon: 'text-warning', text: 'text-warning', bar: 'bg-warning' }
+    : { card: 'bg-destructive/5 border-destructive/30', icon: 'text-destructive', text: 'text-destructive', bar: 'bg-destructive' };
   return (
-    <div className={`card-base bg-${couleur}/5 border-${couleur}/30`}>
+    <div className={`card-base ${couleurClasses.card}`}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-start gap-3">
-          <AlertCircle className={`h-5 w-5 text-${couleur} shrink-0 mt-0.5`} />
+          <AlertCircle className={`h-5 w-5 ${couleurClasses.icon} shrink-0 mt-0.5`} />
           <div>
-            <p className={`text-sm font-semibold text-${couleur}`}>
+            <p className={`text-sm font-semibold ${couleurClasses.text}`}>
               Profil complété à {resume.pourcentage}%
             </p>
             {motif && <p className="text-xs text-muted-foreground mt-0.5">{motif}</p>}
@@ -90,7 +94,7 @@ function BandeauCompletionProfil({ resume }: { resume: ResumeCompletion }) {
       </div>
       <div className="h-2 bg-muted rounded-full overflow-hidden">
         <div
-          className={`h-full bg-${couleur} transition-all`}
+          className={`h-full ${couleurClasses.bar} transition-all`}
           style={{ width: `${resume.pourcentage}%` }}
         />
       </div>

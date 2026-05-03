@@ -11,6 +11,7 @@ import { ModalReclamationScore } from '@/components/ModalReclamationScore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { handleErrorSilent } from '@/lib/handleError';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 
 export default function FiabiliteSoignant() {
@@ -35,7 +36,7 @@ export default function FiabiliteSoignant() {
           p_type_ressource: 'soignant', p_id_ressource: user.id,
           p_cle_s3: null, p_details: { page: 'fiabilite' },
           p_ip: null, p_navigateur: navigator.userAgent,
-        }).then(undefined, () => {});
+        }).then(undefined, (err) => handleErrorSilent(err, 'FiabiliteSoignant.audit'));
       });
   }, [user]);
 

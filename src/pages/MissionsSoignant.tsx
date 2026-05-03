@@ -21,6 +21,7 @@ import { getLabelProfession, extraireContratPreference, missionCompatibleContrat
 import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { handleErrorSilent } from '@/lib/handleError';
 
 type Onglet = 'disponibles' | 'mes_missions' | 'historique';
 
@@ -60,7 +61,7 @@ export default function MissionsSoignant() {
     supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
       .eq('id', user.id).maybeSingle()
-      .then(({ data }) => { if (data) setSoignant(data as any); }).then(undefined, () => {});
+      .then(({ data }) => { if (data) setSoignant(data as any); }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.soignant'));
 
     // RCP check only for LIBERAL/MIXTE
     supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle()
@@ -82,7 +83,7 @@ export default function MissionsSoignant() {
               setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
             }
           });
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.rcp'));
 
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
     const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
@@ -95,7 +96,7 @@ export default function MissionsSoignant() {
       .then(({ data }) => {
         const total = (data ?? []).reduce((s: number, m: any) => s + (m.duree_heures ?? 0), 0);
         setHeuresSemaine(total);
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.heuresSemaine'));
   }, [user]);
 
   useEffect(() => {

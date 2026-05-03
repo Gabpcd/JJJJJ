@@ -232,7 +232,7 @@ export default function PageParrainage() {
               <p className="text-muted-foreground text-sm">Aucun filleul pour le moment. Partagez votre lien !</p>
             </div>
           ) : (
-            <div className="rounded-xl border border-border overflow-hidden">
+            <div className="rounded-xl border border-border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -242,23 +242,31 @@ export default function PageParrainage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filleuls.map((f) => (
-                    <TableRow key={f.id}>
-                      <TableCell className="font-medium">{f.prenom}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">
-                        {f.cree_le ? new Date(f.cree_le).toLocaleDateString('fr-FR') : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {f.premiere_mission_le || f.statut === 'VALIDE' ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                            <CheckCircle className="h-3 w-3" /> 1ère mission faite
-                          </span>
-                        ) : (
-                          <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">Inscrit</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filleuls.map((f) => {
+                    const aFaitMission = !!f.premiere_mission_le || f.statut === 'VALIDE';
+                    const enAttente = !aFaitMission && f.statut === 'EN_ATTENTE';
+                    return (
+                      <TableRow key={f.id}>
+                        <TableCell className="font-medium">{f.prenom}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                          {f.cree_le ? new Date(f.cree_le).toLocaleDateString('fr-FR') : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {aFaitMission ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5 whitespace-nowrap">
+                              <CheckCircle className="h-3 w-3" /> 1ère mission faite
+                            </span>
+                          ) : enAttente ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-warning bg-warning/10 rounded-full px-2 py-0.5 whitespace-nowrap">
+                              ⏳ En attente
+                            </span>
+                          ) : (
+                            <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 whitespace-nowrap">Inscrit</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

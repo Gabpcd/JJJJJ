@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/lib/logger';
+import { handleErrorSilent } from '@/lib/handleError';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
@@ -121,7 +122,7 @@ export default function RechercheMissions() {
           setProfession(s.profession);
           setRayonKm(s.rayon_deplacement_km || 50);
         }
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'RechercheMissions.soignant'));
 
     // RCP check only for LIBERAL/MIXTE
     supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle()

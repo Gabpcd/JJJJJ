@@ -24,6 +24,7 @@ import { BandeauCompletionProfil } from '@/components/profil-soignant/BandeauCom
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
+import { BandeauGraceDocuments } from '@/components/BandeauGraceDocuments';
 const GraphiqueGains6Mois = lazy(() =>
   import('@/components/GraphiqueGains6Mois').then(m => ({ default: m.GraphiqueGains6Mois }))
 );
@@ -168,6 +169,14 @@ export default function DashboardSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
+      {soignant && (
+        <div className="mb-4">
+          <BandeauGraceDocuments
+            premiereMissionLe={(soignant as any).premiere_mission_le}
+            tousDocumentsValides={soignant.tous_documents_valides}
+          />
+        </div>
+      )}
       <BandeauCompletionProfil soignant={soignant as any} variant="detaille" />
       <BandeauEvaluationsEnAttente role="SOIGNANT" />
       <OnboardingGuide role="SOIGNANT" userId={user!.id} />

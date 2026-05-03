@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { handleErrorSilent } from '@/lib/handleError';
 import { supabase } from '@/integrations/supabase/client';
 import { Copy, Gift, CheckCircle, LogOut } from 'lucide-react';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
@@ -117,7 +118,7 @@ export default function ProfilSoignant() {
           p_type_ressource: 'soignant', p_id_ressource: user.id,
           p_cle_s3: null, p_details: { page: 'profil' },
           p_ip: null, p_navigateur: navigator.userAgent,
-        }).then(undefined, () => {});
+        }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.audit'));
 
         setEmail(data.email || '');
         setProfession(data.profession || '');
@@ -161,17 +162,17 @@ export default function ProfilSoignant() {
 
     supabase.rpc('fn_mes_filleuls' as any).then(({ data }: any) => {
       if (Array.isArray(data)) setFilleuls(data);
-    }).then(undefined, () => {});
+    }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.filleuls'));
 
     supabase.rpc('fn_note_moyenne' as any, { p_user_id: user.id })
       .then(({ data }: any) => {
         if (Array.isArray(data) && data.length > 0) setNoteMoyenne(data[0]);
         else if (data && typeof data === 'object' && !Array.isArray(data) && 'total' in data) setNoteMoyenne(data);
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.noteMoyenne'));
     supabase.rpc('fn_mes_evaluations_recues' as any)
       .then(({ data }: any) => {
         if (Array.isArray(data)) setEvaluations(data);
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.evaluations'));
     supabase.rpc('fn_badge_stats' as any).then(({ data }: any) => {
       if (data) {
         setBadgeStats({
@@ -186,7 +187,7 @@ export default function ProfilSoignant() {
           totalMissions: data.total_missions ?? data.missionsTerminees ?? 0,
         });
       }
-    }).then(undefined, () => {});
+    }).then(undefined, (err) => handleErrorSilent(err, 'ProfilSoignant.badgeStats'));
   }, [user, refreshKey, afficherNotification]);
 
   const toggleContrat = (valeur: string) => {
@@ -232,14 +233,16 @@ export default function ProfilSoignant() {
       p_taux_horaire_minimum: tauxHoraireMinimum,
     });
 
+    let specialiteError: any = null;
     if ((profession === 'MEDECIN' || profession === 'IDE') && !specialiteVerifiee) {
-      await supabase.from('soignants')
+      const { error: specErr } = await supabase.from('soignants')
         .update({ specialite_medicale: specialiteMedicale || null, specialite_code: specialiteMedicale || null, specialite_source: 'MANUEL' } as any)
         .eq('id', user.id);
+      specialiteError = specErr;
     }
 
-    if (error || exError) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error || exError) });
+    if (error || exError || specialiteError) {
+      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error || exError || specialiteError) });
     } else if ((rpcResult as any)?.error) {
       afficherNotification({ type: 'erreur', message: (rpcResult as any).error });
     } else {

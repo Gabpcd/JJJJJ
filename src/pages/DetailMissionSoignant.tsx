@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { ouvrirNavigation } from '@/lib/platform';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -70,6 +70,8 @@ export default function DetailMissionSoignant() {
   const [candidatureEnvoyee, setCandidatureEnvoyee] = useState(false);
   const [postulationEnCours, setPostulationEnCours] = useState(false);
   const [choixContratDialog, setChoixContratDialog] = useState<{ open: boolean; options: any[]; action: 'postuler' | 'accepter' }>({ open: false, options: [], action: 'postuler' });
+  const postulationLockRef = useRef(false);
+  const acceptationLockRef = useRef(false);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -124,7 +126,7 @@ export default function DetailMissionSoignant() {
       .gt('fin_le', mission.debut_le)
       .then(({ data }) => {
         setChevauchement((data || []).length > 0);
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.chevauchement'));
   }, [mission, user]);
 
   // Fetch average rating for the establishment
@@ -134,7 +136,7 @@ export default function DetailMissionSoignant() {
       .then(({ data }: any) => {
         if (data && typeof data === 'object') setNoteMoyenne(data);
         else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.noteMoyenne'));
   }, [mission?.etablissement_id]);
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
@@ -163,6 +165,8 @@ export default function DetailMissionSoignant() {
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
 
   const postulerMission = async (choixContrat?: string) => {
+    if (postulationLockRef.current) return;
+    postulationLockRef.current = true;
     setPostulationEnCours(true);
     try {
       const params: any = { p_mission_id: id!, p_message: messageCandidature || null };
@@ -179,11 +183,15 @@ export default function DetailMissionSoignant() {
     } catch (err: any) {
       capturerErreurSentry(err, 'DetailMissionSoignant', 'candidature');
       toast.error(extraireMessageErreur(err));
+    } finally {
+      postulationLockRef.current = false;
+      setPostulationEnCours(false);
     }
-    setPostulationEnCours(false);
   };
 
   const accepterMission = async (choixContrat?: string) => {
+    if (acceptationLockRef.current) return;
+    acceptationLockRef.current = true;
     setAcceptationEnCours(true);
     try {
       const params: any = { p_mission_id: id! };
@@ -253,7 +261,7 @@ export default function DetailMissionSoignant() {
           },
           destinataire_id: user!.id,
         },
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.email-soignant'));
 
       // Email à l'établissement (établissement role can send to other addresses)
       {
@@ -269,9 +277,10 @@ export default function DetailMissionSoignant() {
             },
             destinataire_id: mission.etablissement_id,
           },
-        }).then(undefined, () => {});
+        }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.email-etablissement'));
       }
     } finally {
+      acceptationLockRef.current = false;
       setAcceptationEnCours(false);
     }
   };

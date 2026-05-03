@@ -34,7 +34,7 @@ function AttestationSante({ userId }: { userId: string }) {
           setCheckVaccin(true);
           setCheckMedecine(true);
         }
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'DocumentsSoignant.attestation'));
   }, [userId]);
 
   const signer = async () => {
