@@ -14,13 +14,30 @@ e2e/
 ├── helpers/
 │   ├── auth.ts        # loginAs(page, 'soignant'), generateTestUser(), TEST_ACCOUNTS
 │   ├── db.ts          # adminClient, resetTestAccount, cleanupTestAccounts
+│   ├── seed.ts        # seedMission, seedCandidature, markMissionTerminee, hasTestAccount
+│   ├── axe.ts         # runAxe, expectNoCriticalA11y (audit a11y WCAG 2.1 AA)
 │   └── wait.ts        # waitForToast, waitForLoadingDone, assertFastLoad
-├── accueil.spec.ts            # tests landing
-├── auth.spec.ts               # login, états page connexion
-├── inscription.spec.ts        # inscription soignant + étab + reset password
-├── missions.spec.ts           # navigation publique missions
-├── navigation-publique.spec.ts # routes publiques
-└── regression.spec.ts         # tests régression bugs critiques fixés
+├── flows/
+│   ├── candidature.spec.ts          # Flow A — candidature soignant → étab
+│   ├── pointage.spec.ts             # Flow B — pointage ouverture/fin
+│   ├── notation.spec.ts             # Flow C — notation bidirectionnelle
+│   ├── litige.spec.ts               # Flow D + E — litiges + cron 7j
+│   ├── parrainage.spec.ts           # Flow F + G — parrainage soignant + étab
+│   ├── pool-urgence.spec.ts         # Flow H — opt-in + missions urgentes
+│   ├── centre-aide.spec.ts          # Flow I — recherche + article + filtres
+│   ├── changer-password.spec.ts     # Flow J — modifier mot de passe
+│   ├── suppression-compte.spec.ts   # Flow K — suppression RGPD
+│   ├── export-rgpd.spec.ts          # Flow L — fn_exporter_mes_donnees
+│   ├── notifications.spec.ts        # Flow M — bell icon + dropdown
+│   └── recherche-missions.spec.ts   # Flow N — filtres + sauvegarde
+├── a11y.spec.ts                # Audit accessibilité axe-core 9 pages publiques
+├── accueil.spec.ts             # Tests landing
+├── auth.spec.ts                # Login, états page connexion
+├── inscription.spec.ts         # Inscription soignant + étab + reset password
+├── missions.spec.ts            # Navigation publique missions
+├── navigation-publique.spec.ts # Routes publiques
+├── regression.spec.ts          # Tests régression bugs critiques (1ère vague)
+└── regression-bugs.spec.ts     # Tests régression exhaustifs (XSS, RLS, etc.)
 ```
 
 ## Lancer en local
@@ -177,15 +194,55 @@ Update intentionnel : même commande après vérification visuelle.
 
 Workflow : `.github/workflows/playwright.yml`.
 
-- **Trigger** : push main, PR vers main, manuel.
-- **Browsers** : Chromium uniquement (gain de temps CI). Cross-browser en local au besoin.
-- **Secrets requis** (Settings → Secrets and variables → Actions) :
-  - `VITE_SUPABASE_URL`
-  - `VITE_SUPABASE_PUBLISHABLE_KEY`
-  - `SUPABASE_URL`
-  - `SUPABASE_SERVICE_ROLE_KEY`
-  - `PLAYWRIGHT_TEST_PASSWORD`
-- **Artifacts** : rapport HTML + traces upload sur échec (rétention 7j).
+### Stratégie matrix
+
+- **PR** → 1 job (`e2e-pr`) : Chromium uniquement pour rapidité (feedback < 5 min)
+- **push main** → 5 jobs (`e2e-main` matrix) :
+  - chromium
+  - firefox
+  - webkit (Safari)
+  - mobile-iphone (375×812)
+  - mobile-pixel (412×915)
+
+`fail-fast: false` : un échec mobile ne stoppe pas Firefox.
+
+### Secrets requis
+
+Settings → Secrets and variables → Actions :
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `PLAYWRIGHT_TEST_PASSWORD`
+
+### Artifacts
+
+Rapports HTML + traces (sur échec) uploadés par browser/projet. Rétention 7j.
+
+## Helpers de seed (flows complexes)
+
+Pour les tests qui nécessitent données préparées (mission, candidature, etc.) :
+
+```ts
+import { seedMission, markMissionTerminee, cleanupSeedData } from './helpers/seed';
+
+test('mon flow', async ({ page }) => {
+  const m = await seedMission({ intitule: '[playwright-test] X' });
+  try {
+    // ... test logic
+    await markMissionTerminee(m!.id);
+  } finally {
+    await cleanupSeedData();
+  }
+});
+```
+
+Tous les seeds utilisent le préfixe `[playwright-test]` ou rattachent aux comptes test fixes (`playwright-soignant@jolene.app`, `playwright-etab@jolene.app`).
+
+Cleanup automatique :
+- `cleanupSeedData()` supprime les missions du compte test étab avec préfixe
+- `cleanupTestAccounts()` supprime les comptes éphémères `playwright-test-%@%`
+- Cron périodique recommandé pour garder la DB propre
 
 ### Statut commit
 
