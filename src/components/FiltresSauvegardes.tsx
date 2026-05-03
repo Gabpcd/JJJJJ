@@ -12,6 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { Bell, BellOff, Save, Trash2, Edit2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -190,7 +191,7 @@ function ModalSave({
     if (nom.trim().length === 0) { toast.error('Donnez un nom à votre recherche'); return; }
     setSubmitting(true);
     const { data, error } = await supabase.rpc('fn_creer_filtre_sauvegarde', {
-      p_nom: nom.trim(), p_audience: audience, p_filtres: filtres,
+      p_nom: nom.trim(), p_audience: audience, p_filtres: filtres as Json,
       p_alerte_active: alerteActive, p_frequence_alerte: frequence,
     });
     setSubmitting(false);

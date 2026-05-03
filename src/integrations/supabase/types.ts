@@ -97,6 +97,42 @@ export type Database = {
           },
         ]
       }
+      alertes_systeme: {
+        Row: {
+          cree_le: string
+          details: Json | null
+          email_envoye_le: string | null
+          id: string
+          message: string
+          resolu_le: string | null
+          severite: string
+          source: string
+          type_alerte: string
+        }
+        Insert: {
+          cree_le?: string
+          details?: Json | null
+          email_envoye_le?: string | null
+          id?: string
+          message: string
+          resolu_le?: string | null
+          severite: string
+          source: string
+          type_alerte: string
+        }
+        Update: {
+          cree_le?: string
+          details?: Json | null
+          email_envoye_le?: string | null
+          id?: string
+          message?: string
+          resolu_le?: string | null
+          severite?: string
+          source?: string
+          type_alerte?: string
+        }
+        Relationships: []
+      }
       api_keys: {
         Row: {
           actif: boolean | null
@@ -156,6 +192,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      articles_aide: {
+        Row: {
+          audience: string
+          categorie: string
+          contenu: string
+          cree_le: string
+          id: string
+          mis_a_jour_le: string
+          ordre_affichage: number
+          publie: boolean
+          slug: string
+          titre: string
+        }
+        Insert: {
+          audience: string
+          categorie: string
+          contenu: string
+          cree_le?: string
+          id?: string
+          mis_a_jour_le?: string
+          ordre_affichage?: number
+          publie?: boolean
+          slug: string
+          titre: string
+        }
+        Update: {
+          audience?: string
+          categorie?: string
+          contenu?: string
+          cree_le?: string
+          id?: string
+          mis_a_jour_le?: string
+          ordre_affichage?: number
+          publie?: boolean
+          slug?: string
+          titre?: string
+        }
+        Relationships: []
       }
       assurance_config: {
         Row: {
@@ -956,6 +1031,120 @@ export type Database = {
           },
         ]
       }
+      contrats_service_signatures: {
+        Row: {
+          contenu_hash: string | null
+          cree_le: string
+          etablissement_id: string
+          id: string
+          ip_address: string | null
+          motif_revocation: string | null
+          pdf_url: string | null
+          revoked_at: string | null
+          signature_s3_key: string | null
+          signed_at: string
+          user_agent: string | null
+          version: string
+        }
+        Insert: {
+          contenu_hash?: string | null
+          cree_le?: string
+          etablissement_id: string
+          id?: string
+          ip_address?: string | null
+          motif_revocation?: string | null
+          pdf_url?: string | null
+          revoked_at?: string | null
+          signature_s3_key?: string | null
+          signed_at?: string
+          user_agent?: string | null
+          version?: string
+        }
+        Update: {
+          contenu_hash?: string | null
+          cree_le?: string
+          etablissement_id?: string
+          id?: string
+          ip_address?: string | null
+          motif_revocation?: string | null
+          pdf_url?: string | null
+          revoked_at?: string | null
+          signature_s3_key?: string | null
+          signed_at?: string
+          user_agent?: string | null
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrats_service_signatures_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contrats_travail_missions: {
+        Row: {
+          cree_le: string
+          etablissement_id: string
+          id: string
+          mission_id: string
+          nom_fichier: string | null
+          pdf_s3_key: string
+          soignant_id: string | null
+          taille_octets: number | null
+          uploaded_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          cree_le?: string
+          etablissement_id: string
+          id?: string
+          mission_id: string
+          nom_fichier?: string | null
+          pdf_s3_key: string
+          soignant_id?: string | null
+          taille_octets?: number | null
+          uploaded_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          cree_le?: string
+          etablissement_id?: string
+          id?: string
+          mission_id?: string
+          nom_fichier?: string | null
+          pdf_s3_key?: string
+          soignant_id?: string | null
+          taille_octets?: number | null
+          uploaded_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrats_travail_missions_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrats_travail_missions_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: true
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrats_travail_missions_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           cree_le: string | null
@@ -1187,6 +1376,61 @@ export type Database = {
             columns: ["soignant_id"]
             isOneToOne: false
             referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credits_etablissement: {
+        Row: {
+          applique_le: string | null
+          cree_le: string
+          etablissement_id: string
+          facture_id: string | null
+          id: string
+          montant_eur: number
+          motif: Database["public"]["Enums"]["credit_etab_motif"]
+          parrainage_id: string | null
+        }
+        Insert: {
+          applique_le?: string | null
+          cree_le?: string
+          etablissement_id: string
+          facture_id?: string | null
+          id?: string
+          montant_eur: number
+          motif: Database["public"]["Enums"]["credit_etab_motif"]
+          parrainage_id?: string | null
+        }
+        Update: {
+          applique_le?: string | null
+          cree_le?: string
+          etablissement_id?: string
+          facture_id?: string | null
+          id?: string
+          montant_eur?: number
+          motif?: Database["public"]["Enums"]["credit_etab_motif"]
+          parrainage_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credits_etablissement_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credits_etablissement_facture_id_fkey"
+            columns: ["facture_id"]
+            isOneToOne: false
+            referencedRelation: "factures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credits_etablissement_parrainage_id_fkey"
+            columns: ["parrainage_id"]
+            isOneToOne: false
+            referencedRelation: "parrainages_etablissements"
             referencedColumns: ["id"]
           },
         ]
@@ -1530,6 +1774,9 @@ export type Database = {
           bloque_auto_raisons: Json | null
           chorus_pro_actif: boolean | null
           chorus_pro_identifiant: string | null
+          code_parrainage: string | null
+          contrat_service_signe: boolean
+          contrat_service_signe_le: string | null
           contrat_uploade_le: string | null
           contrat_url: string | null
           contrat_valide: boolean | null
@@ -1556,13 +1803,17 @@ export type Database = {
           modifie_le: string | null
           motif_rejet: string | null
           nb_evaluations: number | null
+          niveau: Database["public"]["Enums"]["niveau_qualitatif"] | null
           nom: string
           note_moyenne: number | null
           palier_commission_id: string | null
           palier_recalcule_le: string | null
+          parraine_par_id: string | null
           peut_publier_missions: boolean | null
+          rib_s3_key: string | null
           rist_plafond_actif: boolean | null
           rist_taux_base_horaire: number | null
+          score_qualite: number | null
           siret: string
           siret_categorie_juridique: string | null
           siret_code_naf: string | null
@@ -1597,6 +1848,9 @@ export type Database = {
           bloque_auto_raisons?: Json | null
           chorus_pro_actif?: boolean | null
           chorus_pro_identifiant?: string | null
+          code_parrainage?: string | null
+          contrat_service_signe?: boolean
+          contrat_service_signe_le?: string | null
           contrat_uploade_le?: string | null
           contrat_url?: string | null
           contrat_valide?: boolean | null
@@ -1623,13 +1877,17 @@ export type Database = {
           modifie_le?: string | null
           motif_rejet?: string | null
           nb_evaluations?: number | null
+          niveau?: Database["public"]["Enums"]["niveau_qualitatif"] | null
           nom: string
           note_moyenne?: number | null
           palier_commission_id?: string | null
           palier_recalcule_le?: string | null
+          parraine_par_id?: string | null
           peut_publier_missions?: boolean | null
+          rib_s3_key?: string | null
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
+          score_qualite?: number | null
           siret: string
           siret_categorie_juridique?: string | null
           siret_code_naf?: string | null
@@ -1664,6 +1922,9 @@ export type Database = {
           bloque_auto_raisons?: Json | null
           chorus_pro_actif?: boolean | null
           chorus_pro_identifiant?: string | null
+          code_parrainage?: string | null
+          contrat_service_signe?: boolean
+          contrat_service_signe_le?: string | null
           contrat_uploade_le?: string | null
           contrat_url?: string | null
           contrat_valide?: boolean | null
@@ -1690,13 +1951,17 @@ export type Database = {
           modifie_le?: string | null
           motif_rejet?: string | null
           nb_evaluations?: number | null
+          niveau?: Database["public"]["Enums"]["niveau_qualitatif"] | null
           nom?: string
           note_moyenne?: number | null
           palier_commission_id?: string | null
           palier_recalcule_le?: string | null
+          parraine_par_id?: string | null
           peut_publier_missions?: boolean | null
+          rib_s3_key?: string | null
           rist_plafond_actif?: boolean | null
           rist_taux_base_horaire?: number | null
+          score_qualite?: number | null
           siret?: string
           siret_categorie_juridique?: string | null
           siret_code_naf?: string | null
@@ -1733,6 +1998,13 @@ export type Database = {
             columns: ["palier_commission_id"]
             isOneToOne: false
             referencedRelation: "paliers_commission"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "etablissements_parraine_par_id_fkey"
+            columns: ["parraine_par_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
             referencedColumns: ["id"]
           },
         ]
@@ -2099,6 +2371,7 @@ export type Database = {
       factures_honoraires: {
         Row: {
           admin_notes: string | null
+          annee_iso: number | null
           chorus_avoir_reference_invoice: string | null
           chorus_last_sync_at: string | null
           chorus_submission_id: string | null
@@ -2109,6 +2382,7 @@ export type Database = {
           date_paiement: string | null
           date_remboursement: string | null
           engagement_juridique: string | null
+          est_facture_finale_mission: boolean
           etablissement_id: string
           exoneration_tva: boolean | null
           factor_assigned: boolean
@@ -2127,8 +2401,11 @@ export type Database = {
           montant_ttc: number
           montant_tva: number
           numero_facture: string
+          numero_semaine_iso: number | null
           pdf_a_regenerer: boolean
           pdf_s3_key: string | null
+          periode_debut: string
+          periode_fin: string
           reference_remboursement: string | null
           service_code_chorus: string | null
           siret_client: string | null
@@ -2144,6 +2421,7 @@ export type Database = {
         }
         Insert: {
           admin_notes?: string | null
+          annee_iso?: number | null
           chorus_avoir_reference_invoice?: string | null
           chorus_last_sync_at?: string | null
           chorus_submission_id?: string | null
@@ -2154,6 +2432,7 @@ export type Database = {
           date_paiement?: string | null
           date_remboursement?: string | null
           engagement_juridique?: string | null
+          est_facture_finale_mission?: boolean
           etablissement_id: string
           exoneration_tva?: boolean | null
           factor_assigned?: boolean
@@ -2172,8 +2451,11 @@ export type Database = {
           montant_ttc: number
           montant_tva?: number
           numero_facture: string
+          numero_semaine_iso?: number | null
           pdf_a_regenerer?: boolean
           pdf_s3_key?: string | null
+          periode_debut: string
+          periode_fin: string
           reference_remboursement?: string | null
           service_code_chorus?: string | null
           siret_client?: string | null
@@ -2189,6 +2471,7 @@ export type Database = {
         }
         Update: {
           admin_notes?: string | null
+          annee_iso?: number | null
           chorus_avoir_reference_invoice?: string | null
           chorus_last_sync_at?: string | null
           chorus_submission_id?: string | null
@@ -2199,6 +2482,7 @@ export type Database = {
           date_paiement?: string | null
           date_remboursement?: string | null
           engagement_juridique?: string | null
+          est_facture_finale_mission?: boolean
           etablissement_id?: string
           exoneration_tva?: boolean | null
           factor_assigned?: boolean
@@ -2217,8 +2501,11 @@ export type Database = {
           montant_ttc?: number
           montant_tva?: number
           numero_facture?: string
+          numero_semaine_iso?: number | null
           pdf_a_regenerer?: boolean
           pdf_s3_key?: string | null
+          periode_debut?: string
+          periode_fin?: string
           reference_remboursement?: string | null
           service_code_chorus?: string | null
           siret_client?: string | null
@@ -2270,7 +2557,7 @@ export type Database = {
           },
         ]
       }
-      favoris: {
+      favoris_etab_soignant: {
         Row: {
           cree_le: string | null
           etablissement_id: string
@@ -2290,6 +2577,42 @@ export type Database = {
           soignant_id?: string
         }
         Relationships: []
+      }
+      favoris_soignant_etab: {
+        Row: {
+          cree_le: string
+          etablissement_id: string
+          id: string
+          soignant_id: string
+        }
+        Insert: {
+          cree_le?: string
+          etablissement_id: string
+          id?: string
+          soignant_id: string
+        }
+        Update: {
+          cree_le?: string
+          etablissement_id?: string
+          id?: string
+          soignant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favoris_soignant_etab_etablissement_id_fkey"
+            columns: ["etablissement_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favoris_soignant_etab_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       file_revue_manuelle: {
         Row: {
@@ -2342,11 +2665,55 @@ export type Database = {
         }
         Relationships: []
       }
+      filtres_sauvegardes: {
+        Row: {
+          alerte_active: boolean
+          audience: Database["public"]["Enums"]["filtre_audience"]
+          cree_le: string
+          dernier_check_le: string
+          filtres: Json
+          frequence_alerte: Database["public"]["Enums"]["filtre_frequence_alerte"]
+          id: string
+          mis_a_jour_le: string
+          nb_resultats_dernier_check: number
+          nom: string
+          utilisateur_id: string
+        }
+        Insert: {
+          alerte_active?: boolean
+          audience: Database["public"]["Enums"]["filtre_audience"]
+          cree_le?: string
+          dernier_check_le?: string
+          filtres?: Json
+          frequence_alerte?: Database["public"]["Enums"]["filtre_frequence_alerte"]
+          id?: string
+          mis_a_jour_le?: string
+          nb_resultats_dernier_check?: number
+          nom: string
+          utilisateur_id: string
+        }
+        Update: {
+          alerte_active?: boolean
+          audience?: Database["public"]["Enums"]["filtre_audience"]
+          cree_le?: string
+          dernier_check_le?: string
+          filtres?: Json
+          frequence_alerte?: Database["public"]["Enums"]["filtre_frequence_alerte"]
+          id?: string
+          mis_a_jour_le?: string
+          nb_resultats_dernier_check?: number
+          nom?: string
+          utilisateur_id?: string
+        }
+        Relationships: []
+      }
       groupes_sante: {
         Row: {
           adresse_facturation: string | null
           bfa_contrat_signe_le: string | null
           bfa_eligible: boolean | null
+          contrat_debut: string | null
+          contrat_fin: string | null
           couleur_primaire: string | null
           couleur_secondaire: string | null
           cree_le: string | null
@@ -2365,12 +2732,15 @@ export type Database = {
           siren: string | null
           siret_facturation: string | null
           supprime_le: string | null
+          taux_commission_negocie: number | null
           telephone_admin: string | null
         }
         Insert: {
           adresse_facturation?: string | null
           bfa_contrat_signe_le?: string | null
           bfa_eligible?: boolean | null
+          contrat_debut?: string | null
+          contrat_fin?: string | null
           couleur_primaire?: string | null
           couleur_secondaire?: string | null
           cree_le?: string | null
@@ -2389,12 +2759,15 @@ export type Database = {
           siren?: string | null
           siret_facturation?: string | null
           supprime_le?: string | null
+          taux_commission_negocie?: number | null
           telephone_admin?: string | null
         }
         Update: {
           adresse_facturation?: string | null
           bfa_contrat_signe_le?: string | null
           bfa_eligible?: boolean | null
+          contrat_debut?: string | null
+          contrat_fin?: string | null
           couleur_primaire?: string | null
           couleur_secondaire?: string | null
           cree_le?: string | null
@@ -2413,6 +2786,7 @@ export type Database = {
           siren?: string | null
           siret_facturation?: string | null
           supprime_le?: string | null
+          taux_commission_negocie?: number | null
           telephone_admin?: string | null
         }
         Relationships: [
@@ -2766,12 +3140,15 @@ export type Database = {
           est_informatif: boolean
           etablissement_id: string
           facture_id: string | null
+          gel_facture_scope: string
           id: string
           initie_par: string
           mission_id: string
           montant_tresorerie_bloquee: number | null
           motif: string
           paiement_soignant_id: string | null
+          periode_debut: string | null
+          periode_fin: string | null
           presence_id: string | null
           reponse: string | null
           resolu_le: string | null
@@ -2795,12 +3172,15 @@ export type Database = {
           est_informatif?: boolean
           etablissement_id: string
           facture_id?: string | null
+          gel_facture_scope?: string
           id?: string
           initie_par: string
           mission_id: string
           montant_tresorerie_bloquee?: number | null
           motif: string
           paiement_soignant_id?: string | null
+          periode_debut?: string | null
+          periode_fin?: string | null
           presence_id?: string | null
           reponse?: string | null
           resolu_le?: string | null
@@ -2824,12 +3204,15 @@ export type Database = {
           est_informatif?: boolean
           etablissement_id?: string
           facture_id?: string | null
+          gel_facture_scope?: string
           id?: string
           initie_par?: string
           mission_id?: string
           montant_tresorerie_bloquee?: number | null
           motif?: string
           paiement_soignant_id?: string | null
+          periode_debut?: string | null
+          periode_fin?: string | null
           presence_id?: string | null
           reponse?: string | null
           resolu_le?: string | null
@@ -3116,6 +3499,7 @@ export type Database = {
       }
       missions: {
         Row: {
+          absence_sans_prevenir: boolean
           accepte_non_specialises: boolean | null
           annulee_le: string | null
           annulee_par: string | null
@@ -3174,6 +3558,7 @@ export type Database = {
           soignant_assigne_id: string | null
           specialite_medicale_requise: string | null
           statut: Database["public"]["Enums"]["statut_mission"] | null
+          strategie_facturation: Database["public"]["Enums"]["strategie_facturation"]
           stripe_payment_intent_id: string | null
           stripe_transfer_id: string | null
           taux_commission: number | null
@@ -3197,6 +3582,7 @@ export type Database = {
           yousign_statut: string | null
         }
         Insert: {
+          absence_sans_prevenir?: boolean
           accepte_non_specialises?: boolean | null
           annulee_le?: string | null
           annulee_par?: string | null
@@ -3255,6 +3641,7 @@ export type Database = {
           soignant_assigne_id?: string | null
           specialite_medicale_requise?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
+          strategie_facturation?: Database["public"]["Enums"]["strategie_facturation"]
           stripe_payment_intent_id?: string | null
           stripe_transfer_id?: string | null
           taux_commission?: number | null
@@ -3278,6 +3665,7 @@ export type Database = {
           yousign_statut?: string | null
         }
         Update: {
+          absence_sans_prevenir?: boolean
           accepte_non_specialises?: boolean | null
           annulee_le?: string | null
           annulee_par?: string | null
@@ -3336,6 +3724,7 @@ export type Database = {
           soignant_assigne_id?: string | null
           specialite_medicale_requise?: string | null
           statut?: Database["public"]["Enums"]["statut_mission"] | null
+          strategie_facturation?: Database["public"]["Enums"]["strategie_facturation"]
           stripe_payment_intent_id?: string | null
           stripe_transfer_id?: string | null
           taux_commission?: number | null
@@ -3386,6 +3775,74 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "specialites_medicales"
             referencedColumns: ["code"]
+          },
+        ]
+      }
+      notations_missions: {
+        Row: {
+          commentaire: string | null
+          cree_le: string
+          critere_1: number
+          critere_2: number
+          critere_3: number
+          critere_4: number
+          id: string
+          masque: boolean
+          masque_le: string | null
+          masque_par: string | null
+          mis_a_jour_le: string
+          mission_id: string
+          notateur_anonymise: boolean
+          notateur_id: string
+          note_id: string
+          sens: Database["public"]["Enums"]["sens_notation"]
+          signale: boolean
+        }
+        Insert: {
+          commentaire?: string | null
+          cree_le?: string
+          critere_1: number
+          critere_2: number
+          critere_3: number
+          critere_4: number
+          id?: string
+          masque?: boolean
+          masque_le?: string | null
+          masque_par?: string | null
+          mis_a_jour_le?: string
+          mission_id: string
+          notateur_anonymise?: boolean
+          notateur_id: string
+          note_id: string
+          sens: Database["public"]["Enums"]["sens_notation"]
+          signale?: boolean
+        }
+        Update: {
+          commentaire?: string | null
+          cree_le?: string
+          critere_1?: number
+          critere_2?: number
+          critere_3?: number
+          critere_4?: number
+          id?: string
+          masque?: boolean
+          masque_le?: string | null
+          masque_par?: string | null
+          mis_a_jour_le?: string
+          mission_id?: string
+          notateur_anonymise?: boolean
+          notateur_id?: string
+          note_id?: string
+          sens?: Database["public"]["Enums"]["sens_notation"]
+          signale?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notations_missions_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3445,6 +3902,38 @@ export type Database = {
           type_ressource?: string | null
         }
         Relationships: []
+      }
+      notifications_notation_j1: {
+        Row: {
+          destinataire_id: string
+          envoye_le: string
+          id: string
+          mission_id: string
+          sens: Database["public"]["Enums"]["sens_notation"]
+        }
+        Insert: {
+          destinataire_id: string
+          envoye_le?: string
+          id?: string
+          mission_id: string
+          sens: Database["public"]["Enums"]["sens_notation"]
+        }
+        Update: {
+          destinataire_id?: string
+          envoye_le?: string
+          id?: string
+          mission_id?: string
+          sens?: Database["public"]["Enums"]["sens_notation"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_notation_j1_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       paiements_mission: {
         Row: {
@@ -3767,6 +4256,54 @@ export type Database = {
         }
         Relationships: []
       }
+      parrainages_etablissements: {
+        Row: {
+          code_parrainage: string
+          cree_le: string
+          filleul_etab_id: string
+          id: string
+          mis_a_jour_le: string
+          parrain_etab_id: string
+          statut: Database["public"]["Enums"]["parrainage_etab_statut"]
+          valide_le: string | null
+        }
+        Insert: {
+          code_parrainage: string
+          cree_le?: string
+          filleul_etab_id: string
+          id?: string
+          mis_a_jour_le?: string
+          parrain_etab_id: string
+          statut?: Database["public"]["Enums"]["parrainage_etab_statut"]
+          valide_le?: string | null
+        }
+        Update: {
+          code_parrainage?: string
+          cree_le?: string
+          filleul_etab_id?: string
+          id?: string
+          mis_a_jour_le?: string
+          parrain_etab_id?: string
+          statut?: Database["public"]["Enums"]["parrainage_etab_statut"]
+          valide_le?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parrainages_etablissements_filleul_etab_id_fkey"
+            columns: ["filleul_etab_id"]
+            isOneToOne: true
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parrainages_etablissements_parrain_etab_id_fkey"
+            columns: ["parrain_etab_id"]
+            isOneToOne: false
+            referencedRelation: "etablissements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partages_rib: {
         Row: {
           actif: boolean | null
@@ -3938,6 +4475,66 @@ export type Database = {
         }
         Relationships: []
       }
+      preferences_notifications: {
+        Row: {
+          canal_email: boolean
+          canal_in_app: boolean
+          canal_push: boolean
+          canal_sms: boolean
+          cree_le: string
+          mis_a_jour_le: string
+          utilisateur_id: string
+        }
+        Insert: {
+          canal_email?: boolean
+          canal_in_app?: boolean
+          canal_push?: boolean
+          canal_sms?: boolean
+          cree_le?: string
+          mis_a_jour_le?: string
+          utilisateur_id: string
+        }
+        Update: {
+          canal_email?: boolean
+          canal_in_app?: boolean
+          canal_push?: boolean
+          canal_sms?: boolean
+          cree_le?: string
+          mis_a_jour_le?: string
+          utilisateur_id?: string
+        }
+        Relationships: []
+      }
+      preferences_notifications_par_evenement: {
+        Row: {
+          actif: boolean
+          canal: Database["public"]["Enums"]["canal_notification"]
+          cree_le: string
+          id: string
+          mis_a_jour_le: string
+          type_evenement: Database["public"]["Enums"]["type_evenement_notification"]
+          utilisateur_id: string
+        }
+        Insert: {
+          actif?: boolean
+          canal: Database["public"]["Enums"]["canal_notification"]
+          cree_le?: string
+          id?: string
+          mis_a_jour_le?: string
+          type_evenement: Database["public"]["Enums"]["type_evenement_notification"]
+          utilisateur_id: string
+        }
+        Update: {
+          actif?: boolean
+          canal?: Database["public"]["Enums"]["canal_notification"]
+          cree_le?: string
+          id?: string
+          mis_a_jour_le?: string
+          type_evenement?: Database["public"]["Enums"]["type_evenement_notification"]
+          utilisateur_id?: string
+        }
+        Relationships: []
+      }
       presences: {
         Row: {
           ajustement_litige_id: string | null
@@ -4083,6 +4680,41 @@ export type Database = {
           },
         ]
       }
+      prevoyance_liste_attente: {
+        Row: {
+          cree_le: string
+          email: string
+          id: string
+          mis_a_jour_le: string
+          niveau_souhaite: Database["public"]["Enums"]["niveau_prevoyance_souhaite"]
+          soignant_id: string | null
+        }
+        Insert: {
+          cree_le?: string
+          email: string
+          id?: string
+          mis_a_jour_le?: string
+          niveau_souhaite?: Database["public"]["Enums"]["niveau_prevoyance_souhaite"]
+          soignant_id?: string | null
+        }
+        Update: {
+          cree_le?: string
+          email?: string
+          id?: string
+          mis_a_jour_le?: string
+          niveau_souhaite?: Database["public"]["Enums"]["niveau_prevoyance_souhaite"]
+          soignant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prevoyance_liste_attente_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       professions_liberal_eligible: {
         Row: {
           code_ape: string
@@ -4136,6 +4768,41 @@ export type Database = {
           state?: string
         }
         Relationships: []
+      }
+      rappels_contrat_travail: {
+        Row: {
+          cible_etab: boolean
+          cible_soignant: boolean
+          cree_le: string
+          envoye_le: string
+          id: string
+          mission_id: string
+        }
+        Insert: {
+          cible_etab?: boolean
+          cible_soignant?: boolean
+          cree_le?: string
+          envoye_le?: string
+          id?: string
+          mission_id: string
+        }
+        Update: {
+          cible_etab?: boolean
+          cible_soignant?: boolean
+          cree_le?: string
+          envoye_le?: string
+          id?: string
+          mission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rappels_contrat_travail_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rate_limits: {
         Row: {
@@ -4451,6 +5118,143 @@ export type Database = {
           },
         ]
       }
+      scoring_breakdown: {
+        Row: {
+          absence_sans_prevenir_malus: number
+          anciennete_volume_pct: number | null
+          anciennete_volume_poids: number | null
+          bonus_super_actif: number
+          composantes_actives_count: number
+          composantes_inactives_json: Json | null
+          cree_le: string
+          en_periode_probatoire: boolean
+          id: string
+          litiges_malus: number
+          niveau: Database["public"]["Enums"]["niveau_qualitatif"]
+          notation_etab_soignant_pct: number | null
+          notation_etab_soignant_poids: number | null
+          notation_soignant_etab_pct: number | null
+          notation_soignant_etab_poids: number | null
+          ponctualite_pct: number | null
+          ponctualite_poids: number | null
+          presentisme_pct: number | null
+          presentisme_poids: number | null
+          raison_recalcul: string | null
+          reactivite_pct: number | null
+          reactivite_poids: number | null
+          redistribution_json: Json | null
+          score_total: number
+          soignant_id: string
+        }
+        Insert: {
+          absence_sans_prevenir_malus?: number
+          anciennete_volume_pct?: number | null
+          anciennete_volume_poids?: number | null
+          bonus_super_actif?: number
+          composantes_actives_count: number
+          composantes_inactives_json?: Json | null
+          cree_le?: string
+          en_periode_probatoire?: boolean
+          id?: string
+          litiges_malus?: number
+          niveau: Database["public"]["Enums"]["niveau_qualitatif"]
+          notation_etab_soignant_pct?: number | null
+          notation_etab_soignant_poids?: number | null
+          notation_soignant_etab_pct?: number | null
+          notation_soignant_etab_poids?: number | null
+          ponctualite_pct?: number | null
+          ponctualite_poids?: number | null
+          presentisme_pct?: number | null
+          presentisme_poids?: number | null
+          raison_recalcul?: string | null
+          reactivite_pct?: number | null
+          reactivite_poids?: number | null
+          redistribution_json?: Json | null
+          score_total: number
+          soignant_id: string
+        }
+        Update: {
+          absence_sans_prevenir_malus?: number
+          anciennete_volume_pct?: number | null
+          anciennete_volume_poids?: number | null
+          bonus_super_actif?: number
+          composantes_actives_count?: number
+          composantes_inactives_json?: Json | null
+          cree_le?: string
+          en_periode_probatoire?: boolean
+          id?: string
+          litiges_malus?: number
+          niveau?: Database["public"]["Enums"]["niveau_qualitatif"]
+          notation_etab_soignant_pct?: number | null
+          notation_etab_soignant_poids?: number | null
+          notation_soignant_etab_pct?: number | null
+          notation_soignant_etab_poids?: number | null
+          ponctualite_pct?: number | null
+          ponctualite_poids?: number | null
+          presentisme_pct?: number | null
+          presentisme_poids?: number | null
+          raison_recalcul?: string | null
+          reactivite_pct?: number | null
+          reactivite_poids?: number | null
+          redistribution_json?: Json | null
+          score_total?: number
+          soignant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scoring_breakdown_soignant_id_fkey"
+            columns: ["soignant_id"]
+            isOneToOne: false
+            referencedRelation: "soignants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      serie_email_envois: {
+        Row: {
+          cree_le: string
+          envoye_le: string | null
+          erreur_message: string | null
+          etape: Database["public"]["Enums"]["serie_onboarding_etape"]
+          id: string
+          mis_a_jour_le: string
+          planifie_le: string
+          serie: Database["public"]["Enums"]["serie_onboarding_type"]
+          skip_raison: string | null
+          statut: Database["public"]["Enums"]["serie_email_statut"]
+          tentatives: number
+          utilisateur_id: string
+        }
+        Insert: {
+          cree_le?: string
+          envoye_le?: string | null
+          erreur_message?: string | null
+          etape: Database["public"]["Enums"]["serie_onboarding_etape"]
+          id?: string
+          mis_a_jour_le?: string
+          planifie_le: string
+          serie: Database["public"]["Enums"]["serie_onboarding_type"]
+          skip_raison?: string | null
+          statut?: Database["public"]["Enums"]["serie_email_statut"]
+          tentatives?: number
+          utilisateur_id: string
+        }
+        Update: {
+          cree_le?: string
+          envoye_le?: string | null
+          erreur_message?: string | null
+          etape?: Database["public"]["Enums"]["serie_onboarding_etape"]
+          id?: string
+          mis_a_jour_le?: string
+          planifie_le?: string
+          serie?: Database["public"]["Enums"]["serie_onboarding_type"]
+          skip_raison?: string | null
+          statut?: Database["public"]["Enums"]["serie_email_statut"]
+          tentatives?: number
+          utilisateur_id?: string
+        }
+        Relationships: []
+      }
       shift_affectations: {
         Row: {
           cree_le: string | null
@@ -4614,6 +5418,7 @@ export type Database = {
           destinataire_id: string | null
           erreur: string | null
           id: string
+          idempotency_key: string | null
           provider_id: string | null
           statut: string | null
           telephone: string
@@ -4626,6 +5431,7 @@ export type Database = {
           destinataire_id?: string | null
           erreur?: string | null
           id?: string
+          idempotency_key?: string | null
           provider_id?: string | null
           statut?: string | null
           telephone: string
@@ -4638,6 +5444,7 @@ export type Database = {
           destinataire_id?: string | null
           erreur?: string | null
           id?: string
+          idempotency_key?: string | null
           provider_id?: string | null
           statut?: string | null
           telephone?: string
@@ -4675,11 +5482,13 @@ export type Database = {
           cree_le: string | null
           date_naissance: string | null
           date_passage_liberal: string | null
+          defacto_opt_in: boolean
           derniere_activite_le: string | null
           diplome_verifie: boolean | null
           disponible_urgence: boolean | null
           eligible_conversion_3200h: boolean | null
           email: string
+          en_periode_probatoire: boolean
           est_cumul_activite: boolean | null
           est_salarie_etablissement: boolean | null
           heures_cumulees: number | null
@@ -4691,7 +5500,9 @@ export type Database = {
           mandat_facturation_signe_le: string | null
           mandat_facturation_version: string | null
           modifie_le: string | null
+          nb_absences_sans_prevenir_6_mois: number
           nb_evaluations: number | null
+          niveau: Database["public"]["Enums"]["niveau_qualitatif"] | null
           nom: string
           note_moyenne: number | null
           numero_adeli: string | null
@@ -4700,6 +5511,7 @@ export type Database = {
           numero_securite_sociale: string | null
           numero_tva: string | null
           parraine_par: string | null
+          pool_urgence_sms_opt_in: boolean
           premiere_mission_le: string | null
           prenom: string
           prevoyance_fournisseur: string | null
@@ -4717,6 +5529,7 @@ export type Database = {
           rpps_profession_api: string | null
           rpps_verifie: boolean | null
           rpps_verifie_le: string | null
+          score_breakdown_id: string | null
           score_fiabilite: number | null
           siret_liberal: string | null
           sms_actif: boolean | null
@@ -4727,15 +5540,19 @@ export type Database = {
           specialite_verifiee: boolean | null
           specialite_verifiee_le: string | null
           specialites: string[] | null
+          statut_compte: Database["public"]["Enums"]["statut_compte_soignant"]
           statut_liberal: string | null
           statut_verification_aria:
             | Database["public"]["Enums"]["statut_verification"]
             | null
           stripe_account_id: string | null
           supprime_le: string | null
+          suspension_le: string | null
+          suspension_raison: string | null
           taux_horaire_minimum: number | null
           telephone: string | null
           total_absences: number | null
+          total_litiges_perdus: number
           total_missions_annulees: number | null
           total_missions_terminees: number | null
           total_missions_urgence: number | null
@@ -4781,11 +5598,13 @@ export type Database = {
           cree_le?: string | null
           date_naissance?: string | null
           date_passage_liberal?: string | null
+          defacto_opt_in?: boolean
           derniere_activite_le?: string | null
           diplome_verifie?: boolean | null
           disponible_urgence?: boolean | null
           eligible_conversion_3200h?: boolean | null
           email: string
+          en_periode_probatoire?: boolean
           est_cumul_activite?: boolean | null
           est_salarie_etablissement?: boolean | null
           heures_cumulees?: number | null
@@ -4797,7 +5616,9 @@ export type Database = {
           mandat_facturation_signe_le?: string | null
           mandat_facturation_version?: string | null
           modifie_le?: string | null
+          nb_absences_sans_prevenir_6_mois?: number
           nb_evaluations?: number | null
+          niveau?: Database["public"]["Enums"]["niveau_qualitatif"] | null
           nom: string
           note_moyenne?: number | null
           numero_adeli?: string | null
@@ -4806,6 +5627,7 @@ export type Database = {
           numero_securite_sociale?: string | null
           numero_tva?: string | null
           parraine_par?: string | null
+          pool_urgence_sms_opt_in?: boolean
           premiere_mission_le?: string | null
           prenom: string
           prevoyance_fournisseur?: string | null
@@ -4823,6 +5645,7 @@ export type Database = {
           rpps_profession_api?: string | null
           rpps_verifie?: boolean | null
           rpps_verifie_le?: string | null
+          score_breakdown_id?: string | null
           score_fiabilite?: number | null
           siret_liberal?: string | null
           sms_actif?: boolean | null
@@ -4833,15 +5656,19 @@ export type Database = {
           specialite_verifiee?: boolean | null
           specialite_verifiee_le?: string | null
           specialites?: string[] | null
+          statut_compte?: Database["public"]["Enums"]["statut_compte_soignant"]
           statut_liberal?: string | null
           statut_verification_aria?:
             | Database["public"]["Enums"]["statut_verification"]
             | null
           stripe_account_id?: string | null
           supprime_le?: string | null
+          suspension_le?: string | null
+          suspension_raison?: string | null
           taux_horaire_minimum?: number | null
           telephone?: string | null
           total_absences?: number | null
+          total_litiges_perdus?: number
           total_missions_annulees?: number | null
           total_missions_terminees?: number | null
           total_missions_urgence?: number | null
@@ -4887,11 +5714,13 @@ export type Database = {
           cree_le?: string | null
           date_naissance?: string | null
           date_passage_liberal?: string | null
+          defacto_opt_in?: boolean
           derniere_activite_le?: string | null
           diplome_verifie?: boolean | null
           disponible_urgence?: boolean | null
           eligible_conversion_3200h?: boolean | null
           email?: string
+          en_periode_probatoire?: boolean
           est_cumul_activite?: boolean | null
           est_salarie_etablissement?: boolean | null
           heures_cumulees?: number | null
@@ -4903,7 +5732,9 @@ export type Database = {
           mandat_facturation_signe_le?: string | null
           mandat_facturation_version?: string | null
           modifie_le?: string | null
+          nb_absences_sans_prevenir_6_mois?: number
           nb_evaluations?: number | null
+          niveau?: Database["public"]["Enums"]["niveau_qualitatif"] | null
           nom?: string
           note_moyenne?: number | null
           numero_adeli?: string | null
@@ -4912,6 +5743,7 @@ export type Database = {
           numero_securite_sociale?: string | null
           numero_tva?: string | null
           parraine_par?: string | null
+          pool_urgence_sms_opt_in?: boolean
           premiere_mission_le?: string | null
           prenom?: string
           prevoyance_fournisseur?: string | null
@@ -4929,6 +5761,7 @@ export type Database = {
           rpps_profession_api?: string | null
           rpps_verifie?: boolean | null
           rpps_verifie_le?: string | null
+          score_breakdown_id?: string | null
           score_fiabilite?: number | null
           siret_liberal?: string | null
           sms_actif?: boolean | null
@@ -4939,15 +5772,19 @@ export type Database = {
           specialite_verifiee?: boolean | null
           specialite_verifiee_le?: string | null
           specialites?: string[] | null
+          statut_compte?: Database["public"]["Enums"]["statut_compte_soignant"]
           statut_liberal?: string | null
           statut_verification_aria?:
             | Database["public"]["Enums"]["statut_verification"]
             | null
           stripe_account_id?: string | null
           supprime_le?: string | null
+          suspension_le?: string | null
+          suspension_raison?: string | null
           taux_horaire_minimum?: number | null
           telephone?: string | null
           total_absences?: number | null
+          total_litiges_perdus?: number
           total_missions_annulees?: number | null
           total_missions_terminees?: number | null
           total_missions_urgence?: number | null
@@ -4965,6 +5802,13 @@ export type Database = {
           ville_urgence?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_soignants_score_breakdown"
+            columns: ["score_breakdown_id"]
+            isOneToOne: false
+            referencedRelation: "scoring_breakdown"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "soignants_specialite_medicale_fkey"
             columns: ["specialite_medicale"]
@@ -5329,6 +6173,33 @@ export type Database = {
           },
         ]
       }
+      stripe_webhook_events: {
+        Row: {
+          erreur: string | null
+          event_id: string
+          event_type: string
+          payload: Json | null
+          recu_le: string
+          traite_le: string | null
+        }
+        Insert: {
+          erreur?: string | null
+          event_id: string
+          event_type: string
+          payload?: Json | null
+          recu_le?: string
+          traite_le?: string | null
+        }
+        Update: {
+          erreur?: string | null
+          event_id?: string
+          event_type?: string
+          payload?: Json | null
+          recu_le?: string
+          traite_le?: string | null
+        }
+        Relationships: []
+      }
       suivi_conversion_3200h: {
         Row: {
           avantages_debloques: Json | null
@@ -5489,6 +6360,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _sha256_hex: { Args: { p_input: string }; Returns: string }
       est_admin: { Args: never; Returns: boolean }
       est_admin_etablissement: { Args: never; Returns: boolean }
       est_admin_valide: { Args: never; Returns: boolean }
@@ -5497,7 +6369,21 @@ export type Database = {
         Args: { p_choix_contrat?: string; p_mission_id: string }
         Returns: Json
       }
+      fn_accepter_mission_urgence: {
+        Args: { p_mission_id: string }
+        Returns: Json
+      }
       fn_activer_liberal: { Args: never; Returns: Json }
+      fn_admin_chorus_config_toggle: {
+        Args: {
+          p_actif: boolean
+          p_code_service?: string
+          p_etablissement_id: string
+          p_identifiant_cpro?: string
+          p_numero_structure?: string
+        }
+        Returns: Json
+      }
       fn_admin_chorus_stats: { Args: never; Returns: Json }
       fn_admin_chorus_submission_reset: {
         Args: { p_facture_honoraire_id: string }
@@ -5518,7 +6404,12 @@ export type Database = {
       fn_admin_factor_stats: { Args: never; Returns: Json }
       fn_admin_finances: { Args: never; Returns: Json }
       fn_admin_finances_par_etablissement: { Args: never; Returns: Json }
+      fn_admin_forcer_reupload_rib: {
+        Args: { p_etablissement_id: string; p_raison: string }
+        Returns: Json
+      }
       fn_admin_graphiques: { Args: never; Returns: Json }
+      fn_admin_health_check: { Args: never; Returns: Json }
       fn_admin_incoherences_identite: {
         Args: never
         Returns: {
@@ -5537,13 +6428,43 @@ export type Database = {
       }
       fn_admin_invocations_purge: { Args: never; Returns: number }
       fn_admin_kpi: { Args: never; Returns: Json }
+      fn_admin_lever_suspension: {
+        Args: { p_raison: string; p_soignant_id: string }
+        Returns: Json
+      }
+      fn_admin_lister_taux_commission: { Args: never; Returns: Json }
       fn_admin_mandats_stats: { Args: never; Returns: Json }
+      fn_admin_marquer_absence_sans_prevenir: {
+        Args: { p_mission_id: string; p_motif?: string }
+        Returns: Json
+      }
+      fn_admin_marquer_facture_en_retard: {
+        Args: { p_facture_id: string }
+        Returns: Json
+      }
+      fn_admin_masquer_notation: {
+        Args: { p_notation_id: string; p_raison: string }
+        Returns: Json
+      }
       fn_admin_moderer_document: {
         Args: { p_action: string; p_document_id: string; p_motif?: string }
         Returns: Json
       }
       fn_admin_moderer_evaluation: {
         Args: { p_action: string; p_evaluation_id: string }
+        Returns: Json
+      }
+      fn_admin_modifier_gel_scope_litige: {
+        Args: { p_litige_id: string; p_nouveau_scope: string; p_raison: string }
+        Returns: Json
+      }
+      fn_admin_modifier_taux_commission: {
+        Args: {
+          p_etablissement_id?: string
+          p_groupe_id?: string
+          p_nouveau_taux?: number
+          p_raison?: string
+        }
         Returns: Json
       }
       fn_admin_planning_global: {
@@ -5561,6 +6482,7 @@ export type Database = {
         Args: { p_etablissement_id: string; p_motif?: string }
         Returns: Json
       }
+      fn_admin_resoudre_alerte: { Args: { p_alerte_id: string }; Returns: Json }
       fn_admin_resoudre_litige:
         | {
             Args: {
@@ -5588,6 +6510,10 @@ export type Database = {
         Args: { p_id: string; p_suspendre?: boolean; p_table: string }
         Returns: Json
       }
+      fn_admin_trancher_litige: {
+        Args: { p_decision: string; p_litige_id: string; p_motif?: string }
+        Returns: Json
+      }
       fn_admin_valider_contrat_etablissement: {
         Args: { p_etablissement_id: string; p_valider?: boolean }
         Returns: Json
@@ -5610,6 +6536,7 @@ export type Database = {
       }
       fn_alerter_mediation_prioritaire: { Args: never; Returns: Json }
       fn_alerter_paiements_retard: { Args: never; Returns: Json }
+      fn_alertes_dashboard_etab: { Args: never; Returns: Json }
       fn_analytics_etablissement: {
         Args: { p_etablissement_id: string; p_mois?: number }
         Returns: Json
@@ -5632,7 +6559,12 @@ export type Database = {
         Returns: Json
       }
       fn_anonymiser_gps_anciennes: { Args: never; Returns: undefined }
+      fn_appliquer_credits_disponibles_etab: {
+        Args: { p_facture_id: string }
+        Returns: Json
+      }
       fn_appliquer_parrainage: { Args: { p_code: string }; Returns: Json }
+      fn_appliquer_parrainage_etab: { Args: { p_code: string }; Returns: Json }
       fn_appliquer_remise_groupe: { Args: never; Returns: Json }
       fn_arrondir_quart_heure: { Args: { p_ts: string }; Returns: string }
       fn_assigner_mission_admin: {
@@ -5650,6 +6582,7 @@ export type Database = {
       fn_auto_transitions_missions: { Args: never; Returns: Json }
       fn_auto_valider_presences_72h: { Args: never; Returns: number }
       fn_badge_stats: { Args: never; Returns: Json }
+      fn_basculer_litiges_revue_admin_timeout: { Args: never; Returns: Json }
       fn_bfa_info: { Args: { p_annee?: number }; Returns: Json }
       fn_calculer_bfa: {
         Args: {
@@ -5681,6 +6614,14 @@ export type Database = {
         Args: { p_soignant_id: string }
         Returns: Json
       }
+      fn_calculer_montant_periode: {
+        Args: {
+          p_mission_id: string
+          p_periode_debut?: string
+          p_periode_fin?: string
+        }
+        Returns: Json
+      }
       fn_calculer_remuneration_mission: {
         Args: {
           p_debut: string
@@ -5689,6 +6630,14 @@ export type Database = {
           p_soignant_id?: string
           p_taux_base: number
         }
+        Returns: Json
+      }
+      fn_calculer_score_etablissement: {
+        Args: { p_etab_id: string }
+        Returns: Json
+      }
+      fn_calculer_score_fiabilite_v2: {
+        Args: { p_raison?: string; p_soignant_id: string }
         Returns: Json
       }
       fn_calculer_taux_free_transition: {
@@ -5704,10 +6653,12 @@ export type Database = {
         Returns: boolean
       }
       fn_charger_demo_investisseur: { Args: never; Returns: Json }
+      fn_check_crons_health: { Args: never; Returns: Json }
       fn_check_rate_limit: {
         Args: { p_action: string; p_max_per_minute?: number }
         Returns: boolean
       }
+      fn_check_stripe_webhook_health: { Args: never; Returns: Json }
       fn_choisir_parcours_kine: {
         Args: { p_parcours: string }
         Returns: {
@@ -5740,6 +6691,14 @@ export type Database = {
         Returns: Json
       }
       fn_commission_info_etablissement: { Args: never; Returns: Json }
+      fn_compter_missions_sans_notation: {
+        Args: { p_role?: string }
+        Returns: Json
+      }
+      fn_compter_nouveaux_pour_filtre: {
+        Args: { p_filtre_id: string; p_since: string }
+        Returns: number
+      }
       fn_compteur_heures_soignant: {
         Args: { p_soignant_id: string }
         Returns: {
@@ -5752,6 +6711,10 @@ export type Database = {
       }
       fn_compteur_soignants_disponibles: {
         Args: { p_etablissement_id: string }
+        Returns: Json
+      }
+      fn_confirmer_accord_partie: {
+        Args: { p_litige_id: string }
         Returns: Json
       }
       fn_confirmer_dpae: { Args: { p_contrat_id: string }; Returns: Json }
@@ -5787,13 +6750,22 @@ export type Database = {
       fn_creer_api_key: {
         Args: {
           p_etablissement_id?: string
-          p_groupe_sante_id?: string
           p_nom: string
-          p_permissions?: string[]
+          p_permissions: string[]
         }
         Returns: Json
       }
       fn_creer_bulletin_paie: { Args: { p_mission_id: string }; Returns: Json }
+      fn_creer_filtre_sauvegarde: {
+        Args: {
+          p_alerte_active?: boolean
+          p_audience: Database["public"]["Enums"]["filtre_audience"]
+          p_filtres: Json
+          p_frequence_alerte?: Database["public"]["Enums"]["filtre_frequence_alerte"]
+          p_nom: string
+        }
+        Returns: Json
+      }
       fn_creer_litige: {
         Args: { p_mission_id: string; p_motif?: string; p_presence_id?: string }
         Returns: Json
@@ -5812,6 +6784,18 @@ export type Database = {
           p_service?: string
           p_specialite_medicale_requise?: string
           p_taux_horaire_base?: number
+        }
+        Returns: Json
+      }
+      fn_creer_notation_mission: {
+        Args: {
+          p_commentaire?: string
+          p_critere_1: number
+          p_critere_2: number
+          p_critere_3: number
+          p_critere_4: number
+          p_mission_id: string
+          p_sens: string
         }
         Returns: Json
       }
@@ -5843,6 +6827,10 @@ export type Database = {
       }
       fn_cumul_annuel_paie: {
         Args: { p_annee?: number; p_jusqu_au?: string; p_soignant_id: string }
+        Returns: Json
+      }
+      fn_cumul_factures_mission: {
+        Args: { p_jusqu_au?: string; p_mission_id: string }
         Returns: Json
       }
       fn_dashboard_soignant_complet: { Args: never; Returns: Json }
@@ -5897,6 +6885,15 @@ export type Database = {
           p_soignant_id: string
         }
         Returns: Json
+      }
+      fn_diagnostic_coherence_financiere: { Args: never; Returns: Json }
+      fn_doit_notifier: {
+        Args: {
+          p_canal: Database["public"]["Enums"]["canal_notification"]
+          p_type_evenement: Database["public"]["Enums"]["type_evenement_notification"]
+          p_utilisateur_id: string
+        }
+        Returns: boolean
       }
       fn_ecrire_audit: {
         Args: {
@@ -5983,12 +6980,23 @@ export type Database = {
           soignant_id: string
         }[]
       }
+      fn_emettre_alerte_monitoring: {
+        Args: {
+          p_details?: Json
+          p_message: string
+          p_severite: string
+          p_source: string
+          p_type: string
+        }
+        Returns: string
+      }
       fn_enregistrer_siret_liberal: { Args: { p_siret: string }; Returns: Json }
       fn_envoyer_message: {
         Args: { p_contenu: string; p_conversation_id: string }
         Returns: Json
       }
       fn_envoyer_rappels_litiges: { Args: never; Returns: Json }
+      fn_envoyer_rappels_notation_j1: { Args: never; Returns: Json }
       fn_est_exclu: {
         Args: { p_etablissement_id: string; p_soignant_id: string }
         Returns: boolean
@@ -5998,6 +7006,14 @@ export type Database = {
         Returns: boolean
       }
       fn_est_jour_ferie: { Args: { p_date: string }; Returns: boolean }
+      fn_etab_valider_acceptation_urgence: {
+        Args: {
+          p_action: string
+          p_candidature_id: string
+          p_motif_refus?: string
+        }
+        Returns: Json
+      }
       fn_etablissement_pour_mission: {
         Args: { p_etablissement_id: string }
         Returns: Json
@@ -6031,6 +7047,16 @@ export type Database = {
           type: string
         }[]
       }
+      fn_evaluer_alertes_filtres: {
+        Args: { p_frequence?: string }
+        Returns: {
+          audience: Database["public"]["Enums"]["filtre_audience"]
+          filtre_id: string
+          nb_nouveaux: number
+          nom: string
+          utilisateur_id: string
+        }[]
+      }
       fn_evaluer_etablissement: {
         Args: { p_commentaire?: string; p_mission_id: string; p_note: number }
         Returns: Json
@@ -6039,10 +7065,13 @@ export type Database = {
         Args: { p_commentaire?: string; p_mission_id: string; p_note: number }
         Returns: Json
       }
+      fn_evolution_missions_etab: { Args: never; Returns: Json }
+      fn_evolution_score_soignant: { Args: { p_limit?: number }; Returns: Json }
       fn_exclure_utilisateur: {
         Args: { p_exclu_id: string; p_motif?: string; p_type: string }
         Returns: Json
       }
+      fn_expirer_parrainages_inactifs: { Args: never; Returns: Json }
       fn_export_fec: {
         Args: { p_annee: number }
         Returns: {
@@ -6074,6 +7103,7 @@ export type Database = {
         Returns: boolean
       }
       fn_generer_code_parrainage: { Args: never; Returns: string }
+      fn_generer_code_parrainage_etab: { Args: never; Returns: string }
       fn_generer_facture: { Args: { p_mission_id: string }; Returns: Json }
       fn_generer_facture_honoraires_mission: {
         Args: { p_mission_id: string }
@@ -6119,7 +7149,12 @@ export type Database = {
       }
       fn_health_check: { Args: never; Returns: Json }
       fn_html_escape: { Args: { p_text: string }; Returns: string }
+      fn_inscrire_liste_attente_prevoyance: {
+        Args: { p_email: string; p_niveau?: string }
+        Returns: Json
+      }
       fn_is_valid_uuid: { Args: { p_text: string }; Returns: boolean }
+      fn_lire_secret_cron: { Args: never; Returns: string }
       fn_list_admin_user_ids: { Args: never; Returns: string[] }
       fn_lister_factures_a_regenerer: {
         Args: { p_limit?: number }
@@ -6131,6 +7166,19 @@ export type Database = {
           type_document: Database["public"]["Enums"]["type_document_facture"]
         }[]
       }
+      fn_lister_mes_filtres_sauvegardes: {
+        Args: { p_audience?: Database["public"]["Enums"]["filtre_audience"] }
+        Returns: Json
+      }
+      fn_lister_missions_a_facturer: {
+        Args: { p_today?: string }
+        Returns: Json
+      }
+      fn_lister_missions_contrat_travail_manquant: {
+        Args: never
+        Returns: Json
+      }
+      fn_lister_notations_recues: { Args: { p_limit?: number }; Returns: Json }
       fn_litige_pour_mission: { Args: { p_mission_id: string }; Returns: Json }
       fn_litige_preuves_agregees: {
         Args: { p_litige_id: string }
@@ -6187,6 +7235,14 @@ export type Database = {
       }
       fn_marquer_messages_lus: {
         Args: { p_conversation_id: string }
+        Returns: undefined
+      }
+      fn_marquer_rappel_contrat_travail_envoye: {
+        Args: {
+          p_cible_etab: boolean
+          p_cible_soignant: boolean
+          p_mission_id: string
+        }
         Returns: undefined
       }
       fn_matcher_soignants_mission: {
@@ -6257,6 +7313,7 @@ export type Database = {
           total_cotisations_salariales: number
         }[]
       }
+      fn_mes_credits_etab: { Args: never; Returns: Json }
       fn_mes_etablissements_soignant: {
         Args: never
         Returns: {
@@ -6302,7 +7359,10 @@ export type Database = {
           statut: string
         }[]
       }
+      fn_mes_favoris_etablissements: { Args: never; Returns: Json }
+      fn_mes_favoris_soignants: { Args: never; Returns: Json }
       fn_mes_filleuls: { Args: never; Returns: Json }
+      fn_mes_filleuls_etab: { Args: never; Returns: Json }
       fn_mes_missions_soignant: {
         Args: never
         Returns: {
@@ -6377,6 +7437,15 @@ export type Database = {
       }
       fn_mode_paiement_mission: {
         Args: { p_mission_id: string }
+        Returns: Json
+      }
+      fn_modifier_filtre_sauvegarde: {
+        Args: {
+          p_alerte_active?: boolean
+          p_frequence_alerte?: Database["public"]["Enums"]["filtre_frequence_alerte"]
+          p_id: string
+          p_nom?: string
+        }
         Returns: Json
       }
       fn_modifier_mission_etablissement: {
@@ -6457,6 +7526,27 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_modifier_notation_mission: {
+        Args: {
+          p_commentaire?: string
+          p_critere_1: number
+          p_critere_2: number
+          p_critere_3: number
+          p_critere_4: number
+          p_notation_id: string
+        }
+        Returns: Json
+      }
+      fn_modifier_preferences_notifications: {
+        Args: {
+          p_canal_email?: boolean
+          p_canal_in_app?: boolean
+          p_canal_push?: boolean
+          p_canal_sms?: boolean
+          p_par_evenement?: Json
+        }
+        Returns: Json
+      }
       fn_modifier_profil_etablissement: {
         Args: {
           p_adresse_code_postal?: string
@@ -6484,10 +7574,20 @@ export type Database = {
         Args: { p_assujetti_tva: boolean; p_numero_tva?: string }
         Returns: Json
       }
+      fn_modifier_type_contrat_mission: {
+        Args: { p_mission_id: string; p_type_contrat: string }
+        Returns: Json
+      }
       fn_mon_bfa: { Args: never; Returns: Json }
+      fn_mon_breakdown_actuel: { Args: never; Returns: Json }
       fn_mon_contrat_plateforme: { Args: never; Returns: Json }
+      fn_mon_etab_alerte_cddu: {
+        Args: { p_etablissement_id: string; p_soignant_id: string }
+        Returns: Json
+      }
       fn_mon_etablissement_complet: { Args: never; Returns: Json }
       fn_mon_profil_soignant_complet: { Args: never; Returns: Json }
+      fn_mon_score_etab: { Args: never; Returns: Json }
       fn_mon_token_calendrier: { Args: never; Returns: string }
       fn_nettoyer_missions_fantomes: { Args: never; Returns: number }
       fn_nettoyer_partages_rib_expires: { Args: never; Returns: undefined }
@@ -6500,10 +7600,19 @@ export type Database = {
       fn_note_moyenne: { Args: { p_user_id: string }; Returns: Json }
       fn_notifier_documents_expirants: { Args: never; Returns: number }
       fn_obligations_financieres: { Args: never; Returns: Json }
+      fn_obtenir_apercu_filtre: {
+        Args: { p_filtre_id: string; p_limit?: number; p_since: string }
+        Returns: Json
+      }
       fn_obtenir_conversation: {
         Args: { p_autre_id: string; p_mission_id?: string }
         Returns: string
       }
+      fn_obtenir_donnees_template_serie: {
+        Args: { p_envoi_id: string }
+        Returns: Json
+      }
+      fn_obtenir_mes_preferences_notifications: { Args: never; Returns: Json }
       fn_ouvrir_litige_rate_limited:
         | { Args: { p_mission_id: string; p_motif: string }; Returns: Json }
         | {
@@ -6515,6 +7624,13 @@ export type Database = {
             Returns: Json
           }
       fn_paiements_etablissement: { Args: never; Returns: Json }
+      fn_planifier_serie_onboarding: {
+        Args: {
+          p_serie: Database["public"]["Enums"]["serie_onboarding_type"]
+          p_utilisateur_id: string
+        }
+        Returns: Json
+      }
       fn_planning_etablissement: {
         Args: { p_debut?: string; p_fin?: string }
         Returns: Json
@@ -6578,6 +7694,7 @@ export type Database = {
           soignant_id: string
         }[]
       }
+      fn_pool_urgence_missions_pour_soignant: { Args: never; Returns: Json }
       fn_postuler_mission: {
         Args: {
           p_choix_contrat?: string
@@ -6599,6 +7716,10 @@ export type Database = {
         Returns: boolean
       }
       fn_professions_liberales: { Args: never; Returns: Json }
+      fn_proposer_accord_partie: {
+        Args: { p_litige_id: string }
+        Returns: Json
+      }
       fn_proposer_cloture_litige: {
         Args: { p_litige_id: string }
         Returns: Json
@@ -6619,10 +7740,36 @@ export type Database = {
         Args: { p_etablissement_id: string }
         Returns: Json
       }
+      fn_recalculer_score_fiabilite_soignant: {
+        Args: { p_soignant_id: string }
+        Returns: number
+      }
       fn_recalculer_tous_paliers: { Args: never; Returns: number }
       fn_recalculer_tresorerie_bloquee: {
         Args: { p_litige_id: string }
         Returns: undefined
+      }
+      fn_rechercher_aide: {
+        Args: { p_audience?: string; p_query?: string }
+        Returns: Json
+      }
+      fn_rechercher_soignants_etab: {
+        Args: {
+          p_disponible_urgence?: boolean
+          p_distance_max_km?: number
+          p_documents_valides?: boolean
+          p_experience_min?: number
+          p_limit?: number
+          p_note_min?: number
+          p_offset?: number
+          p_profession?: string
+          p_recherche_texte?: string
+          p_score_min?: number
+          p_specialites?: string[]
+          p_type_exercice?: string
+          p_ville?: string
+        }
+        Returns: Json
       }
       fn_rechercher_utilisateurs: { Args: { p_query: string }; Returns: Json }
       fn_recommander_soignants: {
@@ -6649,6 +7796,10 @@ export type Database = {
         Returns: Json
       }
       fn_relancer_signatures_contrats: { Args: never; Returns: number }
+      fn_repartition_heures_soignant: {
+        Args: { p_periode_jours?: number }
+        Returns: Json
+      }
       fn_repondre_contestation_paiement: {
         Args: {
           p_action: string
@@ -6671,6 +7822,8 @@ export type Database = {
         Returns: Json
       }
       fn_retirer_exclusion: { Args: { p_exclu_id: string }; Returns: Json }
+      fn_revoquer_api_key: { Args: { p_id: string }; Returns: Json }
+      fn_revoquer_contrat_service: { Args: { p_motif: string }; Returns: Json }
       fn_revoquer_mandat_facturation: {
         Args: { p_motif?: string }
         Returns: Json
@@ -6694,9 +7847,14 @@ export type Database = {
         Args: { p_code: string; p_metadata?: Json }
         Returns: Json
       }
+      fn_score_etab_public: { Args: { p_etab_id: string }; Returns: Json }
       fn_set_user_role: {
         Args: { p_etablissement_id?: string; p_role: string; p_user_id: string }
         Returns: undefined
+      }
+      fn_signaler_notation: {
+        Args: { p_motif?: string; p_notation_id: string }
+        Returns: Json
       }
       fn_signer_attestation_sante: { Args: never; Returns: Json }
       fn_signer_cession_creance: {
@@ -6713,6 +7871,16 @@ export type Database = {
         Args: { p_contrat_id: string; p_signature_image: string }
         Returns: Json
       }
+      fn_signer_contrat_service: {
+        Args: {
+          p_contenu_hash: string
+          p_ip: string
+          p_signature_s3_key?: string
+          p_user_agent: string
+          p_version: string
+        }
+        Returns: Json
+      }
       fn_signer_contrat_soignant: {
         Args: { p_contrat_id: string; p_signature_image: string }
         Returns: Json
@@ -6725,6 +7893,14 @@ export type Database = {
           p_version: string
         }
         Returns: Json
+      }
+      fn_sms_doit_envoyer: {
+        Args: {
+          p_destinataire_id: string
+          p_fenetre_minutes?: number
+          p_type: string
+        }
+        Returns: boolean
       }
       fn_soignant_compatible_mission: {
         Args: {
@@ -6771,12 +7947,37 @@ export type Database = {
         Returns: Json
       }
       fn_stats_dashboard_etablissement: { Args: never; Returns: Json }
+      fn_stats_etab_complements: { Args: never; Returns: Json }
       fn_stats_rh_etablissement: { Args: never; Returns: Json }
+      fn_stripe_webhook_event_is_new: {
+        Args: { p_event_id: string; p_event_type: string; p_payload?: Json }
+        Returns: boolean
+      }
+      fn_suggestions_missions_pour_soignant: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      fn_supprimer_api_key: { Args: { p_id: string }; Returns: Json }
+      fn_supprimer_compte_etablissement_rate_limited: {
+        Args: never
+        Returns: Json
+      }
       fn_supprimer_compte_rate_limited: { Args: never; Returns: Json }
+      fn_supprimer_filtre_sauvegarde: { Args: { p_id: string }; Returns: Json }
       fn_supprimer_mon_compte: { Args: never; Returns: Json }
+      fn_supprimer_mon_compte_etablissement: { Args: never; Returns: Json }
       fn_terminer_mission: { Args: { p_mission_id: string }; Returns: Json }
+      fn_toggle_favori_etablissement: {
+        Args: { p_actif: boolean; p_etablissement_id: string }
+        Returns: Json
+      }
       fn_toggle_pool_urgence: {
         Args: { p_actif: boolean; p_creneaux?: Json; p_rayon_km?: number }
+        Returns: Json
+      }
+      fn_toggle_pool_urgence_sms: { Args: { p_actif: boolean }; Returns: Json }
+      fn_top_etablissements_soignant: {
+        Args: { p_limit?: number }
         Returns: Json
       }
       fn_top_soignants: {
@@ -6831,6 +8032,15 @@ export type Database = {
         Args: { p_contrat_url: string }
         Returns: Json
       }
+      fn_uploader_contrat_travail_mission: {
+        Args: {
+          p_mission_id: string
+          p_nom_fichier: string
+          p_pdf_s3_key: string
+          p_taille_octets: number
+        }
+        Returns: Json
+      }
       fn_upsert_token_push: {
         Args: { p_plateforme?: string; p_token: string }
         Returns: undefined
@@ -6863,7 +8073,11 @@ export type Database = {
       }
       fn_verifier_documents_expirants: { Args: never; Returns: number }
       fn_verifier_pre_facturation: {
-        Args: { p_mission_id: string }
+        Args: {
+          p_mission_id: string
+          p_periode_debut?: string
+          p_periode_fin?: string
+        }
         Returns: Json
       }
       fn_verifier_rate_limit: {
@@ -6874,6 +8088,10 @@ export type Database = {
           p_max_tentatives?: number
         }
         Returns: boolean
+      }
+      fn_verifier_skip_serie_onboarding: {
+        Args: { p_envoi_id: string }
+        Returns: Json
       }
       mon_etablissement_id: { Args: never; Returns: string }
       mon_role: { Args: never; Returns: string }
@@ -6889,13 +8107,31 @@ export type Database = {
       next_invoice_number: { Args: { p_soignant_id: string }; Returns: string }
     }
     Enums: {
+      canal_notification: "EMAIL" | "SMS" | "PUSH" | "IN_APP"
       categorie_litige:
         | "PRESENCE"
         | "FINANCIER"
         | "CONDITIONS"
         | "COMPORTEMENT"
         | "AUTRE"
+      credit_etab_motif: "PARRAINAGE"
+      filtre_audience:
+        | "SOIGNANT_RECHERCHE_MISSIONS"
+        | "ETAB_RECHERCHE_SOIGNANTS"
+      filtre_frequence_alerte: "IMMEDIATE" | "QUOTIDIENNE" | "HEBDOMADAIRE"
       mode_remboursement_avoir: "N_A" | "AUTO_STRIPE" | "VIREMENT_MANUEL"
+      niveau_prevoyance_souhaite: "BRONZE" | "ARGENT" | "OR" | "INDIFFERENT"
+      niveau_qualitatif: "BRONZE" | "ARGENT" | "OR" | "PLATINE"
+      parrainage_etab_statut: "PENDING" | "VALIDATED" | "EXPIRED"
+      sens_notation: "ETAB_VERS_SOIGNANT" | "SOIGNANT_VERS_ETAB"
+      serie_email_statut: "PLANIFIE" | "ENVOYE" | "SKIPPED" | "ERREUR"
+      serie_onboarding_etape: "J0" | "J1" | "J3" | "J7"
+      serie_onboarding_type: "SOIGNANT_ONBOARDING" | "ETAB_ONBOARDING"
+      statut_compte_soignant:
+        | "ACTIF"
+        | "SUSPENDU"
+        | "SUPPRIME"
+        | "EN_REVISION_ADMIN"
       statut_litige_facture:
         | "NORMAL"
         | "EN_ATTENTE_LITIGE"
@@ -6918,6 +8154,7 @@ export type Database = {
         | "EXPIRE"
         | "REVUE_MANUELLE_REQUISE"
         | "API_INDISPONIBLE"
+      strategie_facturation: "FINALE_UNIQUE" | "HEBDO_ET_FINALE"
       type_contrat: "CDDU" | "CDDU_USAGE" | "VACATION" | "LIBERAL" | "SALARIE"
       type_contrat_applique_enum: "LIBERAL" | "SALARIE"
       type_document:
@@ -6954,6 +8191,25 @@ export type Database = {
         | "FAM"
         | "PHARMACIE_OFFICINE"
         | "ESPIC"
+      type_evenement_notification:
+        | "NOUVELLE_MISSION_MATCHANT_FILTRE"
+        | "CANDIDATURE_RECUE"
+        | "CANDIDATURE_ACCEPTEE"
+        | "MISSION_ASSIGNEE"
+        | "RAPPEL_J1_MISSION"
+        | "POINTAGE_MANQUANT"
+        | "FACTURE_EMISE"
+        | "PAIEMENT_RECU"
+        | "CONTRAT_TRAVAIL_DEPOSE"
+        | "LITIGE_OUVERT"
+        | "LITIGE_RESOLU"
+        | "DOCUMENT_EXPIRANT"
+        | "MANDAT_RE_SIGNATURE"
+        | "SERIE_ONBOARDING"
+        | "URGENCE"
+        | "NOUVEAU_SOIGNANT_MATCHANT_FILTRE"
+        | "FAVORI_NOUVELLE_MISSION"
+        | "NOTATION_RAPPEL"
       type_litige:
         | "ABSENCE_SOIGNANT"
         | "DEPART_ANTICIPE"
@@ -7110,6 +8366,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      canal_notification: ["EMAIL", "SMS", "PUSH", "IN_APP"],
       categorie_litige: [
         "PRESENCE",
         "FINANCIER",
@@ -7117,7 +8374,26 @@ export const Constants = {
         "COMPORTEMENT",
         "AUTRE",
       ],
+      credit_etab_motif: ["PARRAINAGE"],
+      filtre_audience: [
+        "SOIGNANT_RECHERCHE_MISSIONS",
+        "ETAB_RECHERCHE_SOIGNANTS",
+      ],
+      filtre_frequence_alerte: ["IMMEDIATE", "QUOTIDIENNE", "HEBDOMADAIRE"],
       mode_remboursement_avoir: ["N_A", "AUTO_STRIPE", "VIREMENT_MANUEL"],
+      niveau_prevoyance_souhaite: ["BRONZE", "ARGENT", "OR", "INDIFFERENT"],
+      niveau_qualitatif: ["BRONZE", "ARGENT", "OR", "PLATINE"],
+      parrainage_etab_statut: ["PENDING", "VALIDATED", "EXPIRED"],
+      sens_notation: ["ETAB_VERS_SOIGNANT", "SOIGNANT_VERS_ETAB"],
+      serie_email_statut: ["PLANIFIE", "ENVOYE", "SKIPPED", "ERREUR"],
+      serie_onboarding_etape: ["J0", "J1", "J3", "J7"],
+      serie_onboarding_type: ["SOIGNANT_ONBOARDING", "ETAB_ONBOARDING"],
+      statut_compte_soignant: [
+        "ACTIF",
+        "SUSPENDU",
+        "SUPPRIME",
+        "EN_REVISION_ADMIN",
+      ],
       statut_litige_facture: [
         "NORMAL",
         "EN_ATTENTE_LITIGE",
@@ -7143,6 +8419,7 @@ export const Constants = {
         "REVUE_MANUELLE_REQUISE",
         "API_INDISPONIBLE",
       ],
+      strategie_facturation: ["FINALE_UNIQUE", "HEBDO_ET_FINALE"],
       type_contrat: ["CDDU", "CDDU_USAGE", "VACATION", "LIBERAL", "SALARIE"],
       type_contrat_applique_enum: ["LIBERAL", "SALARIE"],
       type_document: [
@@ -7181,6 +8458,26 @@ export const Constants = {
         "PHARMACIE_OFFICINE",
         "ESPIC",
       ],
+      type_evenement_notification: [
+        "NOUVELLE_MISSION_MATCHANT_FILTRE",
+        "CANDIDATURE_RECUE",
+        "CANDIDATURE_ACCEPTEE",
+        "MISSION_ASSIGNEE",
+        "RAPPEL_J1_MISSION",
+        "POINTAGE_MANQUANT",
+        "FACTURE_EMISE",
+        "PAIEMENT_RECU",
+        "CONTRAT_TRAVAIL_DEPOSE",
+        "LITIGE_OUVERT",
+        "LITIGE_RESOLU",
+        "DOCUMENT_EXPIRANT",
+        "MANDAT_RE_SIGNATURE",
+        "SERIE_ONBOARDING",
+        "URGENCE",
+        "NOUVEAU_SOIGNANT_MATCHANT_FILTRE",
+        "FAVORI_NOUVELLE_MISSION",
+        "NOTATION_RAPPEL",
+      ],
       type_litige: [
         "ABSENCE_SOIGNANT",
         "DEPART_ANTICIPE",
@@ -7215,3 +8512,4 @@ export const Constants = {
     },
   },
 } as const
+

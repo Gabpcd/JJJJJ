@@ -19,6 +19,9 @@ on:
       - '.github/workflows/deploy-supabase.yml'
   workflow_dispatch: # Permet un déclenchement manuel depuis l'UI GitHub
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 concurrency:
   # Empêche deux déploiements simultanés (évite race conditions sur les migrations)
   group: deploy-supabase-${{ github.ref }}

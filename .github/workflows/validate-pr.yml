@@ -12,6 +12,11 @@ on:
   push:
     branches: [main] # double-check post-merge
 
+# Force les actions JS à utiliser Node 24 (Node 20 est déprécié sur GitHub
+# Actions runners depuis le 19 sept 2025, removal le 16 sept 2026).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   typecheck-and-build:
     name: Typecheck + build
@@ -21,7 +26,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
