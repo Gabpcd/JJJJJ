@@ -148,12 +148,41 @@ Agent attaquant a remonté 5 findings ; vérifications directes en DB :
 
 ## Score de confiance global
 
+## Bugs fixés en itération 2 — sécurité (1 migration)
+
+Itération 2 ciblée sur les zones complexes (financier, sécurité, concurrence, edge cases). 4 RPCs `SECURITY DEFINER` GRANTed à `authenticated` mais **sans check auth** détectées :
+
+| Migration | Description |
+|---|---|
+| `20260429550000_iter2_fix_secdef_rpcs_auth_check.sql` | 4 RPCs sécurisées : `fn_admin_cohort_economics` (+check est_admin), `fn_creer_notification` (+check auth.uid()), REVOKE authenticated sur `fn_creer_bulletin_paie` + `fn_generer_facture_honoraires_mission` (appelées par triggers/cron uniquement, pas par UI front) |
+
+### Audits iter2 (vérifications systémiques)
+
+| Audit | Tests | Résultat |
+|---|---|---|
+| Re-validation 19 fixes session 1 + iter1 | 19/19 EXISTS | ✅ Aucune régression |
+| Audit financier (commission, TVA, doublons, idempotence Stripe) | 6/6 | ✅ PASS |
+| Audit concurrence + edge cases (UNIQUE candidatures, transitions, missions zombies, étab/soignant supprimé avec missions actives) | 6/6 | ✅ PASS |
+| Cohérence cross-system (scoring_breakdown vs audit log) | 3 vs 3 sur 30j | ✅ PASS |
+| RLS exhaustif (tables sans RLS, tables RLS sans policy) | 0 / 0 | ✅ PASS |
+| Edge functions actives | 40 actives, send-email v348 récente | ✅ PASS |
+
+### Nouveaux bugs iter2
+
+| # | Bug | Gravité | Statut |
+|---|---|---|---|
+| 1 | `fn_admin_cohort_economics` exposée à authenticated sans check est_admin (leak data biz) | CRITIQUE | ✅ FIXÉ |
+| 2 | `fn_creer_bulletin_paie` exposée à authenticated → un soignant peut créer bulletins fictifs | CRITIQUE | ✅ FIXÉ (REVOKE) |
+| 3 | `fn_generer_facture_honoraires_mission` exposée à authenticated → factures fantômes | CRITIQUE | ✅ FIXÉ (REVOKE) |
+| 4 | `fn_creer_notification` exposée sans check auth → spam notifications | MAJEUR | ✅ FIXÉ |
+
 | Étape | Score | Notes |
 |---|---|---|
 | Avant audit | ~7/10 | 3 bugs critiques cachés + 12 mineurs |
 | Après session 1 + 3 fixes | 8/10 | 3 bugs critiques fixés, 12 mineurs documentés |
 | Après itération 1 + 13 fixes | 9/10 | Tous bugs critiques + majeurs DB fixés |
-| **Après audit attaquant + RGPD fix** | **9.5/10** | Bug RGPD critique fixé, 2 faux positifs identifiés, 3 tech-debts mineurs documentés. **Prêt pour lancement après actions Gabrielle P0** |
+| Après audit attaquant + RGPD fix | 9.5/10 | Bug RGPD critique fixé |
+| **Après itération 2 + 4 fixes sécurité** | **9.7/10** | 4 escalades de privilèges fermées. Aucun bug critique restant. |
 
 ## Bugs reportés / tech-debt (post-itération 1)
 
