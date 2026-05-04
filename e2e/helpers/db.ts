@@ -66,10 +66,21 @@ export async function emailFutEnvoye(
   return Array.isArray(data) && data.length > 0;
 }
 
-/** Récupère l'ID auth d'un compte test (pour cleanup ciblé). */
+/**
+ * Récupère l'ID auth d'un compte test (pour cleanup ciblé).
+ *
+ * Utilise la RPC `fn_admin_get_user_id_by_email` (migration
+ * 20260503060000) plutôt que `auth.admin.listUsers()` qui échoue
+ * silencieusement en CI (pagination 50/page, rate limit, timeout).
+ */
 export async function userIdByEmail(email: string): Promise<string | null> {
-  const { data, error } = await adminClient().auth.admin.listUsers();
-  if (error) return null;
-  const user = data?.users?.find((u: any) => u.email === email);
-  return user?.id || null;
+  const { data, error } = await adminClient().rpc(
+    'fn_admin_get_user_id_by_email' as any,
+    { p_email: email },
+  );
+  if (error) {
+    console.error(`[playwright/db] userIdByEmail("${email}") RPC error:`, error.message);
+    return null;
+  }
+  return (data as string | null) || null;
 }
