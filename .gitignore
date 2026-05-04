@@ -30,3 +30,4 @@ pnpm-debug.log*
 supabase/.temp/
 yarn-debug.log*
 yarn-error.log*
+tests/load/results/
