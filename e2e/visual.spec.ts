@@ -19,11 +19,11 @@
 
 import { test, expect } from '@playwright/test';
 
-// Restreindre aux projets desktop (mobile = trop variable pour visual stable)
-test.skip(
-  ({ browserName }, testInfo) => testInfo.project.name !== 'chromium',
-  'Visual regression : Chromium uniquement (référence baseline unique)',
-);
+test.describe('Visual regression — pages critiques', () => {
+  // Skip sur projets non-chromium : les baselines sont générées sur Chromium uniquement
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', 'Visual regression : Chromium uniquement');
+  });
 
 const SNAPSHOT_OPTIONS = {
   maxDiffPixels: 200,
@@ -32,7 +32,6 @@ const SNAPSHOT_OPTIONS = {
   animations: 'disabled' as const,
 };
 
-test.describe('Visual regression — pages critiques', () => {
   test('landing /', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
