@@ -82,12 +82,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Install Playwright browsers
-        # Install dynamically pour économiser le temps : chromium pour tous les
-        # projets sauf firefox/webkit qui ont leur propre browser
+        # Mapping projet → moteur browser :
+        #   chromium / mobile-pixel / tablet-ipad → Chromium
+        #   firefox → Firefox
+        #   webkit / mobile-iphone → WebKit (iPhone simulé utilise Safari)
         run: |
           case "${{ matrix.project }}" in
             firefox) npx playwright install --with-deps firefox ;;
-            webkit) npx playwright install --with-deps webkit ;;
+            webkit|mobile-iphone) npx playwright install --with-deps webkit ;;
             *) npx playwright install --with-deps chromium ;;
           esac
       - name: Build app

@@ -44,6 +44,9 @@ export default defineConfig({
     navigationTimeout: 15_000,
     locale: 'fr-FR',
     timezoneId: 'Europe/Paris',
+    // Bloquer le service worker en E2E pour éviter le banner "Nouvelle version
+    // disponible" qui intercepte les clics + viole les contrastes a11y.
+    serviceWorkers: 'block',
   },
 
   projects: [

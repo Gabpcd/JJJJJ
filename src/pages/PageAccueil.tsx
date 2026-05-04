@@ -147,7 +147,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
       <div className="max-w-4xl mx-auto px-4">
         <RevealOnScroll>
           <div className="text-center mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold mb-2">Découvrez les missions disponibles</h2>
+            <h2 className="text-2xl md:text-3xl font-bold mb-2 text-foreground">Découvrez les missions disponibles</h2>
             <p className="text-muted-foreground">Cherchez par profession et localisation — sans inscription. Laissez la ville vide pour tout voir.</p>
           </div>
 

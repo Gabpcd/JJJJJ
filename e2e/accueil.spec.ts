@@ -14,7 +14,13 @@ test.describe('Page d\'accueil', () => {
     await expect(header.getByText('Jolene', { exact: true }).first()).toBeVisible();
   });
 
-  test('affiche les liens de navigation principaux', async ({ page }) => {
+  test('affiche les liens de navigation principaux', async ({ page }, testInfo) => {
+    // Sur mobile (< sm = 640px), les liens header sont cachés intentionnellement
+    // (classe `hidden sm:inline`). Le menu burger les expose à la place.
+    test.skip(
+      ['mobile-iphone', 'mobile-pixel'].includes(testInfo.project.name),
+      'Liens header cachés en mobile (design intentionnel, accessibles via menu burger)',
+    );
     const header = page.locator('header');
     await expect(header.locator('a[href="/tarifs"]')).toBeVisible();
     await expect(header.locator('a[href="/blog"]')).toBeVisible();
