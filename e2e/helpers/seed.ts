@@ -100,14 +100,15 @@ export async function cleanupSeedData(): Promise<void> {
 
 /**
  * Garde-fou : skip un test si compte test fixe pas seedé.
- * Usage : await requireTestAccount('SOIGNANT', test);
+ *
+ * Les comptes `playwright-soignant@jolene.app` et `playwright-etab@jolene.app`
+ * sont seedés via la migration 20260503050000_playwright_seed_test_accounts.sql.
+ * La présence des secrets SUPABASE_SERVICE_ROLE_KEY + PLAYWRIGHT_TEST_PASSWORD
+ * en CI est la condition suffisante (la migration a été appliquée à la prod).
+ *
+ * On évite l'appel `auth.admin.listUsers()` qui peut échouer silencieusement
+ * (pagination, timeout, rate limit) et créer de faux skips.
  */
-export async function hasTestAccount(role: 'SOIGNANT' | 'ADMIN_ETABLISSEMENT'): Promise<boolean> {
-  const email = role === 'SOIGNANT' ? 'playwright-soignant@jolene.app' : 'playwright-etab@jolene.app';
-  try {
-    const id = await userIdByEmail(email);
-    return !!id;
-  } catch {
-    return false;
-  }
+export async function hasTestAccount(_role: 'SOIGNANT' | 'ADMIN_ETABLISSEMENT'): Promise<boolean> {
+  return !!process.env.SUPABASE_SERVICE_ROLE_KEY && !!process.env.PLAYWRIGHT_TEST_PASSWORD;
 }
