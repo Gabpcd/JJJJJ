@@ -15,7 +15,7 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { getPisteConfig, getAccessToken, consulterFlux } from '../_shared/piste-client.ts';
+import { getPisteConfig, getAccessToken, consulterFlux, consulterCRDetaille } from '../_shared/piste-client.ts';
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -294,7 +294,19 @@ Deno.serve(async (req) => {
         response_raw: result.data,
       };
       if (hasChanged) updateData.status = newStatus;
-      if (['rejected'].includes(newStatus) && motifRefus) updateData.error_message = String(motifRefus).slice(0, 1000);
+      if (['rejected'].includes(newStatus)) {
+        let detailMsg = motifRefus ? String(motifRefus) : '';
+        try {
+          const cr = await consulterCRDetaille(config, token, sub.piste_request_id!);
+          if (cr.ok) {
+            const dpErrors = (cr.erreurs ?? []).map((e: any) => e.libelleErreurDP ?? e.libelle ?? JSON.stringify(e)).join(' | ');
+            const techErrors = (cr.erreursTechniques ?? []).map((e: any) => e.libelleErreur ?? e.libelle ?? JSON.stringify(e)).join(' | ');
+            if (dpErrors) detailMsg += (detailMsg ? ' — ' : '') + `DP: ${dpErrors}`;
+            if (techErrors) detailMsg += (detailMsg ? ' — ' : '') + `Tech: ${techErrors}`;
+          }
+        } catch { /* CR detail non bloquant */ }
+        if (detailMsg) updateData.error_message = detailMsg.slice(0, 2000);
+      }
 
       await supabase.from('chorus_submissions').update(updateData).eq('id', sub.id);
 

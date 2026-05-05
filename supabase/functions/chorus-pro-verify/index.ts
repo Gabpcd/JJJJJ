@@ -1,16 +1,19 @@
 /**
- * chorus-pro-verify — Vérifie un numéro de structure Chorus Pro via l'API PISTE.
+ * chorus-pro-verify — Vérifie une structure + ses services via l'API Chorus Pro.
  *
- * Appelé depuis ChorusConfigEtabDialog (admin) et ChorusConfig (établissement)
- * pour valider en temps réel que le numéro de structure saisi existe sur Chorus Pro.
+ * Actions :
+ * - { identifiant }                → vérifie que la structure existe
+ * - { identifiant, detail: true }  → + paramétrage (code service obligatoire ?)
+ * - { identifiant, services: true } → + liste des codes service disponibles
+ * - { identifiant, code_service }  → vérifie qu'un code service précis est valide
  *
- * Body : { identifiant: string }
- * Réponse : { found: boolean, structure?: { designation, siret, ... }, error?: string }
- *
- * Auth : JWT authenticated (admin OU établissement via RPC check).
+ * Auth : JWT authenticated (admin ou établissement).
  */
 
-import { getPisteConfig, getAccessToken, rechercherStructure } from '../_shared/piste-client.ts';
+import {
+  getPisteConfig, getAccessToken,
+  rechercherStructure, consulterStructure, rechercherServicesStructure, consulterService,
+} from '../_shared/piste-client.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 function corsHeaders(req: Request) {
@@ -29,13 +32,11 @@ Deno.serve(async (req) => {
   const headers = corsHeaders(req);
 
   try {
-    // Auth : vérifier que le caller est authentifié
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Non authentifié' }), { status: 401, headers });
     }
 
-    // Vérifier que l'utilisateur est admin ou établissement via Supabase
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
@@ -50,14 +51,12 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Accès réservé admin / établissement' }), { status: 403, headers });
     }
 
-    // Parse body
     const body = await req.json().catch(() => ({}));
     const identifiant = body.identifiant?.toString().trim();
     if (!identifiant) {
       return new Response(JSON.stringify({ error: 'identifiant requis' }), { status: 400, headers });
     }
 
-    // PISTE config
     const config = getPisteConfig();
     if (!config) {
       return new Response(JSON.stringify({
@@ -67,28 +66,19 @@ Deno.serve(async (req) => {
       }), { status: 200, headers });
     }
 
-    // OAuth2 token
     const token = await getAccessToken(config);
 
-    // Rechercher la structure
-    const result = await rechercherStructure(config, token, identifiant);
-
-    if (!result.ok) {
-      return new Response(JSON.stringify({
-        found: false,
-        error: `API Chorus Pro erreur (HTTP ${result.data?.status || 'unknown'})`,
-      }), { status: 200, headers });
-    }
-
-    if (!result.found) {
+    // Action 1 : vérifier que la structure existe
+    const searchResult = await rechercherStructure(config, token, identifiant);
+    if (!searchResult.ok || !searchResult.found) {
       return new Response(JSON.stringify({
         found: false,
         error: `Structure "${identifiant}" introuvable sur Chorus Pro`,
       }), { status: 200, headers });
     }
 
-    const s = result.structure;
-    return new Response(JSON.stringify({
+    const s = searchResult.structure;
+    const result: any = {
       found: true,
       structure: {
         designationStructure: s?.designationStructure,
@@ -98,7 +88,45 @@ Deno.serve(async (req) => {
         typeIdentifiant: s?.typeIdentifiantStructure,
         actif: s?.structureActive,
       },
-    }), { status: 200, headers });
+    };
+
+    // Action 2 : paramétrage détaillé (code service obligatoire ?)
+    if (body.detail) {
+      try {
+        const detail = await consulterStructure(config, token, identifiant);
+        if (detail.ok) {
+          result.parametrage = {
+            codeServiceObligatoire: detail.codeServiceObligatoire,
+            designation: detail.designation,
+            raw: detail.data?.parametrage,
+          };
+        }
+      } catch { /* non bloquant */ }
+    }
+
+    // Action 3 : lister les codes service disponibles
+    if (body.services) {
+      try {
+        const svcResult = await rechercherServicesStructure(config, token, identifiant);
+        if (svcResult.ok) {
+          result.services = svcResult.services;
+        }
+      } catch { /* non bloquant */ }
+    }
+
+    // Action 4 : vérifier un code service précis
+    if (body.code_service) {
+      try {
+        const svcCheck = await consulterService(config, token, identifiant, body.code_service);
+        result.service_valide = svcCheck.ok && svcCheck.actif;
+        result.service_nom = svcCheck.nom;
+        if (!svcCheck.ok || !svcCheck.actif) {
+          result.service_erreur = `Code service "${body.code_service}" invalide ou inactif`;
+        }
+      } catch { /* non bloquant */ }
+    }
+
+    return new Response(JSON.stringify(result), { status: 200, headers });
 
   } catch (err) {
     console.error('[chorus-pro-verify]', err);

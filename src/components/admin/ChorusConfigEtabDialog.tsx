@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Loader2, Search } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Search, ChevronDown } from 'lucide-react';
 
 interface ChorusConfig {
   etablissement_id: string;
@@ -29,6 +29,8 @@ interface VerifyResult {
   status: 'idle' | 'loading' | 'found' | 'not_found' | 'error';
   designation?: string;
   error?: string;
+  codeServiceObligatoire?: boolean;
+  services?: Array<{ code: string; nom: string; actif: boolean }>;
 }
 
 export function ChorusConfigEtabDialog({ etabId, etabNom, config, open, onClose, onSaved }: Props) {
@@ -53,13 +55,18 @@ export function ChorusConfigEtabDialog({ etabId, etabNom, config, open, onClose,
     setVerify({ status: 'loading' });
     try {
       const { data, error } = await supabase.functions.invoke('chorus-pro-verify', {
-        body: { identifiant: id },
+        body: { identifiant: id, detail: true, services: true },
       });
       if (error) throw error;
       if (data.simulation) {
         setVerify({ status: 'error', error: 'Credentials PISTE non configurés' });
       } else if (data.found) {
-        setVerify({ status: 'found', designation: data.structure?.designationStructure || 'Structure trouvée' });
+        setVerify({
+          status: 'found',
+          designation: data.structure?.designationStructure || 'Structure trouvée',
+          codeServiceObligatoire: data.parametrage?.codeServiceObligatoire,
+          services: data.services ?? [],
+        });
       } else {
         setVerify({ status: 'not_found', error: data.error || 'Structure introuvable' });
       }
@@ -71,6 +78,10 @@ export function ChorusConfigEtabDialog({ etabId, etabNom, config, open, onClose,
   const save = async () => {
     if (actif && !numeroStructure.trim()) {
       toast.error('Numéro de structure obligatoire si actif');
+      return;
+    }
+    if (actif && verify.codeServiceObligatoire && !codeService.trim()) {
+      toast.error('Le code service est obligatoire pour cette structure');
       return;
     }
     setSaving(true);
@@ -91,6 +102,8 @@ export function ChorusConfigEtabDialog({ etabId, etabNom, config, open, onClose,
     onSaved();
     onClose();
   };
+
+  const activeServices = verify.services?.filter(s => s.actif) ?? [];
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -145,14 +158,36 @@ export function ChorusConfigEtabDialog({ etabId, etabNom, config, open, onClose,
               </p>
             )}
             {verify.status === 'idle' && (
-              <p className="text-xs text-muted-foreground mt-1">SIRET étendu Chorus Pro destinataire (14 chiffres + extension si applicable)</p>
+              <p className="text-xs text-muted-foreground mt-1">SIRET étendu Chorus Pro destinataire</p>
             )}
           </div>
 
           <div>
-            <Label htmlFor="code-service">Code service</Label>
-            <Input id="code-service" value={codeService} onChange={e => setCodeService(e.target.value)} placeholder="ex. PAIE" />
-            <p className="text-xs text-muted-foreground mt-1">Code du service exécutant (si applicable, sinon laisser vide)</p>
+            <Label htmlFor="code-service">
+              Code service
+              {verify.codeServiceObligatoire && <span className="text-destructive ml-1">* obligatoire pour cette structure</span>}
+            </Label>
+            {activeServices.length > 0 ? (
+              <select
+                id="code-service"
+                value={codeService}
+                onChange={e => setCodeService(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">— Aucun —</option>
+                {activeServices.map(s => (
+                  <option key={s.code} value={s.code}>{s.code} — {s.nom}</option>
+                ))}
+              </select>
+            ) : (
+              <Input id="code-service" value={codeService} onChange={e => setCodeService(e.target.value)} placeholder="ex. PAIE" />
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              {activeServices.length > 0
+                ? `${activeServices.length} service(s) disponible(s) — sélectionnez dans la liste`
+                : 'Code du service exécutant (cliquez "Vérifier" pour charger la liste)'
+              }
+            </p>
           </div>
 
           <div>

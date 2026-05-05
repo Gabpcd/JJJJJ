@@ -7,7 +7,10 @@
  * - Construction headers (Bearer + cpro-account si tech user)
  * - Appels API Chorus Pro génériques
  * - Dépôt de flux Factur-X via /deposer/flux
- * - Consultation statut via /consulter/facture
+ * - Consultation statut via /consulter/facture, /consulter/fournisseur
+ * - Consultation historique via /consulter/historique
+ * - Compte rendu détaillé via /consulterCR, /consulterCRDetaille
+ * - Recherche structures + services via /structures/v1/*
  *
  * Env vars attendues :
  * - PISTE_CLIENT_ID (fallback CHORUS_PRO_CLIENT_ID)
@@ -225,6 +228,220 @@ export async function consulterFlux(
  * Rechercher une structure Chorus Pro par identifiant (SIRET/numéro structure).
  * Retourne la structure trouvée ou null si introuvable.
  */
+// ═══════════════════════════════════════════════════════════════════════
+// P1 — Consultation détaillée factures
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Consulter le détail complet d'une facture émise (point de vue fournisseur).
+ * Retourne : cadre de facturation, destinataire, fournisseur, lignes de poste,
+ * pièces jointes, montants, statut, references, coordonnées bancaires,
+ * numéro de mandat DGFiP, pièce précédente/suivante.
+ */
+export async function consulterFactureFournisseur(
+  config: PisteConfig,
+  token: string,
+  identifiantFactureCPP: string | number,
+): Promise<{ ok: boolean; data: any }> {
+  return chorusProApiCall(
+    config, token,
+    `${CHORUS_API_PREFIX}/consulter/fournisseur`,
+    'POST',
+    { idUtilisateurCourant: 0, identifiantFactureCPP: Number(identifiantFactureCPP) },
+  );
+}
+
+/**
+ * Historique complet d'une facture : statuts successifs avec dates et
+ * utilisateurs, actions utilisateurs, événements complémentaires.
+ */
+export async function consulterHistoriqueFacture(
+  config: PisteConfig,
+  token: string,
+  identifiantFactureCPP: string | number,
+): Promise<{ ok: boolean; data: any }> {
+  return chorusProApiCall(
+    config, token,
+    `${CHORUS_API_PREFIX}/consulter/historique`,
+    'POST',
+    { idUtilisateurCourant: 0, identifiantFactureCPP: Number(identifiantFactureCPP) },
+  );
+}
+
+/**
+ * Compte rendu d'un flux (PDF base64). Preuve officielle de réception.
+ * Retourne `fichierCR` (base64), `etatCourantFlux`, `dateDepotFlux`.
+ */
+export async function consulterCR(
+  config: PisteConfig,
+  token: string,
+  numeroFluxDepot: string,
+): Promise<{ ok: boolean; data: any; fichierCR?: string; etatCourant?: string }> {
+  const result = await chorusProApiCall(
+    config, token,
+    '/cpro/transverses/v1/consulterCR',
+    'POST',
+    { idUtilisateurCourant: 0, numeroFluxDepot },
+  );
+  return {
+    ...result,
+    fichierCR: result.data?.fichierCR,
+    etatCourant: result.data?.etatCourantFlux,
+  };
+}
+
+/**
+ * Compte rendu détaillé d'un flux : retourne les erreurs par demande de
+ * paiement (listeErreurDP) et erreurs techniques (listeErreurTechnique).
+ * Indispensable pour comprendre pourquoi un flux est rejeté.
+ */
+export async function consulterCRDetaille(
+  config: PisteConfig,
+  token: string,
+  numeroFluxDepot: string,
+): Promise<{ ok: boolean; data: any; erreurs?: any[]; erreursTechniques?: any[] }> {
+  const result = await chorusProApiCall(
+    config, token,
+    '/cpro/transverses/v1/consulterCRDetaille',
+    'POST',
+    { idUtilisateurCourant: 0, numeroFluxDepot },
+  );
+  return {
+    ...result,
+    erreurs: result.data?.listeErreurDP ?? [],
+    erreursTechniques: result.data?.listeErreurTechnique ?? [],
+  };
+}
+
+/**
+ * Rechercher les factures émises par le fournisseur (recherche batch).
+ * Filtres : statut, dates, SIRET destinataire, montants, numéro flux.
+ */
+export async function rechercherFacturesFournisseur(
+  config: PisteConfig,
+  token: string,
+  filtres: {
+    dateDepotDebut?: string;
+    dateDepotFin?: string;
+    statutCourant?: string;
+    identifiantDestinataire?: string;
+    nbResultatsMax?: number;
+    pageNumero?: number;
+  } = {},
+): Promise<{ ok: boolean; data: any; factures?: any[]; nbResultats?: number }> {
+  const result = await chorusProApiCall(
+    config, token,
+    `${CHORUS_API_PREFIX}/rechercher/fournisseur`,
+    'POST',
+    {
+      idUtilisateurCourant: 0,
+      parametres: {
+        nbResultatsMaxParPage: filtres.nbResultatsMax ?? 50,
+        numeroPagePourRechercher: filtres.pageNumero ?? 1,
+        triSurChamp: 'DateDepot',
+        triSensTri: 'Descendant',
+      },
+      ...(filtres.dateDepotDebut ? { dateDepotDebut: filtres.dateDepotDebut } : {}),
+      ...(filtres.dateDepotFin ? { dateDepotFin: filtres.dateDepotFin } : {}),
+      ...(filtres.statutCourant ? { statutCourant: filtres.statutCourant } : {}),
+      ...(filtres.identifiantDestinataire ? { identifiantDestinataire: filtres.identifiantDestinataire } : {}),
+    },
+  );
+  return {
+    ...result,
+    factures: result.data?.listeFactures ?? [],
+    nbResultats: result.data?.parametres?.nbResultatsGlobal,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// P2 — Validation structures + services
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Consulter le détail + paramétrage d'une structure Chorus Pro.
+ * Retourne : codeServiceDoitEtreRenseigne, statutMiseEnPaiementNestPasRemonte,
+ * raison sociale, adresse, SIRET, type identifiant, statut.
+ */
+export async function consulterStructure(
+  config: PisteConfig,
+  token: string,
+  identifiantStructure: string,
+): Promise<{ ok: boolean; data: any; codeServiceObligatoire?: boolean; designation?: string }> {
+  const result = await chorusProApiCall(
+    config, token,
+    '/cpro/structures/v1/consulter',
+    'POST',
+    { idUtilisateurCourant: 0, identifiantStructure },
+  );
+  return {
+    ...result,
+    codeServiceObligatoire: result.data?.parametrage?.codeServiceDoitEtreRenseigne === true,
+    designation: result.data?.designationStructure,
+  };
+}
+
+/**
+ * Rechercher les services d'une structure (codes service valides).
+ * Retourne la liste paginée des services (code, nom, statut, actif).
+ */
+export async function rechercherServicesStructure(
+  config: PisteConfig,
+  token: string,
+  identifiantStructure: string,
+): Promise<{ ok: boolean; data: any; services?: Array<{ code: string; nom: string; actif: boolean }> }> {
+  const result = await chorusProApiCall(
+    config, token,
+    '/cpro/structures/v1/rechercher/services',
+    'POST',
+    {
+      idUtilisateurCourant: 0,
+      identifiantStructure,
+      parametres: {
+        nbResultatsMaxParPage: 100,
+        numeroPagePourRechercher: 1,
+        triSurChamp: 'CodeService',
+        triSensTri: 'Ascendant',
+      },
+    },
+  );
+  const raw = result.data?.listeServices ?? [];
+  return {
+    ...result,
+    services: raw.map((s: any) => ({
+      code: s.codeService ?? s.code,
+      nom: s.nomService ?? s.libelle ?? s.nom,
+      actif: s.serviceActif !== false && s.actif !== false,
+    })),
+  };
+}
+
+/**
+ * Consulter le détail d'un service spécifique d'une structure.
+ */
+export async function consulterService(
+  config: PisteConfig,
+  token: string,
+  identifiantStructure: string,
+  codeService: string,
+): Promise<{ ok: boolean; data: any; actif?: boolean; nom?: string }> {
+  const result = await chorusProApiCall(
+    config, token,
+    '/cpro/structures/v1/consulter/service',
+    'POST',
+    { idUtilisateurCourant: 0, identifiantStructure, codeService },
+  );
+  return {
+    ...result,
+    actif: result.data?.serviceActif !== false,
+    nom: result.data?.nomService ?? result.data?.libelle,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Existant — Recherche structure (inchangé)
+// ═══════════════════════════════════════════════════════════════════════
+
 export async function rechercherStructure(
   config: PisteConfig,
   token: string,
