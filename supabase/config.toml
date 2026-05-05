@@ -115,3 +115,6 @@ verify_jwt = false
 
 [functions.test-piste-credentials]
 verify_jwt = false
+
+[functions.chorus-pro-verify]
+verify_jwt = true

@@ -220,3 +220,40 @@ export async function consulterFlux(
     },
   );
 }
+
+/**
+ * Rechercher une structure Chorus Pro par identifiant (SIRET/numéro structure).
+ * Retourne la structure trouvée ou null si introuvable.
+ */
+export async function rechercherStructure(
+  config: PisteConfig,
+  token: string,
+  identifiant: string,
+): Promise<{ ok: boolean; found: boolean; structure?: any; data: any }> {
+  const result = await chorusProApiCall(
+    config, token,
+    '/cpro/transverses/v1/rechercherStructure',
+    'POST',
+    {
+      idUtilisateurCourant: 0,
+      parametres: {
+        nbResultatsMaxParPage: 5,
+        numeroPagePourRechercher: 1,
+        triSurChamp: 'Identifiant',
+        triSensTri: 'Ascendant',
+      },
+      restreindreStructures: {
+        identifiantStructure: identifiant,
+        structureActive: true,
+      },
+      typeRecherche: 'ACTIF',
+    },
+  );
+  const structures = result.data?.listeStructures ?? [];
+  return {
+    ok: result.ok,
+    found: structures.length > 0,
+    structure: structures[0] ?? undefined,
+    data: result.data,
+  };
+}

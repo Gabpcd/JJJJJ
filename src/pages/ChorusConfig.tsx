@@ -4,11 +4,17 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Landmark, Loader2, Save, CheckCircle, ExternalLink, Edit2 } from 'lucide-react';
+import { Landmark, Loader2, Save, CheckCircle, Edit2, Search, XCircle } from 'lucide-react';
 import { FadeInView } from '@/components/FadeInView';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { capturerErreurSentry } from '@/lib/sentry';
+
+interface VerifyResult {
+  status: 'idle' | 'loading' | 'found' | 'not_found' | 'error';
+  designation?: string;
+  error?: string;
+}
 
 export default function ChorusConfig() {
   usePageTitle('Configuration Chorus Pro');
@@ -22,6 +28,7 @@ export default function ChorusConfig() {
   const [codeService, setCodeService] = useState('');
   const [identifiantCpro, setIdentifiantCpro] = useState('');
   const [actif, setActif] = useState(true);
+  const [verify, setVerify] = useState<VerifyResult>({ status: 'idle' });
 
   useEffect(() => {
     if (!user) return;
@@ -41,6 +48,27 @@ export default function ChorusConfig() {
       setLoading(false);
     })();
   }, [user]);
+
+  const verifyStructure = async () => {
+    const id = numeroStructure.trim();
+    if (!id) return;
+    setVerify({ status: 'loading' });
+    try {
+      const { data, error } = await supabase.functions.invoke('chorus-pro-verify', {
+        body: { identifiant: id },
+      });
+      if (error) throw error;
+      if (data.simulation) {
+        setVerify({ status: 'error', error: 'Vérification indisponible temporairement' });
+      } else if (data.found) {
+        setVerify({ status: 'found', designation: data.structure?.designationStructure || 'Structure trouvée' });
+      } else {
+        setVerify({ status: 'not_found', error: data.error || 'Structure introuvable sur Chorus Pro' });
+      }
+    } catch (err: any) {
+      setVerify({ status: 'error', error: err.message || 'Erreur de vérification' });
+    }
+  };
 
   const sauvegarder = async () => {
     if (!user || !numeroStructure.trim()) {
@@ -130,13 +158,52 @@ export default function ChorusConfig() {
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 Numéro de structure Chorus <span className="text-destructive">*</span>
               </label>
-              <Input
-                value={numeroStructure}
-                onChange={e => setNumeroStructure(e.target.value)}
-                placeholder="Ex: 12345678"
-                disabled={isReadOnly}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Identifiant unique de votre structure sur Chorus Pro (SIRET ou n° structure).</p>
+              <div className="flex gap-2">
+                <Input
+                  value={numeroStructure}
+                  onChange={e => { setNumeroStructure(e.target.value); setVerify({ status: 'idle' }); }}
+                  placeholder="Ex: 12345678"
+                  disabled={isReadOnly}
+                  className="flex-1"
+                />
+                {!isReadOnly && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={verifyStructure}
+                    disabled={verify.status === 'loading' || !numeroStructure.trim()}
+                    className="shrink-0"
+                  >
+                    {verify.status === 'loading'
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Search className="h-4 w-4" />
+                    }
+                    <span className="ml-1.5">Vérifier</span>
+                  </Button>
+                )}
+              </div>
+              {verify.status === 'found' && (
+                <p className="text-xs text-success flex items-center gap-1 mt-1.5">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {verify.designation}
+                </p>
+              )}
+              {verify.status === 'not_found' && (
+                <p className="text-xs text-destructive flex items-center gap-1 mt-1.5">
+                  <XCircle className="h-3.5 w-3.5" />
+                  {verify.error}
+                </p>
+              )}
+              {verify.status === 'error' && (
+                <p className="text-xs text-warning flex items-center gap-1 mt-1.5">
+                  <XCircle className="h-3.5 w-3.5" />
+                  {verify.error}
+                </p>
+              )}
+              {verify.status === 'idle' && (
+                <p className="text-xs text-muted-foreground mt-1">Identifiant unique de votre structure sur Chorus Pro (SIRET ou n° structure).</p>
+              )}
             </div>
 
             <div>
