@@ -112,3 +112,6 @@ verify_jwt = false
 
 [functions.weekly-invoicing-cron]
 verify_jwt = false
+
+[functions.test-piste-credentials]
+verify_jwt = false
