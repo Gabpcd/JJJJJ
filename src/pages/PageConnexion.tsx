@@ -173,7 +173,14 @@ export default function PageConnexion() {
               </div>
             </div>
 
-            <CaptchaTurnstile invisible onVerify={setLoginTurnstileToken} onExpire={() => setLoginTurnstileToken(null)} onError={() => setLoginTurnstileToken(null)} />
+            {/* Widget Turnstile visible (mode `normal`) — le mode `invisible`
+                lançait un challenge silencieux qui crée des iframes srcdoc
+                nichés, sensibles à la CSP `about:srcdoc` + extensions anti-
+                fingerprint + Service Workers. Symptôme : "Blocked a frame with
+                origin challenges.cloudflare.com" en mode normal du navigateur
+                (OK en incognito sans extensions). Mode visible = iframe direct,
+                pas d'imbrication srcdoc, robuste. */}
+            <CaptchaTurnstile className="flex justify-center" onVerify={setLoginTurnstileToken} onExpire={() => setLoginTurnstileToken(null)} onError={() => setLoginTurnstileToken(null)} />
 
             <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" data-testid="login-submit">
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
