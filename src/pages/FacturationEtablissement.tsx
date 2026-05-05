@@ -8,10 +8,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw,
   Building2, AlertTriangle, Download, Banknote, Info, Eye, ChevronDown,
-  Edit2, X, Scale, ChevronRight, ExternalLink,
+  Edit2, X, Scale, ChevronRight, ExternalLink, Landmark,
 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
+import { getChorusStatutBadge } from '@/lib/chorus-helpers';
 import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
 import { BadgePalier } from '@/components/BadgePalier';
 import { PaiementVirement } from '@/components/PaiementVirement';
@@ -689,13 +690,24 @@ export default function FacturationEtablissement() {
                     <FileText className="h-4 w-4 text-destructive" /> Factures impayées ({facturesImpayees.length})
                   </h3>
                   <div className="space-y-2">
-                    {facturesImpayees.map((f: any) => (
+                    {facturesImpayees.map((f: any) => {
+                      const chorusBadge = f.est_secteur_public && f.chorus_pro_statut ? getChorusStatutBadge(f.chorus_pro_statut) : null;
+                      return (
                       <div key={f.facture_id} className="p-4 rounded-lg border space-y-3">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="font-semibold text-sm">{f.numero_facture}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-sm">{f.numero_facture}</p>
+                              {chorusBadge && (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${chorusBadge.classes}`}>
+                                  <Landmark className="h-3 w-3" />
+                                  {chorusBadge.label}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                               {f.nombre_missions} mission(s) · Échéance : {f.date_echeance && new Date(f.date_echeance).toLocaleDateString('fr-FR')}
+                              {f.est_secteur_public && f.chorus_pro_numero_flux && ` · Flux ${f.chorus_pro_numero_flux}`}
                             </p>
                           </div>
                           <div className="text-right shrink-0">
@@ -703,6 +715,13 @@ export default function FacturationEtablissement() {
                             <p className="text-[10px] text-muted-foreground">{fmt(f.montant_ht)} HT + {fmt(f.montant_tva)} TVA</p>
                           </div>
                         </div>
+                        {f.est_secteur_public && (
+                          <p className="text-[10px] text-primary flex items-center gap-1">
+                            <Landmark className="h-3 w-3" />
+                            Secteur public — paiement via Chorus Pro (30 à 60 jours après acceptation)
+                          </p>
+                        )}
+                        {!f.est_secteur_public && (
                         <div className="flex gap-2 flex-wrap">
                           <Button
                             size="sm"
@@ -721,8 +740,17 @@ export default function FacturationEtablissement() {
                             <Download className="w-4 h-4 mr-1" /> PDF
                           </Button>
                         </div>
+                        )}
+                        {f.est_secteur_public && (
+                        <div className="flex gap-2 flex-wrap">
+                          <Button size="sm" variant="outline" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
+                            <Download className="w-4 h-4 mr-1" /> PDF
+                          </Button>
+                        </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (

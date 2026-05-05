@@ -73,13 +73,13 @@ export default function AdminChorusPro() {
       if (error) throw error;
       const d: any = data;
       if (d.success) {
-        toast.success(`PISTE ${d.env} opérationnel (${d.duration_ms}ms)`);
+        toast.success(`Connexion Chorus Pro ${d.env} opérationnelle (${d.duration_ms}ms)`);
       } else {
         const fails = d.diagnostics?.filter((s: any) => s.status === 'FAIL').map((s: any) => s.step).join(', ');
-        toast.error(`PISTE ${d.env} — échecs : ${fails || d.summary}`);
+        toast.error(`Connexion Chorus Pro — échecs : ${fails || d.summary}`);
       }
     } catch (err: any) {
-      toast.error(`Test PISTE erreur : ${err.message ?? 'inconnu'}`);
+      toast.error(`Vérification connexion : ${err.message ?? 'erreur inconnue'}`);
     }
     setTesting(false);
   };
@@ -112,7 +112,7 @@ export default function AdminChorusPro() {
         <div className="flex gap-2">
           <Button onClick={testPiste} disabled={testing} variant="outline" size="sm">
             <Wifi className={`h-4 w-4 mr-1.5 ${testing ? 'animate-pulse' : ''}`} />
-            {testing ? 'Test…' : 'Test PISTE'}
+            {testing ? 'Vérification…' : 'Vérifier connexion'}
           </Button>
           <Button onClick={syncNow} disabled={syncing} variant="outline" size="sm">
             <RefreshCw className={`h-4 w-4 mr-1.5 ${syncing ? 'animate-spin' : ''}`} />
