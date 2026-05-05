@@ -76,9 +76,14 @@ export async function getAccessToken(config: PisteConfig): Promise<string> {
     scope: 'openid',
   });
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  };
+  if (config.apiKey) headers['KeyId'] = config.apiKey;
+
   const res = await fetch(config.oauthUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers,
     body: body.toString(),
     signal: AbortSignal.timeout(15000),
   });

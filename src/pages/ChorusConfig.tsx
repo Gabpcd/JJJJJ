@@ -173,23 +173,11 @@ export default function ChorusConfig() {
               </div>
             )}
 
-            <div className="rounded-lg border border-border p-3 space-y-2">
-              <p className="text-xs font-semibold text-foreground">Comment déposer vos factures ?</p>
-              <p className="text-xs text-muted-foreground">
-                En attendant l'intégration API directe, déposez vos factures manuellement sur le portail Chorus Pro.
-                Un guide pas-à-pas est disponible dans chaque facture secteur public.
-              </p>
-              <a href="https://chorus-pro.gouv.fr" target="_blank" rel="noopener noreferrer">
-                <Button size="sm" variant="outline" className="text-xs gap-1 mt-1">
-                  <ExternalLink className="h-3 w-3" /> Accéder à Chorus Pro
-                </Button>
-              </a>
-            </div>
-
-            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-              <p className="text-xs text-primary">
-                <strong>Intégration API en cours</strong> — Lorsque l'API Chorus Pro sera connectée,
-                vos factures seront déposées et suivies automatiquement depuis Jolene.
+            <div className="p-3 rounded-lg bg-success/5 border border-success/20">
+              <p className="text-xs text-success">
+                <strong>Intégration API active</strong> — Vos factures secteur public sont déposées
+                et suivies automatiquement via l'API Chorus Pro (PISTE). Le statut est synchronisé
+                toutes les 2 heures.
               </p>
             </div>
           </div>

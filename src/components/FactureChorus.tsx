@@ -246,7 +246,7 @@ export function FactureChorus({ facture, onUpdate }: Props) {
       <div className="rounded-lg bg-primary/5 border border-primary/20 p-3">
         <p className="text-xs text-primary font-medium flex items-center gap-1.5">
           <Landmark className="h-4 w-4 shrink-0" />
-          Dépôt manuel sur Chorus Pro — en attendant l'intégration API
+          Dépôt manuel sur Chorus Pro (factures commission)
         </p>
       </div>
 

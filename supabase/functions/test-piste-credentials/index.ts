@@ -120,9 +120,13 @@ Deno.serve(async (req) => {
           client_secret: clientSecret,
           scope: 'openid',
         });
+        const oauthHeaders: Record<string, string> = {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        };
+        if (apiKey) oauthHeaders['KeyId'] = apiKey;
         const oauthRes = await fetch(urls.oauth, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: oauthHeaders,
           body: oauthBody.toString(),
         });
         const oauthText = await oauthRes.text();
