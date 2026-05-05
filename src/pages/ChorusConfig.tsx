@@ -14,6 +14,8 @@ interface VerifyResult {
   status: 'idle' | 'loading' | 'found' | 'not_found' | 'error';
   designation?: string;
   error?: string;
+  codeServiceObligatoire?: boolean;
+  services?: Array<{ code: string; nom: string; actif: boolean }>;
 }
 
 export default function ChorusConfig() {
@@ -55,13 +57,18 @@ export default function ChorusConfig() {
     setVerify({ status: 'loading' });
     try {
       const { data, error } = await supabase.functions.invoke('chorus-pro-verify', {
-        body: { identifiant: id },
+        body: { identifiant: id, detail: true, services: true },
       });
       if (error) throw error;
       if (data.simulation) {
         setVerify({ status: 'error', error: 'Vérification indisponible temporairement' });
       } else if (data.found) {
-        setVerify({ status: 'found', designation: data.structure?.designationStructure || 'Structure trouvée' });
+        setVerify({
+          status: 'found',
+          designation: data.structure?.designationStructure || 'Structure trouvée',
+          codeServiceObligatoire: data.parametrage?.codeServiceObligatoire,
+          services: data.services ?? [],
+        });
       } else {
         setVerify({ status: 'not_found', error: data.error || 'Structure introuvable sur Chorus Pro' });
       }
@@ -73,6 +80,10 @@ export default function ChorusConfig() {
   const sauvegarder = async () => {
     if (!user || !numeroStructure.trim()) {
       afficherNotification({ type: 'erreur', message: 'Le numéro de structure est obligatoire.' });
+      return;
+    }
+    if (verify.codeServiceObligatoire && !codeService.trim()) {
+      afficherNotification({ type: 'erreur', message: 'Le code service est obligatoire pour cette structure.' });
       return;
     }
     setSaving(true);
@@ -126,6 +137,7 @@ export default function ChorusConfig() {
   }
 
   const isReadOnly = !!configId && !editMode;
+  const activeServices = verify.services?.filter(s => s.actif) ?? [];
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -154,6 +166,7 @@ export default function ChorusConfig() {
               </div>
             )}
 
+            {/* Numéro de structure + bouton Vérifier */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 Numéro de structure Chorus <span className="text-destructive">*</span>
@@ -162,7 +175,7 @@ export default function ChorusConfig() {
                 <Input
                   value={numeroStructure}
                   onChange={e => { setNumeroStructure(e.target.value); setVerify({ status: 'idle' }); }}
-                  placeholder="Ex: 12345678"
+                  placeholder="Ex: 10000071800067"
                   disabled={isReadOnly}
                   className="flex-1"
                 />
@@ -206,17 +219,43 @@ export default function ChorusConfig() {
               )}
             </div>
 
+            {/* Code service — select dynamique si services chargés */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Code service</label>
-              <Input
-                value={codeService}
-                onChange={e => setCodeService(e.target.value)}
-                placeholder="Ex: SRV001"
-                disabled={isReadOnly}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Code du service destinataire (facultatif).</p>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Code service
+                {verify.codeServiceObligatoire && (
+                  <span className="text-destructive ml-1">* obligatoire pour cette structure</span>
+                )}
+              </label>
+              {activeServices.length > 0 ? (
+                <select
+                  value={codeService}
+                  onChange={e => setCodeService(e.target.value)}
+                  disabled={isReadOnly}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">— Aucun —</option>
+                  {activeServices.map(s => (
+                    <option key={s.code} value={s.code}>{s.code} — {s.nom}</option>
+                  ))}
+                </select>
+              ) : (
+                <Input
+                  value={codeService}
+                  onChange={e => setCodeService(e.target.value)}
+                  placeholder="Ex: SRV001"
+                  disabled={isReadOnly}
+                />
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                {activeServices.length > 0
+                  ? `${activeServices.length} service(s) disponible(s) — sélectionnez dans la liste`
+                  : 'Code du service destinataire (cliquez "Vérifier" pour charger la liste).'
+                }
+              </p>
             </div>
 
+            {/* Identifiant CPro */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Identifiant CPro</label>
               <Input
@@ -228,6 +267,7 @@ export default function ChorusConfig() {
               <p className="text-xs text-muted-foreground mt-1">Identifiant de connexion à la plateforme Chorus Pro.</p>
             </div>
 
+            {/* Actions */}
             {!isReadOnly && (
               <div className="flex gap-2">
                 <Button onClick={sauvegarder} disabled={saving || !numeroStructure.trim()} className="flex-1 gap-2">
