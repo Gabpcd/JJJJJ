@@ -39,41 +39,28 @@ Deno.serve(async (req) => {
   const start = Date.now();
 
   try {
-    // Auth : décoder le JWT et valider role === 'service_role'
-    // (pas de validation signature — endpoint diagnostic interne seulement)
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Authorization header Bearer manquant' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
+    // Auth : accepte sb_secret_ (apikey header) OU JWT service_role (Bearer)
+    const apikey = req.headers.get('apikey') || '';
+    const authBearer = req.headers.get('Authorization')?.replace('Bearer ', '') || '';
+    let isAuthed = false;
+    if (apikey.startsWith('sb_secret_') || authBearer.startsWith('sb_secret_')) {
+      isAuthed = true;
+    } else {
+      const token = authBearer || apikey;
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        try {
+          const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+          const payload = JSON.parse(atob(padded));
+          if (payload?.role === 'service_role') isAuthed = true;
+        } catch { /* invalid JWT */ }
+      }
+    }
+    if (!isAuthed) {
+      return new Response(JSON.stringify({ error: 'Service role key requis (apikey ou Bearer)' }), {
+        status: 403, headers: { 'Content-Type': 'application/json' },
       });
-    }
-    const token = authHeader.slice(7).trim();
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      return new Response(JSON.stringify({ error: 'Token JWT invalide (format malformé)' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    let payload: any;
-    try {
-      // base64url decode du payload (partie 1)
-      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
-      payload = JSON.parse(atob(padded));
-    } catch (decodeErr) {
-      return new Response(JSON.stringify({
-        error: 'Impossible de décoder le JWT',
-        detail: decodeErr instanceof Error ? decodeErr.message : String(decodeErr),
-      }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-    }
-    if (payload?.role !== 'service_role') {
-      return new Response(JSON.stringify({
-        error: 'Token n\'a pas le role service_role',
-        role_recu: payload?.role ?? '(absent)',
-        iss: payload?.iss ?? '(absent)',
-      }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
     // Auth OK
 
