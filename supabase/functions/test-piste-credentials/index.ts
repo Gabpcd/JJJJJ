@@ -20,7 +20,7 @@ const PISTE_URLS = {
   },
   prod: {
     oauth: 'https://oauth.piste.gouv.fr/api/oauth/token',
-    api: 'https://api.piste.gouv.fr',
+    api: 'https://chorus-pro.gouv.fr',
   },
 };
 

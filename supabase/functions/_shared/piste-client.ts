@@ -36,7 +36,7 @@ const PISTE_URLS = {
   },
   prod: {
     oauth: 'https://oauth.piste.gouv.fr/api/oauth/token',
-    api: 'https://api.piste.gouv.fr',
+    api: 'https://chorus-pro.gouv.fr',
   },
 };
 
@@ -98,13 +98,14 @@ export async function getAccessToken(config: PisteConfig): Promise<string> {
   return data.access_token;
 }
 
-/** Headers API Chorus Pro (Bearer + cpro-account si tech user) */
+/** Headers API Chorus Pro (Bearer + KeyId + cpro-account si tech user) */
 export function buildChorusHeaders(config: PisteConfig, token: string): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     Accept: 'application/json',
   };
+  if (config.apiKey) headers['KeyId'] = config.apiKey;
   if (config.techLogin && config.techPassword) {
     headers['cpro-account'] = btoa(`${config.techLogin}:${config.techPassword}`);
   }
