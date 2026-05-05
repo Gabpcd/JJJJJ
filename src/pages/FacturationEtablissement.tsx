@@ -14,7 +14,6 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
 import { BadgePalier } from '@/components/BadgePalier';
-import { FactureChorus, ChorusStatutBadge } from '@/components/FactureChorus';
 import { PaiementVirement } from '@/components/PaiementVirement';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';

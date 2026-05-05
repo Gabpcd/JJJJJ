@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { FileStack, RefreshCw, Search, Settings } from 'lucide-react';
+import { FileStack, RefreshCw, Search, Settings, Wifi } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -64,6 +64,25 @@ export default function AdminChorusPro() {
 
   const [tab, setTab] = useState('dashboard');
   const [syncing, setSyncing] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  const testPiste = async () => {
+    setTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('test-piste-credentials');
+      if (error) throw error;
+      const d: any = data;
+      if (d.success) {
+        toast.success(`PISTE ${d.env} opérationnel (${d.duration_ms}ms)`);
+      } else {
+        const fails = d.diagnostics?.filter((s: any) => s.status === 'FAIL').map((s: any) => s.step).join(', ');
+        toast.error(`PISTE ${d.env} — échecs : ${fails || d.summary}`);
+      }
+    } catch (err: any) {
+      toast.error(`Test PISTE erreur : ${err.message ?? 'inconnu'}`);
+    }
+    setTesting(false);
+  };
 
   const syncNow = async () => {
     setSyncing(true);
@@ -90,10 +109,16 @@ export default function AdminChorusPro() {
           <FileStack className="h-7 w-7 text-primary" />
           <h1 className="text-2xl font-bold text-foreground">Chorus Pro</h1>
         </div>
-        <Button onClick={syncNow} disabled={syncing} variant="outline">
-          <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Sync en cours…' : 'Sync maintenant'}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={testPiste} disabled={testing} variant="outline" size="sm">
+            <Wifi className={`h-4 w-4 mr-1.5 ${testing ? 'animate-pulse' : ''}`} />
+            {testing ? 'Test…' : 'Test PISTE'}
+          </Button>
+          <Button onClick={syncNow} disabled={syncing} variant="outline" size="sm">
+            <RefreshCw className={`h-4 w-4 mr-1.5 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sync…' : 'Sync maintenant'}
+          </Button>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
