@@ -44,16 +44,14 @@ export function ChorusConfigEtabDialog({ etabId, etabNom, config, open, onClose,
       return;
     }
     setSaving(true);
-    const payload = {
-      etablissement_id: etabId,
-      numero_structure: numeroStructure.trim() || null,
-      code_service: codeService.trim() || null,
-      identifiant_cpro: identifiantCpro.trim() || null,
-      actif,
-    };
-    const { error } = await supabase
-      .from('chorus_pro_config')
-      .upsert(payload, { onConflict: 'etablissement_id' });
+    const { data, error: rpcError } = await supabase.rpc('fn_admin_chorus_config_toggle' as any, {
+      p_etablissement_id: etabId,
+      p_actif: actif,
+      p_numero_structure: numeroStructure.trim() || null,
+      p_code_service: codeService.trim() || null,
+      p_identifiant_cpro: identifiantCpro.trim() || null,
+    });
+    const error = rpcError || ((data as any)?.error ? { message: (data as any).error } : null);
     setSaving(false);
     if (error) {
       toast.error(`Erreur : ${error.message}`);
