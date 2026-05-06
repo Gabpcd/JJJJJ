@@ -16,11 +16,12 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getPisteConfig, getAccessToken, consulterFlux, consulterCRDetaille } from '../_shared/piste-client.ts';
+import { corsHeaders, preflightResponse } from '../_shared/cors.ts';
 
-function json(body: unknown, status = 200) {
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: corsHeaders(req),
   });
 }
 
@@ -212,7 +213,7 @@ async function emitNotificationsForStatus(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
+  if (req.method === 'OPTIONS') return preflightResponse(req);
 
   const start = Date.now();
 
@@ -224,12 +225,12 @@ Deno.serve(async (req) => {
 
   // Auth (après création du client pour que la vérif puisse lire vault si besoin)
   const auth = await verifyServiceRole(req.headers.get('Authorization'), supabase);
-  if (!auth.ok) return json({ error: `Non autorisé : ${auth.error}` }, 401);
+  if (!auth.ok) return json(req, { error: `Non autorisé : ${auth.error}` }, 401);
 
   const pisteConfig = getPisteConfig();
   if (!pisteConfig) {
     console.log('[sync-chorus-status] PISTE credentials absents → simulation mode');
-    return json({ success: true, mode: 'simulation', synced: 0, reason: 'PISTE credentials not configured' });
+    return json(req, { success: true, mode: 'simulation', synced: 0, reason: 'PISTE credentials not configured' });
   }
 
   // Fetch submissions à sync
@@ -244,11 +245,11 @@ Deno.serve(async (req) => {
 
   if (fetchErr) {
     console.error('[sync-chorus-status] fetch error:', fetchErr.message);
-    return json({ error: `Fetch submissions : ${fetchErr.message}` }, 500);
+    return json(req, { error: `Fetch submissions : ${fetchErr.message}` }, 500);
   }
 
   if (!submissions || submissions.length === 0) {
-    return json({ success: true, synced: 0, message: 'No pending submissions to sync', duration_ms: Date.now() - start });
+    return json(req, { success: true, synced: 0, message: 'No pending submissions to sync', duration_ms: Date.now() - start });
   }
 
   // Access token
@@ -257,7 +258,7 @@ Deno.serve(async (req) => {
     accessToken = await getAccessToken(pisteConfig);
   } catch (err) {
     console.error('[sync-chorus-status] OAuth error:', err);
-    return json({ error: `PISTE OAuth failed : ${err instanceof Error ? err.message : String(err)}` }, 502);
+    return json(req, { error: `PISTE OAuth failed : ${err instanceof Error ? err.message : String(err)}` }, 502);
   }
 
   let updates = 0;
@@ -344,7 +345,7 @@ Deno.serve(async (req) => {
   const duration_ms = Date.now() - start;
   console.log(`[sync-chorus-status] done: synced=${submissions.length}, updates=${updates}, errors=${errors}, notifs=${notifsEmitted}, duration=${duration_ms}ms`);
 
-  return json({
+  return json(req, {
     success: true,
     sandbox: pisteConfig.isSandbox,
     synced: submissions.length,

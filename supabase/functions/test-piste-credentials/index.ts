@@ -24,34 +24,8 @@ const PISTE_URLS = {
   },
 };
 
-// CORS aligné avec les autres edge functions (chorus-pro-deposit, send-email).
-// Sans cette conf, le browser bloque les requêtes depuis https://jolene.app
-// avec "Origin not allowed by Access-Control-Allow-Origin".
-function getCorsOrigin(req: Request): string {
-  const origin = req.headers.get('origin') || '';
-  // Note : ne PAS ajouter de sous-domaine "app." — le sous-domaine legacy
-  // Lovable est banni par le job drift-detection (.github/workflows/validate-pr.yml).
-  // La prod tourne sur jolene.app et www.jolene.app uniquement.
-  const allowed = [
-    'https://jolene.app',
-    'https://www.jolene.app',
-    'http://localhost:5173',
-    'http://localhost:8080',
-  ];
-  if (allowed.includes(origin)) return origin;
-  // Lovable preview : *.lovable.app
-  if (/^https:\/\/[a-z0-9-]+\.lovable\.app$/i.test(origin)) return origin;
-  return 'https://jolene.app';
-}
-
-function corsHeaders(req: Request): Record<string, string> {
-  return {
-    'Access-Control-Allow-Origin': getCorsOrigin(req),
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-    'Content-Type': 'application/json',
-  };
-}
+// CORS standardisé : import depuis le helper partagé _shared/cors.ts
+import { corsHeaders } from '../_shared/cors.ts';
 
 interface Diagnostic {
   step: string;

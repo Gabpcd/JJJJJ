@@ -21,11 +21,12 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getPisteConfig, getAccessToken, deposerFlux } from '../_shared/piste-client.ts';
+import { corsHeaders, preflightResponse } from '../_shared/cors.ts';
 
-function json(body: unknown, status = 200) {
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: corsHeaders(req),
   });
 }
 
@@ -41,7 +42,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
+  if (req.method === 'OPTIONS') return preflightResponse(req);
 
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
 
   try {
     const { facture_honoraire_id, type_document } = await req.json();
-    if (!facture_honoraire_id) return json({ error: 'facture_honoraire_id requis' }, 400);
+    if (!facture_honoraire_id) return json(req, { error: 'facture_honoraire_id requis' }, 400);
 
     // ─── Fetch facture + joins ───
     const { data: fh, error: fhErr } = await supabaseAdmin
@@ -66,11 +67,11 @@ Deno.serve(async (req) => {
       .eq('id', facture_honoraire_id)
       .single();
 
-    if (fhErr || !fh) return json({ error: 'Facture honoraire introuvable', detail: fhErr?.message }, 404);
+    if (fhErr || !fh) return json(req, { error: 'Facture honoraire introuvable', detail: fhErr?.message }, 404);
 
     // Idempotence : ne pas re-soumettre si déjà en cours
     if (fh.chorus_submission_id && ['submitted', 'accepted'].includes(fh.chorus_submission_status ?? '')) {
-      return json({
+      return json(req, {
         accepted: true,
         skipped: true,
         reason: `Facture déjà soumise (statut=${fh.chorus_submission_status})`,
@@ -89,7 +90,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (!etab?.est_secteur_public) {
-      return json({
+      return json(req, {
         error: 'Etablissement non secteur public, Chorus Pro non applicable',
         etablissement_id: fh.etablissement_id,
       }, 400);
@@ -103,14 +104,14 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!cpConfig) {
-      return json({
+      return json(req, {
         error: 'Config Chorus Pro inactive ou absente pour cet établissement',
         etablissement_id: fh.etablissement_id,
       }, 400);
     }
 
     if (!fh.pdf_s3_key) {
-      return json({
+      return json(req, {
         error: 'PDF Factur-X manquant (pdf_s3_key null) — régénérer la facture via generate-invoice',
       }, 400);
     }
@@ -133,14 +134,14 @@ Deno.serve(async (req) => {
         .select('id')
         .single();
 
-      if (simErr) return json({ error: simErr.message }, 500);
+      if (simErr) return json(req, { error: simErr.message }, 500);
 
       await supabaseAdmin.from('factures_honoraires').update({
         chorus_submission_id: sim!.id,
         chorus_submission_status: 'pending_credentials',
       }).eq('id', facture_honoraire_id);
 
-      return json({
+      return json(req, {
         accepted: true,
         simulation: true,
         status: 'pending_credentials',
@@ -156,7 +157,7 @@ Deno.serve(async (req) => {
       .download(fh.pdf_s3_key);
 
     if (dlErr || !pdfBlob) {
-      return json({
+      return json(req, {
         error: `Impossible de télécharger PDF : ${dlErr?.message ?? 'blob null'}`,
         pdf_s3_key: fh.pdf_s3_key,
       }, 500);
@@ -179,7 +180,7 @@ Deno.serve(async (req) => {
       .select('id')
       .single();
 
-    if (subErr) return json({ error: `INSERT chorus_submissions : ${subErr.message}` }, 500);
+    if (subErr) return json(req, { error: `INSERT chorus_submissions : ${subErr.message}` }, 500);
     submissionId = sub!.id;
 
     // ─── Appel PISTE deposer/flux (DEPOT_PDF_FACTURX) ───
@@ -207,7 +208,7 @@ Deno.serve(async (req) => {
 
       console.log(`[submit-to-chorus] OK — flux ${result.identifiantFluxDepot} pour ${fh.numero_facture}`);
 
-      return json({
+      return json(req, {
         success: true,
         simulation: false,
         sandbox: pisteConfig.isSandbox,
@@ -240,7 +241,7 @@ Deno.serve(async (req) => {
       chorus_submission_status: 'error',
     }).eq('id', facture_honoraire_id);
 
-    return json({
+    return json(req, {
       success: false,
       error: `Chorus Pro API erreur ${result.status}: ${errMsg}`,
       submission_id: submissionId,
@@ -259,6 +260,6 @@ Deno.serve(async (req) => {
       }).eq('id', submissionId);
     }
 
-    return json({ error: errMsg, submission_id: submissionId }, 500);
+    return json(req, { error: errMsg, submission_id: submissionId }, 500);
   }
 });

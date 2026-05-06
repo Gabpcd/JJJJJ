@@ -14,6 +14,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { maskSensitive } from '../_shared/mask-sensitive.ts';
+import { corsHeaders, preflightResponse } from '../_shared/cors.ts';
 
 /* ── Allowlist (A4: env-aware) ── */
 const ALLOWED_FUNCTIONS_PROD = [
@@ -43,10 +44,10 @@ function getAllowedFunctions(): string[] {
 }
 
 /* ── Helpers ── */
-function json(body: unknown, status = 200) {
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: corsHeaders(req),
   });
 }
 
@@ -77,7 +78,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 /* ── Main ── */
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
+  if (req.method === 'OPTIONS') return preflightResponse(req);
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -91,14 +92,14 @@ Deno.serve(async (req) => {
   try {
     // ── Auth layer 1: JWT ──
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Non autorisé', request_id: requestId }, 401);
+    if (!authHeader?.startsWith('Bearer ')) return json(req, { error: 'Non autorisé', request_id: requestId }, 401);
 
     const token = authHeader.replace('Bearer ', '');
     const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: userData, error: authError } = await supabaseUser.auth.getUser(token);
-    if (authError || !userData?.user) return json({ error: 'Token invalide', request_id: requestId }, 401);
+    if (authError || !userData?.user) return json(req, { error: 'Token invalide', request_id: requestId }, 401);
 
     const userId = userData.user.id;
     const userEmail = userData.user.email || 'unknown';
@@ -107,7 +108,7 @@ Deno.serve(async (req) => {
     // ── Auth layer 2: admin check ──
     if (userMeta.role !== 'ADMIN_PLATEFORME') {
       console.warn(`[admin-invoke][${requestId}] Non-admin attempt by ${userEmail}`);
-      return json({ error: 'Accès réservé aux administrateurs Jolene', request_id: requestId }, 403);
+      return json(req, { error: 'Accès réservé aux administrateurs Jolene', request_id: requestId }, 403);
     }
 
     const isTestAdmin = userMeta.is_test_admin === true;
@@ -123,7 +124,7 @@ Deno.serve(async (req) => {
 
     if (!matchesCurrent && !matchesPrevious) {
       console.warn(`[admin-invoke][${requestId}] Invalid X-Admin-Confirm from ${userEmail}`);
-      return json({ error: 'X-Admin-Confirm invalide ou expiré', request_id: requestId }, 403);
+      return json(req, { error: 'X-Admin-Confirm invalide ou expiré', request_id: requestId }, 403);
     }
 
     // ── Parse body ──
@@ -136,14 +137,14 @@ Deno.serve(async (req) => {
     };
 
     if (!target_function || !reason) {
-      return json({ error: 'target_function et reason requis', request_id: requestId }, 400);
+      return json(req, { error: 'target_function et reason requis', request_id: requestId }, 400);
     }
 
     // ── Allowlist check (A4: env-aware) ──
     const allowed = getAllowedFunctions();
     if (!allowed.includes(target_function)) {
       console.warn(`[admin-invoke][${requestId}] Function not allowed: ${target_function}`);
-      return json({ error: `Function "${target_function}" non autorisée`, request_id: requestId }, 403);
+      return json(req, { error: `Function "${target_function}" non autorisée`, request_id: requestId }, 403);
     }
 
     // ── Rate limit with advisory lock (V6: anti-race-condition) ──
@@ -162,7 +163,7 @@ Deno.serve(async (req) => {
       .gte('invoked_at', oneHourAgo);
 
     if ((perAdminCount || 0) >= 20) {
-      return json({ error: 'Rate limit: max 20/admin/heure', request_id: requestId }, 429);
+      return json(req, { error: 'Rate limit: max 20/admin/heure', request_id: requestId }, 429);
     }
 
     const { count: globalCount } = await supabaseAdmin
@@ -171,7 +172,7 @@ Deno.serve(async (req) => {
       .gte('invoked_at', oneHourAgo);
 
     if ((globalCount || 0) >= 100) {
-      return json({ error: 'Rate limit: max 100 global/heure', request_id: requestId }, 429);
+      return json(req, { error: 'Rate limit: max 100 global/heure', request_id: requestId }, 429);
     }
 
     // ── Write audit BEFORE invocation (internal_status = PENDING) ──
@@ -192,7 +193,7 @@ Deno.serve(async (req) => {
 
     if (auditErr) {
       console.error(`[admin-invoke][${requestId}] Audit insert failed:`, auditErr);
-      return json({ error: 'Erreur audit', request_id: requestId }, 500);
+      return json(req, { error: 'Erreur audit', request_id: requestId }, 500);
     }
 
     const invocationId = auditRow!.id;
@@ -207,7 +208,7 @@ Deno.serve(async (req) => {
         completed_at: new Date().toISOString(),
       }).eq('id', invocationId);
 
-      return json({
+      return json(req, {
         dry_run: true,
         invocation_id: invocationId,
         request_id: requestId,
@@ -304,7 +305,7 @@ Deno.serve(async (req) => {
     let parsedResponse: unknown;
     try { parsedResponse = JSON.parse(responseText); } catch { parsedResponse = { raw: responseText.substring(0, 1000) }; }
 
-    return json({
+    return json(req, {
       invocation_id: invocationId,
       request_id: requestId,
       target_function,
@@ -315,7 +316,7 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error(`[admin-invoke][${requestId}] Fatal:`, err);
-    return json({ error: err instanceof Error ? err.message : 'Erreur interne', request_id: requestId }, 500);
+    return json(req, { error: err instanceof Error ? err.message : 'Erreur interne', request_id: requestId }, 500);
   }
 });
 
