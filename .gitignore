@@ -31,3 +31,14 @@ supabase/.temp/
 yarn-debug.log*
 yarn-error.log*
 tests/load/results/
+
+# ─── Secrets ANS (mTLS API FHIR Annuaire Santé) ───
+# Clé privée + certificat client. Le certificat (.pem) est public mais la clé
+# (.key) ne doit JAMAIS quitter la machine de Gabrielle. Le dossier entier est
+# exclu pour éviter toute fuite accidentelle. La doc de génération est dans
+# docs/ANS-API-FHIR-AUTHENTIFICATION.md.
+.secrets-ans/
+*.key
+# Ne pas wildcard *.pem ici : node_modules / fixtures peuvent légitimement
+# contenir des PEM publics (root CAs, certificats de test). Si un .pem
+# privé doit être exclu, l'ajouter explicitement.
