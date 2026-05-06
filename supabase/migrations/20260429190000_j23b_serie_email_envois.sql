@@ -1,0 +1,97 @@
+-- J2.3.B — Série email welcome J0-J7
+
+DO $$ BEGIN
+  CREATE TYPE public.serie_onboarding_type AS ENUM ('SOIGNANT_ONBOARDING','ETAB_ONBOARDING');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE public.serie_onboarding_etape AS ENUM ('J0','J1','J3','J7');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE public.serie_email_statut AS ENUM ('PLANIFIE','ENVOYE','SKIPPED','ERREUR');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS public.serie_email_envois (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  utilisateur_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  serie public.serie_onboarding_type NOT NULL,
+  etape public.serie_onboarding_etape NOT NULL,
+  planifie_le timestamptz NOT NULL,
+  envoye_le timestamptz,
+  skip_raison text,
+  statut public.serie_email_statut NOT NULL DEFAULT 'PLANIFIE',
+  erreur_message text,
+  tentatives integer NOT NULL DEFAULT 0,
+  cree_le timestamptz NOT NULL DEFAULT now(),
+  mis_a_jour_le timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (utilisateur_id, serie, etape)
+);
+
+CREATE INDEX IF NOT EXISTS idx_serie_email_a_traiter
+  ON public.serie_email_envois (statut, planifie_le)
+  WHERE statut = 'PLANIFIE';
+
+ALTER TABLE public.serie_email_envois ENABLE ROW LEVEL SECURITY;
+CREATE POLICY see_select_own ON public.serie_email_envois
+  FOR SELECT TO authenticated USING (utilisateur_id = auth.uid() OR est_admin());
+GRANT SELECT ON public.serie_email_envois TO authenticated;
+GRANT INSERT, UPDATE ON public.serie_email_envois TO service_role;
+
+DROP TRIGGER IF EXISTS trg_see_updated_at ON public.serie_email_envois;
+CREATE TRIGGER trg_see_updated_at BEFORE UPDATE ON public.serie_email_envois
+  FOR EACH ROW EXECUTE FUNCTION public.fn_trg_pn_updated_at();
+
+CREATE OR REPLACE FUNCTION public.fn_planifier_serie_onboarding(
+  p_utilisateur_id uuid,
+  p_serie public.serie_onboarding_type
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
+BEGIN
+  INSERT INTO serie_email_envois (utilisateur_id, serie, etape, planifie_le, statut)
+  VALUES
+    (p_utilisateur_id, p_serie, 'J0', now(), 'PLANIFIE'),
+    (p_utilisateur_id, p_serie, 'J1', now() + INTERVAL '1 day', 'PLANIFIE'),
+    (p_utilisateur_id, p_serie, 'J3', now() + INTERVAL '3 days', 'PLANIFIE'),
+    (p_utilisateur_id, p_serie, 'J7', now() + INTERVAL '7 days', 'PLANIFIE')
+  ON CONFLICT (utilisateur_id, serie, etape) DO NOTHING;
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.fn_planifier_serie_onboarding(uuid, public.serie_onboarding_type) TO service_role;
+
+-- Étendre journaux_audit.action_check : SERIE_EMAIL_ENVOYE/SKIPPED
+ALTER TABLE public.journaux_audit DROP CONSTRAINT IF EXISTS journaux_audit_action_check;
+ALTER TABLE public.journaux_audit ADD CONSTRAINT journaux_audit_action_check CHECK (action IN (
+  'INSCRIPTION','CONNEXION','DECONNEXION','MODIFICATION_PROFIL','SUPPRESSION_COMPTE',
+  'UPLOAD_DOCUMENT','TELECHARGEMENT_DOCUMENT','VERIFICATION_DOCUMENT','VERIFICATION_RPPS',
+  'CREATION_MISSION','MODIFICATION_MISSION','ANNULATION_MISSION','CANDIDATURE','ASSIGNATION',
+  'POINTAGE','SIGNATURE_CONTRAT','EVALUATION','PAIEMENT','FACTURATION',
+  'DONNEES_PERSO_CONSULTATION','DONNEES_PERSO_EXPORT','DONNEES_PERSO_SUPPRESSION',
+  'ADMIN_ACTION','SYSTEM','RIB_CONSULTE','RIB_PARTAGE','CONTRAT_SIGNE',
+  'DOCUMENT_CONSULTATION','DOCUMENT_TELEVERSEMENT','DONNEES_PERSO_MODIFICATION',
+  'EXPORT_RH_PAIE','FINANCE_FACTURE_PAYEE','MISSION_ASSIGNATION','MISSION_CREATION',
+  'RGPD_EXPORT_DONNEES','RGPD_SUPPRESSION_COMPTE','RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT',
+  'DEGEL_APPLIED','OVERRIDE_CHAMP_POST_GEL','GEL_APPLIED','OVERRIDE_ANTI_SEED',
+  'CONNECT_METADATA_MANQUANTE','DOCUMENT_VERIFICATION_AUTO',
+  'FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE','FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE',
+  'FINANCE_CHARGE_EXPIRED','FINANCE_CHARGE_FAILED','FINANCE_CHARGE_PENDING',
+  'FINANCE_CHARGE_REFUNDED','FINANCE_DISPUTE_CLOSE','FINANCE_DISPUTE_OUVERTE',
+  'FINANCE_PAYOUT_CANCELED','FINANCE_PAYOUT_CREATED','FINANCE_PAYOUT_FAILED',
+  'FINANCE_PAYOUT_PAID','FINANCE_SEPA_CAPTURE','FINANCE_TRANSFER_CONNECT',
+  'FINANCE_TRANSFER_CREATED','FINANCE_TRANSFER_FAILED','FINANCE_TRANSFER_REVERSED',
+  'FINANCE_TRANSFER_UPDATED','STRIPE_CHECKOUT_ORPHANED_RECOVERED',
+  'STRIPE_CONNECT_ACCOUNT_DELETED','ATTESTATION_SANTE_SIGNEE',
+  'EXCLUSION_CREEE','EXCLUSION_SUPPRIMEE','FACTURE_GENEREE',
+  'MISSION_ANNULATION_SERIE','MISSION_MODIFICATION','PAIEMENT_SOIGNANT_DECLARE_ETAB',
+  'RECLAMATION_CREEE','ADMIN_CONSULTATION_ETABLISSEMENT','ADMIN_CONSULTATION_SOIGNANT',
+  'DOCUMENT_SUPPRESSION','HEURES_EXTERNES_DECLAREES','MISSION_ANNULATION',
+  'NOTE_HONORAIRES_GENEREE','PRESENCE_CONTESTATION','PRESENCE_POINTAGE_ARRIVEE',
+  'PRESENCE_VALIDATION','PRESENCE_VALIDATION_LOT','RGPD_CONSENTEMENT_DONNE',
+  'PAIEMENT_MONTANT_ECART','FACTURE_COMMISSION_CREATED_VIA_STRIPE',
+  'TAUX_COMMISSION_MODIFIE','LITIGE_GEL_SCOPE_MODIFIE',
+  'PREFERENCE_NOTIFICATION_MODIFIEE','NOTIFICATION_SKIPPED',
+  'SERIE_EMAIL_ENVOYE','SERIE_EMAIL_SKIPPED'
+));
+
+NOTIFY pgrst, 'reload schema';

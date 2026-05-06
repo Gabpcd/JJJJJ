@@ -10,6 +10,8 @@ export function FooterLegal() {
       />
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
+          <Link to="/aide" className="hover:text-primary hover:underline transition-colors">❓ Centre d'aide</Link>
+          <span className="text-primary/30">•</span>
           <Link to="/cgu" className="hover:text-primary hover:underline transition-colors">📋 CGU</Link>
           <span className="text-primary/30">•</span>
           <Link to="/cgv" className="hover:text-primary hover:underline transition-colors">💰 CGV</Link>
@@ -17,10 +19,12 @@ export function FooterLegal() {
           <Link to="/confidentialite" className="hover:text-primary hover:underline transition-colors">🔒 Confidentialité</Link>
           <span className="text-primary/30">•</span>
           <Link to="/mentions-legales" className="hover:text-primary hover:underline transition-colors">📄 Mentions légales</Link>
-          <span className="text-primary/30">•</span>
+          <span className="text-primary/30" aria-hidden="true">•</span>
+          <Link to="/accessibilite" className="hover:text-primary hover:underline transition-colors">♿ Accessibilité</Link>
+          <span className="text-primary/30" aria-hidden="true">•</span>
           <a href="mailto:contact@jolene.app" className="hover:text-primary hover:underline transition-colors">✉️ Contact</a>
         </div>
-        <p className="text-[10px] text-muted-foreground/60 mt-2">© {new Date().getFullYear()} Jolene SASU — Tous droits réservés 🩷</p>
+        <p className="text-xs text-muted-foreground mt-2">© {new Date().getFullYear()} Jolene SASU — Tous droits réservés 🩷</p>
       </div>
     </footer>
   );

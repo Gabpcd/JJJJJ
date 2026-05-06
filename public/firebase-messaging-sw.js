@@ -1,7 +1,10 @@
 /* eslint-disable no-undef */
 
 // ─── Cache Configuration ───
-const CACHE_VERSION = 'jolene-v5';
+// v6 (2026-05-04) : ne plus intercepter les requêtes cross-origin (corrige
+// l'iframe Turnstile bloqué par SOP en mode normal — incognito OK car pas
+// de SW persistant).
+const CACHE_VERSION = 'jolene-v6';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 
@@ -99,6 +102,14 @@ self.addEventListener('fetch', (event) => {
 
   if (request.method !== 'GET') return;
   if (!url.protocol.startsWith('http')) return;
+
+  // CRITIQUE : ne JAMAIS intercepter les requêtes cross-origin. `event.respondWith()`
+  // sur une response cross-origin altère le contexte d'origin perçu par le browser,
+  // ce qui casse les iframes (Turnstile, Stripe Elements) avec une erreur SOP
+  // "Blocked a frame with origin 'X' from accessing a frame with origin 'Y'".
+  // Cf. bug 2026-05-04 (Turnstile login KO en mode normal, OK en incognito sans SW).
+  // Le browser fait la requête nativement quand on `return` sans respondWith.
+  if (url.origin !== self.location.origin) return;
 
   // Only cache fonts and static images — NEVER cache JS/HTML/CSS to avoid
   // version mismatch after deployments

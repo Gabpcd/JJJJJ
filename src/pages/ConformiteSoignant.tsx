@@ -7,6 +7,7 @@ import { CarteConformite } from '@/components/CarteConformite';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchEtablissementsSafe } from '@/lib/etablissements';
+import { handleErrorSilent } from '@/lib/handleError';
 import { ShieldCheck, Copy } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -47,8 +48,8 @@ export default function ConformiteSoignant() {
           p_type_ressource: 'conformite_travail', p_id_ressource: user.id,
           p_cle_s3: null, p_details: { page: 'conformite_soignant' },
           p_ip: null, p_navigateur: navigator.userAgent,
-        }).then(() => {});
-      });
+        }).then(undefined, (err) => handleErrorSilent(err, 'ConformiteSoignant.audit'));
+      }, (err) => handleErrorSilent(err, 'ConformiteSoignant.controles'));
   }, [user]);
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
@@ -118,7 +119,7 @@ export default function ConformiteSoignant() {
         />
       ) : (
         <div className="space-y-6">
-          {Object.entries(grouped).map(([label, items]: [string, any[]]) => (
+          {(Object.entries(grouped) as Array<[string, any[]]>).map(([label, items]) => (
             <div key={label}>
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{label}</h3>
               <div className="card-base divide-y divide-border">

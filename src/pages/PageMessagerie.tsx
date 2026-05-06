@@ -9,6 +9,7 @@ import { AvatarDisplay } from '@/components/AvatarUpload';
 import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { logger } from '@/lib/logger';
+import { handleErrorSilent } from '@/lib/handleError';
 import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -78,9 +79,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
-  const isAdmin = role === 'ADMIN_PLATEFORME';
+  const isAdminPlateforme = role === 'ADMIN_PLATEFORME';
+  const isAdmin = isAdminPlateforme; // alias conservé pour compat ascendante interne
 
-  const dashboardRoute = isAdmin ? '/admin' : role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : '/etablissement/tableau-de-bord';
+  const dashboardRoute = isAdminPlateforme ? '/admin' : role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : '/etablissement/tableau-de-bord';
 
   // ── Load conversations ──
   const chargerConversations = useCallback(async () => {
@@ -91,7 +93,11 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       .select('id, participant_1_id, participant_2_id, mission_id, dernier_message_le, cree_le')
       .order('dernier_message_le', { ascending: false, nullsFirst: false });
 
-    if (!isAdmin) {
+    // ADMIN_PLATEFORME voit toutes les conversations (pour modération litiges).
+    // Pour SOIGNANT et ADMIN_ETABLISSEMENT, le filtre `participant_X_id = user.id`
+    // suffit : la RLS pol_conv_select impose la même restriction côté DB
+    // (ceinture+bretelles).
+    if (!isAdminPlateforme) {
       query = query.or(`participant_1_id.eq.${user.id},participant_2_id.eq.${user.id}`);
     }
 
@@ -238,7 +244,8 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
         const msg = payload.new as Message;
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         if (msg.auteur_id !== user?.id) {
-          supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId });
+          supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: selectedConvId })
+            .then(undefined, (err) => handleErrorSilent(err, 'PageMessagerie.marquer_messages_lus'));
         }
       })
       .subscribe();
@@ -277,6 +284,9 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
       logger.error('fn_envoyer_message returned error', data);
       toast.error("Impossible d'envoyer le message.");
       setTexte(contenuBrut);
+    } else {
+      // Refresh conversations list pour reordonner par dernier_message_le
+      chargerConversations().catch(() => { /* non bloquant */ });
     }
 
     setEnvoi(false);
@@ -425,7 +435,7 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
             <>
               {/* Header */}
               <div className="flex items-center gap-3 p-4 border-b border-border">
-                <button onClick={() => { setSelectedConvId(null); setSearchParams({}); }} className="md:hidden text-muted-foreground hover:text-foreground">
+                <button onClick={() => { setSelectedConvId(null); setSearchParams({}); }} className="md:hidden text-muted-foreground hover:text-foreground" aria-label="Retour aux conversations">
                   <ArrowLeft className="h-5 w-5" />
                 </button>
                 {selectedConv.is_jolene ? (

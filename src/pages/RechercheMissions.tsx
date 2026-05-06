@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebounce } from '@/hooks/useDebounce';
 import { logger } from '@/lib/logger';
+import { handleErrorSilent } from '@/lib/handleError';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
@@ -10,11 +11,13 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
+import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { PROFESSIONS, getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
+import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -25,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { FiltresSauvegardes } from '@/components/FiltresSauvegardes';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -86,11 +90,31 @@ export default function RechercheMissions() {
   const leafletMap = useRef<L.Map | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
 
+  // Auto-apply filtres pré-stockés depuis PageRecherchesSauvegardees
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('jolene.filtres_a_appliquer');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      sessionStorage.removeItem('jolene.filtres_a_appliquer');
+      if (parsed?.audience !== 'SOIGNANT_RECHERCHE_MISSIONS') return;
+      const f = parsed.filtres || {};
+      if (typeof f.profession === 'string') setProfession(f.profession);
+      if (typeof f.rayonKm === 'number') setRayonKm(f.rayonKm);
+      if (typeof f.tauxMin === 'number') setTauxMin(f.tauxMin);
+      if (typeof f.typeContrat === 'string') setTypeContrat(f.typeContrat);
+      if (typeof f.urgentesOnly === 'boolean') setUrgentesOnly(f.urgentesOnly);
+      if (typeof f.horaire === 'string') setHoraire(f.horaire as Horaire);
+      if (typeof f.villeRecherche === 'string') setVilleRecherche(f.villeRecherche);
+      if (parsed.nom_source) toast.success(`Filtres « ${parsed.nom_source} » appliqués`);
+    } catch (_e) { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
-      .eq('id', user.id).single()
+      .eq('id', user.id).maybeSingle()
       .then(({ data }) => {
         if (data) {
           const s = data as any;
@@ -98,42 +122,61 @@ export default function RechercheMissions() {
           setProfession(s.profession);
           setRayonKm(s.rayon_deplacement_km || 50);
         }
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'RechercheMissions.soignant'));
 
-    // Vérifier si la RCP est expirée
-    supabase.from('documents_soignants')
-      .select('statut_verification, valide_jusqua')
-      .eq('soignant_id', user.id)
-      .eq('type_document', 'RCP_ASSURANCE')
-      .order('televerse_le', { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        if (!data || data.length === 0) {
-          setRcpExpiree(true);
-        } else {
-          const doc = data[0];
-          const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
-          setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
-        }
+    // RCP check only for LIBERAL/MIXTE
+    supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle()
+      .then(({ data: sg }) => {
+        const isLiberalOrMixte = sg?.type_exercice === 'LIBERAL' || sg?.type_exercice === 'MIXTE';
+        if (!isLiberalOrMixte) { setRcpExpiree(false); return; }
+        supabase.from('documents_soignants')
+          .select('statut_verification, valide_jusqua')
+          .eq('soignant_id', user.id)
+          .eq('type_document', 'RCP_ASSURANCE')
+          .order('televerse_le', { ascending: false })
+          .limit(1)
+          .then(({ data }) => {
+            if (!data || data.length === 0) {
+              setRcpExpiree(true);
+            } else {
+              const doc = data[0];
+              const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
+              setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
+            }
+          });
       });
   }, [user]);
 
   useEffect(() => {
-    if (!user || !soignant) return;
+    if (!user) return;
     setLoading(true);
     const fetchMissions = async () => {
       let query = supabase.from('missions').select(`
         id, intitule, description, service, profession_requise,
+        specialite_medicale_requise, accepte_non_specialises,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
         soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche
       `)
         .eq('statut', 'OUVERTE')
         .gte('debut_le', new Date().toISOString())
-        .eq('profession_requise', (profession || soignant.profession) as any)
         .order('est_urgente', { ascending: false })
         .order('debut_le', { ascending: true })
         .limit(500);
+
+      const professionFiltre = profession || soignant?.profession;
+      if (professionFiltre) {
+        // Si l'utilisateur n'a pas explicitement choisi une profession dans le
+        // filtre (utilise sa propre profession), on élargit la recherche aux
+        // missions hiérarchiquement compatibles (IBODE/IADE peuvent voir les
+        // missions IDE ; IDE voit les missions IBODE/IADE si accepte_non_spec).
+        const orFiltre = !profession ? getMissionsCompatiblesFilter(professionFiltre) : null;
+        if (orFiltre) {
+          query = query.or(orFiltre);
+        } else {
+          query = query.eq('profession_requise', professionFiltre as any);
+        }
+      }
 
       if (tauxMin > 0) query = query.gte('taux_horaire_base', tauxMin);
       if (urgentesOnly) query = query.eq('est_urgente', true);
@@ -151,14 +194,13 @@ export default function RechercheMissions() {
   }, [user, soignant, profession, tauxMin, urgentesOnly]);
 
   const filtered = useMemo(() => {
-    if (!soignant) return [];
-    const typesContrat = getTypesContratSoignant(soignant);
+    const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
     const villeSearch = debouncedVille.trim().toLowerCase();
 
     return missions
       .map(m => ({
         ...m,
-        distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
+        distance_km: calculerDistanceKm(soignant?.adresse_lat ?? null, soignant?.adresse_lng ?? null, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
       }))
       .filter(m => {
         if (villeSearch) {
@@ -242,10 +284,11 @@ export default function RechercheMissions() {
     }, 100);
   };
 
-  if (!soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  // No blocking guard — render even without soignant profile
 
   return (
     <LayoutApp role="SOIGNANT">
+      {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-foreground">Recherche avancée</h1>
@@ -256,6 +299,31 @@ export default function RechercheMissions() {
         </div>
 
         <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} />
+
+        {/* Mes recherches sauvegardées (J2.3.C) */}
+        <FiltresSauvegardes
+          audience="SOIGNANT_RECHERCHE_MISSIONS"
+          filtresCourants={{
+            profession,
+            rayonKm,
+            tauxMin,
+            typeContrat,
+            urgentesOnly,
+            horaire,
+            villeRecherche,
+          }}
+          onCharger={(f) => {
+            const obj = f as Record<string, any>;
+            if (typeof obj.profession === 'string') setProfession(obj.profession);
+            if (typeof obj.rayonKm === 'number') setRayonKm(obj.rayonKm);
+            if (typeof obj.tauxMin === 'number') setTauxMin(obj.tauxMin);
+            if (typeof obj.typeContrat === 'string') setTypeContrat(obj.typeContrat);
+            if (typeof obj.urgentesOnly === 'boolean') setUrgentesOnly(obj.urgentesOnly);
+            if (typeof obj.horaire === 'string') setHoraire(obj.horaire as Horaire);
+            if (typeof obj.villeRecherche === 'string') setVilleRecherche(obj.villeRecherche);
+            setShowFilters(true);
+          }}
+        />
 
         {/* Filters */}
         <div className={`${showFilters ? 'block' : 'hidden md:block'} card-base space-y-4`}>

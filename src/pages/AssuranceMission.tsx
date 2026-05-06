@@ -19,12 +19,6 @@ const LABELS_TYPE: Record<TypeCouverture, string> = {
   ACCIDENT_TRAVAIL: 'Accident du travail',
 };
 
-const LABELS_PRISE_EN_CHARGE: Record<PriseEnCharge, string> = {
-  ETABLISSEMENT: 'Etablissement',
-  SOIGNANT: 'Soignant',
-  PARTAGE: 'Partage',
-};
-
 const STATUT_BADGE: Record<StatutPolice, { label: string; cls: string }> = {
   ACTIVE: { label: 'Active', cls: 'bg-success/10 text-success' },
   EXPIREE: { label: 'Expiree', cls: 'bg-muted text-muted-foreground' },
@@ -39,10 +33,17 @@ const fmtDate = (d: string | null) =>
 
 export default function AssuranceMission() {
   usePageTitle('Assurance Mission');
+  return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <AssuranceMissionContent />
+    </LayoutApp>
+  );
+}
+
+export function AssuranceMissionContent() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
 
-  // Config state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [configId, setConfigId] = useState<string | null>(null);
@@ -52,18 +53,15 @@ export default function AssuranceMission() {
   const [typeCouverture, setTypeCouverture] = useState<TypeCouverture>('RC_MISSION');
   const [montantCouverture, setMontantCouverture] = useState(1000000);
 
-  // Policies state
   const [polices, setPolices] = useState<any[]>([]);
   const [loadingPolices, setLoadingPolices] = useState(true);
 
-  // Sinistre modal state
   const [sinistreOuvert, setSinistreOuvert] = useState(false);
   const [sinistreMissionId, setSinistreMissionId] = useState('');
   const [sinistreDescription, setSinistreDescription] = useState('');
   const [sinistreMontant, setSinistreMontant] = useState('');
   const [submittingSinistre, setSubmittingSinistre] = useState(false);
 
-  // Load config
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -84,7 +82,6 @@ export default function AssuranceMission() {
     })();
   }, [user]);
 
-  // Load policies
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -99,7 +96,6 @@ export default function AssuranceMission() {
     })();
   }, [user]);
 
-  // Save config
   const sauvegarder = async () => {
     if (!user) return;
     setSaving(true);
@@ -137,7 +133,6 @@ export default function AssuranceMission() {
     }
   };
 
-  // Submit sinistre
   const declarerSinistre = async () => {
     if (!user || !sinistreMissionId || !sinistreDescription.trim()) {
       afficherNotification({ type: 'erreur', message: 'Veuillez remplir tous les champs obligatoires.' });
@@ -163,7 +158,6 @@ export default function AssuranceMission() {
       setSinistreDescription('');
       setSinistreMontant('');
 
-      // Refresh policies
       const { data } = await supabase
         .from('assurances_mission' as any)
         .select('*, missions(intitule, debut_le, fin_le)')
@@ -180,36 +174,27 @@ export default function AssuranceMission() {
 
   const policesActives = polices.filter((p: any) => p.statut === 'ACTIVE');
 
-  if (loading) {
-    return (
-      <LayoutApp role="ADMIN_ETABLISSEMENT">
-        <ChargementPage />
-      </LayoutApp>
-    );
-  }
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
+    <>
       <FadeInView>
         <div className="max-w-3xl mx-auto space-y-6">
-          {/* Header */}
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-primary/10">
               <Shield className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Assurance Mission</h1>
+              <h2 className="text-lg font-bold text-foreground">Assurance Mission</h2>
               <p className="text-sm text-muted-foreground">
                 Couverture assurantielle pour vos missions de staffing. Protegez vos soignants et votre etablissement.
               </p>
             </div>
           </div>
 
-          {/* Config card */}
           <div className="card-base space-y-5">
-            <h2 className="text-base font-bold text-foreground">Configuration de l'assurance</h2>
+            <h3 className="text-base font-bold text-foreground">Configuration de l'assurance</h3>
 
-            {/* Toggle assurance automatique */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-foreground">Assurance automatique</p>
@@ -226,7 +211,6 @@ export default function AssuranceMission() {
               </button>
             </div>
 
-            {/* Prise en charge */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Prise en charge</label>
               <select
@@ -240,7 +224,6 @@ export default function AssuranceMission() {
               </select>
             </div>
 
-            {/* Slider part soignant */}
             {priseEnCharge === 'PARTAGE' && (
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -262,7 +245,6 @@ export default function AssuranceMission() {
               </div>
             )}
 
-            {/* Type de couverture */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Type de couverture</label>
               <select
@@ -276,7 +258,6 @@ export default function AssuranceMission() {
               </select>
             </div>
 
-            {/* Montant couverture */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Montant de couverture</label>
               <div className="input-base bg-muted/50 cursor-default">
@@ -285,7 +266,6 @@ export default function AssuranceMission() {
               <p className="text-xs text-muted-foreground mt-1">Plafond de couverture par mission</p>
             </div>
 
-            {/* Info box Wakam */}
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex gap-3">
               <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div className="text-xs text-primary space-y-1">
@@ -297,7 +277,6 @@ export default function AssuranceMission() {
               </div>
             </div>
 
-            {/* Save button */}
             <button
               onClick={sauvegarder}
               disabled={saving}
@@ -308,10 +287,9 @@ export default function AssuranceMission() {
             </button>
           </div>
 
-          {/* Active policies */}
           <div className="card-base space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-foreground">Polices d'assurance</h2>
+              <h3 className="text-base font-bold text-foreground">Polices d'assurance</h3>
               {policesActives.length > 0 && (
                 <button
                   onClick={() => setSinistreOuvert(true)}
@@ -378,7 +356,6 @@ export default function AssuranceMission() {
         </div>
       </FadeInView>
 
-      {/* Sinistre modal */}
       {sinistreOuvert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSinistreOuvert(false)}>
           <div className="bg-card rounded-xl shadow-xl w-full max-w-md mx-4 p-6 space-y-4" onClick={e => e.stopPropagation()}>
@@ -447,6 +424,6 @@ export default function AssuranceMission() {
           </div>
         </div>
       )}
-    </LayoutApp>
+    </>
   );
 }

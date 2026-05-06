@@ -38,6 +38,15 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
   const [libelle, setLibelle] = useState('');
   const [valideDepuis, setValideDepuis] = useState('');
   const [valideJusqua, setValideJusqua] = useState('');
+
+  // Reset state à la fermeture pour éviter de réouvrir avec un fichier précédent
+  const fermerEtReinitialiser = () => {
+    setFichier(null);
+    setLibelle('');
+    setValideDepuis('');
+    setValideJusqua('');
+    onFermer();
+  };
   const [envoi, setEnvoi] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,8 +63,8 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
       alert('Format non pris en charge. Utilisez un PDF ou une image.');
       return;
     }
-    if (f.size > 20 * 1024 * 1024) {
-      alert('Le fichier ne doit pas dépasser 20 Mo.');
+    if (f.size > 10 * 1024 * 1024) {
+      alert('Le fichier ne doit pas dépasser 10 Mo.');
       return;
     }
     setFichier(f);
@@ -79,9 +88,9 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto overscroll-contain" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))', paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' }}>
-      <div className="fixed inset-0 bg-foreground/50" style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={onFermer} />
+      <div className="fixed inset-0 bg-foreground/50" style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={fermerEtReinitialiser} />
       <div className="relative bg-card rounded-2xl shadow-xl p-6 max-w-md w-full my-auto">
-        <button onClick={onFermer} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
+        <button onClick={fermerEtReinitialiser} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
           <X className="h-5 w-5" />
         </button>
 
@@ -191,7 +200,7 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
         </div>
 
         <div className="flex gap-3 mt-6">
-          <button onClick={onFermer} className="btn-secondary text-sm flex-1 py-2.5">Annuler</button>
+          <button onClick={fermerEtReinitialiser} className="btn-secondary text-sm flex-1 py-2.5">Annuler</button>
           <button onClick={handleSubmit} disabled={!fichier || envoi} className="btn-primary text-sm flex-1 py-2.5 disabled:opacity-50">
             {envoi ? 'Envoi…' : 'Téléverser'}
           </button>

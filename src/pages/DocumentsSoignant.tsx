@@ -27,14 +27,14 @@ function AttestationSante({ userId }: { userId: string }) {
     supabase.from('soignants')
       .select('attestation_sante_signee_le')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data && (data as any).attestation_sante_signee_le) {
           setSignedAt((data as any).attestation_sante_signee_le);
           setCheckVaccin(true);
           setCheckMedecine(true);
         }
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'DocumentsSoignant.attestation'));
   }, [userId]);
 
   const signer = async () => {
@@ -129,6 +129,14 @@ function AttestationSante({ userId }: { userId: string }) {
 
 export default function DocumentsSoignant() {
   usePageTitle('Documents');
+  return (
+    <LayoutApp role="SOIGNANT">
+      <DocumentsSoignantContent />
+    </LayoutApp>
+  );
+}
+
+export function DocumentsSoignantContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [soignant, setSoignant] = useState<any>(null);
@@ -145,7 +153,7 @@ export default function DocumentsSoignant() {
   const charger = async () => {
     if (!user) return;
     const [{ data: sg }, { data: dr }, { data: md }] = await Promise.all([
-      supabase.from('soignants').select('profession, prenom, nom').eq('id', user.id).single(),
+      supabase.from('soignants').select('profession, prenom, nom, type_exercice').eq('id', user.id).maybeSingle(),
       supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique'),
       supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
     ]);
@@ -173,7 +181,7 @@ export default function DocumentsSoignant() {
     )
   ), [docsRequis, mesDocuments]);
 
-  const completionDocs = docsRequis.length > 0 ? Math.round((docsValides.length / docsRequis.length) * 100) : 100;
+  const completionDocs = docsRequis.length > 0 ? Math.round((docsValides.length / docsRequis.length) * 100) : (soignant?.profession ? 100 : 0);
 
   const documentsExpirantBientot = useMemo(() => mesDocuments.filter(d =>
     d.valide_jusqua && d.statut_verification === 'VERIFIE' &&
@@ -359,7 +367,7 @@ export default function DocumentsSoignant() {
     charger();
   };
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   // Organize: critiques first, then optionnels
   const typesOrdonnes = [
@@ -368,11 +376,24 @@ export default function DocumentsSoignant() {
   ];
 
   return (
-    <LayoutApp role="SOIGNANT">
-      <h1 className="text-xl font-bold text-foreground mb-1">📂 Mes documents professionnels</h1>
+    <>
+      <h2 className="text-lg font-bold text-foreground mb-1">Mes documents professionnels</h2>
       <p className="text-sm text-muted-foreground mb-4">
         Téléversez et gérez vos documents. Les documents marqués ★ sont obligatoires pour postuler aux missions.
       </p>
+
+      {/* Bandeau profil incomplet — pas de docs requis si profession inconnue */}
+      {!soignant?.profession && (
+        <div className="rounded-xl border border-info/30 bg-info/5 p-3 mb-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-info shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-foreground">Profession non définie</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Vérifiez votre RPPS dans votre profil pour voir les documents requis pour votre profession.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Attestation sur l'honneur */}
       {user && <AttestationSante userId={user.id} />}
@@ -388,8 +409,10 @@ export default function DocumentsSoignant() {
         </div>
       ))}
 
-      {/* RCP obligatoire tous profils */}
+      {/* RCP obligatoire seulement LIBERAL/MIXTE */}
       {(() => {
+        const isLiberalOrMixte = soignant?.type_exercice === 'LIBERAL' || soignant?.type_exercice === 'MIXTE';
+        if (!isLiberalOrMixte) return null;
         const rcpDoc = mesDocuments.find(d => d.type_document === 'RCP_ASSURANCE');
         const rcpExpired = rcpDoc?.valide_jusqua && new Date(rcpDoc.valide_jusqua) < new Date();
         const rcpMissing = !rcpDoc || rcpDoc.statut_verification !== 'VERIFIE';
@@ -399,7 +422,7 @@ export default function DocumentsSoignant() {
               <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs text-destructive font-medium">Votre assurance RCP est expirée. Veuillez la renouveler.</p>
-                <p className="text-xs text-destructive mt-0.5">⚠️ Vous ne pouvez pas postuler aux missions tant que votre RCP n'est pas à jour.</p>
+                <p className="text-xs text-destructive mt-0.5">Vous ne pouvez pas postuler aux missions libérales tant que votre RCP n'est pas à jour.</p>
               </div>
             </div>
           );
@@ -409,7 +432,7 @@ export default function DocumentsSoignant() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-700">
-                L'assurance RCP est obligatoire pour tous les soignants, salariés comme libéraux. Veuillez téléverser votre attestation RCP.
+                L'assurance RCP est obligatoire pour l'exercice libéral et mixte. Veuillez téléverser votre attestation RCP.
               </p>
             </div>
           );
@@ -418,9 +441,9 @@ export default function DocumentsSoignant() {
       })()}
 
       {/* Jauge globale */}
-      {completionDocs >= 100 ? (
+      {completionDocs >= 100 && soignant?.profession ? (
         <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4 text-center">
-          <p className="text-sm font-semibold text-emerald-700">✅ Tous vos documents obligatoires sont à jour</p>
+          <p className="text-sm font-semibold text-emerald-700">Tous vos documents obligatoires sont a jour</p>
         </div>
       ) : (
         <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 mb-4">
@@ -580,6 +603,6 @@ export default function DocumentsSoignant() {
         labelConfirmer="Supprimer"
         variante="danger"
       />
-    </LayoutApp>
+    </>
   );
 }

@@ -15,13 +15,15 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 20%;
 
-    --primary: 330 85% 60%;
+    /* Couleurs ajustées pour WCAG AA contrast (4.5:1 minimum sur blanc).
+       Le branding rose Jolene reste vif mais conforme : 330 85% 60% → 330 85% 45%. */
+    --primary: 330 85% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --primary-dark: 330 85% 52%;
+    --primary-dark: 330 85% 38%;
     --primary-light: 330 70% 95%;
 
-    --rose: 340 82% 55%;
+    --rose: 340 82% 42%;
     --rose-foreground: 0 0% 100%;
     --rose-light: 340 70% 95%;
 
@@ -39,7 +41,8 @@
 
     --accent-navy: 250 50% 35%;
 
-    --destructive: 0 84% 62%;
+    /* destructive ajusté pour 4.5:1 sur blanc */
+    --destructive: 0 75% 45%;
     --destructive-foreground: 0 0% 100%;
 
     --success: 152 70% 48%;
@@ -48,7 +51,8 @@
     --warning: 38 95% 55%;
     --warning-foreground: 38 95% 15%;
 
-    --info: 215 90% 62%;
+    /* info ajusté pour 4.5:1 sur blanc (215 90% 62% → 215 90% 42% = #1565C0 ratio 5.0:1) */
+    --info: 215 90% 42%;
     --info-foreground: 0 0% 100%;
 
     --border: 240 10% 92%;
@@ -59,7 +63,7 @@
 
     --sidebar-bg: 270 40% 97%;
     --sidebar-foreground: 260 30% 30%;
-    --sidebar-primary: 330 85% 55%;
+    --sidebar-primary: 330 85% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 270 50% 93%;
     --sidebar-accent-foreground: 260 30% 25%;
@@ -765,6 +769,32 @@
   .card-kpi {
     transition: none !important;
   }
+  /* Couvre les utilitaires Tailwind d'animation (Loader2, indicateurs, etc.) */
+  .animate-spin,
+  .animate-ping,
+  .animate-pulse,
+  .animate-bounce {
+    animation: none !important;
+  }
+}
+
+/* ═══ Skip-to-content link (accessibilité clavier) ═══ */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  z-index: 10000;
+  transition: top 0.2s ease;
+}
+.skip-to-content:focus {
+  top: 8px;
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 @media print {

@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -45,21 +44,25 @@ function corsHeaders(req: Request) {
   };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders(req) });
   }
 
+  let step = 'init';
+
   try {
+    step = '1_auth_header';
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      console.error("create-invoice-payment: No Authorization header");
+      console.error("[create-invoice-payment] step=1 No Authorization header");
       return new Response(JSON.stringify({ error: "Non authentifié — header manquant" }), {
         status: 401,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
+    step = '2_auth_user';
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? ""
@@ -68,13 +71,14 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: { user } } = await supabaseClient.auth.getUser(token);
     if (!user?.email) {
-      console.error("create-invoice-payment: User not authenticated");
+      console.error("[create-invoice-payment] step=2 User not authenticated");
       return new Response(JSON.stringify({ error: "Non authentifié" }), {
         status: 401,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
+    step = '3_parse_body';
     const body = await req.json();
     const { facture_id, embedded } = body;
     if (!facture_id) {
@@ -84,8 +88,9 @@ serve(async (req) => {
       });
     }
 
-    console.log(`create-invoice-payment: user=${user.id}, facture=${facture_id}`);
+    console.log(`[create-invoice-payment] step=3 user=${user.id}, facture=${facture_id}, embedded=${!!embedded}`);
 
+    step = '4_fetch_facture';
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -99,19 +104,21 @@ serve(async (req) => {
       .single();
 
     if (errF || !facture) {
-      console.error("create-invoice-payment: Facture introuvable", errF);
+      console.error("[create-invoice-payment] step=4 Facture introuvable", errF);
       return new Response(JSON.stringify({ error: "Facture introuvable" }), {
         status: 404,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
-    // Verify ownership via app_metadata
+    console.log(`[create-invoice-payment] step=4 facture statut=${facture.statut} montant=${facture.montant_ttc} etab=${facture.etablissement_id}`);
+
+    step = '5_ownership';
     const { data: userData } = await supabaseAdmin.auth.admin.getUserById(user.id);
     const userEtabId = userData?.user?.app_metadata?.etablissement_id || user.id;
-    
+
     if (userEtabId !== facture.etablissement_id) {
-      console.error(`create-invoice-payment: ownership mismatch user_etab=${userEtabId} facture_etab=${facture.etablissement_id}`);
+      console.error(`[create-invoice-payment] step=5 ownership mismatch user_etab=${userEtabId} facture_etab=${facture.etablissement_id}`);
       return new Response(JSON.stringify({ error: "Accès interdit : cette facture ne vous appartient pas" }), {
         status: 403,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -125,22 +132,27 @@ serve(async (req) => {
       });
     }
 
+    step = '6_stripe_init';
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) {
-      console.error("create-invoice-payment: STRIPE_SECRET_KEY not set");
+      console.error("[create-invoice-payment] step=6 STRIPE_SECRET_KEY not set");
       return new Response(JSON.stringify({ error: "Configuration Stripe manquante" }), {
         status: 500,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    // Pas de apiVersion pinned : utiliser celle liée à la clé (safe, évite les versions inventées)
+    const stripe = new Stripe(stripeKey);
 
+    step = '7_customer';
     let customerId = (facture.etablissements as any)?.stripe_customer_id;
+    console.log(`[create-invoice-payment] step=7 customerId initial=${customerId ?? 'null'}`);
     if (!customerId) {
       const customers = await stripe.customers.list({ email: user.email, limit: 1 });
       if (customers.data.length > 0) {
         customerId = customers.data[0].id;
+        console.log(`[create-invoice-payment] step=7 customer found by email: ${customerId}`);
       } else {
         const customer = await stripe.customers.create({
           email: user.email,
@@ -148,6 +160,7 @@ serve(async (req) => {
           metadata: { etablissement_id: facture.etablissement_id },
         });
         customerId = customer.id;
+        console.log(`[create-invoice-payment] step=7 customer created: ${customerId}`);
       }
 
       await supabaseAdmin
@@ -156,6 +169,7 @@ serve(async (req) => {
         .eq("id", facture.etablissement_id);
     }
 
+    step = '8_search_intent';
     const existingIntent = await findMatchingPaymentIntent(stripe, facture.id, customerId);
 
     if (existingIntent?.status === "succeeded") {
@@ -195,9 +209,10 @@ serve(async (req) => {
       });
     }
 
+    step = '9_checkout';
     const appUrl = getCorsOrigin(req);
 
-    console.log(`create-invoice-payment: creating checkout, amount=${facture.montant_ttc}, customer=${customerId}, embedded=${!!embedded}`);
+    console.log(`[create-invoice-payment] step=9 creating checkout, amount=${facture.montant_ttc}, customer=${customerId}, embedded=${!!embedded}`);
 
     const sessionParams: any = {
       customer: customerId,
@@ -220,8 +235,9 @@ serve(async (req) => {
       payment_intent_data: {
         metadata: { facture_id: facture.id },
         description: `Facture ${facture.numero_facture}`,
+        // Stripe : statement_descriptor doit contenir au moins 1 lettre Latin, 5-22 chars, pas de caractères spéciaux.
+        // "JOLENE" suffit — pas de suffix (qui doit aussi respecter les règles Latin + ne pas dépasser combiné).
         statement_descriptor: "JOLENE",
-        statement_descriptor_suffix: facture.numero_facture?.slice(-10) || undefined,
       },
     };
 
@@ -249,18 +265,37 @@ serve(async (req) => {
       // Non-blocking: session was created, log the issue but continue
     }
 
-    console.log(`create-invoice-payment: session created, id=${session.id}, payment_intent=${session.payment_intent}, client_secret=${!!session.client_secret}, url=${session.url}`);
+    console.log(`[create-invoice-payment] step=10 session created, id=${session.id}, payment_intent=${session.payment_intent}, client_secret=${!!session.client_secret}, url=${session.url}`);
 
-    return new Response(JSON.stringify({ 
-      url: session.url, 
+    return new Response(JSON.stringify({
+      url: session.url,
       client_secret: session.client_secret || null,
     }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error: unknown) {
-    console.error("Erreur create-invoice-payment:", error instanceof Error ? error.message : error);
-    return new Response(JSON.stringify({ error: "Une erreur interne est survenue." }), {
+    // Expose error message (Stripe errors ne sont pas sensibles, aident le debug)
+    const err = error as any;
+    const message = err?.message ?? String(error);
+    const stripeCode = err?.code ?? null;
+    const stripeType = err?.type ?? null;
+    const stripeParam = err?.param ?? null;
+
+    console.error(`[create-invoice-payment] step=${step} ERROR: ${message}`, {
+      code: stripeCode,
+      type: stripeType,
+      param: stripeParam,
+      stack: err?.stack?.slice(0, 500),
+    });
+
+    return new Response(JSON.stringify({
+      error: message,
+      failed_at_step: step,
+      stripe_code: stripeCode,
+      stripe_type: stripeType,
+      stripe_param: stripeParam,
+    }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       status: 500,
     });

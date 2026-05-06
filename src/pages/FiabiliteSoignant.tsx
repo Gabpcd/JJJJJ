@@ -11,6 +11,7 @@ import { ModalReclamationScore } from '@/components/ModalReclamationScore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
+import { handleErrorSilent } from '@/lib/handleError';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 
 export default function FiabiliteSoignant() {
@@ -26,7 +27,7 @@ export default function FiabiliteSoignant() {
     if (!user) return;
     supabase.from('soignants')
       .select('score_fiabilite, total_missions_terminees, total_missions_annulees, total_absences, total_retards_pointage')
-      .eq('id', user.id).single()
+      .eq('id', user.id).maybeSingle()
       .then(({ data }) => {
         setSoignant(data); setLoading(false);
         supabase.rpc('fn_ecrire_audit_safe', {
@@ -35,13 +36,15 @@ export default function FiabiliteSoignant() {
           p_type_ressource: 'soignant', p_id_ressource: user.id,
           p_cle_s3: null, p_details: { page: 'fiabilite' },
           p_ip: null, p_navigateur: navigator.userAgent,
-        }).then(undefined, () => {});
+        }).then(undefined, (err) => handleErrorSilent(err, 'FiabiliteSoignant.audit'));
       });
   }, [user]);
 
   if (loading || !soignant) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
 
+  const totalMissions = soignant.total_missions_terminees ?? 0;
   const score = soignant.score_fiabilite ?? 50;
+  const scoreActif = totalMissions >= 3;
 
   return (
     <LayoutApp role="SOIGNANT">
@@ -50,12 +53,29 @@ export default function FiabiliteSoignant() {
           <ArrowLeft className="h-4 w-4" /> Retour
         </button>
         <h1 className="text-xl font-bold text-foreground">⭐ Score de fiabilité</h1>
-        <div className="mt-2"><BadgeNiveau score={score} /></div>
+        {scoreActif ? (
+          <div className="mt-2"><BadgeNiveau score={score} /></div>
+        ) : (
+          <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-muted text-muted-foreground px-3 py-1 text-xs font-medium">
+            Pas encore d'évaluation · disponible après 3 missions terminées
+          </div>
+        )}
       </div>
 
-      <div className="mb-6">
-        <JaugeScoreFiabilite score={score} />
-      </div>
+      {scoreActif ? (
+        <div className="mb-6">
+          <JaugeScoreFiabilite score={score} />
+        </div>
+      ) : (
+        <div className="card-base mb-6 text-center py-8">
+          <p className="text-sm font-medium text-foreground">
+            Votre score sera disponible après {Math.max(0, 3 - totalMissions)} mission{Math.max(0, 3 - totalMissions) > 1 ? 's' : ''} terminée{Math.max(0, 3 - totalMissions) > 1 ? 's' : ''} de plus.
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            En attendant, votre profil reste visible aux établissements avec la mention « Pas encore d'évaluation ».
+          </p>
+        </div>
+      )}
 
       <div className="space-y-4">
         <DecompositionScore soignant={soignant} />

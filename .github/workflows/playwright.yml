@@ -1,0 +1,125 @@
+name: Playwright E2E tests
+
+# Tests Playwright à chaque PR + push main.
+# Stratégie matrix :
+#   - PR : chromium uniquement (rapidité review)
+#   - push main : chromium + firefox + webkit + mobile-iphone + mobile-pixel
+#     (couverture cross-browser + mobile complet)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  # PR — chromium only (job rapide pour feedback)
+  e2e-pr:
+    name: Playwright E2E (PR — Chromium)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Build app
+        run: npm run build
+      - name: Start preview server
+        run: |
+          npx vite preview --port 4173 --host 0.0.0.0 &
+          npx wait-on http://127.0.0.1:4173 -t 30000 || true
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      - name: Run Playwright tests (chromium)
+        run: npx playwright test --project=chromium
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+          CI: 'true'
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report-chromium
+          path: playwright-report/
+          retention-days: 7
+
+  # push main — matrix complète (cross-browser + mobile)
+  e2e-main:
+    name: Playwright E2E (${{ matrix.project }})
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - chromium
+          - firefox
+          - webkit
+          - mobile-iphone
+          - mobile-pixel
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        # Mapping projet → moteur browser :
+        #   chromium / mobile-pixel / tablet-ipad → Chromium
+        #   firefox → Firefox
+        #   webkit / mobile-iphone → WebKit (iPhone simulé utilise Safari)
+        run: |
+          case "${{ matrix.project }}" in
+            firefox) npx playwright install --with-deps firefox ;;
+            webkit|mobile-iphone) npx playwright install --with-deps webkit ;;
+            *) npx playwright install --with-deps chromium ;;
+          esac
+      - name: Build app
+        run: npm run build
+      - name: Start preview server
+        run: |
+          npx vite preview --port 4173 --host 0.0.0.0 &
+          npx wait-on http://127.0.0.1:4173 -t 30000 || true
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      - name: Run Playwright tests (${{ matrix.project }})
+        run: npx playwright test --project=${{ matrix.project }}
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+          CI: 'true'
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report-${{ matrix.project }}
+          path: playwright-report/
+          retention-days: 7
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-traces-${{ matrix.project }}
+          path: test-results/
+          retention-days: 7

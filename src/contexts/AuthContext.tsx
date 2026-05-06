@@ -60,8 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const connexion = useCallback(async (email: string, motDePasse: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: motDePasse });
+  const connexion = useCallback(async (email: string, motDePasse: string, captchaToken?: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: motDePasse,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
+    });
     if (error) throw error;
 
     const u = data.user;
@@ -146,7 +150,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: signUpData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.motDePasse,
-        options: { data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom } },
+        options: {
+          data: { role: 'SOIGNANT', prenom: data.prenom, nom: data.nom },
+          ...(data.turnstileToken ? { captchaToken: data.turnstileToken } : {}),
+        },
       });
       if (authError) {
         logger.error('[INSCRIPTION] ERREUR signUp', authError);
@@ -182,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       lat: data.lat || null,
       lng: data.lng || null,
       navigateur: navigator.userAgent,
+      turnstileToken: data.turnstileToken || null,
     };
 
     try {
@@ -215,24 +223,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw err instanceof Error ? err : new Error('Erreur lors de la création de votre profil. Veuillez réessayer.');
     }
 
-    // Étape 3 : Email de bienvenue (fire-and-forget)
-    logger.debug('[INSCRIPTION] 8. Envoi email bienvenue (fire-and-forget)');
-    fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_PUBLISHABLE_KEY,
-        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
-      },
-      body: JSON.stringify({ type: 'BIENVENUE_SOIGNANT', data: { prenom: data.prenom }, destinataire_id: userId }),
-    }).catch((e) => logger.warn('[INSCRIPTION] Email bienvenue échoué (ignoré)', e));
+    // L'email BIENVENUE_SOIGNANT est envoyé par register-soignant lui-même
+    // (best-effort côté serveur) — pas de double-envoi côté client.
   }, []);
 
   const inscriptionEtablissement = useCallback(async (data: any) => {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.motDePasse,
-      options: { data: { role: 'ETABLISSEMENT', nom_etablissement: data.nom } },
+      options: {
+        data: { role: 'ETABLISSEMENT', nom_etablissement: data.nom },
+        ...(data.turnstileToken ? { captchaToken: data.turnstileToken } : {}),
+      },
     });
     if (authError) {
       logger.error('Inscription établissement auth échouée', authError);
@@ -255,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         adresse_lng: data.lng || null,
         numero_licence: data.numeroLicence || null,
         navigateur: navigator.userAgent,
+        turnstileToken: data.turnstileToken || null,
       },
     });
 
@@ -267,14 +270,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Erreur lors de la création du profil établissement. Veuillez réessayer.');
     }
 
-    // Email de bienvenue établissement (fire-and-forget)
-    supabase.functions.invoke('send-email', {
-      body: {
-        type: 'BIENVENUE_ETABLISSEMENT',
-        data: { nom: data.nom },
-        destinataire_id: authData.user!.id,
-      },
-    }).catch((err) => { logger.warn('[AuthContext] send-email bienvenue établissement failed', err); });
+    // L'email BIENVENUE_ETABLISSEMENT est envoyé par register-etablissement lui-même
+    // (best-effort côté serveur) — pas de double-envoi côté client.
   }, []);
 
   return (

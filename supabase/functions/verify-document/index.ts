@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { applyRateLimit, getClientIp } from "../_shared/rate-limit.ts";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -48,7 +48,7 @@ async function loadDocumentWithRetry(supabase: any, documentId: string, attempts
   throw new Error("Document introuvable");
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
 
   try {
@@ -57,6 +57,14 @@ serve(async (req) => {
     if (body?.warm === true) {
       return new Response(JSON.stringify({ warm: true }), {
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    // Rate-limit IP : 10 vérifs document/min/IP (OCR coûteux côté infra).
+    if (applyRateLimit('verify-document', getClientIp(req), { max: 10, windowMs: 60_000 })) {
+      return new Response(JSON.stringify({ error: 'Trop de vérifications. Réessayez dans 1 minute.' }), {
+        status: 429,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 

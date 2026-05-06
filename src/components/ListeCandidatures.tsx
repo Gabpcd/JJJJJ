@@ -3,6 +3,7 @@ import { CheckCircle, XCircle, Clock, Send, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { ModalPaiementCommission } from '@/components/ModalPaiementCommission';
+import { getLabelProfession } from '@/lib/constantes';
 
 function scoreBadge(score: number) {
   if (score >= 70) return 'bg-success/10 text-success';
@@ -12,13 +13,61 @@ function scoreBadge(score: number) {
 
 interface ListeCandidaturesProps {
   missionId: string;
+  /** Profession requise par la mission — sert à signaler les candidats hors profession exacte (hiérarchie/souplesse). */
+  missionProfession?: string | null;
+  /** Spécialité médicale requise (code) — sert à signaler les médecins sans la spécialité exacte. */
+  missionSpecialiteMedicale?: string | null;
+  /** Flag accepte_non_specialises — sert au calcul du label badge. */
+  missionAccepteNonSpecialises?: boolean | null;
   modePaiement?: string;
   onAccepted: () => void;
   onError: (msg: string) => void;
   onSuccess: (msg: string) => void;
 }
 
-export function ListeCandidatures({ missionId, modePaiement, onAccepted, onError, onSuccess }: ListeCandidaturesProps) {
+function getCandidatMatchBadge(
+  candidatProfession: string | null | undefined,
+  candidatSpecialite: string | null | undefined,
+  missionProfession: string | null | undefined,
+  missionSpecialite: string | null | undefined,
+): { label: string; classes: string; tooltip: string } | null {
+  if (!candidatProfession || !missionProfession) return null;
+
+  if (candidatProfession === missionProfession) {
+    if (
+      missionProfession === 'MEDECIN' &&
+      missionSpecialite &&
+      (candidatSpecialite || '') !== missionSpecialite
+    ) {
+      return {
+        label: '🩺 Médecin sans la spécialité requise',
+        classes: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
+        tooltip: 'Ce candidat est médecin mais sans la spécialité ciblée — la mission accepte les non-spécialisés.',
+      };
+    }
+    return null;
+  }
+
+  if (missionProfession === 'IDE' && (candidatProfession === 'IBODE' || candidatProfession === 'IADE')) {
+    return {
+      label: `↑ ${candidatProfession} qualifié IDE`,
+      classes: 'bg-success/10 text-success',
+      tooltip: `Diplôme ${candidatProfession} couvre les missions IDE (hiérarchie naturelle).`,
+    };
+  }
+
+  if (candidatProfession === 'IDE' && (missionProfession === 'IBODE' || missionProfession === 'IADE')) {
+    return {
+      label: `↓ IDE non spécialisé`,
+      classes: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
+      tooltip: `Ce candidat est IDE — la mission ${missionProfession} accepte les non-spécialisés.`,
+    };
+  }
+
+  return null;
+}
+
+export function ListeCandidatures({ missionId, missionProfession, missionSpecialiteMedicale, missionAccepteNonSpecialises, modePaiement, onAccepted, onError, onSuccess }: ListeCandidaturesProps) {
   const [candidatures, setCandidatures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [traitement, setTraitement] = useState<string | null>(null);
@@ -144,17 +193,35 @@ export function ListeCandidatures({ missionId, modePaiement, onAccepted, onError
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-foreground flex items-center gap-1.5 flex-wrap">
                     👤 {c.soignant?.prenom} {c.soignant?.nom}
+                    {c.soignant?.profession && (
+                      <span className="badge-base text-[10px] bg-muted text-muted-foreground" title="Profession du candidat">
+                        {getLabelProfession(c.soignant.profession)}
+                      </span>
+                    )}
                     {c.soignant?.type_exercice && (
                       <span className={`badge-base text-[10px] ${c.soignant.type_exercice === 'LIBERAL' ? 'bg-info/10 text-info' : c.soignant.type_exercice === 'MIXTE' ? 'bg-rose/10 text-rose' : 'bg-muted text-muted-foreground'}`}>
                         {c.soignant.type_exercice === 'MIXTE' ? 'Salarié + Libéral' : c.soignant.type_exercice === 'LIBERAL' ? 'Libéral' : 'Salarié'}
                       </span>
                     )}
+                    {(() => {
+                      const badge = getCandidatMatchBadge(
+                        c.soignant?.profession,
+                        c.soignant?.specialite_medicale,
+                        missionProfession,
+                        missionSpecialiteMedicale,
+                      );
+                      return badge ? (
+                        <span className={`badge-base text-[10px] ${badge.classes}`} title={badge.tooltip}>
+                          {badge.label}
+                        </span>
+                      ) : null;
+                    })()}
                   </p>
                   {c.soignant?.bio && (
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.soignant.bio}</p>
                   )}
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    {c.soignant?.score_fiabilite != null && c.soignant?.total_missions_terminees > 0 ? (
+                    {c.soignant?.score_fiabilite != null && c.soignant?.total_missions_terminees >= 3 ? (
                       <span className={`badge-base text-[10px] ${scoreBadge(c.soignant.score_fiabilite)}`}>
                         ⭐ {c.soignant.score_fiabilite}/100
                       </span>
@@ -179,21 +246,23 @@ export function ListeCandidatures({ missionId, modePaiement, onAccepted, onError
                     </div>
                   )}
                 </div>
-                <div className="flex gap-1.5 shrink-0">
+                <div className="flex gap-2 shrink-0">
                   <button
                     onClick={() => traiterCandidature(c.id, 'ACCEPTEE')}
                     disabled={traitement === c.id}
-                    className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50"
+                    className="btn-primary text-sm py-2.5 px-4 min-h-[44px] flex items-center gap-1 disabled:opacity-50"
+                    aria-label="Accepter cette candidature"
                   >
-                    <CheckCircle className="h-3.5 w-3.5" />
+                    <CheckCircle className="h-4 w-4" />
                     Accepter
                   </button>
                   <button
                     onClick={() => traiterCandidature(c.id, 'REFUSEE')}
                     disabled={traitement === c.id}
-                    className="btn-danger text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-50"
+                    className="btn-danger text-sm py-2.5 px-4 min-h-[44px] flex items-center gap-1 disabled:opacity-50"
+                    aria-label="Refuser cette candidature"
                   >
-                    <XCircle className="h-3.5 w-3.5" />
+                    <XCircle className="h-4 w-4" />
                     Refuser
                   </button>
                 </div>

@@ -1,0 +1,46 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { AlertTriangle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+
+export function BandeauOnboardingEtab() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    if (location.pathname === '/etablissement/finaliser-inscription') return;
+    (async () => {
+      const { data } = await supabase
+        .from('etablissements')
+        .select('contrat_service_signe, rib_s3_key')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!data) return;
+      const contratOk = !!(data as any).contrat_service_signe;
+      const ribOk = !!((data as any).rib_s3_key && (data as any).rib_s3_key !== 'legacy/auto-backfill');
+      setShow(!contratOk || !ribOk);
+    })();
+  }, [user, location.pathname]);
+
+  if (!show) return null;
+
+  return (
+    <div className="bg-warning/10 border-b border-warning/30 px-4 py-3 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2 text-sm text-warning-foreground">
+        <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+        <span className="font-medium">Votre inscription n'est pas finalisée.</span>
+        <span className="text-muted-foreground hidden sm:inline">Signez le contrat de service et fournissez un RIB pour publier des missions.</span>
+      </div>
+      <button
+        onClick={() => navigate('/etablissement/finaliser-inscription')}
+        className="shrink-0 text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
+      >
+        Compléter maintenant
+      </button>
+    </div>
+  );
+}

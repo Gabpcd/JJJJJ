@@ -5,6 +5,8 @@ import { DemandePermissionPush } from '@/components/DemandePermissionPush';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { SyncHorsLigne } from '@/components/SyncHorsLigne';
 import { BandeauInstallerPWA } from '@/components/BandeauInstallerPWA';
+import { BandeauOnboardingEtab } from '@/components/BandeauOnboardingEtab';
+import { BoutonAideGlobal } from '@/components/BoutonAideGlobal';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -39,24 +41,31 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
   return (
     <div className="flex flex-col bg-background" style={{ minHeight: '100dvh' }}>
       <a href="#main-content" className="skip-to-main">Aller au contenu principal</a>
-      <BandeauHorsLigne />
-      <SyncHorsLigne />
       <BarreNavigation role={role} />
-      <main
-        id="main-content"
-        role="main"
-        className="flex-1 md:ml-[260px] min-w-0"
-        style={{
-          paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))',
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 py-6 md:pb-6 min-w-0">
-          {children}
-        </div>
-        <FooterLegal />
-      </main>
+      {/* Bandeaux + main décalés à droite de la sidebar desktop (260px).
+          Bandeaux placés ICI (pas en flex-column root) pour ne PAS être
+          recouverts par la sidebar fixed left-0 top-0 z-40. */}
+      <div className="flex-1 md:ml-[260px] flex flex-col min-w-0">
+        <BandeauHorsLigne />
+        <SyncHorsLigne />
+        {role === 'ADMIN_ETABLISSEMENT' && <BandeauOnboardingEtab />}
+        <main
+          id="main-content"
+          role="main"
+          className="flex-1 min-w-0"
+          style={{
+            paddingBottom: 'calc(5rem + env(safe-area-inset-bottom))',
+          }}
+        >
+          <div className="max-w-6xl mx-auto px-4 py-6 md:pb-6 min-w-0">
+            {children}
+          </div>
+          <FooterLegal />
+        </main>
+      </div>
       <DemandePermissionPush />
       <BandeauInstallerPWA />
+      <BoutonAideGlobal />
     </div>
   );
 }

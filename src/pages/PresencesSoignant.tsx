@@ -19,6 +19,7 @@ import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { genererIdTerminal } from '@/lib/terminal';
 import { stockerPointageHorsLigne } from '@/lib/horsLigne';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { handleErrorSilent } from '@/lib/handleError';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash, Eye, Activity } from 'lucide-react';
@@ -41,10 +42,10 @@ export default function PresencesSoignant() {
   // Load GPS consent on mount
   useEffect(() => {
     if (!user) return;
-    supabase.from('soignants').select('consentement_gps').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('soignants').select('consentement_gps').eq('id', user.id).maybeSingle().then(({ data }) => {
       setConsentementGPS(data?.consentement_gps ?? null);
       setConsentementCharge(true);
-    }).then(undefined, () => {});
+    }).then(undefined, (err) => handleErrorSilent(err, 'PresencesSoignant.consentementGPS'));
   }, [user]);
 
   const handleAccepterGPS = async () => {
@@ -360,7 +361,7 @@ export default function PresencesSoignant() {
 
     if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
 
-    const missionData = missions.find((m: any) => m.id === missionId);
+    const missionData = missions.find((m: any) => m.id === missionId) as any;
     if (missionData) {
       supabase.functions.invoke('send-email', {
         body: {

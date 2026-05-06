@@ -10,6 +10,7 @@ import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
 import { supabase } from '@/integrations/supabase/client';
 import { FooterLegal } from '@/components/FooterLegal';
+import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
   const [asked, setAsked] = useState(false);
@@ -42,11 +43,23 @@ export default function InscriptionEtablissement() {
   const navigate = useNavigate();
   const { inscriptionEtablissement } = useAuth();
   const { afficherNotification } = useNotification();
+
+  // J5.D.2 — Capturer ?ref=ETB-XXXXXX et le stocker en sessionStorage
+  // pour pré-remplir le champ "Code parrainage" dans la page parrainage post-inscription.
+  useEffect(() => {
+    try {
+      const ref = new URLSearchParams(window.location.search).get('ref');
+      if (ref && /^ETB-[A-Z0-9]{4,16}$/i.test(ref)) {
+        sessionStorage.setItem('jolene.parrainage_etab_code', ref.toUpperCase());
+      }
+    } catch { /* noop */ }
+  }, []);
   const [etape, setEtape] = useState(1);
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [cgu, setCgu] = useState(false);
   const [cgv, setCgv] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     email: '', motDePasse: '', confirmMdp: '',
@@ -118,14 +131,10 @@ export default function InscriptionEtablissement() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await inscriptionEtablissement(form);
-      const autoVerifie = inseeCheck?.statut === 'VERIFIE';
-      if (autoVerifie) {
-        afficherNotification({ type: 'succes', message: 'Établissement créé et vérifié automatiquement ! Vous pouvez publier des missions.' });
-      } else {
-        afficherNotification({ type: 'info', message: 'Inscription réussie ! Votre compte est en attente de validation par Jolene (24-48h).', duree: 10000 });
-      }
-      navigate('/etablissement/tableau-de-bord');
+      await inscriptionEtablissement({ ...form, turnstileToken });
+      // PII (email) hors URL : sessionStorage évite leak via historique navigateur
+      try { sessionStorage.setItem('inscription_email', form.email); } catch { /* sessionStorage indisponible */ }
+      navigate('/inscription/succes?role=etab');
     } catch (err) {
       if (!gererErreurSupabase(err, () => handleSubmit(e))) {
         handleError(err, 'inscription établissement');
@@ -157,26 +166,37 @@ export default function InscriptionEtablissement() {
           {etape === 1 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label><input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required /></div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</label>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Email *</span>
+                <input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</span>
                 <div className="relative">
-                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required />
-                  <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required minLength={8} />
+                  <button
+                    type="button"
+                    onClick={() => setAfficherMdp(!afficherMdp)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    aria-label={afficherMdp ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                    aria-pressed={afficherMdp}
+                  >
+                    {afficherMdp ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
                   </button>
                 </div>
-              </div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Confirmer *</label><input type="password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required />
-                {form.confirmMdp && form.confirmMdp !== form.motDePasse && <p className="text-xs text-destructive mt-1">Les mots de passe ne correspondent pas</p>}
-              </div>
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground mb-1.5 block">Confirmer *</span>
+                <input type="password" autoComplete="new-password" value={form.confirmMdp} onChange={e => maj('confirmMdp', e.target.value)} className="input-base" required minLength={8} />
+                {form.confirmMdp && form.confirmMdp !== form.motDePasse && <p className="text-xs text-destructive mt-1" role="alert">Les mots de passe ne correspondent pas</p>}
+              </label>
               <label className="flex items-start gap-2 cursor-pointer">
                 <input type="checkbox" checked={cgu} onChange={e => setCgu(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
-                <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgu" target="_blank" className="text-primary hover:underline">Conditions Générales d'Utilisation</a> et la <a href="/confidentialite" target="_blank" className="text-primary hover:underline">Politique de confidentialité</a> *</span>
+                <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgu" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Conditions Générales d'Utilisation</a> et la <a href="/confidentialite" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Politique de confidentialité</a> *</span>
               </label>
               <label className="flex items-start gap-2 cursor-pointer">
                 <input type="checkbox" checked={cgv} onChange={e => setCgv(e.target.checked)} className="mt-1 h-4 w-4 rounded accent-primary" />
-                <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgv" target="_blank" className="text-primary hover:underline">Conditions Générales de Vente</a> *</span>
+                <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgv" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Conditions Générales de Vente</a> *</span>
               </label>
               <button type="button" onClick={() => setEtape(2)} disabled={!etape1Valide} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
             </div>
@@ -248,6 +268,7 @@ export default function InscriptionEtablissement() {
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">Email contact</label><input type="email" value={form.emailContact} onChange={e => maj('emailContact', e.target.value)} className="input-base" /></div>
                 <div><label className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</label><input value={form.telephoneContact} onChange={e => maj('telephoneContact', e.target.value)} className="input-base" /></div>
               </div>
+              <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
                 <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">

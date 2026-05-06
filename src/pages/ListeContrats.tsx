@@ -18,6 +18,14 @@ const FILTRES_STATUT = ['Tous', 'EN_ATTENTE_SIGNATURES', 'SIGNE_COMPLET', 'ANNUL
 
 export default function ListeContrats({ role }: { role: UserRole }) {
   usePageTitle('Contrats');
+  return (
+    <LayoutApp role={role}>
+      <ListeContratsContent role={role} />
+    </LayoutApp>
+  );
+}
+
+export function ListeContratsContent({ role }: { role: UserRole }) {
   const { user, etablissementId } = useEtablissementScope();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -52,10 +60,10 @@ export default function ListeContrats({ role }: { role: UserRole }) {
 
   const filtered = filtre === 'Tous' ? contrats : contrats.filter(c => c.statut === filtre);
 
-  if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role={role}>
+    <>
       <h1 className="text-xl font-bold text-foreground mb-4">{role === 'SOIGNANT' ? 'Mes contrats' : 'Contrats'}</h1>
 
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -74,9 +82,36 @@ export default function ListeContrats({ role }: { role: UserRole }) {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
-        <EtatVide illustration={<IllustrationStylo />} titre="Aucun contrat" sousTitre="Vos contrats apparaîtront ici après avoir accepté une mission." />
-      ) : (
+      {filtered.length === 0 ? (() => {
+        const isEtab = role === 'ADMIN_ETABLISSEMENT';
+        let titre = 'Aucun contrat';
+        let sousTitre: string;
+        if (filtre === 'EN_ATTENTE_SIGNATURES') {
+          titre = 'Aucun contrat en attente';
+          sousTitre = isEtab
+            ? 'Aucun contrat en attente de signature. Les contrats apparaîtront ici quand un soignant acceptera une mission.'
+            : 'Aucun contrat en attente de signature pour le moment.';
+        } else if (filtre === 'SIGNE_COMPLET') {
+          sousTitre = isEtab
+            ? 'Aucun contrat finalisé pour le moment. Les contrats signés par vos soignants s\'afficheront ici.'
+            : 'Aucun contrat signé pour le moment.';
+        } else if (filtre === 'ANNULE') {
+          sousTitre = isEtab
+            ? 'Aucun contrat annulé.'
+            : 'Aucun contrat annulé.';
+        } else {
+          sousTitre = isEtab
+            ? 'Les contrats apparaîtront ici après qu\'un soignant ait accepté une de vos missions.'
+            : 'Vos contrats apparaîtront ici après avoir accepté une mission.';
+        }
+        return (
+          <EtatVide
+            illustration={<IllustrationStylo />}
+            titre={titre}
+            sousTitre={sousTitre}
+          />
+        );
+      })() : (
         <div className="space-y-3">
           {filtered.map((c: any) => (
             <div key={c.id} onClick={() => navigate(`/contrat/${c.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all">
@@ -102,6 +137,6 @@ export default function ListeContrats({ role }: { role: UserRole }) {
           ))}
         </div>
       )}
-    </LayoutApp>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { LayoutApp } from '@/components/LayoutApp';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -30,7 +30,7 @@ export default function AdminCohortEconomics() {
 
   useEffect(() => { charger(); }, [periode]);
 
-  if (loading) return <LayoutApp role="ADMIN_PLATEFORME"><ChargementPage /></LayoutApp>;
+  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   const cohortes = data?.cohortes_mensuelles || [];
   const retention = data?.retention_mensuelle || [];
@@ -38,7 +38,7 @@ export default function AdminCohortEconomics() {
   const totals = data?.totals || {};
 
   return (
-    <LayoutApp role="ADMIN_PLATEFORME">
+    <LayoutAdmin>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Cohort Analysis & Unit Economics</h1>
@@ -57,14 +57,14 @@ export default function AdminCohortEconomics() {
       {/* Totals headline */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
         {[
-          { label: 'Soignants', value: totals.total_soignants, icon: Users, color: 'primary' },
-          { label: 'Établissements', value: totals.total_etabs, icon: Building2, color: 'info' },
-          { label: 'Missions terminées', value: totals.total_missions_terminees, icon: Zap, color: 'success' },
-          { label: 'GMV totale', value: fmt(totals.gmv_total), icon: TrendingUp, color: 'primary', raw: true },
-          { label: 'Revenue (commissions)', value: fmt(totals.revenue_total), icon: DollarSign, color: 'success', raw: true },
+          { label: 'Soignants', value: totals.total_soignants, icon: Users, color: 'text-primary' },
+          { label: 'Établissements', value: totals.total_etabs, icon: Building2, color: 'text-info' },
+          { label: 'Missions terminées', value: totals.total_missions_terminees, icon: Zap, color: 'text-success' },
+          { label: 'GMV totale', value: fmt(totals.gmv_total), icon: TrendingUp, color: 'text-primary', raw: true },
+          { label: 'Revenue (commissions)', value: fmt(totals.revenue_total), icon: DollarSign, color: 'text-success', raw: true },
         ].map((kpi, i) => (
           <div key={i} className="card-base text-center p-4">
-            <kpi.icon className={`h-5 w-5 text-${kpi.color} mx-auto mb-1`} />
+            <kpi.icon className={`h-5 w-5 ${kpi.color} mx-auto mb-1`} />
             <p className="text-xl font-bold text-foreground">{kpi.raw ? kpi.value : kpi.value?.toLocaleString('fr-FR')}</p>
             <p className="text-[11px] text-muted-foreground">{kpi.label}</p>
           </div>
@@ -162,6 +162,6 @@ export default function AdminCohortEconomics() {
           </ResponsiveContainer>
         </div>
       )}
-    </LayoutApp>
+    </LayoutAdmin>
   );
 }

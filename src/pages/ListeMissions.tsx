@@ -25,6 +25,7 @@ const STATUTS_FILTRES = [
   { valeur: 'ASSIGNEE', label: 'Assignées' },
   { valeur: 'EN_COURS', label: 'En cours' },
   { valeur: 'TERMINEE', label: 'Terminées' },
+  { valeur: 'EXPIREE', label: 'Expirées' },
   { valeur: 'ANNULEE_PAR_ETABLISSEMENT', label: 'Annulées' },
   { valeur: 'LITIGE', label: 'Litiges' },
 ];
@@ -101,7 +102,7 @@ export default function ListeMissions() {
       // M2: Single count query with status grouping instead of 7 parallel queries
       const { data: allData } = await supabase.from('missions').select('statut', { count: 'exact' }).eq('etablissement_id', etabId);
       const c: Record<string, number> = { '': allData?.length ?? 0 };
-      const statuts = ['OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
+      const statuts = ['OUVERTE', 'ASSIGNEE', 'EN_COURS', 'TERMINEE', 'EXPIREE', 'ANNULEE_PAR_ETABLISSEMENT', 'LITIGE'];
       for (const s of statuts) {
         c[s] = allData?.filter((m: any) => m.statut === s).length ?? 0;
       }
@@ -256,6 +257,7 @@ export default function ListeMissions() {
             filtreStatut === 'ASSIGNEE' ? 'Aucune mission assignée' :
             filtreStatut === 'EN_COURS' ? 'Aucune mission en cours' :
             filtreStatut === 'TERMINEE' ? 'Aucune mission terminée' :
+            filtreStatut === 'EXPIREE' ? 'Aucune mission expirée' :
             filtreStatut === 'ANNULEE_PAR_ETABLISSEMENT' ? 'Aucune mission annulée' :
             filtreStatut === 'LITIGE' ? 'Aucun litige' :
             'Aucune mission trouvée'

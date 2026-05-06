@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { mapStripeError } from "../_shared/stripe-errors.ts";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -23,7 +23,7 @@ function corsHeaders(req: Request) {
   };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders(req) });
   }
@@ -34,15 +34,22 @@ serve(async (req) => {
     { auth: { persistSession: false } }
   );
 
+  let step = "init";
+
   try {
+    step = "1_auth_header";
     const authHeader = req.headers.get("Authorization");
+    const hasAuth = !!authHeader;
+    const authLen = authHeader?.length ?? 0;
+    console.log(`[stripe-connect-pay-mission] step=1 hasAuth=${hasAuth} len=${authLen}`);
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
+      return new Response(JSON.stringify({ error: "Non autorisé — header manquant" }), {
         status: 401,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
+    step = "2_auth_user";
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? ""
@@ -52,11 +59,16 @@ serve(async (req) => {
       error: authError,
     } = await supabaseClient.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
+      console.error(`[stripe-connect-pay-mission] step=2 getUser failed: authError=${authError?.message ?? "null"} user=${!!user}`);
+      return new Response(JSON.stringify({
+        error: "Non autorisé",
+        reason: authError?.message || "user_not_found",
+      }), {
         status: 401,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
+    console.log(`[stripe-connect-pay-mission] step=2 user=${user.id}`);
 
     const { mission_id } = await req.json();
     if (!mission_id) {
@@ -70,7 +82,7 @@ serve(async (req) => {
     const { data: mission } = await supabaseAdmin
       .from("missions")
       .select(
-        "id, etablissement_id, soignant_assigne_id, statut, montant_commission_ttc, net_a_payer"
+        "id, etablissement_id, soignant_assigne_id, statut, montant_commission_ttc, net_a_payer, type_contrat_applique"
       )
       .eq("id", mission_id)
       .single();
@@ -85,6 +97,22 @@ serve(async (req) => {
     if (mission.statut !== "TERMINEE") {
       return new Response(
         JSON.stringify({ error: "La mission doit être terminée" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // BUG-UI-OBLIG-1 Fix#3 — défense en profondeur : les missions SALARIE
+    // ne peuvent pas être payées via Stripe (bulletin de paie + virement SEPA).
+    if (mission.type_contrat_applique === "SALARIE") {
+      return new Response(
+        JSON.stringify({
+          error: "CONTRAT_SALARIE_NON_STRIPE",
+          message:
+            "Les missions en contrat salarié doivent être payées par virement SEPA (bulletin de paie). Utilisez le flux 'Déclarer virement' à la place.",
+        }),
         {
           status: 400,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
@@ -171,6 +199,36 @@ serve(async (req) => {
       );
     }
 
+    // [CP-STRIPE-2 H1/H14] Lookup facture_honoraires liée à la mission.
+    // On exige qu'elle existe avant de créer la Checkout Session — ainsi on
+    // peut (1) injecter son id dans la metadata Stripe pour que le webhook
+    // update le bon row, (2) éviter les sessions orphelines si la facture
+    // n'a jamais été générée, (3) supporter les avoirs AUTO_STRIPE futurs
+    // qui nécessitent un stripe_payment_intent_id sur la facture d'origine.
+    const { data: factureHonoraires } = await supabaseAdmin
+      .from("factures_honoraires")
+      .select("id, statut")
+      .eq("mission_id", mission_id)
+      .eq("soignant_id", soignantId)
+      .in("statut", ["EMISE", "EN_RETARD"])
+      .order("date_emission", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!factureHonoraires) {
+      return new Response(
+        JSON.stringify({
+          error: "FACTURE_NON_GENEREE",
+          message:
+            "Facture honoraires non générée pour cette mission. Cliquez sur 'Générer facture' avant de payer.",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        }
+      );
+    }
+
     // Check soignant has Connect account
     const { data: connectOnboarding } = await supabaseAdmin
       .from("stripe_connect_onboarding")
@@ -194,25 +252,68 @@ serve(async (req) => {
       );
     }
 
-    // Check idempotency
+    // BUG-UI-OBLIG-1 Fix#2 — idempotence avec fenêtre de 15 min pour
+    // éviter qu'un transfer `EN_ATTENTE` orphelin (Checkout abandonné, session
+    // expirée, erreur Stripe non propagée) bloque indéfiniment la re-tentative.
+    //   - TRANSFERE / CHARGE_REUSSI / PAYE  : paiement réellement abouti → bloquer.
+    //   - EN_ATTENTE < 15 min               : paiement Stripe possiblement en vol → bloquer, message timing.
+    //   - EN_ATTENTE >= 15 min              : orphelin → marquer ECHOUE puis laisser repartir une nouvelle session.
     const { data: existingTransfer } = await supabaseAdmin
       .from("stripe_transfers")
-      .select("id, statut")
+      .select("id, statut, cree_le")
       .eq("mission_id", mission_id)
+      .order("cree_le", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (existingTransfer?.statut === "TRANSFERE" || existingTransfer?.statut === "EN_ATTENTE") {
+    const FENETRE_ORPHELIN_MINUTES = 15;
+    const statutBloquantDefinitif = ["TRANSFERE", "CHARGE_REUSSI", "PAYE"];
+
+    if (existingTransfer && statutBloquantDefinitif.includes(existingTransfer.statut)) {
       return new Response(
         JSON.stringify({
           already_paid: true,
           statut: existingTransfer.statut,
-          message: existingTransfer.statut === "TRANSFERE" ? "Ce paiement a déjà été effectué" : "Un paiement est déjà en cours pour cette mission",
+          message: "Ce paiement a déjà été effectué",
         }),
         {
           status: 200,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         }
       );
+    }
+
+    let transferAReutiliserId: string | null = existingTransfer?.id ?? null;
+
+    if (existingTransfer?.statut === "EN_ATTENTE") {
+      const ageMs = Date.now() - new Date(existingTransfer.cree_le).getTime();
+      const ageMinutes = Math.floor(ageMs / 60000);
+
+      if (ageMinutes < FENETRE_ORPHELIN_MINUTES) {
+        const minutesRestantes = FENETRE_ORPHELIN_MINUTES - ageMinutes;
+        return new Response(
+          JSON.stringify({
+            already_paid: true,
+            statut: "EN_ATTENTE",
+            message: `Paiement en cours de traitement Stripe, réessayez dans ${minutesRestantes} minute${minutesRestantes > 1 ? "s" : ""}.`,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Orphelin > 15 min : marquer ECHOUE et autoriser une nouvelle session.
+      await supabaseAdmin
+        .from("stripe_transfers")
+        .update({
+          statut: "ECHOUE",
+          erreur: `Orphelin auto-cleanup (>${FENETRE_ORPHELIN_MINUTES} min sans webhook) — BUG-UI-OBLIG-1`,
+        })
+        .eq("id", existingTransfer.id);
+
+      transferAReutiliserId = null;
     }
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
@@ -275,46 +376,127 @@ serve(async (req) => {
           connected_account_id: connectOnboarding.stripe_account_id,
           soignant_cents: soignantCents.toString(),
           commission_cents: commissionCents.toString(),
+          facture_honoraires_id: factureHonoraires.id,
         },
       },
       metadata: {
+        // BUG-BOUCLE-PAIEMENT Fix D.1 — metadata COMPLÈTE niveau session Checkout.
+        // Avant ce fix, seuls type/mission_id/facture_honoraires_id étaient au
+        // niveau session ; les champs soignant_id/connected_account_id/soignant_cents
+        // n'étaient que sur payment_intent_data.metadata. Le webhook lisait
+        // session.metadata → condition L93 false → branche CONNECT_MISSION_PAYMENT
+        // skippée silencieusement après paiement réussi.
+        // Maintenant : redondance sender-side + fallback defensive côté webhook.
         type: "CONNECT_MISSION_PAYMENT",
         mission_id,
+        soignant_id: soignantId,
+        connected_account_id: connectOnboarding.stripe_account_id,
+        soignant_cents: soignantCents.toString(),
+        commission_cents: commissionCents.toString(),
+        facture_honoraires_id: factureHonoraires.id,
       },
       return_url: `${origin}/etablissement/facturation?paiement=succes`,
     });
 
-    // Upsert stripe_transfers record
+    // [CP-STRIPE-3 H5] Compensation Checkout Session orpheline.
+    // Les 2 opérations DB ci-dessous (upsert stripe_transfers + update missions)
+    // peuvent échouer APRÈS que la Session Stripe ait été créée. Sans compensation,
+    // on laisserait une session payable côté Stripe sans trace DB plateforme.
+    //
+    // Stratégie : try/catch englobant, si DB écrit échoue → expire la session
+    // Stripe (fire-and-forget, on log mais on n'échoue pas si expire échoue).
+    //
+    // Décision architecturale (Option A, strict) : si malgré l'expire le user
+    // complète quand même le paiement (expire a pu échouer), le webhook n'a
+    // AUCUN row stripe_transfers correspondant → idempotency check ligne 198
+    // ne matche pas mais le webhook part dans la branche CONNECT_MISSION_PAYMENT
+    // et tente un stripe.transfers.create(). Le webhook actuel ne crée pas de
+    // nouveau row stripe_transfers en secours, donc le paiement reste "dans
+    // les mains de Stripe" côté comptable sans qu'il soit rattaché à une
+    // mission côté plateforme. C'est intentionnel : on préfère laisser une
+    // anomalie visible (audit entry + pas de PAYEE sur factures_honoraires)
+    // plutôt qu'un flow miraculeux qui masque le bug DB initial. L'admin
+    // intervient manuellement pour réconcilier (via INSERT stripe_transfers
+    // ou refund Stripe).
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || null;
-    if (existingTransfer) {
-      await supabaseAdmin
-        .from("stripe_transfers")
-        .update({
-          stripe_payment_intent_id: paymentIntentId,
+
+    try {
+      if (transferAReutiliserId) {
+        const { error: updErr } = await supabaseAdmin
+          .from("stripe_transfers")
+          .update({
+            stripe_payment_intent_id: paymentIntentId,
+            montant_soignant: soignantCents / 100,
+            montant_commission: commissionCents / 100,
+            montant_total: totalCents / 100,
+            statut: "EN_ATTENTE",
+          })
+          .eq("id", transferAReutiliserId);
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabaseAdmin.from("stripe_transfers").insert({
+          mission_id,
+          soignant_id: soignantId,
+          etablissement_id: mission.etablissement_id,
           montant_soignant: soignantCents / 100,
           montant_commission: commissionCents / 100,
           montant_total: totalCents / 100,
+          stripe_payment_intent_id: paymentIntentId,
           statut: "EN_ATTENTE",
-        })
-        .eq("id", existingTransfer.id);
-    } else {
-      await supabaseAdmin.from("stripe_transfers").insert({
-        mission_id,
-        soignant_id: soignantId,
-        etablissement_id: mission.etablissement_id,
-        montant_soignant: soignantCents / 100,
-        montant_commission: commissionCents / 100,
-        montant_total: totalCents / 100,
-        stripe_payment_intent_id: paymentIntentId,
-        statut: "EN_ATTENTE",
-      });
-    }
+        });
+        if (insErr) throw insErr;
+      }
 
-    // Update mission payment mode
-    await supabaseAdmin
-      .from("missions")
-      .update({ mode_paiement_soignant: "STRIPE_CONNECT" })
-      .eq("id", mission_id);
+      // Update mission payment mode
+      const { error: missionErr } = await supabaseAdmin
+        .from("missions")
+        .update({ mode_paiement_soignant: "STRIPE_CONNECT" })
+        .eq("id", mission_id);
+      if (missionErr) throw missionErr;
+    } catch (dbErr) {
+      // DB écrit échoué post-Checkout Session → compensation
+      const dbErrMsg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      console.error("CHECKOUT_CREATED_DB_WRITE_FAILED:", dbErrMsg);
+
+      // Expire la session Stripe (fire-and-forget — si ça échoue, la session
+      // reste ouverte côté Stripe ; le webhook traitera l'anomalie Option A).
+      try {
+        await stripe.checkout.sessions.expire(session.id);
+        console.log(`Stripe session ${session.id} expired (compensation)`);
+      } catch (expireErr) {
+        const expireMsg = expireErr instanceof Error ? expireErr.message : String(expireErr);
+        console.error(`SESSION_EXPIRE_FAILED for ${session.id}:`, expireMsg);
+      }
+
+      // Audit trail pour investigation admin
+      await supabaseAdmin.rpc("fn_ecrire_audit_safe", {
+        p_acteur_id: mission.etablissement_id,
+        p_type_acteur: "SYSTEME",
+        p_action: "STRIPE_CHECKOUT_ORPHANED_RECOVERED",
+        p_type_ressource: "mission",
+        p_id_ressource: mission_id,
+        p_cle_s3: null,
+        p_details: {
+          stripe_session_id: session.id,
+          stripe_payment_intent_id: paymentIntentId,
+          db_error: dbErrMsg,
+          compensation_expire_attempted: true,
+        },
+        p_ip: null,
+        p_navigateur: "stripe-connect-pay-mission",
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: "CHECKOUT_FAILED_RETRY",
+          message: "Paiement impossible, veuillez réessayer dans quelques instants.",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        }
+      );
+    }
 
     return new Response(
       JSON.stringify({
@@ -330,11 +512,16 @@ serve(async (req) => {
       }
     );
   } catch (error: unknown) {
-    console.error("stripe-connect-pay-mission error:", error);
+    // [CP-STRIPE-6 H9] Mapping typed Stripe errors
+    const mapped = mapStripeError(error);
+    console[mapped.logLevel](`[stripe-connect-pay-mission] step=${step} ERROR:`, {
+      code: mapped.code,
+      raw: error instanceof Error ? error.message : String(error),
+    });
     return new Response(
-      JSON.stringify({ error: "Une erreur interne est survenue." }),
+      JSON.stringify({ error: mapped.code, message: mapped.userMessage, failed_at_step: step }),
       {
-        status: 500,
+        status: mapped.status,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       }
     );

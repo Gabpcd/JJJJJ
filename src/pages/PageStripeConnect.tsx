@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 const formatEur = (v: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 
-type ConnectStatut = 'NON_DEMANDE' | 'EN_COURS' | 'COMPLET' | 'SUSPENDU';
+type ConnectStatut = 'NON_DEMANDE' | 'EN_COURS' | 'COMPLET' | 'SUSPENDU' | 'SUPPRIME';
 type TypeExercice = 'SALARIE' | 'LIBERAL' | 'MIXTE' | null;
 
 export default function PageStripeConnect() {
@@ -30,9 +30,12 @@ export default function PageStripeConnect() {
   const [typeExercice, setTypeExercice] = useState<TypeExercice>(null);
   const [soignantNom, setSoignantNom] = useState('');
 
-  const chargerStatut = useCallback(async () => {
+  const chargerStatut = useCallback(async (forceRefresh = false) => {
     try {
-      const { data } = await supabase.functions.invoke('stripe-connect-status');
+      // [CP-STRIPE-6 H10] `?force=true` bypass le cache 5 min côté edge function
+      const { data } = await supabase.functions.invoke(
+        forceRefresh ? 'stripe-connect-status?force=true' : 'stripe-connect-status'
+      );
       if (data) {
         setStatut(data.statut || 'NON_DEMANDE');
         setIbanLast4(data.iban_last4 || null);
@@ -58,7 +61,7 @@ export default function PageStripeConnect() {
       // Load soignant type first
       const { data: sg } = await supabase.from('soignants')
         .select('prenom, nom, type_exercice, statut_liberal')
-        .eq('id', user.id).single();
+        .eq('id', user.id).maybeSingle();
 
       if (sg) {
         setTypeExercice((sg.type_exercice as TypeExercice) || 'SALARIE');
@@ -109,7 +112,8 @@ export default function PageStripeConnect() {
 
   const rafraichirStatut = async () => {
     setActionLoading(true);
-    await chargerStatut();
+    // [CP-STRIPE-6 H10] Bouton "Actualiser" → force=true (bypass cache)
+    await chargerStatut(true);
     await chargerRevenus();
     setActionLoading(false);
     toast.success('Statut actualisé');
@@ -340,6 +344,37 @@ export default function PageStripeConnect() {
                   {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
                   Compléter mon profil Stripe
                 </Button>
+              </div>
+            )}
+
+            {/* [CP-STRIPE-6 H11] SUPPRIME : compte Stripe Connect inexistant côté Stripe */}
+            {statut === 'SUPPRIME' && (
+              <div className="card-base border-destructive/30 bg-destructive/5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-destructive">Compte Stripe supprimé</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Votre compte Stripe Connect a été supprimé (clôture manuelle, fraude détectée par Stripe,
+                      ou décision admin plateforme). Vous ne pouvez plus recevoir de paiements Connect jusqu'à
+                      la création d'un nouveau compte.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={lancerOnboarding} disabled={actionLoading} variant="destructive" className="gap-2">
+                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                    Recommencer l'onboarding
+                  </Button>
+                  <Button
+                    onClick={() => navigate('/soignant/support')}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Info className="h-4 w-4" />
+                    Contacter le support
+                  </Button>
+                </div>
               </div>
             )}
           </>

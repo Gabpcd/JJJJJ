@@ -12,23 +12,33 @@ on:
   push:
     branches: [main] # double-check post-merge
 
+# Force les actions JS à utiliser Node 24 (Node 20 est déprécié sur GitHub
+# Actions runners depuis le 19 sept 2025, removal le 16 sept 2026).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   typecheck-and-build:
     name: Typecheck + build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
       - name: TypeScript strict check
-        run: npx tsc --noEmit
+        # `tsc -b` traverse les references (tsconfig.app.json + tsconfig.node.json).
+        # `tsc --noEmit` sans -p ou -b ne vérifierait RIEN car le tsconfig.json
+        # racine contient files: [] + des references — bug subtil qui a laissé
+        # passer des "Cannot find name" en prod (cf. crash dashboard AS sur
+        # getLabelProfession non importé).
+        run: npx tsc -b
 
       - name: Build
         run: npm run build
@@ -37,7 +47,7 @@ jobs:
     name: Drift detection (Lovable legacy patterns)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check for app.jolene.app legacy domain
         run: |
@@ -53,7 +63,7 @@ jobs:
           fi
           echo "::endgroup::"
 
-          echo "::group::Scanning for '#17A2B8' (old Soin Direct turquoise) in code"
+          echo "::group::Scanning for '#17A2B8' (ancien turquoise legacy) in code"
           # Scope: only real source files (not docs that may legitimately mention drift)
           HITS=$(grep -rn --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.css' --include='*.html' "#17A2B8" src/ supabase/functions/ public/ 2>/dev/null \
             | grep -v "^[[:space:]]*//" \

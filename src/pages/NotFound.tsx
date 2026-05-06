@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { HeartPulse, Home } from "lucide-react";
 
 const NotFound = () => {
+  usePageTitle('Page introuvable');
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="text-center max-w-md">

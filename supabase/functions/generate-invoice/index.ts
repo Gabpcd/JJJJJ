@@ -13,7 +13,8 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
+import { PDFDocument, StandardFonts, rgb, degrees } from 'npm:pdf-lib@1.17.1';
+import { applyRateLimit, getClientIp } from '../_shared/rate-limit.ts';
 
 /* ── Rate limit state (in-memory, per isolate) ── */
 const serviceRoleCallLog: number[] = [];
@@ -24,6 +25,7 @@ const VALID_REASON_PATTERNS = [
   /^admin_replay_[0-9a-f-]{36}$/,
   /^ops_test_.+$/,
   /^admin_invoke_[0-9a-f-]{36}:.+$/,
+  /^admin_resoudre_litige_immediate$/,
 ];
 
 function validateServiceRoleReason(reason: string | undefined): { valid: boolean; error?: string } {
@@ -31,7 +33,7 @@ function validateServiceRoleReason(reason: string | undefined): { valid: boolean
     return { valid: false, error: 'service_role_reason requis pour les appels service_role' };
   }
   if (!VALID_REASON_PATTERNS.some(p => p.test(reason))) {
-    return { valid: false, error: `service_role_invalid_reason: "${reason}" ne match aucun pattern autorisé (cron_auto_generation, admin_replay_<uuid>, ops_test_<purpose>)` };
+    return { valid: false, error: `service_role_invalid_reason: "${reason}" ne match aucun pattern autorisé (cron_auto_generation, admin_replay_<uuid>, ops_test_<purpose>, admin_resoudre_litige_immediate)` };
   }
   return { valid: true };
 }
@@ -66,6 +68,18 @@ function json(req: Request, body: unknown, status = 200) {
 }
 
 /* ── XML CII Generator (EN16931 BASIC WL) ── */
+
+/**
+ * Construire la mention légale de subrogation (art. 289 I-2 CGI + 242 nonies A).
+ * Jolene émet la facture au nom et pour le compte du soignant mandataire.
+ */
+function buildSubrogationMention(soignant: { prenom: string; nom: string; siret_liberal?: string | null }): string {
+  const joleneSiret = Deno.env.get('JOLENE_SIRET') || '';
+  const soignantFullName = `${soignant.prenom} ${soignant.nom}`.trim();
+  const soignantSiret = soignant.siret_liberal || '(SIRET non renseigne)';
+  return `Facture emise par JOLENE SAS (SIRET ${joleneSiret}) en qualite de mandataire de facturation au nom et pour le compte de ${soignantFullName} (SIRET ${soignantSiret}), conformement a l'article 289 I-2 du CGI et a l'article 242 nonies A du CGI.`;
+}
+
 function generateCiiXml(inv: {
   invoiceNumber: string;
   issueDate: string;
@@ -96,9 +110,23 @@ function generateCiiXml(inv: {
   factorBic?: string;
   factorName?: string;
   subrogationMention?: string;
+  // CP-LITIGES-6 : mode AVOIR (BT-3=381 + BT-25/BT-26)
+  isAvoir?: boolean;
+  precedingInvoiceNumber?: string;  // BT-25
+  precedingInvoiceIssueDate?: string; // BT-26 (YYYY-MM-DD)
 }): string {
   const fmtDate = (d: string) => d.replace(/-/g, '');
   const fmtAmt = (n: number) => n.toFixed(2);
+  // CP-LITIGES-6 : AVOIR → TypeCode 381 + montants négatifs + référence facture origine
+  const typeCode = inv.isAvoir ? '381' : '380';
+  const sign = inv.isAvoir ? -1 : 1;
+  const signed = (n: number) => fmtAmt(n * sign);
+  const precedingRef = inv.isAvoir && inv.precedingInvoiceNumber
+    ? `<ram:InvoiceReferencedDocument>
+        <ram:IssuerAssignedID>${escapeXml(inv.precedingInvoiceNumber)}</ram:IssuerAssignedID>
+        ${inv.precedingInvoiceIssueDate ? `<ram:FormattedIssueDateTime><qdt:DateTimeString format="102">${fmtDate(inv.precedingInvoiceIssueDate)}</qdt:DateTimeString></ram:FormattedIssueDateTime>` : ''}
+      </ram:InvoiceReferencedDocument>`
+    : '';
 
   const paymentMeans = inv.factorIban
     ? `<ram:SpecifiedTradeSettlementPaymentMeans>
@@ -135,7 +163,7 @@ function generateCiiXml(inv: {
   </rsm:ExchangedDocumentContext>
   <rsm:ExchangedDocument>
     <ram:ID>${escapeXml(inv.invoiceNumber)}</ram:ID>
-    <ram:TypeCode>380</ram:TypeCode>
+    <ram:TypeCode>${typeCode}</ram:TypeCode>
     <ram:IssueDateTime><udt:DateTimeString format="102">${fmtDate(inv.issueDate)}</udt:DateTimeString></ram:IssueDateTime>
     ${noteBlock}
   </rsm:ExchangedDocument>
@@ -180,6 +208,7 @@ function generateCiiXml(inv: {
           <ram:CountryID>FR</ram:CountryID>
         </ram:PostalTradeAddress>
       </ram:BuyerTradeParty>
+      ${precedingRef}
     </ram:ApplicableHeaderTradeAgreement>
     <ram:ApplicableHeaderTradeDelivery/>
     <ram:ApplicableHeaderTradeSettlement>
@@ -194,11 +223,11 @@ function generateCiiXml(inv: {
         <ram:DueDateDateTime><udt:DateTimeString format="102">${fmtDate(inv.dueDate)}</udt:DateTimeString></ram:DueDateDateTime>
       </ram:SpecifiedTradePaymentTerms>
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
-        <ram:LineTotalAmount>${fmtAmt(inv.amountHt)}</ram:LineTotalAmount>
-        <ram:TaxBasisTotalAmount>${fmtAmt(inv.amountHt)}</ram:TaxBasisTotalAmount>
-        <ram:TaxTotalAmount currencyID="${inv.currencyCode}">${fmtAmt(inv.amountTva)}</ram:TaxTotalAmount>
-        <ram:GrandTotalAmount>${fmtAmt(inv.amountTtc)}</ram:GrandTotalAmount>
-        <ram:DuePayableAmount>${fmtAmt(inv.amountTtc)}</ram:DuePayableAmount>
+        <ram:LineTotalAmount>${signed(inv.amountHt)}</ram:LineTotalAmount>
+        <ram:TaxBasisTotalAmount>${signed(inv.amountHt)}</ram:TaxBasisTotalAmount>
+        <ram:TaxTotalAmount currencyID="${inv.currencyCode}">${signed(inv.amountTva)}</ram:TaxTotalAmount>
+        <ram:GrandTotalAmount>${signed(inv.amountTtc)}</ram:GrandTotalAmount>
+        <ram:DuePayableAmount>${signed(inv.amountTtc)}</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
     </ram:ApplicableHeaderTradeSettlement>
   </rsm:SupplyChainTradeTransaction>
@@ -233,6 +262,14 @@ async function generateInvoicePdf(inv: {
   factorName?: string;
   factorIban?: string;
   mandatVersion: string;
+  // CP-LITIGES-6 : mode AVOIR
+  isAvoir?: boolean;
+  precedingInvoiceNumber?: string;
+  precedingInvoiceIssueDate?: string;
+  motifAvoir?: string;  // issu de litiges.resolution
+  // CP-LITIGES-7a FIX 7 : tampons ANNULEE / REMPLACEE
+  statut?: string;
+  replacedByInvoiceNumber?: string;
 }): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]); // A4
@@ -244,6 +281,9 @@ async function generateInvoicePdf(inv: {
   const black = rgb(0, 0, 0);
   const grey = rgb(0.4, 0.4, 0.4);
   const pink = rgb(0.878, 0.271, 0.565); // #E04590
+  const red = rgb(0.86, 0.15, 0.15);     // AVOIR title
+  const sign = inv.isAvoir ? -1 : 1;
+  const signedAmt = (n: number) => `${(n * sign).toFixed(2)} EUR`;
   const w = page.getWidth();
   let y = 800;
   const margin = 50;
@@ -263,7 +303,10 @@ async function generateInvoicePdf(inv: {
 
   // Header
   drawText('Jolene', margin, y, { font: fontBold, size: 18, color: pink });
-  drawText("FACTURE D'HONORAIRES", w - margin - 180, y, { font: fontBold, size: titleSize });
+  const titleText = inv.isAvoir ? 'AVOIR' : "FACTURE D'HONORAIRES";
+  const titleColor = inv.isAvoir ? red : black;
+  const titleOffset = inv.isAvoir ? 80 : 180;
+  drawText(titleText, w - margin - titleOffset, y, { font: fontBold, size: titleSize, color: titleColor });
   y -= 25;
   drawLine(y);
   y -= 20;
@@ -273,7 +316,30 @@ async function generateInvoicePdf(inv: {
   y -= 14;
   drawText(`Date d'emission : ${inv.issueDate}`, margin, y);
   drawText(`Date d'echeance : ${inv.dueDate}`, margin + 200, y);
-  y -= 25;
+  y -= 14;
+
+  // CP-LITIGES-6 : mention obligatoire AVOIR (art. L441-10 C. com.)
+  if (inv.isAvoir && inv.precedingInvoiceNumber) {
+    drawText(
+      `Avoir emis sur facture n. ${inv.precedingInvoiceNumber}${inv.precedingInvoiceIssueDate ? ` du ${inv.precedingInvoiceIssueDate}` : ''}`,
+      margin, y, { font: fontBold, size: sectionSize, color: red }
+    );
+    y -= 14;
+    if (inv.motifAvoir) {
+      drawText(`Motif : ${inv.motifAvoir.substring(0, 90)}`, margin, y, { size: 8, color: grey });
+      y -= 12;
+    }
+  }
+  // CP-LITIGES-7a FIX 7 : mention rectification pour facture REMPLACEE
+  if (inv.statut === 'REMPLACEE') {
+    const orange = rgb(0.95, 0.55, 0.05);
+    const mentionReplace = inv.replacedByInvoiceNumber
+      ? `Facture rectificative remplacee par ${inv.replacedByInvoiceNumber} (art. L441-9 C. com.).`
+      : `Facture rectifiee et remplacee (art. L441-9 C. com.).`;
+    drawText(mentionReplace, margin, y, { font: fontBold, size: sectionSize, color: orange });
+    y -= 14;
+  }
+  y -= 10;
 
   // Seller block
   drawText('EMETTEUR (Professionnel de sante)', margin, y, { font: fontBold, size: sectionSize });
@@ -332,17 +398,17 @@ async function generateInvoicePdf(inv: {
   drawText('TVA', w - margin - 120, y, { font: fontBold, size: 8 });
   drawText('TTC', w - margin - 60, y, { font: fontBold, size: 8 });
   y -= 4; drawLine(y); y -= 12;
-  // Table row
-  drawText('Honoraires', margin, y, { size: 8 });
-  drawText(`${inv.amountHt.toFixed(2)} EUR`, w - margin - 180, y, { size: 8 });
-  drawText(`${inv.amountTva.toFixed(2)} EUR`, w - margin - 120, y, { size: 8 });
-  drawText(`${inv.amountTtc.toFixed(2)} EUR`, w - margin - 60, y, { size: 8 });
+  // Table row (amounts signés pour AVOIR)
+  drawText(inv.isAvoir ? 'Avoir' : 'Honoraires', margin, y, { size: 8 });
+  drawText(signedAmt(inv.amountHt), w - margin - 180, y, { size: 8 });
+  drawText(signedAmt(inv.amountTva), w - margin - 120, y, { size: 8 });
+  drawText(signedAmt(inv.amountTtc), w - margin - 60, y, { size: 8 });
   y -= 4; drawLine(y); y -= 12;
   // Totals
   drawText('TOTAL', margin, y, { font: fontBold });
-  drawText(`${inv.amountHt.toFixed(2)} EUR`, w - margin - 180, y, { font: fontBold });
-  drawText(`${inv.amountTva.toFixed(2)} EUR`, w - margin - 120, y, { font: fontBold });
-  drawText(`${inv.amountTtc.toFixed(2)} EUR`, w - margin - 60, y, { font: fontBold });
+  drawText(signedAmt(inv.amountHt), w - margin - 180, y, { font: fontBold });
+  drawText(signedAmt(inv.amountTva), w - margin - 120, y, { font: fontBold });
+  drawText(signedAmt(inv.amountTtc), w - margin - 60, y, { font: fontBold });
   y -= 20;
 
   // VAT exemption
@@ -369,6 +435,34 @@ async function generateInvoicePdf(inv: {
   y -= 10;
   drawText('art. 289 I-2 du Code General des Impots', margin, y, { size: 7, color: grey });
 
+  // CP-LITIGES-7a FIX 7 : tampon diagonal ANNULEE / REMPLACEE
+  if (inv.statut === 'ANNULEE' || inv.statut === 'REMPLACEE') {
+    const isAnnulee = inv.statut === 'ANNULEE';
+    const stampColor = isAnnulee
+      ? rgb(0.86, 0.15, 0.15)  // red
+      : rgb(0.95, 0.55, 0.05); // orange
+    const stampMain = isAnnulee ? 'ANNULEE' : 'REMPLACEE';
+    const stampSub = !isAnnulee && inv.replacedByInvoiceNumber
+      ? `par facture ${inv.replacedByInvoiceNumber}`
+      : null;
+    const rot = degrees(30);
+    // Anchor tuned for visual centering of a diagonal stamp on A4 (595x842).
+    page.drawText(stampMain, {
+      x: 90, y: 320,
+      font: fontBold, size: 100,
+      color: stampColor, opacity: 0.35,
+      rotate: rot,
+    });
+    if (stampSub) {
+      page.drawText(stampSub, {
+        x: 170, y: 280,
+        font: fontBold, size: 22,
+        color: stampColor, opacity: 0.45,
+        rotate: rot,
+      });
+    }
+  }
+
   return await pdfDoc.save();
 }
 
@@ -376,6 +470,12 @@ async function generateInvoicePdf(inv: {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(req) });
+
+  // Rate-limit IP : 30 générations facture/min/IP (en plus du rate-limit
+  // service_role spécifique plus bas pour les appels cron).
+  if (applyRateLimit('generate-invoice', getClientIp(req), { max: 30, windowMs: 60_000 })) {
+    return json(req, { error: 'Trop de demandes. Réessayez dans 1 minute.' }, 429);
+  }
 
   try {
     const authHeader = req.headers.get('Authorization');
@@ -390,8 +490,24 @@ Deno.serve(async (req) => {
     const isServiceRole = token === serviceRoleKey;
 
     const body = await req.json();
-    const { mission_id, service_role_reason } = body;
-    if (!mission_id) return json(req, { error: 'mission_id requis' }, 400);
+    const {
+      mission_id,
+      facture_id,
+      service_role_reason,
+      // Partie 2 — facturation hebdomadaire libérale (optionnels)
+      // Quand fournis, génère une facture hebdo intermédiaire ou finale partielle
+      // pour la période donnée. Quand absents, comportement actuel (mission entière).
+      periode_debut,        // 'YYYY-MM-DD' ou undefined
+      periode_fin,          // 'YYYY-MM-DD' ou undefined
+      numero_semaine_iso,   // smallint ou undefined (NULL pour finale unique)
+      annee_iso,            // smallint ou undefined
+      est_facture_finale_mission, // boolean (default true si périodes absentes)
+    } = body;
+    if (!mission_id && !facture_id) {
+      return json(req, { error: 'mission_id ou facture_id requis' }, 400);
+    }
+    const isHebdoMode = !!(mission_id && periode_debut && periode_fin);
+    const isFinaleFromHebdo = !!(mission_id && periode_debut && periode_fin && est_facture_finale_mission === true);
 
     // ── Service_role bypass: validate reason + rate limit ──
     if (isServiceRole) {
@@ -417,19 +533,211 @@ Deno.serve(async (req) => {
       if (authError || !userData?.user) return json(req, { error: 'Token invalide' }, 401);
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // MODE REGEN (CP-LITIGES-6) — facture_id fourni
+    // Regénère PDF + Factur-X XML + upload S3 + Chorus resubmission
+    // pour une facture existante (cas AVOIR ou ANNULER_REEMETTRE).
+    // ═══════════════════════════════════════════════════════════
+    if (facture_id && !mission_id) {
+      const { data: facture, error: fErr } = await supabaseAdmin
+        .from('factures_honoraires')
+        .select('id, numero_facture, soignant_id, etablissement_id, mission_id, montant_ht, montant_tva, montant_ttc, taux_tva, exoneration_tva, date_emission, date_echeance, statut, mandat_version, type_document, facture_precedente_id, litige_id, is_public_sector, service_code_chorus')
+        .eq('id', facture_id)
+        .single();
+      if (fErr || !facture) return json(req, { error: 'Facture introuvable' }, 404);
+
+      // Charger soignant + etab + mission (lookup pour description)
+      const [{ data: sg }, { data: et }, { data: ms }] = await Promise.all([
+        supabaseAdmin.from('soignants').select('id, prenom, nom, profession, numero_rpps, numero_adeli, siret_liberal, email, adresse_rue, adresse_ville, adresse_code_postal, assujetti_tva, numero_tva').eq('id', facture.soignant_id).single(),
+        supabaseAdmin.from('etablissements').select('id, nom, siret, adresse_rue, adresse_ville, adresse_code_postal, est_secteur_public, chorus_pro_actif').eq('id', facture.etablissement_id).single(),
+        supabaseAdmin.from('missions').select('id, intitule, service, debut_le, fin_le, duree_heures').eq('id', facture.mission_id).maybeSingle(),
+      ]);
+      if (!sg || !et) return json(req, { error: 'Soignant/établissement introuvable' }, 404);
+
+      const isAvoir = facture.type_document === 'AVOIR';
+      let precedingNumero: string | null = null;
+      let precedingDate: string | null = null;
+      let motifAvoir: string | null = null;
+      let replacedByNumero: string | null = null;
+
+      if (isAvoir) {
+        if (!facture.facture_precedente_id) {
+          return json(req, { error: 'AVOIR sans facture_precedente_id — incohérence critique' }, 400);
+        }
+        const { data: prec } = await supabaseAdmin
+          .from('factures_honoraires')
+          .select('numero_facture, date_emission')
+          .eq('id', facture.facture_precedente_id)
+          .single();
+        precedingNumero = prec?.numero_facture ?? null;
+        precedingDate = prec?.date_emission ?? null;
+
+        if (facture.litige_id) {
+          const { data: lit } = await supabaseAdmin
+            .from('litiges')
+            .select('resolution')
+            .eq('id', facture.litige_id)
+            .single();
+          motifAvoir = lit?.resolution ?? null;
+        }
+      }
+
+      // CP-LITIGES-7a FIX 7 : pour tampon REMPLACEE, lookup successeur
+      if (facture.statut === 'REMPLACEE') {
+        const { data: succ } = await supabaseAdmin
+          .from('factures_honoraires')
+          .select('numero_facture, cree_le')
+          .eq('facture_precedente_id', facture.id)
+          .order('cree_le', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        replacedByNumero = succ?.numero_facture ?? null;
+      }
+
+      const sellerAddress = [sg.adresse_rue, sg.adresse_code_postal, sg.adresse_ville].filter(Boolean).join(', ');
+      const buyerAddress = [et.adresse_rue, et.adresse_code_postal, et.adresse_ville].filter(Boolean).join(', ');
+      const description = isAvoir
+        ? `Avoir sur facture ${precedingNumero ?? ''}${motifAvoir ? ' — ' + motifAvoir.substring(0, 100) : ''}`
+        : `Honoraires — ${ms?.intitule || 'Mission'} (${ms?.service || ''}) du ${ms?.debut_le || ''} au ${ms?.fin_le || ''} — ${ms?.duree_heures || 0}h`;
+
+      const subrogationMention = buildSubrogationMention(sg);
+
+      const xmlCii = generateCiiXml({
+        invoiceNumber: facture.numero_facture,
+        issueDate: facture.date_emission,
+        dueDate: facture.date_echeance,
+        sellerName: `${sg.prenom} ${sg.nom}`,
+        sellerSiret: sg.siret_liberal || '',
+        sellerRpps: sg.numero_rpps || '',
+        sellerAdeli: sg.numero_adeli || '',
+        sellerAddress: sg.adresse_rue || '',
+        sellerCity: sg.adresse_ville || '',
+        sellerPostalCode: sg.adresse_code_postal || '',
+        sellerEmail: sg.email || '',
+        buyerName: et.nom,
+        buyerSiret: et.siret || '',
+        buyerAddress: et.adresse_rue || '',
+        buyerCity: et.adresse_ville || '',
+        buyerPostalCode: et.adresse_code_postal || '',
+        serviceCode: facture.service_code_chorus || '',
+        description,
+        amountHt: Number(facture.montant_ht) || 0,
+        amountTva: Number(facture.montant_tva) || 0,
+        amountTtc: Number(facture.montant_ttc) || 0,
+        vatRate: Number(facture.taux_tva) || 0,
+        vatExempt: !!facture.exoneration_tva,
+        vatExemptionReason: facture.exoneration_tva ? 'TVA non applicable — art. 261, 4-1° du CGI (actes médicaux et paramédicaux)' : '',
+        currencyCode: 'EUR',
+        subrogationMention,
+        isAvoir,
+        precedingInvoiceNumber: precedingNumero ?? undefined,
+        precedingInvoiceIssueDate: precedingDate ?? undefined,
+      });
+
+      const pdfBytes = await generateInvoicePdf({
+        invoiceNumber: facture.numero_facture,
+        issueDate: facture.date_emission,
+        dueDate: facture.date_echeance,
+        sellerName: `${sg.prenom} ${sg.nom}`,
+        sellerProfession: sg.profession || '',
+        sellerSiret: sg.siret_liberal || '',
+        sellerRpps: sg.numero_rpps || '',
+        sellerAdeli: sg.numero_adeli || '',
+        sellerAddress,
+        buyerName: et.nom,
+        buyerSiret: et.siret || '',
+        buyerAddress,
+        description,
+        amountHt: Number(facture.montant_ht) || 0,
+        amountTva: Number(facture.montant_tva) || 0,
+        amountTtc: Number(facture.montant_ttc) || 0,
+        vatExempt: !!facture.exoneration_tva,
+        vatExemptionReason: facture.exoneration_tva ? 'TVA non applicable - art. 261, 4-1 du CGI (actes medicaux et paramedicaux)' : '',
+        mandatVersion: facture.mandat_version || '1.1',
+        subrogationMention,
+        isAvoir,
+        precedingInvoiceNumber: precedingNumero ?? undefined,
+        precedingInvoiceIssueDate: precedingDate ?? undefined,
+        motifAvoir: motifAvoir ?? undefined,
+        statut: facture.statut,
+        replacedByInvoiceNumber: replacedByNumero ?? undefined,
+      });
+
+      const subDir = isAvoir ? 'avoirs' : 'invoices';
+      const storagePath = `${subDir}/${sg.id}/${facture.numero_facture}.pdf`;
+      const xmlPath = `${subDir}/${sg.id}/${facture.numero_facture}.xml`;
+
+      await supabaseAdmin.storage.from('jolene-documents')
+        .upload(storagePath, new Blob([pdfBytes], { type: 'application/pdf' }), { upsert: true });
+      await supabaseAdmin.storage.from('jolene-documents')
+        .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: true });
+
+      const { error: upErr } = await supabaseAdmin
+        .from('factures_honoraires')
+        .update({
+          pdf_s3_key: storagePath,
+          facturx_xml_url: xmlPath,
+          pdf_a_regenerer: false,
+          chorus_avoir_reference_invoice: isAvoir ? precedingNumero : null,
+        })
+        .eq('id', facture_id);
+      if (upErr) return json(req, { error: `UPDATE facture échoué : ${upErr.message}` }, 500);
+
+      if (facture.is_public_sector) {
+        try {
+          await supabaseAdmin.functions.invoke('submit-to-chorus', {
+            body: { facture_honoraire_id: facture_id, type_document: facture.type_document },
+          });
+        } catch (e) { console.warn('Chorus regen deferred:', e); }
+      }
+
+      console.log(`[generate-invoice] REGEN ${facture.type_document} ${facture.numero_facture} (id=${facture_id})`);
+      return json(req, {
+        success: true,
+        mode: 'regen',
+        facture_id,
+        type_document: facture.type_document,
+        numero_facture: facture.numero_facture,
+        pdf_path: storagePath,
+        xml_path: xmlPath,
+      });
+    }
+
+    if (!mission_id) return json(req, { error: 'mission_id requis' }, 400);
+
     // 1. Vérifier mission TERMINEE
     const { data: mission, error: mErr } = await supabaseAdmin
       .from('missions')
-      .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer, montant_commission_ht, soignant_assigne_id, etablissement_id, statut')
+      .select('id, intitule, service, debut_le, fin_le, duree_heures, taux_horaire_base, total_brut, net_a_payer, montant_commission_ht, soignant_assigne_id, etablissement_id, statut, type_contrat_applique')
       .eq('id', mission_id)
       .single();
 
     if (mErr || !mission) return json(req, { error: 'Mission introuvable' }, 404);
     if (mission.statut !== 'TERMINEE') return json(req, { error: `Mission en statut ${mission.statut}, doit être TERMINEE` }, 400);
 
+    // Fix E — garde type_contrat_applique selon docs/logique-paiements-v1 §1.
+    // Jolene est mandataire de facturation UNIQUEMENT pour les missions LIBERAL
+    // (art. 289 I-2 CGI). Les missions SALARIE passent par bulletin de paie,
+    // pas par facture honoraires (sinon risque de requalification intérim).
+    if (mission.type_contrat_applique === 'SALARIE') {
+      return json(req, {
+        error: 'CONTRAT_SALARIE_NON_FACTURE_HONORAIRES',
+        message: "Les missions en contrat salarié passent par bulletin de paie, pas par facture honoraires. Seules les missions libérales génèrent une facture honoraires (mandat de facturation art. 289 I-2 CGI).",
+      }, 400);
+    }
+    if (mission.type_contrat_applique == null) {
+      return json(req, {
+        error: 'CONTRAT_NON_FIGE',
+        message: "Le type de contrat doit être figé (mission assignée) avant de générer une facture honoraires. Assignez un soignant d'abord.",
+      }, 400);
+    }
+
     // 1b. Garde-fou pré-facturation CP5b (créneaux ouverts + écart > 10%)
+    //     Partie 2 : passe la période si mode hebdo, sinon mission entière.
     const { data: preCheck, error: preCheckErr } = await supabaseAdmin
-      .rpc('fn_verifier_pre_facturation', { p_mission_id: mission_id });
+      .rpc('fn_verifier_pre_facturation', isHebdoMode
+        ? { p_mission_id: mission_id, p_periode_debut: periode_debut, p_periode_fin: periode_fin }
+        : { p_mission_id: mission_id });
 
     if (preCheckErr) {
       console.warn(`[generate-invoice] pré-facturation bloquée: ${preCheckErr.message}`);
@@ -458,15 +766,25 @@ Deno.serve(async (req) => {
     if (!etab) return json(req, { error: 'Établissement introuvable' }, 404);
 
     // 4. Vérifier pas de doublon
-    const { data: existing } = await supabaseAdmin
-      .from('factures_honoraires')
-      .select('id, numero_facture')
-      .eq('mission_id', mission_id)
-      .not('statut', 'eq', 'ANNULEE')
-      .maybeSingle();
-
-    if (existing) {
-      return json(req, { error: `Une facture existe déjà pour cette mission : ${existing.numero_facture}`, facture_id: existing.id }, 409);
+    //    - Mode finale unique (mission entière) : un seul est_facture_finale_mission=true par mission
+    //    - Mode hebdo : un seul (mission, annee_iso, num_sem) avec est_facture_finale_mission=false
+    {
+      let q = supabaseAdmin
+        .from('factures_honoraires')
+        .select('id, numero_facture, est_facture_finale_mission, periode_debut, periode_fin')
+        .eq('mission_id', mission_id)
+        .not('statut', 'in', '("ANNULEE","REMPLACEE","ERREUR_GENERATION")');
+      if (isHebdoMode && est_facture_finale_mission !== true) {
+        // doublon hebdo
+        q = q.eq('annee_iso', annee_iso).eq('numero_semaine_iso', numero_semaine_iso).eq('est_facture_finale_mission', false);
+      } else {
+        // doublon finale (FINALE_UNIQUE ou facture finale partielle d'une mission HEBDO_ET_FINALE)
+        q = q.eq('est_facture_finale_mission', true);
+      }
+      const { data: existing } = await q.maybeSingle();
+      if (existing) {
+        return json(req, { error: `Une facture existe déjà : ${existing.numero_facture}`, facture_id: existing.id }, 409);
+      }
     }
 
     // 5. Générer le numéro de facture
@@ -476,7 +794,25 @@ Deno.serve(async (req) => {
     if (numErr || !invoiceNumber) return json(req, { error: 'Erreur génération numéro de facture' }, 500);
 
     // 6. Calculer les montants
-    const amountHt = Number(mission.net_a_payer) || Number(mission.total_brut) || 0;
+    //    - Mode finale unique : amountHt = mission.net_a_payer (comme avant)
+    //    - Mode hebdo / finale partielle : appel fn_calculer_montant_periode
+    let amountHt: number;
+    let cumulHt = 0;
+    let cumulNbFactures = 0;
+    if (isHebdoMode) {
+      const { data: calc, error: calcErr } = await supabaseAdmin
+        .rpc('fn_calculer_montant_periode', {
+          p_mission_id: mission_id, p_periode_debut: periode_debut, p_periode_fin: periode_fin,
+        });
+      if (calcErr) return json(req, { error: `Erreur calcul montant période : ${calcErr.message}` }, 500);
+      amountHt = Number((calc as any)?.montant_ht_periode) || 0;
+      const { data: cumul } = await supabaseAdmin
+        .rpc('fn_cumul_factures_mission', { p_mission_id: mission_id, p_jusqu_au: periode_debut });
+      cumulHt = Number((cumul as any)?.cumul_ht) || 0;
+      cumulNbFactures = Number((cumul as any)?.nb_factures) || 0;
+    } else {
+      amountHt = Number(mission.net_a_payer) || Number(mission.total_brut) || 0;
+    }
     const vatExempt = !soignant.assujetti_tva;
     const vatRate = vatExempt ? 0 : 20;
     const amountTva = vatExempt ? 0 : Math.round(amountHt * vatRate) / 100;
@@ -505,7 +841,23 @@ Deno.serve(async (req) => {
     // 9. Generate XML CII
     const sellerAddress = [soignant.adresse_rue, soignant.adresse_code_postal, soignant.adresse_ville].filter(Boolean).join(', ');
     const buyerAddress = [etab.adresse_rue, etab.adresse_code_postal, etab.adresse_ville].filter(Boolean).join(', ');
-    const description = `Honoraires — ${mission.intitule || 'Mission'} (${mission.service || ''}) du ${mission.debut_le || ''} au ${mission.fin_le || ''} — ${mission.duree_heures || 0}h`;
+    // Description avec mention hebdo + cumul si applicable
+    let description: string;
+    if (isHebdoMode && est_facture_finale_mission !== true) {
+      const cumulMention = cumulNbFactures > 0
+        ? ` — Cumul mission depuis début : ${cumulHt.toFixed(2)} EUR HT (${cumulNbFactures} facture(s) precedente(s))`
+        : '';
+      description = `Facture hebdomadaire S${numero_semaine_iso}/${annee_iso} — ${mission.intitule || 'Mission'} — Periode du ${periode_debut} au ${periode_fin}${cumulMention}`;
+    } else if (isFinaleFromHebdo) {
+      const cumulMention = cumulNbFactures > 0
+        ? ` — Cumul deja facture : ${cumulHt.toFixed(2)} EUR HT (${cumulNbFactures} facture(s) hebdo)`
+        : '';
+      description = `Facture finale — ${mission.intitule || 'Mission'} — Periode du ${periode_debut} au ${periode_fin}${cumulMention}`;
+    } else {
+      description = `Honoraires — ${mission.intitule || 'Mission'} (${mission.service || ''}) du ${mission.debut_le || ''} au ${mission.fin_le || ''} — ${mission.duree_heures || 0}h`;
+    }
+
+    subrogationMention = buildSubrogationMention(soignant);
 
     const xmlCii = generateCiiXml({
       invoiceNumber: invoiceNumber as string,
@@ -533,6 +885,7 @@ Deno.serve(async (req) => {
       vatExempt,
       vatExemptionReason: vatExempt ? 'TVA non applicable — art. 261, 4-1° du CGI (actes médicaux et paramédicaux)' : '',
       currencyCode: 'EUR',
+      subrogationMention,
     });
 
     // 10. Generate real PDF binary via pdf-lib
@@ -556,24 +909,32 @@ Deno.serve(async (req) => {
       vatExempt,
       vatExemptionReason: vatExempt ? 'TVA non applicable - art. 261, 4-1 du CGI (actes medicaux et paramedicaux)' : '',
       mandatVersion: soignant.mandat_facturation_version || '1.1',
+      subrogationMention,
     });
 
     // 11. Upload to Supabase Storage
     const storagePath = `invoices/${soignant.id}/${invoiceNumber}.pdf`;
     const xmlPath = `invoices/${soignant.id}/${invoiceNumber}.xml`;
 
-    const { error: uploadErr } = await supabaseAdmin.storage
-      .from('jolene-documents')
-      .upload(storagePath, new Blob([pdfBytes], { type: 'application/pdf' }), { upsert: true });
+    // 11b. Lookup facture précédente pour chaînage hebdo (Partie 2)
+    let facturePrecedenteId: string | null = null;
+    if (isHebdoMode) {
+      const { data: prev } = await supabaseAdmin
+        .from('factures_honoraires')
+        .select('id')
+        .eq('mission_id', mission_id)
+        .not('statut', 'in', '("ANNULEE","REMPLACEE","ERREUR_GENERATION","EN_GENERATION")')
+        .lt('periode_fin', periode_debut)
+        .order('periode_fin', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      facturePrecedenteId = prev?.id ?? null;
+    }
 
-    const { error: xmlUploadErr } = await supabaseAdmin.storage
-      .from('jolene-documents')
-      .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: true });
-
-    if (uploadErr) console.error('PDF upload error:', uploadErr);
-    if (xmlUploadErr) console.error('XML upload error:', xmlUploadErr);
-
-    // 12. Insert facture honoraire
+    // 12. Insert facture en statut EN_GENERATION (D11) — réserve le slot
+    //     et empêche tout doublon hebdo concurrent. Sera passée à EMISE
+    //     après succès upload PDF/XML, ou ERREUR_GENERATION sinon.
+    const finalFlag = isHebdoMode ? (est_facture_finale_mission === true) : true;
     const { data: facture, error: insertErr } = await supabaseAdmin
       .from('factures_honoraires')
       .insert({
@@ -588,14 +949,18 @@ Deno.serve(async (req) => {
         exoneration_tva: vatExempt,
         date_emission: issueDate,
         date_echeance: dueDate,
-        statut: 'EMISE',
+        statut: 'EN_GENERATION',
         mandat_version: soignant.mandat_facturation_version || '1.1',
         template_version: 'v2_facturx',
-        pdf_s3_key: storagePath,
-        facturx_xml_url: xmlPath,
         is_public_sector: etab.est_secteur_public || false,
         siret_client: etab.siret || null,
         service_code_chorus: serviceCodeChorus,
+        periode_debut: isHebdoMode ? periode_debut : (mission.debut_le ? String(mission.debut_le).slice(0,10) : issueDate),
+        periode_fin: isHebdoMode ? periode_fin : (mission.fin_le ? String(mission.fin_le).slice(0,10) : issueDate),
+        numero_semaine_iso: (isHebdoMode && !finalFlag) ? numero_semaine_iso : null,
+        annee_iso: (isHebdoMode && !finalFlag) ? annee_iso : null,
+        est_facture_finale_mission: finalFlag,
+        facture_precedente_id: facturePrecedenteId,
       })
       .select('id, numero_facture')
       .single();
@@ -603,6 +968,42 @@ Deno.serve(async (req) => {
     if (insertErr) {
       console.error('Insert facture error:', insertErr);
       return json(req, { error: `Erreur insertion facture : ${insertErr.message}` }, 500);
+    }
+
+    // Upload PDF + XML, puis UPDATE → EMISE. En cas d'échec, ERREUR_GENERATION.
+    const { error: uploadErr } = await supabaseAdmin.storage
+      .from('jolene-documents')
+      .upload(storagePath, new Blob([pdfBytes], { type: 'application/pdf' }), { upsert: true });
+
+    const { error: xmlUploadErr } = await supabaseAdmin.storage
+      .from('jolene-documents')
+      .upload(xmlPath, new Blob([xmlCii], { type: 'application/xml' }), { upsert: true });
+
+    if (uploadErr || xmlUploadErr) {
+      console.error('Upload error:', uploadErr || xmlUploadErr);
+      await supabaseAdmin.from('factures_honoraires').update({
+        statut: 'ERREUR_GENERATION',
+      }).eq('id', facture!.id);
+      // Audit alerte admin
+      await supabaseAdmin.from('journaux_audit').insert({
+        acteur_id: null, type_acteur: 'SYSTEME',
+        action: 'ADMIN_ACTION', type_ressource: 'facture_honoraire',
+        id_ressource: facture!.id,
+        details: { event: 'GENERATION_INVOICE_FAIL', error: String(uploadErr || xmlUploadErr), mission_id, periode_debut, periode_fin },
+      });
+      return json(req, { error: 'Echec upload PDF/XML — facture en ERREUR_GENERATION', facture_id: facture!.id }, 500);
+    }
+
+    // Tout est ok → passage en EMISE avec pdf/xml paths
+    const { error: updErr } = await supabaseAdmin
+      .from('factures_honoraires')
+      .update({
+        statut: 'EMISE', pdf_s3_key: storagePath, facturx_xml_url: xmlPath,
+      })
+      .eq('id', facture!.id);
+    if (updErr) {
+      console.error('Update EMISE error:', updErr);
+      return json(req, { error: `Erreur passage EMISE : ${updErr.message}`, facture_id: facture!.id }, 500);
     }
 
     // 13. If public sector, trigger Chorus submission (stub)

@@ -19,6 +19,7 @@ import {
 } from '@/lib/biometric';
 import { hapticNotification } from '@/lib/haptics';
 import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
+import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 
 export default function PageConnexion() {
   usePageTitle('Connexion');
@@ -32,6 +33,10 @@ export default function PageConnexion() {
   const [submitting, setSubmitting] = useState(false);
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioLoading, setBioLoading] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
+  const [resetTurnstileToken, setResetTurnstileToken] = useState<string | null>(null);
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [loginTurnstileToken, setLoginTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (isNative()) {
@@ -135,9 +140,13 @@ export default function PageConnexion() {
       afficherNotification({ type: 'erreur', message: 'Veuillez remplir tous les champs.' });
       return;
     }
+    if (TURNSTILE_REQUIRED && !loginTurnstileToken) {
+      afficherNotification({ type: 'erreur', message: 'Vérification de sécurité en cours, réessayez dans un instant.' });
+      return;
+    }
     setSubmitting(true);
     try {
-      await connexion(email, motDePasse);
+      await connexion(email, motDePasse, loginTurnstileToken || undefined);
       afficherNotification({ type: 'succes', message: 'Connexion réussie !' });
       await navigateToRole();
     } catch (err) {
@@ -174,13 +183,28 @@ export default function PageConnexion() {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input type={afficherMdp ? "text" : "password"} autoComplete="current-password" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} placeholder="••••••••" className="input-base pl-10 pr-10" required />
-                <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <button
+                  type="button"
+                  onClick={() => setAfficherMdp(!afficherMdp)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={afficherMdp ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  aria-pressed={afficherMdp}
+                >
+                  {afficherMdp ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
                 </button>
               </div>
             </div>
 
-            <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+            {/* Widget Turnstile visible (mode `normal`) — le mode `invisible`
+                lançait un challenge silencieux qui crée des iframes srcdoc
+                nichés, sensibles à la CSP `about:srcdoc` + extensions anti-
+                fingerprint + Service Workers. Symptôme : "Blocked a frame with
+                origin challenges.cloudflare.com" en mode normal du navigateur
+                (OK en incognito sans extensions). Mode visible = iframe direct,
+                pas d'imbrication srcdoc, robuste. */}
+            <CaptchaTurnstile className="flex justify-center" onVerify={setLoginTurnstileToken} onExpire={() => setLoginTurnstileToken(null)} onError={() => setLoginTurnstileToken(null)} />
+
+            <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" data-testid="login-submit">
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {submitting ? 'Connexion…' : 'Se connecter'}
             </button>
@@ -221,29 +245,77 @@ export default function PageConnexion() {
             <button onClick={() => navigate('/inscription/etablissement')} className="btn-secondary w-full text-sm">Créer un compte établissement</button>
           </div>
 
-          <p className="text-center mt-4">
-            <button
-              type="button"
-              onClick={async () => {
-                if (!email) {
-                  afficherNotification({ type: 'erreur', message: 'Saisissez votre email avant de demander une réinitialisation.' });
-                  return;
-                }
-                const { supabase } = await import('@/integrations/supabase/client');
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                  redirectTo: 'https://jolene.app/connexion',
-                });
-                if (error) {
-                  afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });
-                } else {
-                  afficherNotification({ type: 'succes', message: 'Email de réinitialisation envoyé. Vérifiez votre boîte mail.' });
-                }
-              }}
-              className="text-sm text-primary hover:underline"
-            >
-              Mot de passe oublié ?
-            </button>
-          </p>
+          <div className="text-center mt-4">
+            {!resetMode ? (
+              <button
+                type="button"
+                onClick={() => setResetMode(true)}
+                className="text-sm text-primary hover:underline"
+              >
+                Mot de passe oublié ?
+              </button>
+            ) : (
+              <div className="space-y-2">
+                {email ? (
+                  <p className="text-xs text-muted-foreground">Email de réinitialisation envoyé à <strong>{email}</strong></p>
+                ) : (
+                  <label className="block text-left">
+                    <span className="text-xs font-medium text-foreground mb-1 block">Email de votre compte</span>
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="votre@email.com"
+                      className="input-base text-sm"
+                      required
+                    />
+                  </label>
+                )}
+                <CaptchaTurnstile className="flex justify-center" onVerify={setResetTurnstileToken} onExpire={() => setResetTurnstileToken(null)} onError={() => setResetTurnstileToken(null)} />
+                <div className="flex gap-2 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => { setResetMode(false); setResetTurnstileToken(null); }}
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    disabled={resetSubmitting || !email}
+                    onClick={async () => {
+                      if (!email) {
+                        afficherNotification({ type: 'erreur', message: 'Saisissez votre email avant de demander une réinitialisation.' });
+                        return;
+                      }
+                      setResetSubmitting(true);
+                      try {
+                        const { supabase } = await import('@/integrations/supabase/client');
+                        const opts: { redirectTo: string; captchaToken?: string } = {
+                          redirectTo: `${window.location.origin}/reset-password`,
+                        };
+                        if (resetTurnstileToken) opts.captchaToken = resetTurnstileToken;
+                        const { error } = await supabase.auth.resetPasswordForEmail(email, opts);
+                        if (error) {
+                          afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'envoi. Vérifiez votre email.' });
+                        } else {
+                          afficherNotification({ type: 'succes', message: 'Email de réinitialisation envoyé. Vérifiez votre boîte mail.' });
+                          setResetMode(false);
+                        }
+                      } finally {
+                        setResetSubmitting(false);
+                        setResetTurnstileToken(null);
+                      }
+                    }}
+                    className="text-xs text-primary hover:underline disabled:opacity-50"
+                  >
+                    {resetSubmitting ? 'Envoi…' : 'Envoyer'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <FooterLegal />

@@ -39,7 +39,7 @@ export default function PageParrainage() {
       .from('soignants')
       .select('code_parrainage, badge_ambassadeur, priorite_missions_urgentes')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     if (soignant) {
       setCodeParrainage(soignant.code_parrainage || '');
@@ -126,11 +126,18 @@ export default function PageParrainage() {
             </div>
           )}
 
-          <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20 mb-2">
             <Zap className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
             <div className="text-sm text-foreground">
-              <p className="font-semibold">Avantage : Accès prioritaire aux missions urgentes</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Les missions urgentes vous sont visibles <strong>15 minutes avant</strong> les autres soignants.</p>
+              <p className="font-semibold">Bonus immédiat : +50 heures cumulées</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Dès que votre filleul applique votre code à l'inscription, vous gagnez tous les deux <strong>+50h sur votre compteur</strong> (utile pour le seuil 3 200h libéral).</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
+            <Shield className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-foreground">
+              <p className="font-semibold">Badge Ambassadeur visible</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Une fois débloqué, le badge Ambassadeur apparaît sur votre profil côté établissements (annuaire, recherches, candidatures).</p>
             </div>
           </div>
         </div>
@@ -206,9 +213,9 @@ export default function PageParrainage() {
           </h3>
           <ol className="text-sm text-muted-foreground leading-relaxed space-y-2 list-decimal list-inside">
             <li>Partagez votre code ou lien avec vos collègues soignants</li>
-            <li>Ils s'inscrivent et terminent leur première mission sur Jolene</li>
-            <li>Après <strong>3 filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
-            <li>Le badge vous donne accès aux missions urgentes <strong>15 min avant tout le monde</strong></li>
+            <li>Dès qu'ils appliquent votre code à l'inscription : <strong>+50h cumulées</strong> (parrain + filleul)</li>
+            <li>Quand ils terminent leur première mission, ils sont comptés comme « validés »</li>
+            <li>Après <strong>3 filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span> visible sur votre profil côté établissements</li>
           </ol>
           <div className="mt-3 p-2 rounded-lg bg-muted text-xs text-muted-foreground">
             ℹ️ Le parrainage Jolene est un système de recommandation sans rétribution financière, conforme à la réglementation.
@@ -225,7 +232,7 @@ export default function PageParrainage() {
               <p className="text-muted-foreground text-sm">Aucun filleul pour le moment. Partagez votre lien !</p>
             </div>
           ) : (
-            <div className="rounded-xl border border-border overflow-hidden">
+            <div className="rounded-xl border border-border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -235,23 +242,31 @@ export default function PageParrainage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filleuls.map((f) => (
-                    <TableRow key={f.id}>
-                      <TableCell className="font-medium">{f.prenom}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">
-                        {f.cree_le ? new Date(f.cree_le).toLocaleDateString('fr-FR') : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {f.premiere_mission_le || f.statut === 'VALIDE' ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                            <CheckCircle className="h-3 w-3" /> 1ère mission faite
-                          </span>
-                        ) : (
-                          <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">Inscrit</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filleuls.map((f) => {
+                    const aFaitMission = !!f.premiere_mission_le || f.statut === 'VALIDE';
+                    const enAttente = !aFaitMission && f.statut === 'EN_ATTENTE';
+                    return (
+                      <TableRow key={f.id}>
+                        <TableCell className="font-medium">{f.prenom}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                          {f.cree_le ? new Date(f.cree_le).toLocaleDateString('fr-FR') : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {aFaitMission ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5 whitespace-nowrap">
+                              <CheckCircle className="h-3 w-3" /> 1ère mission faite
+                            </span>
+                          ) : enAttente ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-warning bg-warning/10 rounded-full px-2 py-0.5 whitespace-nowrap">
+                              ⏳ En attente
+                            </span>
+                          ) : (
+                            <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 whitespace-nowrap">Inscrit</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

@@ -207,12 +207,16 @@ export default function AdminDetailUtilisateur() {
     const entity = type === 'soignant' ? soignant : etablissement;
     const isSuspended = !!entity?.supprime_le;
 
-    const { error } = await supabase
-      .from(table as any)
-      .update({ supprime_le: isSuspended ? null : new Date().toISOString() } as any)
-      .eq('id', id!);
+    const { data, error } = await supabase.rpc('fn_admin_suspendre_utilisateur' as any, {
+      p_table: table,
+      p_id: id!,
+      p_suspendre: !isSuspended,
+    });
 
-    if (error) { toast.error('Erreur lors de la mise à jour du compte.'); return; }
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || 'Erreur lors de la mise à jour du compte.');
+      return;
+    }
     toast.success(isSuspended ? 'Compte réactivé' : 'Compte suspendu');
     charger();
   };

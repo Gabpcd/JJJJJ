@@ -39,7 +39,7 @@ export function DemandePermissionPush() {
     setVisible(false);
     try {
       const { demanderPermissionPush } = await import('@/lib/firebase');
-      const token = await demanderPermissionPush(user.id, supabase);
+      const token = await demanderPermissionPush(user.id, supabase as any);
       if (token) {
         afficherNotification({ type: 'succes', message: 'Alertes push activées !' });
       }

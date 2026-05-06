@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, Ban, MapPinned, Crown, BarChart3, Calculator, Code2, Flame, Gift, MessageCircle, GraduationCap, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Briefcase, Zap, Shield, RefreshCw, Menu, X } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
-import { PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
+import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import { supabase } from '@/integrations/supabase/client';
 import { BadgeNotification } from '@/components/PanneauNotifications';
 import { AvatarDisplay } from '@/components/AvatarUpload';
@@ -20,17 +20,17 @@ function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
 const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
+  { icone: Banknote, label: 'Factures', route: '/soignant/mes-gains' },
   { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
-  { icone: FileText, label: 'Documents', route: '/soignant/documents' },
-  { icone: User, label: 'Profil', route: '/soignant/profil' },
+  { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
 ];
 
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
   { icone: ClipboardList, label: 'Missions', route: '/etablissement/missions' },
+  { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+  { icone: Users, label: 'Mon équipe', route: '/etablissement/rh' },
   { icone: MessageCircle, label: 'Messages', route: '/etablissement/messagerie' },
-  { icone: Users, label: 'Pool', route: '/etablissement/pool-urgence' },
-  { icone: Building2, label: 'Profil', route: '/etablissement/profil' },
 ];
 
 /* ── Desktop sidebars (grouped) ── */
@@ -39,58 +39,30 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
     { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
     {
       icone: Search, label: 'Missions', items: [
-        { icone: Search, label: 'Missions disponibles', route: '/soignant/missions' },
+        { icone: Search, label: 'Disponibles', route: '/soignant/missions' },
         { icone: MapPinned, label: 'Recherche avancée', route: '/soignant/recherche-missions' },
-        { icone: CalendarDays, label: 'Mon planning', route: '/soignant/planning' },
-        { icone: RefreshCw, label: 'Sync Calendrier', route: '/soignant/calendrier-sync' },
-        { icone: Clock, label: 'Historique', route: '/soignant/historique-missions' },
+        { icone: Flame, label: 'Pool urgence', route: '/soignant/pool-urgence' },
+        { icone: Star, label: 'Mes favoris', route: '/soignant/mes-favoris' },
+        { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
       ],
     },
     {
-      icone: Activity, label: 'Mon activité', items: [
+      icone: Activity, label: 'Activité', items: [
         { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
-        { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
-        { icone: FileText, label: 'Contrats', route: '/soignant/contrats' },
-        { icone: FileText, label: 'Documents', route: '/soignant/documents' },
-        { icone: FileText, label: 'Attestation heures', route: '/soignant/attestation-heures' },
-        { icone: Scale, label: 'Litiges', route: '/soignant/litiges' },
-        { icone: MessageCircle, label: 'Réclamations', route: '/soignant/reclamations' },
+        { icone: FileText, label: 'Documents', route: '/soignant/mes-documents' },
+        { icone: ShieldCheck, label: 'Mon score', route: '/soignant/score' },
+        { icone: Scale, label: 'Litiges & contestations', route: '/soignant/litiges' },
       ],
     },
+    { icone: Banknote, label: 'Factures & paiements', route: '/soignant/mes-gains' },
     { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
   ];
 
-  // Carrière & Finances
-  const carriereItems: NavItem[] = [];
-  if (isLiberal) {
-    carriereItems.push({ icone: Calculator, label: 'Mes charges', route: '/soignant/charges' });
-  }
-  carriereItems.push({ icone: CreditCard, label: 'Paiements Stripe', route: '/soignant/stripe-connect' });
-  carriereItems.push({ icone: FileText, label: 'Factures honoraires', route: '/soignant/mes-factures-honoraires' });
-  carriereItems.push({ icone: Zap, label: 'Paiement rapide', route: '/soignant/mes-avances' });
-  carriereItems.push({ icone: FileText, label: 'Mandat facturation', route: '/soignant/mandat-facturation' });
-  entries.push({ icone: Briefcase, label: 'Finances', items: carriereItems });
-
-  // Évolution professionnelle
-  const evolutionItems: NavItem[] = [];
   if (showLiberalPath) {
-    evolutionItems.push({ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' });
+    entries.push({ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' });
   }
-  evolutionItems.push({ icone: GraduationCap, label: 'Parcours 3 200h', route: '/soignant/parcours-3200h' });
-  evolutionItems.push({ icone: Shield, label: 'Prévoyance', route: '/soignant/prevoyance' });
-  entries.push({ icone: GraduationCap, label: 'Évolution pro', items: evolutionItems });
 
-  // Profil & Réglages
-  entries.push({
-    icone: User, label: 'Profil & Réglages', items: [
-      { icone: User, label: 'Mon profil', route: '/soignant/profil' },
-      { icone: Activity, label: 'Score fiabilité', route: '/soignant/fiabilite' },
-      { icone: Shield, label: 'Conformité', route: '/soignant/conformite' },
-      { icone: Bell, label: 'Notifications', route: '/soignant/notifications' },
-      { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
-      { icone: Flame, label: 'Urgences & exclusions', route: '/soignant/exclusions' },
-    ],
-  });
+  entries.push({ icone: Settings, label: 'Paramètres', route: '/soignant/profil' });
 
   return entries;
 }
@@ -102,6 +74,8 @@ function getEtablissementSidebar(): SidebarEntry[] {
       icone: ClipboardList, label: 'Missions', items: [
         { icone: PlusCircle, label: 'Publier une mission', route: '/etablissement/missions/creer' },
         { icone: List, label: 'Liste des missions', route: '/etablissement/missions' },
+        { icone: Users, label: 'Annuaire soignants', route: '/etablissement/soignants' },
+        { icone: Star, label: 'Mes favoris', route: '/etablissement/mes-favoris' },
         { icone: Flame, label: 'Pool urgence', route: '/etablissement/pool-urgence' },
       ],
     },
@@ -109,33 +83,21 @@ function getEtablissementSidebar(): SidebarEntry[] {
       icone: ClipboardCheck, label: 'Gestion', items: [
         { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
         { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
-        { icone: Scale, label: 'Litiges', route: '/etablissement/litiges' },
-        { icone: MessageCircle, label: 'Réclamations', route: '/etablissement/reclamations' },
+        { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
         { icone: FileSpreadsheet, label: 'Export Paie', route: '/etablissement/export-paie' },
         { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
-        { icone: Activity, label: 'Analytics', route: '/etablissement/analytics' },
         { icone: Clock, label: 'Shifts', route: '/etablissement/shifts' },
       ],
     },
     {
       icone: Banknote, label: 'Finances', items: [
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
-        { icone: FileText, label: 'Obligations', route: '/etablissement/obligations' },
-        { icone: Shield, label: 'Assurance', route: '/etablissement/assurance' },
-        { icone: FileText, label: 'Contrat plateforme', route: '/etablissement/contrat-plateforme' },
         { icone: Building2, label: 'Chorus Pro', route: '/etablissement/chorus-config' },
       ],
     },
     { icone: MessageCircle, label: 'Messagerie', route: '/etablissement/messagerie' },
-    {
-      icone: Settings, label: 'Paramètres', items: [
-        { icone: Building2, label: 'Profil établissement', route: '/etablissement/profil' },
-        { icone: Settings, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
-        { icone: Code2, label: 'API', route: '/etablissement/api' },
-        { icone: Ban, label: 'Exclusions', route: '/etablissement/exclusions' },
-        { icone: Bell, label: 'Notifications', route: '/etablissement/notifications' },
-      ],
-    },
+    { icone: Gift, label: 'Parrainage', route: '/etablissement/parrainage' },
+    { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
   ];
 }
 
@@ -257,12 +219,12 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   useEffect(() => {
     if (!user) return;
     if (role === 'SOIGNANT') {
-      supabase.from('soignants').select('profession, heures_cumulees, statut_liberal, prenom, nom, avatar_url').eq('id', user.id).single()
+      supabase.from('soignants').select('profession, heures_cumulees, statut_liberal, prenom, nom, avatar_url').eq('id', user.id).maybeSingle()
         .then(({ data }) => {
           if (!data) return;
           setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
           if (data.statut_liberal === 'ACTIF') setIsLiberal(true);
-          if (!PROFESSIONS_NON_LIBERAL.includes(data.profession) && (data.heures_cumulees || 0) >= 800 && data.statut_liberal !== 'ACTIF') {
+          if (estEligibleLiberal(data.profession) && data.statut_liberal !== 'ACTIF') {
             setShowLiberalPath(true);
           }
         });

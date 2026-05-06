@@ -38,8 +38,8 @@ test.describe('Missions (espace etablissement)', () => {
 
     await page.goto('/connexion');
     await page.locator('input[type="email"]').fill(process.env.E2E_ETABLISSEMENT_EMAIL!);
-    await page.locator('input[type="password"]').fill(process.env.E2E_ETABLISSEMENT_PASSWORD!);
-    await page.getByRole('button', { name: /Se connecter/i }).click();
+    await page.locator('input[type="password"]').first().fill(process.env.E2E_ETABLISSEMENT_PASSWORD!);
+    await page.getByTestId('login-submit').click();
     await page.waitForURL(/\/etablissement/, { timeout: 15000 });
 
     await page.goto('/etablissement/missions');
@@ -54,8 +54,8 @@ test.describe('Missions (espace etablissement)', () => {
 
     await page.goto('/connexion');
     await page.locator('input[type="email"]').fill(process.env.E2E_ETABLISSEMENT_EMAIL!);
-    await page.locator('input[type="password"]').fill(process.env.E2E_ETABLISSEMENT_PASSWORD!);
-    await page.getByRole('button', { name: /Se connecter/i }).click();
+    await page.locator('input[type="password"]').first().fill(process.env.E2E_ETABLISSEMENT_PASSWORD!);
+    await page.getByTestId('login-submit').click();
     await page.waitForURL(/\/etablissement/, { timeout: 15000 });
 
     // Navigate to mission list first, then click the first mission
@@ -78,8 +78,8 @@ test.describe('Missions (espace etablissement)', () => {
 
     await page.goto('/connexion');
     await page.locator('input[type="email"]').fill(process.env.E2E_ETABLISSEMENT_EMAIL!);
-    await page.locator('input[type="password"]').fill(process.env.E2E_ETABLISSEMENT_PASSWORD!);
-    await page.getByRole('button', { name: /Se connecter/i }).click();
+    await page.locator('input[type="password"]').first().fill(process.env.E2E_ETABLISSEMENT_PASSWORD!);
+    await page.getByTestId('login-submit').click();
     await page.waitForURL(/\/etablissement/, { timeout: 15000 });
 
     await page.goto('/etablissement/missions/creer');

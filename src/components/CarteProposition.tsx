@@ -32,7 +32,7 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
   useEffect(() => {
     if (!user) return;
     // Load type_exercice
-    supabase.from('soignants').select('type_exercice').eq('id', user.id).single().then(({ data }) => {
+    supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle().then(({ data }) => {
       if (data) setTypeExercice((data as any).type_exercice || 'SALARIE');
     });
   }, [user]);
@@ -117,6 +117,16 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
         p_accepter: action === 'ACCEPTEE',
       });
       if (error) throw error;
+
+      if ((data as any)?.error === 'E16_CANDIDATURE_ORPHELINE') {
+        toast({
+          title: 'Proposition obsolète',
+          description: 'Cette proposition date d\'avant une mise à jour. Merci de postuler directement depuis la mission dans votre espace.',
+        });
+        onTraitee(proposition.id);
+        return;
+      }
+
       if ((data as any)?.error) throw new Error((data as any).error);
 
       if (action === 'ACCEPTEE') {

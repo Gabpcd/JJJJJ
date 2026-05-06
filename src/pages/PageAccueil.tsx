@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { ClipboardList, Users, CheckCircle, MapPin, FileText, Navigation, TrendingUp, UserCheck, PercentCircle, Scale, Receipt, ShieldCheck, HeartPulse, ArrowRight, Search, Loader2 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { PROFESSIONS } from '@/lib/constantes';
+import { SelectProfession } from '@/components/SelectProfession';
 import { useDebounce } from '@/hooks/useDebounce';
 import { publicSupabase } from '@/integrations/supabase/public-client';
 import { supabase } from '@/integrations/supabase/client';
@@ -147,22 +147,23 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
       <div className="max-w-4xl mx-auto px-4">
         <RevealOnScroll>
           <div className="text-center mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold mb-2">Découvrez les missions disponibles</h2>
+            <h2 className="text-2xl md:text-3xl font-bold mb-2 text-foreground">Découvrez les missions disponibles</h2>
             <p className="text-muted-foreground">Cherchez par profession et localisation — sans inscription. Laissez la ville vide pour tout voir.</p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto mb-8">
-            <select
-              value={profession}
-              onChange={(e) => setProfession(e.target.value)}
-              className="flex-1 h-12 rounded-xl border border-input bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Toutes les professions</option>
-              {PROFESSIONS.map((p) => (
-                <option key={p.valeur} value={p.valeur}>{p.label}</option>
-              ))}
-            </select>
+            <div className="flex-1">
+              <label htmlFor="hero-profession" className="sr-only">Profession à rechercher</label>
+              <SelectProfession
+                value={profession}
+                onChange={setProfession}
+                placeholder="Toutes les professions"
+                triggerId="hero-profession"
+              />
+            </div>
+            <label htmlFor="hero-ville" className="sr-only">Ville ou code postal</label>
             <input
+              id="hero-ville"
               type="text"
               placeholder="Ville ou code postal (optionnel)"
               value={ville}
@@ -199,7 +200,7 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
                           <span className="font-bold text-primary">{Number(m.taux_horaire_base).toFixed(0)}€/h</span>
                         </div>
                         {m.est_urgente && (
-                          <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-wider text-destructive bg-destructive/10 rounded-full px-2 py-0.5">Urgent</span>
+                          <span className="mt-2 inline-block text-xs font-bold uppercase tracking-wider text-destructive bg-destructive/15 rounded-full px-2 py-0.5">Urgent</span>
                         )}
                       </div>
                     ))}
@@ -270,7 +271,7 @@ export default function PageAccueil() {
             <a href="/blog" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Blog</a>
             <a href="/a-propos" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">À propos</a>
             <a href="/tarifs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Tarifs</a>
-            <button onClick={() => navigate('/connexion')} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
+            <button onClick={() => navigate('/connexion')} className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors" data-testid="header-cta-connexion">
               Se connecter
             </button>
           </div>
@@ -304,6 +305,7 @@ export default function PageAccueil() {
               onClick={() => navigate('/inscription/soignant')}
               className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
               style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
+              data-testid="hero-cta-soignant"
             >
               🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
             </button>
@@ -311,6 +313,7 @@ export default function PageAccueil() {
               onClick={() => navigate('/inscription/etablissement')}
               className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
               style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
+              data-testid="hero-cta-etab"
             >
               🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
             </button>
@@ -516,6 +519,7 @@ export default function PageAccueil() {
                 onClick={() => navigate('/inscription/soignant')}
                 className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 style={{ background: 'linear-gradient(135deg, hsl(330 85% 55%), hsl(270 60% 50%))' }}
+                data-testid="bottom-cta-soignant"
               >
                 🩺 Je suis soignant <ArrowRight className="h-4 w-4" />
               </button>
@@ -523,6 +527,7 @@ export default function PageAccueil() {
                 onClick={() => navigate('/inscription/etablissement')}
                 className="inline-flex items-center justify-center gap-2 text-white rounded-2xl px-5 py-3 sm:px-8 sm:py-4 font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 style={{ background: 'linear-gradient(135deg, hsl(215 80% 55%), hsl(174 72% 48%))' }}
+                data-testid="bottom-cta-etab"
               >
                 🏥 Je suis un établissement <ArrowRight className="h-4 w-4" />
               </button>

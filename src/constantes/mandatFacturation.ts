@@ -2,7 +2,7 @@
 // Document légal permettant à Jolene d'émettre techniquement des factures au nom et pour le compte du soignant libéral.
 // Le soignant reste le vendeur légal et juridique de la prestation. Jolene agit uniquement en qualité de mandataire technique.
 
-export const MANDAT_FACTURATION_VERSION = '1.1';
+export const MANDAT_FACTURATION_VERSION = '1.2';
 
 // Info soignant à injecter dans le mandat lors du rendu. Les champs manquants
 // sont remplacés par "—" pour ne pas générer un document faussement complet.
@@ -88,13 +88,19 @@ Par le présent mandat, le Soignant donne mandat à Jolene d'émettre des factur
 
 Ces factures matérialisent la rémunération des prestations professionnelles effectuées par le Soignant dans le cadre de son activité libérale.
 
+La fréquence de facturation est adaptée à la durée de la mission :
+- **Mission ≤ 7 jours** : une facture finale unique émise à la terminaison de la mission.
+- **Mission > 7 jours** : des factures hebdomadaires intermédiaires émises chaque semaine ISO (lundi à dimanche) échue, complétées par une facture finale pour la période restante à la terminaison de la mission.
+
+Cette stratégie de facturation est déterminée automatiquement au moment de l'assignation du Soignant à la mission et ne peut être modifiée ultérieurement.
+
 ---
 
 ## 3. Portée du mandat
 
 Le Soignant autorise expressément Jolene à :
 
-1. **Émettre** en son nom et pour son compte des factures d'honoraires correspondant aux missions réalisées et validées sur la plateforme
+1. **Émettre** en son nom et pour son compte des factures d'honoraires correspondant aux missions réalisées et validées sur la plateforme, selon la fréquence définie à l'article 2
 2. **Mentionner** sur ces factures les informations légalement obligatoires : identité du Soignant (nom, prénom, profession, numéro RPPS/ADELI, SIREN si applicable), identité du débiteur, désignation de la prestation, date d'exécution, montant
 3. **Transmettre** électroniquement ces factures aux établissements débiteurs
 4. **Encaisser** pour le compte du Soignant le montant des factures via les services de paiement intégrés (notamment Stripe Connect) et **reverser** ces sommes sur le compte bancaire déclaré par le Soignant, déduction faite de la commission Jolene convenue
@@ -180,7 +186,7 @@ Jolene peut modifier le présent mandat à tout moment. Toute modification subst
 ---
 
 **Version du mandat** : ${MANDAT_FACTURATION_VERSION}
-**Dernière mise à jour** : 11 avril 2026
+**Dernière mise à jour** : 29 avril 2026
 `.trim();
 }
 

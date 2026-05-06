@@ -14,6 +14,7 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EtatVide } from '@/components/EtatVide';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
+import { BandeauBlocageAuto } from '@/components/BandeauBlocageAuto';
 
 import { BadgePalier } from '@/components/BadgePalier';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,7 +25,13 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
 import { TopSoignants } from '@/components/dashboard/TopSoignants';
-import { ProchaineMissions } from '@/components/dashboard/ProchaineMissions';
+import { SectionPlanning } from '@/components/dashboard/SectionPlanning';
+import { BannerCandidaturesPoolUrgence } from '@/components/dashboard/BannerCandidaturesPoolUrgence';
+import { BannerAlertesDashboardEtab } from '@/components/dashboard/BannerAlertesDashboardEtab';
+import { BannerEncourageNotation } from '@/components/BannerEncourageNotation';
+import { GraphiqueEvolutionMissions } from '@/components/dashboard/GraphiqueEvolutionMissions';
+import { IndicateursAvancesEtab } from '@/components/dashboard/IndicateursAvancesEtab';
+import { CardScoreQualiteEtab } from '@/components/dashboard/CardScoreQualiteEtab';
 
 
 export default function DashboardEtablissement() {
@@ -39,6 +46,14 @@ export default function DashboardEtablissement() {
     groupes_sante?: { nom: string } | null;
     groupe_sante_id?: string | null;
     peut_publier_missions?: boolean;
+    bloque_auto_le?: string | null;
+    bloque_auto_raisons?: {
+      paiements_retard_nb?: number;
+      paiements_retard_montant?: number;
+      factures_retard_nb?: number;
+      factures_retard_montant?: number;
+      seuil_jours?: number;
+    } | null;
   }
   interface MissionSummary {
     id: string;
@@ -169,10 +184,12 @@ export default function DashboardEtablissement() {
             supabase.from('missions').select('total_brut, duree_heures, soignant_assigne_id')
               .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
             supabase.from('missions')
-              .select('id, intitule, debut_le, statut, soignant_assigne_id')
-              .eq('etablissement_id', etablissementId).gte('debut_le', now.toISOString())
+              .select('id, intitule, debut_le, fin_le, statut, duree_heures, profession_requise, soignant_assigne_id')
+              .eq('etablissement_id', etablissementId)
+              .gte('debut_le', now.toISOString())
+              .lte('debut_le', new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString())
               .in('statut', ['OUVERTE', 'ASSIGNEE', 'EN_COURS'])
-              .order('debut_le', { ascending: true }).limit(5),
+              .order('debut_le', { ascending: true }),
           ]);
 
           if (resCout.data) {
@@ -265,6 +282,10 @@ export default function DashboardEtablissement() {
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <BandeauEvaluationsEnAttente role="ETABLISSEMENT" />
+      {etablissementId && <BannerCandidaturesPoolUrgence etablissementId={etablissementId} />}
+      <BannerAlertesDashboardEtab />
+      <BannerEncourageNotation role="ETAB" />
+      <CardScoreQualiteEtab />
       <OnboardingGuide role="ADMIN_ETABLISSEMENT" userId={user!.id} />
       {erreurPartielle && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-4 text-sm text-warning">
@@ -382,7 +403,12 @@ export default function DashboardEtablissement() {
         )}
       </div>
 
-      {etab && !etab.peut_publier_missions && (
+      {etab?.bloque_auto_le ? (
+        <BandeauBlocageAuto
+          raisons={etab.bloque_auto_raisons}
+          bloque_le={etab.bloque_auto_le}
+        />
+      ) : etab && !etab.peut_publier_missions ? (
         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 mb-4 flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
           <div>
@@ -390,7 +416,7 @@ export default function DashboardEtablissement() {
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vous pourrez publier des missions une fois votre établissement vérifié par l'équipe Jolene (24-48h).</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* KPI row 1 — All from RPC */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
@@ -431,20 +457,28 @@ export default function DashboardEtablissement() {
                 sousLabel={sousLabelParts.length > 0 ? sousLabelParts.join(' + ') : undefined}
                 couleurIcone={hasImpayes ? 'text-destructive' : 'text-success'}
                 couleurFond={hasImpayes ? 'bg-destructive/10' : 'bg-success/10'}
-                lien="/etablissement/obligations"
+                lien="/etablissement/facturation"
               />
             );
           })()}
         </FadeInView>
       </div>
 
-      {/* Top soignants + Prochaines missions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <FadeInView delay={600}>
-          <TopSoignants soignants={topSoignants} etablissementId={etablissementId!} onSelectSoignant={(soignantId) => navigate(`/etablissement/soignants/${soignantId}`)} />
-        </FadeInView>
+      {/* Planning missions à venir (30j) */}
+      <FadeInView delay={600}>
+        <SectionPlanning missions={prochaines} />
+      </FadeInView>
+
+      {/* Indicateurs avancés (J5.B.2) — turnover, taux remplissage, coût moyen */}
+      <IndicateursAvancesEtab soignantsCeMois={Number(stats.soignants_ce_mois) || 0} />
+
+      {/* Évolution missions 6 mois */}
+      <GraphiqueEvolutionMissions />
+
+      {/* Top soignants */}
+      <div className="mb-6">
         <FadeInView delay={650}>
-          <ProchaineMissions missions={prochaines} />
+          <TopSoignants soignants={topSoignants} etablissementId={etablissementId!} onSelectSoignant={(soignantId) => navigate(`/etablissement/soignants/${soignantId}`)} />
         </FadeInView>
       </div>
 

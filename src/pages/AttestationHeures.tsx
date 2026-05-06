@@ -242,6 +242,7 @@ export default function AttestationHeures() {
               <tr><td className="pr-4 text-gray-600 py-0.5">Nom :</td><td className="font-medium">{soignant?.prenom} {soignant?.nom}</td></tr>
               <tr><td className="pr-4 text-gray-600 py-0.5">Profession :</td><td>{getLabelProfession(soignant?.profession)}</td></tr>
               {soignant?.numero_rpps && <tr><td className="pr-4 text-gray-600 py-0.5">N° RPPS :</td><td>{soignant.numero_rpps}</td></tr>}
+              {/* Rétrocompatibilité : ADELI obsolète depuis 2024 (basculé RPPS). Affichage conservé pour anciens comptes qui auraient ce champ rempli en DB. */}
               {soignant?.numero_adeli && <tr><td className="pr-4 text-gray-600 py-0.5">N° ADELI :</td><td>{soignant.numero_adeli}</td></tr>}
             </tbody>
           </table>

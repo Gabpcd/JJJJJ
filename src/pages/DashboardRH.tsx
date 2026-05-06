@@ -1,7 +1,7 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BarChart3, Users, TrendingUp, Download, Loader2, Target, Coins, Calendar, Briefcase, CheckCircle } from 'lucide-react';
+import { BarChart3, Users, TrendingUp, Download, Loader2, Target, Coins, Calendar, Briefcase, CheckCircle, Activity } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
@@ -13,6 +13,8 @@ import { fr } from 'date-fns/locale';
 import type jsPDF from 'jspdf';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { AnalyticsContent } from './AnalyticsEtablissement';
 import { Progress } from '@/components/ui/progress';
 
 // Coût moyen horaire intérim soignant en France — source : DREES / DGOS, actualisé avril 2025
@@ -24,7 +26,9 @@ export default function DashboardRH() {
   const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'analytics' ? 'analytics' : 'rh';
+  const [activeTab, setActiveTab] = useState<'rh' | 'analytics'>(initialTab);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [stats, setStats] = useState<any>(null);
@@ -127,9 +131,9 @@ export default function DashboardRH() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <BarChart3 className="h-6 w-6 text-primary" /> Gestion RH
+            <BarChart3 className="h-6 w-6 text-primary" /> Tableau RH
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Analyse de vos coûts de staffing et suivi des soignants</p>
+          <p className="text-sm text-muted-foreground mt-1">Coûts de staffing, suivi des soignants et analytics</p>
         </div>
         <button onClick={handleGeneratePDF} disabled={generating} className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50">
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -137,13 +141,30 @@ export default function DashboardRH() {
         </button>
       </div>
 
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          setActiveTab(v as 'rh' | 'analytics');
+          if (v === 'analytics') setSearchParams({ tab: 'analytics' }, { replace: true });
+          else setSearchParams({}, { replace: true });
+        }}
+      >
+        <TabsList className="mb-4 w-full grid grid-cols-2">
+          <TabsTrigger value="rh" className="gap-1.5">
+            <BarChart3 className="h-4 w-4" /> Statistiques RH
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="gap-1.5">
+            <Activity className="h-4 w-4" /> Analytics
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="rh">
       {/* KPI Row 1 — Financier */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <div className={`card-base text-center cursor-pointer hover:shadow-md transition-shadow ${detailMois === 'prec' ? 'ring-2 ring-primary' : ''}`} onClick={() => setDetailMois(detailMois === 'prec' ? null : 'prec')}>
           <Coins className="h-5 w-5 text-primary mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalMoisPrec)}</p>
-          <p className="text-xs text-muted-foreground">Coût mois précédent</p>
-          <p className="text-[10px] text-muted-foreground">{stats.mois_precedent}</p>
+          <p className="text-xs text-muted-foreground">Coût {stats.mois_precedent || 'mois précédent'}</p>
           {(stats.commission_mois_prec ?? 0) > 0 && (
             <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_mois_prec)} de commission Jolene</p>
           )}
@@ -151,8 +172,7 @@ export default function DashboardRH() {
         <div className={`card-base text-center cursor-pointer hover:shadow-md transition-shadow ${detailMois === 'courant' ? 'ring-2 ring-primary' : ''}`} onClick={() => setDetailMois(detailMois === 'courant' ? null : 'courant')}>
           <Coins className="h-5 w-5 text-info mx-auto mb-1" />
           <p className="text-2xl font-bold text-foreground">{fmtEur(coutTotalCeMois)}</p>
-          <p className="text-xs text-muted-foreground">Coût ce mois</p>
-          <p className="text-[10px] text-muted-foreground">{stats.mois_en_cours}</p>
+          <p className="text-xs text-muted-foreground">Coût {stats.mois_en_cours || 'mois en cours'}</p>
           {(stats.commission_ce_mois ?? 0) > 0 && (
             <p className="text-[10px] text-muted-foreground">dont {fmtEur(stats.commission_ce_mois)} de commission Jolene</p>
           )}
@@ -190,7 +210,7 @@ export default function DashboardRH() {
           : 'Budget prévisionnel';
         const messageVide = isPrev
           ? 'Aucune mission planifiée'
-          : `Aucune mission terminée ${detailMois === 'prec' ? 'le mois précédent' : 'ce mois'}`;
+          : `Aucune mission terminée ${detailMois === 'prec' ? `en ${stats.mois_precedent || 'mois précédent'}` : `en ${stats.mois_en_cours || 'mois en cours'}`}`;
 
         const missionsConfirmees = isPrev ? (detailMissions || []).filter((m: any) => m.statut === 'ASSIGNEE' || m.statut === 'EN_COURS') : [];
         const missionsOuvertes = isPrev ? (detailMissions || []).filter((m: any) => m.statut === 'OUVERTE') : [];
@@ -288,7 +308,7 @@ export default function DashboardRH() {
             <span className="font-semibold text-foreground">Missions terminées</span>
           </div>
           <p className="text-xl sm:text-3xl font-bold text-foreground">{stats.terminees_total}</p>
-          <p className="text-xs text-muted-foreground">{stats.terminees_mois_prec} le mois précédent</p>
+          <p className="text-xs text-muted-foreground">{stats.terminees_mois_prec} en {stats.mois_precedent || 'mois précédent'}</p>
         </div>
       </div>
 
@@ -380,6 +400,12 @@ export default function DashboardRH() {
           <EtatVide icone={Users} titre="Aucun soignant" sousTitre="Les statistiques apparaîtront une fois vos premières missions terminées." />
         )}
       </div>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <AnalyticsContent />
+        </TabsContent>
+      </Tabs>
     </LayoutApp>
   );
 }

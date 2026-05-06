@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
@@ -12,26 +12,24 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { FilDiscussionLitige } from '@/components/FilDiscussionLitige';
-
-const STATUT_COLORS: Record<string, string> = {
-  OUVERT: 'bg-warning/10 text-warning',
-  EN_COURS: 'bg-primary/10 text-primary',
-  EN_DISCUSSION: 'bg-primary/10 text-primary',
-  EN_MEDIATION: 'bg-info/10 text-info',
-  CONTESTEE: 'bg-warning/10 text-warning',
-  RESOLU: 'bg-success/10 text-success',
-  CLOTURE: 'bg-success/10 text-success',
-  FERME: 'bg-muted text-muted-foreground',
-};
+import { ReclamationsContent } from './MesReclamations';
+import { TimelineLitige } from '@/components/litige/TimelineLitige';
+import { CompteARebours7j } from '@/components/litige/CompteARebours7j';
+import { BoutonsActionLitige } from '@/components/litige/BoutonsActionLitige';
+import { statutBadgeV2, estResolu } from '@/lib/statutLitige';
 
 export default function LitigesEtablissement() {
-  usePageTitle('Litiges');
+  usePageTitle('Litiges & contestations');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'reclamations' ? 'reclamations' : 'litiges';
+  const [activeTab, setActiveTab] = useState<'litiges' | 'reclamations'>(initialTab);
   const { user, etablissementId } = useEtablissementScope();
   const [litiges, setLitiges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,16 +99,37 @@ export default function LitigesEtablissement() {
     charger();
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
-
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+          <Scale className="h-6 w-6 text-primary" /> Litiges & contestations
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">Gérez les litiges mission et vos réclamations générales</p>
+      </div>
+
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          setActiveTab(v as 'litiges' | 'reclamations');
+          if (v === 'reclamations') setSearchParams({ tab: 'reclamations' }, { replace: true });
+          else setSearchParams({}, { replace: true });
+        }}
+      >
+        <TabsList className="mb-4 w-full grid grid-cols-2">
+          <TabsTrigger value="litiges" className="gap-1.5">
+            <Scale className="h-4 w-4" /> Litiges mission
+          </TabsTrigger>
+          <TabsTrigger value="reclamations" className="gap-1.5">
+            <MessageCircle className="h-4 w-4" /> Réclamations générales
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="litiges">
+      {loading ? <ChargementPage /> : (<>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Scale className="h-6 w-6 text-primary" /> Litiges
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Gérez les contestations de vos missions</p>
+          <p className="text-sm text-muted-foreground">Contestations sur vos missions (pointage, paiement, qualité)</p>
         </div>
         <Button onClick={openNewLitige} className="gap-1.5">
           <PlusCircle className="h-4 w-4" /> Ouvrir un litige
@@ -123,6 +142,22 @@ export default function LitigesEtablissement() {
         <div className="space-y-4">
           {litiges.map((l: any) => {
             const isExpanded = expandedId === l.litige_id;
+            const badge = statutBadgeV2(l.statut);
+            const showCountdown = l.statut === 'MEDIATION_EN_COURS' && !estResolu(l.statut);
+            const litigeFull = {
+              id: l.litige_id,
+              statut: l.statut,
+              motif: l.motif,
+              cree_le: l.cree_le,
+              accord_soignant: l.accord_soignant,
+              accord_etablissement: l.accord_etablissement,
+              accord_soignant_le: l.accord_soignant_le,
+              accord_etablissement_le: l.accord_etablissement_le,
+              soignant_id: l.soignant_id,
+              etablissement_id: l.etablissement_id,
+              resolution: l.resolution,
+              missions: { intitule: l.mission_intitule },
+            };
             return (
               <div key={l.litige_id} className="card-base">
                 {/* Summary row */}
@@ -149,7 +184,11 @@ export default function LitigesEtablissement() {
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
-                    <Badge className={STATUT_COLORS[l.statut] || ''}>{l.statut}</Badge>
+                    <Badge variant="outline" className={`text-[10px] ${badge.classes}`}>
+                      <badge.icon className="h-3 w-3 mr-1" />
+                      {badge.label}
+                    </Badge>
+                    {showCountdown && <CompteARebours7j creeLe={l.cree_le} />}
                     {l.nb_messages > 0 && (
                       <span className="text-[10px] text-muted-foreground">{l.nb_messages} message{l.nb_messages > 1 ? 's' : ''}</span>
                     )}
@@ -167,20 +206,10 @@ export default function LitigesEtablissement() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-3">
-                    <FilDiscussionLitige
-                      litige={{
-                        id: l.litige_id,
-                        statut: l.statut,
-                        motif: l.motif,
-                        cree_le: l.cree_le,
-                        accord_soignant: l.accord_soignant,
-                        accord_etablissement: l.accord_etablissement,
-                        resolution: l.resolution,
-                        missions: { intitule: l.mission_intitule },
-                      }}
-                      onUpdate={charger}
-                    />
+                  <div className="mt-3 space-y-3">
+                    <TimelineLitige statut={l.statut} />
+                    <BoutonsActionLitige litige={litigeFull} role="ETABLISSEMENT" onUpdate={charger} />
+                    <FilDiscussionLitige litige={litigeFull} onUpdate={charger} />
                   </div>
                 )}
               </div>
@@ -188,10 +217,17 @@ export default function LitigesEtablissement() {
           })}
         </div>
       )}
+      </>)}
+        </TabsContent>
+
+        <TabsContent value="reclamations">
+          <ReclamationsContent role="ADMIN_ETABLISSEMENT" />
+        </TabsContent>
+      </Tabs>
 
       {/* Modal nouveau litige */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent>
+        <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Ouvrir un nouveau litige</DialogTitle>
           </DialogHeader>

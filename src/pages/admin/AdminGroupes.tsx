@@ -180,12 +180,14 @@ export default function AdminGroupes() {
       return;
     }
     setSavingTaux(true);
-    const { error } = await supabase
-      .from('etablissements')
-      .update({ taux_commission_negocie: taux } as any)
-      .eq('id', editingTaux.etabId);
+    const { data, error } = await supabase.rpc('fn_admin_modifier_taux_commission' as any, {
+      p_etablissement_id: editingTaux.etabId,
+      p_groupe_id: null,
+      p_nouveau_taux: taux,
+      p_raison: 'Modification depuis interface admin',
+    });
     setSavingTaux(false);
-    if (error) { toast.error('Erreur'); return; }
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Erreur'); return; }
     toast.success(`Taux mis à jour : ${taux}%`);
     setEditingTaux(null);
     charger();
@@ -201,22 +203,15 @@ export default function AdminGroupes() {
       return;
     }
     setSavingTaux(true);
-    // Récupérer les cliniques du groupe
-    const { data: etabs } = await supabase
-      .from('etablissements')
-      .select('id')
-      .eq('groupe_sante_id', groupeId)
-      .is('supprime_le', null);
-
-    if (etabs && etabs.length > 0) {
-      const { error } = await supabase
-        .from('etablissements')
-        .update({ taux_commission_negocie: taux } as any)
-        .in('id', etabs.map(e => e.id));
-      if (error) { toast.error('Erreur mise à jour groupe'); setSavingTaux(false); return; }
-      toast.success(`Taux de ${taux}% appliqué à ${etabs.length} clinique(s) du groupe`);
-    }
+    const { data, error } = await supabase.rpc('fn_admin_modifier_taux_commission' as any, {
+      p_etablissement_id: null,
+      p_groupe_id: groupeId,
+      p_nouveau_taux: taux,
+      p_raison: 'Modification groupe depuis interface admin',
+    });
     setSavingTaux(false);
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Erreur mise à jour groupe'); return; }
+    toast.success(`Taux de ${taux}% appliqué au groupe`);
     setEditingTauxGroupe(null);
     charger();
   };

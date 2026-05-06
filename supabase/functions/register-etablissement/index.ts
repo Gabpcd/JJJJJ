@@ -1,5 +1,5 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { verifyTurnstileToken } from '../_shared/verify-turnstile.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -38,7 +38,7 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
   }
@@ -79,7 +79,16 @@ serve(async (req) => {
     const body = await req.json();
     const { nom, siret, finess, type, adresse_rue, adresse_ville, adresse_code_postal,
       adresse_departement, telephone_contact, email_contact, adresse_lat, adresse_lng,
-      numero_licence } = body;
+      numero_licence, turnstileToken } = body;
+
+    // Captcha anti-bot Cloudflare Turnstile (no-op tant que TURNSTILE_SECRET_KEY non configurée)
+    const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
+    if (!captcha.success) {
+      return new Response(JSON.stringify({ error: captcha.error }), {
+        status: 403,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
 
     // Validate required fields
     if (!nom || !siret || !type || !adresse_ville) {
@@ -238,6 +247,33 @@ serve(async (req) => {
       details: { type: 'inscription', cgu: true, confidentialite: true, cgv: true },
       navigateur_acteur: body.navigateur || null,
     });
+
+    // 5. Email bienvenue (best-effort — ne bloque pas l'inscription)
+    try {
+      await supabaseAdmin.functions.invoke('send-email', {
+        body: {
+          type: 'BIENVENUE_ETABLISSEMENT',
+          destinataire_id: user.id,
+          data: {
+            nom_etablissement: String(nom).slice(0, 200),
+            type_etablissement: type,
+            lien_dashboard: 'https://jolene.app/etablissement',
+          },
+        },
+      });
+    } catch (emailErr) {
+      console.warn('[register-etablissement] Email bienvenue non envoyé (best-effort):', emailErr);
+    }
+
+    // 6. Planifier la série onboarding J0/J1/J3/J7 (best-effort)
+    try {
+      await supabaseAdmin.rpc('fn_planifier_serie_onboarding', {
+        p_utilisateur_id: user.id,
+        p_serie: 'ETAB_ONBOARDING',
+      });
+    } catch (serieErr) {
+      console.warn('[register-etablissement] Planification série onboarding échouée (best-effort):', serieErr);
+    }
 
     return new Response(JSON.stringify({ success: true, etablissement_id: user.id, auto_verifie: autoVerifie, statut_verification: statutVerification }), {
       status: 200,

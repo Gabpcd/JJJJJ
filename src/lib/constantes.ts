@@ -40,7 +40,8 @@ export const TYPES_ETABLISSEMENT = [
 // Professions NON éligibles au libéral
 export const PROFESSIONS_NON_LIBERAL = ['PHARMACIEN', 'PREPARATEUR_PHARMA', 'AS', 'AES', 'MANIPULATEUR_RADIO'];
 
-// Professions sans RPPS (ADELI uniquement)
+// Professions sans numéro d'identification professionnelle (RPPS).
+// Vérification par diplôme + CNI uniquement (ADELI obsolète depuis 2024).
 export const PROFESSIONS_SANS_RPPS = ['AS', 'AES'];
 
 // Professions limitées pour pharmacies
@@ -51,6 +52,7 @@ export const BADGES_STATUT: Record<string, { label: string; classes: string }> =
   'ASSIGNEE': { label: 'Assignée', classes: 'bg-warning/10 text-warning' },
   'EN_COURS': { label: 'En cours', classes: 'bg-info/10 text-info' },
   'TERMINEE': { label: 'Terminée', classes: 'bg-success/10 text-success' },
+  'EXPIREE': { label: 'Expirée (non pourvue)', classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
   'ANNULEE_PAR_ETABLISSEMENT': { label: 'Annulée', classes: 'bg-muted text-muted-foreground' },
   'ANNULEE_PAR_SOIGNANT': { label: 'Annulée (soignant)', classes: 'bg-destructive/10 text-destructive' },
   'ABSENCE': { label: 'Absence', classes: 'bg-destructive/20 text-destructive' },
@@ -108,8 +110,9 @@ export function missionCompatibleContrat(pref: ContratPreference | string, types
   return true;
 }
 
-/** Parse the types_contrat_acceptes (JSON array or comma-separated) or fall back to type_exercice/type_contrat */
-export function getTypesContratSoignant(soignant: { type_contrat?: string | null; types_contrat_acceptes?: string | null; type_exercice?: string | null }): string[] {
+/** Parse the types_contrat_acceptes (JSON array or comma-separated) or fall back to type_exercice/type_contrat. Returns all types if nothing defined (profil incomplet). */
+export function getTypesContratSoignant(soignant: { type_contrat?: string | null; types_contrat_acceptes?: string | null; type_exercice?: string | null } | null | undefined): string[] {
+  if (!soignant) return ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
   if (soignant.types_contrat_acceptes) {
     // Handle both JSON array and comma-separated string
     const raw = soignant.types_contrat_acceptes.trim();
@@ -126,5 +129,5 @@ export function getTypesContratSoignant(soignant: { type_contrat?: string | null
   // Fallback based on type_exercice
   if (soignant.type_exercice === 'MIXTE') return ['CDDU', 'LIBERAL'];
   if (soignant.type_exercice === 'LIBERAL') return ['LIBERAL'];
-  return soignant.type_contrat ? [soignant.type_contrat] : ['CDDU'];
+  return soignant.type_contrat ? [soignant.type_contrat] : ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
 }

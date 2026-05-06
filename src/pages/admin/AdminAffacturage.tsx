@@ -10,6 +10,7 @@ import { Zap, TrendingUp, CheckCircle, XCircle, Clock, Loader2, AlertTriangle } 
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
 
@@ -44,7 +45,10 @@ export default function AdminAffacturage() {
       if (aRes.data) setAdvances(aRes.data);
       setLoading(false);
     })
-      .catch(() => {});
+      .catch((err) => {
+        setLoading(false);
+        toast.error(err?.message || 'Erreur chargement affacturage');
+      });
   }, []);
 
   const filtered = filtre === 'TOUS' ? advances : advances.filter(a => a.statut === filtre);

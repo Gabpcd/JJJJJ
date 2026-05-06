@@ -18,6 +18,18 @@ function fmt(v: number | null | undefined): string {
 
 export default function AnalyticsEtablissement() {
   usePageTitle('Analytics');
+  return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <AnalyticsContent />
+    </LayoutApp>
+  );
+}
+
+/**
+ * Contenu Analytics sans LayoutApp — réutilisable dans les Tabs de
+ * DashboardRH (fusion B.2).
+ */
+export function AnalyticsContent() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
@@ -42,18 +54,18 @@ export default function AnalyticsEtablissement() {
     if (user) charger();
   }, [user, periode]);
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   const mpm = data?.missions_par_mois || [];
   const professions = data?.top_professions || [];
   const recurrents = data?.soignants_recurrents || [];
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
+    <>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Analytics</h1>
-          <p className="text-sm text-muted-foreground">Indicateurs de performance sur {periode} mois</p>
+          <h2 className="text-lg font-semibold text-foreground">Indicateurs de performance</h2>
+          <p className="text-sm text-muted-foreground">Sur {periode} mois glissants</p>
         </div>
         <div className="flex gap-2">
           {[3, 6, 12].map(m => (
@@ -191,6 +203,6 @@ export default function AnalyticsEtablissement() {
           <p className="text-sm text-muted-foreground/60 mt-1">Les analytics apparaîtront après vos premières missions.</p>
         </div>
       )}
-    </LayoutApp>
+    </>
   );
 }

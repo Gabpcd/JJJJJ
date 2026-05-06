@@ -26,6 +26,14 @@ const TYPE_MAP: Record<Filtre, string[]> = {
 
 export default function PageNotifications({ role }: { role: UserRole }) {
   usePageTitle('Notifications');
+  return (
+    <LayoutApp role={role}>
+      <NotificationsContent />
+    </LayoutApp>
+  );
+}
+
+export function NotificationsContent() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -85,12 +93,12 @@ export default function PageNotifications({ role }: { role: UserRole }) {
 
   const filtered = filtre === 'Toutes' ? notifications : notifications.filter(n => TYPE_MAP[filtre].includes(n.type));
 
-  if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role={role}>
+    <>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-foreground">Notifications</h1>
+        <h2 className="text-lg font-bold text-foreground">Notifications</h2>
         <button onClick={supprimerLues} className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1">
           <Trash2 className="h-3.5 w-3.5" /> Supprimer les lues
         </button>
@@ -129,6 +137,6 @@ export default function PageNotifications({ role }: { role: UserRole }) {
           ))}
         </div>
       )}
-    </LayoutApp>
+    </>
   );
 }

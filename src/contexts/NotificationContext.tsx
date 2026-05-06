@@ -70,10 +70,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     <NotificationContext.Provider value={{ afficherNotification }}>
       {children}
       {/* Toast container */}
-      <div className="fixed top-4 right-4 left-4 md:left-auto md:w-96 z-[100] flex flex-col gap-2">
+      <div className="fixed top-4 right-4 left-4 md:left-auto md:w-96 z-[100] flex flex-col gap-2" aria-live="polite">
         {notifications.map((n) => (
           <div
             key={n.id}
+            role={n.type === 'erreur' ? 'alert' : 'status'}
+            data-notification-type={n.type}
             className={`animate-slide-in rounded-xl border-l-4 p-4 shadow-lg bg-card ${BG_CLASSES[n.type]} flex items-start gap-3`}
           >
             {ICONS[n.type]}

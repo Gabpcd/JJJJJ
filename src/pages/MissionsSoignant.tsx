@@ -11,14 +11,17 @@ import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
 import { BandeauAlerte48h } from '@/components/BandeauAlerte48h';
 import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
+import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, extraireContratPreference, missionCompatibleContrat, getTypesContratSoignant } from '@/lib/constantes';
+import { getMissionsCompatiblesFilter } from '@/lib/profession-hierarchy';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { handleErrorSilent } from '@/lib/handleError';
 
 type Onglet = 'disponibles' | 'mes_missions' | 'historique';
 
@@ -57,24 +60,30 @@ export default function MissionsSoignant() {
     if (!user) return;
     supabase.from('soignants')
       .select('profession, adresse_lat, adresse_lng, rayon_deplacement_km, tous_documents_valides, type_contrat, types_contrat_acceptes, type_exercice')
-      .eq('id', user.id).single()
-      .then(({ data, error }) => { if (data) setSoignant(data as any); if (error) console.warn('Profil soignant:', error.message); }).then(undefined, () => {});
+      .eq('id', user.id).maybeSingle()
+      .then(({ data }) => { if (data) setSoignant(data as any); }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.soignant'));
 
-    supabase.from('documents_soignants')
-      .select('statut_verification, valide_jusqua')
-      .eq('soignant_id', user.id)
-      .eq('type_document', 'RCP_ASSURANCE')
-      .order('televerse_le', { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        if (!data || data.length === 0) {
-          setRcpExpiree(true);
-        } else {
-          const doc = data[0];
-          const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
-          setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
-        }
-      }).then(undefined, () => { setRcpExpiree(true); });
+    // RCP check only for LIBERAL/MIXTE
+    supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle()
+      .then(({ data: sg }) => {
+        const isLiberalOrMixte = sg?.type_exercice === 'LIBERAL' || sg?.type_exercice === 'MIXTE';
+        if (!isLiberalOrMixte) { setRcpExpiree(false); return; }
+        supabase.from('documents_soignants')
+          .select('statut_verification, valide_jusqua')
+          .eq('soignant_id', user.id)
+          .eq('type_document', 'RCP_ASSURANCE')
+          .order('televerse_le', { ascending: false })
+          .limit(1)
+          .then(({ data }) => {
+            if (!data || data.length === 0) {
+              setRcpExpiree(true);
+            } else {
+              const doc = data[0];
+              const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
+              setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
+            }
+          });
+      }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.rcp'));
 
     const lundi = startOfWeek(new Date(), { weekStartsOn: 1 });
     const dimanche = endOfWeek(new Date(), { weekStartsOn: 1 });
@@ -87,23 +96,33 @@ export default function MissionsSoignant() {
       .then(({ data }) => {
         const total = (data ?? []).reduce((s: number, m: any) => s + (m.duree_heures ?? 0), 0);
         setHeuresSemaine(total);
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'MissionsSoignant.heuresSemaine'));
   }, [user]);
 
   useEffect(() => {
-    if (!user || !soignant) return;
+    if (!user) return;
+    if (!soignant && onglet !== 'disponibles') { setLoading(false); setMissions([]); return; }
     setLoading(true);
     const fetchMissions = async () => {
       const maintenantIso = new Date().toISOString();
       let query = supabase.from('missions').select(`
         id, intitule, description, service, profession_requise,
+        specialite_medicale_requise, accepte_non_specialises,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
         soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche
       `);
 
       if (onglet === 'disponibles') {
-        query = query.eq('statut', 'OUVERTE').eq('profession_requise', soignant.profession as any).gte('debut_le', maintenantIso);
+        query = query.eq('statut', 'OUVERTE').gte('debut_le', maintenantIso);
+        if (soignant?.profession) {
+          const orFiltre = getMissionsCompatiblesFilter(soignant.profession);
+          if (orFiltre) {
+            query = query.or(orFiltre);
+          } else {
+            query = query.eq('profession_requise', soignant.profession as any);
+          }
+        }
         // Contract type compatibility is handled client-side via missionCompatibleContrat
         query = query.order('est_urgente', { ascending: false }).order('niveau_urgence', { ascending: false }).order('debut_le', { ascending: true });
         if (filtres?.dateDebut) query = query.gte('debut_le', filtres.dateDebut);
@@ -134,11 +153,10 @@ export default function MissionsSoignant() {
   useEffect(() => { setNbAffiche(20); setPage(0); }, [onglet, filtres]);
 
   const missionsAvecDistance = useMemo(() => {
-    if (!soignant) return [];
-    const typesContrat = getTypesContratSoignant(soignant);
+    const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
     let result = missions.map(m => ({
       ...m,
-      distance_km: calculerDistanceKm(soignant.adresse_lat, soignant.adresse_lng, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
+      distance_km: calculerDistanceKm(soignant?.adresse_lat ?? null, soignant?.adresse_lng ?? null, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),
     }));
 
     // Filter by contract type compatibility (only for available missions)
@@ -193,8 +211,6 @@ export default function MissionsSoignant() {
     return result;
   }, [missionsAvecDistance, onglet]);
 
-  if (!soignant) return <LayoutApp role="SOIGNANT"><SkeletonList count={4} /></LayoutApp>;
-
   const onglets: { id: Onglet; label: string; count?: number }[] = [
     { id: 'disponibles', label: 'Disponibles' },
     { id: 'mes_missions', label: 'Mes missions' },
@@ -205,7 +221,8 @@ export default function MissionsSoignant() {
     <LayoutApp role="SOIGNANT">
       <h1 className="text-xl font-bold text-foreground mb-4">Missions</h1>
 
-      <BandeauDocumentsManquants tousDocumentsValides={!!soignant.tous_documents_valides} rcpExpiree={rcpExpiree} />
+      {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
+      {soignant && <BandeauDocumentsManquants tousDocumentsValides={!!soignant.tous_documents_valides} rcpExpiree={rcpExpiree} />}
       <div className="flex border-b border-border mb-4 overflow-x-auto">
         {onglets.map(o => (
           <button key={o.id} onClick={() => setOnglet(o.id)}
@@ -219,7 +236,7 @@ export default function MissionsSoignant() {
       {onglet === 'disponibles' && (
         <>
           <BandeauAlerte48h heuresSemaine={heuresSemaine} />
-          <FiltresMissions rayonDefaut={soignant.rayon_deplacement_km} onFiltreChange={setFiltres} />
+          <FiltresMissions rayonDefaut={soignant?.rayon_deplacement_km} onFiltreChange={setFiltres} />
         </>
       )}
 

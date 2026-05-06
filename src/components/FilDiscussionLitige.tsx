@@ -19,6 +19,15 @@ const STATUT_LABELS: Record<string, { label: string; classes: string }> = {
   EN_COURS: { label: 'En cours', classes: 'bg-primary/10 text-primary border-primary/30' },
   EN_DISCUSSION: { label: 'En discussion', classes: 'bg-primary/10 text-primary border-primary/30' },
   EN_MEDIATION: { label: 'Médiation Jolene', classes: 'bg-info/10 text-info border-info/30' },
+  MEDIATION_EN_COURS: { label: 'Médiation en cours', classes: 'bg-info/10 text-info border-info/30' },
+  REVUE_ADMIN: { label: 'Revue admin', classes: 'bg-destructive/10 text-destructive border-destructive/30' },
+  RESOLU_ACCORD_PARTIES: { label: 'Accord mutuel ✅', classes: 'bg-success/10 text-success border-success/30' },
+  RESOLU_FAVEUR_SOIGNANT: { label: 'Tranché — soignant', classes: 'bg-success/5 text-foreground border-border' },
+  RESOLU_FAVEUR_ETAB: { label: 'Tranché — établissement', classes: 'bg-success/5 text-foreground border-border' },
+  RESOLU_PARTAGE: { label: 'Décision partagée', classes: 'bg-success/5 text-foreground border-border' },
+  RESOLU_ADMIN: { label: 'Résolu admin', classes: 'bg-muted text-muted-foreground border-border' },
+  RESOLU_SOIGNANT: { label: 'Résolu (soignant)', classes: 'bg-success/5 text-foreground border-border' },
+  RESOLU_ETABLISSEMENT: { label: 'Résolu (étab)', classes: 'bg-success/5 text-foreground border-border' },
   CONTESTEE: { label: 'Contesté', classes: 'bg-warning/10 text-warning border-warning/30' },
   RESOLU: { label: 'Résolu', classes: 'bg-success/10 text-success border-success/30' },
   CLOTURE: { label: 'Clôturé', classes: 'bg-success/10 text-success border-success/30' },
@@ -31,9 +40,6 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
   const [loadingMsgs, setLoadingMsgs] = useState(true);
   const [newMsg, setNewMsg] = useState('');
   const [sending, setSending] = useState(false);
-  const [clotureLoading, setClotureLoading] = useState(false);
-  const [mediationLoading, setMediationLoading] = useState(false);
-  const [showMediation, setShowMediation] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const chargerMessages = async () => {
@@ -69,41 +75,9 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
     onUpdate();
   };
 
-  const demanderCloture = async () => {
-    setClotureLoading(true);
-    const { data, error } = await supabase.rpc('fn_cloturer_litige' as any, { p_litige_id: litige.id });
-    setClotureLoading(false);
-    if (error || (data as any)?.error) {
-      toast.error((data as any)?.error || 'Erreur');
-      return;
-    }
-    if ((data as any)?.cloture) {
-      toast.success('Litige clôturé d\'un commun accord !');
-    } else {
-      toast.success('Votre accord a été enregistré. En attente de l\'accord de l\'autre partie.');
-    }
-    chargerMessages();
-    onUpdate();
-  };
-
-  const demanderMediation = async () => {
-    setMediationLoading(true);
-    const { data, error } = await supabase.rpc('fn_demander_mediation_litige' as any, {
-      p_litige_id: litige.id,
-    });
-    setMediationLoading(false);
-    if (error || (data as any)?.error) {
-      toast.error((data as any)?.error || 'Erreur');
-      return;
-    }
-    toast.success('Demande de médiation envoyée à l\'équipe Jolene.');
-    setShowMediation(false);
-    chargerMessages();
-    onUpdate();
-  };
-
-  const isOpen = ['OUVERT', 'EN_COURS', 'EN_DISCUSSION', 'EN_MEDIATION', 'CONTESTEE'].includes(litige.statut);
-  const isClosed = litige.statut === 'CLOTURE' || litige.statut === 'RESOLU' || litige.statut === 'FERME';
+  const isOpen = ['OUVERT', 'EN_COURS', 'EN_DISCUSSION', 'EN_MEDIATION', 'MEDIATION_EN_COURS', 'CONTESTEE'].includes(litige.statut);
+  const isClosed = ['CLOTURE', 'RESOLU', 'FERME', 'RESOLU_ACCORD_PARTIES', 'RESOLU_FAVEUR_SOIGNANT', 'RESOLU_FAVEUR_ETAB', 'RESOLU_PARTAGE', 'RESOLU_SOIGNANT', 'RESOLU_ETABLISSEMENT', 'RESOLU_ADMIN'].includes(litige.statut);
+  const isRevueAdmin = litige.statut === 'REVUE_ADMIN';
 
   // Determine if the OTHER party has requested closure
   const iAmSoignant = litige.soignant_id === user?.id;
@@ -134,46 +108,33 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
 
       {/* ── CLOSURE REQUEST BANNER — prominent alert ── */}
       {clotureEnAttente && autrePartieAccepte && !monAccord && (
-        <div className="rounded-xl border-2 border-success/40 bg-success/5 p-4 animate-pulse-once">
+        <div className="rounded-xl border-2 border-success/40 bg-success/5 p-4">
           <div className="flex items-start gap-3">
             <Handshake className="h-5 w-5 text-success shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-bold text-success">
-                L'{iAmSoignant ? 'établissement' : 'soignant(e)'} propose de clôturer ce litige
+                L'{iAmSoignant ? 'établissement' : 'soignant(e)'} propose un accord
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Si vous êtes d'accord, acceptez la clôture ci-dessous. Le litige sera fermé d'un commun accord.
+                Utilisez le bouton « Accepter l'accord » ci-dessus pour confirmer.
               </p>
-              <Button
-                size="sm"
-                className="gap-1.5 mt-3 bg-success hover:bg-success/90 text-success-foreground"
-                disabled={clotureLoading}
-                onClick={demanderCloture}
-              >
-                <CheckCircle className="h-3.5 w-3.5" />
-                {clotureLoading ? 'En cours…' : 'Accepter la clôture'}
-              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {clotureEnAttente && monAccord && !autrePartieAccepte && (
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-primary shrink-0" />
-            <p className="text-sm text-primary font-medium">
-              Vous avez accepté la clôture — en attente {iAmSoignant ? "de l'établissement" : 'du soignant(e)'}
-            </p>
-          </div>
+      {/* Mediation banner */}
+      {(litige.statut === 'EN_MEDIATION' || litige.statut === 'MEDIATION_EN_COURS') && (
+        <div className="bg-info/10 border border-info/30 rounded-xl p-3 flex items-center gap-2">
+          <Shield className="h-4 w-4 text-info" />
+          <p className="text-sm text-info font-medium">En médiation amiable — vous avez 7 jours pour vous accorder</p>
         </div>
       )}
 
-      {/* Mediation banner */}
-      {litige.statut === 'EN_MEDIATION' && (
-        <div className="bg-info/10 border border-info/30 rounded-xl p-3 flex items-center gap-2">
-          <Shield className="h-4 w-4 text-info" />
-          <p className="text-sm text-info font-medium">En médiation — L'équipe Jolene examine ce litige</p>
+      {litige.statut === 'REVUE_ADMIN' && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-destructive" />
+          <p className="text-sm text-destructive font-medium">En revue admin — un administrateur va trancher</p>
         </div>
       )}
 
@@ -228,7 +189,7 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
       )}
 
       {/* Actions */}
-      {isOpen && (
+      {(isOpen || isRevueAdmin) && (
         <div className="space-y-2 pt-2 border-t border-border">
           <Textarea
             value={newMsg}
@@ -241,42 +202,7 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
             <Button size="sm" onClick={envoyerMessage} disabled={sending || newMsg.trim().length < 10} className="gap-1.5">
               <Send className="h-3.5 w-3.5" /> {sending ? 'Envoi…' : 'Envoyer'}
             </Button>
-            {!monAccord && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 border-success/30 text-success hover:bg-success/10"
-                disabled={clotureLoading}
-                onClick={demanderCloture}
-              >
-                <Handshake className="h-3.5 w-3.5" />
-                {clotureLoading ? 'En cours…' : 'Proposer la clôture'}
-              </Button>
-            )}
-            {litige.statut !== 'EN_MEDIATION' && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 border-warning/30 text-warning hover:bg-warning/10"
-                onClick={() => setShowMediation(!showMediation)}
-              >
-                <ShieldAlert className="h-3.5 w-3.5" /> Demander la médiation
-              </Button>
-            )}
           </div>
-          {showMediation && (
-            <div className="rounded-xl bg-warning/5 border border-warning/20 p-3 space-y-2">
-              <p className="text-xs text-warning font-medium">
-                La médiation fait intervenir l'équipe Jolene comme tiers neutre. C'est gratuit et confidentiel.
-              </p>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={demanderMediation} disabled={mediationLoading} className="gap-1.5 bg-warning hover:bg-warning/90 text-warning-foreground">
-                  <ShieldAlert className="h-3.5 w-3.5" /> {mediationLoading ? 'Envoi…' : 'Confirmer la demande'}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setShowMediation(false)}>Annuler</Button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

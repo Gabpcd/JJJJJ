@@ -84,15 +84,17 @@ export default function AdminHealthcheck() {
     // 7. Email (send-email warm)
     const emailStart = Date.now();
     try {
-      const { data } = await supabase.functions.invoke('send-email', { body: { warm: true } });
+      await supabase.functions.invoke('send-email', { body: { warm: true } });
       results.push({ name: 'Resend Email', icon: Mail, status: 'ok', latency: Date.now() - emailStart, detail: 'Warm ping OK' });
     } catch (e: any) {
-      results.push({ name: 'Resend Email', icon: Mail, status: data ? 'ok' : 'error', latency: Date.now() - emailStart, detail: e.message });
+      results.push({ name: 'Resend Email', icon: Mail, status: 'error', latency: Date.now() - emailStart, detail: e.message });
     }
 
-    // 8. Sentry
+    // 8. Sentry — masqué si DSN non configurée (activation à venir côté Vercel).
     const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
-    results.push({ name: 'Sentry Monitoring', icon: Shield, status: sentryDsn ? 'ok' : 'degraded', detail: sentryDsn ? 'DSN configuré' : 'VITE_SENTRY_DSN manquante' });
+    if (sentryDsn) {
+      results.push({ name: 'Sentry Monitoring', icon: Shield, status: 'ok', detail: 'DSN configuré' });
+    }
 
     setServices(results);
     setLastCheck(new Date());
@@ -259,6 +261,12 @@ export default function AdminHealthcheck() {
           </div>
         )}
       </div>
+
+      {!import.meta.env.VITE_SENTRY_DSN && (
+        <p className="text-[11px] text-muted-foreground/60 italic mt-6 text-center">
+          ℹ️ Sentry sera activé prochainement (configuration VITE_SENTRY_DSN côté Vercel à venir).
+        </p>
+      )}
     </LayoutAdmin>
   );
 }

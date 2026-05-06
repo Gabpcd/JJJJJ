@@ -1,0 +1,138 @@
+name: Load tests (k6)
+
+# Lance les tests de charge k6 contre le projet STAGING.
+# Trigger MANUEL (workflow_dispatch) — JAMAIS sur prod, JAMAIS auto sur push.
+#
+# Prérequis :
+# 1. Workflow `deploy-supabase-staging.yml` exécuté au moins 1× (schema + edge fns)
+# 2. Secrets GitHub :
+#    - STAGING_SUPABASE_URL              : https://mejpriaetwgtcstbgfid.supabase.co
+#    - STAGING_SUPABASE_ANON_KEY         : (anon JWT staging)
+#    - STAGING_SUPABASE_SERVICE_ROLE_KEY : (service_role JWT staging — requis pour D, F)
+#    - LOAD_TEST_PASSWORD                : password des comptes test fixes (réutilise PLAYWRIGHT_TEST_PASSWORD)
+#
+# Voir docs/tests-charge.md pour les cibles de performance et l'interprétation des résultats.
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Scénario à exécuter"
+        type: choice
+        required: true
+        default: '03-recherche-missions'
+        options:
+          - '01-inscription-bloc'
+          - '02-login-simultane'
+          - '03-recherche-missions'
+          - '04-candidatures-simultanees'
+          - '05-dashboard-concurrent'
+          - '06-cron-weekly-invoicing'
+          - 'all'
+      vus_override:
+        description: "VUs override (vide = défaut du script)"
+        type: string
+        required: false
+        default: ''
+      duration_override:
+        description: "Durée override (vide = défaut du script, ex: 2m)"
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: load-tests
+  cancel-in-progress: false
+
+jobs:
+  load-tests:
+    name: Run k6 scenario(s)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Verify k6 installation
+        run: k6 version
+
+      - name: Sanity check — staging URL répond
+        run: |
+          set -e
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            "${{ secrets.STAGING_SUPABASE_URL }}/auth/v1/health" \
+            -H "apikey: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}" || echo "000")
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Staging URL ne répond pas (status=$STATUS). Vérifier que deploy-supabase-staging.yml a été exécuté."
+            exit 1
+          fi
+          echo "Staging /auth/v1/health OK ($STATUS)"
+
+      - name: Prepare results directory
+        run: mkdir -p tests/load/results
+
+      - name: Run scenario
+        env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          LOAD_TEST_PASSWORD: ${{ secrets.LOAD_TEST_PASSWORD }}
+          LOAD_TEST_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          K6_FLAGS=""
+          if [ -n "${{ inputs.vus_override }}" ]; then
+            K6_FLAGS="$K6_FLAGS --vus ${{ inputs.vus_override }}"
+          fi
+          if [ -n "${{ inputs.duration_override }}" ]; then
+            K6_FLAGS="$K6_FLAGS --duration ${{ inputs.duration_override }}"
+          fi
+
+          run_one() {
+            local script="$1"
+            echo "::group::k6 run $script"
+            # `|| true` : on capture l'exit code mais on continue pour avoir
+            # les résultats. La somme des thresholds échoués décide en step
+            # final si on fail le job.
+            k6 run $K6_FLAGS "$script" || EXIT_CODE=$?
+            echo "::endgroup::"
+            return ${EXIT_CODE:-0}
+          }
+
+          if [ "${{ inputs.scenario }}" = "all" ]; then
+            FAILED=0
+            for s in tests/load/scenarios/*.js; do
+              run_one "$s" || FAILED=$((FAILED + 1))
+            done
+            echo "Scenarios échoués (thresholds dépassés) : $FAILED"
+            exit $FAILED
+          else
+            run_one "tests/load/scenarios/${{ inputs.scenario }}.js"
+          fi
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results-${{ inputs.scenario }}-${{ github.run_id }}
+          path: tests/load/results/
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Load test ${{ inputs.scenario }} sur staging" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -d tests/load/results ]; then
+            for f in tests/load/results/*.json; do
+              [ -f "$f" ] || continue
+              echo "- \`$(basename "$f")\` ($(stat -c %s "$f") bytes)" >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Métriques détaillées : artifacts \`k6-results-*\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "Cibles + interprétation : voir \`docs/tests-charge.md\`." >> "$GITHUB_STEP_SUMMARY"

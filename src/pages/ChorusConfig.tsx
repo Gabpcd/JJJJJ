@@ -4,11 +4,19 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Landmark, Loader2, Save, CheckCircle, ExternalLink, Edit2 } from 'lucide-react';
+import { Landmark, Loader2, Save, CheckCircle, Edit2, Search, XCircle } from 'lucide-react';
 import { FadeInView } from '@/components/FadeInView';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { capturerErreurSentry } from '@/lib/sentry';
+
+interface VerifyResult {
+  status: 'idle' | 'loading' | 'found' | 'not_found' | 'error';
+  designation?: string;
+  error?: string;
+  codeServiceObligatoire?: boolean;
+  services?: Array<{ code: string; nom: string; actif: boolean }>;
+}
 
 export default function ChorusConfig() {
   usePageTitle('Configuration Chorus Pro');
@@ -22,6 +30,7 @@ export default function ChorusConfig() {
   const [codeService, setCodeService] = useState('');
   const [identifiantCpro, setIdentifiantCpro] = useState('');
   const [actif, setActif] = useState(true);
+  const [verify, setVerify] = useState<VerifyResult>({ status: 'idle' });
 
   useEffect(() => {
     if (!user) return;
@@ -42,9 +51,39 @@ export default function ChorusConfig() {
     })();
   }, [user]);
 
+  const verifyStructure = async () => {
+    const id = numeroStructure.trim();
+    if (!id) return;
+    setVerify({ status: 'loading' });
+    try {
+      const { data, error } = await supabase.functions.invoke('chorus-pro-verify', {
+        body: { identifiant: id, detail: true, services: true },
+      });
+      if (error) throw error;
+      if (data.simulation) {
+        setVerify({ status: 'error', error: 'Vérification indisponible temporairement' });
+      } else if (data.found) {
+        setVerify({
+          status: 'found',
+          designation: data.structure?.designationStructure || 'Structure trouvée',
+          codeServiceObligatoire: data.parametrage?.codeServiceObligatoire,
+          services: data.services ?? [],
+        });
+      } else {
+        setVerify({ status: 'not_found', error: data.error || 'Structure introuvable sur Chorus Pro' });
+      }
+    } catch (err: any) {
+      setVerify({ status: 'error', error: err.message || 'Erreur de vérification' });
+    }
+  };
+
   const sauvegarder = async () => {
     if (!user || !numeroStructure.trim()) {
       afficherNotification({ type: 'erreur', message: 'Le numéro de structure est obligatoire.' });
+      return;
+    }
+    if (verify.codeServiceObligatoire && !codeService.trim()) {
+      afficherNotification({ type: 'erreur', message: 'Le code service est obligatoire pour cette structure.' });
       return;
     }
     setSaving(true);
@@ -98,6 +137,7 @@ export default function ChorusConfig() {
   }
 
   const isReadOnly = !!configId && !editMode;
+  const activeServices = verify.services?.filter(s => s.actif) ?? [];
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
@@ -126,30 +166,96 @@ export default function ChorusConfig() {
               </div>
             )}
 
+            {/* Numéro de structure + bouton Vérifier */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 Numéro de structure Chorus <span className="text-destructive">*</span>
               </label>
-              <Input
-                value={numeroStructure}
-                onChange={e => setNumeroStructure(e.target.value)}
-                placeholder="Ex: 12345678"
-                disabled={isReadOnly}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Identifiant unique de votre structure sur Chorus Pro (SIRET ou n° structure).</p>
+              <div className="flex gap-2">
+                <Input
+                  value={numeroStructure}
+                  onChange={e => { setNumeroStructure(e.target.value); setVerify({ status: 'idle' }); }}
+                  placeholder="Ex: 10000071800067"
+                  disabled={isReadOnly}
+                  className="flex-1"
+                />
+                {!isReadOnly && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={verifyStructure}
+                    disabled={verify.status === 'loading' || !numeroStructure.trim()}
+                    className="shrink-0"
+                  >
+                    {verify.status === 'loading'
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Search className="h-4 w-4" />
+                    }
+                    <span className="ml-1.5">Vérifier</span>
+                  </Button>
+                )}
+              </div>
+              {verify.status === 'found' && (
+                <p className="text-xs text-success flex items-center gap-1 mt-1.5">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {verify.designation}
+                </p>
+              )}
+              {verify.status === 'not_found' && (
+                <p className="text-xs text-destructive flex items-center gap-1 mt-1.5">
+                  <XCircle className="h-3.5 w-3.5" />
+                  {verify.error}
+                </p>
+              )}
+              {verify.status === 'error' && (
+                <p className="text-xs text-warning flex items-center gap-1 mt-1.5">
+                  <XCircle className="h-3.5 w-3.5" />
+                  {verify.error}
+                </p>
+              )}
+              {verify.status === 'idle' && (
+                <p className="text-xs text-muted-foreground mt-1">Identifiant unique de votre structure sur Chorus Pro (SIRET ou n° structure).</p>
+              )}
             </div>
 
+            {/* Code service — select dynamique si services chargés */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Code service</label>
-              <Input
-                value={codeService}
-                onChange={e => setCodeService(e.target.value)}
-                placeholder="Ex: SRV001"
-                disabled={isReadOnly}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Code du service destinataire (facultatif).</p>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Code service
+                {verify.codeServiceObligatoire && (
+                  <span className="text-destructive ml-1">* obligatoire pour cette structure</span>
+                )}
+              </label>
+              {activeServices.length > 0 ? (
+                <select
+                  value={codeService}
+                  onChange={e => setCodeService(e.target.value)}
+                  disabled={isReadOnly}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">— Aucun —</option>
+                  {activeServices.map(s => (
+                    <option key={s.code} value={s.code}>{s.code} — {s.nom}</option>
+                  ))}
+                </select>
+              ) : (
+                <Input
+                  value={codeService}
+                  onChange={e => setCodeService(e.target.value)}
+                  placeholder="Ex: SRV001"
+                  disabled={isReadOnly}
+                />
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                {activeServices.length > 0
+                  ? `${activeServices.length} service(s) disponible(s) — sélectionnez dans la liste`
+                  : 'Code du service destinataire (cliquez "Vérifier" pour charger la liste).'
+                }
+              </p>
             </div>
 
+            {/* Identifiant CPro */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Identifiant CPro</label>
               <Input
@@ -161,6 +267,7 @@ export default function ChorusConfig() {
               <p className="text-xs text-muted-foreground mt-1">Identifiant de connexion à la plateforme Chorus Pro.</p>
             </div>
 
+            {/* Actions */}
             {!isReadOnly && (
               <div className="flex gap-2">
                 <Button onClick={sauvegarder} disabled={saving || !numeroStructure.trim()} className="flex-1 gap-2">
@@ -173,23 +280,11 @@ export default function ChorusConfig() {
               </div>
             )}
 
-            <div className="rounded-lg border border-border p-3 space-y-2">
-              <p className="text-xs font-semibold text-foreground">Comment déposer vos factures ?</p>
-              <p className="text-xs text-muted-foreground">
-                En attendant l'intégration API directe, déposez vos factures manuellement sur le portail Chorus Pro.
-                Un guide pas-à-pas est disponible dans chaque facture secteur public.
-              </p>
-              <a href="https://chorus-pro.gouv.fr" target="_blank" rel="noopener noreferrer">
-                <Button size="sm" variant="outline" className="text-xs gap-1 mt-1">
-                  <ExternalLink className="h-3 w-3" /> Accéder à Chorus Pro
-                </Button>
-              </a>
-            </div>
-
-            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-              <p className="text-xs text-primary">
-                <strong>Intégration API en cours</strong> — Lorsque l'API Chorus Pro sera connectée,
-                vos factures seront déposées et suivies automatiquement depuis Jolene.
+            <div className="p-3 rounded-lg bg-success/5 border border-success/20">
+              <p className="text-xs text-success">
+                <strong>Intégration API active</strong> — Vos factures secteur public sont déposées
+                et suivies automatiquement via l'API Chorus Pro (PISTE). Le statut est synchronisé
+                toutes les 2 heures.
               </p>
             </div>
           </div>

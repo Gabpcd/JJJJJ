@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { ouvrirNavigation } from '@/lib/platform';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -7,11 +7,14 @@ import { hapticNotification } from '@/lib/haptics';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Mail, Building2, MessageCircle } from 'lucide-react';
 import { ChoixContratDialog } from '@/components/ChoixContratDialog';
+import { BoutonNoterMission } from '@/components/BoutonNoterMission';
+import { BadgeScoreEtabPublic } from '@/components/BadgeScoreEtabPublic';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
+import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
 import { NoteHonoraires } from '@/components/NoteHonoraires';
 import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatMission } from '@/components/ChatMission';
@@ -30,28 +33,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { calculerDistanceKm } from '@/lib/geo';
 import { getLabelProfession, getLabelTypeEtablissement } from '@/lib/constantes';
 import { extraireMessageErreur, estBlocageCodeTravail } from '@/lib/erreurs';
+import { calculerCompletionProfil } from '@/lib/profil-soignant';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import type { Database } from '@/integrations/supabase/types';
+import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
 
-interface SoignantData {
-  prenom: string; nom: string; telephone: string | null;
-  date_naissance: string | null; profession: string; type_contrat: string | null;
-  numero_rpps: string | null; numero_adeli: string | null;
-  adresse_lat: number | null; adresse_lng: number | null;
-  tous_documents_valides: boolean | null; identite_verifiee: boolean | null;
-}
-
-function calculerCompletionProfil(s: SoignantData) {
-  // Only count fields the user can actually fill in — not verification statuses
-  const checks: boolean[] = [
-    !!s.prenom, !!s.nom, !!s.telephone, !!s.date_naissance,
-    !!s.profession, !!s.type_contrat,
-    !!(s.numero_rpps || s.numero_adeli),
-    !!(s.adresse_lat && s.adresse_lng),
-  ];
-  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-}
+type SoignantData = Database['public']['Tables']['soignants']['Row'];
 
 export default function DetailMissionSoignant() {
   usePageTitle('Détail mission');
@@ -81,6 +70,8 @@ export default function DetailMissionSoignant() {
   const [candidatureEnvoyee, setCandidatureEnvoyee] = useState(false);
   const [postulationEnCours, setPostulationEnCours] = useState(false);
   const [choixContratDialog, setChoixContratDialog] = useState<{ open: boolean; options: any[]; action: 'postuler' | 'accepter' }>({ open: false, options: [], action: 'postuler' });
+  const postulationLockRef = useRef(false);
+  const acceptationLockRef = useRef(false);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -94,7 +85,8 @@ export default function DetailMissionSoignant() {
           taux_ifm, taux_icp, montant_ifm, montant_icp,
           total_brut, net_a_payer, net_estime, est_urgente, niveau_urgence, statut,
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
-          type_paiement_soignant, numero_note_honoraires,
+          type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
+          numero_note_honoraires,
           yousign_statut, mode_attribution
         `).eq('id', id).single(),
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
@@ -134,7 +126,7 @@ export default function DetailMissionSoignant() {
       .gt('fin_le', mission.debut_le)
       .then(({ data }) => {
         setChevauchement((data || []).length > 0);
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.chevauchement'));
   }, [mission, user]);
 
   // Fetch average rating for the establishment
@@ -144,7 +136,7 @@ export default function DetailMissionSoignant() {
       .then(({ data }: any) => {
         if (data && typeof data === 'object') setNoteMoyenne(data);
         else if (Array.isArray(data) && data[0]) setNoteMoyenne(data[0]);
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.noteMoyenne'));
   }, [mission?.etablissement_id]);
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
@@ -155,15 +147,16 @@ export default function DetailMissionSoignant() {
     soignant.adresse_lat, soignant.adresse_lng,
     etablissement?.adresse_lat, etablissement?.adresse_lng
   );
-  const completionProfil = calculerCompletionProfil(soignant);
+  const resumeCompletion = calculerCompletionProfil(soignant as any);
+  const completionProfil = resumeCompletion.pourcentage;
   const premiereMissionLe = (soignant as any).premiere_mission_le;
   const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
-  const enPeriodeGrace = !premiereMissionLe || 
+  const enPeriodeGrace = !premiereMissionLe ||
     (new Date(premiereMissionLe).getTime() + SEPT_JOURS_MS > Date.now());
   const missionLaisseLeTemps = mission.debut_le &&
     (new Date(mission.debut_le).getTime() - Date.now() > SEPT_JOURS_MS);
   const docsOk = soignant.tous_documents_valides || enPeriodeGrace || missionLaisseLeTemps;
-  const peutPostuler = completionProfil >= 100 && docsOk;
+  const peutPostuler = resumeCompletion.peut_candidater && docsOk;
   const estAssigne = mission.soignant_assigne_id === user!.id;
   const estOuverte = mission.statut === 'OUVERTE';
   const estTerminee = mission.statut === 'TERMINEE';
@@ -172,6 +165,8 @@ export default function DetailMissionSoignant() {
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
 
   const postulerMission = async (choixContrat?: string) => {
+    if (postulationLockRef.current) return;
+    postulationLockRef.current = true;
     setPostulationEnCours(true);
     try {
       const params: any = { p_mission_id: id!, p_message: messageCandidature || null };
@@ -188,11 +183,15 @@ export default function DetailMissionSoignant() {
     } catch (err: any) {
       capturerErreurSentry(err, 'DetailMissionSoignant', 'candidature');
       toast.error(extraireMessageErreur(err));
+    } finally {
+      postulationLockRef.current = false;
+      setPostulationEnCours(false);
     }
-    setPostulationEnCours(false);
   };
 
   const accepterMission = async (choixContrat?: string) => {
+    if (acceptationLockRef.current) return;
+    acceptationLockRef.current = true;
     setAcceptationEnCours(true);
     try {
       const params: any = { p_mission_id: id! };
@@ -262,7 +261,7 @@ export default function DetailMissionSoignant() {
           },
           destinataire_id: user!.id,
         },
-      }).then(undefined, () => {});
+      }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.email-soignant'));
 
       // Email à l'établissement (établissement role can send to other addresses)
       {
@@ -278,9 +277,10 @@ export default function DetailMissionSoignant() {
             },
             destinataire_id: mission.etablissement_id,
           },
-        }).then(undefined, () => {});
+        }).then(undefined, (err) => handleErrorSilent(err, 'DetailMissionSoignant.email-etablissement'));
       }
     } finally {
+      acceptationLockRef.current = false;
       setAcceptationEnCours(false);
     }
   };
@@ -353,8 +353,11 @@ export default function DetailMissionSoignant() {
             <div className="flex items-start gap-3">
               <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-semibold text-sm text-foreground">{etablissement?.nom}</h3>
+                  {estAssigne && mission.etablissement_id && (
+                    <BadgeScoreEtabPublic etablissementId={mission.etablissement_id} />
+                  )}
                   {estAssigne && (
                     <button
                       type="button"
@@ -482,11 +485,30 @@ export default function DetailMissionSoignant() {
               }}
             />
           ) : (
-            <DecompositionFinanciere mission={mission} />
+            <DecompositionFinanciere mission={mission} role="SOIGNANT" />
           )}
           <p className="text-xs text-muted-foreground/60 italic text-center">
             Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
           </p>
+
+          {/* Facture honoraires — visible dès que mission TERMINEE (facture générée) */}
+          {estTerminee && (
+            <FactureHonorairesCard missionId={mission.id} viewerRole="SOIGNANT" />
+          )}
+
+          {estTerminee && estAssigne && (
+            <div className="card-base">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-foreground">Notez l'établissement</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Votre notation aide la communauté + améliore votre score (composante "Notation par soignant").
+                  </p>
+                </div>
+                <BoutonNoterMission missionId={mission.id} sens="SOIGNANT_VERS_ETAB" missionIntitule={mission.intitule} variant="primary" />
+              </div>
+            </div>
+          )}
 
           {/* Bloc de conformité (missions ouvertes) */}
           {estOuverte && peutPostuler && (
@@ -576,6 +598,16 @@ export default function DetailMissionSoignant() {
               <>
                 <div className="bg-success/5 border border-success/20 rounded-xl p-3 mb-4 text-center">
                   <p className="text-sm font-semibold text-success">✅ Vous êtes assigné(e) à cette mission</p>
+                </div>
+                <div className="mb-4">
+                  <BlocContratTravailMission
+                    missionId={mission.id}
+                    typeContratApplique={(mission as any).type_contrat_applique}
+                    soignantAssigneId={mission.soignant_assigne_id}
+                    etablissementId={mission.etablissement_id}
+                    debutLe={mission.debut_le}
+                    role="SOIGNANT"
+                  />
                 </div>
                 <button
                   type="button"

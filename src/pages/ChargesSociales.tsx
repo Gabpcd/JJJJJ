@@ -89,7 +89,7 @@ export default function ChargesSociales() {
           .is('supprime_le', null)
           .order('valide_jusqua', { ascending: false })
           .limit(1),
-        supabase.from('soignants').select('prenom, nom, profession, statut_liberal, assujetti_tva').eq('id', user.id).single(),
+        supabase.from('soignants').select('prenom, nom, profession, statut_liberal, assujetti_tva').eq('id', user.id).maybeSingle(),
       ]);
 
       const enriched = missionData ? await enrichirEtablissements(missionData as any) : [];
@@ -141,6 +141,22 @@ export default function ChargesSociales() {
   };
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+
+  if (!soignant || (soignant.statut_liberal !== 'ACTIF' && soignant.statut_liberal !== 'EN_COURS')) {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="card-base text-center py-12">
+          <p className="text-lg font-bold text-foreground mb-2">Charges sociales libérales</p>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            Cette page est réservée aux soignants en exercice libéral ou mixte.
+          </p>
+          <button onClick={() => navigate('/soignant/tableau-de-bord')} className="btn-primary mt-4 text-sm">
+            Retour au dashboard
+          </button>
+        </div>
+      </LayoutApp>
+    );
+  }
 
   return (
     <LayoutApp role="SOIGNANT">

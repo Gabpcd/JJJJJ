@@ -59,11 +59,18 @@ export function BandeauEvaluationsEnAttente({ role }: Props) {
       const { data: ms } = await query;
       if (!ms || ms.length === 0) return;
 
-      // Get already evaluated missions by this user
+      // Get already evaluated missions.
+      // Filtre par type_evaluateur : côté ETAB, fn_evaluer_soignant stocke
+      // evaluateur_id = etablissement_id (pas auth.uid()), donc un filtre
+      // .eq('evaluateur_id', user.id) manquerait les évals déjà faites
+      // pour les admins de groupe_sante (auth.uid() ≠ etablissement.id).
+      // RLS (pol_eval_select) isole déjà les évaluations accessibles.
+      const typeEvaluateur = role === 'SOIGNANT' ? 'SOIGNANT' : 'ETABLISSEMENT';
       const { data: evals } = await supabase
         .from('evaluations')
         .select('mission_id')
-        .eq('evaluateur_id', user.id);
+        .eq('type_evaluateur', typeEvaluateur)
+        .in('mission_id', (ms as any[]).map(m => m.id));
 
       const evalSet = new Set((evals || []).map((e: any) => e.mission_id));
       const nonEvaluees = (ms as any[]).filter(m => !evalSet.has(m.id));

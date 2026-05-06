@@ -4,10 +4,11 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Key, Copy, Plus, Eye, EyeOff, Code2, CheckCircle } from 'lucide-react';
+import { Key, Copy, Plus, Eye, EyeOff, Code2, CheckCircle, Ban, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 const ENDPOINTS = [
   { method: 'GET', path: '/api-v1/missions', desc: 'Lister vos missions', example: '{ "data": [{ "id": "uuid", "intitule": "IDE Nuit", "statut": "OUVERTE" }] }' },
@@ -30,6 +31,14 @@ const METHOD_COLORS: Record<string, string> = {
 
 export default function APIEtablissement() {
   usePageTitle('API');
+  return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <APIContent />
+    </LayoutApp>
+  );
+}
+
+export function APIContent() {
   const { user } = useAuth();
   const [keys, setKeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,23 +57,47 @@ export default function APIEtablissement() {
 
   useEffect(() => { charger(); }, [user]);
 
+  const [generatedSecret, setGeneratedSecret] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+
   const genererCle = async () => {
-    if (!newName.trim() || !user) return;
-    const cleApi = `sd_live_${crypto.randomUUID().replace(/-/g, '')}`;
-    const cleSecret = crypto.randomUUID();
-    const { error } = await supabase.from('api_keys').insert({
-      nom: newName.trim(),
-      cle_api: cleApi,
-      cle_secret: cleSecret,
-      permissions: newPerms,
-      etablissement_id: user.id,
-    } as any);
-    if (!error) {
-      setGeneratedKey(cleApi);
+    if (!newName.trim() || !user || generating) return;
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_creer_api_key' as any, {
+        p_nom: newName.trim(),
+        p_permissions: newPerms,
+        p_etablissement_id: user.id,
+      });
+      if (error || (data as any)?.error) {
+        toast.error((data as any)?.error || 'Erreur lors de la génération de la clé.');
+        return;
+      }
+      const result = data as any;
+      setGeneratedKey(result.cle_api);
+      setGeneratedSecret(result.cle_secret);
       setNewName('');
       setNewPerms(['missions:read']);
       charger();
+    } finally {
+      setGenerating(false);
     }
+  };
+
+  const revoquer = async (id: string) => {
+    if (!confirm('Révoquer cette clé API ? Elle ne sera plus utilisable.')) return;
+    const { data, error } = await supabase.rpc('fn_revoquer_api_key' as any, { p_id: id });
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Erreur'); return; }
+    toast.success('Clé révoquée');
+    charger();
+  };
+
+  const supprimer = async (id: string) => {
+    if (!confirm('Supprimer définitivement cette clé API ? Action irréversible.')) return;
+    const { data, error } = await supabase.rpc('fn_supprimer_api_key' as any, { p_id: id });
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Erreur'); return; }
+    toast.success('Clé supprimée');
+    charger();
   };
 
   const copier = (text: string) => { navigator.clipboard.writeText(text); };
@@ -73,13 +106,13 @@ export default function APIEtablissement() {
   };
   const masquer = (cle: string, revealed: boolean) => revealed ? cle : cle.slice(0, 12) + '••••••••••••';
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <h1 className="text-xl font-bold text-foreground flex items-center gap-2 mb-1">
+    <>
+      <h2 className="text-lg font-bold text-foreground flex items-center gap-2 mb-1">
         <Code2 className="h-5 w-5 text-primary" /> API REST Jolene
-      </h1>
+      </h2>
       <p className="text-sm text-muted-foreground mb-6">Intégrez vos outils RH avec notre API</p>
 
       {/* Doc */}
@@ -118,10 +151,18 @@ export default function APIEtablissement() {
                 </div>
                 <div className="flex items-center gap-1 mb-1">
                   <code className="text-xs bg-muted px-2 py-0.5 rounded">{masquer(k.cle_api, revealedKeys.has(k.id))}</code>
-                  <button onClick={() => toggleReveal(k.id)} className="p-1 hover:bg-muted rounded">
+                  <button onClick={() => toggleReveal(k.id)} className="p-1 hover:bg-muted rounded" aria-label={revealedKeys.has(k.id) ? 'Masquer' : 'Afficher'}>
                     {revealedKeys.has(k.id) ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
                   </button>
-                  <button onClick={() => copier(k.cle_api)} className="p-1 hover:bg-muted rounded"><Copy className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                  <button onClick={() => copier(k.cle_api)} className="p-1 hover:bg-muted rounded" aria-label="Copier"><Copy className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                  {k.actif && (
+                    <button onClick={() => revoquer(k.id)} className="p-1 hover:bg-warning/10 text-warning rounded ml-auto" aria-label="Révoquer" title="Révoquer">
+                      <Ban className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button onClick={() => supprimer(k.id)} className={`p-1 hover:bg-destructive/10 text-destructive rounded ${k.actif ? '' : 'ml-auto'}`} aria-label="Supprimer" title="Supprimer">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {(k.permissions ?? []).map((p: string) => <span key={p} className="badge-base bg-muted text-muted-foreground text-[10px]">{p}</span>)}
@@ -143,12 +184,22 @@ export default function APIEtablissement() {
           {generatedKey ? (
             <>
               <div className="flex items-center gap-2 mb-4"><CheckCircle className="h-5 w-5 text-success" /><h3 className="font-bold text-foreground">Clé générée !</h3></div>
-              <p className="text-xs text-muted-foreground mb-2">Copiez cette clé maintenant.</p>
-              <div className="flex items-center gap-2 bg-muted rounded-lg p-3 mb-4">
+              <p className="text-xs text-muted-foreground mb-2">⚠️ Copiez ces informations <strong>maintenant</strong>. Le secret ne sera plus jamais affiché.</p>
+              <p className="text-[11px] text-muted-foreground mb-1 mt-3 font-semibold">Clé API (publique)</p>
+              <div className="flex items-center gap-2 bg-muted rounded-lg p-3 mb-3">
                 <code className="text-xs flex-1 break-all">{generatedKey}</code>
-                <button onClick={() => copier(generatedKey)} className="p-1 hover:bg-background rounded"><Copy className="h-4 w-4 text-primary" /></button>
+                <button onClick={() => copier(generatedKey)} className="p-1 hover:bg-background rounded" aria-label="Copier la clé API"><Copy className="h-4 w-4 text-primary" /></button>
               </div>
-              <button onClick={() => setShowModal(false)} className="btn-primary w-full text-sm">Fermer</button>
+              {generatedSecret && (
+                <>
+                  <p className="text-[11px] text-muted-foreground mb-1 mt-3 font-semibold">Clé secrète (à conserver)</p>
+                  <div className="flex items-center gap-2 bg-destructive/5 border border-destructive/20 rounded-lg p-3 mb-4">
+                    <code className="text-xs flex-1 break-all">{generatedSecret}</code>
+                    <button onClick={() => copier(generatedSecret)} className="p-1 hover:bg-background rounded" aria-label="Copier la clé secrète"><Copy className="h-4 w-4 text-primary" /></button>
+                  </div>
+                </>
+              )}
+              <button onClick={() => { setShowModal(false); setGeneratedSecret(null); }} className="btn-primary w-full text-sm">Fermer</button>
             </>
           ) : (
             <>
@@ -165,13 +216,13 @@ export default function APIEtablissement() {
                 ))}
               </div>
               <div className="flex gap-2">
-                <button onClick={genererCle} disabled={!newName.trim()} className="btn-primary flex-1 text-sm disabled:opacity-50">Générer</button>
+                <button onClick={genererCle} disabled={!newName.trim() || generating} className="btn-primary flex-1 text-sm disabled:opacity-50">{generating ? 'Génération…' : 'Générer'}</button>
                 <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 text-sm">Annuler</button>
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
-    </LayoutApp>
+    </>
   );
 }

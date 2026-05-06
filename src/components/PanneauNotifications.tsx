@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, X, Check, ExternalLink } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -74,9 +75,9 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, lue: true } : x));
     }
     if (n.lien) {
-      if (n.lien.startsWith('/') || n.lien.startsWith('https://jolene.app') || n.lien.startsWith('https://jolene.app')) {
+      if (n.lien.startsWith('/') || n.lien.startsWith('https://jolene.app')) {
         onClose();
-        navigate(n.lien.replace('https://jolene.app', '').replace('https://jolene.app', '') || '/');
+        navigate(n.lien.replace('https://jolene.app', '') || '/');
       } else {
         toast.error('Lien non autorisé');
       }
@@ -85,10 +86,10 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <>
-      <div className="fixed inset-0 bg-foreground/30 z-50" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-card shadow-2xl z-50 flex flex-col animate-slide-in">
+      <div className="fixed inset-0 bg-foreground/30 z-[70]" onClick={onClose} />
+      <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-card shadow-2xl z-[70] flex flex-col animate-slide-in">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-bold text-foreground">Notifications</h2>
           <div className="flex items-center gap-2">
@@ -126,7 +127,8 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

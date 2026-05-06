@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import { toast } from "@/hooks/use-toast";
 import { logger } from "@/lib/logger";
 
@@ -21,11 +22,26 @@ function getSecureMessage(error: unknown): string {
   return MESSAGE_GENERIQUE;
 }
 
+function reportToSentry(error: unknown, contexte: string | undefined, level: 'error' | 'warning') {
+  if (error instanceof Error) {
+    Sentry.captureException(error, {
+      level,
+      tags: { source: 'handleError', contexte: contexte ?? 'unknown' },
+    });
+  } else if (error !== undefined && error !== null) {
+    Sentry.captureMessage(
+      `[${contexte ?? 'unknown'}] ${getSecureMessage(error)}`,
+      { level, tags: { source: 'handleError', contexte: contexte ?? 'unknown' } },
+    );
+  }
+}
+
 /**
  * Gère une erreur Supabase ou applicative de manière sécurisée.
  * - En DEV : log l'erreur complète dans la console.
  * - En PROD : affiche uniquement un toast générique, aucune fuite d'info.
  *   Ne jamais afficher error.message, error.details, error.hint ou error.code.
+ * - Toujours : push l'erreur vers Sentry avec tags { source, contexte }.
  *
  * @param error  L'objet erreur (Error, PostgrestError, ou inconnu)
  * @param contexte  Contexte technique (ex: "chargement missions") — jamais affiché à l'utilisateur en prod
@@ -35,6 +51,8 @@ export function handleError(error: unknown, contexte?: string): void {
     logger.error(contexte ?? "Erreur applicative", error);
   }
 
+  reportToSentry(error, contexte, 'error');
+
   toast({
     title: "Erreur",
     description: MESSAGE_GENERIQUE,
@@ -43,13 +61,15 @@ export function handleError(error: unknown, contexte?: string): void {
 }
 
 /**
- * Variante silencieuse — log sans toast.
- * Utile pour les requêtes non-critiques (KPIs secondaires, etc.)
+ * Variante silencieuse — log + Sentry sans toast.
+ * Utile pour les requêtes non-critiques (KPIs secondaires, audit best-effort, etc.)
+ * Niveau 'warning' côté Sentry (déduplication par message + tags).
  */
 export function handleErrorSilent(error: unknown, contexte?: string): void {
   if (import.meta.env.DEV) {
     logger.error(contexte ?? "Erreur silencieuse", error);
   }
+  reportToSentry(error, contexte, 'warning');
 }
 
 /**

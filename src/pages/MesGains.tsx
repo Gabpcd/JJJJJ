@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle, Scale } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { BandeauPaiementDeclare } from '@/components/BandeauPaiementDeclare';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
+import { handleErrorSilent } from '@/lib/handleError';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
@@ -55,7 +56,7 @@ export default function MesGains() {
           .eq('statut', 'TERMINEE')
           .order('debut_le', { ascending: false })
           .range(0, (page + 1) * PAGE_SIZE - 1),
-        supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).single(),
+        supabase.from('soignants').select('type_exercice, statut_liberal').eq('id', user.id).maybeSingle(),
         supabase.from('paiements_soignant' as any)
           .select('mission_id, statut, montant_net, methode, reference_virement, date_paiement')
           .eq('soignant_id', user.id) as any,
@@ -78,7 +79,7 @@ export default function MesGains() {
         p_type_ressource: 'soignant', p_id_ressource: user.id,
         p_cle_s3: null, p_details: { page: 'mes_gains' },
         p_ip: null, p_navigateur: navigator.userAgent,
-      });
+      }).then(undefined, (err) => handleErrorSilent(err, 'MesGains.audit'));
     };
     load();
   }, [user, page]);
@@ -241,7 +242,15 @@ export default function MesGains() {
             const net = netEstime(m);
             const duree = m.duree_heures ?? ((new Date(m.fin_le).getTime() - new Date(m.debut_le).getTime()) / 3600000);
             return (
-              <div key={m.id} className="rounded-xl border border-border hover:border-primary/30 hover:bg-muted/20 transition-all cursor-pointer overflow-hidden" onClick={() => navigate(`/soignant/presences/mission/${m.id}`)}>
+              <div
+                key={m.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Voir mission ${m.intitule || ''}`}
+                className="rounded-xl border border-border hover:border-primary/30 hover:bg-muted/20 transition-all cursor-pointer overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary"
+                onClick={() => navigate(`/soignant/presences/mission/${m.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/soignant/presences/mission/${m.id}`); } }}
+              >
                 <div className="flex items-center gap-3 py-3 px-4">
                   {/* Date compact */}
                   <div className="flex flex-col items-center justify-center rounded-lg bg-muted/50 px-2.5 py-1 min-w-[44px]">
@@ -280,6 +289,7 @@ export default function MesGains() {
                       if (p.statut === 'CONFIRME') return <p className="text-[10px] text-success flex items-center justify-end gap-0.5"><CheckCircle className="h-3 w-3" />Payé</p>;
                       if (p.statut === 'DECLARE') return <p className="text-[10px] text-warning flex items-center justify-end gap-0.5"><AlertTriangle className="h-3 w-3" />À confirmer</p>;
                       if (p.statut === 'CONTESTE') return <p className="text-[10px] text-destructive flex items-center justify-end gap-0.5"><AlertTriangle className="h-3 w-3" />Contesté</p>;
+                      if (p.statut === 'RESOLU') return <p className="text-[10px] text-muted-foreground flex items-center justify-end gap-0.5"><Scale className="h-3 w-3" />Litige résolu</p>;
                       return <p className="text-[10px] text-muted-foreground">{p.statut}</p>;
                     })()}
                   </div>

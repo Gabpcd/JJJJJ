@@ -21,6 +21,14 @@ function fmt(v: number) {
 
 export default function HistoriqueMissions() {
   usePageTitle('Historique missions');
+  return (
+    <LayoutApp role="SOIGNANT">
+      <HistoriqueMissionsContent />
+    </LayoutApp>
+  );
+}
+
+export function HistoriqueMissionsContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [missions, setMissions] = useState<any[]>([]);
@@ -87,12 +95,12 @@ export default function HistoriqueMissions() {
     } catch { toast.error('Impossible d\'ouvrir la conversation.'); }
   };
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role="SOIGNANT">
+    <>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">📋 Historique des missions</h1>
+        <h2 className="text-lg font-bold text-foreground">Historique des missions</h2>
         <p className="text-sm text-muted-foreground mt-1">{missions.length} mission{missions.length > 1 ? 's' : ''} terminée{missions.length > 1 ? 's' : ''}</p>
       </div>
 
@@ -162,6 +170,6 @@ export default function HistoriqueMissions() {
       )}
 
       <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
-    </LayoutApp>
+    </>
   );
 }

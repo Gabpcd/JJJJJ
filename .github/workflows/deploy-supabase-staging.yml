@@ -1,0 +1,264 @@
+name: Deploy Supabase STAGING (bootstrap from prod schema dump)
+
+# Bootstrap le projet STAGING (jolene-staging, mejpriaetwgtcstbgfid) à partir
+# d'un dump du schéma prod. Les migrations Lovable historiques (depuis mars
+# 2026) supposent un état DB déjà créé hors-CLI (dashboard Lovable), donc
+# `supabase db push` from-scratch échoue avec "relation public.missions does
+# not exist" sur la 1re migration (20260311115120_*).
+#
+# Stratégie :
+#   1. Dump du schéma prod via `supabase db dump` (schéma seul, pas de data).
+#   2. Dump des données de `supabase_migrations.schema_migrations` (tracking).
+#   3. Apply sur staging via `psql` direct (db.$REF.supabase.co:5432).
+#   4. Re-exécution de la migration `20260503050000_playwright_seed_test_accounts.sql`
+#      pour seeder les comptes test (auth schema exclu du dump par défaut).
+#   5. Optionnel : seed 500 missions [loadtest] pour scenario F.
+#
+# Trigger MANUEL uniquement (workflow_dispatch).
+#
+# Prérequis (secrets GitHub) :
+# - PROD (lecture pour dump) :
+#   * SUPABASE_ACCESS_TOKEN
+#   * SUPABASE_PROJECT_REF       (flripxtsyegjshnhzjkz)
+#   * SUPABASE_DB_PASSWORD
+# - STAGING (écriture) :
+#   * STAGING_SUPABASE_ACCESS_TOKEN
+#   * STAGING_SUPABASE_PROJECT_REF (mejpriaetwgtcstbgfid)
+#   * STAGING_SUPABASE_DB_PASSWORD
+#
+# Voir docs/staging.md pour la procédure complète.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reset_first:
+        description: "Reset staging public + supabase_migrations schemas avant bootstrap (DESTRUCTIF)"
+        type: boolean
+        required: false
+        default: false
+      seed_load_test_data:
+        description: "Seeder les 500 missions [loadtest] pour scenario F (cron)"
+        type: boolean
+        required: false
+        default: false
+      skip_functions:
+        description: "Skip edge functions deploy (migrations + dump seulement)"
+        type: boolean
+        required: false
+        default: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+concurrency:
+  group: deploy-supabase-staging
+  cancel-in-progress: false
+
+jobs:
+  bootstrap-staging:
+    name: Bootstrap staging from prod schema dump
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      staging_ref: ${{ steps.staging-url.outputs.ref }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Install postgresql-client
+        run: |
+          set -e
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+          psql --version
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Show CLI version
+        run: supabase --version
+
+      # ─── 1. Dump du schéma prod ──────────────────────────────────────
+      - name: Link to PROD
+        run: supabase link --project-ref "$PROD_REF" --password "$PROD_DB_PASSWORD"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROD_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          PROD_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Dump prod schema (public + custom)
+        run: |
+          set -e
+          # `db dump` par défaut = schema-only (pas de data) du schéma public
+          # + schémas custom user-defined. Exclut auth/storage/realtime/etc.
+          supabase db dump --linked -f /tmp/prod-schema.sql
+          echo "Schema dump : $(wc -l < /tmp/prod-schema.sql) lignes, $(stat -c %s /tmp/prod-schema.sql) bytes"
+          head -20 /tmp/prod-schema.sql
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Dump prod schema_migrations data (tracking)
+        run: |
+          set -e
+          # Sans cette donnée, `supabase db push` futur tenterait de
+          # rejouer toutes les migrations (toutes "manquantes" côté staging
+          # tracking), ce qui crasherait sur les anciennes Lovable.
+          supabase db dump --linked --schema supabase_migrations --data-only -f /tmp/migrations-data.sql
+          echo "Migrations tracking : $(wc -l < /tmp/migrations-data.sql) lignes"
+          # Sanity check : doit contenir des INSERT INTO supabase_migrations.schema_migrations
+          if ! grep -q "supabase_migrations" /tmp/migrations-data.sql; then
+            echo "::warning::Pas de données schema_migrations dans le dump"
+          fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      # ─── 2. Apply sur staging ────────────────────────────────────────
+      - name: Build staging DB URL
+        id: staging-url
+        run: |
+          # Format direct : db.<REF>.supabase.co:5432 (pas le pooler).
+          # On URL-encode le password pour gérer les caractères spéciaux.
+          ENCODED_PWD=$(python3 -c "import urllib.parse,os; print(urllib.parse.quote(os.environ['STAGING_DB_PASSWORD'], safe=''))")
+          REF="${{ secrets.STAGING_SUPABASE_PROJECT_REF }}"
+          URL="postgres://postgres:${ENCODED_PWD}@db.${REF}.supabase.co:5432/postgres?sslmode=require"
+          echo "::add-mask::$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+        env:
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+
+      - name: Reset staging schemas (optional, DESTRUCTIF)
+        if: inputs.reset_first
+        run: |
+          set -e
+          echo "::warning::Reset staging public + supabase_migrations schemas"
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 <<'SQL'
+          DROP SCHEMA IF EXISTS public CASCADE;
+          DROP SCHEMA IF EXISTS supabase_migrations CASCADE;
+          CREATE SCHEMA public;
+          GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
+          GRANT ALL ON SCHEMA public TO postgres, service_role;
+          SQL
+
+      - name: Apply prod schema dump on staging
+        run: |
+          set -e
+          # ON_ERROR_STOP : crash le step au premier échec SQL pour debug clair.
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -f /tmp/prod-schema.sql
+
+      - name: Apply schema_migrations tracking data
+        run: |
+          set -e
+          # Le dump --data-only contient des INSERTS qui peuvent dupliquer si
+          # la table existe déjà avec des rows. On purge avant pour rester
+          # idempotent.
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -c "DELETE FROM supabase_migrations.schema_migrations;" || true
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 -f /tmp/migrations-data.sql
+
+      # ─── 3. Seed comptes test Playwright (auth schema pas dans le dump) ─
+      - name: Re-execute playwright seed migration
+        run: |
+          set -e
+          # Cette migration crée playwright-soignant@jolene.app et
+          # playwright-etab@jolene.app dans auth.users (idempotent via DO blocks).
+          # Indispensable pour scenarios B/D/E qui en dépendent.
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260503050000_playwright_seed_test_accounts.sql
+
+      # ─── 4. Seed load test data (optional) ──────────────────────────
+      - name: Seed [loadtest] missions
+        if: inputs.seed_load_test_data
+        run: |
+          set -e
+          psql "${{ steps.staging-url.outputs.url }}" -v ON_ERROR_STOP=1 \
+            -f tests/load/seed/seed-staging.sql
+
+      # ─── 5. Verify ──────────────────────────────────────────────────
+      - name: Verify staging bootstrap
+        run: |
+          set -e
+          URL="${{ steps.staging-url.outputs.url }}"
+
+          TABLES=$(psql "$URL" -t -A -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")
+          MIGRATIONS=$(psql "$URL" -t -A -c "SELECT count(*) FROM supabase_migrations.schema_migrations;")
+          PLAYWRIGHT_USERS=$(psql "$URL" -t -A -c "SELECT count(*) FROM auth.users WHERE email LIKE 'playwright-%@jolene.app';")
+
+          echo "Tables public        : $TABLES"
+          echo "Migrations tracking  : $MIGRATIONS"
+          echo "Comptes Playwright   : $PLAYWRIGHT_USERS"
+
+          if [ "$TABLES" -lt 20 ]; then
+            echo "::error::Trop peu de tables ($TABLES) — bootstrap incomplet"
+            exit 1
+          fi
+          if [ "$PLAYWRIGHT_USERS" -lt 2 ]; then
+            echo "::error::Comptes test Playwright non seedés ($PLAYWRIGHT_USERS/2)"
+            exit 1
+          fi
+
+          if [ "${{ inputs.seed_load_test_data }}" = "true" ]; then
+            LOADTEST=$(psql "$URL" -t -A -c "SELECT count(*) FROM public.missions WHERE intitule LIKE '[loadtest]%' AND statut='TERMINEE';")
+            echo "Missions [loadtest]  : $LOADTEST"
+            if [ "$LOADTEST" -lt 500 ]; then
+              echo "::error::Seed loadtest incomplet ($LOADTEST/500)"
+              exit 1
+            fi
+          fi
+
+          echo "::notice::Bootstrap staging OK : $TABLES tables, $MIGRATIONS migrations trackées, $PLAYWRIGHT_USERS comptes test"
+
+  deploy-functions:
+    name: Deploy edge functions (staging)
+    if: ${{ !inputs.skip_functions }}
+    runs-on: ubuntu-latest
+    needs: bootstrap-staging
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy every function from supabase/functions
+        run: |
+          set -euo pipefail
+          cd supabase/functions
+          for dir in */; do
+            fn="${dir%/}"
+            if [ -f "$fn/index.ts" ]; then
+              echo "::group::Deploying $fn (staging)"
+              supabase functions deploy "$fn" \
+                --project-ref "$SUPABASE_PROJECT_REF" \
+                --use-api
+              echo "::endgroup::"
+            fi
+          done
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+
+      - name: Summary
+        run: |
+          echo "### Deploy Supabase STAGING ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Stratégie : dump prod schema → psql staging" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Schéma prod dumpé (public + custom) et appliqué" >> "$GITHUB_STEP_SUMMARY"
+          echo "- supabase_migrations tracking restauré" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Comptes test Playwright re-seedés" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ inputs.seed_load_test_data }}" = "true" ]; then
+            echo "- 500 missions [loadtest] seedées (scenario F)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "${{ inputs.skip_functions }}" != "true" ]; then
+            echo "- Edge functions déployées" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Projet staging : \`${{ secrets.STAGING_SUPABASE_PROJECT_REF }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Prochaine étape : Actions → \"Load tests (k6)\"." >> "$GITHUB_STEP_SUMMARY"

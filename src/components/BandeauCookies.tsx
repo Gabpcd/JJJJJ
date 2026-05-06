@@ -38,7 +38,7 @@ export function BandeauCookies() {
             <p className="text-xs text-muted-foreground mt-1">
               Jolene utilise des cookies essentiels au fonctionnement (authentification, préférences).
               Aucun cookie publicitaire ni de tracking.{' '}
-              <a href="/confidentialite" className="text-primary hover:underline">En savoir plus</a>
+              <a href="/confidentialite" className="text-primary underline font-medium">En savoir plus</a>
             </p>
           </div>
           <div className="flex gap-2 shrink-0">

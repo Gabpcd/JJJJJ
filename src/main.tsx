@@ -6,17 +6,115 @@ import "./index.css";
 
 // ─── Sentry Initialization ───
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
+
+// Release injectée par Vite (vite.config.ts → define) — match les sourcemaps
+// uploadées par sentryVitePlugin pour désobfusquer les stack traces.
+declare const __APP_VERSION__: string;
+const RELEASE = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev-unknown';
+
+const SENTRY_IGNORE_ERRORS: (string | RegExp)[] = [
+  'ResizeObserver loop limit exceeded',
+  'ResizeObserver loop completed with undelivered notifications',
+  'Non-Error promise rejection captured',
+  'AbortError',
+  'The user aborted a request',
+  'NetworkError when attempting to fetch',
+  'Failed to fetch',
+  'Load failed',
+  'NetworkError',
+  /Script error\.?$/i,
+  /gtag/i,
+];
+
+const SENTRY_DENY_URLS: (string | RegExp)[] = [
+  /^chrome-extension:\/\//i,
+  /^moz-extension:\/\//i,
+  /^safari-extension:\/\//i,
+  /^safari-web-extension:\/\//i,
+  /^https?:\/\/localhost(:\d+)?\//i,
+  /^https?:\/\/127\.0\.0\.1(:\d+)?\//i,
+];
+
+const PII_PATTERNS: { regex: RegExp; replacement: string }[] = [
+  { regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, replacement: '[email-redacted]' },
+  { regex: /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: '[jwt-redacted]' },
+  { regex: /\b\d{11}\b/g, replacement: '[rpps-redacted]' },
+];
+const SENSITIVE_QUERY_PARAMS = ['email', 'token', 'access_token', 'refresh_token', 'recovery_token', 'rpps'];
+
+function scrubString(s: string | undefined): string | undefined {
+  if (!s) return s;
+  let out = s;
+  for (const { regex, replacement } of PII_PATTERNS) out = out.replace(regex, replacement);
+  return out;
+}
+
+function scrubUrl(url: string | undefined): string | undefined {
+  if (!url) return url;
+  try {
+    const u = new URL(url, 'http://x');
+    for (const k of SENSITIVE_QUERY_PARAMS) {
+      if (u.searchParams.has(k)) u.searchParams.set(k, '[redacted]');
+    }
+    if (u.hash && /access_token|recovery/i.test(u.hash)) u.hash = '#[redacted]';
+    return scrubString(u.toString());
+  } catch {
+    return scrubString(url);
+  }
+}
+
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: import.meta.env.VITE_ENV || import.meta.env.MODE,
+    release: RELEASE,
     integrations: [
       Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
+      Sentry.replayIntegration({
+        // RGPD-friendly : la structure DOM est capturée mais pas le contenu
+        // (emails, RPPS, montants, messages chat ne fuitent pas dans Sentry).
+        maskAllText: true,
+        maskAllInputs: true,
+        blockAllMedia: true,
+      }),
     ],
-    tracesSampleRate: 0.1,
+    // Sample adaptatif : pages publiques 5 %, pages auth 20 %, erreurs 100 %.
+    tracesSampler: (samplingContext) => {
+      const path = (samplingContext.location?.pathname ?? '');
+      if (path.startsWith('/inscription') || path.startsWith('/aide') || path === '/' || path === '/connexion') return 0.05;
+      return 0.2;
+    },
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 1.0,
+    ignoreErrors: SENTRY_IGNORE_ERRORS,
+    denyUrls: SENTRY_DENY_URLS,
+    beforeSend(event) {
+      if (event.request?.url) event.request.url = scrubUrl(event.request.url);
+      if (event.request?.headers) {
+        delete (event.request.headers as Record<string, unknown>).Authorization;
+        delete (event.request.headers as Record<string, unknown>).authorization;
+        delete (event.request.headers as Record<string, unknown>).Cookie;
+        delete (event.request.headers as Record<string, unknown>).cookie;
+      }
+      if (event.exception?.values) {
+        for (const ex of event.exception.values) {
+          if (ex.value) ex.value = scrubString(ex.value);
+        }
+      }
+      if (event.message) event.message = scrubString(event.message) ?? event.message;
+      if (event.breadcrumbs) {
+        for (const bc of event.breadcrumbs) {
+          if (bc.data && typeof bc.data === 'object') {
+            const d = bc.data as Record<string, unknown>;
+            if (typeof d.url === 'string') d.url = scrubUrl(d.url);
+            if (typeof d.from === 'string') d.from = scrubUrl(d.from);
+            if (typeof d.to === 'string') d.to = scrubUrl(d.to);
+          }
+          if (bc.message) bc.message = scrubString(bc.message);
+        }
+      }
+      return event;
+    },
   });
 }
 
@@ -120,11 +218,11 @@ function showUpdateBanner() {
     gap: '12px',
     padding: '10px 16px',
     paddingTop: 'calc(10px + env(safe-area-inset-top))',
-    background: 'linear-gradient(90deg, #E04590 0%, #9B2B6F 100%)',
+    background: 'linear-gradient(90deg, #B91560 0%, #6E1F4F 100%)',
     color: '#fff',
     fontSize: '14px',
     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-    boxShadow: '0 2px 8px rgba(224,69,144,0.25)',
+    boxShadow: '0 2px 8px rgba(185,21,96,0.25)',
   });
 
   const text = document.createElement('span');
@@ -134,7 +232,7 @@ function showUpdateBanner() {
   btn.textContent = 'Mettre à jour';
   Object.assign(btn.style, {
     background: '#fff',
-    color: '#E04590',
+    color: '#9B1456',
     border: 'none',
     borderRadius: '6px',
     padding: '6px 14px',

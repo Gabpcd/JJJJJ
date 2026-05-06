@@ -14,6 +14,14 @@ import { fr } from 'date-fns/locale';
 
 export default function ExclusionsEtablissement() {
   usePageTitle('Exclusions');
+  return (
+    <LayoutApp role="ADMIN_ETABLISSEMENT">
+      <ExclusionsContent />
+    </LayoutApp>
+  );
+}
+
+export function ExclusionsContent() {
   const { user } = useAuth();
   const { afficherNotification } = useNotification();
   const [exclusions, setExclusions] = useState<any[]>([]);
@@ -63,13 +71,13 @@ export default function ExclusionsEtablissement() {
     setSuppressionExcluId(null);
   };
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <h1 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
+    <>
+      <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
         <Ban className="h-5 w-5 text-destructive" /> Exclusions
-      </h1>
+      </h2>
 
       {exclusions.length === 0 ? (
         <EtatVide illustration={<IllustrationBouclier />} titre="Aucune exclusion" sousTitre="Vous n'avez bloqué personne." />
@@ -101,6 +109,6 @@ export default function ExclusionsEtablissement() {
         labelConfirmer="Supprimer"
         variante="danger"
       />
-    </LayoutApp>
+    </>
   );
 }

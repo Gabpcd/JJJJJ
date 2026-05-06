@@ -3,10 +3,11 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { Key, Copy, Plus, Eye, EyeOff, Code2, CheckCircle } from 'lucide-react';
+import { Key, Copy, Plus, Eye, EyeOff, Code2, CheckCircle, Ban, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { logger } from '@/lib/logger';
+import { toast } from 'sonner';
 
 const ENDPOINTS = [
   { method: 'GET', path: '/api-v1/missions', desc: 'Lister les missions de l\'établissement', example: '{ "data": [{ "id": "uuid", "intitule": "IDE Nuit", "debut_le": "2026-03-15T20:00:00Z", "statut": "OUVERTE" }] }' },
@@ -47,40 +48,53 @@ export default function AdminAPI() {
 
   const [generating, setGenerating] = useState(false);
 
+  const [generatedSecret, setGeneratedSecret] = useState<string | null>(null);
+
   const genererCle = async () => {
     if (!newName.trim() || generating) return;
     setGenerating(true);
     try {
-      let cleApi: string;
-      let cleSecret: string;
-      try {
-        cleApi = `sd_live_${crypto.randomUUID().replace(/-/g, '')}`;
-        cleSecret = crypto.randomUUID();
-      } catch {
-        // Fallback if crypto.randomUUID() is unavailable (e.g. non-secure context)
-        const fallback = () => Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
-        cleApi = `sd_live_${fallback()}`;
-        cleSecret = fallback();
+      const { data, error } = await supabase.rpc('fn_creer_api_key' as any, {
+        p_nom: newName.trim(),
+        p_permissions: newPerms,
+        p_etablissement_id: null,
+      });
+      if (error || (data as any)?.error) {
+        logger.error('Erreur génération clé API:', error || data);
+        toast.error((data as any)?.error || 'Erreur lors de la génération de la clé API.');
+        return;
       }
-      const { error } = await supabase.from('api_keys').insert({
-        nom: newName.trim(),
-        cle_api: cleApi,
-        cle_secret: cleSecret,
-        permissions: newPerms,
-      } as any);
-      if (error) {
-        logger.error('Erreur génération clé API:', error);
-        const { toast } = await import('sonner');
-        toast.error('Erreur lors de la génération de la clé API.');
-      } else {
-        setGeneratedKey(cleApi);
-        setNewName('');
-        setNewPerms(['missions:read']);
-        charger();
-      }
+      const result = data as any;
+      setGeneratedKey(result.cle_api);
+      setGeneratedSecret(result.cle_secret);
+      setNewName('');
+      setNewPerms(['missions:read']);
+      charger();
     } finally {
       setGenerating(false);
     }
+  };
+
+  const revoquer = async (id: string) => {
+    if (!confirm('Révoquer cette clé API ? Elle ne sera plus utilisable.')) return;
+    const { data, error } = await supabase.rpc('fn_revoquer_api_key' as any, { p_id: id });
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || 'Erreur lors de la révocation.');
+      return;
+    }
+    toast.success('Clé révoquée');
+    charger();
+  };
+
+  const supprimer = async (id: string) => {
+    if (!confirm('Supprimer définitivement cette clé API ? Action irréversible.')) return;
+    const { data, error } = await supabase.rpc('fn_supprimer_api_key' as any, { p_id: id });
+    if (error || (data as any)?.error) {
+      toast.error((data as any)?.error || 'Erreur lors de la suppression.');
+      return;
+    }
+    toast.success('Clé supprimée');
+    charger();
   };
 
   const copier = (text: string) => {
@@ -155,6 +169,7 @@ export default function AdminAPI() {
                   <th className="pb-2 font-medium">Permissions</th>
                   <th className="pb-2 font-medium">Dernière utilisation</th>
                   <th className="pb-2 font-medium">Statut</th>
+                  <th className="pb-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,6 +202,28 @@ export default function AdminAPI() {
                         {k.actif ? 'Active' : 'Désactivée'}
                       </span>
                     </td>
+                    <td className="py-3">
+                      <div className="flex items-center gap-1">
+                        {k.actif && (
+                          <button
+                            onClick={() => revoquer(k.id)}
+                            className="p-1.5 hover:bg-warning/10 rounded text-warning min-w-[32px] min-h-[32px] flex items-center justify-center"
+                            aria-label="Révoquer la clé"
+                            title="Révoquer (désactiver)"
+                          >
+                            <Ban className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => supprimer(k.id)}
+                          className="p-1.5 hover:bg-destructive/10 rounded text-destructive min-w-[32px] min-h-[32px] flex items-center justify-center"
+                          aria-label="Supprimer la clé"
+                          title="Supprimer définitivement"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -207,14 +244,26 @@ export default function AdminAPI() {
                   <CheckCircle className="h-5 w-5 text-success" />
                   <h3 className="font-bold text-foreground">Clé générée !</h3>
                 </div>
-                <p className="text-xs text-muted-foreground mb-2">Copiez cette clé maintenant, elle ne sera plus affichée en clair.</p>
-                <div className="flex items-center gap-2 bg-muted rounded-lg p-3 mb-4">
+                <p className="text-xs text-muted-foreground mb-2">⚠️ Copiez ces informations <strong>maintenant</strong>. Le secret ne sera plus jamais affiché.</p>
+                <p className="text-[11px] text-muted-foreground mb-1 mt-3 font-semibold">Clé API (publique)</p>
+                <div className="flex items-center gap-2 bg-muted rounded-lg p-3 mb-3">
                   <code className="text-xs flex-1 break-all">{generatedKey}</code>
-                  <button onClick={() => copier(generatedKey)} className="p-1 hover:bg-background rounded">
+                  <button onClick={() => copier(generatedKey)} className="p-1 hover:bg-background rounded" aria-label="Copier la clé API">
                     <Copy className="h-4 w-4 text-primary" />
                   </button>
                 </div>
-                <button onClick={() => setShowModal(false)} className="btn-primary w-full text-sm">Fermer</button>
+                {generatedSecret && (
+                  <>
+                    <p className="text-[11px] text-muted-foreground mb-1 mt-3 font-semibold">Clé secrète (à conserver)</p>
+                    <div className="flex items-center gap-2 bg-destructive/5 border border-destructive/20 rounded-lg p-3 mb-4">
+                      <code className="text-xs flex-1 break-all">{generatedSecret}</code>
+                      <button onClick={() => copier(generatedSecret)} className="p-1 hover:bg-background rounded" aria-label="Copier la clé secrète">
+                        <Copy className="h-4 w-4 text-primary" />
+                      </button>
+                    </div>
+                  </>
+                )}
+                <button onClick={() => { setShowModal(false); setGeneratedSecret(null); }} className="btn-primary w-full text-sm">Fermer</button>
               </>
             ) : (
               <>

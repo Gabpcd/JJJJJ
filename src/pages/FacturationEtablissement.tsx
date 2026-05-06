@@ -1,1076 +1,1311 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { SkeletonDashboard } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw, Building2, AlertTriangle, Download, Banknote, Info, Eye, ChevronDown, Edit2, X } from 'lucide-react';
+import {
+  CreditCard, Clock, CheckCircle, FileText, Loader2, Trophy, RefreshCw,
+  Building2, AlertTriangle, Download, Banknote, Info, Eye, ChevronDown,
+  Edit2, X, Scale, ChevronRight, ExternalLink, Landmark,
+} from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
+import { getChorusStatutBadge } from '@/lib/chorus-helpers';
 import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
 import { BadgePalier } from '@/components/BadgePalier';
-import { FactureChorus, ChorusStatutBadge } from '@/components/FactureChorus';
 import { PaiementVirement } from '@/components/PaiementVirement';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
 import { stripePromise } from '@/lib/stripe';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DialogFooter } from '@/components/ui/dialog';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-
+import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
+import { telechargerFactureCommissionPDF } from '@/lib/facture-commission-pdf';
+import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { toast } from 'sonner';
+import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 
-const STATUT_COLORS: Record<string, string> = {
-  BROUILLON: 'bg-muted text-muted-foreground',
-  EMISE: 'bg-primary/10 text-primary',
-  VIREMENT_DECLARE: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  PAYEE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  EN_RETARD: 'bg-destructive/10 text-destructive',
-  ANNULEE: 'bg-muted text-muted-foreground line-through',
-};
+const fmt = (v: number | null | undefined) =>
+  v != null ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v) : '—';
 
-const STATUT_LABELS: Record<string, string> = {
-  BROUILLON: 'Brouillon',
-  EMISE: 'Émise',
-  VIREMENT_DECLARE: 'Virement déclaré 🔍',
-  PAYEE: 'Payée',
-  EN_RETARD: 'En retard',
-  ANNULEE: 'Annulée',
-};
-
-const PAIEMENT_STATUT_COLORS: Record<string, string> = {
-  DECLARE: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  CONFIRME: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  CONTESTE: 'bg-destructive/10 text-destructive',
-};
-
-const PAIEMENT_STATUT_LABELS: Record<string, string> = {
-  DECLARE: 'Déclaré',
-  CONFIRME: 'Confirmé',
-  CONTESTE: 'Contesté',
-};
-
-const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
+type MethodePaiement = 'VIREMENT' | 'CHEQUE' | 'BULLETIN_PAIE' | 'NOTE_HONORAIRES';
 
 const isRefValid = (ref: string) => {
   const t = ref.trim();
   return t.length >= 6 && /\d{2,}/.test(t) && /[A-Za-z]/.test(t);
 };
 
+const METHODE_LABELS: Record<MethodePaiement, string> = {
+  VIREMENT: 'Virement bancaire',
+  CHEQUE: 'Chèque',
+  BULLETIN_PAIE: 'Bulletin de paie',
+  NOTE_HONORAIRES: 'Note d\'honoraires',
+};
+
+// ─── Helpers cards missions ───
+function RetardBadge({ jours }: { jours: number }) {
+  if (jours < 15) return null;
+  if (jours < 30) return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">⏳ {jours}j</Badge>;
+  if (jours < 60) return <Badge className="bg-destructive/10 text-destructive">🔴 {jours}j de retard</Badge>;
+  return <Badge className="bg-destructive text-destructive-foreground">⛔ {jours}j — risque de suspension</Badge>;
+}
+
+function TypeExerciceBadge({ type }: { type: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    SALARIE: { label: 'Salarié', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    LIBERAL: { label: 'Libéral', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    MIXTE: { label: 'Mixte', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+  };
+  const info = map[type] || { label: type, cls: 'bg-muted text-muted-foreground' };
+  return <Badge className={info.cls}>{info.label}</Badge>;
+}
+
+// Section IDs pour navigation rapide
+const SECTIONS = {
+  payer: 'section-a-payer',
+  attente: 'section-attente',
+  commissions: 'section-commissions',
+  historique: 'section-historique',
+  exports: 'section-exports',
+} as const;
+
+function scrollTo(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 export default function FacturationEtablissement() {
   usePageTitle('Facturation');
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, etablissementId } = useEtablissementScope();
   const { afficherNotification } = useNotification();
-  const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [payingId, setPayingId] = useState<string | null>(null);
-  const [refreshingId, setRefreshingId] = useState<string | null>(null);
-  const [declaringId, setDeclaringId] = useState<string | null>(null);
-  const [declaringRef, setDeclaringRef] = useState<Record<string, string>>({});
-  const [connectPayingId, setConnectPayingId] = useState<string | null>(null);
-  const [factures, setFactures] = useState<any[]>([]);
-  const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
-  const [etab, setEtab] = useState<any>(null);
-  const [kpiCommissions, setKpiCommissions] = useState({ enAttente: 0, enCours: 0, totalPaye: 0 });
-  const [prelevements, setPrelevements] = useState<any[]>([]);
-  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
-  const [filtreStatut, setFiltreStatut] = useState<string | null>(searchParams.get('filtre'));
-  const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
-  const [ribCache, setRibCache] = useState<Record<string, string>>({});
-  const [ribLoadingId, setRibLoadingId] = useState<string | null>(null);
-  const [filtreStatutPaiement, setFiltreStatutPaiement] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  // Paiements soignants state
-  const [paiementsData, setPaiementsData] = useState<any>(null);
+  // ── Data ──
+  const [loading, setLoading] = useState(true);
+  const [etab, setEtab] = useState<any>(null);
+  const [data, setData] = useState<any>(null);        // fn_obligations_financieres
+  const [paiementsData, setPaiementsData] = useState<any>(null); // fn_paiements_etablissement
+  const [factures, setFactures] = useState<any[]>([]); // fn_mes_factures
+  const [missionsNonFacturees, setMissionsNonFacturees] = useState<any[]>([]);
+  const [prelevements, setPrelevements] = useState<any[]>([]);
   const [missionsPaidByStripe, setMissionsPaidByStripe] = useState<Set<string>>(new Set());
 
-  // Contestation response state
-  const [contestationOpen, setContestationOpen] = useState<string | null>(null);
-  const [contestationAction, setContestationAction] = useState<string | null>(null);
-  const [contestationRef, setContestationRef] = useState('');
-  const [contestationReponse, setContestationReponse] = useState('');
-  const [contestationLoading, setContestationLoading] = useState(false);
+  // ── UI state ──
+  const [sectionsOpen, setSectionsOpen] = useState<Record<string, boolean>>({
+    [SECTIONS.payer]: true,
+    [SECTIONS.attente]: false,
+    [SECTIONS.commissions]: false,
+    [SECTIONS.historique]: false,
+    [SECTIONS.exports]: false,
+  });
 
+  // Dialog states
+  const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
+  const [connectDecomposition, setConnectDecomposition] = useState<any>(null);
+  const [showConnectCheckout, setShowConnectCheckout] = useState(false);
+  const [connectPayLoading, setConnectPayLoading] = useState(false);
+  const [checkoutFactureId, setCheckoutFactureId] = useState<string | null>(null);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [declarerDialogMission, setDeclarerDialogMission] = useState<any>(null);
+  const [declarerMontant, setDeclarerMontant] = useState<string>('');
+  const [declarerMethode, setDeclarerMethode] = useState<MethodePaiement>('VIREMENT');
+  const [declarerReference, setDeclarerReference] = useState<string>('');
+  const [declarerDatePaiement, setDeclarerDatePaiement] = useState<string>('');
+  const [declarerAttestation, setDeclarerAttestation] = useState<boolean>(false);
+  const [declaringId, setDeclaringId] = useState<string | null>(null);
+  const [connectPayingId, setConnectPayingId] = useState<string | null>(null);
+  const [generatingFacture, setGeneratingFacture] = useState(false);
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
+
+  // ── Responsive: detect mobile ──
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  // Initialize sections: on desktop all open, on mobile only "à payer"
   useEffect(() => {
-    if (searchParams.get('paiement') === 'succes') {
-      setShowSuccessBanner(true);
-      searchParams.delete('paiement');
-      setSearchParams(searchParams, { replace: true });
-      const timer = setTimeout(() => setShowSuccessBanner(false), 8000);
-      return () => clearTimeout(timer);
+    if (!isMobile) {
+      setSectionsOpen({
+        [SECTIONS.payer]: true,
+        [SECTIONS.attente]: true,
+        [SECTIONS.commissions]: true,
+        [SECTIONS.historique]: true,
+        [SECTIONS.exports]: true,
+      });
     }
   }, []);
 
+  // ── Data loading ──
   const charger = async () => {
     if (!user) return;
+    setLoading(true);
+    try {
+      const [resEtab, resObligations, resPaiements, resFactures, resMNF, resTransfers, resPrelev] = await Promise.all([
+        supabase.rpc('fn_mon_etablissement_complet' as any),
+        supabase.rpc('fn_obligations_financieres' as any),
+        supabase.rpc('fn_paiements_etablissement' as any),
+        supabase.rpc('fn_mes_factures' as any),
+        supabase.from('missions')
+          .select('id, intitule, fin_le, montant_commission_ht, montant_commission_ttc')
+          .eq('etablissement_id', user.id)
+          .eq('statut', 'TERMINEE')
+          .eq('commission_facturee', false)
+          .order('fin_le', { ascending: false }),
+        supabase.from('stripe_transfers')
+          .select('mission_id, statut')
+          .eq('etablissement_id', user.id)
+          .in('statut', ['TRANSFERE']),
+        supabase.from('paiements_mission')
+          .select('id, mission_id, montant_ttc, statut, capture_le, missions(intitule)')
+          .eq('etablissement_id', user.id)
+          .order('capture_le', { ascending: false })
+          .limit(20),
+      ]);
 
-    const [resEtab, resFact, resMNF, resPrelev, resPaiements, resTransfers] = await Promise.all([
-      supabase.rpc('fn_mon_etablissement_complet' as any),
-      supabase.rpc('fn_mes_factures' as any),
-      supabase.from('missions')
-        .select('id, intitule, debut_le, fin_le, montant_commission_ht, montant_commission_ttc, statut')
-        .eq('etablissement_id', user.id)
-        .eq('statut', 'TERMINEE')
-        .eq('commission_facturee', false)
-        .order('fin_le', { ascending: false }),
-      supabase.from('paiements_mission')
-        .select('id, mission_id, montant_ttc, statut, capture_le, missions(intitule)')
-        .eq('etablissement_id', user.id)
-        .order('capture_le', { ascending: false })
-        .limit(20),
-      supabase.rpc('fn_paiements_etablissement' as any),
-      supabase.from('stripe_transfers')
-        .select('mission_id, statut')
-        .eq('etablissement_id', user.id)
-        .in('statut', ['EN_ATTENTE', 'TRANSFERE']),
-    ]);
-
-    if (resEtab.data) setEtab(resEtab.data);
-    const facturesRpc = Array.isArray(resFact.data) ? resFact.data : [];
-    setFactures(facturesRpc);
-    if (resMNF.data) setMissionsNonFacturees(resMNF.data);
-    if (resPrelev.data) setPrelevements(resPrelev.data);
-    if (resPaiements.data && !(resPaiements.data as any).error) {
-      setPaiementsData(resPaiements.data);
+      if (resEtab.data) setEtab(resEtab.data);
+      if (resObligations.data && !(resObligations.data as any).error) setData(resObligations.data);
+      if (resPaiements.data && !(resPaiements.data as any).error) setPaiementsData(resPaiements.data);
+      setFactures(Array.isArray(resFactures.data) ? resFactures.data : []);
+      if (resMNF.data) setMissionsNonFacturees(resMNF.data);
+      if (resTransfers.data) setMissionsPaidByStripe(new Set(resTransfers.data.map((t: any) => t.mission_id)));
+      if (resPrelev.data) setPrelevements(resPrelev.data);
+    } catch (err) {
+      logger.error('Facturation charger error', err);
     }
-    if (resTransfers.data) {
-      setMissionsPaidByStripe(new Set(resTransfers.data.map((t: any) => t.mission_id)));
-    }
-
-    const nonFacture = (resMNF.data ?? []).reduce((s: number, m: any) => s + (m.montant_commission_ttc ?? 0), 0);
-    const enCours = facturesRpc.filter((f: any) => f.statut === 'EMISE' || f.statut === 'EN_RETARD' || f.statut === 'VIREMENT_DECLARE').reduce((s: number, f: any) => s + (f.montant_ttc ?? 0), 0);
-    const totalPaye = facturesRpc.filter((f: any) => f.statut === 'PAYEE').reduce((s: number, f: any) => s + (f.montant_ttc ?? 0), 0);
-    setKpiCommissions({ enAttente: nonFacture + enCours, enCours, totalPaye });
-
     setLoading(false);
   };
 
   useEffect(() => { charger(); }, [user]);
 
-  const genererFactureMois = async () => {
-    if (!user || missionsNonFacturees.length === 0) return;
-    setGenerating(true);
+  // ── Handler : générer facture commission mensuelle ──
+  const genererFactureMensuelle = async () => {
+    setGeneratingFacture(true);
     try {
       const { data, error } = await supabase.rpc('fn_generer_facture_rate_limited' as any);
       if (error) throw error;
-      const result = data as any;
-      if (!result?.success) throw new Error(result?.error || 'Erreur de génération');
-      supabase.functions.invoke('send-email', {
-        body: { type: 'FACTURE_EMISE', data: { numero: result.numero_facture, montant_ttc: Number(result.montant_ttc).toFixed(2), facture_id: result.facture_id }, destinataire_id: user!.id },
-      }).catch((err) => { logger.warn('[FacturationEtablissement] send-email facture failed', err); });
-      afficherNotification({ type: 'succes', message: `Facture ${result.numero_facture} générée avec succès !` });
-      charger();
-    } catch (err: any) {
-      capturerErreurSentry(err, 'FacturationEtablissement', 'generer_facture');
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const payerParCarte = (facture: any) => setCheckoutFactureId(facture.id);
-
-  const rafraichirStatut = async (factureId: string) => {
-    setRefreshingId(factureId);
-    try {
-      await supabase.functions.invoke('confirm-invoice-payment', { body: { facture_id: factureId } });
-      const { data, error } = await supabase.from('factures').select('statut, date_paiement').eq('id', factureId).single();
-      if (error) throw error;
-      if (data) {
-        setFactures(prev => prev.map(f => f.id === factureId ? { ...f, ...data } : f));
-        if (data.statut === 'PAYEE') afficherNotification({ type: 'succes', message: 'Statut mis à jour : Payée ✅' });
-        else afficherNotification({ type: 'info', message: `Statut actuel : ${STATUT_LABELS[data.statut] ?? data.statut}` });
+      const res = data as any;
+      if (res?.error) {
+        toast.error(res.message || res.error);
+      } else {
+        toast.success('Facture commission générée');
+        charger();
       }
-    } catch (err: any) {
-      capturerErreurSentry(err, 'FacturationEtablissement', 'rafraichir_paiement');
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+    } catch (e: any) {
+      toast.error(extraireMessageErreur(e));
     } finally {
-      setRefreshingId(null);
+      setGeneratingFacture(false);
     }
   };
 
-  const declarerPaiementSoignant = async (missionId: string, montant: number) => {
-    const ref = declaringRef[missionId]?.trim();
-    if (!ref || !isRefValid(ref)) {
-      toast.error('La référence doit contenir au moins 5 caractères dont 1 chiffre');
+  // ── Handlers dialogs paiement ──
+  const ouvrirDialogDeclarer = (mission: any) => {
+    setDeclarerDialogMission(mission);
+    setDeclarerMontant(String(Number(mission.net_a_payer || 0).toFixed(2)));
+    setDeclarerMethode('VIREMENT');
+    setDeclarerReference('');
+    setDeclarerDatePaiement(new Date().toISOString().split('T')[0]);
+    setDeclarerAttestation(false);
+  };
+
+  const fermerDialogDeclarer = () => {
+    setDeclarerDialogMission(null);
+    setDeclaringId(null);
+  };
+
+  const validerDeclarationPaiement = async () => {
+    if (!declarerDialogMission) return;
+    const missionId = declarerDialogMission.mission_id;
+    const montantNum = Number(declarerMontant);
+    if (!montantNum || montantNum <= 0) {
+      toast.error('Montant invalide');
       return;
     }
+    const refRequired = declarerMethode !== 'BULLETIN_PAIE';
+    if (refRequired && !isRefValid(declarerReference)) {
+      toast.error('La référence doit contenir au moins 5 caractères dont un chiffre.');
+      return;
+    }
+    if (!declarerAttestation) {
+      toast.error('Vous devez cocher l\'attestation sur l\'honneur.');
+      return;
+    }
+
     setDeclaringId(missionId);
     try {
       const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
         p_mission_id: missionId,
-        p_montant: montant,
-        p_reference: ref,
+        p_montant: montantNum,
+        p_methode: declarerMethode,
+        p_reference: declarerReference.trim(),
+        p_date_paiement: declarerDatePaiement,
+        p_attestation_sur_l_honneur: true,
       });
       if (error) throw error;
-      const result = data as any;
-      if (result?.error) {
-        if (result?.use_stripe_connect) {
-          toast.info('Ce soignant utilise Stripe Connect — lancement du paiement par carte');
-          lancerPaiementStripeConnect(missionId);
-          return;
-        }
-        throw new Error(result.error);
+      const res = data as any;
+      if (res?.error === 'ATTESTATION_REQUISE') {
+        toast.error('Attestation sur l\'honneur obligatoire');
+        return;
       }
-      toast.success('Paiement déclaré — le soignant sera notifié');
-      setDeclaringRef(prev => ({ ...prev, [missionId]: '' }));
+      if (res?.error === 'use_stripe_connect') {
+        toast.info('Ce soignant a Stripe Connect actif — utilisez le paiement Stripe');
+        fermerDialogDeclarer();
+        return;
+      }
+      if (res?.error) throw new Error(res.message || res.error);
+
+      // Invoke send-email PAIEMENT_SOIGNANT_DECLARE (non-bloquant)
+      try {
+        await supabase.functions.invoke('send-email', {
+          body: {
+            type: 'PAIEMENT_SOIGNANT_DECLARE',
+            destinataire_id: res.soignant_id,
+            data: {
+              soignant_prenom: declarerDialogMission.soignant_prenom || declarerDialogMission.soignant_nom?.split(' ')[0] || '',
+              montant_formatte: montantNum.toFixed(2),
+              methode: declarerMethode,
+              methode_libelle: METHODE_LABELS[declarerMethode],
+              reference_virement: declarerReference || '',
+              date_paiement: declarerDatePaiement,
+              date_paiement_fr: new Date(declarerDatePaiement).toLocaleDateString('fr-FR'),
+              etablissement_nom: (data as any)?.etablissement_nom || '',
+              mission_intitule: res.mission_intitule || declarerDialogMission.intitule || '',
+              deep_link: '/soignant/mes-gains',
+            },
+          },
+        });
+      } catch (emailErr) {
+        // eslint-disable-next-line no-console
+        console.error('send-email PAIEMENT_SOIGNANT_DECLARE failed:', emailErr);
+      }
+
+      toast.success('Paiement déclaré — le soignant a été notifié pour confirmation');
+      fermerDialogDeclarer();
       charger();
     } catch (e: any) {
-      toast.error(e?.message || 'Erreur lors de la déclaration');
+      toast.error(extraireMessageErreur(e));
     } finally {
       setDeclaringId(null);
     }
   };
 
-  const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
-
-  const lancerPaiementStripeConnect = async (missionId: string) => {
+  const payerStripeConnect = async (missionId: string) => {
     setConnectPayingId(missionId);
+    const loadingToastId = toast.loading('Préparation du paiement…');
     try {
-      const { data, error } = await supabase.functions.invoke('stripe-connect-pay-mission', {
-        body: { mission_id: missionId },
-      });
-      if (data?.already_paid) {
-        toast.info(data.message || 'Ce paiement a déjà été effectué');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        toast.error('Session expirée, veuillez vous reconnecter', { id: loadingToastId });
+        return;
+      }
+
+      const { result, error, code, message, factureGenereeAuto } =
+        await payerMissionStripeConnectAvecGenerationAuto(missionId, accessToken, (msg) => toast.loading(msg, { id: loadingToastId }));
+
+      if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
+        toast.error(message || 'Les missions salariées doivent être payées par virement SEPA (bulletin de paie).', { id: loadingToastId, duration: 8000 });
+        return;
+      }
+
+      if (result?.already_paid) {
+        toast.info(result.message || 'Ce paiement a déjà été effectué', { id: loadingToastId });
         charger();
         return;
       }
-      if (error) {
-        toast.error(data?.error || error.message || 'Erreur lors du paiement');
+
+      if (error || code) {
+        toast.error(message || code || error?.message || 'Erreur lors du paiement', { id: loadingToastId });
         return;
       }
-      if (data?.error) throw new Error(data.error);
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
+
+      toast.dismiss(loadingToastId);
+      if (factureGenereeAuto) {
+        toast.success('Facture honoraires générée automatiquement');
       }
-      if (data?.client_secret) {
-        setConnectClientSecret(data.client_secret);
+      if (result?.url) { window.location.href = result.url; return; }
+      if (result?.client_secret) {
+        setConnectClientSecret(result.client_secret);
+        setShowConnectCheckout(true);
+        setConnectDecomposition({
+          commission_ttc: result.commission_ttc,
+          salaire_brut: result.salaire_brut,
+          total: result.total,
+        });
         return;
       }
       toast.error('Aucune URL de paiement reçue');
     } catch (e: any) {
-      const msg = e?.message || 'Erreur lors du paiement Stripe Connect';
-      if (msg.includes('déjà été effectué') || msg.includes('déjà en cours')) {
-        toast.info(msg);
-        charger();
-      } else {
-        toast.error(msg);
-      }
+      toast.error(extraireMessageErreur(e), { id: loadingToastId });
     } finally {
       setConnectPayingId(null);
     }
   };
 
-  const consulterRib = async (missionId: string) => {
-    setRibLoadingId(missionId);
-    try {
-      const { data, error } = await supabase.rpc('fn_consulter_rib_soignant' as any, { p_mission_id: missionId });
-      if (error) throw error;
-      const result = data as any;
-      if (result?.error) throw new Error(result.error);
-      if (result?.s3_cle && result?.s3_bucket) {
-        const { data: signedData } = await supabase.storage.from(result.s3_bucket).createSignedUrl(result.s3_cle, 300);
-        if (signedData?.signedUrl) {
-          window.open(signedData.signedUrl, '_blank');
-          setRibCache(prev => ({ ...prev, [missionId]: result.nom_fichier || 'RIB consulté' }));
-        } else {
-          toast.error('Impossible de générer le lien de téléchargement');
-        }
-      } else {
-        setRibCache(prev => ({ ...prev, [missionId]: result?.iban || String(result) }));
-      }
-    } catch (e: any) {
-      toast.error(e?.message || 'Impossible de consulter le RIB');
-    }
-    setRibLoadingId(null);
-  };
-
-  const repondreContestation = async (paiementId: string, action: string) => {
-    setContestationLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('fn_repondre_contestation_paiement' as any, {
-        p_paiement_id: paiementId,
-        p_action: action,
-        p_nouvelle_reference: action === 'MODIFIER_REF' ? contestationRef.trim() : null,
-        p_reponse: action === 'CONTESTER' ? (contestationReponse.trim() || null) : null,
-      });
-      if (error) throw error;
-      const result = data as any;
-      if (result?.error) throw new Error(result.error);
-      if (result?.action === 'reference_modifiee') toast.success('Référence corrigée — le soignant sera notifié pour re-confirmer');
-      else if (result?.action === 'paiement_annule') toast.success('Paiement annulé — vous devrez effectuer un nouveau paiement');
-      else if (result?.action === 'escalade_admin') toast.info('Litige transmis à l\'administrateur Jolene');
-      setContestationOpen(null);
-      setContestationAction(null);
-      setContestationRef('');
-      setContestationReponse('');
-      charger();
-    } catch (err: any) {
-      capturerErreurSentry(err, 'FacturationEtablissement', 'repondre_contestation');
-      toast.error(err?.message || 'Erreur');
-    } finally {
-      setContestationLoading(false);
-    }
-  };
-
+  // ── Loading ──
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
 
-  const missionsAPayer = (paiementsData?.missions_a_payer ?? []).filter((m: any) => !missionsPaidByStripe.has(m.mission_id));
-  const paiementsRecents = paiementsData?.paiements_recents ?? [];
-  const paiementsFiltres = filtreStatutPaiement === 'PAYE'
-    ? paiementsRecents.filter((p: any) => p.statut === 'DECLARE' || p.statut === 'CONFIRME')
-    : filtreStatutPaiement === 'DECLARE'
-    ? paiementsRecents.filter((p: any) => p.statut === 'DECLARE')
-    : filtreStatutPaiement === 'CONTESTE'
-    ? paiementsRecents.filter((p: any) => p.statut === 'CONTESTE')
-    : paiementsRecents;
+  // Derived data
+  const missionsNonPayees = data?.missions_non_payees || [];
+  const paiementsEnAttente = data?.paiements_soignants_en_attente || [];
+  const paiementsConfirmes = data?.paiements_soignants_confirmes || [];
+  const facturesImpayees = data?.factures_impayees || [];
+  const facturesCommissionHistorique = data?.factures_commission_historique || [];
+  const nbFacturesHistorique = data?.nb_factures_commission_historique || 0;
+  const missionsNonFactureesObligs = data?.missions_non_facturees || [];
 
-  const scrollToHistorique = () => {
-    setTimeout(() => document.getElementById('historique-paiements')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  const toggleSection = (id: string) =>
+    setSectionsOpen(prev => ({ ...prev, [id]: !prev[id] }));
+
+  /**
+   * Ouvre l'accordéon cible puis scroll smooth.
+   * Timeout pour laisser React render l'accordéon avant que scrollIntoView
+   * calcule la position (sinon saut incorrect si section initialement fermée).
+   */
+  const openAndScrollTo = (id: string) => {
+    setSectionsOpen(prev => ({ ...prev, [id]: true }));
+    setTimeout(() => scrollTo(id), 50);
   };
-
-  const titreHistorique = filtreStatutPaiement === 'PAYE'
-    ? 'Paiements déclarés / confirmés'
-    : filtreStatutPaiement === 'DECLARE'
-    ? 'Paiements en attente de confirmation'
-    : filtreStatutPaiement === 'CONTESTE'
-    ? 'Paiements contestés'
-    : 'Historique des paiements';
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      {showSuccessBanner && (
-        <div className="mb-4 flex items-center gap-2 bg-success/10 border border-success/20 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
-          <CheckCircle className="h-5 w-5 text-success shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-success">Paiement confirmé !</p>
-            <p className="text-xs text-success/80">Votre paiement a été reçu. Le statut sera mis à jour sous quelques instants.</p>
-          </div>
-          <button onClick={() => { setShowSuccessBanner(false); charger(); }} className="text-xs text-success underline hover:no-underline">Rafraîchir</button>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mb-6">
+      {/* ── HEADER : titre + badge palier ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">💳 Facturation</h1>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <CreditCard className="h-6 w-6 text-primary" /> Facturation
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Paiements soignants, commissions Jolene et exports comptables</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
           {etab?.paliers_commission && (
-            <div className="flex items-center gap-2 mt-1">
-              <Trophy className="h-4 w-4 text-primary" />
-              <span className="text-sm text-muted-foreground">
-                Palier <span className="font-semibold text-foreground">{etab.paliers_commission.nom}</span> — Commission : {etab.taux_commission_negocie ?? 15}%
-              </span>
-            </div>
+            <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={etab.taux_commission_negocie ?? 15} />
           )}
           {etab?.est_secteur_public && (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary mt-1">
-              🏛️ Secteur public — Chorus Pro
-            </span>
+            <Badge className="bg-info/10 text-info border-info/20">🏛️ Secteur public</Badge>
           )}
         </div>
-        {etab?.paliers_commission && (
-          <BadgePalier palierNom={etab.paliers_commission.nom} taux={etab.taux_commission_negocie ?? 15} />
-        )}
       </div>
 
-      <Tabs defaultValue={searchParams.get('tab') || 'paiements'} className="w-full">
-        <TabsList className="w-full grid grid-cols-3 mb-6">
-          <TabsTrigger value="paiements">💰 Paiements soignants</TabsTrigger>
-          <TabsTrigger value="commissions">📄 Commissions Jolene</TabsTrigger>
-          <TabsTrigger value="export">📊 Export comptable</TabsTrigger>
-        </TabsList>
-
-        {/* ===== ONGLET 1 : PAIEMENTS SOIGNANTS ===== */}
-        <TabsContent value="paiements" className="flex flex-col">
-          {/* Encart informatif collapsible */}
-          <Collapsible className="mb-6 order-0">
-            <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-primary hover:underline w-full">
-              <Info className="h-4 w-4" />
-              <span>Comment fonctionne le paiement ?</span>
-              <ChevronDown className="h-4 w-4 ml-auto transition-transform [[data-state=open]>&]:rotate-180" />
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="mt-3 rounded-xl border border-border bg-muted/30 p-4 text-xs text-muted-foreground space-y-3">
-                <div>
-                  <p className="font-semibold text-foreground mb-1">• Mission salariée (CDDU)</p>
-                  <p>Vous payez le soignant directement (bulletin de paie). Déclarez le paiement ici avec la référence de virement. Le soignant confirme la réception. La commission Jolene est facturée séparément chaque mois.</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground mb-1">• Mission libérale avec Stripe Connect</p>
-                  <p>Cliquez sur « Payer via Stripe ». Le paiement est automatiquement réparti : le soignant reçoit ses honoraires, Jolene retient sa commission. Rien d'autre à faire.</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground mb-1">• Mission libérale sans Stripe</p>
-                  <p>Vous payez le soignant par virement sur base de sa note d'honoraires. Déclarez le paiement avec la référence. La commission Jolene est facturée séparément.</p>
-                </div>
-                <div className="border-t border-border pt-3 text-destructive font-medium">
-                  ⚠️ Délai de paiement : 30 jours maximum après la fin de la mission. Au-delà de 60 jours d'impayé, la publication de nouvelles missions est suspendue.
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          {/* KPI — total à payer en priorité */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            {missionsAPayer.length > 0 && (
-              <div className="p-4 rounded-xl border-2 border-destructive/40 bg-destructive/5">
-                <p className="text-2xl font-bold text-destructive">{fmt(missionsAPayer.reduce((s: number, m: any) => s + (m.net_a_payer || 0), 0))}</p>
-                <p className="text-sm font-medium text-destructive">À payer</p>
-                <p className="text-xs text-destructive/70 mt-1">{missionsAPayer.length} mission{missionsAPayer.length > 1 ? 's' : ''}</p>
-              </div>
-            )}
+      {/* ── SECTION 0 : État vide si rien à payer ── */}
+      {data && data.total_du === 0 && missionsNonPayees.length === 0 && facturesImpayees.length === 0 && (
+        <FadeInView>
+          <div className="card-base p-8 text-center mb-6">
+            <CheckCircle className="h-12 w-12 text-success mx-auto mb-3" />
+            <p className="text-lg font-semibold text-foreground">Tout est à jour ✅</p>
+            <p className="text-sm text-muted-foreground mt-1">Aucune obligation financière en cours</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            <button
-              onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'PAYE' ? null : 'PAYE'); scrollToHistorique(); }}
-              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
-                filtreStatutPaiement === 'PAYE' ? 'border-primary ring-2 ring-primary/20' : 'border-border'
-              }`}
-            >
-              <p className="text-2xl font-bold text-foreground">{fmt(paiementsData?.total_paye ?? 0)}</p>
-              <p className="text-sm text-muted-foreground">Total payé</p>
-              <p className="text-xs mt-1 text-muted-foreground">{filtreStatutPaiement === 'PAYE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'}</p>
-            </button>
-            <button
-              onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'DECLARE' ? null : 'DECLARE'); scrollToHistorique(); }}
-              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
-                filtreStatutPaiement === 'DECLARE' ? 'border-warning ring-2 ring-warning/20' : 'border-border'
-              }`}
-            >
-              <p className="text-2xl font-bold text-foreground">{fmt(paiementsData?.total_en_attente ?? 0)}</p>
-              <p className="text-sm text-muted-foreground">En attente de confirmation</p>
-              <p className="text-xs mt-1 text-muted-foreground">{filtreStatutPaiement === 'DECLARE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'}</p>
-            </button>
-            <button
-              onClick={() => { setFiltreStatutPaiement(filtreStatutPaiement === 'CONTESTE' ? null : 'CONTESTE'); scrollToHistorique(); }}
-              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
-                filtreStatutPaiement === 'CONTESTE' ? 'border-destructive ring-2 ring-destructive/20' : 'border-border'
-              }`}
-            >
-              <p className="text-2xl font-bold text-foreground">{fmt(paiementsData?.total_conteste ?? 0)}</p>
-              <p className="text-sm text-muted-foreground">Contesté</p>
-              <p className="text-xs mt-1 text-muted-foreground">{filtreStatutPaiement === 'CONTESTE' ? '🔍 Filtre actif' : 'Cliquez pour filtrer'}</p>
-            </button>
+        </FadeInView>
+      )}
+
+      {/* ── SECTION 1 : KPIs toujours visibles ── */}
+      <FadeInView>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          {/* KPI "Total à régler" — informatif uniquement (somme des 2 autres) */}
+          <div className="card-base border-destructive/20">
+            <p className="text-2xl font-bold text-foreground">{fmt(data?.total_du)}</p>
+            <p className="text-xs text-muted-foreground">Total à régler</p>
           </div>
 
-          {/* Historique paiements */}
-          <div className="card-base mb-6 order-2" id="historique-paiements">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-foreground">{titreHistorique}</h2>
-              {filtreStatutPaiement && (
-                <button onClick={() => setFiltreStatutPaiement(null)} className="text-xs text-primary hover:underline">
-                  Voir tout ({paiementsRecents.length})
-                </button>
-              )}
+          {/* KPI "Soignants" — cliquable → section Missions à payer */}
+          <button
+            type="button"
+            onClick={() => openAndScrollTo(SECTIONS.payer)}
+            className="card-base text-left cursor-pointer hover:shadow-md transition-shadow flex items-start justify-between gap-2"
+          >
+            <div>
+              <p className="text-2xl font-bold text-foreground">{fmt(data?.total_soignants_du)}</p>
+              <p className="text-xs text-muted-foreground">Soignants à régler · {data?.nb_missions_non_payees || 0} mission(s)</p>
             </div>
-            {filtreStatutPaiement && paiementsFiltres.length === 0 ? (
-              <div className="p-6 rounded-xl bg-success/10 text-center">
-                <p className="text-lg font-semibold text-success">
-                  {filtreStatutPaiement === 'CONTESTE' ? '✅ Aucun paiement contesté' :
-                   filtreStatutPaiement === 'PAYE' ? 'Aucun paiement déclaré ou confirmé' :
-                   'Aucun paiement en attente'}
-                </p>
-                <button onClick={() => setFiltreStatutPaiement(null)} className="text-sm text-primary hover:underline mt-2">
-                  Voir tous les paiements
-                </button>
-              </div>
-            ) : paiementsFiltres.length > 0 ? (
-              <>
-                {filtreStatutPaiement && (
-                  <p className="text-xs text-muted-foreground mb-3">
-                    {paiementsFiltres.length} résultat{paiementsFiltres.length > 1 ? 's' : ''}
-                  </p>
-                )}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left text-muted-foreground">
-                        <th className="pb-2 font-medium">Date</th>
-                        <th className="pb-2 font-medium">Soignant</th>
-                        <th className="pb-2 font-medium">Mission</th>
-                        <th className="pb-2 font-medium">Référence</th>
-                        <th className="pb-2 font-medium">Méthode</th>
-                        <th className="pb-2 font-medium text-right">Montant</th>
-                        <th className="pb-2 font-medium text-right">Statut</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paiementsFiltres.map((p: any) => (
-                        <React.Fragment key={p.paiement_id}>
-                          <tr className="border-b border-border/50">
-                            <td className="py-2 text-muted-foreground">{p.date_paiement ? format(new Date(p.date_paiement), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
-                            <td className="py-2 text-foreground">{p.soignant_nom || '—'}</td>
-                            <td className="py-2">
-                              {p.mission_id ? (
-                                <button onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)} className="text-primary hover:underline truncate max-w-[180px] block text-left">
-                                  {p.mission_intitule || '—'}
-                                </button>
-                              ) : (
-                                <span className="text-foreground truncate max-w-[180px] block">{p.mission_intitule || '—'}</span>
-                              )}
-                            </td>
-                            <td className="py-2 text-xs text-muted-foreground">{p.reference_virement || '—'}</td>
-                            <td className="py-2 text-muted-foreground">{p.methode || '—'}</td>
-                            <td className="py-2 text-right font-medium">{fmt(p.montant_net ?? 0)}</td>
-                            <td className="py-2 text-right">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PAIEMENT_STATUT_COLORS[p.statut] ?? 'bg-muted text-muted-foreground'}`}>
-                                {PAIEMENT_STATUT_LABELS[p.statut] ?? p.statut}
-                              </span>
-                              {p.confirme_par_soignant && (
-                                <span className="ml-1 text-[10px] text-success">✅ {p.confirme_par_soignant_le ? format(new Date(p.confirme_par_soignant_le), 'dd/MM', { locale: fr }) : ''}</span>
-                              )}
-                            </td>
-                          </tr>
-                          {p.statut === 'CONTESTE' && (
-                            <tr>
-                              <td colSpan={7} className="py-2 px-2">
-                                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 space-y-3">
-                                  {p.motif_contestation && (
-                                    <p className="text-xs text-destructive font-medium">
-                                      ⚠️ Motif du soignant : {p.motif_contestation}
-                                    </p>
-                                  )}
-                                  <p className="text-xs text-foreground font-semibold">Comment souhaitez-vous répondre ?</p>
-                                  {contestationOpen !== p.paiement_id ? (
-                                    <div className="flex flex-wrap gap-2">
-                                      <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => { setContestationOpen(p.paiement_id); setContestationAction('MODIFIER_REF'); }}>
-                                        <Edit2 className="h-3 w-3" /> Corriger la référence
-                                      </Button>
-                                      <Button size="sm" variant="outline" className="text-xs gap-1 border-destructive/30 text-destructive" onClick={() => { setContestationOpen(p.paiement_id); setContestationAction('ACCEPTER'); }}>
-                                        <X className="h-3 w-3" /> Annuler ce paiement
-                                      </Button>
-                                      <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => { setContestationOpen(p.paiement_id); setContestationAction('CONTESTER'); }}>
-                                        <AlertTriangle className="h-3 w-3" /> Maintenir — escalader
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-2">
-                                      {contestationAction === 'MODIFIER_REF' && (
-                                        <>
-                                          <p className="text-xs text-muted-foreground">Saisissez la bonne référence de paiement :</p>
-                                          <div className="flex gap-2">
-                                            <input value={contestationRef} onChange={e => setContestationRef(e.target.value)} placeholder="Ex: VIR-2026-04-001" className="input-base text-xs h-8" />
-                                            <Button size="sm" onClick={() => repondreContestation(p.paiement_id, 'MODIFIER_REF')} disabled={contestationLoading || !isRefValid(contestationRef)} className="text-xs shrink-0">
-                                              {contestationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Envoyer
-                                            </Button>
-                                          </div>
-                                          <p className="text-[10px] text-muted-foreground">Le soignant sera notifié et devra re-confirmer.</p>
-                                        </>
-                                      )}
-                                      {contestationAction === 'ACCEPTER' && (
-                                        <>
-                                          <p className="text-xs text-destructive">Vous confirmez l'annulation de ce paiement ? Il faudra refaire un paiement au soignant.</p>
-                                          <div className="flex gap-2">
-                                            <Button size="sm" variant="destructive" onClick={() => repondreContestation(p.paiement_id, 'ACCEPTER')} disabled={contestationLoading} className="text-xs">
-                                              {contestationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Confirmer l'annulation
-                                            </Button>
-                                          </div>
-                                        </>
-                                      )}
-                                      {contestationAction === 'CONTESTER' && (
-                                        <>
-                                          <p className="text-xs text-muted-foreground">Expliquez votre position (le litige sera transmis à l'admin Jolene) :</p>
-                                          <textarea
-                                            value={contestationReponse}
-                                            onChange={e => setContestationReponse(e.target.value.slice(0, 500))}
-                                            placeholder="Le virement a bien été effectué le..."
-                                            rows={2}
-                                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                          />
-                                          <div className="flex gap-2">
-                                            <Button size="sm" onClick={() => repondreContestation(p.paiement_id, 'CONTESTER')} disabled={contestationLoading || !contestationReponse.trim()} className="text-xs">
-                                              {contestationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Envoyer à l'admin
-                                            </Button>
-                                          </div>
-                                        </>
-                                      )}
-                                      <Button size="sm" variant="ghost" onClick={() => { setContestationOpen(null); setContestationAction(null); }} className="text-xs">Annuler</Button>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                          {p.echeance_le && p.statut !== 'CONFIRME' && p.statut !== 'CONTESTE' && (
-                            <tr>
-                              <td colSpan={7} className="py-0.5 px-2 text-[10px] text-muted-foreground">
-                                Échéance : {format(new Date(p.echeance_le), 'dd/MM/yyyy', { locale: fr })}
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">Aucun paiement enregistré.</p>
-            )}
-          </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
+          </button>
 
-          {/* Missions à payer — PRIORITÉ : en haut */}
-          <div className="card-base mb-6 order-1">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-foreground flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-warning" /> Missions à payer
-              </h2>
-              <span className="badge-base bg-warning/10 text-warning">{missionsAPayer.length}</span>
+          {/* KPI "Commissions" — cliquable → section Commissions Jolene */}
+          <button
+            type="button"
+            onClick={() => openAndScrollTo(SECTIONS.commissions)}
+            className="card-base text-left cursor-pointer hover:shadow-md transition-shadow flex items-start justify-between gap-2"
+          >
+            <div>
+              <p className="text-2xl font-bold text-foreground">{fmt(data?.total_commissions_du)}</p>
+              <p className="text-xs text-muted-foreground">Commissions Jolene · {data?.nb_factures_impayees || 0} facture(s)</p>
             </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-1" />
+          </button>
+        </div>
+      </FadeInView>
 
-            {missionsAPayer.length > 0 ? (
-              <div className="space-y-3">
-                {missionsAPayer.map((m: any) => {
-                  const joursSinceFin = m.fin_le ? Math.floor((Date.now() - new Date(m.fin_le).getTime()) / 86400000) : 0;
-                  const isStripeConnect = m.soignant_stripe_connect === true && m.type_paiement_soignant === 'NOTE_HONORAIRES';
-                  const currentRef = declaringRef[m.mission_id] || '';
-                  const trimmedRef = currentRef.trim();
-                  const refTooShort = trimmedRef.length > 0 && trimmedRef.length < 5;
-                  const refNoDigit = trimmedRef.length >= 5 && !/\d/.test(trimmedRef);
+      {/* ── MOBILE NAV : barre navigation rapide (mobile only) ── */}
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-4 md:hidden">
+        {[
+          { id: SECTIONS.payer, label: 'À payer', count: missionsNonPayees.length },
+          { id: SECTIONS.attente, label: 'En attente', count: paiementsEnAttente.length },
+          { id: SECTIONS.commissions, label: 'Commissions', count: facturesImpayees.length },
+          { id: SECTIONS.historique, label: 'Historique', count: paiementsConfirmes.length },
+          { id: SECTIONS.exports, label: 'Exports', count: 0 },
+        ].map(s => (
+          <button
+            key={s.id}
+            onClick={() => openAndScrollTo(s.id)}
+            className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+          >
+            {s.label}{s.count > 0 && ` (${s.count})`}
+          </button>
+        ))}
+      </div>
 
+      {/* ── SECTION 2 : Missions à payer aux soignants ── */}
+      <div id={SECTIONS.payer} className="mb-4">
+        <Collapsible open={sectionsOpen[SECTIONS.payer]} onOpenChange={() => toggleSection(SECTIONS.payer)}>
+          <CollapsibleTrigger className="w-full">
+            <Card>
+              <CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    Missions à payer aux soignants ({missionsNonPayees.length})
+                  </CardTitle>
+                  <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.payer] ? 'rotate-180' : ''}`} />
+                </div>
+              </CardHeader>
+            </Card>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2 space-y-3">
+              {missionsNonPayees.length === 0 ? (
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Aucune mission en attente de paiement soignant.
+                  </CardContent>
+                </Card>
+              ) : (
+                missionsNonPayees.map((m: any) => {
+                  const typeContratMission = m.type_contrat_applique as 'SALARIE' | 'LIBERAL' | null | undefined;
+                  const isSalarie = typeContratMission === 'SALARIE';
+                  const isLiberal = typeContratMission === 'LIBERAL';
+                  const modePaiementLabel = isSalarie
+                    ? 'Bulletin de paie (virement SEPA)'
+                    : isLiberal
+                    ? (m.mode_paiement_soignant === 'STRIPE_CONNECT' ? 'Note d\'honoraires (Stripe Connect)' : 'Note d\'honoraires (virement)')
+                    : null;
+                  const peutPayerStripeBase =
+                    isLiberal
+                    && m.mode_paiement_soignant === 'STRIPE_CONNECT'
+                    && m.soignant_stripe_connect;
+                  const enLitige = Boolean(m.a_paiement_conteste);
+                  const peutPayerStripe = peutPayerStripeBase && !enLitige;
                   return (
-                    <div key={m.mission_id} className="flex flex-col gap-3 p-3 rounded-lg border border-border/50 bg-background">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-foreground">{m.soignant_nom}</p>
-                          <button
-                            onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
-                            className="text-xs text-primary hover:underline text-left"
-                          >
-                            {m.intitule}
-                          </button>
-                          <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <span className="text-xs text-muted-foreground">
-                              Fin : {m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
-                            </span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              m.type_paiement_soignant === 'NOTE_HONORAIRES' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-muted text-muted-foreground'
-                            }`}>
-                              {m.type_paiement_soignant === 'NOTE_HONORAIRES' ? "Note d'honoraires" : 'Bulletin de paie'}
-                            </span>
-                            {joursSinceFin >= 60 && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">🚫 Publication suspendue — Régularisez vos paiements</span>
+                    <div key={m.mission_id} className="card-base space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)} className="font-semibold text-sm text-primary hover:underline text-left">
+                              {m.intitule}
+                            </button>
+                            {m.soignant_id ? (
+                              <button onClick={() => navigate(`/etablissement/soignants/${m.soignant_id}`)} className="text-xs text-muted-foreground hover:text-primary hover:underline text-left">
+                                {m.soignant_nom}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">{m.soignant_nom}</span>
                             )}
-                            {joursSinceFin >= 30 && joursSinceFin < 60 && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">🔴 Retard de paiement ({joursSinceFin}j)</span>
-                            )}
-                            {joursSinceFin >= 15 && joursSinceFin < 30 && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">⚠️ {joursSinceFin}j depuis fin de mission</span>
-                            )}
+                            <TypeExerciceBadge type={m.soignant_type_exercice} />
+                            <RetardBadge jours={m.jours_depuis_fin} />
                           </div>
-                          {/* RIB soignant */}
-                          {!isStripeConnect && m.type_paiement_soignant !== 'NOTE_HONORAIRES' && (
-                            <div className="mt-1">
-                              {ribCache[m.mission_id] ? (
-                                <p className="text-[10px] text-success flex items-center gap-1">✅ {ribCache[m.mission_id]}</p>
-                              ) : (
-                                <button
-                                  onClick={() => consulterRib(m.mission_id)}
-                                  disabled={ribLoadingId === m.mission_id}
-                                  className="text-[10px] text-primary hover:underline flex items-center gap-1"
-                                >
-                                  {ribLoadingId === m.mission_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-                                  📄 Voir le RIB (PDF)
-                                </button>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {m.soignant_profession} · {Math.round(m.heures || 0)}h pointées
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {m.debut_le && new Date(m.debut_le).toLocaleDateString('fr-FR')} → {m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}
+                          </p>
+                          {typeContratMission && (
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                              <Badge className={isSalarie
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}
+                              >
+                                Contrat {isSalarie ? 'salarié (CDDU)' : 'libéral'}
+                              </Badge>
+                              {modePaiementLabel && (
+                                <span className="text-xs text-muted-foreground">→ {modePaiementLabel}</span>
                               )}
                             </div>
                           )}
+                          {enLitige && (
+                            <div className="mt-2 flex items-center gap-2 flex-wrap rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
+                              <Scale className="h-4 w-4 text-destructive shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-destructive">⚠️ Litige en cours sur un paiement</p>
+                                <p className="text-xs text-destructive/80">
+                                  Les paiements sont désactivés tant que le litige n'est pas résolu.
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
+                                className="text-xs font-medium text-destructive hover:underline shrink-0"
+                              >
+                                Voir le litige →
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <span className="text-sm font-bold text-foreground">{fmt(m.net_a_payer ?? m.total_brut ?? 0)}</span>
+                        <div className="text-right shrink-0">
+                          {peutPayerStripe ? (
+                            <>
+                              <p className="font-bold">{fmt((m.net_a_payer || 0) + (m.montant_commission_ttc || 0))}</p>
+                              {m.montant_commission_ttc > 0 && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  dont {fmt(m.montant_commission_ttc)} commission Jolene
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="font-bold">{fmt(m.net_a_payer)}</p>
+                          )}
+                        </div>
                       </div>
 
-                      {isStripeConnect ? (
+                      {peutPayerStripe ? (
                         <Button
                           size="sm"
-                          onClick={() => lancerPaiementStripeConnect(m.mission_id)}
-                          disabled={connectPayingId === m.mission_id}
-                          className="gap-2 self-end"
+                          onClick={() => payerStripeConnect(m.mission_id)}
+                          disabled={connectPayingId === m.mission_id || enLitige}
+                          className="w-full"
                         >
-                          {connectPayingId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
-                          💳 Payer via Stripe
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          {connectPayingId === m.mission_id ? 'Redirection…' : '💳 Payer via Stripe'}
                         </Button>
-                      ) : m.type_paiement_soignant === 'NOTE_HONORAIRES' && m.soignant_stripe_connect === false ? (
-                        <>
-                          <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground space-y-1 w-full">
-                            <p className="font-semibold text-warning flex items-center gap-1">
-                              <AlertTriangle className="h-3.5 w-3.5" /> Ce soignant n'a pas encore finalisé son compte Stripe Connect.
-                            </p>
-                            <p>En attendant, vous pouvez le payer par virement et déclarer le paiement avec une référence.</p>
-                            <p className="text-muted-foreground/70">Le soignant sera invité à finaliser son compte Stripe pour les prochaines missions.</p>
-                          </div>
-                          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 w-full">
-                            <div className="flex-1 w-full sm:w-auto space-y-1">
-                              <input
-                                type="text"
-                                placeholder="Ex: VIR-2026-03-001"
-                                value={currentRef}
-                                onChange={e => setDeclaringRef(prev => ({ ...prev, [m.mission_id]: e.target.value }))}
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              />
-                              <p className="text-[10px] text-muted-foreground">Numéro de virement bancaire, référence de chèque ou numéro de facture</p>
-                              {refTooShort && <p className="text-[10px] text-destructive">Minimum 5 caractères</p>}
-                              {refNoDigit && <p className="text-[10px] text-destructive">La référence doit contenir au moins 1 chiffre</p>}
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => declarerPaiementSoignant(m.mission_id, m.net_a_payer ?? m.total_brut ?? 0)}
-                              disabled={declaringId === m.mission_id || !isRefValid(currentRef)}
-                              className="gap-1 shrink-0"
-                            >
-                              {declaringId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Banknote className="h-3.5 w-3.5" />}
-                              Déclarer le paiement
-                            </Button>
-                          </div>
-                        </>
                       ) : (
-                        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
-                          <div className="flex-1 w-full sm:w-auto space-y-1">
-                            <input
-                              type="text"
-                              placeholder="Ex: VIR-2026-03-001"
-                              value={currentRef}
-                              onChange={e => setDeclaringRef(prev => ({ ...prev, [m.mission_id]: e.target.value }))}
-                              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
-                            <p className="text-[10px] text-muted-foreground">Numéro de virement bancaire, référence de chèque ou numéro de facture</p>
-                            {refTooShort && (
-                              <p className="text-[10px] text-destructive">Minimum 5 caractères</p>
-                            )}
-                            {refNoDigit && (
-                              <p className="text-[10px] text-destructive">La référence doit contenir au moins 1 chiffre</p>
-                            )}
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => declarerPaiementSoignant(m.mission_id, m.net_a_payer ?? m.total_brut ?? 0)}
-                            disabled={declaringId === m.mission_id || !isRefValid(currentRef)}
-                            className="gap-1 shrink-0"
-                          >
-                            {declaringId === m.mission_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Banknote className="h-3.5 w-3.5" />}
-                            Déclarer le paiement
-                          </Button>
-                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => ouvrirDialogDeclarer(m)}
+                          disabled={declaringId === m.mission_id || enLitige}
+                          className="w-full"
+                        >
+                          <Banknote className="w-4 h-4 mr-2" />
+                          {enLitige ? 'Paiement bloqué (litige)' : 'Déclarer un paiement'}
+                        </Button>
                       )}
                     </div>
                   );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">✅ Aucune mission en attente de paiement.</p>
-            )}
-          </div>
-        </TabsContent>
-
-        {/* ===== ONGLET 2 : COMMISSIONS JOLENE ===== */}
-        <TabsContent value="commissions">
-          {/* SEPA banner */}
-          {etab?.mode_paiement_commission === 'SEPA_DEBIT' && (
-            <div className="mb-6 flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
-              <Building2 className="h-5 w-5 text-primary shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-foreground">Mandat SEPA enregistré 🏦</p>
-                <p className="text-xs text-muted-foreground">Votre mandat SEPA est actif. Les commissions seront prélevées automatiquement lors de la facturation mensuelle.</p>
-              </div>
-            </div>
-          )}
-
-          {/* KPI commissions */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            <button
-              onClick={() => {
-                setFiltreStatut(filtreStatut === 'EN_ATTENTE' ? null : 'EN_ATTENTE');
-                document.getElementById('missions-non-facturees')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
-                filtreStatut === 'EN_ATTENTE' ? 'border-primary ring-2 ring-primary/20' : 'border-border'
-              }`}
-            >
-              <p className="text-2xl font-bold text-foreground">{fmt(kpiCommissions.enAttente)}</p>
-              <p className="text-sm text-muted-foreground">Total dû</p>
-            </button>
-            <button
-              onClick={() => setFiltreStatut(filtreStatut === 'EN_COURS' ? null : 'EN_COURS')}
-              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
-                filtreStatut === 'EN_COURS' ? 'border-warning ring-2 ring-warning/20' : 'border-border'
-              }`}
-            >
-              <p className="text-2xl font-bold text-foreground">{fmt(kpiCommissions.enCours)}</p>
-              <p className="text-sm text-muted-foreground">Factures en cours</p>
-            </button>
-            <button
-              onClick={() => setFiltreStatut(filtreStatut === 'PAYEE' ? null : 'PAYEE')}
-              className={`text-left p-4 rounded-xl border-2 transition-all hover:shadow-md bg-card ${
-                filtreStatut === 'PAYEE' ? 'border-success ring-2 ring-success/20' : 'border-border'
-              }`}
-            >
-              <p className="text-2xl font-bold text-foreground">{fmt(kpiCommissions.totalPaye)}</p>
-              <p className="text-sm text-muted-foreground">Total payé</p>
-            </button>
-          </div>
-
-          {paiementsData && (
-            <div className="card-base mb-6 flex items-center gap-4">
-              <div className="text-sm">
-                <span className="text-muted-foreground">Total commissions HT : </span>
-                <span className="font-semibold text-foreground">{fmt(paiementsData.commissions_ht ?? 0)}</span>
-              </div>
-              <div className="text-sm">
-                <span className="text-muted-foreground">Total commissions TTC : </span>
-                <span className="font-semibold text-foreground">{fmt(paiementsData.commissions_ttc ?? 0)}</span>
-              </div>
-            </div>
-          )}
-
-          {/* RIB Jolene — masqué si pas encore d'IBAN */}
-          {ENTREPRISE.iban && ENTREPRISE.iban !== 'FR76 XXXX XXXX XXXX XXXX XXXX XXX' && (
-            <div className="card-base mb-6 bg-muted/30">
-              <div className="flex items-start gap-3">
-                <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">🏦 Coordonnées bancaires Jolene</p>
-                  <p className="text-xs text-muted-foreground"><strong>IBAN :</strong> {ENTREPRISE.iban}</p>
-                  <p className="text-xs text-muted-foreground"><strong>BIC :</strong> {ENTREPRISE.bic}</p>
-                  <p className="text-xs text-muted-foreground"><strong>Référence à indiquer :</strong> le numéro de facture</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Liste des factures — EN PREMIER pour payer immédiatement */}
-          <div id="liste-factures" className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold text-foreground">
-                {filtreStatut === 'EN_COURS' ? 'Factures en cours' : filtreStatut === 'PAYEE' ? 'Factures payées' : 'Factures'}
-              </h2>
-              {filtreStatut && (
-                <button onClick={() => setFiltreStatut(null)} className="text-xs text-primary hover:underline">Voir toutes</button>
+                })
               )}
             </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
 
-            {(() => {
-              const facturesFiltrees = filtreStatut === 'EN_COURS'
-                ? factures.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD')
-                : filtreStatut === 'PAYEE'
-                ? factures.filter(f => f.statut === 'PAYEE')
-                : factures;
-              return facturesFiltrees.length > 0 ? (
-                <div className="space-y-3">
-                  {facturesFiltrees.map(f => (
-                    <div key={f.id} className="card-base flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-foreground">{f.numero_facture}</span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUT_COLORS[f.statut] ?? STATUT_COLORS.BROUILLON}`}>
-                            {STATUT_LABELS[f.statut] ?? f.statut}
-                          </span>
-                          {f.est_secteur_public && f.chorus_pro_statut && f.chorus_pro_statut !== 'NON_APPLICABLE' && (
-                            <ChorusStatutBadge statut={f.chorus_pro_statut} />
-                          )}
+      {/* ── SECTION 3 : Paiements en attente de confirmation ── */}
+      <div id={SECTIONS.attente} className="mb-4">
+        <Collapsible open={sectionsOpen[SECTIONS.attente]} onOpenChange={() => toggleSection(SECTIONS.attente)}>
+          <CollapsibleTrigger className="w-full">
+            <Card>
+              <CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Clock className="h-5 w-5 text-warning" />
+                    Paiements en attente ({paiementsEnAttente.length})
+                  </CardTitle>
+                  <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.attente] ? 'rotate-180' : ''}`} />
+                </div>
+              </CardHeader>
+            </Card>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2 space-y-3">
+              {paiementsEnAttente.length === 0 ? (
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Aucun paiement en attente de confirmation soignant.
+                  </CardContent>
+                </Card>
+              ) : (
+                paiementsEnAttente.map((p: any) => (
+                  <button
+                    type="button"
+                    key={p.paiement_id}
+                    onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)}
+                    className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border hover:border-primary/50 hover:bg-muted/30 transition-colors cursor-pointer text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm text-primary">{p.mission_intitule}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {p.soignant_nom} · {p.soignant_profession} · {p.methode} · Réf : {p.reference_virement}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Déclaré le {p.date_paiement && new Date(p.date_paiement).toLocaleDateString('fr-FR')}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0 flex items-center gap-2">
+                      <div>
+                        <p className="font-bold">{fmt(p.montant_net)}</p>
+                        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">En attente</Badge>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+
+      {/* ── SECTION 4 : Commissions Jolene ── */}
+      <div id={SECTIONS.commissions} className="mb-4">
+        <Collapsible open={sectionsOpen[SECTIONS.commissions]} onOpenChange={() => toggleSection(SECTIONS.commissions)}>
+          <CollapsibleTrigger className="w-full">
+            <Card>
+              <CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-5 w-5 text-primary" />
+                    Commissions Jolene ({facturesImpayees.length} impayée{facturesImpayees.length > 1 ? 's' : ''})
+                  </CardTitle>
+                  <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.commissions] ? 'rotate-180' : ''}`} />
+                </div>
+              </CardHeader>
+            </Card>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2 space-y-4">
+              {/* 4.1 — Factures Jolene impayées */}
+              {facturesImpayees.length > 0 ? (
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-destructive" /> Factures impayées ({facturesImpayees.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {facturesImpayees.map((f: any) => {
+                      const chorusBadge = f.est_secteur_public && f.chorus_pro_statut ? getChorusStatutBadge(f.chorus_pro_statut) : null;
+                      return (
+                      <div key={f.facture_id} className="p-4 rounded-lg border space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-sm">{f.numero_facture}</p>
+                              {chorusBadge && (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${chorusBadge.classes}`}>
+                                  <Landmark className="h-3 w-3" />
+                                  {chorusBadge.label}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {f.nombre_missions} mission(s) · Échéance : {f.date_echeance && new Date(f.date_echeance).toLocaleDateString('fr-FR')}
+                              {f.est_secteur_public && f.chorus_pro_numero_flux && ` · Flux ${f.chorus_pro_numero_flux}`}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-bold">{fmt(f.montant_ttc)}</p>
+                            <p className="text-[10px] text-muted-foreground">{fmt(f.montant_ht)} HT + {fmt(f.montant_tva)} TVA</p>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                          <span>{f.nombre_missions ?? 0} mission{(f.nombre_missions ?? 0) > 1 ? 's' : ''}</span>
-                          <span>HT: {(f.montant_ht ?? 0).toFixed(2)} €</span>
-                          <span>TVA: {(f.montant_tva ?? 0).toFixed(2)} €</span>
-                          <span className="font-semibold text-foreground">TTC: {(f.montant_ttc ?? 0).toFixed(2)} €</span>
-                        </div>
-                        {f.date_echeance && (
-                          <p className="text-[10px] text-muted-foreground mt-1">
-                            Échéance : {format(new Date(f.date_echeance), 'dd/MM/yyyy', { locale: fr })}
+                        {f.est_secteur_public && (
+                          <p className="text-[10px] text-primary flex items-center gap-1">
+                            <Landmark className="h-3 w-3" />
+                            Secteur public — paiement via Chorus Pro (30 à 60 jours après acceptation)
                           </p>
                         )}
-                      </div>
-                        <div className="flex flex-wrap gap-2 shrink-0">
-                        <button onClick={() => navigate(`/etablissement/facturation/${f.id}`)} className="btn-secondary text-xs flex items-center gap-1">
-                          <FileText className="h-3.5 w-3.5" /> Détail
-                        </button>
-                        {f.statut === 'VIREMENT_DECLARE' && (
-                          <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" /> En attente de vérification
-                          </span>
+                        {!f.est_secteur_public && (
+                        <div className="flex gap-2 flex-wrap">
+                          <Button
+                            size="sm"
+                            onClick={() => { setCheckoutFactureId(f.facture_id); setShowCheckout(true); }}
+                          >
+                            <CreditCard className="w-4 h-4 mr-1" /> Payer par carte
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
+                          >
+                            <Banknote className="w-4 h-4 mr-1" /> Virement
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
+                            <Download className="w-4 h-4 mr-1" /> PDF
+                          </Button>
+                        </div>
                         )}
-                        {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
-                          <>
-                            {f.est_secteur_public ? (
-                              <div className="w-full mt-2 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
-                                <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                                  🏛️ Paiement secteur public
-                                </p>
-                                <p className="text-xs text-muted-foreground">Cette facture sera déposée sur Chorus Pro.</p>
-                                <FactureChorus facture={f} onUpdate={charger} />
-                                {f.chorus_pro_numero_flux && (
-                                  <p className="text-xs text-muted-foreground">Référence Chorus : {f.chorus_pro_numero_flux}</p>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="w-full mt-2 space-y-4">
-                                <p className="text-sm font-semibold text-foreground">Comment payer cette facture ?</p>
-                                {/* Option 1 : Carte */}
-                                <div className="rounded-xl border border-border p-4 space-y-2">
-                                  <p className="text-sm font-semibold text-foreground">Option 1 : 💳 Payer par carte bancaire</p>
-                                  <p className="text-xs text-muted-foreground">Paiement sécurisé par Stripe. Confirmation immédiate.</p>
-                                  <button onClick={() => payerParCarte(f)} disabled={payingId === f.id} className="btn-primary text-xs flex items-center gap-1 disabled:opacity-50">
-                                    {payingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
-                                    Payer maintenant
-                                  </button>
-                                </div>
-                                {/* Option 2 : Virement */}
-                                <div className="rounded-xl border border-border p-4 space-y-2">
-                                  <p className="text-sm font-semibold text-foreground">Option 2 : 🏦 Payer par virement bancaire</p>
-                                  <div className="text-xs text-muted-foreground space-y-0.5 bg-muted/50 rounded-lg p-3">
-                                    <p><strong>Bénéficiaire :</strong> {ENTREPRISE.nom}</p>
-                                    {ENTREPRISE.iban && ENTREPRISE.iban !== 'FR76 XXXX XXXX XXXX XXXX XXXX XXX' ? (
-                                      <>
-                                        <p><strong>IBAN :</strong> {ENTREPRISE.iban}</p>
-                                        <p><strong>BIC :</strong> {ENTREPRISE.bic}</p>
-                                      </>
-                                    ) : (
-                                      <p className="italic">Coordonnées bancaires disponibles prochainement</p>
-                                    )}
-                                    <p><strong>Référence obligatoire :</strong> {f.numero_facture}</p>
-                                  </div>
-                                  <p className="text-[10px] text-muted-foreground">Délai de traitement : 2-3 jours ouvrés.</p>
-                                  <PaiementVirement facture={f} onUpdate={charger} />
-                                </div>
-                              </div>
-                            )}
-                            <button onClick={() => rafraichirStatut(f.id)} disabled={refreshingId === f.id} className="btn-secondary text-xs flex items-center gap-1 disabled:opacity-50" title="Rafraîchir">
-                              <RefreshCw className={`h-3.5 w-3.5 ${refreshingId === f.id ? 'animate-spin' : ''}`} />
-                            </button>
-                          </>
-                        )}
-                        {f.statut === 'PAYEE' && (
-                          <button onClick={() => navigate(`/etablissement/facturation/${f.id}`)} className="btn-secondary text-xs flex items-center gap-1">
-                            <Download className="h-3.5 w-3.5" /> PDF
-                          </button>
+                        {f.est_secteur_public && (
+                        <div className="flex gap-2 flex-wrap">
+                          <Button size="sm" variant="outline" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
+                            <Download className="w-4 h-4 mr-1" /> PDF
+                          </Button>
+                        </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
-                <EtatVide illustration={<IllustrationCalculatrice />} titre={filtreStatut ? 'Aucune facture dans cette catégorie' : 'Aucune facture'} sousTitre="Les factures seront générées après vos premières missions." />
-              );
-            })()}
-          </div>
-
-          {/* Missions non facturées — en bas car moins urgent que payer */}
-          {missionsNonFacturees.length > 0 && (
-            <div id="missions-non-facturees" className="card-base mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-bold text-foreground">Missions à facturer</h2>
-                <span className="badge-base bg-warning/10 text-warning">{missionsNonFacturees.length} mission{missionsNonFacturees.length > 1 ? 's' : ''}</span>
-              </div>
-              <div className="overflow-x-auto mb-4">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="pb-2 font-medium">Date</th>
-                      <th className="pb-2 font-medium">Intitulé</th>
-                      <th className="pb-2 font-medium text-right">Commission HT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {missionsNonFacturees.map(m => (
-                      <tr key={m.id} className="border-b border-border/50">
-                        <td className="py-2 text-muted-foreground">{m.fin_le ? format(new Date(m.fin_le), 'dd/MM/yyyy', { locale: fr }) : '—'}</td>
-                        <td className="py-2">
-                          <button onClick={() => navigate(`/etablissement/missions/${m.id}`)} className="text-primary hover:underline text-left">{m.intitule}</button>
-                        </td>
-                        <td className="py-2 text-right font-medium">{(m.montant_commission_ht ?? 0).toFixed(2)} €</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <button onClick={genererFactureMois} disabled={generating} className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50">
-                {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                Générer la facture du mois
-              </button>
-            </div>
-          )}
-
-          {/* Historique SEPA */}
-          {etab?.mode_paiement_commission === 'SEPA_DEBIT' && prelevements.length > 0 && (
-            <div className="mt-6">
-              <h2 className="font-bold text-foreground mb-3">🏦 Historique des prélèvements</h2>
-              <div className="space-y-2">
-                {prelevements.map((p: any) => (
-                  <div key={p.id} className="card-base flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{(p.missions as any)?.intitule || 'Mission'}</p>
-                      <p className="text-xs text-muted-foreground">{p.capture_le ? format(new Date(p.capture_le), 'dd/MM/yyyy', { locale: fr }) : '—'}</p>
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Aucune facture commission impayée.
+                  </CardContent>
+                </Card>
+              )}
+              {/* 4.2 — Historique factures commission (collapsible) */}
+              {nbFacturesHistorique > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setHistoriqueOuvert(v => !v)}
+                    className="w-full flex items-center justify-between text-left py-2"
+                    aria-expanded={historiqueOuvert}
+                  >
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-success" />
+                      Historique factures commission ({nbFacturesHistorique} payée{nbFacturesHistorique > 1 ? 's' : ''})
+                    </h3>
+                    {historiqueOuvert ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  </button>
+                  {historiqueOuvert && (
+                    <div className="mt-2">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b text-left text-muted-foreground">
+                              <th className="pb-2 pr-3">Numéro</th>
+                              <th className="pb-2 pr-3">Émise le</th>
+                              <th className="pb-2 pr-3">Payée le</th>
+                              <th className="pb-2 pr-3">Missions</th>
+                              <th className="pb-2 pr-3">Montant</th>
+                              <th className="pb-2 pr-3">Mode paiement</th>
+                              <th className="pb-2 pr-3">Statut</th>
+                              <th className="pb-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {facturesCommissionHistorique.map((f: any) => {
+                              const modeLabel =
+                                f.mode_paiement === 'STRIPE' && f.stripe_payment_intent_id
+                                  ? '💳 Stripe (à la source)'
+                                  : f.mode_paiement === 'STRIPE'
+                                  ? '💳 Stripe'
+                                  : f.mode_paiement === 'VIREMENT'
+                                  ? '🏦 Virement'
+                                  : f.mode_paiement === 'CHORUS_PRO'
+                                  ? '🏛️ Chorus Pro'
+                                  : '—';
+                              return (
+                                <tr
+                                  key={f.facture_id}
+                                  onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
+                                  className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                                >
+                                  <td className="py-2 pr-3 font-medium text-primary">{f.numero_facture}</td>
+                                  <td className="py-2 pr-3 text-xs">{f.date_emission && new Date(f.date_emission).toLocaleDateString('fr-FR')}</td>
+                                  <td className="py-2 pr-3 text-xs">{f.date_paiement ? new Date(f.date_paiement).toLocaleDateString('fr-FR') : '—'}</td>
+                                  <td className="py-2 pr-3 text-xs">{f.nombre_missions ?? '—'}</td>
+                                  <td className="py-2 pr-3 font-medium">{fmt(f.montant_ttc)}</td>
+                                  <td className="py-2 pr-3 text-xs">{modeLabel}</td>
+                                  <td className="py-2 pr-3">
+                                    {f.statut === 'PAYEE' ? (
+                                      <Badge className="bg-success/10 text-success">Payée</Badge>
+                                    ) : (
+                                      <Badge className="bg-muted text-muted-foreground">{f.statut}</Badge>
+                                    )}
+                                  </td>
+                                  <td className="py-2">
+                                    <div className="flex items-center gap-1 justify-end">
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-9 w-9"
+                                        title="Télécharger la facture PDF"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          telechargerFactureCommissionPDF(f.facture_id);
+                                        }}
+                                      >
+                                        <Download className="h-4 w-4 text-muted-foreground" />
+                                      </Button>
+                                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-3">
+                        Affiche les 10 dernières factures payées.
+                      </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-foreground">{(p.montant_ttc ?? 0).toFixed(2)} €</p>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.statut === 'CAPTURE' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
-                        {p.statut === 'CAPTURE' ? 'Prélevé' : p.statut}
-                      </span>
-                    </div>
+                  )}
+                </div>
+              )}
+              {/* 4.3 — Missions à facturer (bouton générer facture mensuelle) */}
+              {missionsNonFacturees.length > 0 && (
+                <div className="pt-4 border-t border-border">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-warning" />
+                      Missions à facturer ({missionsNonFacturees.length})
+                    </h3>
+                    <Button
+                      size="sm"
+                      onClick={genererFactureMensuelle}
+                      disabled={generatingFacture}
+                      className="gap-1.5"
+                    >
+                      {generatingFacture ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                      {generatingFacture ? 'Génération…' : 'Générer la facture du mois'}
+                    </Button>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </TabsContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-2 pr-3">Fin</th>
+                          <th className="pb-2 pr-3">Mission</th>
+                          <th className="pb-2 pr-3 text-right">Commission HT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {missionsNonFacturees.map((m: any) => (
+                          <tr
+                            key={m.id}
+                            onClick={() => navigate(`/etablissement/missions/${m.id}`)}
+                            className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                          >
+                            <td className="py-2 pr-3 text-xs">{m.fin_le && new Date(m.fin_le).toLocaleDateString('fr-FR')}</td>
+                            <td className="py-2 pr-3 text-primary">{m.intitule}</td>
+                            <td className="py-2 pr-3 text-right font-medium">{fmt(m.montant_commission_ht)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Commissions non encore facturées à votre établissement. Le bouton génère une facture mensuelle groupée
+                    pour toutes les missions terminées sans facture (hors LIBERAL+Stripe qui sont facturées à la source).
+                  </p>
+                </div>
+              )}
+              {/* 4.4 — Bandeau SEPA + IBAN Jolene + Chorus Pro + Prélèvements SEPA */}
 
-        {/* ===== ONGLET 3 : EXPORT COMPTABLE ===== */}
-        <TabsContent value="export">
-          <div className="card-base space-y-4">
-            <h2 className="font-bold text-foreground">Export comptable</h2>
-            <p className="text-sm text-muted-foreground">Téléchargez vos données financières pour votre comptabilité.</p>
-            <div className="flex flex-wrap gap-3">
-              <Button variant="outline" className="gap-2" onClick={() => navigate('/etablissement/export-paie')}>
-                <Download className="h-4 w-4" /> Export FEC / Paie
-              </Button>
-              <Button variant="outline" className="gap-2" onClick={() => {
-                if (factures.length === 0) {
-                  toast.info('Aucune facture à télécharger');
-                  return;
-                }
-                factures.forEach(f => {
-                  window.open(`/etablissement/facturation/${f.id}`, '_blank');
-                });
-              }}>
-                <FileText className="h-4 w-4" /> Télécharger toutes les factures
-              </Button>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
+              {/* 4.4.a — Bandeau SEPA actif */}
+              {etab?.mode_paiement_commission === 'SEPA_DEBIT' && (
+                <div className="rounded-lg border border-info/30 bg-info/5 p-3 flex items-start gap-2">
+                  <Info className="h-4 w-4 text-info shrink-0 mt-0.5" />
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-semibold text-info mb-0.5">🏦 Mandat SEPA actif</p>
+                    <p>Les factures commission sont prélevées automatiquement chaque mois sur le compte bancaire enregistré.</p>
+                  </div>
+                </div>
+              )}
 
-      {checkoutFactureId && (
+              {/* 4.4.b — IBAN Jolene (pour virements classiques) */}
+              {etab?.mode_paiement_commission !== 'SEPA_DEBIT' && (
+                <div className="rounded-lg border bg-muted/20 p-3">
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                    <Building2 className="h-4 w-4 text-primary" /> Coordonnées bancaires Jolene
+                  </p>
+                  <div className="text-xs text-muted-foreground space-y-1 font-mono">
+                    <p>IBAN : {ENTREPRISE.iban || 'FR76 XXXX XXXX XXXX XXXX XXXX XXX'}</p>
+                    <p>BIC : {ENTREPRISE.bic || 'XXXXXXXX'}</p>
+                    <p className="text-[10px] text-muted-foreground/70 font-sans italic">
+                      Référence obligatoire : numéro de la facture commission (ex: FACT-2026-04-0001)
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* 4.4.c — Chorus Pro (si établissement secteur public) */}
+              {etab?.est_secteur_public && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-start gap-2">
+                  <Building2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-semibold text-primary mb-0.5">🏛️ Secteur public — Chorus Pro</p>
+                    <p>Vos factures commission sont déposées sur Chorus Pro. Le paiement suit le cycle de mandatement habituel (30 à 60 jours).</p>
+                    <button
+                      onClick={() => navigate('/etablissement/chorus-config')}
+                      className="mt-1 text-primary hover:underline font-medium"
+                    >
+                      Configurer Chorus Pro →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 4.4.d — Historique prélèvements SEPA */}
+              {etab?.mode_paiement_commission === 'SEPA_DEBIT' && prelevements.length > 0 && (
+                <div className="pt-4 border-t border-border">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                    <Banknote className="h-4 w-4 text-info" />
+                    Historique des prélèvements ({prelevements.length})
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="pb-2 pr-3">Date</th>
+                          <th className="pb-2 pr-3">Mission</th>
+                          <th className="pb-2 pr-3 text-right">Montant</th>
+                          <th className="pb-2 pr-3">Statut</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {prelevements.map((p: any) => (
+                          <tr
+                            key={p.id}
+                            onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
+                            className={`border-b last:border-0 transition-colors ${p.mission_id ? 'cursor-pointer hover:bg-muted/40' : 'cursor-default'}`}
+                          >
+                            <td className="py-2 pr-3 text-xs">{p.capture_le && new Date(p.capture_le).toLocaleDateString('fr-FR')}</td>
+                            <td className="py-2 pr-3 text-primary">{(p.missions as any)?.intitule || '—'}</td>
+                            <td className="py-2 pr-3 text-right font-medium">{fmt(p.montant_ttc)}</td>
+                            <td className="py-2 pr-3">
+                              {p.statut === 'PRELEVE' ? (
+                                <Badge className="bg-success/10 text-success">Prélevé</Badge>
+                              ) : (
+                                <Badge className="bg-muted text-muted-foreground">{p.statut}</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+
+      {/* ── SECTION 5 : Historique paiements confirmés ── */}
+      <div id={SECTIONS.historique} className="mb-4">
+        <Collapsible open={sectionsOpen[SECTIONS.historique]} onOpenChange={() => toggleSection(SECTIONS.historique)}>
+          <CollapsibleTrigger className="w-full">
+            <Card>
+              <CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CheckCircle className="h-5 w-5 text-success" />
+                    Historique paiements ({paiementsConfirmes.length} confirmé{paiementsConfirmes.length > 1 ? 's' : ''})
+                  </CardTitle>
+                  <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.historique] ? 'rotate-180' : ''}`} />
+                </div>
+              </CardHeader>
+            </Card>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2">
+              {paiementsConfirmes.length === 0 ? (
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Aucun paiement confirmé pour l'instant.
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-muted-foreground">
+                            <th className="pb-2 pr-3">Date</th>
+                            <th className="pb-2 pr-3">Soignant</th>
+                            <th className="pb-2 pr-3">Mission</th>
+                            <th className="pb-2 pr-3 text-right">Montant</th>
+                            <th className="pb-2 pr-3">Réf.</th>
+                            <th className="pb-2">Confirmé</th>
+                            <th className="pb-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paiementsConfirmes.map((p: any) => (
+                            <tr
+                              key={p.paiement_id}
+                              onClick={() => p.mission_id && navigate(`/etablissement/missions/${p.mission_id}`)}
+                              className="border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors"
+                            >
+                              <td className="py-2 pr-3 text-xs">{p.confirme_par_soignant_le && new Date(p.confirme_par_soignant_le).toLocaleDateString('fr-FR')}</td>
+                              <td className="py-2 pr-3">{p.soignant_nom}</td>
+                              <td className="py-2 pr-3 text-primary">{p.mission_intitule}</td>
+                              <td className="py-2 pr-3 text-right font-medium">{fmt(p.montant_net)}</td>
+                              <td className="py-2 pr-3 text-xs text-muted-foreground">{p.reference_virement}</td>
+                              <td className="py-2"><Badge className="bg-success/10 text-success">✅</Badge></td>
+                              <td className="py-2">
+                                <div className="flex items-center gap-1 justify-end">
+                                  {p.facture_honoraires_id && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-9 w-9"
+                                      title="Télécharger la facture honoraires PDF"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        telechargerFactureHonorairesPDF(p.facture_honoraires_id);
+                                      }}
+                                    >
+                                      <Download className="h-4 w-4 text-muted-foreground" />
+                                    </Button>
+                                  )}
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-3">
+                      Les 10 derniers paiements confirmés par le soignant. Cliquez sur une ligne pour voir le détail mission.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+              {/* Note : les paiements CONTESTE ne sont pas exposés par fn_obligations_financieres
+                  (seulement DECLARE et CONFIRME). Pour voir les contestations en cours :
+                  navigate vers /etablissement/litiges ou fiche mission concernée. */}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+
+      {/* ── SECTION 6 : Exports comptables ── */}
+      <div id={SECTIONS.exports} className="mb-4">
+        <Collapsible open={sectionsOpen[SECTIONS.exports]} onOpenChange={() => toggleSection(SECTIONS.exports)}>
+          <CollapsibleTrigger className="w-full">
+            <Card>
+              <CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Download className="h-5 w-5 text-info" />
+                    Exports comptables
+                  </CardTitle>
+                  <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.exports] ? 'rotate-180' : ''}`} />
+                </div>
+              </CardHeader>
+            </Card>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2 space-y-3">
+              <Card>
+                <CardContent className="pt-4 space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Téléchargez vos données financières pour votre comptabilité.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button
+                      variant="outline"
+                      className="h-auto py-3 justify-start gap-2"
+                      onClick={() => navigate('/etablissement/export-paie')}
+                    >
+                      <FileText className="h-5 w-5 text-primary shrink-0" />
+                      <div className="text-left">
+                        <p className="font-medium text-sm">Export FEC / Paie</p>
+                        <p className="text-xs text-muted-foreground">
+                          Fichier comptable (Silae, Sage, ADP, FEC)
+                        </p>
+                      </div>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="h-auto py-3 justify-start gap-2"
+                      onClick={() => {
+                        // Ouvre un onglet par facture commission PAYEE (historique)
+                        if (facturesCommissionHistorique.length === 0) {
+                          toast.info('Aucune facture à télécharger.');
+                          return;
+                        }
+                        facturesCommissionHistorique.forEach((f: any, i: number) => {
+                          setTimeout(() => telechargerFactureCommissionPDF(f.facture_id), i * 200);
+                        });
+                        toast.success(`Téléchargement de ${facturesCommissionHistorique.length} facture(s)…`);
+                      }}
+                    >
+                      <Download className="h-5 w-5 text-primary shrink-0" />
+                      <div className="text-left">
+                        <p className="font-medium text-sm">Toutes les factures commission</p>
+                        <p className="text-xs text-muted-foreground">
+                          Télécharge les {facturesCommissionHistorique.length} dernières payées
+                        </p>
+                      </div>
+                    </Button>
+                  </div>
+
+                  <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
+                    <p className="font-semibold text-foreground mb-1">💡 À savoir</p>
+                    <p>
+                      Les factures honoraires soignants (mandat art. 289 I-2 CGI) sont accessibles
+                      individuellement depuis la section 5 (historique paiements).
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+
+      {/* ── DIALOGS GLOBAUX ── */}
+
+      {/* Dialog Stripe Checkout (paiement facture commission) */}
+      {showCheckout && checkoutFactureId && (
         <StripeEmbeddedCheckout
           factureId={checkoutFactureId}
-          open={!!checkoutFactureId}
-          onClose={() => setCheckoutFactureId(null)}
-          onComplete={() => { setCheckoutFactureId(null); charger(); }}
+          open={showCheckout}
+          onClose={() => { setShowCheckout(false); setCheckoutFactureId(null); charger(); }}
         />
       )}
 
-      {/* Stripe Connect embedded checkout for mission payments */}
-      {connectClientSecret && (
-        <Dialog open={!!connectClientSecret} onOpenChange={(v) => { if (!v) { setConnectClientSecret(null); charger(); } }}>
-          <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      {/* Dialog Stripe Connect (paiement mission soignant) */}
+      {showConnectCheckout && connectClientSecret && (
+        <Dialog open={showConnectCheckout} onOpenChange={(open) => { if (!open) { setShowConnectCheckout(false); charger(); } }}>
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Paiement mission</DialogTitle>
-              <DialogDescription>Réglez les honoraires du soignant et la commission Jolene.</DialogDescription>
+              <DialogTitle>Paiement Stripe Connect</DialogTitle>
+              <DialogDescription>Paiement sécurisé par carte — commission + honoraires en un seul débit</DialogDescription>
             </DialogHeader>
+            {connectDecomposition && (
+              <div className="text-xs text-muted-foreground space-y-1 mb-3">
+                <p>Honoraires soignant : {fmt(connectDecomposition.salaire_brut)}</p>
+                <p>Commission Jolene : {fmt(connectDecomposition.commission_ttc)}</p>
+                <p className="font-semibold text-foreground">Total : {fmt(connectDecomposition.total)}</p>
+              </div>
+            )}
             <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: connectClientSecret }}>
               <EmbeddedCheckout />
             </EmbeddedCheckoutProvider>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Dialog Déclaration paiement soignant (form complet OF-11, fullscreen mobile) */}
+      {declarerDialogMission && (
+        <Dialog open={!!declarerDialogMission} onOpenChange={(open) => { if (!open) fermerDialogDeclarer(); }}>
+          <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Déclarer un paiement au soignant</DialogTitle>
+              <DialogDescription>
+                {declarerDialogMission.intitule || 'Mission'} — {declarerDialogMission.soignant_nom || ''}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div>
+                <Label htmlFor="declarer-montant">Montant payé (€ net)</Label>
+                <Input
+                  id="declarer-montant"
+                  type="number"
+                  step="0.01"
+                  value={declarerMontant}
+                  onChange={(e) => setDeclarerMontant(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Montant estimé : {fmt(Number(declarerDialogMission.net_a_payer || 0))}
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="declarer-methode">Méthode de paiement</Label>
+                <Select
+                  value={declarerMethode}
+                  onValueChange={(v) => setDeclarerMethode(v as MethodePaiement)}
+                >
+                  <SelectTrigger id="declarer-methode">
+                    <SelectValue placeholder="Choisir une méthode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
+                    <SelectItem value="CHEQUE">Chèque</SelectItem>
+                    <SelectItem value="BULLETIN_PAIE">Bulletin de paie</SelectItem>
+                    <SelectItem value="NOTE_HONORAIRES">Note d'honoraires</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="declarer-reference">
+                  Référence {declarerMethode === 'BULLETIN_PAIE' ? '(optionnelle)' : '(obligatoire, min. 5 car. + 1 chiffre)'}
+                </Label>
+                <Input
+                  id="declarer-reference"
+                  value={declarerReference}
+                  onChange={(e) => setDeclarerReference(e.target.value)}
+                  placeholder={
+                    declarerMethode === 'VIREMENT' ? 'Réf. virement bancaire'
+                      : declarerMethode === 'CHEQUE' ? 'N° chèque'
+                      : declarerMethode === 'BULLETIN_PAIE' ? 'N° bulletin (facultatif)'
+                      : 'Réf. note d\'honoraires'
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="declarer-date">Date du paiement</Label>
+                <Input
+                  id="declarer-date"
+                  type="date"
+                  value={declarerDatePaiement}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setDeclarerDatePaiement(e.target.value)}
+                />
+              </div>
+
+              <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="declarer-attestation"
+                    checked={declarerAttestation}
+                    onCheckedChange={(c) => setDeclarerAttestation(c === true)}
+                    className="mt-0.5"
+                  />
+                  <Label
+                    htmlFor="declarer-attestation"
+                    className="text-xs text-foreground leading-relaxed cursor-pointer"
+                  >
+                    <strong>J'atteste sur l'honneur</strong> avoir effectivement payé ce soignant conformément au
+                    Code du travail (pour un salarié) ou au Code de commerce (pour un libéral) en contrepartie
+                    de la prestation effectuée dans le cadre de cette mission. Cette déclaration m'engage au
+                    regard de l'URSSAF et de l'administration fiscale. Une déclaration frauduleuse m'expose à
+                    des sanctions pénales (article 441-1 du Code pénal).
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={fermerDialogDeclarer}>
+                Annuler
+              </Button>
+              <Button
+                onClick={validerDeclarationPaiement}
+                disabled={
+                  !declarerAttestation ||
+                  declaringId === declarerDialogMission.mission_id ||
+                  !declarerMontant ||
+                  Number(declarerMontant) <= 0 ||
+                  (declarerMethode !== 'BULLETIN_PAIE' && !isRefValid(declarerReference))
+                }
+              >
+                {declaringId === declarerDialogMission.mission_id ? 'Envoi…' : 'Valider la déclaration'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

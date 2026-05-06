@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { mapStripeError } from "../_shared/stripe-errors.ts";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -23,7 +23,7 @@ function corsHeaders(req: Request) {
   };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders(req) });
   }
@@ -167,11 +167,16 @@ serve(async (req) => {
       }
     );
   } catch (error: unknown) {
-    console.error("stripe-connect-onboard error:", error);
+    // [CP-STRIPE-6 H9] Mapping typed Stripe errors
+    const mapped = mapStripeError(error);
+    console[mapped.logLevel]("stripe-connect-onboard error:", {
+      code: mapped.code,
+      raw: error instanceof Error ? error.message : String(error),
+    });
     return new Response(
-      JSON.stringify({ error: "Une erreur interne est survenue." }),
+      JSON.stringify({ error: mapped.code, message: mapped.userMessage }),
       {
-        status: 500,
+        status: mapped.status,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       }
     );

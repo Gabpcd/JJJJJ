@@ -11,6 +11,8 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { ChatMission } from '@/components/ChatMission';
 import { ChatConversation } from '@/components/ChatConversation';
 import { DecompositionFinanciere } from '@/components/DecompositionFinanciere';
+import { FactureHonorairesCard } from '@/components/FactureHonorairesCard';
+import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
 import { CodesPointageMission } from '@/components/CodesPointageMission';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
@@ -20,6 +22,7 @@ import { BandeauRappelDPAE } from '@/components/BandeauRappelDPAE';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { useOuvrirConversation } from '@/hooks/useOuvrirConversation';
 import { BoutonFavori } from '@/components/BoutonFavori';
+import { BoutonNoterMission } from '@/components/BoutonNoterMission';
 import { RechercheRemplacantUrgence } from '@/components/RechercheRemplacantUrgence';
 import { WorkflowPaiementMission } from '@/components/WorkflowPaiementMission';
 import { ListeCandidatures } from '@/components/ListeCandidatures';
@@ -29,6 +32,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getLabelProfession } from '@/lib/constantes';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMissionPay';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -193,7 +197,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       return;
     }
     toast.success('Litige ouvert avec succès');
-    navigate(0);
+    refresh();
   };
 
   // Stripe Connect
@@ -202,6 +206,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [showConnectCheckout, setShowConnectCheckout] = useState(false);
   const [connectClientSecret, setConnectClientSecret] = useState<string | null>(null);
   const [connectDecomposition, setConnectDecomposition] = useState<{ commission_ttc: number; salaire_brut: number; total: number } | null>(null);
+  // Audit étab fix #3 : refreshTick remplace navigate(0) (full page reload).
+  // Incrémente cet état pour re-fetcher les données ciblées sans perdre l'UI.
+  const [refreshTick, setRefreshTick] = useState(0);
+  const refresh = React.useCallback(() => setRefreshTick(t => t + 1), []);
 
   useEffect(() => {
     if (!id) return;
@@ -210,13 +218,15 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         .from('missions')
         .select(`
           id, intitule, description, service, profession_requise,
+          specialite_medicale_requise, accepte_non_specialises,
           debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
-          total_brut, net_a_payer, montant_ifm, montant_icp, montant_majoration_nuit,
+          total_brut, net_a_payer, net_estime, montant_ifm, montant_icp, montant_majoration_nuit,
           montant_majoration_dimanche, montant_majoration_ferie,
           heures_nuit, heures_dimanche, heures_ferie,
-          montant_commission_ttc,
+          montant_commission_ttc, commission_facturee,
           statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
           mode_attribution,
+          type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           cree_le, modifie_le,
           etablissements(nom, adresse_ville, adresse_departement,
             taux_majoration_nuit_pourcent, taux_majoration_dimanche_pourcent,
@@ -268,7 +278,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       setLoading(false);
     };
     load();
-  }, [id]);
+  }, [id, refreshTick]);
 
   // Load recommendations when tab is selected
   const chargerRecommandations = async () => {
@@ -337,8 +347,14 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     }
   };
 
-  const backUrl = isAdmin ? '/admin/calendrier' : '/etablissement/missions';
-  const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour aux missions';
+  const handleBack = () => {
+    if (window.history.length > 2) {
+      navigate(-1);
+    } else {
+      navigate(isAdmin ? '/admin/calendrier' : '/etablissement/missions');
+    }
+  };
+  const backLabel = isAdmin ? '← Retour au calendrier' : '← Retour';
 
   if (loading) return <LayoutApp role={role}><ChargementPage /></LayoutApp>;
   if (!loading && !mission) return <LayoutApp role={role}><div className="text-center py-20"><p className="text-lg font-semibold text-foreground">Mission introuvable</p><p className="text-sm text-muted-foreground mt-2">Cette mission n'existe pas ou a été supprimée.</p><button onClick={() => navigate(-1)} className="btn-primary mt-4">Retour</button></div></LayoutApp>;
@@ -350,7 +366,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
   return (
     <LayoutApp role={role}>
-      <button onClick={() => navigate(backUrl)} className="text-sm text-primary hover:underline mb-4 inline-block">
+      <button onClick={handleBack} className="text-sm text-primary hover:underline mb-4 inline-block">
         {backLabel}
       </button>
 
@@ -369,8 +385,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           <h2 className="text-lg font-bold text-foreground mb-3">Candidatures {nbCandidatures > 0 ? `(${nbCandidatures})` : ''}</h2>
           <ListeCandidatures
             missionId={m.id}
+            missionProfession={m.profession_requise}
+            missionSpecialiteMedicale={(m as any).specialite_medicale_requise}
+            missionAccepteNonSpecialises={(m as any).accepte_non_specialises}
             modePaiement={(m.etablissements as any)?.mode_paiement_commission}
-            onAccepted={() => navigate(0)}
+            onAccepted={() => refresh()}
             onError={(msg) => toast.error(msg)}
             onSuccess={(msg) => toast.success(msg)}
           />
@@ -426,6 +445,9 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                       </button>
                       {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
                         <BoutonFavori soignantId={m.soignant_assigne_id} etablissementId={m.etablissement_id} />
+                      )}
+                      {m.statut === 'TERMINEE' && m.soignant_assigne_id && !isAdmin && (
+                        <BoutonNoterMission missionId={m.id} sens="ETAB_VERS_SOIGNANT" missionIntitule={m.intitule} variant="secondary" />
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">
@@ -493,11 +515,16 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             </div>
 
             <div className="space-y-4">
-              <DecompositionFinanciere mission={m} />
-              {/* Payment mode indicator */}
+              <DecompositionFinanciere mission={m} role={isAdmin ? 'ADMIN' : 'ETAB'} />
+              {/* Payment mode indicator — ordre priorité :
+                  1. mode_paiement_soignant=STRIPE_CONNECT + commission_facturee : commission capturée à la source, déjà réglée
+                  2. etablissements.mode_paiement_commission (STRIPE_RESERVATION / CHORUS_PRO)
+                  3. fallback : facturée en fin de mois */}
               {m.montant_commission_ttc > 0 && (
                 <div className="card-base flex items-center gap-2 text-xs text-muted-foreground">
-                  {(m.etablissements as any)?.mode_paiement_commission === 'STRIPE_RESERVATION' ? (
+                  {m.mode_paiement_soignant === 'STRIPE_CONNECT' && m.commission_facturee ? (
+                    <><CreditCard className="h-3.5 w-3.5 text-success" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — ✅ Capturée à la source par Stripe lors du paiement (déjà réglée)</span></>
+                  ) : (m.etablissements as any)?.mode_paiement_commission === 'STRIPE_RESERVATION' ? (
                     <><CreditCard className="h-3.5 w-3.5 text-primary" /><span>Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — 💳 Prélevée à la réservation</span></>
                   ) : (m.etablissements as any)?.mode_paiement_commission === 'CHORUS_PRO' ? (
                     <><span>🏛️ Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Chorus Pro</span></>
@@ -505,6 +532,27 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                     <><span>📄 Commission : {m.montant_commission_ttc?.toFixed(2)} € TTC — Facturée en fin de mois</span></>
                   )}
                 </div>
+              )}
+              {/* Contrat de travail SALARIE (Partie 2 onboarding) — étab uploade
+                  le contrat CDDU pour les missions salariées. Affichage seulement si
+                  type_contrat_applique=SALARIE et soignant assigné. */}
+              {m.soignant_assigne_id && (
+                <div className="mb-4">
+                  <BlocContratTravailMission
+                    missionId={m.id}
+                    typeContratApplique={(m as any).type_contrat_applique}
+                    soignantAssigneId={m.soignant_assigne_id}
+                    etablissementId={m.etablissement_id}
+                    debutLe={m.debut_le}
+                    role="ETABLISSEMENT"
+                  />
+                </div>
+              )}
+              {/* Facture honoraires — visible quand mission TERMINEE (une facture
+                  a été générée à la déclaration paiement ou via generate-invoice).
+                  L'étab doit pouvoir télécharger la facture comme preuve comptable. */}
+              {m.statut === 'TERMINEE' && m.soignant_assigne_id && (
+                <FactureHonorairesCard missionId={m.id} viewerRole={isAdmin ? 'ADMIN' : 'ETAB'} />
               )}
               {/* Workflow paiement mission */}
               {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && (
@@ -515,24 +563,45 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                   soignantHasConnect={soignantHasConnect}
                   onStartConnectPay={async () => {
                     setConnectPayLoading(true);
-                    const { data, error: fnErr } = await supabase.functions.invoke('stripe-connect-pay-mission', {
-                      body: { mission_id: m.id },
-                    });
-                    if (data?.already_paid) {
-                      toast.info(data.message || 'Ce paiement a déjà été effectué');
-                      navigate(0);
+                    const loadingToastId = toast.loading('Préparation du paiement…');
+                    try {
+                      const { data: sessionData } = await supabase.auth.getSession();
+                      const accessToken = sessionData?.session?.access_token;
+                      if (!accessToken) {
+                        toast.error('Session expirée, veuillez vous reconnecter', { id: loadingToastId });
+                        return;
+                      }
+
+                      // FIX 3 Option B — génération facture honoraires à la volée si absente.
+                      const { result: data, error: fnErr, code, message, factureGenereeAuto } =
+                        await payerMissionStripeConnectAvecGenerationAuto(m.id, accessToken, (msg) => toast.loading(msg, { id: loadingToastId }));
+
+                      if (code === 'CONTRAT_SALARIE_NON_STRIPE') {
+                        toast.error(message || "Les missions salariées doivent être payées par virement SEPA (bulletin de paie).", { id: loadingToastId, duration: 8000 });
+                        return;
+                      }
+
+                      if (data?.already_paid) {
+                        toast.info(data.message || 'Ce paiement a déjà été effectué', { id: loadingToastId });
+                        refresh();
+                        return;
+                      }
+
+                      if (fnErr || code || !data?.client_secret) {
+                        toast.error(message || code || fnErr?.message || 'Erreur lors du paiement', { id: loadingToastId });
+                        return;
+                      }
+
+                      toast.dismiss(loadingToastId);
+                      if (factureGenereeAuto) {
+                        toast.success('Facture honoraires générée automatiquement');
+                      }
+                      setConnectClientSecret(data.client_secret);
+                      setConnectDecomposition({ commission_ttc: data.commission_ttc, salaire_brut: data.salaire_brut, total: data.total });
+                      setShowConnectCheckout(true);
+                    } finally {
                       setConnectPayLoading(false);
-                      return;
                     }
-                    if (fnErr || !data?.client_secret) {
-                      toast.error(data?.error || fnErr?.message || 'Erreur lors du paiement');
-                      setConnectPayLoading(false);
-                      return;
-                    }
-                    setConnectClientSecret(data.client_secret);
-                    setConnectDecomposition({ commission_ttc: data.commission_ttc, salaire_brut: data.salaire_brut, total: data.total });
-                    setShowConnectCheckout(true);
-                    setConnectPayLoading(false);
                   }}
                 />
               )}
@@ -552,7 +621,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         resolution: litigeExistant.resolution,
                         missions: { intitule: m.intitule },
                       }}
-                      onUpdate={() => navigate(0)}
+                      onUpdate={() => refresh()}
                     />
                   </div>
                 ) : (
@@ -771,7 +840,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
             afficherNotification({ type: 'erreur', message: (data as any).error || 'Erreur lors de la terminaison.' });
           } else {
             afficherNotification({ type: 'succes', message: 'Mission terminée ✅' });
-            navigate(0);
+            refresh();
           }
           setTerminating(false);
         }}
@@ -798,7 +867,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           onComplete={() => {
             setShowConnectCheckout(false);
             toast.success('Paiement effectué ! Le soignant recevra son salaire via Stripe.');
-            navigate(0);
+            refresh();
           }}
         />
       )}

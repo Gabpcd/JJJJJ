@@ -1,19 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Download, ArrowLeft, Loader2, CheckCircle, Clock, AlertTriangle, Info, Zap } from 'lucide-react';
+import { FileText, Download, ArrowLeft, Loader2, CheckCircle, Clock, AlertTriangle, Info, Zap, X } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import type jsPDF from 'jspdf';
-import { toast } from 'sonner';
-import { MANDAT_FACTURATION_VERSION } from '@/constantes/mandatFacturation';
 import { ModalCessionCreance } from '@/components/ModalCessionCreance';
-import { ENTREPRISE } from '@/constantes/entreprise';
+import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0);
 
@@ -48,6 +44,37 @@ export default function MesFacturesHonoraires() {
   }, [user]);
 
   const [cessionModal, setCessionModal] = useState<{ id: string; numero: string; montant: number } | null>(null);
+  const [filtreStatut, setFiltreStatut] = useState<string>('tous');
+  const [filtreAnnee, setFiltreAnnee] = useState<string>('toutes');
+  const [filtreMois, setFiltreMois] = useState<string>('tous');
+
+  const anneesDisponibles = useMemo(() => {
+    const annees = new Set<string>();
+    factures.forEach(f => { if (f.date_emission) annees.add(String(new Date(f.date_emission).getFullYear())); });
+    return Array.from(annees).sort((a, b) => b.localeCompare(a));
+  }, [factures]);
+
+  const facturesFiltrees = useMemo(() => {
+    return factures.filter((f: any) => {
+      if (filtreStatut !== 'tous' && f.statut !== filtreStatut) return false;
+      if (filtreAnnee !== 'toutes' && f.date_emission) {
+        const annee = String(new Date(f.date_emission).getFullYear());
+        if (annee !== filtreAnnee) return false;
+      }
+      if (filtreMois !== 'tous' && f.date_emission) {
+        const mois = String(new Date(f.date_emission).getMonth() + 1).padStart(2, '0');
+        if (mois !== filtreMois) return false;
+      }
+      return true;
+    });
+  }, [factures, filtreStatut, filtreAnnee, filtreMois]);
+
+  const filtreActif = filtreStatut !== 'tous' || filtreAnnee !== 'toutes' || filtreMois !== 'tous';
+  const reinitialiserFiltres = () => {
+    setFiltreStatut('tous');
+    setFiltreAnnee('toutes');
+    setFiltreMois('tous');
+  };
 
   const ouvrirCession = (facture: any) => {
     setCessionModal({
@@ -61,164 +88,7 @@ export default function MesFacturesHonoraires() {
     navigate('/soignant/mes-avances');
   };
 
-  const telechargerFacturePDF = async (factureId: string) => {
-    try {
-      // Récupérer la facture complète + soignant + établissement
-      const { data: f } = await supabase
-        .from('factures_honoraires')
-        .select('*')
-        .eq('id', factureId)
-        .maybeSingle();
-      if (!f) { toast.error('Facture introuvable'); return; }
-
-      const [{ data: sg }, { data: etab }, { data: mission }] = await Promise.all([
-        supabase.from('soignants').select('prenom, nom, profession, numero_rpps, numero_adeli, email, telephone, adresse_rue, adresse_code_postal, adresse_ville').eq('id', (f as any).soignant_id).maybeSingle(),
-        supabase.from('etablissements').select('nom, type, adresse_rue, adresse_code_postal, adresse_ville, siret, email_contact').eq('id', (f as any).etablissement_id).maybeSingle(),
-        (f as any).mission_id ? supabase.from('missions').select('intitule, profession_requise, debut_le, fin_le, duree_heures, taux_horaire_base').eq('id', (f as any).mission_id).maybeSingle() : Promise.resolve({ data: null }),
-      ]);
-
-      const { default: jsPDF } = await import('jspdf');
-      const doc = new jsPDF();
-      const TEAL = { r: 23, g: 162, b: 184 };
-
-      // Header bandeau
-      doc.setFillColor(TEAL.r, TEAL.g, TEAL.b);
-      doc.rect(0, 0, 210, 28, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text("FACTURE D'HONORAIRES", 14, 17);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(f.numero_facture, 14, 24);
-
-      // Mention mandataire
-      doc.setTextColor(80, 80, 80);
-      doc.setFontSize(7);
-      doc.text("Émise par Jolene en qualité de mandataire (Article 289 I-2 CGI)", 110, 17);
-      doc.text(`Mandat version ${f.mandat_version || MANDAT_FACTURATION_VERSION}`, 110, 22);
-
-      let y = 40;
-
-      // Émetteur (soignant — légalement le vendeur)
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text('ÉMETTEUR (vendeur légal)', 14, y);
-      doc.setFont('helvetica', 'normal');
-      y += 5;
-      if (sg) {
-        doc.text(`${sg.prenom || ''} ${sg.nom || ''}`.trim(), 14, y); y += 4;
-        doc.text(sg.profession || '', 14, y); y += 4;
-        if (sg.numero_rpps) { doc.text(`RPPS : ${sg.numero_rpps}`, 14, y); y += 4; }
-        if (sg.numero_adeli) { doc.text(`ADELI : ${sg.numero_adeli}`, 14, y); y += 4; }
-        if (sg.adresse_rue) { doc.text(sg.adresse_rue, 14, y); y += 4; }
-        if (sg.adresse_code_postal) { doc.text(`${sg.adresse_code_postal} ${sg.adresse_ville || ''}`, 14, y); y += 4; }
-        if (sg.email) { doc.text(sg.email, 14, y); y += 4; }
-      }
-
-      // Destinataire (établissement)
-      let yClient = 45;
-      doc.setFont('helvetica', 'bold');
-      doc.text('FACTURÉ À', 120, yClient);
-      doc.setFont('helvetica', 'normal');
-      yClient += 5;
-      if (etab) {
-        doc.text(etab.nom || '', 120, yClient); yClient += 4;
-        if (etab.adresse_rue) { doc.text(etab.adresse_rue, 120, yClient); yClient += 4; }
-        if (etab.adresse_code_postal) { doc.text(`${etab.adresse_code_postal} ${etab.adresse_ville || ''}`, 120, yClient); yClient += 4; }
-        if (etab.siret) { doc.text(`SIRET : ${etab.siret}`, 120, yClient); yClient += 4; }
-      }
-
-      // Détails facture
-      y = Math.max(y, yClient) + 8;
-      doc.setDrawColor(200, 200, 200);
-      doc.line(14, y, 196, y);
-      y += 6;
-
-      doc.setFontSize(9);
-      const addInfo = (label: string, value: string) => {
-        doc.setFont('helvetica', 'bold');
-        doc.text(label, 14, y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(value, 60, y);
-        y += 5;
-      };
-      addInfo('Date d\'émission :', format(new Date(f.date_emission), 'dd/MM/yyyy', { locale: fr }));
-      if (f.date_echeance) addInfo('Date d\'échéance :', format(new Date(f.date_echeance), 'dd/MM/yyyy', { locale: fr }));
-
-      if (mission) {
-        addInfo('Mission :', mission.intitule || '—');
-        addInfo('Profession :', mission.profession_requise || '—');
-        if (mission.debut_le && mission.fin_le) {
-          addInfo('Période :', `${format(new Date(mission.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })} → ${format(new Date(mission.fin_le), 'dd/MM/yyyy HH:mm', { locale: fr })}`);
-        }
-        if (mission.duree_heures) addInfo('Heures :', `${mission.duree_heures} h`);
-        if (mission.taux_horaire_base) addInfo('Taux horaire :', `${Number(mission.taux_horaire_base).toFixed(2)} €`);
-      }
-
-      // Montants
-      y += 5;
-      doc.setDrawColor(200, 200, 200);
-      doc.line(14, y, 196, y);
-      y += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Montant HT', 14, y);
-      doc.text(fmt(Number(f.montant_ht)), 196, y, { align: 'right' });
-      y += 6;
-
-      if (f.exoneration_tva) {
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.text("TVA non applicable — Article 261-4 du CGI (actes médicaux et paramédicaux)", 14, y);
-        y += 6;
-      } else {
-        doc.setFont('helvetica', 'normal');
-        doc.text(`TVA (${f.taux_tva}%)`, 14, y);
-        doc.text(fmt(Number(f.montant_tva)), 196, y, { align: 'right' });
-        y += 6;
-      }
-
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text('TOTAL TTC', 14, y);
-      doc.text(fmt(Number(f.montant_ttc)), 196, y, { align: 'right' });
-      y += 12;
-
-      // Modalités paiement
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text("Conditions de paiement : 30 jours date de facture.", 14, y); y += 4;
-      doc.text("Pénalités de retard : 3× le taux d'intérêt légal. Indemnité forfaitaire : 40 €.", 14, y); y += 4;
-
-      // Footer avec infos Jolene (mandataire)
-      y = 272;
-      doc.setFontSize(7);
-      doc.setTextColor(120, 120, 120);
-      doc.text("Facture émise par " + ENTREPRISE.nom + " en qualité de mandataire (Article 289 I-2 du CGI).", 14, y);
-      y += 3;
-      doc.text("Le professionnel ci-dessus demeure le vendeur légal de la prestation.", 14, y);
-      y += 4;
-      doc.text(
-        `${ENTREPRISE.nom} · ${ENTREPRISE.forme_juridique} · Capital ${ENTREPRISE.capital_social} · SIRET ${ENTREPRISE.siret_formate} · ${ENTREPRISE.rcs}`,
-        14,
-        y,
-      );
-      y += 3;
-      doc.text(
-        `TVA intra : ${ENTREPRISE.tva_intra} · Siège : ${ENTREPRISE.adresse} · ${ENTREPRISE.email}`,
-        14,
-        y,
-      );
-
-      doc.save(`${f.numero_facture}.pdf`);
-      toast.success('Facture téléchargée');
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur génération PDF');
-    }
-  };
+  const telechargerFacturePDF = telechargerFactureHonorairesPDF;
 
   if (loading) {
     return (
@@ -230,9 +100,9 @@ export default function MesFacturesHonoraires() {
     );
   }
 
-  const totalFacture = factures.reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
-  const totalPaye = factures.filter(f => f.statut === 'PAYEE' || f.statut === 'FACTORISEE').reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
-  const totalAttente = factures.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD').reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
+  const totalFacture = facturesFiltrees.reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
+  const totalPaye = facturesFiltrees.filter(f => f.statut === 'PAYEE' || f.statut === 'FACTORISEE').reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
+  const totalAttente = facturesFiltrees.filter(f => f.statut === 'EMISE' || f.statut === 'EN_RETARD').reduce((s, f) => s + Number(f.montant_ttc || 0), 0);
 
   return (
     <LayoutApp role="SOIGNANT">
@@ -281,6 +151,64 @@ export default function MesFacturesHonoraires() {
           </div>
         </div>
 
+        {factures.length > 0 && (
+          <div className="card-base flex flex-wrap items-center gap-2 py-2.5">
+            <span className="text-xs font-semibold text-muted-foreground mr-1">Filtres :</span>
+            <select
+              value={filtreStatut}
+              onChange={e => setFiltreStatut(e.target.value)}
+              className="text-xs border border-border rounded-md px-2 py-1 bg-background"
+            >
+              <option value="tous">Tous statuts</option>
+              <option value="BROUILLON">Brouillon</option>
+              <option value="EMISE">Émise</option>
+              <option value="EN_RETARD">En retard</option>
+              <option value="PAYEE">Payée</option>
+              <option value="FACTORISEE">Avance reçue</option>
+              <option value="ANNULEE">Annulée</option>
+            </select>
+            <select
+              value={filtreAnnee}
+              onChange={e => setFiltreAnnee(e.target.value)}
+              className="text-xs border border-border rounded-md px-2 py-1 bg-background"
+            >
+              <option value="toutes">Toutes années</option>
+              {anneesDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <select
+              value={filtreMois}
+              onChange={e => setFiltreMois(e.target.value)}
+              className="text-xs border border-border rounded-md px-2 py-1 bg-background"
+            >
+              <option value="tous">Tous mois</option>
+              <option value="01">Janvier</option>
+              <option value="02">Février</option>
+              <option value="03">Mars</option>
+              <option value="04">Avril</option>
+              <option value="05">Mai</option>
+              <option value="06">Juin</option>
+              <option value="07">Juillet</option>
+              <option value="08">Août</option>
+              <option value="09">Septembre</option>
+              <option value="10">Octobre</option>
+              <option value="11">Novembre</option>
+              <option value="12">Décembre</option>
+            </select>
+            {filtreActif && (
+              <button
+                type="button"
+                onClick={reinitialiserFiltres}
+                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 ml-1"
+              >
+                <X className="h-3 w-3" /> Réinitialiser
+              </button>
+            )}
+            <span className="text-[10px] text-muted-foreground ml-auto">
+              {facturesFiltrees.length} / {factures.length} facture{factures.length > 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
+
         {factures.length === 0 ? (
           <div className="card-base text-center py-10">
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
@@ -291,9 +219,17 @@ export default function MesFacturesHonoraires() {
                 : 'Signez d\'abord le mandat de facturation pour commencer à recevoir des factures automatiques.'}
             </p>
           </div>
+        ) : facturesFiltrees.length === 0 ? (
+          <div className="card-base text-center py-10">
+            <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="font-semibold text-foreground">Aucune facture ne correspond aux filtres</p>
+            <button type="button" onClick={reinitialiserFiltres} className="text-sm text-primary hover:underline mt-2">
+              Réinitialiser les filtres
+            </button>
+          </div>
         ) : (
           <div className="space-y-2">
-            {factures.map((f: any) => {
+            {facturesFiltrees.map((f: any) => {
               const config = STATUT_CONFIG[f.statut] || STATUT_CONFIG.EMISE;
               return (
                 <div key={f.id} className="card-base hover:border-primary/30 transition-colors">

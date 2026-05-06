@@ -3,7 +3,9 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { BadgeDistance } from '@/components/BadgeDistance';
 import { BadgeStatut } from '@/components/BadgeStatut';
+import { BoutonFavoriEtab } from '@/components/BoutonFavoriEtab';
 import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge, getTypeContratRechercheBadge } from '@/lib/constantes';
+import { getMissionMatchInfo } from '@/lib/profession-hierarchy';
 
 interface CarteMissionSoignantProps {
   mission: any;
@@ -41,6 +43,13 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
     : getContratBadge(extraireContratPreference(m.description));
   const tauxMin = soignant?.taux_horaire_minimum;
   const sousMinimum = tauxMin && m.taux_horaire_base && m.taux_horaire_base < tauxMin;
+  const matchInfo = getMissionMatchInfo(
+    soignant?.profession,
+    soignant?.specialite_medicale,
+    m.profession_requise,
+    m.specialite_medicale_requise,
+    m.accepte_non_specialises,
+  );
 
   const couleurTheme = m.etablissements?.couleur_theme;
 
@@ -71,7 +80,10 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
         <span className={`text-[10px] ${temps.couleur}`}>{temps.texte}</span>
       </div>
 
-      <h3 className="font-semibold text-sm text-foreground mb-0.5">{m.intitule}</h3>
+      <div className="flex items-start justify-between gap-2 mb-0.5">
+        <h3 className="font-semibold text-sm text-foreground">{m.intitule}</h3>
+        {m.etablissement_id && <BoutonFavoriEtab etablissementId={m.etablissement_id} />}
+      </div>
       {m.service && <p className="text-[10px] text-muted-foreground mb-1">Service : {m.service}</p>}
       <div className="flex items-center gap-2 mb-1">
         {m.etablissements?.logo_url && (
@@ -102,7 +114,12 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
         <p className="text-[10px] text-warning font-medium mt-1">⚠️ Taux plafonné Loi Rist</p>
       )}
 
-      <div className="mt-2">
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {matchInfo && (
+          <span className={`badge-base text-[10px] ${matchInfo.badgeClasses}`} title={matchInfo.tooltip}>
+            {matchInfo.badgeLabel}
+          </span>
+        )}
         {profilComplet ? (
           <span className="badge-base bg-success/10 text-success text-[10px]">✅ Compatible</span>
         ) : soignant && !soignant.tous_documents_valides ? (

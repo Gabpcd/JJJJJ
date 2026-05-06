@@ -26,14 +26,20 @@ export function EvaluationPostMission({ missionId, evalueId, typeEvaluateur, nom
 
   useEffect(() => {
     if (!user) return;
+    // Filtre sur mission_id + type_evaluateur : RLS isole les évaluations
+    // accessibles (les siennes côté soignant, celles de son étab côté admin).
+    // Évite la faille : fn_evaluer_soignant stocke evaluateur_id = etablissement_id
+    // (pas auth.uid()), donc .eq('evaluateur_id', user.id) ne matche jamais pour
+    // les admins de groupe_sante → le modal rouvrait à chaque visite.
     supabase
       .from('evaluations')
       .select('id')
       .eq('mission_id', missionId)
-      .eq('evaluateur_id', user.id)
+      .eq('type_evaluateur', typeEvaluateur)
+      .limit(1)
       .maybeSingle()
       .then(({ data }) => setDejaEvalue(!!data));
-  }, [missionId, user]);
+  }, [missionId, user, typeEvaluateur]);
 
   if (dejaEvalue === null || dejaEvalue) return null;
 

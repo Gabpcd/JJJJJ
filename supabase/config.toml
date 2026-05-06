@@ -101,3 +101,20 @@ verify_jwt = false
 
 [functions.admin-invoke]
 verify_jwt = true
+
+# Cron-cibles : verify_jwt=false + auth résiliente côté code (legacy JWT
+# OU sb_secret_… via vault). Cf. docs/audit-infrastructure-production.md.
+[functions.litige-escalation-cron]
+verify_jwt = false
+
+[functions.process-stripe-refunds]
+verify_jwt = false
+
+[functions.weekly-invoicing-cron]
+verify_jwt = false
+
+[functions.test-piste-credentials]
+verify_jwt = false
+
+[functions.chorus-pro-verify]
+verify_jwt = true
