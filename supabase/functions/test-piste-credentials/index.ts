@@ -24,6 +24,33 @@ const PISTE_URLS = {
   },
 };
 
+// CORS aligné avec les autres edge functions (chorus-pro-deposit, send-email).
+// Sans cette conf, le browser bloque les requêtes depuis https://jolene.app
+// avec "Origin not allowed by Access-Control-Allow-Origin".
+function getCorsOrigin(req: Request): string {
+  const origin = req.headers.get('origin') || '';
+  const allowed = [
+    'https://jolene.app',
+    'https://www.jolene.app',
+    'https://app.jolene.app',
+    'http://localhost:5173',
+    'http://localhost:8080',
+  ];
+  if (allowed.includes(origin)) return origin;
+  // Lovable preview : *.lovable.app
+  if (/^https:\/\/[a-z0-9-]+\.lovable\.app$/i.test(origin)) return origin;
+  return 'https://jolene.app';
+}
+
+function corsHeaders(req: Request): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin': getCorsOrigin(req),
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+    'Content-Type': 'application/json',
+  };
+}
+
 interface Diagnostic {
   step: string;
   status: 'OK' | 'FAIL' | 'SKIP';
@@ -49,7 +76,7 @@ function decodeJwtPayload(token: string | undefined): Record<string, unknown> | 
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(req) });
 
   const diagnostics: Diagnostic[] = [];
   const start = Date.now();
@@ -75,7 +102,7 @@ Deno.serve(async (req) => {
     }
     if (!isAuthed) {
       return new Response(JSON.stringify({ error: 'Service role key requis (apikey ou Bearer)' }), {
-        status: 403, headers: { 'Content-Type': 'application/json' },
+        status: 403, headers: corsHeaders(req),
       });
     }
     // Auth OK
@@ -109,7 +136,7 @@ Deno.serve(async (req) => {
         success: false,
         summary: 'PISTE_CLIENT_ID ou PISTE_CLIENT_SECRET manquant. Configurer dans Supabase Dashboard → Edge Functions → Secrets.',
         diagnostics,
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }), { status: 200, headers: corsHeaders(req) });
     }
 
     // ─── Étape 2 : OAuth2 client_credentials ───
@@ -153,7 +180,7 @@ Deno.serve(async (req) => {
             summary: `OAuth2 échec : ${oauthRes.status}. Vérifier PISTE_CLIENT_ID/SECRET sur https://piste.gouv.fr (${env}).`,
             env,
             diagnostics,
-          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+          }), { status: 200, headers: corsHeaders(req) });
         }
 
         accessToken = oauthData.access_token;
@@ -192,7 +219,7 @@ Deno.serve(async (req) => {
           success: false,
           summary: 'Exception réseau lors de l\'appel OAuth PISTE',
           env, diagnostics,
-        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }), { status: 200, headers: corsHeaders(req) });
       }
     }
 
@@ -300,7 +327,7 @@ Deno.serve(async (req) => {
       env,
       total_duration_ms: Date.now() - start,
       diagnostics,
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }), { status: 200, headers: corsHeaders(req) });
 
   } catch (err) {
     diagnostics.push({
@@ -312,6 +339,6 @@ Deno.serve(async (req) => {
       success: false,
       summary: 'Exception lors du test',
       diagnostics,
-    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }), { status: 500, headers: corsHeaders(req) });
   }
 });

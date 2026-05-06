@@ -1390,6 +1390,20 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders(req) });
   }
 
+  // Warm ping (utilisé par /admin/healthcheck pour vérifier la disponibilité
+  // de la fonction sans envoyer d'email réel). Doit être traité AVANT le
+  // rate-limit et l'auth pour ne pas polluer ces compteurs.
+  // Body attendu : { warm: true }. Réponse : { warm: true } 200.
+  try {
+    const peeked = await req.clone().json().catch(() => null);
+    if (peeked && (peeked as Record<string, unknown>).warm === true) {
+      return new Response(JSON.stringify({ warm: true }), {
+        status: 200,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+  } catch { /* fallthrough to normal flow */ }
+
   // Rate-limit IP : 5 envois email par minute par IP (anti-spam).
   if (applyRateLimit('send-email', getClientIp(req), { max: 5, windowMs: 60_000 })) {
     return new Response(JSON.stringify({ error: 'Trop d\'emails envoyés. Réessayez dans 1 minute.' }), {
