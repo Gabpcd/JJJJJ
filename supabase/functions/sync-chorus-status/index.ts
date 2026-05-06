@@ -17,6 +17,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getPisteConfig, getAccessToken, consulterFlux, consulterCRDetaille } from '../_shared/piste-client.ts';
 import { corsHeaders, preflightResponse } from '../_shared/cors.ts';
+import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
 
 function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -25,45 +26,8 @@ function json(req: Request, body: unknown, status = 200) {
   });
 }
 
-/** Auth service_role résiliente : accepte legacy JWT (avec role=service_role)
- *  OU nouveau secret asymétrique sb_secret_… (depuis env ou vault). */
-let _vaultSecret: string | null = null;
-async function getVaultSecret(sb: any): Promise<string> {
-  if (_vaultSecret) return _vaultSecret;
-  const env = Deno.env.get('SUPABASE_SECRET_KEY') || Deno.env.get('SB_SECRET_KEY') || '';
-  if (env) { _vaultSecret = env; return env; }
-  try {
-    const { data } = await sb.rpc('fn_lire_secret_cron');
-    if (data) { _vaultSecret = data; return data; }
-  } catch { /* ignore */ }
-  return '';
-}
-
-async function verifyServiceRole(authHeader: string | null, sb: any): Promise<{ ok: boolean; error?: string }> {
-  if (!authHeader?.startsWith('Bearer ')) return { ok: false, error: 'Authorization Bearer manquant' };
-  const token = authHeader.slice(7).trim();
-
-  // Cas 1 : nouveau secret asymétrique (sb_secret_…) — match exact env/vault
-  const legacyKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-  if (legacyKey && token === legacyKey) return { ok: true };
-  const vault = await getVaultSecret(sb);
-  if (vault && token === vault) return { ok: true };
-
-  // Cas 2 : JWT classique avec role=service_role
-  const parts = token.split('.');
-  if (parts.length === 3) {
-    try {
-      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
-      const payload = JSON.parse(atob(padded));
-      if (payload?.role === 'service_role') return { ok: true };
-      return { ok: false, error: `Role '${payload?.role}' non autorisé` };
-    } catch (e) {
-      return { ok: false, error: `JWT decode error: ${e instanceof Error ? e.message : String(e)}` };
-    }
-  }
-  return { ok: false, error: 'JWT format invalide' };
-}
+// Auth : voir _shared/admin-auth.ts (verifyAdminOrServiceRole)
+// Accepte JWT user admin (frontend) OU service_role (cron pg_cron / admin-invoke).
 
 /** Mapping statut Chorus Pro → statut interne chorus_submissions */
 function mapChorusStatus(chorusStatut: string | undefined): 'submitted' | 'accepted' | 'rejected' | 'pending' {
@@ -217,15 +181,17 @@ Deno.serve(async (req) => {
 
   const start = Date.now();
 
+  // Auth admin OU service_role (cron pg_cron). L'helper standardisé accepte
+  // les 2 cas → le bouton "Sync maintenant" depuis /admin/chorus-pro fonctionne
+  // avec un JWT user admin, et le cron pg_cron fonctionne avec service_role.
+  const auth = await verifyAdminOrServiceRole(req);
+  if (!auth.ok) return json(req, { error: auth.error }, auth.status);
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     { auth: { persistSession: false } },
   );
-
-  // Auth (après création du client pour que la vérif puisse lire vault si besoin)
-  const auth = await verifyServiceRole(req.headers.get('Authorization'), supabase);
-  if (!auth.ok) return json(req, { error: `Non autorisé : ${auth.error}` }, 401);
 
   const pisteConfig = getPisteConfig();
   if (!pisteConfig) {

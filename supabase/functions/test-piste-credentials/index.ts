@@ -26,6 +26,9 @@ const PISTE_URLS = {
 
 // CORS standardisé : import depuis le helper partagé _shared/cors.ts
 import { corsHeaders } from '../_shared/cors.ts';
+// Auth admin standardisée : JWT user + check rôle ADMIN_PLATEFORME (avec
+// bypass service_role pour les appels server-to-server type cron / admin-invoke).
+import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
 
 interface Diagnostic {
   step: string;
@@ -58,30 +61,13 @@ Deno.serve(async (req) => {
   const start = Date.now();
 
   try {
-    // Auth : accepte sb_secret_ (apikey header) OU JWT service_role (Bearer)
-    const apikey = req.headers.get('apikey') || '';
-    const authBearer = req.headers.get('Authorization')?.replace('Bearer ', '') || '';
-    let isAuthed = false;
-    if (apikey.startsWith('sb_secret_') || authBearer.startsWith('sb_secret_')) {
-      isAuthed = true;
-    } else {
-      const token = authBearer || apikey;
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        try {
-          const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-          const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
-          const payload = JSON.parse(atob(padded));
-          if (payload?.role === 'service_role') isAuthed = true;
-        } catch { /* invalid JWT */ }
-      }
-    }
-    if (!isAuthed) {
-      return new Response(JSON.stringify({ error: 'Service role key requis (apikey ou Bearer)' }), {
-        status: 403, headers: corsHeaders(req),
+    // Auth admin : JWT user (depuis frontend admin) ou service_role (server-to-server)
+    const auth = await verifyAdminOrServiceRole(req);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), {
+        status: auth.status, headers: corsHeaders(req),
       });
     }
-    // Auth OK
 
     // ─── Étape 1 : Lecture des secrets ───
     // Support double naming (PISTE_* préféré, fallback CHORUS_PRO_* pour compat)

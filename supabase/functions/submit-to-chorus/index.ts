@@ -22,6 +22,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getPisteConfig, getAccessToken, deposerFlux } from '../_shared/piste-client.ts';
 import { corsHeaders, preflightResponse } from '../_shared/cors.ts';
+import { verifyAdminOrServiceRole } from '../_shared/admin-auth.ts';
 
 function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -43,6 +44,11 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflightResponse(req);
+
+  // Auth admin OU service_role (appelée en interne par generate-invoice et
+  // par admin-invoke, manuellement par les admins depuis /admin/chorus-pro).
+  const auth = await verifyAdminOrServiceRole(req);
+  if (!auth.ok) return json(req, { error: auth.error }, auth.status);
 
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL')!,

@@ -16,7 +16,7 @@
 //   duration_ms: number,
 // }
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyAdminOrServiceRole } from "../_shared/admin-auth.ts";
 
 // Endpoints hardcodés dans psc-authorize/psc-callback. Le test compare la
 // découverte OIDC à ces valeurs : si l'ANS modifie un endpoint, on le détecte.
@@ -68,37 +68,12 @@ Deno.serve(async (req) => {
 
   const t0 = Date.now();
 
-  // ── Auth admin ──
-  const authHeader = req.headers.get("Authorization") || "";
-  const bearer = authHeader.replace(/^Bearer\s+/i, "");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-
-  if (!bearer) {
-    return new Response(JSON.stringify({ error: "Non autorisé" }), {
-      status: 401, headers: corsHeaders(req),
+  // ── Auth admin standardisée ──
+  const auth = await verifyAdminOrServiceRole(req);
+  if (!auth.ok) {
+    return new Response(JSON.stringify({ error: auth.error }), {
+      status: auth.status, headers: corsHeaders(req),
     });
-  }
-
-  // Service role bypass (interne) ou JWT admin
-  if (bearer !== serviceRoleKey) {
-    const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
-      auth: { persistSession: false },
-    });
-    const { data: userData, error: userErr } = await supabaseAuth.auth.getUser(bearer);
-    if (userErr || !userData?.user) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
-        status: 401, headers: corsHeaders(req),
-      });
-    }
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-    const { data: full } = await adminClient.auth.admin.getUserById(userData.user.id);
-    const role = full?.user?.app_metadata?.role;
-    if (role !== "ADMIN" && role !== "ADMIN_PLATEFORME") {
-      return new Response(JSON.stringify({ error: "Accès réservé aux administrateurs" }), {
-        status: 403, headers: corsHeaders(req),
-      });
-    }
   }
 
   // ── 1. Vérification des secrets (sans jamais les logger) ──
