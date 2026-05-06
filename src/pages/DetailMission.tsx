@@ -113,6 +113,24 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
                 },
               }),
             }).catch((err) => { logger.warn('[DetailMission] send-email alert failed', err); });
+
+            // SMS Twilio en parallèle (best-effort, ne bloque pas l'UI)
+            // L'edge function send-sms vérifie sms_actif AND sms_alertes_actives
+            // côté serveur — pas besoin de check ici. Si pas de téléphone, skip.
+            if (s.telephone) {
+              const smsBody = `🚨 Mission urgente : ${mission.intitule.slice(0, 40)} le ${format(debut, 'dd/MM', { locale: fr })} à ${format(debut, 'HH:mm')}. Voir l'app pour postuler.`;
+              fetch(`${supabaseUrl}/functions/v1/send-sms`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'MISSION_URGENTE',
+                  destinataire_id: s.soignant_id,
+                  telephone: s.telephone,
+                  contenu: smsBody,
+                  prefix_type: 'MISSION_URGENTE',
+                }),
+              }).catch((err) => { logger.warn('[DetailMission] send-sms alert failed', err); });
+            }
           }
         })
       );

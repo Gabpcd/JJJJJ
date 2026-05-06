@@ -48,8 +48,44 @@ Deno.serve(async (req) => {
     const results: Record<string, number> = {};
     const { data: r1 } = await sb.rpc("fn_email_rappels_j1");
     let c = 0;
-    for (const r of r1 || []) { await sb.functions.invoke("send-email", { body: { type: "RAPPEL_MISSION", destinataire_id: r.soignant_id, data: { prenom: r.prenom, mission: r.mission, etablissement: r.etablissement, heure_debut: r.heure_debut } } }); c++; }
+    let smsJ1 = 0;
+    for (const r of r1 || []) {
+      // Email rappel J-1 (existant)
+      await sb.functions.invoke("send-email", { body: { type: "RAPPEL_MISSION", destinataire_id: r.soignant_id, data: { prenom: r.prenom, mission: r.mission, etablissement: r.etablissement, heure_debut: r.heure_debut } } });
+      c++;
+
+      // SMS rappel J-1 en parallèle, best-effort. send-sms vérifie sms_actif AND
+      // sms_alertes_actives côté serveur — on filtre déjà ici sur la présence
+      // du téléphone pour éviter un appel inutile.
+      try {
+        const { data: soignant } = await sb.from('soignants')
+          .select('telephone, sms_actif, sms_alertes_actives')
+          .eq('id', r.soignant_id)
+          .maybeSingle();
+        const optedIn = !!soignant?.telephone
+          && soignant?.sms_actif !== false
+          && soignant?.sms_alertes_actives !== false;
+        if (optedIn) {
+          const intitule = (r.mission || '').toString().slice(0, 40);
+          const etab = (r.etablissement || '').toString().slice(0, 30);
+          const smsBody = `📅 Rappel : votre mission ${intitule} démarre demain à ${r.heure_debut} chez ${etab}. Bonne journée !`;
+          await sb.functions.invoke('send-sms', {
+            body: {
+              type: 'RAPPEL_MISSION_J1',
+              destinataire_id: r.soignant_id,
+              telephone: soignant.telephone,
+              contenu: smsBody,
+              prefix_type: 'RAPPEL_MISSION_J1',
+            },
+          });
+          smsJ1++;
+        }
+      } catch (e) {
+        console.warn('[email-cron] SMS rappel J-1 failed for', r.soignant_id, e);
+      }
+    }
     results.rappels_j1 = c;
+    results.rappels_j1_sms = smsJ1;
     const { data: v2 } = await sb.rpc("fn_verifier_documents_expirants");
     results.docs_expirants = v2 || 0;
     const { data: v3 } = await sb.rpc("fn_auto_facturation_mensuelle");

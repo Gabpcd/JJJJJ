@@ -87,7 +87,9 @@ Deno.serve(async (req) => {
 
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const fromNumber = Deno.env.get("TWILIO_PHONE_NUMBER");
+    // Compat : TWILIO_FROM_NUMBER (nouveau nom standard) avec fallback
+    // TWILIO_PHONE_NUMBER (ancien nom). Au moins l'un doit être défini.
+    const fromNumber = Deno.env.get("TWILIO_FROM_NUMBER") || Deno.env.get("TWILIO_PHONE_NUMBER");
 
     if (!accountSid || !authToken || !fromNumber) {
       return new Response(JSON.stringify({
@@ -106,11 +108,39 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Opt-out global SMS d'alerte (sms_alertes_actives) ──
+    // Vérifié pour les 2 cas critiques. Si le soignant a opt-out, on skip.
+    if (destinataire_id && (type === 'MISSION_URGENTE' || type === 'RAPPEL_MISSION_J1')) {
+      const sb = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+        { auth: { persistSession: false } }
+      );
+      const { data: soignant } = await sb
+        .from('soignants')
+        .select('sms_actif, sms_alertes_actives')
+        .eq('id', destinataire_id)
+        .maybeSingle();
+
+      // Cumulatif : sms_actif (consentement initial) ET sms_alertes_actives (opt-in granulaire)
+      // Si l'un des 2 est explicitement false, on skip.
+      const optedOut = soignant?.sms_actif === false || soignant?.sms_alertes_actives === false;
+      if (optedOut) {
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'sms_opt_out',
+        }), { status: 200, headers: corsHeaders(req) });
+      }
+    }
+
     // [J2.3.A] Vérification préférences notifications (canal SMS)
     if (destinataire_id && type) {
       const TYPE_TO_EVENT: Record<string, string> = {
         'SMS_MISSION_URGENTE': 'URGENCE',
+        'MISSION_URGENTE': 'URGENCE',
         'SMS_ANNULATION_TARDIVE': 'URGENCE',
+        'RAPPEL_MISSION_J1': 'RAPPEL_J1_MISSION',
         'LITIGE_OUVERTURE': 'LITIGE_OUVERT',
         'LITIGE_RAPPEL_J1': 'LITIGE_OUVERT',
         'LITIGE_RAPPEL_J3': 'LITIGE_OUVERT',

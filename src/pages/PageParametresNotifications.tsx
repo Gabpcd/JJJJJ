@@ -71,6 +71,10 @@ export default function PageParametresNotifications() {
   });
   const [parEvenement, setParEvenement] = useState<Map<string, boolean>>(new Map());
 
+  // Toggle granulaire opt-in SMS pour mission urgente + rappel J-1 (soignant uniquement).
+  // Stocké directement sur soignants.sms_alertes_actives, indépendant des prefs DB.
+  const [smsAlertesActives, setSmsAlertesActives] = useState<boolean>(true);
+
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -88,9 +92,22 @@ export default function PageParametresNotifications() {
         }
         setParEvenement(m);
       }
+
+      // Lecture du flag SMS d'alerte (soignant uniquement)
+      if (!isEtab) {
+        const { data: soignant } = await supabase
+          .from('soignants')
+          .select('sms_alertes_actives')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (soignant && (soignant as any).sms_alertes_actives !== null) {
+          setSmsAlertesActives(!!(soignant as any).sms_alertes_actives);
+        }
+      }
+
       setLoading(false);
     })();
-  }, [user]);
+  }, [user, isEtab]);
 
   const isEnabled = (event: string, canal: Canal) => {
     const key = `${event}:${canal}`;
@@ -122,6 +139,23 @@ export default function PageParametresNotifications() {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
+
+      // Mise à jour du flag granulaire SMS d'alerte (soignant uniquement)
+      // Cast `as any` car la colonne sms_alertes_actives sera ajoutée par la migration
+      // 20260506100000_soignants_sms_alertes_actives.sql et les types ne sont pas
+      // encore régénérés. À retirer après prochain `supabase gen types`.
+      if (!isEtab && user) {
+        const { error: smsErr } = await supabase
+          .from('soignants')
+          .update({ sms_alertes_actives: smsAlertesActives } as any)
+          .eq('id', user.id);
+        if (smsErr) {
+          // Ne casse pas la sauvegarde des autres prefs, mais signaler à l'user
+          toast.error('Préférences générales enregistrées, mais flag SMS d\'alerte non sauvegardé.');
+          return;
+        }
+      }
+
       toast.success('Préférences enregistrées');
     } catch (err: any) {
       toast.error(err?.message || 'Erreur enregistrement');
@@ -156,6 +190,26 @@ export default function PageParametresNotifications() {
             <p className="text-xs text-muted-foreground">Choisissez par canal et par type d'événement</p>
           </div>
         </div>
+
+        {/* SMS d'alerte (soignants uniquement) — opt-in granulaire pour mission
+            urgente et rappel J-1. Coupe ces 2 cas sans toucher aux autres SMS. */}
+        {!isEtab && (
+          <section className="card-base space-y-3">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary" /> SMS d'alerte
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Recevoir un SMS pour les missions urgentes et le rappel mission J-1.
+              Coût supporté par Jolene. Vous pouvez désactiver à tout moment.
+            </p>
+            <ToggleCanal
+              icone={<MessageSquare className="h-4 w-4" />}
+              label="Recevoir les alertes par SMS"
+              actif={smsAlertesActives}
+              onChange={setSmsAlertesActives}
+            />
+          </section>
+        )}
 
         {/* Canaux globaux */}
         <section className="card-base space-y-3">

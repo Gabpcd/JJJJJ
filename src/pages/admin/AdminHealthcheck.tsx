@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, Loader2, MessageSquare, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ServiceStatus {
   name: string;
@@ -15,9 +16,13 @@ interface ServiceStatus {
 
 export default function AdminHealthcheck() {
   usePageTitle('Healthcheck Services');
+  const { user } = useAuth();
   const [services, setServices] = useState<ServiceStatus[]>([]);
   const [checking, setChecking] = useState(false);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
+  const [smsTesting, setSmsTesting] = useState(false);
+  const [smsPhone, setSmsPhone] = useState('');
+  const [smsResult, setSmsResult] = useState<null | { ok: boolean; detail: string }>(null);
 
   const checkAll = async () => {
     setChecking(true);
@@ -115,6 +120,55 @@ export default function AdminHealthcheck() {
     endpoints_diff: string[];
     duration_ms: number;
   }>(null);
+
+  // Charger le téléphone admin connecté pour pré-remplir le test SMS
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      // Si l'admin est aussi inscrit comme soignant, on récupère son téléphone
+      const { data } = await supabase.from('soignants').select('telephone').eq('id', user.id).maybeSingle();
+      if (data && (data as any).telephone) setSmsPhone((data as any).telephone);
+    })();
+  }, [user]);
+
+  const testerSMS = async () => {
+    if (!smsPhone || smsPhone.replace(/\D/g, '').length < 8) {
+      toast.error('Numéro invalide. Format : +33 6 XX XX XX XX');
+      return;
+    }
+    setSmsTesting(true);
+    setSmsResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-sms', {
+        body: {
+          telephone: smsPhone.trim(),
+          type: 'TEST_ADMIN',
+          contenu: `Test SMS Jolene depuis /admin/healthcheck à ${new Date().toLocaleTimeString('fr-FR')}.`,
+          // Pas de destinataire_id → pas de check sms_alertes_actives, c'est un test admin pur
+        },
+      });
+      if (error) {
+        setSmsResult({ ok: false, detail: error.message || 'Erreur invocation' });
+        toast.error(`Échec : ${error.message || 'Erreur'}`);
+      } else if (data?.success === false) {
+        setSmsResult({ ok: false, detail: data.error || 'Twilio rejected' });
+        toast.error(`Twilio rejette : ${data.error || 'Erreur'}`);
+      } else if (data?.configured === false) {
+        setSmsResult({ ok: false, detail: 'Twilio non configuré (TWILIO_FROM_NUMBER absent)' });
+        toast.warning('Twilio non configuré');
+      } else if (data?.sid) {
+        setSmsResult({ ok: true, detail: `SMS envoyé · sid=${data.sid} · to=${data.to}` });
+        toast.success('SMS envoyé');
+      } else {
+        setSmsResult({ ok: true, detail: 'Réponse inattendue : ' + JSON.stringify(data).slice(0, 200) });
+      }
+    } catch (e: any) {
+      setSmsResult({ ok: false, detail: e?.message || String(e) });
+      toast.error(`Exception : ${e?.message || e}`);
+    } finally {
+      setSmsTesting(false);
+    }
+  };
 
   const verifierPSC = async () => {
     setPscChecking(true);
@@ -258,6 +312,44 @@ export default function AdminHealthcheck() {
                 </ul>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ── SMS Twilio : test rapide ── */}
+      <div className="card-base mt-6 p-5">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary" />
+              SMS Twilio
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Envoi d'un SMS de test au numéro indiqué (préchargé depuis votre profil si admin = soignant). Coût ~0.045€.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="tel"
+            inputMode="tel"
+            value={smsPhone}
+            onChange={(e) => setSmsPhone(e.target.value)}
+            placeholder="+33 6 XX XX XX XX"
+            className="input-base flex-1"
+          />
+          <button
+            onClick={testerSMS}
+            disabled={smsTesting || !smsPhone.trim()}
+            className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {smsTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {smsTesting ? 'Envoi…' : 'Tester SMS'}
+          </button>
+        </div>
+        {smsResult && (
+          <div className={`mt-3 p-3 rounded-lg border text-xs ${smsResult.ok ? 'border-success/30 bg-success/5 text-success' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}>
+            <span className="font-mono">{smsResult.detail}</span>
           </div>
         )}
       </div>
