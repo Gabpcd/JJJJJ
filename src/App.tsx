@@ -23,6 +23,7 @@ const AdminMandatsFacturation = lazy(() => import("./pages/admin/AdminMandatsFac
 const AdminAffacturage = lazy(() => import("./pages/admin/AdminAffacturage"));
 const ConfirmerEmail = lazy(() => import("./pages/ConfirmerEmail"));
 const InscriptionSoignant = lazy(() => import("./pages/InscriptionSoignant"));
+const InscriptionSoignantCompletion = lazy(() => import("./pages/InscriptionSoignantCompletion"));
 const InscriptionEtablissement = lazy(() => import("./pages/InscriptionEtablissement"));
 const Tarifs = lazy(() => import("./pages/Tarifs"));
 const DevenirSoignant = lazy(() => import("./pages/DevenirSoignant"));
@@ -117,6 +118,7 @@ const AdminCalendrier = lazy(() => import("./pages/admin/AdminCalendrier"));
 const AdminMissions = lazy(() => import("./pages/admin/AdminMissions"));
 const AdminReclamations = lazy(() => import("./pages/admin/AdminReclamations"));
 const AdminFinances = lazy(() => import("./pages/admin/AdminFinances"));
+const AdminHealthcheck = lazy(() => import("./pages/admin/AdminHealthcheck"));
 
 const queryClient = new QueryClient();
 
@@ -140,6 +142,7 @@ function AppRoutes() {
           <Route path="/auth/psc/callback" element={<PscCallback />} />
           <Route path="/confirmer-email" element={<ConfirmerEmail />} />
           <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
+          <Route path="/inscription/soignant/completion" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><InscriptionSoignantCompletion /></RouteProtegee>} />
           <Route path="/inscription/etablissement" element={<InscriptionEtablissement />} />
 
           {/* Pages légales — publiques */}
@@ -244,6 +247,7 @@ function AppRoutes() {
           <Route path="/admin/presences/mission/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><DetailPresencesMission role="ADMIN_PLATEFORME" /></RouteProtegee>} />
           <Route path="/admin/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><PageMessagerie role="ADMIN_PLATEFORME" /></RouteProtegee>} />
           <Route path="/admin/finances" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminFinances /></RouteProtegee>} />
+          <Route path="/admin/healthcheck" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminHealthcheck /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />

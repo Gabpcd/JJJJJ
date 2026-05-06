@@ -53,7 +53,9 @@ export default function PscCallback() {
         const { data: roleData } = await supabase.rpc('fn_get_my_role' as any);
         const role = typeof roleData === 'string' ? roleData : (roleData as any)?.role;
         if (role === 'SOIGNANT') {
-          navigate(isNewUser ? '/soignant/profil' : '/soignant/tableau-de-bord');
+          // Nouveau soignant via PSC : page de complétion (téléphone, contrat, mdp optionnel, CGU)
+          // Soignant existant : tableau de bord
+          navigate(isNewUser ? '/inscription/soignant/completion' : '/soignant/tableau-de-bord');
         } else {
           navigate('/');
         }

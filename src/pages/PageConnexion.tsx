@@ -1,6 +1,6 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { HeartPulse, Mail, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -23,6 +23,7 @@ import { BoutonProSanteConnect } from '@/components/BoutonProSanteConnect';
 export default function PageConnexion() {
   usePageTitle('Connexion');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { connexion, loading } = useAuth();
   const { afficherNotification } = useNotification();
   const [email, setEmail] = useState('');
@@ -39,6 +40,27 @@ export default function PageConnexion() {
       }).then(undefined, () => {});
     }
   }, []);
+
+  // Retour de PSC end_session : finaliser le signOut Supabase local et notifier
+  useEffect(() => {
+    if (searchParams.get('logout') !== 'psc') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        await supabase.auth.signOut();
+      } catch (e) {
+        logger.warn('[CONNEXION] signOut local après PSC logout échoué', e);
+      }
+      if (cancelled) return;
+      afficherNotification({ type: 'succes', message: 'Déconnexion Pro Santé Connect réussie.' });
+      // Nettoyer l'URL pour éviter de rejouer la déconnexion à un refresh
+      const next = new URLSearchParams(searchParams);
+      next.delete('logout');
+      setSearchParams(next, { replace: true });
+    })();
+    return () => { cancelled = true; };
+  }, [searchParams, setSearchParams, afficherNotification]);
 
   const navigateToRole = async () => {
     const { supabase } = await import('@/integrations/supabase/client');
@@ -182,11 +204,15 @@ export default function PageConnexion() {
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          {/* Pro Santé Connect — soignants avec carte CPS/e-CPS */}
+          {/* Pro Santé Connect — soignants avec carte CPS/e-CPS
+              Double usage explicite : connexion d'un compte existant ET création de compte en 1 clic */}
           <div className="mb-4">
             <BoutonProSanteConnect intention="login" />
-            <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-              Réservé aux professionnels de santé disposant d'une carte CPS ou e-CPS
+            <p className="text-[11px] text-muted-foreground text-center mt-2 leading-snug">
+              <span className="font-medium text-foreground">Déjà inscrit ?</span> Vous serez connecté.
+              {' '}<span className="font-medium text-foreground">Premier accès ?</span> Votre compte sera créé en 1 clic.
+              <br />
+              <span className="text-[10px]">Réservé aux professionnels de santé disposant d'une carte CPS ou e-CPS.</span>
             </p>
           </div>
 
