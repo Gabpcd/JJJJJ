@@ -100,6 +100,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (auditError) logger.error('Audit déconnexion échoué', auditError);
     }
+
+    // Si l'utilisateur s'est connecté via PSC, on doit appeler end_session_endpoint
+    // pour invalider la session ANS. Sinon il resterait connecté côté PSC et un
+    // nouveau "Se connecter avec Pro Santé Connect" le re-loguerait silencieusement.
+    let pscEndSessionUrl: string | null = null;
+    if (currentUser) {
+      try {
+        const { data: soignant } = await supabase
+          .from('soignants')
+          .select('psc_sub')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+        const isPscUser = !!soignant?.psc_sub;
+        if (isPscUser) {
+          // supabase.functions.invoke transmet automatiquement le JWT de la session courante
+          const { data: logoutData } = await supabase.functions.invoke('psc-logout', { body: {} });
+          if (logoutData?.configured && typeof logoutData.end_session_url === 'string') {
+            pscEndSessionUrl = logoutData.end_session_url;
+          }
+        }
+      } catch (e) {
+        logger.warn('[AuthContext] PSC logout lookup failed (fallback to local signOut)', e);
+      }
+    }
+
+    if (pscEndSessionUrl) {
+      // On ne fait PAS signOut() ici : c'est /connexion?logout=psc qui le fera après
+      // que PSC ait redirigé le navigateur. Cela évite une race entre un signOut local
+      // (qui invalide tout) et le redirect PSC qui pourrait être abandonné.
+      viderCacheHorsLigne();
+      Sentry.setUser(null);
+      window.location.href = pscEndSessionUrl;
+      return;
+    }
+
     await supabase.auth.signOut();
     viderCacheHorsLigne();
     Sentry.setUser(null);

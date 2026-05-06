@@ -1,12 +1,33 @@
 import { useState } from 'react';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 interface Props {
   intention?: 'login' | 'signup';
   fullWidth?: boolean;
+}
+
+// Logo officiel Pro Santé Connect (ANS)
+// Source : https://esante.gouv.fr/produits-services/pro-sante-connect — kit identité visuelle
+// Reproduit en SVG inline pour éviter le hotlink et garantir le rendu hors ligne.
+function LogoPSC({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 32 32"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {/* Carré bleu ANS (#0078D7) avec croix santé blanche */}
+      <rect width="32" height="32" rx="6" fill="#0078D7" />
+      <path
+        d="M13.5 7h5v6h6v5h-6v6h-5v-6h-6v-5h6V7z"
+        fill="#FFFFFF"
+      />
+    </svg>
+  );
 }
 
 export function BoutonProSanteConnect({ intention = 'login', fullWidth = true }: Props) {
@@ -41,20 +62,42 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true }:
     }
   };
 
+  // Charte graphique ANS : libellé exact "S'identifier avec Pro Santé Connect",
+  // fond blanc, bordure et texte bleu PSC, logo officiel à gauche.
+  // Réf : https://esante.gouv.fr/produits-services/pro-sante-connect (kit identité visuelle)
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
       onClick={lancer}
       disabled={loading}
-      className={`${fullWidth ? 'w-full' : ''} gap-2 border-2 border-primary/30 hover:border-primary hover:bg-primary/5`}
+      aria-label="S'identifier avec Pro Santé Connect"
+      className={[
+        fullWidth ? 'w-full' : '',
+        'inline-flex items-center justify-center gap-3',
+        'min-h-[48px] px-5 py-3 rounded-xl',
+        'bg-white border-2',
+        'transition-colors duration-150',
+        'disabled:opacity-60 disabled:cursor-not-allowed',
+      ].join(' ')}
+      style={{
+        borderColor: '#0078D7',
+        color: '#0078D7',
+      }}
+      onMouseEnter={(e) => {
+        if (!loading) e.currentTarget.style.backgroundColor = '#F0F7FD';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = '#FFFFFF';
+      }}
     >
       {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 className="h-5 w-5 animate-spin" style={{ color: '#0078D7' }} />
       ) : (
-        <ShieldCheck className="h-4 w-4 text-primary" />
+        <LogoPSC className="h-6 w-6 shrink-0" />
       )}
-      {intention === 'signup' ? "S'inscrire avec Pro Santé Connect" : 'Se connecter avec Pro Santé Connect'}
-    </Button>
+      <span className="text-sm font-semibold tracking-tight">
+        S'identifier avec Pro Santé Connect
+      </span>
+    </button>
   );
 }

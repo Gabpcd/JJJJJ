@@ -27,6 +27,7 @@ const AdminAffacturage = lazy(() => import("./pages/admin/AdminAffacturage"));
 const AdminChorusPro = lazy(() => import("./pages/admin/AdminChorusPro"));
 const ConfirmerEmail = lazy(() => import("./pages/ConfirmerEmail"));
 const InscriptionSoignant = lazy(() => import("./pages/InscriptionSoignant"));
+const InscriptionSoignantCompletion = lazy(() => import("./pages/InscriptionSoignantCompletion"));
 const InscriptionEtablissement = lazy(() => import("./pages/InscriptionEtablissement"));
 const Tarifs = lazy(() => import("./pages/Tarifs"));
 const DevenirSoignant = lazy(() => import("./pages/DevenirSoignant"));
@@ -161,6 +162,7 @@ function AppRoutes() {
           <Route path="/auth/psc/callback" element={<PscCallback />} />
           <Route path="/confirmer-email" element={<ConfirmerEmail />} />
           <Route path="/inscription/soignant" element={<InscriptionSoignant />} />
+          <Route path="/inscription/soignant/completion" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><InscriptionSoignantCompletion /></RouteProtegee>} />
           <Route path="/inscription/etablissement" element={<InscriptionEtablissement />} />
           <Route path="/inscription/succes" element={<PageInscriptionSucces />} />
 

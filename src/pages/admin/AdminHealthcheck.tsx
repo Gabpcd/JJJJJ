@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ServiceStatus {
   name: string;
@@ -102,6 +103,51 @@ export default function AdminHealthcheck() {
 
   useEffect(() => { checkAll(); }, []);
 
+  // ── Pro Santé Connect : test isolé (jour J de la bascule prod) ──
+  const [pscChecking, setPscChecking] = useState(false);
+  const [pscResult, setPscResult] = useState<null | {
+    env: string;
+    secrets_ok: boolean;
+    missing_secrets: string[];
+    discovery_ok: boolean;
+    discovery_status: number | null;
+    endpoints_match: boolean;
+    endpoints_diff: string[];
+    duration_ms: number;
+  }>(null);
+
+  const verifierPSC = async () => {
+    setPscChecking(true);
+    setPscResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('psc-test-connexion', { body: {} });
+      if (error) throw error;
+      setPscResult(data);
+      const allOk = data?.secrets_ok && data?.discovery_ok && data?.endpoints_match;
+      if (allOk) {
+        toast.success(`PSC OK — ${data.env} · ${data.duration_ms}ms`);
+      } else if (data?.discovery_ok && !data?.secrets_ok) {
+        toast.warning(`PSC : endpoint joignable mais secrets incomplets (${data.missing_secrets.length} manquants)`);
+      } else {
+        toast.error('PSC : configuration incomplète — voir détail ci-dessous');
+      }
+    } catch (e: any) {
+      toast.error(`PSC : erreur — ${e?.message || e}`);
+      setPscResult({
+        env: 'inconnu',
+        secrets_ok: false,
+        missing_secrets: [],
+        discovery_ok: false,
+        discovery_status: null,
+        endpoints_match: false,
+        endpoints_diff: [`Exception : ${e?.message || e}`],
+        duration_ms: 0,
+      });
+    } finally {
+      setPscChecking(false);
+    }
+  };
+
   const statusColor = (s: string) => s === 'ok' ? 'text-success' : s === 'degraded' ? 'text-warning' : s === 'error' ? 'text-destructive' : 'text-muted-foreground';
   const statusIcon = (s: string) => s === 'ok' ? CheckCircle : s === 'error' ? XCircle : Clock;
   const okCount = services.filter(s => s.status === 'ok').length;
@@ -152,6 +198,68 @@ export default function AdminHealthcheck() {
             </div>
           );
         })}
+      </div>
+
+      {/* ── Pro Santé Connect : diagnostic isolé (bascule prod) ── */}
+      <div className="card-base mt-6 p-5">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              Pro Santé Connect
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Vérifie la configuration PSC : secrets présents, OIDC discovery joignable, endpoints alignés. Outil critique le jour de la bascule prod.
+            </p>
+          </div>
+          <button
+            onClick={verifierPSC}
+            disabled={pscChecking}
+            className="btn-primary flex items-center gap-2 disabled:opacity-50 shrink-0"
+          >
+            {pscChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {pscChecking ? 'Vérification…' : 'Vérifier connexion PSC'}
+          </button>
+        </div>
+
+        {pscResult && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-3 rounded-lg border border-border bg-muted/20">
+              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Environnement</p>
+              <p className="text-sm font-semibold text-foreground mt-1">{pscResult.env}</p>
+            </div>
+            <div className={`p-3 rounded-lg border ${pscResult.secrets_ok ? 'border-success/30 bg-success/5' : 'border-destructive/30 bg-destructive/5'}`}>
+              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Secrets</p>
+              <p className={`text-sm font-semibold mt-1 ${pscResult.secrets_ok ? 'text-success' : 'text-destructive'}`}>
+                {pscResult.secrets_ok ? 'OK' : `${pscResult.missing_secrets.length} manquant(s)`}
+              </p>
+              {!pscResult.secrets_ok && pscResult.missing_secrets.length > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                  {pscResult.missing_secrets.join(', ')}
+                </p>
+              )}
+            </div>
+            <div className={`p-3 rounded-lg border ${pscResult.discovery_ok && pscResult.endpoints_match ? 'border-success/30 bg-success/5' : 'border-warning/30 bg-warning/5'}`}>
+              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Discovery OIDC</p>
+              <p className={`text-sm font-semibold mt-1 ${pscResult.discovery_ok ? 'text-success' : 'text-destructive'}`}>
+                {pscResult.discovery_ok ? `HTTP ${pscResult.discovery_status}` : 'Inaccessible'}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Endpoints {pscResult.endpoints_match ? 'alignés' : 'divergents'} · {pscResult.duration_ms}ms
+              </p>
+            </div>
+            {pscResult.endpoints_diff.length > 0 && (
+              <div className="sm:col-span-3 p-3 rounded-lg border border-warning/30 bg-warning/5">
+                <p className="text-[10px] uppercase text-muted-foreground tracking-wide mb-1">Divergences détectées</p>
+                <ul className="text-[11px] text-foreground font-mono space-y-0.5">
+                  {pscResult.endpoints_diff.map((d, i) => (
+                    <li key={i}>· {d}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {!import.meta.env.VITE_SENTRY_DSN && (
