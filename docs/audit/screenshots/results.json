@@ -1,0 +1,167 @@
+{
+  "results": [
+    {
+      "scenario": "S1 Inscription IDE",
+      "status": "PARTIAL",
+      "email": "audit-pw-ide-1777298142955@jolene-test.dev",
+      "finalUrl": "http://127.0.0.1:8080/inscription/soignant",
+      "bugs": [
+        {
+          "severity": "P1",
+          "desc": "Badge \"RPPS Vérifié\" absent après saisie 00000000001"
+        },
+        {
+          "severity": "P1",
+          "desc": "Bouton submit désactivé malgré formulaire valide"
+        },
+        {
+          "severity": "P1",
+          "desc": "Submit error: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: /Créer mon compte/i })\u001b[22m\n\u001b[2m    - locator resolved to <button disabled type=\"submit\" class=\"btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2\">Créer mon compte</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    58 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not enabled\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+        }
+      ],
+      "screenshots": [
+        "docs/audit/screenshots/s1-01-page.png",
+        "docs/audit/screenshots/s1-02-etape1-rempli.png",
+        "docs/audit/screenshots/s1-03-etape2-vide.png",
+        "docs/audit/screenshots/s1-04-profession-IDE-types.png",
+        "docs/audit/screenshots/s1-05-rpps-verifie.png",
+        "docs/audit/screenshots/s1-06-after-submit.png"
+      ]
+    },
+    {
+      "scenario": "S2 Inscription AS",
+      "status": "PARTIAL",
+      "email": "audit-pw-as-1777298142955@jolene-test.dev",
+      "finalUrl": "http://127.0.0.1:8080/inscription/soignant",
+      "bugs": [
+        {
+          "severity": "P1",
+          "desc": "Submit: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: /Créer mon compte/i })\u001b[22m\n\u001b[2m    - locator resolved to <button disabled type=\"submit\" class=\"btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2\">Créer mon compte</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    58 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not enabled\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n"
+        }
+      ],
+      "screenshots": [
+        "docs/audit/screenshots/s2-01-as-selectionne.png",
+        "docs/audit/screenshots/s2-02-as-form-rempli.png",
+        "docs/audit/screenshots/s2-03-after-submit.png"
+      ]
+    },
+    {
+      "scenario": "S3 Inscription Médecin avec spécialité",
+      "status": "SKIP",
+      "notes": "Limitation : pas de RPPS test pour MEDECIN dans la table rpps_test (uniquement IDE 00000000001 et Pharmacien 00000000002 stubs sans match nom). Test bypass code-only sur Phase 1."
+    },
+    {
+      "scenario": "S4 Inscription Étab",
+      "status": "PARTIAL",
+      "email": "audit-pw-hopital-1777298142955@jolene-test.dev",
+      "finalUrl": "http://127.0.0.1:8080/inscription/etablissement",
+      "bugs": [],
+      "notes": "Inscription étab nécessite SIRET valide vérifié par INSEE — stoppé après étape 1 pour ne pas créer de fausses entreprises. La form est rendue correctement.",
+      "screenshots": [
+        "docs/audit/screenshots/s4-01-page.png",
+        "docs/audit/screenshots/s4-02-etape1.png",
+        "docs/audit/screenshots/s4-03-etape2.png"
+      ]
+    },
+    {
+      "scenario": "S5 Candidature complète",
+      "status": "SKIP",
+      "notes": "Dépend du compte étab S4 vérifié + mission publiée. Utilisation des comptes audit Phase 1 + missions test SQL pour validation candidature couverte en Phase 1 SQL tests."
+    },
+    {
+      "scenario": "Bonus 1 P1-A IDE/IBODE matching",
+      "status": "SKIP",
+      "notes": "Reproductibilité confirmée Phase 1 par SQL : audit-ibode → mission IDE retourne erreur stricte. Comportement UI identique attendu."
+    },
+    {
+      "scenario": "Bonus 2 Profil AS",
+      "status": "FAIL",
+      "bugs": [
+        {
+          "severity": "P1",
+          "desc": "Pas de redirect après login. URL: http://127.0.0.1:8080/connexion"
+        }
+      ],
+      "screenshots": [
+        "docs/audit/screenshots/b2-01-login-page.png",
+        "docs/audit/screenshots/b2-02-after-login.png"
+      ]
+    },
+    {
+      "scenario": "Bonus 3 Pharmacie filtre profession",
+      "status": "FAIL",
+      "bugs": [
+        {
+          "severity": "P1",
+          "desc": "Combobox profession introuvable sur page créer mission"
+        }
+      ],
+      "screenshots": [
+        "docs/audit/screenshots/b3-01-pharmacie-login.png",
+        "docs/audit/screenshots/b3-02-creer-mission-pharma.png"
+      ]
+    }
+  ],
+  "errorsLog": [
+    {
+      "scenario": "S1",
+      "type": "console",
+      "text": "Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID"
+    },
+    {
+      "scenario": "S1",
+      "type": "console",
+      "text": "Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID"
+    },
+    {
+      "scenario": "S2",
+      "type": "console",
+      "text": "Failed to load resource: the server responded with a status of 503 ()"
+    },
+    {
+      "scenario": "S2",
+      "type": "console",
+      "text": "Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID"
+    },
+    {
+      "scenario": "S4",
+      "type": "console",
+      "text": "Failed to load resource: the server responded with a status of 503 ()"
+    },
+    {
+      "scenario": "Bonus2",
+      "type": "console",
+      "text": "Failed to load resource: the server responded with a status of 503 ()"
+    },
+    {
+      "scenario": "Bonus2",
+      "type": "console",
+      "text": "Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID"
+    },
+    {
+      "scenario": "Bonus2",
+      "type": "console",
+      "text": "TypeError: Failed to fetch\n    at http://127.0.0.1:8080/node_modules/.vite/deps/@supabase_supabase-js.js?v=8fb3263f:8099:23\n    at _handleRequest2 (http://127.0.0.1:8080/node_modules/.vite/deps/@supabase_supabase-js.js?v=8fb3263f:8389:20)\n    at _request (http://127.0.0.1:8080/node_modules/.vite/deps/@supabase_supabase-js.js?v=8fb3263f:8379:22)\n    at SupabaseAuthClient.signInWithPassword (http://127.0.0.1:8080/node_modules/.vite/deps/@supabase_supabase-js.js?v=8fb3263f:10526:21)\n    at http://127.0.0.1:8080/src/contexts/AuthContext.tsx:59:53\n    at handleSubmit (http://127.0.0.1:8080/src/pages/PageConnexion.tsx:146:19)\n    at HTMLUnknownElement.callCallback2 (http://127.0.0.1:8080/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95105c29:3674:22)\n    at Object.invokeGuardedCallbackDev (http://127.0.0.1:8080/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95105c29:3699:24)\n    at invokeGuardedCallback (http://127.0.0.1:8080/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95105c29:3733:39)\n    at invokeGuardedCallbackAndCatchFirstError (http://127.0.0.1:8080/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95105c29:3736:33)"
+    },
+    {
+      "scenario": "Bonus3",
+      "type": "console",
+      "text": "Failed to load resource: the server responded with a status of 503 ()"
+    },
+    {
+      "scenario": "Bonus3",
+      "type": "console",
+      "text": "Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID"
+    },
+    {
+      "scenario": "Bonus3",
+      "type": "console",
+      "text": "TypeError: Failed to fetch\n    at http://127.0.0.1:8080/node_modules/.vite/deps/@supabase_supabase-js.js?v=8fb3263f:8099:23\n    at _handleRequest2 (http://127.0.0.1:8080/node_modules/.vite/deps/@supabase_supabase-js.js?v=8fb3263f:8389:20)\n    at _request (http://127.0.0.1:8080/node_modules/.vite/deps/@supabase_supabase-js.js?v=8fb3263f:8379:22)\n    at SupabaseAuthClient.signInWithPassword (http://127.0.0.1:8080/node_modules/.vite/deps/@supabase_supabase-js.js?v=8fb3263f:10526:21)\n    at http://127.0.0.1:8080/src/contexts/AuthContext.tsx:59:53\n    at handleSubmit (http://127.0.0.1:8080/src/pages/PageConnexion.tsx:146:19)\n    at HTMLUnknownElement.callCallback2 (http://127.0.0.1:8080/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95105c29:3674:22)\n    at Object.invokeGuardedCallbackDev (http://127.0.0.1:8080/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95105c29:3699:24)\n    at invokeGuardedCallback (http://127.0.0.1:8080/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95105c29:3733:39)\n    at invokeGuardedCallbackAndCatchFirstError (http://127.0.0.1:8080/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95105c29:3736:33)"
+    },
+    {
+      "scenario": "Bonus3",
+      "type": "console",
+      "text": "Failed to load resource: the server responded with a status of 503 ()"
+    }
+  ]
+}
