@@ -70,7 +70,15 @@ export function getPisteConfig(): PisteConfig | null {
   };
 }
 
-/** OAuth2 client_credentials → access_token */
+/** OAuth2 client_credentials → access_token
+ *
+ * Note PROD : oauth.piste.gouv.fr est un endpoint séparé de l'API Manager
+ * Gravitee. Le header `KeyId` est requis sur les endpoints API métier
+ * (api.piste.gouv.fr) mais N'EST PAS attendu sur l'OAuth lui-même. Certains
+ * plans PISTE rejettent les requêtes OAuth contenant `KeyId` (observé après
+ * recréation d'app prod le 2026-05-05 → 401 invalid_client). On garde donc
+ * l'OAuth strictement minimal.
+ */
 export async function getAccessToken(config: PisteConfig): Promise<string> {
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
@@ -81,8 +89,8 @@ export async function getAccessToken(config: PisteConfig): Promise<string> {
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/x-www-form-urlencoded',
+    Accept: 'application/json',
   };
-  if (config.apiKey) headers['KeyId'] = config.apiKey;
 
   const res = await fetch(config.oauthUrl, {
     method: 'POST',

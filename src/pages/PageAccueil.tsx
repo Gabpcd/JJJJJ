@@ -112,8 +112,13 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
     const professionValue = nextProfession?.trim() || null;
     const villeValue = nextVille?.trim() || null;
 
-    // Try authenticated client first (RPC only granted to authenticated), fall back to public
-    const client = supabase;
+    // RPC granté à anon ET authenticated. Sur la page d'accueil (publique, sans
+    // session active), le client `supabase` peut échouer avec AbortError quand le
+    // refresh token lock est volé entre onglets. On préfère donc le client public
+    // dédié (storageKey isolée, pas de refresh) — fallback vers `supabase` si
+    // session active pour profiter de l'éventuel cache.
+    const { data: { session } } = await supabase.auth.getSession();
+    const client = session ? supabase : publicSupabase;
     const { data, error } = await client.rpc('fn_missions_publiques_recherche', {
       p_profession: professionValue,
       p_ville: villeValue,
@@ -122,7 +127,14 @@ function RechercheMissionsPublique({ navigate }: { navigate: ReturnType<typeof u
     logger.debug('missions recherche raw:', { data, error, professionValue, villeValue });
 
     if (error) {
-      logger.error('Erreur recherche missions publiques', error);
+      // AbortError = annulation côté SDK (lock multi-tabs, navigation, etc.) —
+      // pas un vrai échec. Le user verra simplement "Pas de mission" temporairement.
+      const isAbort = error?.name === 'AbortError' || /Lock was stolen|aborted|AbortError/i.test(error?.message || '');
+      if (isAbort) {
+        logger.debug('missions recherche abandonnée (AbortError ignoré)');
+      } else {
+        logger.error('Erreur recherche missions publiques', error);
+      }
       setResults([]);
       setTotalCount(0);
       setLoading(false);

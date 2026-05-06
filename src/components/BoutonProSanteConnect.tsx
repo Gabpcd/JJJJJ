@@ -40,8 +40,8 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true }:
         body: { intention },
       });
 
-      if (error || data?.configured === false) {
-        toast.info('Pro Santé Connect sera disponible très prochainement. Utilisez l\'inscription classique en attendant.');
+      if (error) {
+        toast.error('Pro Santé Connect indisponible. Réessayez plus tard ou utilisez l\'inscription par email.');
         return;
       }
 
@@ -52,11 +52,14 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true }:
 
       if (data?.authorization_url) {
         window.location.href = data.authorization_url;
-      } else {
-        toast.error('Impossible de contacter Pro Santé Connect');
+        return;
       }
+
+      // Fallback : `configured: false` ou réponse inattendue côté serveur
+      // (credentials ANS pas encore reçus → erreur réelle, pas un blocage UX en amont)
+      toast.error('Pro Santé Connect indisponible pour le moment. Réessayez dans quelques minutes ou utilisez l\'inscription par email.');
     } catch {
-      toast.info('Pro Santé Connect sera disponible très prochainement.');
+      toast.error('Erreur de connexion à Pro Santé Connect. Vérifiez votre réseau.');
     } finally {
       setLoading(false);
     }

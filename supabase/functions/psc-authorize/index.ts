@@ -59,10 +59,10 @@ Deno.serve(async (req) => {
     const redirectUri = Deno.env.get("PSC_REDIRECT_URI");
 
     if (!clientId || !redirectUri) {
+      console.warn(`psc-authorize: configuration incomplete (clientId=${!!clientId}, redirectUri=${!!redirectUri})`);
       return new Response(JSON.stringify({
-        configured: false,
-        message: "Pro Santé Connect sera disponible très prochainement.",
-      }), { status: 200, headers: corsHeaders(req) });
+        error: "Pro Santé Connect indisponible : configuration serveur incomplète.",
+      }), { status: 503, headers: corsHeaders(req) });
     }
 
     const body = await req.json().catch(() => ({}));

@@ -32,6 +32,22 @@ interface Diagnostic {
   duration_ms?: number;
 }
 
+/** Décode (sans vérifier la signature) le payload d'un JWT pour diagnostic.
+ * Retourne les claims utiles (iss/aud/exp/scope/sub) sans jamais exposer
+ * le token complet. Utilisé uniquement par cette fonction de diagnostic. */
+function decodeJwtPayload(token: string | undefined): Record<string, unknown> | null {
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
 
@@ -107,10 +123,14 @@ Deno.serve(async (req) => {
           client_secret: clientSecret,
           scope: 'openid',
         });
+        // OAuth endpoint = oauth.piste.gouv.fr (séparé de l'API Manager).
+        // KeyId N'EST PAS attendu ici, contrairement aux endpoints API métier.
+        // L'envoyer peut être rejeté par certains plans PISTE après recréation
+        // d'app prod. On garde donc OAuth strictement minimal.
         const oauthHeaders: Record<string, string> = {
           'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
         };
-        if (apiKey) oauthHeaders['KeyId'] = apiKey;
         const oauthRes = await fetch(urls.oauth, {
           method: 'POST',
           headers: oauthHeaders,
@@ -137,12 +157,29 @@ Deno.serve(async (req) => {
         }
 
         accessToken = oauthData.access_token;
+
+        // Décode le JWT pour vérifier iss/aud/scope/exp (claims attendus en prod) :
+        // iss : https://oauth.piste.gouv.fr (ou équivalent issuer ANS)
+        // aud : doit contenir une référence chorus-pro / cpro
+        // scope : doit autoriser cpro.* ou openid + scope métier
+        // exp : pas déjà expiré (timestamp futur)
+        const claims = decodeJwtPayload(accessToken);
+        const claimsSummary = claims ? {
+          iss: claims.iss ?? '(absent)',
+          aud: Array.isArray(claims.aud) ? claims.aud.join(',') : (claims.aud ?? '(absent)'),
+          scope: claims.scope ?? '(absent)',
+          sub: typeof claims.sub === 'string' ? `${claims.sub.slice(0, 8)}...` : '(absent)',
+          exp: typeof claims.exp === 'number'
+            ? `${new Date(claims.exp * 1000).toISOString()} (in ${claims.exp - Math.floor(Date.now() / 1000)}s)`
+            : '(absent)',
+        } : '(JWT non parsable)';
+
         diagnostics.push({
           step: '2. OAuth2 token request',
           status: 'OK',
           http_status: oauthRes.status,
           duration_ms: Date.now() - oauthStart,
-          detail: `access_token obtenu (${accessToken?.length || 0} chars, expires_in=${oauthData.expires_in}s)`,
+          detail: `access_token obtenu (${accessToken?.length || 0} chars, expires_in=${oauthData.expires_in}s) | claims=${JSON.stringify(claimsSummary)}`,
         });
       } catch (fetchErr) {
         diagnostics.push({
@@ -162,16 +199,19 @@ Deno.serve(async (req) => {
     // ─── Étape 3 : Ping API Chorus Pro (endpoint métier léger) ───
     // Endpoint recommanderChorusPro : /cpro/transverses/v1/recupererAnnuaireDestinataire
     // Alternative plus simple : consulter annuaire destinataire via API PISTE structures
+    // ⚠️ Header `KeyId` requis sur les endpoints métier en prod (plan API Manager).
     const pingStart = Date.now();
     const pingUrl = `${urls.api}/cpro/transverses/v1/recupererUtilisateurCourant`;
     try {
+      const pingHeaders: Record<string, string> = {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      if (apiKey) pingHeaders['KeyId'] = apiKey;
       const pingRes = await fetch(pingUrl, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+        headers: pingHeaders,
         body: JSON.stringify({ idUtilisateurCourant: 0 }),
       });
       const pingText = await pingRes.text();
@@ -202,14 +242,16 @@ Deno.serve(async (req) => {
       try {
         const cproAccount = btoa(`${techLogin}:${techPassword}`);
         const techUrl = `${urls.api}/cpro/transverses/v1/rechercherStructure`;
+        const techHeaders: Record<string, string> = {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'cpro-account': cproAccount,
+        };
+        if (apiKey) techHeaders['KeyId'] = apiKey;
         const techRes = await fetch(techUrl, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            'cpro-account': cproAccount,
-          },
+          headers: techHeaders,
           body: JSON.stringify({
             idUtilisateurCourant: 0,
             parametres: { nbResultatsMaxParPage: 1, numeroPagePourRechercher: 1, triSurChamp: 'Identifiant', triSensTri: 'Ascendant' },
