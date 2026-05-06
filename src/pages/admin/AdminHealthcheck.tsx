@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, Loader2, MessageSquare, Send } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, Loader2, MessageSquare, Send, ShieldCheck, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -95,7 +95,45 @@ export default function AdminHealthcheck() {
       results.push({ name: 'Resend Email', icon: Mail, status: 'error', latency: Date.now() - emailStart, detail: e.message });
     }
 
-    // 8. Sentry — masqué si DSN non configurée (activation à venir côté Vercel).
+    // 8. Pro Santé Connect (warm ping psc-authorize)
+    const pscStart = Date.now();
+    try {
+      const { data } = await supabase.functions.invoke('psc-authorize', { body: { warm: true } });
+      const configured = data?.configured !== false;
+      results.push({
+        name: 'Pro Santé Connect',
+        icon: ShieldCheck,
+        status: configured ? 'ok' : 'degraded',
+        latency: Date.now() - pscStart,
+        detail: configured ? 'Credentials ANS configurés' : 'En attente credentials ANS (PSC_CLIENT_ID/SECRET)',
+      });
+    } catch (e: any) {
+      results.push({ name: 'Pro Santé Connect', icon: ShieldCheck, status: 'error', latency: Date.now() - pscStart, detail: e.message });
+    }
+
+    // 9. Chorus Pro / PISTE (warm ping test-piste-credentials)
+    const pisteStart = Date.now();
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/test-piste-credentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ warm: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const oauthOk = data?.diagnostics?.some((d: any) => d.step?.includes('OAuth') && d.status === 'OK');
+      const apiOk = data?.success === true;
+      results.push({
+        name: 'Chorus Pro (PISTE)',
+        icon: Landmark,
+        status: apiOk ? 'ok' : oauthOk ? 'degraded' : 'error',
+        latency: Date.now() - pisteStart,
+        detail: apiOk ? 'OAuth + API factures opérationnels' : oauthOk ? 'OAuth OK, API en attente déblocage AIFE' : 'Credentials PISTE manquants',
+      });
+    } catch (e: any) {
+      results.push({ name: 'Chorus Pro (PISTE)', icon: Landmark, status: 'error', latency: Date.now() - pisteStart, detail: e.message });
+    }
+
+    // 10. Sentry — masqué si DSN non configurée (activation à venir côté Vercel).
     const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
     if (sentryDsn) {
       results.push({ name: 'Sentry Monitoring', icon: Shield, status: 'ok', detail: 'DSN configuré' });

@@ -80,11 +80,17 @@ export function getPisteConfig(): PisteConfig | null {
  * l'OAuth strictement minimal.
  */
 export async function getAccessToken(config: PisteConfig): Promise<string> {
+  // Scope OAuth configurable via env var PISTE_OAUTH_SCOPE.
+  // Quand l'AIFE débloquera l'application avec des scopes opérationnels
+  // spécifiques (ex: "openid profile deposerFluxFacture rechercherStructure"),
+  // il suffira de définir PISTE_OAUTH_SCOPE dans Supabase Edge Functions Secrets
+  // sans modifier le code. Voir docs/CHORUS-PRO-BASCULE-PROD.md.
+  const scope = Deno.env.get('PISTE_OAUTH_SCOPE') || 'openid';
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
     client_id: config.clientId,
     client_secret: config.clientSecret,
-    scope: 'openid',
+    scope,
   });
 
   const headers: Record<string, string> = {

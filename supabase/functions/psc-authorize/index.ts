@@ -58,6 +58,17 @@ Deno.serve(async (req) => {
     const clientId = Deno.env.get("PSC_CLIENT_ID");
     const redirectUri = Deno.env.get("PSC_REDIRECT_URI");
 
+    const body = await req.json().catch(() => ({}));
+
+    // Warm ping (admin healthcheck) — pas d'effet de bord, juste retourne le statut config.
+    if (body.warm === true) {
+      return new Response(JSON.stringify({
+        warm: true,
+        configured: !!(clientId && redirectUri),
+        environment: env,
+      }), { status: 200, headers: corsHeaders(req) });
+    }
+
     if (!clientId || !redirectUri) {
       console.warn(`psc-authorize: configuration incomplete (clientId=${!!clientId}, redirectUri=${!!redirectUri})`);
       return new Response(JSON.stringify({
@@ -65,7 +76,6 @@ Deno.serve(async (req) => {
       }), { status: 503, headers: corsHeaders(req) });
     }
 
-    const body = await req.json().catch(() => ({}));
     const intention: "login" | "signup" = body.intention === "signup" ? "signup" : "login";
 
     // Générer PKCE + state + nonce
