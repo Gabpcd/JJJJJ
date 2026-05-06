@@ -29,10 +29,12 @@ const PISTE_URLS = {
 // avec "Origin not allowed by Access-Control-Allow-Origin".
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get('origin') || '';
+  // Note : ne PAS ajouter de sous-domaine "app." — le sous-domaine legacy
+  // Lovable est banni par le job drift-detection (.github/workflows/validate-pr.yml).
+  // La prod tourne sur jolene.app et www.jolene.app uniquement.
   const allowed = [
     'https://jolene.app',
     'https://www.jolene.app',
-    'https://app.jolene.app',
     'http://localhost:5173',
     'http://localhost:8080',
   ];
