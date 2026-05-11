@@ -6,8 +6,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
 import { getLabelProfession } from '@/lib/constantes';
 import { useNotification } from '@/contexts/NotificationContext';
-import { extraireMessageErreur } from '@/lib/erreurs';
+import { mapperErreurInscription, type ErreurInscriptionMappee } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
+import { ErreurInscription } from '@/components/inscription/ErreurInscription';
 import { SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 import { SelectProfession } from '@/components/SelectProfession';
@@ -108,6 +109,10 @@ export default function InscriptionSoignant() {
   const [cgu, setCgu] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [erreurInscription, setErreurInscription] = useState<ErreurInscriptionMappee | null>(null);
+
+  const champsAHighlighter = new Set(erreurInscription?.champs_highlight ?? []);
+  const classeChampErreur = (champ: string) => champsAHighlighter.has(champ) ? 'border-destructive ring-1 ring-destructive/30' : '';
 
   const [form, setForm] = useState({
     email: '', motDePasse: '', confirmMdp: '',
@@ -263,18 +268,42 @@ export default function InscriptionSoignant() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setErreurInscription(null);
     try {
       await inscriptionSoignant({ ...form, turnstileToken });
       // PII (email) hors URL : sessionStorage évite leak via historique/referer
       try { sessionStorage.setItem('inscription_email', form.email); } catch { /* sessionStorage indisponible */ }
       navigate('/inscription/succes?role=soignant');
     } catch (err) {
-      if (!gererErreurSupabase(err, () => handleSubmit(e))) {
-        afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
+      if (gererErreurSupabase(err, () => handleSubmit(e))) {
+        // Erreur réseau / session — gérée par l'helper, pas d'affichage local.
+        return;
       }
+      // Affichage inline avec code + action proposée.
+      const erreurMappee = mapperErreurInscription(err);
+      setErreurInscription(erreurMappee);
+      // Si l'erreur cible un champ d'étape 1 mais on est en étape 2,
+      // remonter à l'étape 1 pour rendre le champ visible.
+      if (erreurMappee.champs_highlight?.some(c => c === 'email' || c === 'motDePasse') && etape !== 1) {
+        setEtape(1);
+      }
+      // Pas de toast : l'Alert inline juste au-dessus du bouton submit
+      // est plus actionnable (boutons "Se connecter" / "Réessayer" / etc.).
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSeConnecter = () => {
+    try { sessionStorage.setItem('connexion_email', form.email); } catch { /* noop */ }
+    navigate('/connexion');
+  };
+
+  const handleRetry = () => {
+    setErreurInscription(null);
+    // Re-soumettre le formulaire en simulant un submit.
+    const formEl = document.querySelector('form');
+    if (formEl) formEl.requestSubmit();
   };
 
   return (
@@ -326,7 +355,7 @@ export default function InscriptionSoignant() {
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 1 — Vos identifiants</p>
               <label className="block">
                 <span className="text-sm font-medium text-foreground mb-1.5 block">Email *</span>
-                <input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className="input-base" required aria-invalid={form.email.length > 0 && !emailValide} aria-describedby={form.email.length > 0 && !emailValide ? 'email-err' : undefined} />
+                <input type="email" autoComplete="email" value={form.email} onChange={e => maj('email', e.target.value)} className={`input-base ${classeChampErreur('email')}`} required aria-invalid={form.email.length > 0 && !emailValide} aria-describedby={form.email.length > 0 && !emailValide ? 'email-err' : undefined} />
                 {form.email.length > 0 && !emailValide && (
                   <p id="email-err" className="text-xs text-destructive mt-1 break-words" role="alert">Format d'email invalide</p>
                 )}
@@ -334,7 +363,7 @@ export default function InscriptionSoignant() {
               <label className="block">
                 <span className="text-sm font-medium text-foreground mb-1.5 block">Mot de passe *</span>
                 <div className="relative">
-                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className="input-base pr-10" required minLength={8} />
+                  <input type={afficherMdp ? 'text' : 'password'} value={form.motDePasse} onChange={e => maj('motDePasse', e.target.value)} placeholder="Minimum 8 caractères" className={`input-base pr-10 ${classeChampErreur('motDePasse')}`} required minLength={8} />
                   <button type="button" onClick={() => setAfficherMdp(!afficherMdp)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-label={afficherMdp ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>
                     {afficherMdp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -352,6 +381,13 @@ export default function InscriptionSoignant() {
                 <input type="checkbox" checked={cgu} onChange={e => setCgu(e.target.checked)} className="mt-1 h-4 w-4 rounded border-input text-primary accent-primary" />
                 <span className="text-sm text-muted-foreground">J'accepte les <a href="/cgu" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Conditions Générales d'Utilisation</a> et la <a href="/confidentialite" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Politique de confidentialité</a> *</span>
               </label>
+              {erreurInscription && (etape === 1 || champsAHighlighter.has('email') || champsAHighlighter.has('motDePasse')) && (
+                <ErreurInscription
+                  erreur={erreurInscription}
+                  onRetry={handleRetry}
+                  onSeConnecter={handleSeConnecter}
+                />
+              )}
               <button type="button" onClick={() => setEtape(2)} disabled={!etape1Valide} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
             </div>
           )}
@@ -366,15 +402,15 @@ export default function InscriptionSoignant() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Prénom *{rppsPreRempli && <span className="text-xs text-emerald-600 ml-1.5 font-normal">Vérifié via RPPS</span>}</span>
-                  <input value={form.prenom} onChange={e => { if (!rppsPreRempli) maj('prenom', e.target.value); }} readOnly={rppsPreRempli} className={`input-base ${rppsPreRempli ? 'bg-emerald-50/50 cursor-not-allowed' : ''}`} required autoComplete="given-name" />
+                  <input value={form.prenom} onChange={e => { if (!rppsPreRempli) maj('prenom', e.target.value); }} readOnly={rppsPreRempli} className={`input-base ${rppsPreRempli ? 'bg-emerald-50/50 cursor-not-allowed' : ''} ${classeChampErreur('prenom')}`} required autoComplete="given-name" />
                 </label>
                 <label className="block">
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Nom *{rppsPreRempli && <span className="text-xs text-emerald-600 ml-1.5 font-normal">Vérifié via RPPS</span>}</span>
-                  <input value={form.nom} onChange={e => { if (!rppsPreRempli) maj('nom', e.target.value); }} readOnly={rppsPreRempli} className={`input-base ${rppsPreRempli ? 'bg-emerald-50/50 cursor-not-allowed' : ''}`} required autoComplete="family-name" />
+                  <input value={form.nom} onChange={e => { if (!rppsPreRempli) maj('nom', e.target.value); }} readOnly={rppsPreRempli} className={`input-base ${rppsPreRempli ? 'bg-emerald-50/50 cursor-not-allowed' : ''} ${classeChampErreur('nom')}`} required autoComplete="family-name" />
                 </label>
               </div>
               <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</span><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="+33 6 ..." className="input-base" pattern="[\\+]?[0-9\\s]{8,15}" /></label>
-              <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</span><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className="input-base" max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required aria-invalid={!!form.dateNaissance && !dateNaissanceMajeur} aria-describedby={form.dateNaissance && !dateNaissanceMajeur ? 'date-err' : undefined} />
+              <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</span><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className={`input-base ${classeChampErreur('dateNaissance')}`} max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required aria-invalid={!!form.dateNaissance && !dateNaissanceMajeur} aria-describedby={form.dateNaissance && !dateNaissanceMajeur ? 'date-err' : undefined} />
                 {dateNaissanceRequise && <p className="text-xs text-destructive mt-1 break-words">La date de naissance est obligatoire</p>}
                 {form.dateNaissance && !dateNaissanceMajeur && <p id="date-err" className="text-xs text-destructive mt-1 break-words" role="alert">Vous devez avoir 18 ans révolus pour vous inscrire</p>}
               </label>
@@ -409,7 +445,7 @@ export default function InscriptionSoignant() {
                 <label className="block">
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS *</span>
                   <div className="relative">
-                    <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base pr-10" inputMode="numeric" autoComplete="off" aria-describedby={rppsVerifiant ? 'rpps-status' : undefined} />
+                    <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className={`input-base pr-10 ${classeChampErreur('rpps')}`} inputMode="numeric" autoComplete="off" aria-describedby={rppsVerifiant ? 'rpps-status' : undefined} />
                     {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" aria-hidden="true" />}
                   </div>
                   {rppsVerifiant && <p id="rpps-status" className="text-xs text-primary mt-1" role="status">Vérification en cours...</p>}
@@ -461,6 +497,13 @@ export default function InscriptionSoignant() {
                 <div className="flex justify-between text-[10px] text-muted-foreground"><span>5 km</span><span>100 km</span></div>
               </label>
               <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
+              {erreurInscription && etape === 2 && !champsAHighlighter.has('email') && !champsAHighlighter.has('motDePasse') && (
+                <ErreurInscription
+                  erreur={erreurInscription}
+                  onRetry={handleRetry}
+                  onSeConnecter={handleSeConnecter}
+                />
+              )}
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
                 <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2" aria-busy={submitting}>
