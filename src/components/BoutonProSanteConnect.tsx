@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { ModalePscPreAuth } from '@/components/ModalePscPreAuth';
 
 interface Props {
   intention?: 'login' | 'signup';
   fullWidth?: boolean;
+  onSwitchToEmail?: () => void;
 }
 
 // Logo officiel Pro Santé Connect (ANS)
@@ -30,10 +32,18 @@ function LogoPSC({ className }: { className?: string }) {
   );
 }
 
-export function BoutonProSanteConnect({ intention = 'login', fullWidth = true }: Props) {
+export function BoutonProSanteConnect({ intention = 'login', fullWidth = true, onSwitchToEmail }: Props) {
   const [loading, setLoading] = useState(false);
+  const [modaleOuverte, setModaleOuverte] = useState(false);
 
-  const lancer = async () => {
+  // Le clic sur le bouton ouvre la modale informative AVANT de rediriger vers PSC.
+  // Beaucoup de pros de santé n'ont pas encore activé leur e-CPS et l'écran ANS
+  // ne l'explique pas. On éduque ici pour réduire l'abandon silencieux.
+  const ouvrirModale = () => {
+    setModaleOuverte(true);
+  };
+
+  const lancerRedirection = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('psc-authorize', {
@@ -42,11 +52,13 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true }:
 
       if (error) {
         toast.error('Pro Santé Connect indisponible. Réessayez plus tard ou utilisez l\'inscription par email.');
+        setModaleOuverte(false);
         return;
       }
 
       if (data?.error) {
         toast.error(data.error);
+        setModaleOuverte(false);
         return;
       }
 
@@ -58,8 +70,10 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true }:
       // Fallback : `configured: false` ou réponse inattendue côté serveur
       // (credentials ANS pas encore reçus → erreur réelle, pas un blocage UX en amont)
       toast.error('Pro Santé Connect indisponible pour le moment. Réessayez dans quelques minutes ou utilisez l\'inscription par email.');
+      setModaleOuverte(false);
     } catch {
       toast.error('Erreur de connexion à Pro Santé Connect. Vérifiez votre réseau.');
+      setModaleOuverte(false);
     } finally {
       setLoading(false);
     }
@@ -69,38 +83,48 @@ export function BoutonProSanteConnect({ intention = 'login', fullWidth = true }:
   // fond blanc, bordure et texte bleu PSC, logo officiel à gauche.
   // Réf : https://esante.gouv.fr/produits-services/pro-sante-connect (kit identité visuelle)
   return (
-    <button
-      type="button"
-      onClick={lancer}
-      disabled={loading}
-      aria-label="S'identifier avec Pro Santé Connect"
-      className={[
-        fullWidth ? 'w-full' : '',
-        'inline-flex items-center justify-center gap-3',
-        'min-h-[48px] px-5 py-3 rounded-xl',
-        'bg-white border-2',
-        'transition-colors duration-150',
-        'disabled:opacity-60 disabled:cursor-not-allowed',
-      ].join(' ')}
-      style={{
-        borderColor: '#0078D7',
-        color: '#0078D7',
-      }}
-      onMouseEnter={(e) => {
-        if (!loading) e.currentTarget.style.backgroundColor = '#F0F7FD';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = '#FFFFFF';
-      }}
-    >
-      {loading ? (
-        <Loader2 className="h-5 w-5 animate-spin" style={{ color: '#0078D7' }} />
-      ) : (
-        <LogoPSC className="h-6 w-6 shrink-0" />
-      )}
-      <span className="text-sm font-semibold tracking-tight">
-        S'identifier avec Pro Santé Connect
-      </span>
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={ouvrirModale}
+        disabled={loading}
+        aria-label="S'identifier avec Pro Santé Connect"
+        className={[
+          fullWidth ? 'w-full' : '',
+          'inline-flex items-center justify-center gap-3',
+          'min-h-[48px] px-5 py-3 rounded-xl',
+          'bg-white border-2',
+          'transition-colors duration-150',
+          'disabled:opacity-60 disabled:cursor-not-allowed',
+        ].join(' ')}
+        style={{
+          borderColor: '#0078D7',
+          color: '#0078D7',
+        }}
+        onMouseEnter={(e) => {
+          if (!loading) e.currentTarget.style.backgroundColor = '#F0F7FD';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = '#FFFFFF';
+        }}
+      >
+        {loading ? (
+          <Loader2 className="h-5 w-5 animate-spin" style={{ color: '#0078D7' }} />
+        ) : (
+          <LogoPSC className="h-6 w-6 shrink-0" />
+        )}
+        <span className="text-sm font-semibold tracking-tight">
+          S'identifier avec Pro Santé Connect
+        </span>
+      </button>
+
+      <ModalePscPreAuth
+        open={modaleOuverte}
+        onOpenChange={setModaleOuverte}
+        onContinue={lancerRedirection}
+        onSwitchToEmail={onSwitchToEmail}
+        loading={loading}
+      />
+    </>
   );
 }
