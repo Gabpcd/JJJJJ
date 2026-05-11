@@ -48,6 +48,7 @@ function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
   if (
     origin === "https://jolene.app" ||
+    origin === "https://app.jolene.app" ||
     origin === "https://www.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
