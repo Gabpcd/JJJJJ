@@ -143,7 +143,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const inscriptionSoignant = useCallback(async (data: any) => {
     logger.debug('[INSCRIPTION] 1. Début inscription soignant, données:', { email: data.email, prenom: data.prenom, nom: data.nom, profession: data.profession });
 
-    // Étape 1 : signUp Supabase Auth
+    // Étape 1 : signUp Supabase Auth (ou signIn si le user existe déjà
+    // d'une tentative précédente avortée — le profil soignant n'existe
+    // pas encore mais le compte auth oui).
     let authData: any;
     try {
       logger.debug('[INSCRIPTION] 2. Appel supabase.auth.signUp...');
@@ -156,11 +158,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       });
       if (authError) {
-        logger.error('[INSCRIPTION] ERREUR signUp', authError);
-        throw authError;
+        const msg = authError.message?.toLowerCase() || '';
+        if (msg.includes('already') && msg.includes('registered')) {
+          logger.debug('[INSCRIPTION] 2b. User déjà enregistré, tentative signIn...');
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: data.email,
+            password: data.motDePasse,
+          });
+          if (signInError) {
+            logger.error('[INSCRIPTION] ERREUR signIn fallback', signInError);
+            throw new Error('Ce compte existe déjà. Vérifiez votre mot de passe ou connectez-vous.');
+          }
+          authData = signInData;
+        } else {
+          logger.error('[INSCRIPTION] ERREUR signUp', authError);
+          throw authError;
+        }
+      } else {
+        authData = signUpData;
       }
-      authData = signUpData;
-      logger.debug('[INSCRIPTION] 3. signUp OK, user id:', authData.user?.id, 'session:', !!authData.session);
+      logger.debug('[INSCRIPTION] 3. signUp/signIn OK, user id:', authData.user?.id, 'session:', !!authData.session);
     } catch (err) {
       logger.error('[INSCRIPTION] signUp EXCEPTION', err);
       throw err;
