@@ -119,7 +119,8 @@ export default function InscriptionSoignant() {
 
   // RPPS verification state
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
-  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string; specialite_code?: string | null; specialite_label?: string | null } | null>(null);
+  const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string; specialite_code?: string | null; specialite_label?: string | null; fhir_indisponible?: boolean; profession_api?: string } | null>(null);
+  const [rppsPreRempli, setRppsPreRempli] = useState(false);
 
   const normaliser = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
 
@@ -180,13 +181,14 @@ export default function InscriptionSoignant() {
   })();
   const rppsRequis = form.profession && !PROFESSIONS_SANS_RPPS.includes(form.profession);
   const rppsMatch = rppsCorrespond();
-  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && (!rppsResultat.trouve || rppsMatch === false);
+  const rppsBloquant = rppsRequis && form.rpps.length === 11 && rppsResultat && !rppsResultat.fhir_indisponible && (!rppsResultat.trouve || rppsMatch === false);
   const etape2Valide = form.prenom && form.nom && form.profession && form.typesContrat.length > 0 && !rppsBloquant && !dateNaissanceRequise && dateNaissanceMajeur && (!TURNSTILE_REQUIRED || !!turnstileToken);
 
   // Verify RPPS when 11 digits entered
   useEffect(() => {
     if (form.rpps.length !== 11 || !form.prenom || !form.nom) {
       setRppsResultat(null);
+      setRppsPreRempli(false);
       return;
     }
     const controller = new AbortController();
@@ -223,14 +225,25 @@ export default function InscriptionSoignant() {
           setRppsResultat(data?.trouve === false ? { trouve: false } : null);
         } else if (data) {
           const nomAffiche = data.nom_api || data.nom || '';
-          const prenomAffiche = data.prenom || '';
+          const prenomAffiche = data.prenom || data.prenom_api || '';
           const label = [prenomAffiche, nomAffiche].filter(Boolean).join(' ') || nomAffiche;
-          setRppsResultat({
+          const resultat = {
             trouve: !!data.trouve,
             nom_affiche: label,
             specialite_code: data.specialite_code ?? null,
             specialite_label: data.specialite_label ?? null,
-          });
+            fhir_indisponible: !!data.fhir_indisponible,
+            profession_api: data.profession_api ?? undefined,
+          };
+          setRppsResultat(resultat);
+          if (data.trouve && !data.fhir_indisponible && (nomAffiche || prenomAffiche)) {
+            setForm(prev => ({
+              ...prev,
+              ...(nomAffiche ? { nom: nomAffiche } : {}),
+              ...(prenomAffiche ? { prenom: prenomAffiche } : {}),
+            }));
+            setRppsPreRempli(true);
+          }
         } else {
           setRppsResultat({ trouve: false });
         }
@@ -351,10 +364,16 @@ export default function InscriptionSoignant() {
               />
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre profil professionnel</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Prénom *</span><input value={form.prenom} onChange={e => maj('prenom', e.target.value)} className="input-base" required autoComplete="given-name" /></label>
-                <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Nom *</span><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required autoComplete="family-name" /></label>
+                <label className="block">
+                  <span className="text-sm font-medium text-foreground mb-1.5 block">Prénom *{rppsPreRempli && <span className="text-xs text-emerald-600 ml-1.5 font-normal">Vérifié via RPPS</span>}</span>
+                  <input value={form.prenom} onChange={e => { if (!rppsPreRempli) maj('prenom', e.target.value); }} readOnly={rppsPreRempli} className={`input-base ${rppsPreRempli ? 'bg-emerald-50/50 cursor-not-allowed' : ''}`} required autoComplete="given-name" />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-foreground mb-1.5 block">Nom *{rppsPreRempli && <span className="text-xs text-emerald-600 ml-1.5 font-normal">Vérifié via RPPS</span>}</span>
+                  <input value={form.nom} onChange={e => { if (!rppsPreRempli) maj('nom', e.target.value); }} readOnly={rppsPreRempli} className={`input-base ${rppsPreRempli ? 'bg-emerald-50/50 cursor-not-allowed' : ''}`} required autoComplete="family-name" />
+                </label>
               </div>
-              <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</span><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="+33 6 ..." className="input-base" pattern="[\+]?[0-9\s]{8,15}" /></label>
+              <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Téléphone</span><input value={form.telephone} onChange={e => maj('telephone', e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="+33 6 ..." className="input-base" pattern="[\\+]?[0-9\\s]{8,15}" /></label>
               <label className="block"><span className="text-sm font-medium text-foreground mb-1.5 block">Date de naissance *</span><input type="date" value={form.dateNaissance} onChange={e => maj('dateNaissance', e.target.value)} className="input-base" max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]} required aria-invalid={!!form.dateNaissance && !dateNaissanceMajeur} aria-describedby={form.dateNaissance && !dateNaissanceMajeur ? 'date-err' : undefined} />
                 {dateNaissanceRequise && <p className="text-xs text-destructive mt-1 break-words">La date de naissance est obligatoire</p>}
                 {form.dateNaissance && !dateNaissanceMajeur && <p id="date-err" className="text-xs text-destructive mt-1 break-words" role="alert">Vous devez avoir 18 ans révolus pour vous inscrire</p>}
@@ -390,7 +409,7 @@ export default function InscriptionSoignant() {
                 <label className="block">
                   <span className="text-sm font-medium text-foreground mb-1.5 block">Numéro RPPS *</span>
                   <div className="relative">
-                    <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base pr-10" inputMode="numeric" autoComplete="off" aria-describedby={rppsVerifiant ? 'rpps-status' : undefined} />
+                    <input value={form.rpps} onChange={e => maj('rpps', e.target.value.replace(/\\D/g, '').slice(0, 11))} placeholder="11 chiffres" className="input-base pr-10" inputMode="numeric" autoComplete="off" aria-describedby={rppsVerifiant ? 'rpps-status' : undefined} />
                     {rppsVerifiant && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" aria-hidden="true" />}
                   </div>
                   {rppsVerifiant && <p id="rpps-status" className="text-xs text-primary mt-1" role="status">Vérification en cours...</p>}
@@ -414,10 +433,16 @@ export default function InscriptionSoignant() {
                       ❌ Ce RPPS ne correspond pas à votre identité
                     </div>
                   )}
-                  {rppsResultat && !rppsResultat.trouve && form.rpps.length === 11 && (
+                  {rppsResultat && !rppsResultat.trouve && !rppsResultat.fhir_indisponible && form.rpps.length === 11 && (
                     <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-destructive/5 text-destructive rounded-lg px-2 py-1.5" role="alert">
                       <ShieldAlert className="h-3.5 w-3.5" />
                       ❌ RPPS non trouvé dans l'annuaire
+                    </div>
+                  )}
+                  {rppsResultat && rppsResultat.fhir_indisponible && form.rpps.length === 11 && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 rounded-lg px-2 py-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Format RPPS valide. La vérification auprès de l'Annuaire Santé sera effectuée sous 24h.
                     </div>
                   )}
                 </label>
