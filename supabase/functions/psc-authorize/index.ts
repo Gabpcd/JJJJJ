@@ -5,12 +5,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // https://industriels.esante.gouv.fr/produits-et-services/pro-sante-connect/documentation-technique
 const PSC_ENDPOINTS = {
   sandbox: {
-    issuer: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet",
-    authorization: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/auth",
+    issuer: "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet",
+    authorization: "https://wallet.bas.esw.esante.gouv.fr/auth",
   },
   production: {
     issuer: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet",
-    authorization: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/auth",
+    authorization: "https://wallet.esw.esante.gouv.fr/auth",
   },
 };
 
