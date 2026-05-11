@@ -33,16 +33,16 @@ Configurés dans **Project Settings → Edge Functions → Secrets** sur le proj
 
 ## Endpoints PSC production (hardcodés dans le code)
 
-Vérifiables à tout moment via `https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/.well-known/openid-configuration`.
+Vérifiables à tout moment via `https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/.well-known/wallet-openid-configuration`.
 
 | Endpoint | URL |
 |---|---|
 | Issuer | `https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet` |
-| Authorization | `…/protocol/openid-connect/auth` |
-| Token | `…/protocol/openid-connect/token` |
-| UserInfo | `…/protocol/openid-connect/userinfo` |
-| JWKS | `…/protocol/openid-connect/certs` |
-| End Session (logout) | `…/protocol/openid-connect/logout` |
+| Authorization | `https://wallet.esw.esante.gouv.fr/auth` |
+| Token | `https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/token` |
+| UserInfo | `https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/userinfo` |
+| JWKS | `https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/certs` |
+| End Session (logout) | `https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/logout` |
 
 Le bouton **« Vérifier connexion PSC »** dans `/admin/healthcheck` compare ce hardcode au discovery OIDC à chaque vérification — si l'ANS modifie un endpoint, l'écart s'affiche.
 
@@ -154,7 +154,7 @@ supabase.functions.invoke('psc-authorize')
    │ stocke dans psc_auth_sessions
    │ retourne authorization_url
    ▼
-Navigateur → auth.esw.esante.gouv.fr/.../auth?...
+Navigateur → wallet.esw.esante.gouv.fr/auth?...
    │ user présente sa carte e-CPS
    ▼
 PSC redirige → https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/psc-callback?code=...&state=...

@@ -22,15 +22,15 @@ import { verifyAdminOrServiceRole } from "../_shared/admin-auth.ts";
 // découverte OIDC à ces valeurs : si l'ANS modifie un endpoint, on le détecte.
 const PSC_HARDCODED = {
   sandbox: {
-    issuer: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet",
-    authorization_endpoint: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/auth",
-    token_endpoint: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/token",
-    userinfo_endpoint: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/userinfo",
-    end_session_endpoint: "https://auth.bas.psc.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/logout",
+    issuer: "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet",
+    authorization_endpoint: "https://wallet.bas.esw.esante.gouv.fr/auth",
+    token_endpoint: "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/token",
+    userinfo_endpoint: "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/userinfo",
+    end_session_endpoint: "https://auth.bas.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/logout",
   },
   production: {
     issuer: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet",
-    authorization_endpoint: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/auth",
+    authorization_endpoint: "https://wallet.esw.esante.gouv.fr/auth",
     token_endpoint: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/token",
     userinfo_endpoint: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/userinfo",
     end_session_endpoint: "https://auth.esw.esante.gouv.fr/auth/realms/esante-wallet/protocol/openid-connect/logout",
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
 
   // ── 2. Découverte OIDC (.well-known) ──
   const issuer = PSC_HARDCODED[env].issuer;
-  const discoveryUrl = `${issuer}/.well-known/openid-configuration`;
+  const discoveryUrl = `${issuer}/.well-known/wallet-openid-configuration`;
   let discoveryOk = false;
   let discoveryStatus: number | null = null;
   let discoveredEndpoints: Record<string, string> = {};
