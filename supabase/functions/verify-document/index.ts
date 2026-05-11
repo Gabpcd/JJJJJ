@@ -5,6 +5,7 @@ function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
     origin === "https://jolene.app" ||
+    origin === "https://app.jolene.app" ||
     origin === "https://www.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
@@ -37,12 +38,10 @@ async function loadDocumentWithRetry(supabase: any, documentId: string, attempts
 
     if (data) return data;
 
-    // If there's a real error (not just "row not found"), fail immediately
     if (error && !error.message?.includes("not found") && status !== 406) {
       throw new Error(`Erreur base de données: ${error.message}`);
     }
 
-    // Only retry if document simply doesn't exist yet (race condition after insert)
     if (attempt < attempts - 1) await wait(350 * (attempt + 1));
   }
   throw new Error("Document introuvable");
@@ -52,7 +51,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
 
   try {
-    // Warm ping: return immediately to prevent cold starts
     const body = await req.clone().json().catch(() => ({}));
     if (body?.warm === true) {
       return new Response(JSON.stringify({ warm: true }), {
@@ -60,7 +58,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Rate-limit IP : 10 vérifs document/min/IP (OCR coûteux côté infra).
     if (applyRateLimit('verify-document', getClientIp(req), { max: 10, windowMs: 60_000 })) {
       return new Response(JSON.stringify({ error: 'Trop de vérifications. Réessayez dans 1 minute.' }), {
         status: 429,
@@ -68,7 +65,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Auth: verify JWT user or service_role
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Non autorisé" }), {
@@ -101,23 +97,19 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // 1. Get document info (retry to handle race condition after insert)
     const doc = await loadDocumentWithRetry(supabase, document_id);
 
-    // 2. Get soignant info for name matching
     const { data: soignant } = await supabase
       .from("soignants")
       .select("prenom, nom")
       .eq("id", doc.soignant_id)
       .single();
 
-    // 3. Download document from storage
     const { data: fileData, error: fileErr } = await supabase.storage
       .from(doc.s3_bucket)
       .download(doc.s3_cle);
     if (fileErr || !fileData) throw new Error("Impossible de télécharger le fichier");
 
-    // 4. Convert to base64 (chunked to avoid stack overflow)
     const arrayBuffer = await fileData.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     const chunkSize = 8192;
@@ -130,7 +122,6 @@ Deno.serve(async (req) => {
     }
     const base64 = btoa(binary);
 
-    // Whitelist allowed MIME types for security
     const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
     if (doc.type_mime && !ALLOWED_MIME_TYPES.includes(doc.type_mime)) {
       await supabase.rpc("fn_update_document_verification", {
@@ -146,7 +137,6 @@ Deno.serve(async (req) => {
     const isImage = doc.type_mime?.startsWith("image/");
     const isPdf = doc.type_mime === "application/pdf";
 
-    // Type document labels
     const typeLabels: Record<string, string> = {
       CARTE_IDENTITE: "Carte d'identité ou Passeport",
       PASSEPORT: "Passeport",
@@ -164,7 +154,6 @@ Deno.serve(async (req) => {
     const typeLabel = typeLabels[doc.type_document] || doc.type_document;
     const nomComplet = soignant ? `${soignant.prenom} ${soignant.nom}` : "inconnu";
 
-    // 5. Call Anthropic Claude API for analysis
     const systemPrompt = `Tu es un vérificateur de documents professionnels de santé. Analyse le document fourni et réponds UNIQUEMENT en JSON valide avec cette structure exacte:
 {
   "type_correspond": true/false,
@@ -200,7 +189,6 @@ Analyse ce document et vérifie sa conformité.`;
 
     const mimeType = isPdf ? "application/pdf" : (doc.type_mime || "application/octet-stream");
 
-    // Build Anthropic-format content directly (no OpenAI intermediate)
     const anthropicContent: any[] = [{ type: "text", text: userMessage }];
     if (isImage || isPdf) {
       anthropicContent.push({
@@ -238,7 +226,6 @@ Analyse ce document et vérifie sa conformité.`;
     const aiData = await aiResponse.json();
     const rawContent = aiData.content?.[0]?.text || "";
 
-    // Parse JSON from response
     let analysis: any;
     try {
       const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
@@ -257,7 +244,6 @@ Analyse ce document et vérifie sa conformité.`;
       });
     }
 
-    // 6. Update document with results via RPC (bypasses protective triggers)
     await supabase.rpc("fn_update_document_verification", {
       p_document_id: document_id,
       p_statut_verification: analysis.verdict || "EN_ATTENTE",
@@ -267,24 +253,19 @@ Analyse ce document et vérifie sa conformité.`;
       p_verifie_le: analysis.verdict === "VERIFIE" ? new Date().toISOString() : null,
     });
 
-    // 6b. Store AI-extracted name fields for identity cross-check
     const nomExtraitIa = analysis.nom_extrait || null;
     const prenomExtraitIa = analysis.prenom_extrait || null;
     const scoreConfianceIa = typeof analysis.score_confiance === "number" ? analysis.score_confiance : null;
 
-    // Normalize for accent-insensitive, composite-name-tolerant comparison
-    // Same logic as verify-rpps: NFD decompose + strip diacriticals + lowercase + trim
-    const normalize = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const normalize = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
     const nomDocNorm = normalize(nomExtraitIa || "");
     const nomProfilNorm = normalize(soignant?.nom || "");
     const prenomDocNorm = normalize(prenomExtraitIa || "");
     const prenomProfilNorm = normalize(soignant?.prenom || "");
 
-    // Bidirectional containment (handles composite names: "DUPONT-MARTIN" matches "DUPONT")
     const nomMatch = nomDocNorm && nomProfilNorm
       ? nomDocNorm.includes(nomProfilNorm) || nomProfilNorm.includes(nomDocNorm)
       : null;
-    // First 3 chars for first name (handles "Jean-Pierre" vs "Jean")
     const prenomMatch = prenomDocNorm && prenomProfilNorm
       ? prenomDocNorm.slice(0, 3) === prenomProfilNorm.slice(0, 3)
       : null;
@@ -298,7 +279,6 @@ Analyse ce document et vérifie sa conformité.`;
       coherence_nom: coherenceNom,
     } as any).eq("id", document_id);
 
-    // 7. Audit
     await supabase.rpc("fn_ecrire_audit_safe" as any, {
       p_acteur_id: doc.soignant_id,
       p_type_acteur: "SYSTEME",
