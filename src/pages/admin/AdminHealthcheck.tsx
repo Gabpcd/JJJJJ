@@ -133,7 +133,25 @@ export default function AdminHealthcheck() {
       results.push({ name: 'Chorus Pro (PISTE)', icon: Landmark, status: 'error', latency: Date.now() - pisteStart, detail: e.message });
     }
 
-    // 10. Sentry — masqué si DSN non configurée (activation à venir côté Vercel).
+    // 10. Annuaire Santé FHIR (warm ping verify-rpps)
+    const rppsStart = Date.now();
+    try {
+      const { data } = await supabase.functions.invoke('verify-rpps', { body: { warm: true } });
+      const configured = data?.configured === true;
+      results.push({
+        name: 'Annuaire Santé (RPPS)',
+        icon: ShieldCheck,
+        status: configured ? 'ok' : 'degraded',
+        latency: Date.now() - rppsStart,
+        detail: configured
+          ? 'Clé API FHIR ANS configurée (vérification automatique active)'
+          : 'ESANTE_FHIR_API_KEY manquante (vérification différée à 24h)',
+      });
+    } catch (e: any) {
+      results.push({ name: 'Annuaire Santé (RPPS)', icon: ShieldCheck, status: 'error', latency: Date.now() - rppsStart, detail: e.message });
+    }
+
+    // 11. Sentry — masqué si DSN non configurée (activation à venir côté Vercel).
     const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
     if (sentryDsn) {
       results.push({ name: 'Sentry Monitoring', icon: Shield, status: 'ok', detail: 'DSN configuré' });
