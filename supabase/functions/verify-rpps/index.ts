@@ -78,12 +78,20 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
   specialiteLabel?: string;
   actif?: boolean;
 }> {
-  const FHIR_BASE = 'https://gateway.api.esante.gouv.fr/fhir/v1';
+  // API FHIR Annuaire Santé v2 (ANS) — authentification via clé Gravitee.
+  // La clé ESANTE_FHIR_API_KEY est obtenue sur portal.api.esante.gouv.fr.
+  // Header officiel : ESANTE-API-KEY (cf. doc ansforge.github.io).
+  const apiKey = Deno.env.get('ESANTE_FHIR_API_KEY') || '';
+  if (!apiKey) {
+    throw new Error('ESANTE_FHIR_API_KEY non configuré');
+  }
+  const FHIR_BASE = 'https://gateway.api.esante.gouv.fr/fhir/v2';
   const url = `${FHIR_BASE}/Practitioner?identifier=${rpps}`;
 
   const response = await fetchWithTimeout(url, {
     headers: {
       'Accept': 'application/fhir+json',
+      'ESANTE-API-KEY': apiKey,
     },
   }, 8000);
 
@@ -187,7 +195,20 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { numero_rpps, rpps, prenom, nom, soignant_id, turnstileToken } = await req.json();
+    const body = await req.json();
+    // Warm ping admin healthcheck — pas d'effet de bord, juste retourne statut config.
+    if (body && body.warm === true) {
+      return new Response(JSON.stringify({
+        warm: true,
+        configured: !!Deno.env.get('ESANTE_FHIR_API_KEY'),
+        endpoint: 'https://gateway.api.esante.gouv.fr/fhir/v2/Practitioner',
+      }), {
+        status: 200,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { numero_rpps, rpps, prenom, nom, soignant_id, turnstileToken } = body;
     const numeroRpps = String(numero_rpps || rpps || '').trim();
 
     const captchaRequis = !isServiceRole && (!isAnonKey || !!soignant_id);
@@ -290,6 +311,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Si la clé API n'est pas configurée, retour gracieux : format valide,
+    // vérification différée (admin reverra manuellement).
+    if (!Deno.env.get('ESANTE_FHIR_API_KEY')) {
+      console.warn('verify-rpps: ESANTE_FHIR_API_KEY non configuré, dégradation gracieuse');
+      return new Response(JSON.stringify({
+        trouve: true, correspond: null, nom_api: null, prenom_api: null, profession_api: null,
+        fhir_indisponible: true, source: 'Format RPPS valide — vérification ANS différée',
+      }), {
+        status: 200,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
     try {
       const result = await queryFhirAnnuaire(numeroRpps);
 
@@ -341,7 +375,7 @@ Deno.serve(async (req) => {
         profession_api: result.professionLabel || mapProfessionCode(result.professionCode),
         specialite_code: result.specialiteCode ?? null,
         specialite_label: result.specialiteLabel ?? null,
-        actif: result.actif, source: 'FHIR Annuaire Sante',
+        actif: result.actif, source: 'FHIR Annuaire Sante v2',
       }), {
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
