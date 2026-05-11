@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { verifyTurnstileToken } from '../_shared/verify-turnstile.ts';
+import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -50,7 +51,14 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
   }
 }
 
-async function verifierRppsServeur(rpps: string, nom: string, prenom: string): Promise<{ valide: boolean; verifie?: boolean; erreur?: string }> {
+interface VerifierRppsResult {
+  valide: boolean;
+  verifie?: boolean;
+  code?: 'RPPS_NOT_FOUND' | 'RPPS_TRAITS_MISMATCH' | 'RPPS_API_UNAVAILABLE';
+  message?: string;
+}
+
+async function verifierRppsServeur(rpps: string, nom: string, prenom: string): Promise<VerifierRppsResult> {
   if (rpps === '00000000001') return { valide: true, verifie: true };
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -66,62 +74,51 @@ async function verifierRppsServeur(rpps: string, nom: string, prenom: string): P
     );
     if (!res.ok) {
       console.error('verify-rpps HTTP error:', res.status);
-      return { valide: false, erreur: 'Impossible de verifier le numero RPPS. Reessayez.' };
+      return { valide: false, code: 'RPPS_API_UNAVAILABLE', message: 'Impossible de vérifier le numéro RPPS pour le moment. Réessayez dans quelques minutes.' };
     }
     const data = await res.json();
-    if (!data.trouve) return { valide: false, erreur: 'Numero RPPS introuvable dans l\'annuaire sante.' };
-    if (data.correspond === false) return { valide: false, erreur: 'Le numero RPPS ne correspond pas a votre identite (nom/prenom).' };
+    if (!data.trouve) return { valide: false, code: 'RPPS_NOT_FOUND', message: 'Aucun professionnel trouvé avec ce numéro RPPS dans l\'Annuaire Santé.' };
+    if (data.correspond === false) return { valide: false, code: 'RPPS_TRAITS_MISMATCH', message: 'Les informations saisies (nom, prénom) ne correspondent pas au numéro RPPS.' };
     if (data.fhir_indisponible) return { valide: true, verifie: false };
     return { valide: true, verifie: true };
   } catch (err) {
-    console.error('RPPS verification error:', err);
-    return { valide: false, erreur: 'Impossible de verifier le numero RPPS. Reessayez.' };
+    console.error('RPPS verification error:', safeStringifyError(err));
+    return { valide: false, code: 'RPPS_API_UNAVAILABLE', message: 'Impossible de vérifier le numéro RPPS pour le moment. Réessayez dans quelques minutes.' };
   }
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(req) });
+  const cors = corsHeaders(req);
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
   if (!checkRateLimit(clientIp)) {
-    return new Response(JSON.stringify({ error: 'Trop de tentatives. Reessayez dans quelques minutes.' }), {
-      status: 429, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
+    return errorResponse(cors, 429, 'RATE_LIMITED', 'Trop de tentatives. Réessayez dans quelques minutes.');
   }
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'Non authentifie' }), {
-      status: 401, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
+    return errorResponse(cors, 401, 'UNAUTHORIZED', 'Non authentifié.');
   }
   const token = authHeader.replace('Bearer ', '');
   const supabaseAuth = createClient(supabaseUrl, anonKey);
   const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
   if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Non authentifie' }), {
-      status: 401, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
+    return errorResponse(cors, 401, 'INVALID_TOKEN', 'Session invalide. Reconnectez-vous et réessayez.');
   }
   try {
     const body = await req.json();
     const { prenom, nom, telephone, dateNaissance, profession, typesContrat, rpps, rayon, lat, lng, turnstileToken } = body;
     const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
     if (!captcha.success) {
-      return new Response(JSON.stringify({ error: captcha.error }), {
-        status: 403, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      return errorResponse(cors, 403, 'CAPTCHA_FAILED', captcha.error || 'Vérification anti-bot échouée. Rafraîchissez la page.');
     }
     if (!prenom || !nom || !profession) {
-      return new Response(JSON.stringify({ error: 'Champs obligatoires manquants (prenom, nom, profession)' }), {
-        status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      return errorResponse(cors, 400, 'MISSING_REQUIRED_FIELDS', 'Champs obligatoires manquants (prénom, nom, profession).', { champs_manquants: [!prenom && 'prenom', !nom && 'nom', !profession && 'profession'].filter(Boolean) });
     }
     if (!dateNaissance) {
-      return new Response(JSON.stringify({ error: 'Date de naissance requise.' }), {
-        status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      return errorResponse(cors, 400, 'MISSING_REQUIRED_FIELDS', 'Date de naissance requise.', { champs_manquants: ['dateNaissance'] });
     }
     {
       const birth = new Date(dateNaissance);
@@ -131,31 +128,25 @@ Deno.serve(async (req) => {
       const dayDiff = today.getDate() - birth.getDate();
       const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
       if (actualAge < 18) {
-        return new Response(JSON.stringify({ error: 'Vous devez avoir au moins 18 ans pour vous inscrire.' }), {
-          status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
+        return errorResponse(cors, 400, 'UNDERAGE', 'Vous devez avoir au moins 18 ans pour vous inscrire.');
       }
     }
     const rppsObligatoire = !PROFESSIONS_SANS_RPPS.includes(profession);
     let rppsServerVerifie = false;
     if (rppsObligatoire) {
       if (!rpps || !/^[0-9]{11}$/.test(rpps)) {
-        return new Response(JSON.stringify({ error: 'Le numero RPPS est obligatoire pour votre profession (11 chiffres).' }), {
-          status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
+        return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Le numéro RPPS est obligatoire pour votre profession (11 chiffres).');
       }
       const verification = await verifierRppsServeur(rpps, nom, prenom);
       if (!verification.valide) {
-        return new Response(JSON.stringify({ error: verification.erreur }), {
-          status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
+        const code = verification.code || 'RPPS_NOT_FOUND';
+        const message = verification.message || 'Numéro RPPS invalide.';
+        return errorResponse(cors, 400, code, message);
       }
       rppsServerVerifie = verification.verifie !== false;
     } else {
       if (rpps && !/^[0-9]{11}$/.test(rpps)) {
-        return new Response(JSON.stringify({ error: 'Numero RPPS invalide (11 chiffres requis)' }), {
-          status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
+        return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Numéro RPPS invalide. Vérifiez qu\'il contient bien 11 chiffres.');
       }
     }
     const rayonKm = typeof rayon === 'number' ? Math.min(Math.max(rayon, 5), 100) : 30;
@@ -179,26 +170,40 @@ Deno.serve(async (req) => {
     };
     const { error: insertError } = await supabaseAdmin.from('soignants').insert(insertPayload);
     if (insertError) {
-      console.error('INSERT soignants echoue', insertError.code);
+      console.error('INSERT soignants echoue', insertError.code || safeStringifyError(insertError));
       const msg = insertError.message || '';
       if (msg.includes('duplicate key')) {
-        return new Response(JSON.stringify({ error: 'Un compte avec cet identifiant existe deja.' }), {
-          status: 409, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
+        // [P1 — fix compte zombie] Le user Supabase Auth existe déjà mais
+        // l'INSERT soignants est bloqué par contrainte unique. Cas typique :
+        // utilisateur réessaye après une 1re tentative interrompue. On retourne
+        // 409 sans toucher au compte Auth — il est légitime puisqu'un autre
+        // soignant utilise déjà cet identifiant.
+        return errorResponse(cors, 409, 'USER_ALREADY_REGISTERED', 'Un compte existe déjà avec cet email. Connectez-vous ou utilisez une autre adresse.');
       }
-      return new Response(JSON.stringify({ error: 'Erreur lors de la creation du profil soignant.' }), {
-        status: 500, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      // [P1 — fix compte zombie] L'INSERT a échoué pour une autre raison
+      // (validation, RLS, contrainte autre). On nettoie le user Auth pour que
+      // le retry de l'utilisateur ne se heurte pas à "User already registered".
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(user.id);
+        console.log(`[register-soignant] Compte Auth ${user.id} nettoyé après échec INSERT soignants`);
+      } catch (cleanupErr) {
+        console.error('[register-soignant] Cleanup Auth user échoué:', safeStringifyError(cleanupErr));
+      }
+      return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la création du profil soignant. Notre équipe a été notifiée. Réessayez dans quelques minutes.');
     }
     const { error: claimsError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
       app_metadata: { role: 'SOIGNANT' },
     });
     if (claimsError) {
-      console.error('set-user-claims echoue', claimsError.code);
+      console.error('set-user-claims echoue', claimsError.code || safeStringifyError(claimsError));
+      // Compensation : on supprime aussi le row soignants ET le user Auth.
       await supabaseAdmin.from('soignants').delete().eq('id', user.id);
-      return new Response(JSON.stringify({ error: 'Erreur lors de la configuration du compte.' }), {
-        status: 500, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(user.id);
+      } catch (cleanupErr) {
+        console.error('[register-soignant] Cleanup Auth user échoué (claims):', safeStringifyError(cleanupErr));
+      }
+      return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la configuration du compte. Réessayez dans quelques minutes.');
     }
     await supabaseAdmin.from('journaux_audit').insert({
       acteur_id: user.id, type_acteur: 'SOIGNANT', action: 'INSCRIPTION',
@@ -218,20 +223,18 @@ Deno.serve(async (req) => {
           data: { prenom: String(prenom).slice(0, 100), nom: String(nom).slice(0, 100), profession, lien_dashboard: 'https://jolene.app/soignant' } },
       });
     } catch (emailErr) {
-      console.warn('[register-soignant] Email bienvenue non envoye (best-effort):', emailErr);
+      console.warn('[register-soignant] Email bienvenue non envoye (best-effort):', safeStringifyError(emailErr));
     }
     try {
       await supabaseAdmin.rpc('fn_planifier_serie_onboarding', { p_utilisateur_id: user.id, p_serie: 'SOIGNANT_ONBOARDING' });
     } catch (serieErr) {
-      console.warn('[register-soignant] Planification serie onboarding echouee (best-effort):', serieErr);
+      console.warn('[register-soignant] Planification serie onboarding echouee (best-effort):', safeStringifyError(serieErr));
     }
-    return new Response(JSON.stringify({ success: true, soignant_id: user.id }), {
-      status: 200, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+    return new Response(JSON.stringify({ ok: true, success: true, soignant_id: user.id }), {
+      status: 200, headers: { ...cors, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    console.error('register-soignant error:', err);
-    return new Response(JSON.stringify({ error: 'Erreur interne' }), {
-      status: 500, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
+    console.error('register-soignant error:', safeStringifyError(err));
+    return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur serveur. Notre équipe a été notifiée. Réessayez dans quelques minutes.');
   }
 });

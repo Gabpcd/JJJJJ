@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { verifyTurnstileToken } from '../_shared/verify-turnstile.ts';
+import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -44,13 +45,12 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders(req) });
   }
 
+  const cors = corsHeaders(req);
+
   // M7: Rate limiting
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
   if (!checkRateLimit(clientIp)) {
-    return new Response(JSON.stringify({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' }), {
-      status: 429,
-      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
+    return errorResponse(cors, 429, 'RATE_LIMITED', 'Trop de tentatives. Réessayez dans quelques minutes.');
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -60,20 +60,14 @@ Deno.serve(async (req) => {
   // 1. Authenticate caller via JWT
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'Non authentifié' }), {
-      status: 401,
-      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
+    return errorResponse(cors, 401, 'UNAUTHORIZED', 'Non authentifié.');
   }
 
   const token = authHeader.replace('Bearer ', '');
   const supabaseAuth = createClient(supabaseUrl, anonKey);
   const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
   if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Non authentifié' }), {
-      status: 401,
-      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
+    return errorResponse(cors, 401, 'INVALID_TOKEN', 'Session invalide. Reconnectez-vous et réessayez.');
   }
 
   try {
@@ -85,26 +79,17 @@ Deno.serve(async (req) => {
     // Captcha anti-bot Cloudflare Turnstile (no-op tant que TURNSTILE_SECRET_KEY non configurée)
     const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
     if (!captcha.success) {
-      return new Response(JSON.stringify({ error: captcha.error }), {
-        status: 403,
-        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      return errorResponse(cors, 403, 'CAPTCHA_FAILED', captcha.error || 'Vérification anti-bot échouée. Rafraîchissez la page.');
     }
 
     // Validate required fields
     if (!nom || !siret || !type || !adresse_ville) {
-      return new Response(JSON.stringify({ error: 'Champs obligatoires manquants' }), {
-        status: 400,
-        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      return errorResponse(cors, 400, 'MISSING_REQUIRED_FIELDS', 'Champs obligatoires manquants.', { champs_manquants: [!nom && 'nom', !siret && 'siret', !type && 'type', !adresse_ville && 'adresse_ville'].filter(Boolean) });
     }
 
     // Luhn validation
     if (!/^\d{14}$/.test(siret) || /^0+$/.test(siret)) {
-      return new Response(JSON.stringify({ error: 'Le SIRET doit contenir 14 chiffres' }), {
-        status: 400,
-        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      return errorResponse(cors, 400, 'SIRET_FORMAT_INVALID', 'Le SIRET doit contenir 14 chiffres.');
     }
     {
       let sum = 0;
@@ -114,10 +99,7 @@ Deno.serve(async (req) => {
         sum += d;
       }
       if (sum % 10 !== 0) {
-        return new Response(JSON.stringify({ error: 'SIRET invalide (checksum incorrecte)' }), {
-          status: 400,
-          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
+        return errorResponse(cors, 400, 'SIRET_CHECKSUM_INVALID', 'SIRET invalide (checksum incorrecte).');
       }
     }
 
@@ -200,18 +182,19 @@ Deno.serve(async (req) => {
       .insert(insertPayload);
 
     if (insertError) {
-      console.error('INSERT etablissements échoué', insertError.code);
+      console.error('INSERT etablissements échoué', insertError.code || safeStringifyError(insertError));
       const msg = insertError.message || '';
       if (msg.includes('duplicate key') && msg.includes('siret')) {
-        return new Response(JSON.stringify({ error: 'Ce numéro SIRET est déjà enregistré.' }), {
-          status: 409,
-          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-        });
+        return errorResponse(cors, 409, 'SIRET_ALREADY_REGISTERED', 'Ce numéro SIRET est déjà enregistré.');
       }
-      return new Response(JSON.stringify({ error: 'Erreur lors de la création du profil établissement.' }), {
-        status: 500,
-        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      // Compensation : nettoyer le user Auth pour qu'un retry ne se heurte pas
+      // à "User already registered".
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(user.id);
+      } catch (cleanupErr) {
+        console.error('[register-etablissement] Cleanup Auth user échoué:', safeStringifyError(cleanupErr));
+      }
+      return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la création du profil établissement. Réessayez dans quelques minutes.');
     }
 
     // 3. Set app_metadata role — server-side, no client involvement
@@ -220,12 +203,14 @@ Deno.serve(async (req) => {
     });
 
     if (claimsError) {
-      console.error('set-user-claims échoué', claimsError.code);
+      console.error('set-user-claims échoué', claimsError.code || safeStringifyError(claimsError));
       await supabaseAdmin.from('etablissements').delete().eq('id', user.id);
-      return new Response(JSON.stringify({ error: 'Erreur lors de la configuration du compte.' }), {
-        status: 500,
-        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(user.id);
+      } catch (cleanupErr) {
+        console.error('[register-etablissement] Cleanup Auth user échoué (claims):', safeStringifyError(cleanupErr));
+      }
+      return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur lors de la configuration du compte. Réessayez dans quelques minutes.');
     }
 
     // 4. Audit inscription + CGU + L1: CGV consent
@@ -276,15 +261,12 @@ Deno.serve(async (req) => {
       console.warn('[register-etablissement] Planification série onboarding échouée (best-effort):', serieErr);
     }
 
-    return new Response(JSON.stringify({ success: true, etablissement_id: user.id, auto_verifie: autoVerifie, statut_verification: statutVerification }), {
+    return new Response(JSON.stringify({ ok: true, success: true, etablissement_id: user.id, auto_verifie: autoVerifie, statut_verification: statutVerification }), {
       status: 200,
-      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      headers: { ...cors, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    console.error('register-etablissement error:', err);
-    return new Response(JSON.stringify({ error: 'Erreur interne' }), {
-      status: 500,
-      headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-    });
+    console.error('register-etablissement error:', safeStringifyError(err));
+    return errorResponse(cors, 500, 'INTERNAL_ERROR', 'Erreur serveur. Notre équipe a été notifiée. Réessayez dans quelques minutes.');
   }
 });
