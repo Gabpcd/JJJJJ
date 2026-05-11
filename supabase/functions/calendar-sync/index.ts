@@ -1,7 +1,7 @@
 // Edge function : calendar-sync
-// Synchronise les missions Jolene vers les calendriers externes connectés.
-// Pour l'instant : mode "dry-run" — enregistre les entrées calendar_events_sync
-// sans appeler les API Google/Microsoft (OAuth2 pas encore configuré).
+// Synchronise les missions Jolene vers les calendriers externes connectes.
+// Pour l'instant : mode "dry-run" -- enregistre les entrees calendar_events_sync
+// sans appeler les API Google/Microsoft (OAuth2 pas encore configure).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -9,6 +9,7 @@ function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
   if (
     origin === "https://jolene.app" ||
+    origin === "https://app.jolene.app" ||
     origin === "https://www.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
@@ -32,14 +33,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Warm ping
     const bodyRaw = await req.clone().json().catch(() => ({}));
     if (bodyRaw?.warm === true) {
       return new Response(JSON.stringify({ warm: true }), { headers: corsHeaders(req) });
     }
 
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Méthode non autorisée" }), {
+      return new Response(JSON.stringify({ error: "Methode non autorisee" }), {
         status: 405,
         headers: corsHeaders(req),
       });
@@ -58,7 +58,6 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-    // Verify the caller is authenticated
     const authHeader = req.headers.get("Authorization");
     if (authHeader) {
       const bearerToken = authHeader.replace("Bearer ", "");
@@ -67,7 +66,7 @@ Deno.serve(async (req) => {
         const authClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
         const { data: { user }, error: authError } = await authClient.auth.getUser(bearerToken);
         if (authError || !user || user.id !== user_id) {
-          return new Response(JSON.stringify({ error: "Non autorisé" }), {
+          return new Response(JSON.stringify({ error: "Non autorise" }), {
             status: 401,
             headers: corsHeaders(req),
           });
@@ -75,7 +74,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 1. Fetch active calendar connections for this user
     let connectionsQuery = supabase
       .from("calendar_connections")
       .select("*")
@@ -89,14 +87,13 @@ Deno.serve(async (req) => {
     const { data: connections, error: connError } = await connectionsQuery;
 
     if (connError) {
-      console.error("Erreur récupération connexions:", connError);
-      return new Response(JSON.stringify({ error: "Erreur récupération connexions" }), {
+      console.error("Erreur recuperation connexions:", connError);
+      return new Response(JSON.stringify({ error: "Erreur recuperation connexions" }), {
         status: 500,
         headers: corsHeaders(req),
       });
     }
 
-    // 2. Fetch upcoming missions (ASSIGNEE/EN_COURS)
     const { data: missions, error: missionsError } = await supabase
       .from("missions")
       .select("id, intitule, debut_le, fin_le, service, taux_horaire_base, etablissement_id, description")
@@ -106,14 +103,13 @@ Deno.serve(async (req) => {
       .order("debut_le");
 
     if (missionsError) {
-      console.error("Erreur récupération missions:", missionsError);
-      return new Response(JSON.stringify({ error: "Erreur récupération missions" }), {
+      console.error("Erreur recuperation missions:", missionsError);
+      return new Response(JSON.stringify({ error: "Erreur recuperation missions" }), {
         status: 500,
         headers: corsHeaders(req),
       });
     }
 
-    // 3. Fetch establishment info for location details
     const etabIds = [...new Set((missions || []).map((m: any) => m.etablissement_id))];
     let etabMap: Record<string, any> = {};
     if (etabIds.length > 0) {
@@ -128,7 +124,6 @@ Deno.serve(async (req) => {
 
     let syncedCount = 0;
 
-    // 4. For each connection, create/update calendar_events_sync entries
     for (const conn of connections || []) {
       for (const mission of missions || []) {
         const etab = etabMap[mission.etablissement_id];
@@ -136,7 +131,6 @@ Deno.serve(async (req) => {
           ? [etab.adresse_rue, etab.adresse_code_postal, etab.adresse_ville].filter(Boolean).join(", ")
           : "";
 
-        // Upsert sync entry
         const { error: upsertError } = await supabase
           .from("calendar_events_sync")
           .upsert(
@@ -150,9 +144,9 @@ Deno.serve(async (req) => {
               event_end: mission.fin_le,
               event_location: location,
               event_description: [
-                etab ? `Établissement: ${etab.nom}` : "",
+                etab ? `Etablissement: ${etab.nom}` : "",
                 mission.service ? `Service: ${mission.service}` : "",
-                `Taux: ${mission.taux_horaire_base}€/h`,
+                `Taux: ${mission.taux_horaire_base} EUR/h`,
               ].filter(Boolean).join("\n"),
               sync_status: "pending",
               updated_at: new Date().toISOString(),
@@ -165,7 +159,6 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Log what WOULD be synced (actual API calls require OAuth tokens)
         console.log(
           `[calendar-sync] Would sync mission ${mission.id} ("${mission.intitule}") ` +
           `to ${conn.provider} for user ${user_id}. ` +
@@ -175,14 +168,12 @@ Deno.serve(async (req) => {
         syncedCount++;
       }
 
-      // Update last_sync_at on the connection
       await supabase
         .from("calendar_connections")
         .update({ last_sync_at: new Date().toISOString() })
         .eq("id", conn.id);
     }
 
-    // If no active connections, still count missions that could be synced
     if (!connections || connections.length === 0) {
       syncedCount = (missions || []).length;
       console.log(

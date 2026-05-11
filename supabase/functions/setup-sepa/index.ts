@@ -5,6 +5,7 @@ function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
     origin === "https://jolene.app" ||
+    origin === "https://app.jolene.app" ||
     origin === "https://www.jolene.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:8080"
@@ -64,11 +65,9 @@ Deno.serve(async (req) => {
 
     const { action, payment_method_id } = await req.json();
 
-    // Resolve real etablissement_id from user metadata (not userId)
     const { data: adminUserData } = await supabaseAdmin.auth.admin.getUserById(userId);
     const etablissementId = adminUserData?.user?.app_metadata?.etablissement_id || userId;
 
-    // Get establishment using resolved ID
     const { data: etab, error: etabErr } = await supabaseAdmin
       .from("etablissements")
       .select("id, nom, email_contact, stripe_customer_id")
@@ -82,7 +81,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Ensure Stripe customer exists
     let customerId = etab.stripe_customer_id;
     if (!customerId) {
       const customer = await stripe.customers.create({
@@ -118,16 +116,13 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Set as default payment method
       await stripe.customers.update(customerId, {
         invoice_settings: { default_payment_method: payment_method_id },
       });
 
-      // Get last4 of IBAN
       const pm = await stripe.paymentMethods.retrieve(payment_method_id);
       const last4 = pm.sepa_debit?.last4 || "****";
 
-      // Update mode_paiement_commission + store PM ID and IBAN last4
       await supabaseAdmin
         .from("etablissements")
         .update({
