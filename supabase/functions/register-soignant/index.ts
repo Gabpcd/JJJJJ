@@ -56,10 +56,10 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
 }
 
 /** Server-side RPPS verification against Annuaire Santé */
-async function verifierRppsServeur(rpps: string, nom: string, prenom: string): Promise<{ valide: boolean; erreur?: string }> {
+async function verifierRppsServeur(rpps: string, nom: string, prenom: string): Promise<{ valide: boolean; verifie?: boolean; erreur?: string }> {
   // Mode test
   if (rpps === '00000000001') {
-    return { valide: true };
+    return { valide: true, verifie: true };
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -96,7 +96,11 @@ async function verifierRppsServeur(rpps: string, nom: string, prenom: string): P
       return { valide: false, erreur: 'Le numéro RPPS ne correspond pas à votre identité (nom/prénom).' };
     }
 
-    return { valide: true };
+    if (data.fhir_indisponible) {
+      return { valide: true, verifie: false };
+    }
+
+    return { valide: true, verifie: true };
   } catch (err) {
     console.error('RPPS verification error:', err);
     return { valide: false, erreur: 'Impossible de vérifier le numéro RPPS. Réessayez.' };
@@ -190,6 +194,7 @@ Deno.serve(async (req) => {
     // RPPS VERIFICATION — Server-side (double vérification)
     // ══════════════════════════════════════════════════
     const rppsObligatoire = !PROFESSIONS_SANS_RPPS.includes(profession);
+    let rppsServerVerifie = false;
 
     if (rppsObligatoire) {
       // RPPS is mandatory for this profession
@@ -208,6 +213,7 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
         });
       }
+      rppsServerVerifie = verification.verifie !== false;
     } else {
       // For AS/AES: RPPS optional, but validate format if provided
       if (rpps && !/^\d{11}$/.test(rpps)) {
@@ -245,7 +251,7 @@ Deno.serve(async (req) => {
       type_contrat: contrats[0],
       types_contrat_acceptes: JSON.stringify(contrats),
       numero_rpps: rpps || null,
-      rpps_verifie: rppsObligatoire && !!rpps, // Mark as verified if server check passed
+      rpps_verifie: rppsObligatoire && !!rpps && rppsServerVerifie,
       rayon_deplacement_km: rayonKm,
       adresse_lat: typeof lat === 'number' ? lat : null,
       adresse_lng: typeof lng === 'number' ? lng : null,
@@ -292,7 +298,7 @@ Deno.serve(async (req) => {
       action: 'INSCRIPTION',
       type_ressource: 'soignant',
       id_ressource: user.id,
-      details: { evenement: 'inscription', profession, rpps_verifie: rppsObligatoire && !!rpps },
+      details: { evenement: 'inscription', profession, rpps_verifie: rppsObligatoire && !!rpps && rppsServerVerifie },
       navigateur_acteur: body.navigateur || null,
     });
 
