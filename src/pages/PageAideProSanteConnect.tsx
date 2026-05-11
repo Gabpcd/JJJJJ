@@ -15,8 +15,8 @@ import { FooterLegal } from '@/components/FooterLegal';
 const LIEN_OFFICIEL_PSC = 'https://esante.gouv.fr/produits-services/pro-sante-connect';
 const LIEN_OFFICIEL_ECPS = 'https://esante.gouv.fr/produits-services/e-cps';
 const LIEN_CONTACT_ANS = 'https://esante.gouv.fr/contact';
-const APP_STORE_ECPS = 'https://apps.apple.com/fr/app/e-cps/id1463399676';
-const PLAY_STORE_ECPS = 'https://play.google.com/store/apps/details?id=fr.asipsante.ecps';
+const APP_STORE_ECPS = 'https://apps.apple.com/fr/app/e-cps/id1469033607';
+const PLAY_STORE_ECPS = 'https://play.google.com/store/apps/details?id=fr.asipsante.esante.wallet.prod';
 
 function LogoPSC({ className }: { className?: string }) {
   return (
