@@ -106,8 +106,15 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: corsHeaders(req) });
     }
 
-    // Nettoyer les vieilles sessions
-    await supabaseAdmin.rpc("fn_nettoyer_psc_sessions_expirees" as any).catch(() => {});
+    // Nettoyer les vieilles sessions (best effort, non bloquant).
+    // Note : .catch() ne fonctionne pas directement sur un PostgrestBuilder
+    // Supabase v2 (qui est thenable mais pas une vraie Promise). On enveloppe
+    // dans un try/catch + await pour gérer proprement les erreurs.
+    try {
+      await supabaseAdmin.rpc("fn_nettoyer_psc_sessions_expirees" as any);
+    } catch (cleanupErr) {
+      console.warn("psc-authorize: cleanup sessions expirees failed (non-blocking)", cleanupErr);
+    }
 
     // Construire l'URL d'autorisation PSC
     const authUrl = new URL(PSC_ENDPOINTS[env].authorization);
