@@ -44,6 +44,7 @@ const PageMentionsLegales = lazy(() => import("./pages/PageMentionsLegales"));
 const PageAccessibilite = lazy(() => import("./pages/PageAccessibilite"));
 const PageAide = lazy(() => import("./pages/PageAide"));
 const PageAideArticle = lazy(() => import("./pages/PageAideArticle"));
+const PageAideProSanteConnect = lazy(() => import("./pages/PageAideProSanteConnect"));
 const PageParametresNotifications = lazy(() => import("./pages/PageParametresNotifications"));
 const PageRecherchesSauvegardees = lazy(() => import("./pages/PageRecherchesSauvegardees"));
 const PageInscriptionSucces = lazy(() => import("./pages/PageInscriptionSucces"));
@@ -174,6 +175,8 @@ function AppRoutes() {
           <Route path="/mentions-legales" element={<PageMentionsLegales />} />
           <Route path="/accessibilite" element={<PageAccessibilite />} />
           <Route path="/aide" element={<PageAide />} />
+          {/* Route statique enregistrée AVANT /aide/:slug pour qu'elle ait priorité */}
+          <Route path="/aide/pro-sante-connect" element={<PageAideProSanteConnect />} />
           <Route path="/aide/:slug" element={<PageAideArticle />} />
           <Route path="/faq" element={<Navigate to="/aide" replace />} />
           <Route path="/help" element={<Navigate to="/aide" replace />} />
