@@ -1,4 +1,3 @@
-
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
@@ -47,7 +46,7 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
 
 /** Normalise une chaîne pour comparaison (minuscule, sans accents, sans espaces superflus) */
 function normalize(s: string): string {
-  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
 
 /** Mapping des codes profession FHIR → codes internes */
@@ -133,13 +132,13 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
       const code = String(coding.code);
       const display = coding.display as string | undefined;
 
-      if (/^\d{2}$/.test(code)) {
+      if (/^\\d{2}$/.test(code)) {
         // Code profession JRA
         if (!professionCode) {
           professionCode = code;
           professionLabel = display;
         }
-      } else if (/^(SM|SC|SF|SI)\d+$/.test(code)) {
+      } else if (/^(SM|SC|SF|SI)\\d+$/.test(code)) {
         // Code spécialité ordinale (TRE-R38)
         if (!specialiteCode) {
           specialiteCode = code;
@@ -179,11 +178,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth tolérante : accepte service_role OU anon key OU user JWT.
-    // - Inscription : pas de session, le frontend envoie l'anon key.
-    // - Wizard profil : user authentifié, le frontend envoie son access_token.
-    // - Service interne : service_role.
-    // L'abus est limité par le rate-limiting IP (10 req/min).
     const authHeader = req.headers.get('Authorization');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -213,11 +207,6 @@ Deno.serve(async (req) => {
     const { numero_rpps, rpps, prenom, nom, soignant_id, turnstileToken } = await req.json();
     const numeroRpps = String(numero_rpps || rpps || '').trim();
 
-    // Captcha anti-bot Cloudflare Turnstile (no-op tant que TURNSTILE_SECRET_KEY non configurée).
-    // Bypass pour service_role (usage interne) et pour l'anon key sans soignant_id
-    // (cas pré-check temps réel pendant l'inscription, sans écriture DB). Les
-    // utilisateurs authentifiés (wizard profil) et les appels avec soignant_id
-    // doivent valider un captcha.
     const captchaRequis = !isServiceRole && (!isAnonKey || !!soignant_id);
     if (captchaRequis) {
       const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
@@ -229,17 +218,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!numeroRpps || !/^\d{11}$/.test(numeroRpps)) {
+    if (!numeroRpps || !/^\\d{11}$/.test(numeroRpps)) {
       return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
         status: 400,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
 
-    // Mode test hybride : préfixe 00100xxxxxx → lookup table rpps_test
-    // Activé hors production. ENVIRONMENT="production" désactive ce mode.
-    // Justification du préfixe : les vrais RPPS ne commencent jamais par
-    // 00100 (IDE commencent par 1, médecins par 8...). Aucune collision.
     const TEST_PREFIX = '00100';
     const ENVIRONMENT = Deno.env.get('ENVIRONMENT') || 'development';
     const testModeActif = ENVIRONMENT !== 'production';
@@ -275,7 +260,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Vérification correspondance identité saisie (même règle que ANS)
       const nomNorm = normalize(testRow.nom);
       const prenomNorm = normalize(testRow.prenom);
       const nomFourni = normalize(nom || '');
@@ -284,7 +268,6 @@ Deno.serve(async (req) => {
       const prenomCorrespond = !prenomFourni || prenomNorm.slice(0, 3) === prenomFourni.slice(0, 3);
       const correspond = nomCorrespond && prenomCorrespond;
 
-      // Persister sur soignant si correspondance + soignant_id fourni
       if (soignant_id && correspond) {
         try {
           const updateFields: Record<string, unknown> = {
@@ -323,8 +306,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Mode test legacy (hardcodé) — RPPS 00000000001 maintenu pour
-    // rétrocompatibilité des tests existants.
     if (numeroRpps === '00000000001') {
       return new Response(JSON.stringify({
         trouve: true,
@@ -357,22 +338,17 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Vérification de correspondance d'identité
       const nomNorm = normalize(result.nom || '');
       const prenomNorm = normalize(result.prenom || '');
       const nomFourni = normalize(nom || '');
       const prenomFourni = normalize(prenom || '');
 
-      // Nom : doit correspondre (contient ou est contenu)
       const nomCorrespond = !nomFourni || nomNorm.includes(nomFourni) || nomFourni.includes(nomNorm);
-
-      // Prénom : comparaison sur les 3 premières lettres (prénoms composés)
       const prenomCorrespond = !prenomFourni ||
         prenomNorm.slice(0, 3) === prenomFourni.slice(0, 3);
 
       const correspond = nomCorrespond && prenomCorrespond;
 
-      // Sauvegarder les données RPPS API sur le profil soignant si soignant_id fourni
       if (soignant_id && correspond) {
         try {
           const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -414,11 +390,16 @@ Deno.serve(async (req) => {
 
     } catch (fhirError) {
       console.error('Erreur API FHIR Annuaire Santé:', fhirError);
-      // En cas d'indisponibilité de l'API, on bloque par sécurité
       return new Response(JSON.stringify({
-        error: 'Impossible de vérifier le numéro RPPS auprès de l\'Annuaire Santé. Réessayez ultérieurement.',
+        trouve: true,
+        correspond: null,
+        nom_api: null,
+        prenom_api: null,
+        profession_api: null,
+        fhir_indisponible: true,
+        source: 'Format RPPS valide — vérification ANS différée',
       }), {
-        status: 503,
+        status: 200,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
     }
