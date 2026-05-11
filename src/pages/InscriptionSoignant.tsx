@@ -121,7 +121,7 @@ export default function InscriptionSoignant() {
   const [rppsVerifiant, setRppsVerifiant] = useState(false);
   const [rppsResultat, setRppsResultat] = useState<{ trouve: boolean; nom_affiche?: string; specialite_code?: string | null; specialite_label?: string | null } | null>(null);
 
-  const normaliser = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+  const normaliser = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
 
   const rppsCorrespond = (): boolean | null => {
     if (!rppsResultat || !rppsResultat.trouve) return null;
@@ -286,7 +286,16 @@ export default function InscriptionSoignant() {
         {/* Pro Santé Connect — inscription rapide avec carte CPS/e-CPS */}
         {etape === 1 && (
           <div className="mb-6">
-            <BoutonProSanteConnect intention="signup" />
+            <BoutonProSanteConnect
+              intention="signup"
+              onSwitchToEmail={() => {
+                const input = document.querySelector<HTMLInputElement>('input[type="email"]');
+                if (input) {
+                  input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  setTimeout(() => input.focus(), 400);
+                }
+              }}
+            />
             <p className="text-[10px] text-muted-foreground text-center mt-1.5">
               Avec une carte CPS/e-CPS, votre inscription est automatique et votre RPPS vérifié instantanément
             </p>

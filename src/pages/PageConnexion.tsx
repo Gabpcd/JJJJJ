@@ -231,7 +231,16 @@ export default function PageConnexion() {
           {/* Pro Santé Connect — soignants avec carte CPS/e-CPS
               Double usage explicite : connexion d'un compte existant ET création de compte en 1 clic */}
           <div className="mb-4">
-            <BoutonProSanteConnect intention="login" />
+            <BoutonProSanteConnect
+              intention="login"
+              onSwitchToEmail={() => {
+                const input = document.querySelector<HTMLInputElement>('input[type="email"]');
+                if (input) {
+                  input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  setTimeout(() => input.focus(), 400);
+                }
+              }}
+            />
             <p className="text-[11px] text-muted-foreground text-center mt-2 leading-snug">
               <span className="font-medium text-foreground">Déjà inscrit ?</span> Vous serez connecté.
               {' '}<span className="font-medium text-foreground">Premier accès ?</span> Votre compte sera créé en 1 clic.
