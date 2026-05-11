@@ -1,9 +1,11 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2, CheckCircle, XCircle, HeartPulse } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, HeartPulse, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+
+const LIEN_ACTIVATION_ECPS = 'https://esante.gouv.fr/produits-services/e-cps';
 
 export default function PscCallback() {
   usePageTitle('Pro Santé Connect');
@@ -11,6 +13,7 @@ export default function PscCallback() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const [retryLoading, setRetryLoading] = useState(false);
 
   useEffect(() => {
     const finaliser = async () => {
@@ -65,6 +68,26 @@ export default function PscCallback() {
     finaliser();
   }, [searchParams, navigate]);
 
+  // Relance le flow PSC complet (équivalent du bouton "S'identifier avec Pro Santé Connect")
+  const relancerPsc = async () => {
+    setRetryLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('psc-authorize', {
+        body: { intention: 'login' },
+      });
+      if (!error && data?.authorization_url) {
+        window.location.href = data.authorization_url;
+        return;
+      }
+      // Fallback : retour à la page de connexion
+      navigate('/connexion');
+    } catch {
+      navigate('/connexion');
+    } finally {
+      setRetryLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-4">
       <div className="card-base max-w-md w-full text-center space-y-6">
@@ -97,12 +120,63 @@ export default function PscCallback() {
         {status === 'error' && (
           <>
             <XCircle className="h-14 w-14 text-destructive mx-auto" />
-            <div>
-              <p className="text-lg font-semibold text-foreground">Échec de la connexion</p>
-              <p className="text-sm text-muted-foreground mt-1">{message}</p>
+            <div className="space-y-3">
+              <p className="text-lg font-semibold text-foreground">
+                La connexion à Pro Santé Connect n'a pas fonctionné
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Cela peut arriver dans plusieurs cas :
+              </p>
+              <ul className="text-sm text-muted-foreground text-left list-disc list-inside space-y-1 mx-auto max-w-xs">
+                <li>Vous n'avez pas encore activé votre e-CPS sur votre téléphone</li>
+                <li>Votre carte CPS n'a pas été reconnue par votre lecteur</li>
+                <li>Vous avez annulé la procédure d'authentification</li>
+                <li>Votre e-CPS ou votre carte CPS est expirée</li>
+              </ul>
+              {message && (
+                <p className="text-xs text-muted-foreground/80 italic pt-1">
+                  Détail technique : {message}
+                </p>
+              )}
             </div>
-            <div className="flex gap-2 justify-center">
-              <Button onClick={() => navigate('/connexion')}>Retour à la connexion</Button>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <Button
+                onClick={() => navigate('/inscription/soignant')}
+                className="w-full"
+              >
+                S'inscrire par email
+              </Button>
+              <Button
+                variant="outline"
+                onClick={relancerPsc}
+                disabled={retryLoading}
+                className="w-full"
+              >
+                {retryLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Redirection…
+                  </>
+                ) : (
+                  'Réessayer Pro Santé Connect'
+                )}
+              </Button>
+              <a
+                href={LIEN_ACTIVATION_ECPS}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1 text-sm text-primary hover:underline pt-1"
+              >
+                Activer ma e-CPS
+                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+              </a>
+              <a
+                href="/aide/pro-sante-connect"
+                className="text-xs text-muted-foreground hover:text-primary hover:underline"
+              >
+                En savoir plus sur Pro Santé Connect
+              </a>
             </div>
           </>
         )}
