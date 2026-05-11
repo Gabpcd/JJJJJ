@@ -1,5 +1,6 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect, useCallback } from 'react';
+import * as Sentry from '@sentry/react';
 import { useNavigate } from 'react-router-dom';
 import { HeartPulse, Eye, EyeOff, Check, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -226,7 +227,12 @@ export default function InscriptionSoignant() {
         logger.debug('RPPS response:', data);
 
         if (!response.ok) {
-          logger.error('verify-rpps fetch error', data);
+          // Erreur réelle (4xx/5xx) — tagger Sentry avec le code retourné
+          // par l'edge function structurée pour pouvoir regrouper.
+          const codeBackend = (data && typeof data === 'object' && 'code' in data) ? String(data.code) : 'RPPS_API_UNAVAILABLE';
+          Sentry.captureException(new Error(`verify-rpps ${response.status}: ${data?.message || data?.error || 'unknown'}`), {
+            tags: { type: 'verify_rpps_temps_reel', code: codeBackend, http_status: String(response.status) },
+          });
           setRppsResultat(data?.trouve === false ? { trouve: false } : null);
         } else if (data) {
           const nomAffiche = data.nom_api || data.nom || '';
@@ -254,7 +260,9 @@ export default function InscriptionSoignant() {
         }
       } catch (err: any) {
         if (err?.name === 'AbortError') return; // re-render cancellation, normal
-        logger.error('verify-rpps fetch exception', err);
+        Sentry.captureException(err, {
+          tags: { type: 'verify_rpps_temps_reel', code: 'NETWORK_ERROR' },
+        });
         setRppsResultat(null);
       }
       if (!controller.signal.aborted) setRppsVerifiant(false);
@@ -282,6 +290,16 @@ export default function InscriptionSoignant() {
       // Affichage inline avec code + action proposée.
       const erreurMappee = mapperErreurInscription(err);
       setErreurInscription(erreurMappee);
+      // Sentry : tag avec le type d'événement et le code mappé pour permettre
+      // le regroupement par catégorie dans le dashboard (vs un seul gros
+      // bucket "inscription_soignant"). On laisse Sentry stringifier err
+      // proprement (les Error objects ont leur message/stack lisibles ;
+      // les objets bruts seraient capturés tels quels grâce au mapper amont
+      // qui les a déjà transformés en Error ou en objet structuré).
+      Sentry.captureException(err, {
+        tags: { type: 'inscription_soignant', code: erreurMappee.code },
+        extra: { champs_highlight: erreurMappee.champs_highlight },
+      });
       // Si l'erreur cible un champ d'étape 1 mais on est en étape 2,
       // remonter à l'étape 1 pour rendre le champ visible.
       if (erreurMappee.champs_highlight?.some(c => c === 'email' || c === 'motDePasse') && etape !== 1) {
