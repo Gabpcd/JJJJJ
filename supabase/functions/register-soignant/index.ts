@@ -42,7 +42,7 @@ function checkRateLimit(ip: string): boolean {
 const PROFESSIONS_SANS_RPPS = ['AS', 'AES'];
 
 function normalizeStr(s: string): string {
-  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
@@ -63,6 +63,7 @@ async function verifierRppsServeur(rpps: string, nom: string, prenom: string): P
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
   try {
     // Call our own verify-rpps Edge Function internally
@@ -70,7 +71,10 @@ async function verifierRppsServeur(rpps: string, nom: string, prenom: string): P
       `${supabaseUrl}/functions/v1/verify-rpps`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceRoleKey}`,
+        },
         body: JSON.stringify({ rpps, nom, prenom }),
       },
       10000
