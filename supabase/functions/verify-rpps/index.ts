@@ -59,7 +59,7 @@ function mapProfessionCode(code: string | undefined): string {
     '40': 'PHARMACIEN',
     '50': 'SAGE_FEMME',
     '60': 'IDE',
-    '69': 'IDE',   // Infirmier psychiatrique
+    '69': 'IDE',
     '70': 'KINE',
     '80': 'PEDICURE',
     '86': 'AIDE_SOIGNANT',
@@ -71,15 +71,6 @@ function mapProfessionCode(code: string | undefined): string {
   return mapping[code || ''] || code || '';
 }
 
-/**
- * Interroge l'API FHIR officielle de l'Annuaire Santé (ANS).
- * Endpoint : https://gateway.api.esante.gouv.fr/fhir/v1/Practitioner
- * Documentation : https://ansforge.github.io/annuaire-sante-fhir-documentation/
- *
- * Parse TOUTES les qualifications d'un practitioner :
- *  - Code profession JRA (TRE-G15) : 2 chiffres (ex: "10" médecin, "60" IDE)
- *  - Code spécialité ordinale (TRE-R38) : préfixe SM/SC/SF/SI + chiffres
- */
 async function queryFhirAnnuaire(rpps: string): Promise<{
   trouve: boolean;
   nom?: string;
@@ -118,7 +109,6 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
   const nom = officialName?.family || '';
   const prenom = officialName?.given?.[0] || '';
 
-  // Parse toutes les qualifications : profession (2 chiffres) + spécialité (SM/SC/SF/SI)
   let professionCode: string | undefined;
   let professionLabel: string | undefined;
   let specialiteCode: string | undefined;
@@ -132,14 +122,12 @@ async function queryFhirAnnuaire(rpps: string): Promise<{
       const code = String(coding.code);
       const display = coding.display as string | undefined;
 
-      if (/^\\d{2}$/.test(code)) {
-        // Code profession JRA
+      if (/^[0-9]{2}$/.test(code)) {
         if (!professionCode) {
           professionCode = code;
           professionLabel = display;
         }
-      } else if (/^(SM|SC|SF|SI)\\d+$/.test(code)) {
-        // Code spécialité ordinale (TRE-R38)
+      } else if (/^(SM|SC|SF|SI)[0-9]+$/.test(code)) {
         if (!specialiteCode) {
           specialiteCode = code;
           specialiteLabel = display;
@@ -168,7 +156,6 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders(req) });
   }
 
-  // Rate limiting par IP
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
   if (isRateLimited(clientIp)) {
     return new Response(JSON.stringify({ error: 'Trop de requêtes' }), {
@@ -218,7 +205,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!numeroRpps || !/^\\d{11}$/.test(numeroRpps)) {
+    if (!numeroRpps || !/^[0-9]{11}$/.test(numeroRpps)) {
       return new Response(JSON.stringify({ error: 'Numéro RPPS invalide (11 chiffres requis)' }), {
         status: 400,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
@@ -321,7 +308,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Appel API FHIR officielle de l'Annuaire Santé
     try {
       const result = await queryFhirAnnuaire(numeroRpps);
 
