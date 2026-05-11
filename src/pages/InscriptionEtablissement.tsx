@@ -97,7 +97,7 @@ export default function InscriptionEtablissement() {
         maj('nom', data.raison_sociale);
       }
     } catch (err) {
-      console.warn('Vérification INSEE échouée:', err);
+      if (import.meta.env.DEV) console.warn('Vérification INSEE échouée:', err);
       setInseeCheck({
         statut: 'ALERTE',
         raison_sociale: null,
