@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Loader2, AlertTriangle } from 'lucide-react';
-import { extraireContratPreference, injecterContratTag, type ContratPreference } from '@/lib/constantes';
+import { extraireContratPreference, injecterContratTag, peutExercerLiberal, type ContratPreference } from '@/lib/constantes';
 import { SelectProfession } from '@/components/SelectProfession';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { WarningRist } from '@/components/WarningRist';
@@ -478,11 +478,25 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             </div>
           ) : (
           <div className="space-y-2">
-            {([
-              { value: 'TOUS' as const, label: 'Tous les profils', desc: 'Salariés et libéraux peuvent postuler' },
-              { value: 'SALARIE' as const, label: 'Salarié uniquement', desc: 'Contrat CDD — soumis au plafond 48h/semaine' },
-              { value: 'LIBERAL' as const, label: 'Libéral uniquement', desc: 'Remplacement libéral — pas de plafond horaire' },
-            ]).filter(opt => !typesExAutorise || opt.value === 'TOUS' || typesExAutorise.includes(opt.value)).map(opt => (
+            {(() => {
+              // PR 2 Sprint 1 — matrice de compatibilité prof × type_etab.
+              // Si la combinaison ne permet pas le libéral, on retire l'option.
+              const liberalAutorise = profession && etablissementType
+                ? peutExercerLiberal(profession, etablissementType)
+                : true;
+              return ([
+                { value: 'TOUS' as const, label: 'Tous les profils', desc: 'Salariés et libéraux peuvent postuler' },
+                { value: 'SALARIE' as const, label: 'Salarié uniquement', desc: 'Contrat CDD — soumis au plafond 48h/semaine' },
+                { value: 'LIBERAL' as const, label: 'Libéral uniquement', desc: 'Remplacement libéral — pas de plafond horaire' },
+              ]).filter(opt => {
+                if (typesExAutorise && opt.value !== 'TOUS' && !typesExAutorise.includes(opt.value)) return false;
+                // Bloquer LIBERAL si incompatible avec le type d'établissement courant
+                if (opt.value === 'LIBERAL' && !liberalAutorise) return false;
+                // Bloquer TOUS si LIBERAL n'est pas autorisé (force SALARIE only)
+                if (opt.value === 'TOUS' && !liberalAutorise) return false;
+                return true;
+              });
+            })().map(opt => (
               <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">
                 <input
                   type="radio" name="contratPreference"
@@ -496,6 +510,11 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 </div>
               </label>
             ))}
+            {profession && etablissementType && !peutExercerLiberal(profession, etablissementType) && (
+              <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 mt-2">
+                <strong>ℹ️ Mode libéral non disponible :</strong> pour <strong>{profession}</strong> en <strong>{etablissementType}</strong>, le mode libéral n'est pas autorisé par la réglementation (cas de salariat déguisé, cf Conseil d'État 11/02/2025 arrêt Mediflash). Vous pouvez proposer la mission en CDD ou Vacation.
+              </div>
+            )}
           </div>
           )}
         </div>
