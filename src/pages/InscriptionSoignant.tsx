@@ -452,7 +452,7 @@ export default function InscriptionSoignant() {
                 </div>
                 {form.profession && !peutEtreLiberal && (
                   <p className="text-[10px] text-muted-foreground mt-1.5">
-                    Votre profession ne peut pas exercer en libéral. Seuls CDDU et Salarié sont disponibles.
+                    Votre profession ne peut pas exercer en libéral. Seuls CDD et Salarié sont disponibles.
                   </p>
                 )}
                 {form.typesContrat.length === 0 && (

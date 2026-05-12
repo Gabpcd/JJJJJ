@@ -206,7 +206,7 @@ export function BlocContratTravailMission({
           <div className="flex-1">
             <p className="font-semibold text-foreground">Contrat de travail à déposer</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Vous êtes employeur du soignant pour cette mission salariée. Déposez le contrat de travail CDDU signé par les deux parties au plus tard le premier jour de mission. Format PDF, max 10 Mo.
+              Vous êtes employeur du soignant pour cette mission salariée. Déposez le contrat de travail CDD signé par les deux parties au plus tard le premier jour de mission. Format PDF, max 10 Mo.
             </p>
           </div>
         </div>

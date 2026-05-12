@@ -210,7 +210,7 @@ export function genererBulletinPaiePdf(
   doc.text(sanitizeForPdf(`${soignant.adresse_code_postal || ''} ${soignant.adresse_ville || ''}`.trim() || '-'), colX2, y + 19);
   doc.text(sanitizeForPdf(`Emploi : ${soignant.profession || '-'}`), colX2, y + 23);
   doc.text(sanitizeForPdf(`N° Sécurité sociale : ${soignant.numero_securite_sociale || 'à renseigner sur votre profil'}`), colX2, y + 27);
-  doc.text(sanitizeForPdf(`Contrat : CDD d'usage (CDDU)`), colX2, y + 31);
+  doc.text(sanitizeForPdf(`Contrat : Contrat à Durée Déterminée (CDD)`), colX2, y + 31);
 
   y += 40;
 
@@ -312,7 +312,7 @@ export function genererBulletinPaiePdf(
     `Bulletin emis le ${formatDate(b.date_emission)} pour la periode du ${formatDate(b.periode_debut)} au ${formatDate(b.periode_fin)}.`,
     `Conservation 5 ans minimum par l'employeur (art. L3243-4 CTW). Le salarie le conserve sans limitation de duree.`,
     `Plafond mensuel SS 2026 (PMSS) : ${fmtEur(PMSS_2026)}.`,
-    `Indemnites CDDU : IFM ${formatTaux(TAUX_IFM)} (precarite, art. L1243-8) + ICP ${formatTaux(TAUX_ICP)} (conges payes, art. L3141-22).`,
+    `Indemnites CDD : IFM ${formatTaux(TAUX_IFM)} (precarite, art. L1243-8) + ICP ${formatTaux(TAUX_ICP)} (conges payes, art. L3141-22).`,
     `Cotisations salariales = part deduite du brut. Cotisations patronales = a la charge de l'employeur, mentionnees a titre informatif.`,
     `En cas de contestation, le salarie dispose de 3 ans pour reclamer (art. L3245-1 CTW).`,
     `Pour acceder au site service-public.fr/particuliers concernant le bulletin de paie : verifier les mentions et conserver ce document.`,

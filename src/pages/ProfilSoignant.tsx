@@ -64,7 +64,7 @@ export default function ProfilSoignant() {
   const [tauxHoraireMinimum, setTauxHoraireMinimum] = useState<number | null>(null);
   const [villeRecherche, setVilleRecherche] = useState('');
   const [specialites, setSpecialites] = useState<string[]>([]);
-  const [typesContrat, setTypesContrat] = useState<string[]>(['CDDU']);
+  const [typesContrat, setTypesContrat] = useState<string[]>(['CDD']);
   const [consentementGPS, setConsentementGPS] = useState(true);
   const [gpsToggling, setGpsToggling] = useState(false);
   const [consentementSMS, setConsentementSMS] = useState(false);

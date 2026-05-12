@@ -153,7 +153,7 @@ export default function MissionsSoignant() {
   useEffect(() => { setNbAffiche(20); setPage(0); }, [onglet, filtres]);
 
   const missionsAvecDistance = useMemo(() => {
-    const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
+    const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDD', 'VACATION', 'LIBERAL', 'SALARIE'];
     let result = missions.map(m => ({
       ...m,
       distance_km: calculerDistanceKm(soignant?.adresse_lat ?? null, soignant?.adresse_lng ?? null, m.etablissements?.adresse_lat ?? null, m.etablissements?.adresse_lng ?? null),

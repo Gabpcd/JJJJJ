@@ -180,7 +180,7 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       const profLabel = sgSpec ? `${mission.profession_requise || '-'} - ${sgSpec}` : (mission.profession_requise || '-');
       addInfoRow(doc, PAGE.margin, y, 'Profession :', profLabel);
       y += 5;
-      addInfoRow(doc, PAGE.margin, y, 'Type contrat :', mission.type_contrat_applique === 'SALARIE' ? 'Salarié (CDDU)' : 'Libéral');
+      addInfoRow(doc, PAGE.margin, y, 'Type contrat :', mission.type_contrat_applique === 'SALARIE' ? 'Salarié (CDD)' : 'Libéral');
       y += 5;
       if (mission.debut_le && mission.fin_le) {
         const debutStr = format(new Date(mission.debut_le), "dd/MM/yyyy HH'h'mm", { locale: fr });
@@ -250,7 +250,7 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
 
     // Section décomposition financière adaptée au type de contrat
     if (mission?.type_contrat_applique === 'SALARIE') {
-      y = createSectionTitle(doc, y, 'Décomposition CDDU (Modèle A salarié)');
+      y = createSectionTitle(doc, y, 'Décomposition CDD (Modèle A salarié)');
       const totalBrut = Number(mission.total_brut || 0);
       const ifm = Number(mission.montant_ifm || 0);
       const icp = Number(mission.montant_icp || 0);

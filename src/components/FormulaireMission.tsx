@@ -480,7 +480,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <div className="space-y-2">
             {([
               { value: 'TOUS' as const, label: 'Tous les profils', desc: 'Salariés et libéraux peuvent postuler' },
-              { value: 'SALARIE' as const, label: 'Salarié uniquement', desc: 'Contrat CDDU — soumis au plafond 48h/semaine' },
+              { value: 'SALARIE' as const, label: 'Salarié uniquement', desc: 'Contrat CDD — soumis au plafond 48h/semaine' },
               { value: 'LIBERAL' as const, label: 'Libéral uniquement', desc: 'Remplacement libéral — pas de plafond horaire' },
             ]).filter(opt => !typesExAutorise || opt.value === 'TOUS' || typesExAutorise.includes(opt.value)).map(opt => (
               <label key={opt.value} className="flex items-start gap-3 cursor-pointer group">

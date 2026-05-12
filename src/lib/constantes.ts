@@ -17,7 +17,7 @@ export const PROFESSIONS = [
 ] as const;
 
 export const CONTRATS = [
-  { valeur: 'CDDU', label: "CDD d'Usage (CDDU)" },
+  { valeur: 'CDD', label: 'Contrat à Durée Déterminée (CDD)' },
   { valeur: 'VACATION', label: 'Vacation' },
   { valeur: 'LIBERAL', label: 'Libéral' },
   { valeur: 'SALARIE', label: 'Salarié' },
@@ -106,13 +106,16 @@ export function getTypeContratRechercheBadge(type: string): { label: string; cla
 export function missionCompatibleContrat(pref: ContratPreference | string, typesContratSoignant: string[]): boolean {
   if (!pref || pref === 'TOUS') return true;
   if (pref === 'LIBERAL') return typesContratSoignant.includes('LIBERAL');
-  if (pref === 'SALARIE') return typesContratSoignant.some(t => ['CDDU', 'CDDU_USAGE', 'VACATION', 'SALARIE'].includes(t));
+  // 'CDDU' / 'CDDU_USAGE' conservés en compat lecture pour les profils legacy
+  // pas encore migrés (defense en profondeur). Les nouvelles écritures
+  // n'utilisent plus que 'CDD'. Refactor PR 1 Sprint 1.
+  if (pref === 'SALARIE') return typesContratSoignant.some(t => ['CDD', 'CDDU', 'CDDU_USAGE', 'VACATION', 'SALARIE'].includes(t));
   return true;
 }
 
 /** Parse the types_contrat_acceptes (JSON array or comma-separated) or fall back to type_exercice/type_contrat. Returns all types if nothing defined (profil incomplet). */
 export function getTypesContratSoignant(soignant: { type_contrat?: string | null; types_contrat_acceptes?: string | null; type_exercice?: string | null } | null | undefined): string[] {
-  if (!soignant) return ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
+  if (!soignant) return ['CDD', 'VACATION', 'LIBERAL', 'SALARIE'];
   if (soignant.types_contrat_acceptes) {
     // Handle both JSON array and comma-separated string
     const raw = soignant.types_contrat_acceptes.trim();
@@ -122,12 +125,12 @@ export function getTypesContratSoignant(soignant: { type_contrat?: string | null
         if (Array.isArray(arr) && arr.length > 0) return arr;
       } catch { /* fallback to comma split */ }
     }
-    // Comma-separated: "CDDU,LIBERAL"
+    // Comma-separated: "CDD,LIBERAL"
     const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
     if (parts.length > 0) return parts;
   }
   // Fallback based on type_exercice
-  if (soignant.type_exercice === 'MIXTE') return ['CDDU', 'LIBERAL'];
+  if (soignant.type_exercice === 'MIXTE') return ['CDD', 'LIBERAL'];
   if (soignant.type_exercice === 'LIBERAL') return ['LIBERAL'];
-  return soignant.type_contrat ? [soignant.type_contrat] : ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
+  return soignant.type_contrat ? [soignant.type_contrat] : ['CDD', 'VACATION', 'LIBERAL', 'SALARIE'];
 }

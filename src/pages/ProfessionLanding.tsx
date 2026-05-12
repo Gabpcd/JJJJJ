@@ -9,7 +9,7 @@ import { Euro, Clock, ShieldCheck, TrendingUp, Stethoscope, ArrowRight } from 'l
 const avantages = [
   { icon: Euro, titre: 'Rémunération transparente', desc: 'Taux horaire affiché avant candidature. Zéro frais cachés, paiement garanti sous 7 jours.' },
   { icon: Clock, titre: 'Flexibilité des horaires', desc: 'Choisissez vos missions, vos jours et vos créneaux. Vous gardez le contrôle de votre emploi du temps.' },
-  { icon: ShieldCheck, titre: 'Contrats conformes', desc: 'CDDU ou vacation générés automatiquement, conformes au Code du Travail et signés électroniquement.' },
+  { icon: ShieldCheck, titre: 'Contrats conformes', desc: 'CDD ou vacation générés automatiquement, conformes au Code du Travail et signés électroniquement.' },
   { icon: TrendingUp, titre: 'Évolution de carrière', desc: 'Cumulez vos heures vers le libéral avec le programme Free Transition. Accédez à des missions variées.' },
 ];
 
@@ -35,8 +35,8 @@ const faqParProfession: Record<string, { q: string; a: string }[]> = {
 
 const defaultFaq = [
   { q: 'Comment s\'inscrire sur Jolene ?', a: 'L\'inscription est gratuite et prend moins de 2 minutes. Renseignez votre profession, téléversez vos documents (diplôme, RPPS/ADELI, RCP) et validez votre profil. Notre équipe vérifie vos informations sous 24h.' },
-  { q: 'Quels types de contrats sont proposés ?', a: 'Jolene propose des missions en CDDU (CDD d\'usage), en vacation et en exercice libéral selon votre profession et votre statut. Le type de contrat est précisé sur chaque annonce de mission.' },
-  { q: 'Comment est calculée la rémunération ?', a: 'Le taux horaire brut est affiché sur chaque mission. S\'y ajoutent les majorations légales (nuit, week-end, férié), l\'IFM (10%) et l\'ICP (10%) pour les CDDU. Le détail complet est visible avant la candidature.' },
+  { q: 'Quels types de contrats sont proposés ?', a: 'Jolene propose des missions en CDD (Contrat à Durée Déterminée), en vacation et en exercice libéral selon votre profession et votre statut. Le type de contrat est précisé sur chaque annonce de mission.' },
+  { q: 'Comment est calculée la rémunération ?', a: 'Le taux horaire brut est affiché sur chaque mission. S\'y ajoutent les majorations légales (nuit, week-end, férié), l\'IFM (10%) et l\'ICP (10%) pour les CDD. Le détail complet est visible avant la candidature.' },
   { q: 'Dans quels établissements puis-je travailler ?', a: 'Jolene référence des hôpitaux publics, cliniques privées, EHPAD, SSIAD, HAD, pharmacies d\'officine, centres de santé, laboratoires et établissements médico-sociaux (IME, MAS, FAM).' },
 ];
 
