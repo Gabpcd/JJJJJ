@@ -8191,6 +8191,14 @@ export type Database = {
         | "FAM"
         | "PHARMACIE_OFFICINE"
         | "ESPIC"
+        | "CABINET_MEDICAL"
+        | "CABINET_DENTAIRE"
+        | "CABINET_IDEL"
+        | "CABINET_SAGE_FEMME"
+        | "CABINET_KINE"
+        | "CABINET_ORTHO"
+        | "CABINET_ERGO"
+        | "CABINET_PSYCHOMOT"
       type_evenement_notification:
         | "NOUVELLE_MISSION_MATCHANT_FILTRE"
         | "CANDIDATURE_RECUE"
@@ -8457,6 +8465,14 @@ export const Constants = {
         "FAM",
         "PHARMACIE_OFFICINE",
         "ESPIC",
+        "CABINET_MEDICAL",
+        "CABINET_DENTAIRE",
+        "CABINET_IDEL",
+        "CABINET_SAGE_FEMME",
+        "CABINET_KINE",
+        "CABINET_ORTHO",
+        "CABINET_ERGO",
+        "CABINET_PSYCHOMOT",
       ],
       type_evenement_notification: [
         "NOUVELLE_MISSION_MATCHANT_FILTRE",

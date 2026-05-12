@@ -2,11 +2,13 @@ export const PROFESSIONS = [
   { valeur: 'IDE', label: "Infirmier(ère) Diplômé(e) d'État (IDE)" },
   { valeur: 'AS', label: 'Aide-Soignant(e) (AS)' },
   { valeur: 'AES', label: 'Accompagnant Éducatif et Social (AES)' },
+  { valeur: 'AUXILIAIRE_PUERICULTURE', label: 'Auxiliaire de puériculture' },
   { valeur: 'IBODE', label: 'Infirmier(ère) de Bloc Opératoire (IBODE)' },
   { valeur: 'IADE', label: 'Infirmier(ère) Anesthésiste (IADE)' },
   { valeur: 'SAGE_FEMME', label: 'Sage-Femme' },
   { valeur: 'KINE', label: 'Kinésithérapeute' },
   { valeur: 'MEDECIN', label: 'Médecin' },
+  { valeur: 'DENTISTE', label: 'Chirurgien-Dentiste' },
   { valeur: 'PHARMACIEN', label: 'Pharmacien(ne)' },
   { valeur: 'MANIPULATEUR_RADIO', label: 'Manipulateur Radio' },
   { valeur: 'PREPARATEUR_PHARMA', label: 'Préparateur en Pharmacie' },
@@ -25,6 +27,7 @@ export const CONTRATS = [
 
 export const TYPES_ETABLISSEMENT = [
   { valeur: 'HOPITAL_PUBLIC', label: 'Hôpital Public' },
+  { valeur: 'ESPIC', label: 'ESPIC (Étab. de Santé Privé d\'Intérêt Collectif)' },
   { valeur: 'CLINIQUE_PRIVEE', label: 'Clinique Privée' },
   { valeur: 'EHPAD', label: 'EHPAD' },
   { valeur: 'SSIAD', label: 'SSIAD' },
@@ -35,10 +38,72 @@ export const TYPES_ETABLISSEMENT = [
   { valeur: 'MAS', label: 'MAS' },
   { valeur: 'FAM', label: 'FAM' },
   { valeur: 'PHARMACIE_OFFICINE', label: 'Pharmacie d\'Officine' },
+  // Cabinets libéraux (PR 2 Sprint 1 — exercice libéral remplacement)
+  { valeur: 'CABINET_MEDICAL', label: 'Cabinet médical (libéral)' },
+  { valeur: 'CABINET_DENTAIRE', label: 'Cabinet dentaire (libéral)' },
+  { valeur: 'CABINET_IDEL', label: 'Cabinet IDEL (libéral)' },
+  { valeur: 'CABINET_SAGE_FEMME', label: 'Cabinet sage-femme (libéral)' },
+  { valeur: 'CABINET_KINE', label: 'Cabinet kinésithérapie (libéral)' },
+  { valeur: 'CABINET_ORTHO', label: 'Cabinet orthophonie (libéral)' },
+  { valeur: 'CABINET_ERGO', label: 'Cabinet ergothérapie (libéral)' },
+  { valeur: 'CABINET_PSYCHOMOT', label: 'Cabinet psychomotricité (libéral)' },
 ] as const;
 
-// Professions NON éligibles au libéral
-export const PROFESSIONS_NON_LIBERAL = ['PHARMACIEN', 'PREPARATEUR_PHARMA', 'AS', 'AES', 'MANIPULATEUR_RADIO'];
+// Professions NON éligibles au libéral (mode salarié uniquement)
+export const PROFESSIONS_NON_LIBERAL = [
+  'PHARMACIEN', 'PREPARATEUR_PHARMA',
+  'AS', 'AES', 'AUXILIAIRE_PUERICULTURE',
+  'MANIPULATEUR_RADIO',
+  // IBODE et IADE existent en théorie en libéral mais quasi inexistants en
+  // pratique (pas de marché de remplacement consolidé). Bloqué par défaut.
+  'IBODE', 'IADE',
+  // Diététicien : exercice libéral autorisé mais hors scope Jolene v1
+  // (pas de marché de remplacement actuellement).
+  'DIETETICIEN',
+];
+
+// ─── Matrice de compatibilité exercice libéral × type d'établissement ───
+// Mirror exact de la RPC SQL public.peut_exercer_liberal (migration
+// 20260512_pr2_matrice_compatibilite_liberal.sql). Toute modification ici
+// DOIT être répliquée côté SQL. Validation côté backend par trigger
+// dec_valider_compatibilite_mission_liberal.
+//
+// Référence juridique : Conseil d'État 11/02/2025 (arrêt Mediflash) +
+// art. L8221-1 Code travail (interdiction du salariat déguisé).
+export const LIBERAL_COMPATIBILITY: Record<string, string[]> = {
+  MEDECIN: ['CABINET_MEDICAL', 'CLINIQUE_PRIVEE', 'EHPAD', 'SSIAD', 'HAD', 'CENTRE_SANTE', 'MAS', 'FAM'],
+  DENTISTE: ['CABINET_DENTAIRE'],
+  IDE: ['CABINET_IDEL'],
+  SAGE_FEMME: ['CABINET_SAGE_FEMME', 'CLINIQUE_PRIVEE', 'HAD', 'CENTRE_SANTE'],
+  KINE: ['CABINET_KINE', 'CLINIQUE_PRIVEE', 'SSIAD', 'HAD', 'MAS', 'FAM'],
+  ORTHOPHONISTE: ['CABINET_ORTHO'],
+  ERGOTHERAPEUTE: ['CABINET_ERGO', 'HAD'],
+  PSYCHOMOTRICIEN: ['CABINET_PSYCHOMOT', 'HAD'],
+  // Les autres professions sont dans PROFESSIONS_NON_LIBERAL (pas d'entrée
+  // dans cette matrice = pas de libéral autorisé du tout).
+};
+
+export function peutExercerLiberal(profession: string, typeEtablissement: string): boolean {
+  if (PROFESSIONS_NON_LIBERAL.includes(profession)) return false;
+  const allowed = LIBERAL_COMPATIBILITY[profession];
+  if (!allowed) return false;
+  return allowed.includes(typeEtablissement);
+}
+
+/** Mirror de la RPC peut_exercer côté DB (étend peut_exercer_liberal en couvrant aussi le mode salarié). */
+export function peutExercer(profession: string, typeExercice: string, typeEtablissement: string): boolean {
+  if (['SALARIE', 'CDD', 'CDDU', 'VACATION'].includes(typeExercice)) return true;
+  if (['LIBERAL', 'MIXTE'].includes(typeExercice)) {
+    return peutExercerLiberal(profession, typeEtablissement);
+  }
+  return true;
+}
+
+/** Pour une profession donnée, retourne la liste des types d'établissement où le libéral est autorisé. */
+export function typesEtablissementCompatiblesLiberal(profession: string): string[] {
+  if (PROFESSIONS_NON_LIBERAL.includes(profession)) return [];
+  return LIBERAL_COMPATIBILITY[profession] || [];
+}
 
 // Professions sans numéro d'identification professionnelle (RPPS).
 // Vérification par diplôme + CNI uniquement (ADELI obsolète depuis 2024).
