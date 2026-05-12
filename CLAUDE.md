@@ -64,3 +64,22 @@ Au début d'une session impliquant des opérations Git, détecter quelle voie es
 - Supabase déploie via le workflow GitHub Actions `deploy-supabase` uniquement sur main
 - Une PR mergée sur main = déclenchement automatique du déploiement Supabase prod
 - Vérifier dans le rapport final que le run `deploy-supabase` est passé vert (via `gh run watch` ou en remontant l'URL du run à Gabrielle)
+
+### Migrations SQL — règles non-négociables (apprises à la dure le 2026-05-12)
+
+1. **Nom de fichier** : format strict `YYYYMMDDHHMMSS_*.sql` (14 chiffres). Pas de `YYYYMMDD_*.sql` (8 chiffres) ni autre — le Supabase CLI rejette silencieusement et la migration n'est jamais enregistrée dans `schema_migrations`. Le job CI échoue après le rejet.
+
+2. **Pas de `BEGIN;`/`COMMIT;` internes** : `supabase db push` gère le wrap transactionnel implicite. Les `BEGIN/COMMIT` explicites sont redondants et peuvent même empêcher l'application de certains `ALTER TYPE`.
+
+3. **Avant tout `INSERT INTO journaux_audit` dans une migration**, vérifier la CHECK constraint actuelle :
+   ```sql
+   SELECT pg_get_constraintdef(oid) FROM pg_constraint
+   WHERE conname = 'journaux_audit_action_check';
+   ```
+   - Si l'action voulue est dans la liste autorisée → l'utiliser directement.
+   - Sinon : soit utiliser une action générique existante comme `'SYSTEM'` (avec le contexte spécifique dans `details jsonb`), soit étendre la CHECK constraint en début de migration AVANT l'INSERT.
+   - **Une CHECK constraint violation à la fin de migration rollback TOUT** (l'ALTER TYPE, les UPDATE, etc.) — toujours valider la chaîne complète avant push.
+
+4. **Test deploy manuel si possible** avant push : `supabase db push --dry-run --password ...` localement pour catcher les erreurs avant CI.
+
+5. **Surveillance post-merge obligatoire** : après merge d'une PR avec migration, vérifier IMMÉDIATEMENT via MCP Supabase que la migration est bien dans `schema_migrations` ET que les enums/tables sont dans l'état attendu. Ne PAS attendre qu'un user signale un bug.
