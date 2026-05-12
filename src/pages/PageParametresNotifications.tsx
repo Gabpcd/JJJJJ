@@ -38,7 +38,7 @@ const EVENTS_SOIGNANT: EventDef[] = [
   { type: 'POINTAGE_MANQUANT', label: 'Pointage manquant', description: 'Si j\'ai oublié de pointer mon départ', canaux: ['EMAIL','PUSH'] },
   { type: 'FACTURE_EMISE', label: 'Facture émise', description: 'Quand Jolene émet une nouvelle facture en mon nom', canaux: ['EMAIL','PUSH'] },
   { type: 'PAIEMENT_RECU', label: 'Paiement reçu', description: 'Quand un établissement règle ma facture', canaux: ['EMAIL','PUSH'] },
-  { type: 'CONTRAT_TRAVAIL_DEPOSE', label: 'Contrat de travail SALARIE déposé', description: 'Quand mon établissement upload mon contrat CDDU', canaux: ['EMAIL','PUSH'] },
+  { type: 'CONTRAT_TRAVAIL_DEPOSE', label: 'Contrat de travail SALARIE déposé', description: 'Quand mon établissement upload mon contrat CDD', canaux: ['EMAIL','PUSH'] },
   { type: 'LITIGE_OUVERT', label: 'Litige ouvert', description: 'Notifications sur les litiges en cours', canaux: ['EMAIL','PUSH','SMS'] },
   { type: 'LITIGE_RESOLU', label: 'Litige résolu', description: 'Quand un litige a été clos', canaux: ['EMAIL','PUSH'] },
   { type: 'DOCUMENT_EXPIRANT', label: 'Document expirant bientôt', description: 'RCP, diplôme ou autre document arrivant à expiration', canaux: ['EMAIL','PUSH'] },

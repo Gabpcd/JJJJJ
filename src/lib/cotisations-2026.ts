@@ -79,7 +79,7 @@ export const TAUX_PATRONAL_FORMATION = 0.0055;
 export const TAUX_PATRONAL_TRANSPORT = 0.0175;
 
 // ───────────────────────────────────────────────────────────────────────
-// CDDU — Indemnités de fin de contrat (art. L1243-8 et L3141-22 CTW)
+// CDD — Indemnités de fin de contrat (art. L1243-8 et L3141-22 CTW)
 
 /** Indemnité de Fin de Mission (10% du brut hors IFM/ICP). */
 export const TAUX_IFM = 0.10;

@@ -194,7 +194,7 @@ export default function RechercheMissions() {
   }, [user, soignant, profession, tauxMin, urgentesOnly]);
 
   const filtered = useMemo(() => {
-    const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDDU', 'VACATION', 'LIBERAL', 'SALARIE'];
+    const typesContrat = soignant ? getTypesContratSoignant(soignant) : ['CDD', 'VACATION', 'LIBERAL', 'SALARIE'];
     const villeSearch = debouncedVille.trim().toLowerCase();
 
     return missions
@@ -216,7 +216,7 @@ export default function RechercheMissions() {
         if (!missionCompatibleContrat(mType, typesAcceptes)) return false;
         // Additional UI filter
         if (typeContrat !== 'TOUS') {
-          if (typeContrat === 'CDDU' && mType === 'LIBERAL') return false;
+          if (typeContrat === 'CDD' && mType === 'LIBERAL') return false;
           if (typeContrat === 'LIBERAL' && mType === 'SALARIE') return false;
         }
         if (horaire === 'NUIT' && !isNuit(m.debut_le)) return false;
@@ -384,7 +384,7 @@ export default function RechercheMissions() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TOUS">Tous</SelectItem>
-                  <SelectItem value="CDDU">CDDU</SelectItem>
+                  <SelectItem value="CDD">CDD</SelectItem>
                   <SelectItem value="LIBERAL">Libéral</SelectItem>
                 </SelectContent>
               </Select>

@@ -57,7 +57,7 @@ Le présent contrat a pour objet de définir les conditions dans lesquelles Jole
 
 2.1 Jolene agit en qualité d'intermédiaire technique et de mandataire de facturation au sens de l'article 289 I-2 du Code général des impôts pour les soignants exerçant en libéral.
 
-2.2 Pour les soignants en exercice salarié (CDDU notamment), l'Établissement demeure **seul employeur** du soignant. Jolene n'est en aucun cas employeur des soignants. L'Établissement assume l'intégralité des obligations légales afférentes à la qualité d'employeur, notamment le respect du Code du travail, la déclaration aux organismes sociaux, et la responsabilité de la sécurité du soignant pendant la mission.
+2.2 Pour les soignants en exercice salarié (CDD notamment), l'Établissement demeure **seul employeur** du soignant. Jolene n'est en aucun cas employeur des soignants. L'Établissement assume l'intégralité des obligations légales afférentes à la qualité d'employeur, notamment le respect du Code du travail, la déclaration aux organismes sociaux, et la responsabilité de la sécurité du soignant pendant la mission.
 
 2.3 Jolene fournit, à titre de service accessoire, l'établissement automatisé des bulletins de paie au nom de l'Établissement employeur, conformément à l'article R3243-1 du Code du travail. La responsabilité finale du contenu du bulletin et du paiement des cotisations incombe à l'Établissement.
 
@@ -99,7 +99,7 @@ Le présent contrat a pour objet de définir les conditions dans lesquelles Jole
 - déclarer dans les 48 heures les heures réellement travaillées par le soignant via la plateforme,
 - payer les sommes dues aux soignants (paie pour les salariés, factures pour les libéraux par l'intermédiaire de Jolene),
 - assurer les conditions de sécurité du soignant pendant la mission,
-- conclure, le cas échéant, un contrat de travail individuel (CDDU notamment) avec le soignant pour les missions salariées, dans les formes et délais prévus par le Code du travail.
+- conclure, le cas échéant, un contrat de travail individuel (CDD notamment) avec le soignant pour les missions salariées, dans les formes et délais prévus par le Code du travail.
 
 5.2 L'Établissement s'engage à uploader sur la plateforme une copie signée du contrat de travail conclu avec le soignant pour chaque mission salariée, au plus tard le premier jour de la mission.
 

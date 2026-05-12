@@ -200,7 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       telephone: data.telephone || null,
       dateNaissance: data.dateNaissance || null,
       profession: data.profession,
-      typesContrat: data.typesContrat || ['CDDU'],
+      typesContrat: data.typesContrat || ['CDD'],
       rpps: data.rpps || null,
       rayon: data.rayon,
       lat: data.lat || null,

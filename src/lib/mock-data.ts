@@ -10,7 +10,7 @@ export const MOCK_SOIGNANT: Soignant = {
   profession: 'IDE',
   numero_rpps: '12345678901',
   numero_adeli: null,
-  type_contrat: 'CDDU',
+  type_contrat: 'CDD',
   score_fiabilite: 82,
   total_missions_terminees: 47,
   total_missions_annulees: 2,

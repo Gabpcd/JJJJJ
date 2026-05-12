@@ -552,7 +552,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                 </div>
               )}
               {/* Contrat de travail SALARIE (Partie 2 onboarding) — étab uploade
-                  le contrat CDDU pour les missions salariées. Affichage seulement si
+                  le contrat CDD pour les missions salariées. Affichage seulement si
                   type_contrat_applique=SALARIE et soignant assigné. */}
               {m.soignant_assigne_id && (
                 <div className="mb-4">

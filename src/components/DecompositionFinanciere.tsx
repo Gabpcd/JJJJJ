@@ -13,7 +13,7 @@ import { Info, ChevronDown, ChevronRight, AlertTriangle, Ban } from 'lucide-reac
  *   Jolene visible uniquement côté ÉTAB/ADMIN (§5.5 : soignant ne voit JAMAIS
  *   la commission).
  *
- * - SALARIE (Modèle A CDDU) : NET en évidence (= ce que l'étab vire au
+ * - SALARIE (Modèle A CDD) : NET en évidence (= ce que l'étab vire au
  *   soignant). Détail brut + IFM + ICP + cotisations salariales dans
  *   accordéon fermé par défaut ("Détail comptable"). Super brut pas en avant
  *   (éviter surpaiement). Commission idem LIBERAL côté ÉTAB/ADMIN uniquement.
@@ -243,7 +243,7 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
   }
 
   // ─────────────────────────────────────────────
-  // Branche SALARIE (Modèle A CDDU) — NET en évidence (= ce que l'étab vire
+  // Branche SALARIE (Modèle A CDD) — NET en évidence (= ce que l'étab vire
   // au soignant via virement SEPA). Détails comptables dans accordéon fermé
   // par défaut pour éviter que l'étab vire le super brut par erreur.
   // ─────────────────────────────────────────────
@@ -255,7 +255,7 @@ export function DecompositionFinanciere({ mission, role = 'ETAB' }: Decompositio
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-foreground">💰 Décomposition financière</h3>
           <span className="text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-1 rounded-full">
-            Contrat salarié (CDDU)
+            Contrat salarié (CDD)
           </span>
         </div>
 

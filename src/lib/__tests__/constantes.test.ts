@@ -36,10 +36,15 @@ describe('constantes', () => {
       expect(CONTRATS).toHaveLength(4);
     });
 
-    it('should include CDDU and LIBERAL', () => {
+    it('should include CDD and LIBERAL', () => {
       const valeurs = CONTRATS.map(c => c.valeur);
-      expect(valeurs).toContain('CDDU');
+      expect(valeurs).toContain('CDD');
       expect(valeurs).toContain('LIBERAL');
+    });
+
+    it('should NOT include CDDU (refactored to CDD in PR 1 Sprint 1)', () => {
+      const valeurs = CONTRATS.map(c => c.valeur);
+      expect(valeurs).not.toContain('CDDU');
     });
   });
 

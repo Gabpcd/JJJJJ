@@ -119,7 +119,7 @@ const INDICATEURS: Indicateur[] = [
   {
     cle: 'cddu_repetitifs',
     rpcCle: 'cddu_repetitifs',
-    label: 'CDDU répétitifs',
+    label: 'CDD répétitifs (risque requalification CDI)',
     icone: Repeat,
     colonnes: ['Soignant', 'Mission', 'Établissement', 'Nb missions', 'Première', 'Dernière'],
     renderRow: (item: any) => (

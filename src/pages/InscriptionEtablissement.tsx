@@ -253,7 +253,7 @@ export default function InscriptionEtablissement() {
 
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Type d'établissement *</label><SelectTypeEtablissement value={form.type} onChange={v => maj('type', v)} /></div>
               {form.type !== 'PHARMACIE_OFFICINE' && (
-                <p className="text-xs text-muted-foreground">ℹ️ Le plafond Loi Rist s'applique aux taux horaires en CDDU.</p>
+                <p className="text-xs text-muted-foreground">ℹ️ Le plafond Loi Rist s'applique aux taux horaires en CDD.</p>
               )}
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Adresse</label>

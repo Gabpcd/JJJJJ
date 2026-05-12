@@ -25,8 +25,10 @@ export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, t
     setConfirmedDate(dpaeEffectueeLe ?? null);
   }, [dpaeEffectuee, dpaeEffectueeLe]);
 
-  // Afficher uniquement pour les contrats CDDU
-  if (typeContrat !== 'CDDU') return null;
+  // Afficher uniquement pour les contrats CDD (salarié)
+  // Compat lecture : on accepte aussi 'CDDU' legacy au cas où des contrats
+  // pré-migration PR 1 traînent encore.
+  if (typeContrat !== 'CDD' && typeContrat !== 'CDDU') return null;
 
   const handleConfirmer = async () => {
     if (!contratId) return;
@@ -69,7 +71,7 @@ export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, t
           ⚠️ Rappel légal : effectuez la Déclaration Préalable à l'Embauche (DPAE) sur net-entreprises.fr avant le début de la mission.
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          La DPAE est obligatoire pour les contrats CDDU. Pour les remplacements libéraux, elle n'est pas requise.
+          La DPAE est obligatoire pour les contrats CDD. Pour les remplacements libéraux, elle n'est pas requise.
         </p>
         <div className="flex flex-wrap items-center gap-3 mt-2">
           <a
