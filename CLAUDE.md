@@ -65,21 +65,24 @@ Au début d'une session impliquant des opérations Git, détecter quelle voie es
 - Une PR mergée sur main = déclenchement automatique du déploiement Supabase prod
 - Vérifier dans le rapport final que le run `deploy-supabase` est passé vert (via `gh run watch` ou en remontant l'URL du run à Gabrielle)
 
-### Migrations SQL — règles non-négociables (apprises à la dure le 2026-05-12)
+## Règles migrations Supabase
 
-1. **Nom de fichier** : format strict `YYYYMMDDHHMMSS_*.sql` (14 chiffres). Pas de `YYYYMMDD_*.sql` (8 chiffres) ni autre — le Supabase CLI rejette silencieusement et la migration n'est jamais enregistrée dans `schema_migrations`. Le job CI échoue après le rejet.
+Apprises à la dure le 2026-05-12 (3 deploy-supabase échoués sur Sprint 1 PR 1+2).
 
-2. **Pas de `BEGIN;`/`COMMIT;` internes** : `supabase db push` gère le wrap transactionnel implicite. Les `BEGIN/COMMIT` explicites sont redondants et peuvent même empêcher l'application de certains `ALTER TYPE`.
+1. **Format obligatoire** : `YYYYMMDDHHMMSS_description.sql` (14 chiffres). Pas de `YYYYMMDD_*.sql` (8 chiffres) ni autre — le Supabase CLI rejette silencieusement et la migration n'est jamais enregistrée dans `schema_migrations`.
 
-3. **Avant tout `INSERT INTO journaux_audit` dans une migration**, vérifier la CHECK constraint actuelle :
+2. **PAS de `BEGIN;`/`COMMIT;` internes** — le CLI wrap déjà en transaction. Les BEGIN/COMMIT explicites sont redondants et peuvent empêcher l'application de certains `ALTER TYPE`.
+
+3. **Avant tout `INSERT INTO journaux_audit`**, vérifier la CHECK constraint :
    ```sql
    SELECT pg_get_constraintdef(oid) FROM pg_constraint
    WHERE conname = 'journaux_audit_action_check';
    ```
-   - Si l'action voulue est dans la liste autorisée → l'utiliser directement.
-   - Sinon : soit utiliser une action générique existante comme `'SYSTEM'` (avec le contexte spécifique dans `details jsonb`), soit étendre la CHECK constraint en début de migration AVANT l'INSERT.
-   - **Une CHECK constraint violation à la fin de migration rollback TOUT** (l'ALTER TYPE, les UPDATE, etc.) — toujours valider la chaîne complète avant push.
+   - Si action custom non listée : utiliser `'SYSTEM'` (action générique existante) avec le contexte dans `details jsonb`, OU étendre la CHECK constraint en début de migration AVANT l'INSERT.
+   - **Une CHECK constraint violation à la fin de migration rollback TOUT** (ALTER TYPE, UPDATE, etc. compris). Toujours valider la chaîne complète avant push.
 
-4. **Test deploy manuel si possible** avant push : `supabase db push --dry-run --password ...` localement pour catcher les erreurs avant CI.
+4. **Si migration échoue : NE PAS LAISSER LES FICHIERS DANS LE REPO.** Les supprimer immédiatement (`git rm`) sinon ils bloquent les migrations suivantes au prochain `db push` (le CLI s'arrête à la première erreur, dans l'ordre des timestamps).
 
-5. **Surveillance post-merge obligatoire** : après merge d'une PR avec migration, vérifier IMMÉDIATEMENT via MCP Supabase que la migration est bien dans `schema_migrations` ET que les enums/tables sont dans l'état attendu. Ne PAS attendre qu'un user signale un bug.
+5. **Test deploy manuel si possible** avant push : `supabase db push --dry-run --password ...` localement pour catcher les erreurs avant CI.
+
+6. **Surveillance post-merge obligatoire** : après merge, vérifier IMMÉDIATEMENT via MCP Supabase que la migration est bien dans `schema_migrations` ET que les enums/tables sont dans l'état attendu. Ne PAS attendre qu'un user signale un bug. Attendre 10 min minimum avant de conclure que le déploiement a échoué (et non juste en cours).
