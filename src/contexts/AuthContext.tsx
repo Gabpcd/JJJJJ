@@ -226,10 +226,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await response.json();
       logger.debug('[INSCRIPTION] 6. register-soignant réponse:', result);
 
-      if (!response.ok || result?.error) {
+      if (!response.ok || result?.ok === false || result?.error) {
         logger.error('[INSCRIPTION] ERREUR register-soignant', result);
         try { await supabase.auth.signOut(); } catch { /* ignore */ }
-        throw new Error(result?.error || 'Erreur lors de la création de votre profil. Veuillez réessayer.');
+        // [BUG 2 fix] Propage le code machine-readable + détails du backend
+        // sur l'Error throwée, pour que mapperErreurInscription() côté
+        // page puisse lire err.code au lieu de retomber sur le pattern
+        // matching texte (qui ratait RPPS_NOT_FOUND, etc.).
+        const erreur = new Error(result?.message || result?.error || 'Erreur lors de la création de votre profil. Veuillez réessayer.');
+        (erreur as any).code = result?.code;
+        (erreur as any).details = result?.details;
+        (erreur as any).body = result;
+        (erreur as any).httpStatus = response.status;
+        throw erreur;
       }
 
       logger.debug('[INSCRIPTION] 7. register-soignant OK ✅');
@@ -237,6 +246,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logger.error('[INSCRIPTION] register-soignant EXCEPTION', err);
       Sentry.captureException(err, { tags: { composant: 'AuthContext', action: 'inscription_soignant' } });
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
+      // Re-throw en préservant code/details si déjà attachés (vrai pour
+      // notre Error construite ci-dessus, false pour les exceptions natives
+      // comme TypeError "Failed to fetch" — qui n'ont pas de code).
       throw err instanceof Error ? err : new Error('Erreur lors de la création de votre profil. Veuillez réessayer.');
     }
 
@@ -278,13 +290,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    if (fnError || result?.error) {
-      Sentry.captureException(fnError || new Error(result?.error), { tags: { composant: 'AuthContext', action: 'inscription_etablissement' } });
-      logger.error('register-etablissement échoué', fnError || result?.error);
+    if (fnError || result?.ok === false || result?.error) {
+      Sentry.captureException(fnError || new Error(result?.message || result?.error), { tags: { composant: 'AuthContext', action: 'inscription_etablissement' } });
+      logger.error('register-etablissement échoué', fnError || result);
       try {
         await supabase.auth.signOut();
       } catch { /* ignore */ }
-      throw new Error('Erreur lors de la création du profil établissement. Veuillez réessayer.');
+      // [BUG 2 fix] Propage code/details du backend pour que mapperErreur
+      // côté page puisse afficher un message précis (SIRET déjà enregistré,
+      // SIRET checksum invalide, etc.).
+      const erreur = new Error(result?.message || result?.error || 'Erreur lors de la création du profil établissement. Veuillez réessayer.');
+      (erreur as any).code = result?.code;
+      (erreur as any).details = result?.details;
+      (erreur as any).body = result;
+      throw erreur;
     }
 
     // L'email BIENVENUE_ETABLISSEMENT est envoyé par register-etablissement lui-même
