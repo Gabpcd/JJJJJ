@@ -113,22 +113,24 @@ Deno.serve(async (req) => {
     return errorResponse(cors, 429, 'RATE_LIMITED', 'Trop de requêtes. Réessayez dans une minute.');
   }
   try {
+    // [BUG 1 fix] Auth devenue OPTIONNELLE : verify-rpps interroge un registre
+    // public (Annuaire Santé FHIR). L'utilisateur en cours d'inscription
+    // n'a PAS encore de session, donc exiger un JWT cassait la vérif RPPS
+    // temps réel (401 → feedback visuel disparu).
+    //
+    // Sécurité conservée :
+    //   - Rate-limit IP : 10 requêtes/minute (cf. RATE_LIMIT_MAX en haut)
+    //   - Turnstile : exigé si la page d'origine en envoie un (anti-bot)
+    //   - Aucune écriture en base sauf si soignant_id fourni AVEC service-role
+    //
+    // Les appels authentifiés (service-role admin, healthcheck) continuent
+    // de fonctionner — leur token n'est juste plus vérifié strictement.
     const authHeader = req.headers.get('Authorization');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return errorResponse(cors, 401, 'UNAUTHORIZED', 'Non autorisé.');
-    }
-    const token = authHeader.replace('Bearer ', '');
-    const isServiceRole = token === serviceRoleKey;
-    const isAnonKey = token === anonKey;
-    if (!isServiceRole && !isAnonKey) {
-      const supabaseAuth = createClient(Deno.env.get('SUPABASE_URL')!, anonKey);
-      const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(token);
-      if (authErr || !user) {
-        return errorResponse(cors, 401, 'INVALID_TOKEN', 'Session invalide. Reconnectez-vous et réessayez.');
-      }
-    }
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const isServiceRole = !!token && token === serviceRoleKey;
+    const isAnonKey = !!token && token === anonKey;
     const body = await req.json();
     if (body && body.warm === true) {
       return new Response(JSON.stringify({
@@ -217,7 +219,12 @@ Deno.serve(async (req) => {
       const nomCorrespond = !nomFourni || nomNorm.includes(nomFourni) || nomFourni.includes(nomNorm);
       const prenomCorrespond = !prenomFourni || prenomNorm.slice(0, 3) === prenomFourni.slice(0, 3);
       const correspond = nomCorrespond && prenomCorrespond;
-      if (soignant_id && correspond) {
+      if (soignant_id && correspond && isServiceRole) {
+        // [BUG 1 fix] L'update soignants n'est autorisée qu'avec le
+        // service-role token. Sinon un appelant anonyme pourrait passer
+        // un soignant_id arbitraire et marquer le profil RPPS-vérifié.
+        // Les call-sites légitimes (admin healthcheck, batch RPPS) utilisent
+        // tous le service-role.
         try {
           const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
           const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
