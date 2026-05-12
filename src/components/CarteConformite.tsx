@@ -3,9 +3,10 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 const LABELS_CONTROLE: Record<string, string> = {
-  'REPOS_11H': 'Repos 11h',
-  'PLAFOND_48H_HEBDO': 'Plafond 48h hebdomadaire',
-  'MOYENNE_44H_12_SEMAINES': 'Moyenne 44h / 12 semaines',
+  'REPOS_11H': 'Repos quotidien 11h (Art. L3131-1)',
+  'REPOS_HEBDO_35H': 'Repos hebdomadaire 35h (Art. L3132-2)',
+  'PLAFOND_48H_HEBDO': 'Plafond hebdo 48h (Art. L3121-20)',
+  'MOYENNE_44H_12_SEMAINES': 'Moyenne 44h sur 12 semaines (Art. L3121-22)',
   'PLAFOND_10H_JOUR': 'Durée max 10h/jour',
   'PLAFOND_RIST': 'Plafond Loi Rist',
   'LIMITE_TRAVAIL_NUIT': 'Limite travail de nuit',
