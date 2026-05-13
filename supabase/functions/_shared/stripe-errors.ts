@@ -62,6 +62,19 @@ export function mapStripeError(err: unknown): StripeErrorMapped {
     };
   }
 
+  // F-15 fix — Balance insufficient : compte plateforme ou Connect sans solde.
+  // Vu en mode test surtout, mais peut arriver en prod si payouts trop fréquents
+  // ou holds en cours. Retryable une fois le solde reconstitué.
+  if (code === "balance_insufficient") {
+    return {
+      status: 402,
+      code: "STRIPE_BALANCE_INSUFFICIENT",
+      userMessage: "Solde Stripe insuffisant pour effectuer le virement. Le paiement sera retenté dès que le solde sera disponible.",
+      retryable: true,
+      logLevel: "error",
+    };
+  }
+
   // Invalid request : paramètre fautif côté appel Stripe
   if (stripeType === "StripeInvalidRequestError") {
     return {
