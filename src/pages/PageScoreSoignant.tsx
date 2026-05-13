@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, AlertTriangle, MessageSquare, Loader2 } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, AlertTriangle, MessageSquare } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -10,7 +10,21 @@ import { BadgeNiveauV2 } from '@/components/BadgeNiveauV2';
 import { BreakdownScore } from '@/components/BreakdownScore';
 import { GraphiqueEvolutionScore } from '@/components/GraphiqueEvolutionScore';
 import { NotationsRecues } from '@/components/NotationsRecues';
-import { ModalReclamationScore } from '@/components/ModalReclamationScore';
+import { ModaleReclamationScore } from '@/components/score/ModaleReclamationScore';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+
+interface EvenementScore {
+  id: string;
+  type_evenement: string;
+  points: number;
+  points_corriges: number | null;
+  motif: string;
+  contestable: boolean;
+  decision_admin: string | null;
+  cree_le: string;
+  mission_id: string | null;
+}
 
 export default function PageScoreSoignant() {
   usePageTitle('Mon score');
@@ -19,14 +33,33 @@ export default function PageScoreSoignant() {
   const [loading, setLoading] = useState(true);
   const [breakdown, setBreakdown] = useState<any>(null);
   const [totalMissions, setTotalMissions] = useState<number>(0);
-  const [showReclamation, setShowReclamation] = useState(false);
+  const [evenements, setEvenements] = useState<EvenementScore[]>([]);
+  const [evenementSelectionne, setEvenementSelectionne] = useState<EvenementScore | null>(null);
+
+  function rechargerEvenements() {
+    supabase.rpc('fn_mes_evenements_score' as any, { p_limit: 20 }).then(({ data }) => {
+      const res = data as any;
+      if (Array.isArray(res?.evenements)) {
+        setEvenements(res.evenements as EvenementScore[]);
+      } else if (Array.isArray(res)) {
+        setEvenements(res as EvenementScore[]);
+      }
+    });
+  }
 
   useEffect(() => {
     if (!user) return;
     Promise.all([
       supabase.rpc('fn_mon_breakdown_actuel' as any),
       supabase.from('soignants').select('total_missions_terminees, score_fiabilite, niveau, en_periode_probatoire').eq('id', user.id).maybeSingle(),
-    ]).then(([{ data: bd }, { data: sg }]) => {
+      supabase.rpc('fn_mes_evenements_score' as any, { p_limit: 20 }),
+    ]).then(([{ data: bd }, { data: sg }, { data: ev }]) => {
+      const evRes = ev as any;
+      if (Array.isArray(evRes?.evenements)) {
+        setEvenements(evRes.evenements as EvenementScore[]);
+      } else if (Array.isArray(evRes)) {
+        setEvenements(evRes as EvenementScore[]);
+      }
       const bdObj = (bd as any);
       // Si breakdown vide (pas de snapshot), on construit un breakdown minimal depuis la table soignants
       if (!bdObj || !bdObj.score_total) {
@@ -117,18 +150,67 @@ export default function PageScoreSoignant() {
           <NotationsRecues audience="SOIGNANT" />
         </section>
 
-        {/* Réclamation pénalité injuste */}
-        <div className="card-base">
-          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-warning" /> Vous pensez qu'une pénalité est injuste ?
-          </h3>
-          <p className="text-xs text-muted-foreground mb-3">
-            Si votre score a baissé suite à un arrêt maladie, accident, ou erreur d'établissement, vous pouvez contester. Un admin examinera sous 72h.
-          </p>
-          <button onClick={() => setShowReclamation(true)} className="btn-secondary text-sm py-2 px-4">
-            ⚖️ Contester une pénalité
-          </button>
-        </div>
+        {/* Événements impactants récents avec bouton "Contester" par événement (Sprint 3.5) */}
+        {evenements.length > 0 && (
+          <section>
+            <h2 className="text-lg font-bold text-foreground mb-3 inline-flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning" /> Événements impactant votre score (12 derniers mois)
+            </h2>
+            <div className="space-y-2">
+              {evenements.map((ev) => {
+                const pts = Number(ev.points_corriges ?? ev.points);
+                const estPenalite = pts < 0;
+                return (
+                  <div key={ev.id} className="card-base flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{ev.type_evenement}</p>
+                      {ev.motif && <p className="text-xs text-muted-foreground truncate">{ev.motif}</p>}
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {format(new Date(ev.cree_le), "d MMMM yyyy 'à' HH:mm", { locale: fr })}
+                      </p>
+                      {ev.decision_admin && (
+                        <p className="text-[11px] text-primary mt-0.5">
+                          ✔️ Décision admin : {ev.decision_admin}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                      <span className={`text-base font-bold ${estPenalite ? 'text-destructive' : 'text-success'}`}>
+                        {pts > 0 ? '+' : ''}{pts} pts
+                      </span>
+                      {ev.contestable ? (
+                        <button
+                          onClick={() => setEvenementSelectionne(ev)}
+                          className="btn-secondary text-xs py-1.5 px-3 whitespace-nowrap"
+                        >
+                          ⚖️ Contester
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground italic whitespace-nowrap">
+                          {ev.decision_admin ? 'Traitée' : 'Non contestable'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground italic mt-2">
+              Les événements contestables peuvent être soumis à un admin Jolene qui décidera MAINTENIR / RÉDUIRE / ANNULER la pénalité sous 72h.
+            </p>
+          </section>
+        )}
+
+        {evenements.length === 0 && (
+          <div className="card-base">
+            <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-warning" /> Vous pensez qu'une pénalité est injuste ?
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Aucun événement impactant votre score n'a été enregistré sur les 12 derniers mois. Si vous constatez une erreur, contactez le support Jolene.
+            </p>
+          </div>
+        )}
 
         <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground">
           <p className="font-semibold text-foreground mb-1">À propos du calcul</p>
@@ -142,10 +224,22 @@ export default function PageScoreSoignant() {
         </div>
       </div>
 
-      {showReclamation && (
-        <ModalReclamationScore
-          onClose={() => setShowReclamation(false)}
-          onSuccess={() => setShowReclamation(false)}
+      {evenementSelectionne && (
+        <ModaleReclamationScore
+          ouvert={true}
+          onFermer={() => setEvenementSelectionne(null)}
+          onCreee={() => {
+            setEvenementSelectionne(null);
+            rechargerEvenements();
+          }}
+          evenementId={evenementSelectionne.id}
+          evenementType="SOIGNANT"
+          evenementInfo={{
+            type_evenement: evenementSelectionne.type_evenement,
+            points: Number(evenementSelectionne.points_corriges ?? evenementSelectionne.points),
+            motif: evenementSelectionne.motif,
+            cree_le: evenementSelectionne.cree_le,
+          }}
         />
       )}
     </LayoutApp>
