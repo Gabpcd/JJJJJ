@@ -241,3 +241,42 @@ Cf. docs/EQUIPE_ETAB.md, docs/EVALUATION_REVERSE_ETAB.md, docs/ADMIN_CONTRATS.md
 #### Bilan
 - ✅ **13/13 P0 Sprint 5 résolus** (8 Sprint 5.5 + 5 Sprint 5.7)
 - Prêt pour Sprint 6 (P1/P2 audit Sprint 5)
+
+### Sprint 6 — Fixes P1 audit Sprint 5 (12/15 P1 résolus)
+
+Cf. docs/ONBOARDING_TUTORIEL.md, docs/EVALUATION_POST_MISSION_SOIGNANT.md, docs/SCORE_ETAB_CONTESTATION.md, docs/OTP_SMS_TELEPHONE.md, docs/MANDAT_FACTURATION_SOIGNANT.md.
+
+13 PRs enchaînées en mode autonome :
+
+| PR | P1 | Workflow / Composant | Description courte |
+|---|---|---|---|
+| PR 1 | P1-3 | Page évaluations reçues soignant | `/soignant/evaluations` dédiée + filtres établissement / période / note |
+| PR 2 | P1-2 | Wizard ouverture litige + bouton noter mission | `WizardOuvertureLitige` 3 étapes + `BoutonNoterMission` intégré historique |
+| PR 3 | P1-6 | Countdown 72h signature contrat | `CountdownExpirationContrat` visible étab + soignant, désactivation Yousign legacy |
+| PR 4 | P1-9 | Contestation événements score étab | `SectionEvenementsScore` générique + page `/etablissement/mes-reclamations` |
+| PR 5 | P1-1 | Onboarding tutoriel 7 étapes persistant DB | `OnboardingGuide` étendu + `TooltipAide` + `BoutonResetOnboarding` |
+| PR 6 | P1-10 | Dashboard admin alertes anti-triche Sprint 4.5 | Bandeau KPIs téléportation / mock GPS / cohérence cliquables vers `/admin/alertes-pointage` |
+| PR 7 | P1-15 | Filtres anti-triche `AdminAuditLogs` | Ajout TELEPORTATION_DETECTEE, MOCK_GPS_SUSPECT, POINTAGE_INCOHERENT, etc. |
+| PR 8 | P1-8 | Détail payload accord litige timeline | `PayloadAccordVisualization` rendu jolie des 6 types Sprint 3.5 |
+| PR 9 | P1-12 | OTP SMS téléphone | Migration `otps_telephone` + RPCs `fn_envoyer_otp_telephone` / `fn_verifier_otp_telephone` + composant `VerificationTelephoneOTP` |
+| PR 10 | P1-13 | Banner mandat facturation embarquable | `BannerMandatFacturation` (statut SIGNÉ / NON_SIGNÉ / VERSION_OBSOLETE) |
+| PR 11 | P1-7 | Alertes cohérence pointage côté étab | 7 codes incidents Sprint 4.5 visibles + code secours `visible-once` + badge mock GPS |
+| PR 12 | P1-14 | KBIS upload dans inscription étab | Step KBIS dans `InscriptionEtablissement` (déplacé depuis `FinaliserInscriptionEtab`) |
+| PR 13 | — | Documentation Sprint 6 | 5 docs MD + CLAUDE.md + AUDIT_FRONTEND_EXHAUSTIF.md badges |
+
+#### Sécurité + garde-fous Sprint 6
+- OTP SMS bcrypt salt 8 + rate limit 3/24h + 5 tentatives max
+- Onboarding persistance DB priorisée sur localStorage (multi-device)
+- Mandat facturation hash SHA-256 + audit IP/UA + résiliation conserve historique RGPD 5 ans
+- Aucune action automatique sur compte/score sans admin
+- Aucune pénalité financière soignant
+
+#### P1 reportés Sprint 7
+- P1-4 : Modal récap mission avant publication + radio LIBERAL disabled (§25)
+- P1-5 : Score breakdown soignant inline candidatures (§27)
+- P1-11 : Page admin `AdminAuditRLS.tsx` (§49)
+
+#### Bilan
+- ✅ **12/15 P1 Sprint 5 résolus** (P1-1, P1-2, P1-3, P1-6, P1-7, P1-8, P1-9, P1-10, P1-12, P1-13, P1-14, P1-15)
+- 3 P1 reportés Sprint 7 (P1-4, P1-5, P1-11)
+- Prêt pour Sprint 7 (3 P1 restants + P2 polish)
