@@ -54,5 +54,11 @@
 	<string>Jolene accède à vos photos pour téléverser vos documents professionnels.</string>
 	<key>NSLocalNotificationUsageDescription</key>
 	<string>Jolene vous envoie des rappels pour vos missions (début, pointage, paiement).</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Jolene enregistre vos justificatifs téléchargés (avoirs, certificats) dans votre photothèque.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
