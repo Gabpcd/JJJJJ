@@ -14,6 +14,25 @@ Claude Code mène chaque tâche jusqu'au bout en autonomie totale, sans interven
 6. **Surveillance du déploiement** : suivre le workflow `deploy-supabase` jusqu'à confirmation verte avec `gh run watch` **ou**, si gh indisponible, fournir l'URL du run à Gabrielle (`https://github.com/Gabpcd/Jolene/actions?query=branch%3Amain`) pour qu'elle confirme visuellement
 7. **Rapport final** : URLs de la PR mergée, du run de workflow, et confirmation que les changements sont bien en prod
 
+### Vérification CI systématique — règle non-négociable (apprise Sprint 7 le 2026-05-13)
+
+**Après PR #174 et #177 mergées avec `Typecheck + build` en échec** (subagents ayant divergé du code local), 5 commits hotfix sur main ont été nécessaires pour ramener la branche en état build. Pour éviter la récidive :
+
+1. **Avant chaque merge** (`mcp__github__merge_pull_request`) : appeler `mcp__github__pull_request_read --method get_check_runs` et vérifier que **TOUS** les checks suivants sont `conclusion: "success"` :
+   - `Typecheck + build`
+   - `Drift detection (Lovable legacy patterns)`
+   - `Lighthouse audit` (warning seulement, pas bloquant si fail isolé)
+   - `Vercel Preview Comments`
+   Si un check est `in_progress` ou `queued` : attendre (re-check dans 1-2 min). Si un check est `failure` : analyser, fixer en commit sur la branche PR, attendre re-run, vérifier vert AVANT de merger.
+
+2. **Après chaque merge** : refaire un `get_check_runs` sur la PR (ou commit HEAD de main) pour confirmer que le merge commit a aussi passé la CI sur main (les checks ré-tournent à cause du push event).
+
+3. **Si CI rouge sur main** : créer un commit hotfix IMMÉDIATEMENT (ne pas enchaîner d'autres PRs sur une main cassée — sinon les PRs suivantes héritent du fail et c'est l'avalanche).
+
+4. **`npx tsc -b` local AVANT push de la PR** : reproduit exactement le check `Typecheck + build` du CI. Si KO local → fixer avant push. Si OK local mais KO en CI → divergence sub-agent vs local : `git pull` puis re-vérifier.
+
+5. **Subagents Write/Edit** : après chaque subagent qui crée des fichiers TS/TSX, faire un `npx tsc -b` AVANT de commit/push. Les subagents Sprint 7 ont écrit du code qui compilait pas (imports mauvais path `LayoutAdmin`, props `titre` inexistant sur `Notification`) → 5 hotfix nécessaires.
+
 ### Ce que Gabrielle ne fait JAMAIS
 
 - Pousser du code manuellement
