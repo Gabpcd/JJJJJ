@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
 
   // Rate-limit IP : 20 vérifs SIRET/min/IP (API INSEE quota partagé).
   if (applyRateLimit('verify-siret', getClientIp(req), { max: 20, windowMs: 60_000 })) {
-    return new Response(JSON.stringify({ error: 'Trop de vérifications. Réessayez dans 1 minute.' }), {
+    return new Response(JSON.stringify({ ok: false, code: 'RATE_LIMITED', error: 'Trop de vérifications. Réessayez dans 1 minute.' }), {
       status: 429,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Non autorisé' }), {
+      return new Response(JSON.stringify({ ok: false, code: 'UNAUTHORIZED', error: 'Non autorisé' }), {
         status: 401,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
       );
       const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(tokenVal);
       if (authErr || !user) {
-        return new Response(JSON.stringify({ error: 'Token invalide' }), {
+        return new Response(JSON.stringify({ ok: false, code: 'INVALID_TOKEN', error: 'Token invalide' }), {
           status: 401,
           headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
         });
@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
 
     const { siret, etablissement_id } = await req.json();
     if (!siret || !/^\d{14}$/.test(siret)) {
-      return new Response(JSON.stringify({ error: 'SIRET invalide' }), {
+      return new Response(JSON.stringify({ ok: false, code: 'SIRET_INVALID', error: 'SIRET invalide' }), {
         status: 400,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
@@ -206,13 +206,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify({ ok: true, ...result }), {
       status: 200,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
   } catch (err) {
     console.error('verify-siret error:', err);
-    return new Response(JSON.stringify({ error: 'Erreur interne' }), {
+    return new Response(JSON.stringify({ ok: false, code: 'INTERNAL_ERROR', error: 'Erreur interne' }), {
       status: 500,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     });
