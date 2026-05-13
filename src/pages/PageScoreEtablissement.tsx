@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { BadgeNiveauV2 } from '@/components/BadgeNiveauV2';
 import { NotationsRecues } from '@/components/NotationsRecues';
+import { SectionEvenementsScore } from '@/components/score/SectionEvenementsScore';
 
 interface ScoreEtab {
   score_qualite: number | null;
@@ -164,6 +165,11 @@ export default function PageScoreEtablissement() {
           <MessageSquare className="h-5 w-5 text-primary" /> Notations reçues récemment
         </h2>
         <NotationsRecues audience="ETAB" />
+      </section>
+
+      {/* Événements impactants + contestation (Sprint 6 PR 4 — Fix P1-9) */}
+      <section className="mb-6">
+        <SectionEvenementsScore type="ETAB" />
       </section>
 
       <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground">
