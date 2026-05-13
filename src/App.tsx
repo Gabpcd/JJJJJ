@@ -107,6 +107,7 @@ const MesFavorisEtablissement = lazy(() => import("./pages/MesFavorisEtablisseme
 const PageParrainageEtablissement = lazy(() => import("./pages/PageParrainageEtablissement"));
 const DetailPresencesMission = lazy(() => import("./pages/DetailPresencesMission"));
 const Parametres = lazy(() => import("./pages/Parametres"));
+const ObligationsFinancieresEtab = lazy(() => import("./pages/ObligationsFinancieresEtab"));
 
 
 /* ─── Shared protected ─── */
@@ -259,7 +260,7 @@ function AppRoutes() {
           <Route path="/etablissement/parrainage" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParrainageEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/dashboard" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
-          <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation" replace />} />
+          <Route path="/etablissement/obligations" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ObligationsFinancieresEtab /></RouteProtegee>} />
           <Route path="/etablissement/messagerie" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageMessagerie role="ADMIN_ETABLISSEMENT" /></RouteProtegee>} />
           <Route path="/etablissement/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><LitigesEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/reclamations" element={<Navigate to="/etablissement/litiges?tab=reclamations" replace />} />
