@@ -75,6 +75,7 @@ const PageScoreSoignant = lazy(() => import("./pages/PageScoreSoignant"));
 const PageScoreEtablissement = lazy(() => import("./pages/PageScoreEtablissement"));
 const PrevoyanceSoignant = lazy(() => import("./pages/PrevoyanceSoignant"));
 const AttestationHeures = lazy(() => import("./pages/AttestationHeures"));
+const MesDPAE = lazy(() => import("./pages/MesDPAE"));
 const MesReclamations = lazy(() => import("./pages/MesReclamations"));
 const PasserEnLiberal = lazy(() => import("./pages/PasserEnLiberal"));
 const ExclusionsSoignant = lazy(() => import("./pages/ExclusionsSoignant"));
@@ -212,6 +213,7 @@ function AppRoutes() {
           <Route path="/soignant/parcours-3200h" element={<Navigate to="/soignant/passer-en-liberal" replace />} />
           <Route path="/soignant/prevoyance" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PrevoyanceSoignant /></RouteProtegee>} />
           <Route path="/soignant/attestation-heures" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><AttestationHeures /></RouteProtegee>} />
+          <Route path="/soignant/dpae" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MesDPAE /></RouteProtegee>} />
           <Route path="/soignant/reclamations" element={<Navigate to="/soignant/litiges?tab=reclamations" replace />} />
           <Route path="/soignant/passer-en-liberal" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PasserEnLiberal /></RouteProtegee>} />
           <Route path="/soignant/exclusions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ExclusionsSoignant /></RouteProtegee>} />
