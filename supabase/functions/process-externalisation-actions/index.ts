@@ -1,0 +1,381 @@
+// process-externalisation-actions — Worker async pour Sprint 4 PR 2
+//
+// Cron pg_cron toutes les 5 min appelle cet endpoint en service_role.
+// Lit fn_externalisations_a_traiter (pagination 50/run) pour récupérer
+// les actions à dispatcher selon leur type_action.
+//
+// Types supportés :
+//   STRIPE_REFUND_TOTAL / _PARTIEL → Stripe API refunds.create
+//   STRIPE_PAYMENT                  → Stripe Connect transfers.create
+//   STRIPE_PAYOUT                   → Stripe payouts.create
+//   CHORUS_RECYCLER_FACTURE         → piste-client.ts (PENDING_AIFE si scope KO)
+//   DPAE_ANNULATION                 → email + push étab Net-Entreprises
+//   EMAIL_NOTIF                     → send-email
+//   PUSH_NOTIF                      → send-push
+//   AVOIR_PDF_GENERATION            → génération PDF + upload Storage
+//
+// Sur succès → fn_externalisation_succes
+// Sur échec → fn_externalisation_echec avec backoff
+// Sur PENDING_AIFE → fn_externalisation_echec(..., 'PENDING_AIFE')
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+function corsHeaders(req: Request) {
+  return {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": req.headers.get("origin") || "*",
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
+
+interface ActionRow {
+  id: string;
+  type_action: string;
+  payload: Record<string, any>;
+  source: string;
+  source_id: string | null;
+  tentatives: number;
+}
+
+interface DispatchResult {
+  ok: boolean;
+  resultat?: any;
+  erreur?: string;
+  pending_aife?: boolean;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
+
+  // Auth : service_role only
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.includes(SERVICE_ROLE_KEY)) {
+    return new Response(JSON.stringify({ error: "Service role required" }),
+      { status: 401, headers: corsHeaders(req) });
+  }
+
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const workerId = `worker_${crypto.randomUUID().slice(0, 8)}`;
+
+  // Récupérer batch
+  const { data: rpcData, error: rpcErr } = await admin
+    .rpc("fn_externalisations_a_traiter", { p_limit: 50, p_worker_id: workerId });
+  if (rpcErr) {
+    console.error("[worker] fn_externalisations_a_traiter error:", rpcErr);
+    return new Response(JSON.stringify({ error: "RPC failed" }),
+      { status: 500, headers: corsHeaders(req) });
+  }
+  const actions: ActionRow[] = (rpcData as any)?.actions || [];
+
+  let success = 0, failed = 0, pendingAife = 0;
+  const startTs = Date.now();
+
+  for (const action of actions) {
+    try {
+      const result = await dispatch(admin, action);
+      if (result.ok) {
+        await admin.rpc("fn_externalisation_succes", { p_id: action.id, p_resultat: result.resultat || {} });
+        success++;
+      } else if (result.pending_aife) {
+        await admin.rpc("fn_externalisation_echec", { p_id: action.id, p_erreur: result.erreur || "PENDING_AIFE", p_special_statut: "PENDING_AIFE" });
+        pendingAife++;
+      } else {
+        await admin.rpc("fn_externalisation_echec", { p_id: action.id, p_erreur: result.erreur || "Unknown error" });
+        failed++;
+      }
+    } catch (err) {
+      console.error(`[worker] action ${action.id} threw:`, err);
+      await admin.rpc("fn_externalisation_echec",
+        { p_id: action.id, p_erreur: (err as Error).message?.slice(0, 500) || "Exception" });
+      failed++;
+    }
+  }
+
+  const durationMs = Date.now() - startTs;
+  console.log(`[worker] ${workerId}: ${actions.length} actions, ${success} success, ${failed} failed, ${pendingAife} pending_aife, ${durationMs}ms`);
+
+  return new Response(JSON.stringify({
+    worker_id: workerId,
+    processed: actions.length,
+    success, failed, pending_aife: pendingAife, duration_ms: durationMs,
+  }), { headers: corsHeaders(req) });
+});
+
+// ─── Dispatch principal ──────────────────────────────────────────────
+
+async function dispatch(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const { type_action, payload } = action;
+  switch (type_action) {
+    case "STRIPE_REFUND_TOTAL":
+    case "STRIPE_REFUND_PARTIEL":
+      return dispatchStripeRefund(admin, action);
+    case "STRIPE_PAYMENT":
+      return dispatchStripePayment(admin, action);
+    case "STRIPE_PAYOUT":
+      return dispatchStripePayout(admin, action);
+    case "CHORUS_RECYCLER_FACTURE":
+    case "CHORUS_RECYCLE_FACTURE":
+      return dispatchChorusRecycle(admin, action);
+    case "DPAE_ANNULATION":
+    case "DPAE_ANNULATION_NOTIF":
+      return dispatchDpaeAnnulation(admin, action);
+    case "EMAIL_NOTIF":
+      return dispatchEmail(admin, action);
+    case "PUSH_NOTIF":
+      return dispatchPush(admin, action);
+    case "AVOIR_PDF_GENERATION":
+      return dispatchAvoirPdf(admin, action);
+    default:
+      return { ok: false, erreur: `Type d'action non supporté : ${type_action}` };
+  }
+}
+
+// ─── Stripe ──────────────────────────────────────────────────────────
+
+async function dispatchStripeRefund(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+  if (!stripeKey) return { ok: false, erreur: "STRIPE_SECRET_KEY missing" };
+
+  const { mission_id, montant, pourcentage } = action.payload;
+  if (!mission_id) return { ok: false, erreur: "mission_id missing in payload" };
+
+  // Récupérer le payment_intent_id depuis mission ou facture
+  const { data: mission } = await admin.from("missions")
+    .select("paiement_id, stripe_payment_intent_id, taux_horaire_base, duree_heures")
+    .eq("id", mission_id).maybeSingle();
+
+  const piId = mission?.stripe_payment_intent_id || mission?.paiement_id;
+  if (!piId) return { ok: false, erreur: `Aucun payment_intent pour mission ${mission_id}` };
+
+  // Calculer montant remboursement (centimes)
+  let amountCents: number | undefined;
+  if (action.type_action === "STRIPE_REFUND_PARTIEL") {
+    if (pourcentage) {
+      const total = (mission?.taux_horaire_base || 0) * (mission?.duree_heures || 0) * 100;
+      amountCents = Math.round(total * (pourcentage / 100));
+    } else if (montant) {
+      amountCents = Math.round(montant * 100);
+    }
+  }
+  // TOTAL : ne pas spécifier amount = remboursement total
+
+  const body = new URLSearchParams({
+    payment_intent: piId,
+    reason: "requested_by_customer",
+    ...(amountCents ? { amount: amountCents.toString() } : {}),
+  });
+
+  const res = await fetch("https://api.stripe.com/v1/refunds", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  const json = await res.json();
+  if (res.ok) return { ok: true, resultat: { refund_id: json.id, amount: json.amount } };
+
+  // Balance insufficient → retry plus tard (pas FAILED définitif)
+  if (json.error?.code === "balance_insufficient") {
+    return { ok: false, erreur: "balance_insufficient (sera retenté)" };
+  }
+  return { ok: false, erreur: `Stripe ${res.status}: ${json.error?.message || JSON.stringify(json)}` };
+}
+
+async function dispatchStripePayment(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+  if (!stripeKey) return { ok: false, erreur: "STRIPE_SECRET_KEY missing" };
+  const { beneficiaire_id, montant, motif } = action.payload;
+  if (!beneficiaire_id || !montant) return { ok: false, erreur: "beneficiaire_id + montant requis" };
+
+  // Récupérer Stripe Connect account du soignant
+  const { data: soignant } = await admin.from("soignants")
+    .select("stripe_account_id").eq("id", beneficiaire_id).maybeSingle();
+  if (!soignant?.stripe_account_id) {
+    return { ok: false, erreur: `Soignant ${beneficiaire_id} sans Stripe Connect account` };
+  }
+
+  const res = await fetch("https://api.stripe.com/v1/transfers", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      amount: Math.round(montant * 100).toString(),
+      currency: "eur",
+      destination: soignant.stripe_account_id,
+      description: motif || "Versement Jolene",
+    }),
+  });
+  const json = await res.json();
+  if (res.ok) return { ok: true, resultat: { transfer_id: json.id, amount: json.amount } };
+  if (json.error?.code === "balance_insufficient") {
+    return { ok: false, erreur: "balance_insufficient (sera retenté)" };
+  }
+  return { ok: false, erreur: `Stripe transfer ${res.status}: ${json.error?.message}` };
+}
+
+async function dispatchStripePayout(admin: any, action: ActionRow): Promise<DispatchResult> {
+  return { ok: false, erreur: "STRIPE_PAYOUT pas encore implémenté (Sprint 5+)" };
+}
+
+// ─── Chorus Pro ──────────────────────────────────────────────────────
+
+async function dispatchChorusRecycle(admin: any, action: ActionRow): Promise<DispatchResult> {
+  // Si PISTE_OAUTH_SCOPE pas configuré (cas actuel jusqu'à déblocage AIFE),
+  // marquer PENDING_AIFE pour re-check 24h
+  const oauthScope = Deno.env.get("PISTE_OAUTH_SCOPE");
+  if (!oauthScope || !oauthScope.includes("recyclerFacture")) {
+    return { ok: false, erreur: "PISTE scopes pas activés AIFE (recyclerFacture absent)", pending_aife: true };
+  }
+
+  // À implémenter quand AIFE active les scopes (Sprint final).
+  // Pour le moment : marquer PENDING_AIFE même si scope présent
+  // (car la chaîne piste-client complète n'est pas dans cette PR)
+  return { ok: false, erreur: "Chorus recycleFacture pas encore intégré (à finaliser post-AIFE)", pending_aife: true };
+}
+
+// ─── DPAE ────────────────────────────────────────────────────────────
+
+async function dispatchDpaeAnnulation(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const { contrat_id, mission_id, motif } = action.payload;
+  if (!contrat_id) return { ok: false, erreur: "contrat_id missing" };
+
+  // Récupérer l'étab
+  const { data: contrat } = await admin.from("contrats_mission")
+    .select("etablissement_id, numero_contrat, type_contrat, dpae_numero")
+    .eq("id", contrat_id).maybeSingle();
+  if (!contrat) return { ok: false, erreur: "contrat introuvable" };
+
+  // Option A : email + push étab pour annulation manuelle Net-Entreprises
+  // (Option B API tiers déclarant URSSAF = Sprint 5+)
+  await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
+    body: JSON.stringify({
+      type: "DPAE_ANNULATION_RAPPEL",
+      destinataire_id: contrat.etablissement_id,
+      data: { numero_contrat: contrat.numero_contrat, motif, dpae_numero: contrat.dpae_numero,
+              url: "https://www.net-entreprises.fr/declaration-prealable-embauche/",
+              echeance_legale_h: 48 },
+    }),
+  });
+  await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
+    body: JSON.stringify({
+      destinataire_id: contrat.etablissement_id,
+      type_evenement: "DPAE_ANNULATION_RAPPEL",
+      titre: "⚠️ Annulation DPAE à effectuer",
+      corps: `Contrat ${contrat.numero_contrat || ""} annulé. Annulez la DPAE sur Net-Entreprises sous 48h.`,
+      lien: `/contrat/${contrat_id}`,
+    }),
+  });
+
+  return { ok: true, resultat: { mode: "OPTION_A_MANUEL", etablissement_id: contrat.etablissement_id } };
+}
+
+// ─── Emails + Push (relais simples) ──────────────────────────────────
+
+async function dispatchEmail(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
+    body: JSON.stringify(action.payload),
+  });
+  if (res.ok) return { ok: true, resultat: { status: res.status } };
+  return { ok: false, erreur: `send-email ${res.status}` };
+}
+
+async function dispatchPush(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const p = action.payload;
+  // Adapter le format pour send-push (peut être appelé avec destinataire_id, type_evenement, titre, corps, data.lien)
+  const body: any = {
+    destinataire_id: p.destinataire_id,
+    titre: p.titre || p.title,
+    corps: p.corps || p.body,
+    lien: p.lien || p.data?.lien,
+    type_evenement: p.type_evenement,
+  };
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY}` },
+    body: JSON.stringify(body),
+  });
+  if (res.ok) return { ok: true, resultat: { status: res.status } };
+  return { ok: false, erreur: `send-push ${res.status}` };
+}
+
+// ─── AVOIR PDF ───────────────────────────────────────────────────────
+
+async function dispatchAvoirPdf(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const { mission_id, type, motif_avoir, montant, pourcentage, nouveau_montant, montant_indemnite } = action.payload;
+  if (!mission_id) return { ok: false, erreur: "mission_id missing" };
+
+  // Récupérer mission + facture
+  const { data: mission } = await admin.from("missions")
+    .select("id, intitule, etablissement_id, soignant_assigne_id, debut_le, fin_le, duree_heures, taux_horaire_base")
+    .eq("id", mission_id).maybeSingle();
+  if (!mission) return { ok: false, erreur: "mission introuvable" };
+
+  // Calculer montant avoir
+  let montantHt: number;
+  const total = (mission.taux_horaire_base || 0) * (mission.duree_heures || 0);
+  if (montant) montantHt = montant;
+  else if (pourcentage) montantHt = total * (pourcentage / 100);
+  else if (nouveau_montant) montantHt = total - nouveau_montant;
+  else if (montant_indemnite) montantHt = montant_indemnite;
+  else montantHt = total; // TOTAL par défaut
+
+  // Générer numéro avoir AV-YYYYMM-XXXX
+  const date = new Date();
+  const yymm = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const numero = `AV-${yymm}-${Math.floor(Math.random() * 9999).toString().padStart(4, "0")}`;
+
+  // HTML simple de l'avoir
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Avoir ${numero}</title>
+<style>body{font-family:Arial;color:#222;line-height:1.6;padding:40px;max-width:800px;margin:0 auto}
+h1{color:#d6336c}.box{background:#fef3f7;padding:16px;border-radius:8px;margin:16px 0}</style>
+</head><body>
+<h1>AVOIR ${numero}</h1>
+<p><strong>Date :</strong> ${date.toLocaleDateString("fr-FR")}</p>
+<p><strong>Motif :</strong> ${motif_avoir || type || "AJUSTEMENT"}</p>
+<div class="box">
+<p><strong>Mission :</strong> ${mission.intitule || "—"}</p>
+<p><strong>Période :</strong> ${mission.debut_le?.slice(0, 10) || "—"} → ${mission.fin_le?.slice(0, 10) || "—"}</p>
+<p><strong>Montant avoir HT :</strong> ${montantHt.toFixed(2)} €</p>
+<p><strong>Action source :</strong> ${action.source}</p>
+</div>
+<p><em>Avoir généré automatiquement suite à ${action.source === "LITIGE_EXEC" ? "résolution d'un litige" : "annulation de mission"}. Document à conserver pour comptabilité.</em></p>
+</body></html>`;
+
+  // Hash SHA-256 du PDF (en pratique on stocke le HTML, jsPDF côté front pour PDF binaire)
+  const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(html));
+  const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+
+  // Upload Storage bucket avoirs (si existe)
+  const path = `${mission_id}/${numero}.html`;
+  const { error: uploadErr } = await admin.storage.from("avoirs")
+    .upload(path, new Blob([html], { type: "text/html" }), { upsert: false });
+  if (uploadErr && !uploadErr.message?.includes("Bucket not found")) {
+    // Si bucket existe mais erreur autre, on log mais continue
+    console.warn("[worker] avoir upload warning:", uploadErr.message);
+  }
+
+  // INSERT avoirs row
+  const { error: insertErr } = await admin.from("avoirs").insert({
+    facture_origine_type: "FACTURE_ETAB",
+    numero,
+    montant_ht: montantHt,
+    montant_ttc: montantHt, // exo TVA art. 261-4-1 CGI pour soins
+    motif: motif_avoir || (action.source === "LITIGE_EXEC" ? "LITIGE_ACCORD_MUTUEL" : "AUTRE"),
+    source_litige_id: action.source === "LITIGE_EXEC" ? action.source_id : null,
+    source_mission_id: mission_id,
+    pdf_storage_path: path,
+    emis_par: "00000000-0000-0000-0000-000000000000",
+    details: { type, hash_document: hash, action_payload: action.payload },
+  });
+  if (insertErr) return { ok: false, erreur: `INSERT avoir failed: ${insertErr.message}` };
+
+  return { ok: true, resultat: { numero, montant_ht: montantHt, path, hash } };
+}
