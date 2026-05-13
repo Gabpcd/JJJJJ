@@ -919,10 +919,13 @@ export type Database = {
       contrats_mission: {
         Row: {
           contenu_html: string | null
+          contenu_html_rendu_le: string | null
           cree_le: string | null
           dpae_effectuee: boolean | null
           dpae_effectuee_le: string | null
+          dpae_numero: string | null
           etablissement_id: string
+          hash_document: string | null
           id: string
           mission_id: string
           mode_signature: string | null
@@ -943,16 +946,21 @@ export type Database = {
           signature_soignant_le: string | null
           soignant_id: string
           statut: string | null
+          storage_path: string | null
+          template_slug: string | null
           type_contrat: string
           yousign_document_id: string | null
           yousign_procedure_id: string | null
         }
         Insert: {
           contenu_html?: string | null
+          contenu_html_rendu_le?: string | null
           cree_le?: string | null
           dpae_effectuee?: boolean | null
           dpae_effectuee_le?: string | null
+          dpae_numero?: string | null
           etablissement_id: string
+          hash_document?: string | null
           id?: string
           mission_id: string
           mode_signature?: string | null
@@ -973,16 +981,21 @@ export type Database = {
           signature_soignant_le?: string | null
           soignant_id: string
           statut?: string | null
+          storage_path?: string | null
+          template_slug?: string | null
           type_contrat: string
           yousign_document_id?: string | null
           yousign_procedure_id?: string | null
         }
         Update: {
           contenu_html?: string | null
+          contenu_html_rendu_le?: string | null
           cree_le?: string | null
           dpae_effectuee?: boolean | null
           dpae_effectuee_le?: string | null
+          dpae_numero?: string | null
           etablissement_id?: string
+          hash_document?: string | null
           id?: string
           mission_id?: string
           mode_signature?: string | null
@@ -1003,6 +1016,8 @@ export type Database = {
           signature_soignant_le?: string | null
           soignant_id?: string
           statut?: string | null
+          storage_path?: string | null
+          template_slug?: string | null
           type_contrat?: string
           yousign_document_id?: string | null
           yousign_procedure_id?: string | null
@@ -4552,6 +4567,7 @@ export type Database = {
           depart_ip: unknown
           depart_lat: number | null
           depart_lng: number | null
+          depart_modele_terminal: string | null
           depart_precision_gps_m: number | null
           distance_etablissement_m: number | null
           duree_brute_min: number | null
@@ -4592,6 +4608,7 @@ export type Database = {
           depart_ip?: unknown
           depart_lat?: number | null
           depart_lng?: number | null
+          depart_modele_terminal?: string | null
           depart_precision_gps_m?: number | null
           distance_etablissement_m?: number | null
           duree_brute_min?: number | null
@@ -4632,6 +4649,7 @@ export type Database = {
           depart_ip?: unknown
           depart_lat?: number | null
           depart_lng?: number | null
+          depart_modele_terminal?: string | null
           depart_precision_gps_m?: number | null
           distance_etablissement_m?: number | null
           duree_brute_min?: number | null
@@ -5366,6 +5384,89 @@ export type Database = {
           },
         ]
       }
+      signatures_contrats: {
+        Row: {
+          audit_trail: Json | null
+          contrat_id: string
+          cree_le: string | null
+          hash_document: string | null
+          id: string
+          ip_signature: unknown
+          modifie_le: string | null
+          otp_code_hash: string | null
+          otp_envoye_a: string | null
+          otp_tentatives: number | null
+          otp_valide_a: string | null
+          psc_session_active: boolean | null
+          rpps_verifie: boolean | null
+          signataire_role: string
+          signataire_user_id: string
+          signature_image_base64: string | null
+          signe_a: string | null
+          sms_envoyes_count: number | null
+          sms_premier_envoi_a: string | null
+          statut_signature: string
+          traits_identite_verifies: boolean | null
+          user_agent: string | null
+        }
+        Insert: {
+          audit_trail?: Json | null
+          contrat_id: string
+          cree_le?: string | null
+          hash_document?: string | null
+          id?: string
+          ip_signature?: unknown
+          modifie_le?: string | null
+          otp_code_hash?: string | null
+          otp_envoye_a?: string | null
+          otp_tentatives?: number | null
+          otp_valide_a?: string | null
+          psc_session_active?: boolean | null
+          rpps_verifie?: boolean | null
+          signataire_role: string
+          signataire_user_id: string
+          signature_image_base64?: string | null
+          signe_a?: string | null
+          sms_envoyes_count?: number | null
+          sms_premier_envoi_a?: string | null
+          statut_signature?: string
+          traits_identite_verifies?: boolean | null
+          user_agent?: string | null
+        }
+        Update: {
+          audit_trail?: Json | null
+          contrat_id?: string
+          cree_le?: string | null
+          hash_document?: string | null
+          id?: string
+          ip_signature?: unknown
+          modifie_le?: string | null
+          otp_code_hash?: string | null
+          otp_envoye_a?: string | null
+          otp_tentatives?: number | null
+          otp_valide_a?: string | null
+          psc_session_active?: boolean | null
+          rpps_verifie?: boolean | null
+          signataire_role?: string
+          signataire_user_id?: string
+          signature_image_base64?: string | null
+          signe_a?: string | null
+          sms_envoyes_count?: number | null
+          sms_premier_envoi_a?: string | null
+          statut_signature?: string
+          traits_identite_verifies?: boolean | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signatures_contrats_contrat_id_fkey"
+            columns: ["contrat_id"]
+            isOneToOne: false
+            referencedRelation: "contrats_mission"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signatures_yousign: {
         Row: {
           contrat_id: string
@@ -5496,10 +5597,13 @@ export type Database = {
           iban_last4: string | null
           id: string
           identite_verifiee: boolean | null
+          lieu_naissance_commune: string | null
+          lieu_naissance_departement: string | null
           mandat_facturation_signe: boolean | null
           mandat_facturation_signe_le: string | null
           mandat_facturation_version: string | null
           modifie_le: string | null
+          nationalite: string | null
           nb_absences_sans_prevenir_6_mois: number
           nb_evaluations: number | null
           niveau: Database["public"]["Enums"]["niveau_qualitatif"] | null
@@ -5511,6 +5615,7 @@ export type Database = {
           numero_securite_sociale: string | null
           numero_tva: string | null
           parraine_par: string | null
+          pays_naissance: string | null
           pool_urgence_sms_opt_in: boolean
           premiere_mission_le: string | null
           prenom: string
@@ -5531,8 +5636,10 @@ export type Database = {
           rpps_verifie_le: string | null
           score_breakdown_id: string | null
           score_fiabilite: number | null
+          sexe: string | null
           siret_liberal: string | null
           sms_actif: boolean | null
+          sms_alertes_actives: boolean | null
           sms_consent_le: string | null
           specialite_code: string | null
           specialite_medicale: string | null
@@ -5612,10 +5719,13 @@ export type Database = {
           iban_last4?: string | null
           id?: string
           identite_verifiee?: boolean | null
+          lieu_naissance_commune?: string | null
+          lieu_naissance_departement?: string | null
           mandat_facturation_signe?: boolean | null
           mandat_facturation_signe_le?: string | null
           mandat_facturation_version?: string | null
           modifie_le?: string | null
+          nationalite?: string | null
           nb_absences_sans_prevenir_6_mois?: number
           nb_evaluations?: number | null
           niveau?: Database["public"]["Enums"]["niveau_qualitatif"] | null
@@ -5627,6 +5737,7 @@ export type Database = {
           numero_securite_sociale?: string | null
           numero_tva?: string | null
           parraine_par?: string | null
+          pays_naissance?: string | null
           pool_urgence_sms_opt_in?: boolean
           premiere_mission_le?: string | null
           prenom: string
@@ -5647,8 +5758,10 @@ export type Database = {
           rpps_verifie_le?: string | null
           score_breakdown_id?: string | null
           score_fiabilite?: number | null
+          sexe?: string | null
           siret_liberal?: string | null
           sms_actif?: boolean | null
+          sms_alertes_actives?: boolean | null
           sms_consent_le?: string | null
           specialite_code?: string | null
           specialite_medicale?: string | null
@@ -5728,10 +5841,13 @@ export type Database = {
           iban_last4?: string | null
           id?: string
           identite_verifiee?: boolean | null
+          lieu_naissance_commune?: string | null
+          lieu_naissance_departement?: string | null
           mandat_facturation_signe?: boolean | null
           mandat_facturation_signe_le?: string | null
           mandat_facturation_version?: string | null
           modifie_le?: string | null
+          nationalite?: string | null
           nb_absences_sans_prevenir_6_mois?: number
           nb_evaluations?: number | null
           niveau?: Database["public"]["Enums"]["niveau_qualitatif"] | null
@@ -5743,6 +5859,7 @@ export type Database = {
           numero_securite_sociale?: string | null
           numero_tva?: string | null
           parraine_par?: string | null
+          pays_naissance?: string | null
           pool_urgence_sms_opt_in?: boolean
           premiere_mission_le?: string | null
           prenom?: string
@@ -5763,8 +5880,10 @@ export type Database = {
           rpps_verifie_le?: string | null
           score_breakdown_id?: string | null
           score_fiabilite?: number | null
+          sexe?: string | null
           siret_liberal?: string | null
           sms_actif?: boolean | null
+          sms_alertes_actives?: boolean | null
           sms_consent_le?: string | null
           specialite_code?: string | null
           specialite_medicale?: string | null
@@ -6389,6 +6508,7 @@ export type Database = {
         Args: { p_facture_honoraire_id: string }
         Returns: Json
       }
+      fn_admin_cleanup_test_accounts: { Args: never; Returns: Json }
       fn_admin_cohort_economics: { Args: { p_mois?: number }; Returns: Json }
       fn_admin_conformite: { Args: never; Returns: Json }
       fn_admin_conformite_detail: { Args: { p_type: string }; Returns: Json }
@@ -6407,6 +6527,10 @@ export type Database = {
       fn_admin_forcer_reupload_rib: {
         Args: { p_etablissement_id: string; p_raison: string }
         Returns: Json
+      }
+      fn_admin_get_user_id_by_email: {
+        Args: { p_email: string }
+        Returns: string
       }
       fn_admin_graphiques: { Args: never; Returns: Json }
       fn_admin_health_check: { Args: never; Returns: Json }
@@ -6482,6 +6606,7 @@ export type Database = {
         Args: { p_etablissement_id: string; p_motif?: string }
         Returns: Json
       }
+      fn_admin_reset_test_account: { Args: { p_role: string }; Returns: Json }
       fn_admin_resoudre_alerte: { Args: { p_alerte_id: string }; Returns: Json }
       fn_admin_resoudre_litige:
         | {
@@ -6747,6 +6872,7 @@ export type Database = {
         Args: { p_motif: string; p_presence_id: string }
         Returns: Json
       }
+      fn_contrat_storage_path: { Args: { p_contrat_id: string }; Returns: Json }
       fn_creer_api_key: {
         Args: {
           p_etablissement_id?: string
@@ -6990,9 +7116,17 @@ export type Database = {
         }
         Returns: string
       }
+      fn_enregistrer_numero_dpae: {
+        Args: { p_contrat_id: string; p_dpae_numero: string }
+        Returns: Json
+      }
       fn_enregistrer_siret_liberal: { Args: { p_siret: string }; Returns: Json }
       fn_envoyer_message: {
         Args: { p_contenu: string; p_conversation_id: string }
+        Returns: Json
+      }
+      fn_envoyer_otp_signature: {
+        Args: { p_contrat_id: string }
         Returns: Json
       }
       fn_envoyer_rappels_litiges: { Args: never; Returns: Json }
@@ -7104,6 +7238,7 @@ export type Database = {
       }
       fn_generer_code_parrainage: { Args: never; Returns: string }
       fn_generer_code_parrainage_etab: { Args: never; Returns: string }
+      fn_generer_donnees_dpae: { Args: { p_contrat_id: string }; Returns: Json }
       fn_generer_facture: { Args: { p_mission_id: string }; Returns: Json }
       fn_generer_facture_honoraires_mission: {
         Args: { p_mission_id: string }
@@ -7232,6 +7367,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      fn_maj_infos_dpae: {
+        Args: {
+          p_lieu_naissance_commune: string
+          p_lieu_naissance_departement: string
+          p_nationalite: string
+          p_pays_naissance: string
+          p_sexe: string
+        }
+        Returns: Json
       }
       fn_marquer_messages_lus: {
         Args: { p_conversation_id: string }
@@ -7405,6 +7550,10 @@ export type Database = {
         }[]
       }
       fn_messages_non_lus: { Args: never; Returns: number }
+      fn_mission_est_de_nuit: {
+        Args: { p_debut: string; p_fin: string }
+        Returns: boolean
+      }
       fn_missions_publiques_etablissement: {
         Args: { p_etablissement_id: string }
         Returns: {
@@ -7817,6 +7966,14 @@ export type Database = {
         Args: { p_accepter: boolean; p_candidature_id: string }
         Returns: Json
       }
+      fn_resolve_template_contrat: {
+        Args: {
+          p_profession: string
+          p_type_contrat: string
+          p_type_etab: string
+        }
+        Returns: Json
+      }
       fn_resoudre_litige: {
         Args: { p_litige_id: string; p_resolution: string; p_statut: string }
         Returns: Json
@@ -7871,6 +8028,15 @@ export type Database = {
         Args: { p_contrat_id: string; p_signature_image: string }
         Returns: Json
       }
+      fn_signer_contrat_otp: {
+        Args: {
+          p_contrat_id: string
+          p_hash_document?: string
+          p_otp_code: string
+          p_signature_image?: string
+        }
+        Returns: Json
+      }
       fn_signer_contrat_service: {
         Args: {
           p_contenu_hash: string
@@ -7911,6 +8077,10 @@ export type Database = {
           p_soignant_specialite: string
         }
         Returns: boolean
+      }
+      fn_soignant_dpae_complet: {
+        Args: { p_soignant_id: string }
+        Returns: Json
       }
       fn_soignant_pour_etablissement: {
         Args: { p_soignant_id: string }
@@ -8105,6 +8275,18 @@ export type Database = {
         Returns: string
       }
       next_invoice_number: { Args: { p_soignant_id: string }; Returns: string }
+      peut_exercer: {
+        Args: {
+          p_profession: string
+          p_type_etablissement: string
+          p_type_exercice: string
+        }
+        Returns: boolean
+      }
+      peut_exercer_liberal: {
+        Args: { p_profession: string; p_type_etablissement: string }
+        Returns: boolean
+      }
     }
     Enums: {
       canal_notification: "EMAIL" | "SMS" | "PUSH" | "IN_APP"
@@ -8528,4 +8710,3 @@ export const Constants = {
     },
   },
 } as const
-
