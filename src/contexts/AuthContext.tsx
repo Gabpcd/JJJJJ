@@ -130,9 +130,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // que PSC ait redirigé le navigateur. Cela évite une race entre un signOut local
       // (qui invalide tout) et le redirect PSC qui pourrait être abandonné.
       viderCacheHorsLigne();
+      // Cleanup tokens push avant le signOut PSC (best-effort, ne bloque pas)
+      try {
+        await supabase.rpc('fn_supprimer_mes_tokens_push' as any);
+      } catch (e) {
+        logger.warn('[AuthContext] cleanup tokens push avant PSC logout failed', e);
+      }
       Sentry.setUser(null);
       window.location.href = pscEndSessionUrl;
       return;
+    }
+
+    // Cleanup tokens push avant le signOut (évite les orphelins / fuites
+    // entre comptes sur appareil partagé)
+    try {
+      await supabase.rpc('fn_supprimer_mes_tokens_push' as any);
+    } catch (e) {
+      logger.warn('[AuthContext] cleanup tokens push avant signOut failed', e);
     }
 
     await supabase.auth.signOut();
