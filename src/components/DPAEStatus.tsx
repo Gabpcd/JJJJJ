@@ -196,12 +196,16 @@ function formatPayloadAsText(p: any): string {
   }
   lines.push('');
   lines.push('--- Salarié ---');
+  const manquants = ((p.salarie?.champs_a_completer_sur_net_entreprises) || []) as string[];
   for (const [k, v] of Object.entries(p.salarie || {})) {
-    if (k === 'champs_a_completer_sur_net_entreprises') {
-      lines.push(`${k.padEnd(30)} : ${(v as any[]).join(', ')}`);
-    } else {
-      lines.push(`${k.padEnd(30)} : ${v ?? '—'}`);
-    }
+    if (k === 'champs_a_completer_sur_net_entreprises') continue;
+    const flag = (v == null || v === '') && manquants.includes(k) ? ' ⚠ À COMPLÉTER MANUELLEMENT' : '';
+    lines.push(`${k.padEnd(30)} : ${v ?? '—'}${flag}`);
+  }
+  if (manquants.length > 0) {
+    lines.push('');
+    lines.push(`>> Champs encore manquants côté soignant : ${manquants.join(', ')}`);
+    lines.push('   (demandez au soignant de compléter son profil DPAE).');
   }
   lines.push('');
   lines.push('--- Embauche ---');

@@ -23,6 +23,7 @@ import { SectionProfilPrincipal } from '@/components/profil-soignant/SectionProf
 import { SectionPaiements } from '@/components/profil-soignant/SectionPaiements';
 import { SectionPreferences } from '@/components/profil-soignant/SectionPreferences';
 import { SectionConfidentialite } from '@/components/profil-soignant/SectionConfidentialite';
+import { SectionDpaeIdentite } from '@/components/profil-soignant/SectionDpaeIdentite';
 
 type SoignantRow = Database['public']['Tables']['soignants']['Row'];
 
@@ -351,6 +352,9 @@ export default function ProfilSoignant() {
               onSave={handleSave}
               saving={saving}
             />
+            <div className="mt-4">
+              <SectionDpaeIdentite soignantId={user!.id} typeExercice={typeExercice} />
+            </div>
           </TabsContent>
 
           <TabsContent value="paiements">
