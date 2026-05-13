@@ -129,6 +129,8 @@ const AdminModeration = lazy(() => import("./pages/admin/AdminModeration"));
 const AdminLitiges = lazy(() => import("./pages/admin/AdminLitiges"));
 const AdminTemplatesContrats = lazy(() => import("./pages/admin/AdminTemplatesContrats"));
 const AdminEditerTemplateContrat = lazy(() => import("./pages/admin/AdminEditerTemplateContrat"));
+const AdminContrats = lazy(() => import("./pages/admin/AdminContrats"));
+const AdminDetailContrat = lazy(() => import("./pages/admin/AdminDetailContrat"));
 const AdminReclamationsScore = lazy(() => import("./pages/admin/AdminReclamationsScore"));
 const AdminExternalisationsActions = lazy(() => import("./pages/admin/AdminExternalisationsActions"));
 const AdminStatus = lazy(() => import("./pages/admin/AdminStatus"));
@@ -294,6 +296,8 @@ function AppRoutes() {
           <Route path="/admin/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminLitiges /></RouteProtegee>} />
           <Route path="/admin/templates-contrats" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminTemplatesContrats /></RouteProtegee>} />
           <Route path="/admin/templates-contrats/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEditerTemplateContrat /></RouteProtegee>} />
+          <Route path="/admin/contrats" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminContrats /></RouteProtegee>} />
+          <Route path="/admin/contrats/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDetailContrat /></RouteProtegee>} />
           <Route path="/admin/reclamations-score" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminReclamationsScore /></RouteProtegee>} />
           <Route path="/admin/externalisations-actions" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminExternalisationsActions /></RouteProtegee>} />
           <Route path="/admin/status" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminStatus /></RouteProtegee>} />
