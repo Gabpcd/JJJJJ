@@ -419,7 +419,7 @@ export default function ContratMission() {
         </div>
 
         {/* DPAE : visible pour étab + admin sur contrats CDD signés */}
-        {(role === 'ETABLISSEMENT' || role === 'ADMIN_ETABLISSEMENT' || role === 'ADMIN') &&
+        {(role === 'ADMIN_ETABLISSEMENT' || role === 'ADMIN_PLATEFORME' || role === 'ADMIN_GROUPE') &&
          contrat.statut === 'SIGNE_COMPLET' &&
          contrat.type_contrat && ['CDD', 'CDDU', 'SALARIE'].includes(contrat.type_contrat) && (
           <div className="mb-4">
@@ -436,7 +436,7 @@ export default function ContratMission() {
           <div className="mb-4">
             <CertificatSignature
               contratId={contrat.id}
-              variant={role === 'ADMIN' ? 'detail' : 'resume'}
+              variant={role === 'ADMIN_PLATEFORME' ? 'detail' : 'resume'}
             />
           </div>
         )}
