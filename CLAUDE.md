@@ -124,3 +124,27 @@ Apprises à la dure le 2026-05-12 (3 deploy-supabase échoués sur Sprint 1 PR 1
 - Trigger `dec_valider_compatibilite_mission_liberal` (PR 2 Sprint 1) bloque les missions libérales sur paires incompatibles (ex: IDE LIBERAL en CLINIQUE)
 - 8 `CABINET_*` distincts + `ESPIC` ajoutés aux enums type_etablissement
 - Helpers `peutExercer()`, `peutExercerLiberal()` côté front (cf. `src/lib/constantes.ts`)
+
+### Sprint 3.5 — Litiges + Annulation + Score + Réclamations
+
+#### Litiges résolution automatique (cf. docs/LITIGES_RESOLUTION_AUTOMATIQUE.md)
+- Payload structuré dans `litiges.payload_modifications` (6 types : HORAIRES, MONTANT, ANNULATION, COMPENSATION, MIXTE, SIMPLE)
+- `fn_executer_modifications_litige` propage aux presences/factures + enqueue Stripe/Chorus/DPAE via `externalisation_actions`
+- `FormulaireAccord.tsx` permet aux parties de proposer + accepter (auto-exec si double accord)
+
+#### Annulation mission (cf. docs/ANNULATION_MISSION.md)
+- Fenêtre rétractation 30 min après acceptation (libre pour les 2 parties)
+- Grille soignant : 12-24h=-5, 1-12h=-10, ASAP<2h=-25, no-show=-30+signalement admin
+- Grille étab : OUVERTE=libre, ACCEPTEE sans contrat=-3, CDD signé=-10+indem L1243-8, libéral signé=-10+clause pénale art.1231-5 (50/30/10%), après pointage=-20+montant complet
+- AUCUNE suspension automatique. AUCUNE pénalité financière soignant.
+
+#### Score révisé (cf. docs/SCORE_FIABILITE.md)
+- Soignant : note moyenne (40) + comportement events 12m (40) + ancienneté (20)
+- Étab : note moyenne (40) + comportement events 12m (40) + délai paiement (20)
+- Events ANNULES par admin neutralisés. REDUIRE applique `points_corriges`.
+
+#### Réclamations admin (cf. docs/RECLAMATIONS_ADMIN.md)
+- Toute pénalité contestable via `fn_creer_reclamation_score`
+- Admin tranche MAINTENIR/REDUIRE/ANNULER via `/admin/reclamations-score`
+- Propagation auto sur event + recalcul score + notif user
+- AUCUNE action automatique sur compte sans admin
