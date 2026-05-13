@@ -260,8 +260,23 @@ export default function AdminReclamations() {
       {/* ═══ TAB: Scoring ═══ */}
       {!loading && tab === 'scoring' && (
         <div className="space-y-4">
+          {/* Sprint 5.5 PR 11 : bandeau redirection workflow Sprint 3.5 */}
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200">
+            <p className="font-semibold mb-1">⚠️ Contestations scoring legacy</p>
+            <p className="text-xs mb-2">
+              Cette table <code>reclamations_scoring</code> contient des contestations créées avant Sprint 3.5.
+              Le nouveau workflow MAINTENIR / RÉDUIRE / ANNULER se trouve dans la page dédiée Sprint 3.5.
+            </p>
+            <a
+              href="/admin/reclamations-score"
+              className="inline-flex items-center gap-1 text-amber-900 dark:text-amber-200 underline font-medium"
+            >
+              → Aller à /admin/reclamations-score (workflow Sprint 3.5)
+            </a>
+          </div>
+
           {reclamationsScoring.length === 0 ? (
-            <p className="text-center py-12 text-muted-foreground">Aucune contestation scoring.</p>
+            <p className="text-center py-12 text-muted-foreground">Aucune contestation scoring legacy.</p>
           ) : (
             <>
               {reclamationsScoring.filter(r => r.statut === 'EN_ATTENTE').map(r => (
