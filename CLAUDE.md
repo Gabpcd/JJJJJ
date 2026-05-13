@@ -86,3 +86,8 @@ Apprises à la dure le 2026-05-12 (3 deploy-supabase échoués sur Sprint 1 PR 1
 5. **Test deploy manuel si possible** avant push : `supabase db push --dry-run --password ...` localement pour catcher les erreurs avant CI.
 
 6. **Surveillance post-merge obligatoire** : après merge, vérifier IMMÉDIATEMENT via MCP Supabase que la migration est bien dans `schema_migrations` ET que les enums/tables sont dans l'état attendu. Ne PAS attendre qu'un user signale un bug. Attendre 10 min minimum avant de conclure que le déploiement a échoué (et non juste en cours).
+
+## Règles TypeScript / build (apprises 2026-05-13)
+
+- **Utiliser `npx tsc -b` (pas `--noEmit`) pour valider en local** avant push. La config racine `tsconfig.json` a `files: []` + `references` → `tsc --noEmit` sans flag ne traverse pas les references et ne vérifie RIEN, laissant passer des comparaisons de types incompatibles (ex: `role === 'ETABLISSEMENT'` quand `UserRole = 'ADMIN_ETABLISSEMENT' | ...`). Le CI utilise `tsc -b` strict, donc reproduire localement avec la même commande.
+- **Toujours utiliser les valeurs exactes des enums `UserRole`** : `SOIGNANT` | `ADMIN_ETABLISSEMENT` | `ADMIN_PLATEFORME` | `ADMIN_GROUPE`. Pas de raccourcis `ETABLISSEMENT` ou `ADMIN`.
