@@ -4,6 +4,7 @@ import { ArrowLeft, FileText, Download, Loader2, Receipt, X } from 'lucide-react
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { telechargerBulletinPaiePdf } from '@/lib/bulletin-paie-pdf';
@@ -170,21 +171,20 @@ export default function BulletinsPaie() {
         )}
 
         {bulletins.length === 0 ? (
-          <div className="card-base text-center py-10">
-            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="font-semibold text-foreground">Aucun bulletin de paie pour le moment</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Les bulletins apparaîtront ici dès que vos missions salariées seront terminées.
-            </p>
-          </div>
+          <EmptyState
+            icone={<FileText />}
+            titre="Aucun bulletin de paie pour le moment"
+            description="Les bulletins apparaîtront ici dès que vos missions salariées seront terminées."
+          />
+
         ) : bulletinsFiltres.length === 0 ? (
-          <div className="card-base text-center py-10">
-            <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="font-semibold text-foreground">Aucun bulletin ne correspond aux filtres</p>
-            <button type="button" onClick={reinitialiserFiltres} className="text-sm text-primary hover:underline mt-2">
-              Réinitialiser les filtres
-            </button>
-          </div>
+          <EmptyState
+            icone={<FileText />}
+            titre="Aucun bulletin ne correspond aux filtres"
+            cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }}
+            compact
+          />
+
         ) : (
           <div className="space-y-2">
             {bulletinsFiltres.map((b) => {
