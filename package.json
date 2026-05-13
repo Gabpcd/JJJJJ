@@ -22,6 +22,7 @@
     "test:regression": "vitest run tests/invoicing/no-regression.test.ts"
   },
   "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "^8.1.0",
     "@capacitor/android": "^8.2.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.3",
@@ -32,6 +33,7 @@
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.2.0",
     "@capacitor/keyboard": "^8.0.2",
+    "@capacitor/network": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/push-notifications": "^8.0.3",
     "@capacitor/share": "^8.0.1",
