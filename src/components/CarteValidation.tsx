@@ -6,6 +6,7 @@ import { MapPin, Radio, AlertTriangle, Phone, Mail, CheckCircle, XCircle, Scale,
 import { BadgeCertification } from './BadgeCertification';
 import { PanneauContestation } from './PanneauContestation';
 import { FilDiscussionLitige } from './FilDiscussionLitige';
+import { BadgesAntiTrichePresence } from './presence/BadgesAntiTrichePresence';
 
 interface CarteValidationProps {
   presence: any;
@@ -118,10 +119,18 @@ export function CarteValidation({ presence, litigeExistant, onValider, onContest
         )}
       </div>
 
-      {/* Alertes */}
+      {/* Alertes anti-triche Sprint 4.5 (Sprint 6 PR 7 — Fix P1-7) */}
+      <BadgesAntiTrichePresence
+        arrivee_mock_detected={presence.arrivee_mock_detected}
+        depart_mock_detected={presence.depart_mock_detected}
+        alerte_teleportation={presence.alerte_teleportation}
+        perimetre_gps_valide={presence.perimetre_gps_valide}
+        coherence_incidents={presence.coherence_incidents}
+      />
+
+      {/* Détail alertes legacy (préserve compat) */}
       {aAlertes && (
         <div className="space-y-1">
-          <p className="text-xs font-semibold text-destructive">🚨 ALERTES :</p>
           {!presence.perimetre_gps_valide && (
             <p className="text-xs text-warning flex items-center gap-1">
               <AlertTriangle className="h-3.5 w-3.5" /> Hors périmètre à l'arrivée ({Math.round(presence.distance_etablissement_m || 0)}m)
