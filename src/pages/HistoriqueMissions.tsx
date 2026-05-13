@@ -5,6 +5,8 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EtatVide } from '@/components/EtatVide';
 import { ModalCotisations } from '@/components/ModalCotisations';
+import { BoutonNoterMission } from '@/components/BoutonNoterMission';
+import { WizardOuvertureLitige } from '@/components/litige/WizardOuvertureLitige';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
@@ -38,6 +40,7 @@ export function HistoriqueMissionsContent() {
   const PAGE_SIZE = 50;
   const [moisFiltre, setMoisFiltre] = useState('TOUS');
   const [cotisationsMissionId, setCotisationsMissionId] = useState<string | null>(null);
+  const [wizardLitige, setWizardLitige] = useState<{ id: string; intitule: string } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -147,13 +150,26 @@ export function HistoriqueMissionsContent() {
                     <p className="text-[10px] text-muted-foreground">{m.duree_heures}h</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border flex-wrap">
+                  <BoutonNoterMission
+                    missionId={m.id}
+                    sens="SOIGNANT_VERS_ETAB"
+                    missionIntitule={m.intitule}
+                    variant="secondary"
+                  />
                   <Button variant="ghost" size="sm" className="gap-1.5 text-xs h-8" onClick={() => ouvrirConversation(m.etablissement_id)}>
                     <MessageCircle className="h-3.5 w-3.5" /> Contacter
                   </Button>
-                  <Button variant="ghost" size="sm" className={`gap-1.5 text-xs h-8 text-warning hover:text-warning ${aLitige ? 'invisible' : ''}`} onClick={() => navigate(`/soignant/missions/${m.id}`)}>
-                    <AlertTriangle className="h-3.5 w-3.5" /> Ouvrir un litige
-                  </Button>
+                  {!aLitige && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-xs h-8 text-warning hover:text-warning"
+                      onClick={() => setWizardLitige({ id: m.id, intitule: m.intitule })}
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5" /> Signaler un problème
+                    </Button>
+                  )}
                   {aLitige && (
                     <span className="text-[10px] text-destructive font-medium">⚠️ Litige en cours</span>
                   )}
@@ -170,6 +186,17 @@ export function HistoriqueMissionsContent() {
       )}
 
       <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
+
+      {wizardLitige && (
+        <WizardOuvertureLitige
+          missionId={wizardLitige.id}
+          missionIntitule={wizardLitige.intitule}
+          onClose={() => setWizardLitige(null)}
+          onSuccess={() => {
+            setLitiges(prev => new Set(prev).add(wizardLitige.id));
+          }}
+        />
+      )}
     </>
   );
 }
