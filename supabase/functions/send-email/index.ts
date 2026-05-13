@@ -130,6 +130,8 @@ const ALLOWED_TYPES = new Set([
   'COMPTE_SUSPENDU','COMPTE_REACTIVE',
   // [Refonte.D.3] rappel notation J+1
   'RAPPEL_NOTATION_ETAB','RAPPEL_NOTATION_SOIGNANT',
+  // [Sprint 5.7 PR 4 → Sprint 6 PR 1] invitation équipe étab multi-utilisateurs
+  'INVITATION_EQUIPE_ETAB',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -170,6 +172,37 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           ${BUTTON('Publier une mission →', `${APP_URL}/etablissement/missions/creer`)}
         `),
       };
+
+    case 'INVITATION_EQUIPE_ETAB': {
+      const lienAcceptation = `${APP_URL}/etab/invitation/${data.token || ''}`;
+      const roleLabels: Record<string, string> = {
+        ADMIN_GROUPE: 'Admin groupe (tout sauf gestion équipe)',
+        RH: 'Ressources humaines (missions, candidatures, contrats, pointage)',
+        POINTAGE_ONLY: 'Pointage uniquement',
+        LECTURE_SEULE: 'Lecture seule (consultations sans actions)',
+      };
+      const roleLabel = roleLabels[data.role || ''] || data.role || '';
+      return {
+        subject: `Vous êtes invité à rejoindre ${data.nom_etablissement || 'une équipe'} sur Jolene`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Invitation à rejoindre une équipe</h2>
+          <p style="color:#334155;">
+            <strong>${data.invite_par_nom || 'L\'administrateur'}</strong> vous invite à rejoindre
+            l'équipe <strong>${data.nom_etablissement || ''}</strong> sur Jolene avec le rôle :
+          </p>
+          ${INFO_BOX(`<strong style="color:#0F172A;">${roleLabel}</strong>`)}
+          <p style="color:#334155;">
+            Cliquez sur le bouton ci-dessous pour accepter l'invitation. Le lien expire le
+            <strong>${data.expire_le || 'dans 7 jours'}</strong>.
+          </p>
+          ${BUTTON("Accepter l'invitation →", lienAcceptation)}
+          <p style="color:#64748B;font-size:13px;margin-top:24px;">
+            Si vous n'êtes pas concerné(e) par cette invitation, ignorez simplement cet e-mail —
+            elle s'auto-annulera après 7 jours.
+          </p>
+        `),
+      };
+    }
 
     case 'MISSION_ACCEPTEE_SOIGNANT':
       return {
@@ -1460,10 +1493,21 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { type, data: templateData, destinataire_id } = body;
+    const { type, data: templateData, destinataire_id, destinataire_email: bodyEmail } = body;
 
-    // Strict validation: only type + destinataire_id accepted
-    if (!type || !destinataire_id) {
+    // [Sprint 6 PR 1] INVITATION_EQUIPE_ETAB peut viser un email non-user (invité externe).
+    // Pour ce cas précis, on accepte destinataire_email sans destinataire_id mais on exige
+    // service_role pour empêcher l'envoi d'emails arbitraires depuis le browser.
+    const isExternalInviteFlow = type === 'INVITATION_EQUIPE_ETAB' && !destinataire_id && bodyEmail;
+    if (isExternalInviteFlow && !isServiceRole) {
+      return new Response(JSON.stringify({ error: 'INVITATION_EQUIPE_ETAB externe nécessite service_role' }), {
+        status: 403,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Strict validation: type requis, destinataire_id OU (INVITATION_EQUIPE_ETAB + destinataire_email)
+    if (!type || (!destinataire_id && !isExternalInviteFlow)) {
       return new Response(JSON.stringify({ error: 'Paramètres requis : type, destinataire_id, data' }), {
         status: 400,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
@@ -1472,11 +1516,21 @@ Deno.serve(async (req) => {
 
     // C2-FIX: Validate destinataire_id is a strict UUID to prevent PostgREST filter injection
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_REGEX.test(destinataire_id)) {
+    if (destinataire_id && !UUID_REGEX.test(destinataire_id)) {
       return new Response(JSON.stringify({ error: 'destinataire_id invalide' }), {
         status: 400,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
+    }
+
+    if (isExternalInviteFlow) {
+      const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+      if (!EMAIL_REGEX.test(bodyEmail)) {
+        return new Response(JSON.stringify({ error: 'destinataire_email invalide' }), {
+          status: 400,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     if (!ALLOWED_TYPES.has(type)) {
@@ -1528,7 +1582,8 @@ Deno.serve(async (req) => {
     };
     const typeEvenement = TYPE_TO_EVENT[type] || null;
 
-    if (typeEvenement) {
+    // [Sprint 6 PR 1] flow externe : skip préférences (pas de user) + skip auth
+    if (typeEvenement && !isExternalInviteFlow) {
       const supabaseCheck = createClient(supabaseUrl, serviceRoleKey);
       const { data: shouldNotify } = await supabaseCheck.rpc('fn_doit_notifier' as any, {
         p_utilisateur_id: destinataire_id,
@@ -1559,21 +1614,26 @@ Deno.serve(async (req) => {
     const supabaseService = createClient(supabaseUrl, serviceRoleKey);
     let resolvedEmail: string | null = null;
 
-    const { data: soignant } = await supabaseService
-      .from('soignants').select('email').eq('id', destinataire_id).maybeSingle();
-    if (soignant?.email) {
-      resolvedEmail = soignant.email;
+    if (isExternalInviteFlow) {
+      // Flow externe : destinataire_email fourni directement (invité non-user)
+      resolvedEmail = bodyEmail;
     } else {
-      const { data: etab } = await supabaseService
-        .from('etablissements').select('email_contact').eq('id', destinataire_id).maybeSingle();
-      if (etab?.email_contact) {
-        resolvedEmail = etab.email_contact;
+      const { data: soignant } = await supabaseService
+        .from('soignants').select('email').eq('id', destinataire_id).maybeSingle();
+      if (soignant?.email) {
+        resolvedEmail = soignant.email;
       } else {
-        // Dernier fallback : auth.admin (peut échouer avec sb_secret_)
-        try {
-          const { data: authUser } = await supabaseService.auth.admin.getUserById(destinataire_id);
-          if (authUser?.user?.email) resolvedEmail = authUser.user.email;
-        } catch (_e) { /* silently fall through to 404 */ }
+        const { data: etab } = await supabaseService
+          .from('etablissements').select('email_contact').eq('id', destinataire_id).maybeSingle();
+        if (etab?.email_contact) {
+          resolvedEmail = etab.email_contact;
+        } else {
+          // Dernier fallback : auth.admin (peut échouer avec sb_secret_)
+          try {
+            const { data: authUser } = await supabaseService.auth.admin.getUserById(destinataire_id);
+            if (authUser?.user?.email) resolvedEmail = authUser.user.email;
+          } catch (_e) { /* silently fall through to 404 */ }
+        }
       }
     }
 
@@ -1586,7 +1646,8 @@ Deno.serve(async (req) => {
 
     // Authorization: les admins plateforme sont autorisés, sinon l'utilisateur
     // doit s'envoyer l'email à lui-même, partager une mission, ou administrer le même groupe.
-    if (!isServiceRole && !isPlatformAdmin && destinataire_id !== userId) {
+    // [Sprint 6 PR 1] flow externe : auth déjà vérifiée par service_role check plus haut
+    if (!isServiceRole && !isPlatformAdmin && !isExternalInviteFlow && destinataire_id !== userId) {
       const { count } = await supabaseService
         .from('missions')
         .select('id', { count: 'exact', head: true })
@@ -1703,7 +1764,7 @@ Deno.serve(async (req) => {
     // Log in emails_envoyes
     await supabaseService.from('emails_envoyes').insert({
       destinataire_email: resolvedEmail,
-      destinataire_id: destinataire_id,
+      destinataire_id: destinataire_id || null,
       type,
       sujet: subject,
       provider_id: resData.id || null,
