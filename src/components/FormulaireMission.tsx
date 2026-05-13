@@ -10,6 +10,7 @@ import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressi
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
 import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
 import { BarreProgressionBulk } from '@/components/BarreProgressionBulk';
+import { ModalRecapMission, type RecapMissionData } from '@/components/mission/ModalRecapMission';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -61,6 +62,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   const [etablissementType, setEtablissementType] = useState<string | null>(null);
   const [erreurFactureImpayee, setErreurFactureImpayee] = useState(false);
+  const [toleranceGpsMetres, setToleranceGpsMetres] = useState<number | null>(null);
+  // Sprint 7 PR 1 — Modal récap mission (P1-4)
+  const [modalRecapOuvert, setModalRecapOuvert] = useState(false);
   const { typesAutorises: typesExAutorise, uniqueType: uniqueExType } = useTypesExerciceAutorises(profession);
 
   // Auto-set contratPreference when profession only allows SALARIE
@@ -88,6 +92,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         setRistPlafondActif(data.rist_plafond_actif === true && isPublic);
         setTauxCommission(data.taux_commission_negocie ?? 15);
         setEtablissementType(data.type);
+        if ((data as any).tolerance_gps_metres != null) setToleranceGpsMetres((data as any).tolerance_gps_metres);
         if ((data as any).paliers_commission?.nom) setPalierNom((data as any).paliers_commission.nom);
         // SIRET check: must exist and not be empty
         const s = (data.siret || '').trim();
@@ -246,7 +251,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     navigate('/etablissement/missions');
   };
 
-  // Single mission submit
+  // Sprint 7 PR 1 — Submit intercepté pour afficher le modal récap avant publication.
+  // En mode édition ou récurrent, on garde le flow direct (pas de modal).
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -260,6 +266,20 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
     if (erreurDates || !intitule || !profession || !debutLe || !finLe || !tauxHoraire) return;
 
+    // Mode édition : pas de modal récap, on enregistre directement
+    if (modeEdition && missionSource) {
+      await publierMissionPonctuelle();
+      return;
+    }
+
+    // Mode création ponctuelle : on ouvre le modal récap
+    setModalRecapOuvert(true);
+  };
+
+  // Publication ponctuelle (création ou édition) — appelée par le modal en mode création,
+  // ou directement par handleSubmit en mode édition.
+  const publierMissionPonctuelle = async () => {
+    if (!user) return;
     setLoading(true);
     try {
       // C6: Sanitize description — strip injected tags
@@ -348,6 +368,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         });
 
         afficherNotification({ type: 'succes', message: 'Mission publiée avec succès !' });
+        setModalRecapOuvert(false);
         navigate('/etablissement/missions');
       }
     } finally {
@@ -358,6 +379,29 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const canSubmit = !siretInvalide && !contratNonValide && !erreurFactureImpayee && (modeRecurrent
     ? (!!intitule && !!profession && !!tauxHoraire && recurrenceValide && !publicationEnCours)
     : (!!intitule && !!profession && !!debutLe && !!finLe && !!tauxHoraire && !erreurDates && !loading));
+
+  // Sprint 7 PR 1 — Données récap pour le modal (P1-4)
+  const liberalRestreint = !!profession && !!etablissementType && !peutExercerLiberal(profession, etablissementType);
+  const recapData: RecapMissionData = {
+    intitule,
+    description,
+    profession,
+    service,
+    debutLe,
+    finLe,
+    dureeHeures: dureeEstimee,
+    heuresNuit: heuresNuitEstimees,
+    tauxHoraire: taux,
+    contratPreference,
+    modeAttribution,
+    estUrgente,
+    niveauUrgence,
+    tauxCommission,
+    toleranceGpsMetres,
+    qrAutoGenere: true, // Sprint 4.5 PR 4 : trigger auto à la signature du contrat
+    etablissementType,
+    liberalRestreint,
+  };
 
   return (
     <>
@@ -725,6 +769,15 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       {publicationEnCours && (
         <BarreProgressionBulk progression={progression} total={creneaux.length} actuel={progressionActuel} />
       )}
+
+      {/* Sprint 7 PR 1 — Modal récap avant publication finale (P1-4) */}
+      <ModalRecapMission
+        ouvert={modalRecapOuvert}
+        data={recapData}
+        onModifier={() => setModalRecapOuvert(false)}
+        onConfirmer={publierMissionPonctuelle}
+        loading={loading}
+      />
     </>
   );
 }
