@@ -32,10 +32,14 @@ COMMENT ON COLUMN public.externalisation_actions.cron_lock_at IS
   'Timestamp de prise de lock par le worker. Une action LOCKEE depuis '
   'plus de 10 min est considérée orpheline et peut être re-lock.';
 
--- 2. Index sur next_retry_at + statut pour scan rapide
-CREATE INDEX IF NOT EXISTS idx_ext_actions_to_process
-  ON public.externalisation_actions(statut, next_retry_at NULLS FIRST)
-  WHERE statut IN ('PENDING', 'PENDING_AIFE') OR (statut = 'PROCESSING' AND cron_lock_at < NOW() - INTERVAL '10 minutes');
+-- 2. Index sur statut pour scan rapide (sans condition NOW() pour rester IMMUTABLE)
+-- Note Sprint 4.5 PR 1 : NOW() retiré de la WHERE clause car non-IMMUTABLE
+-- (erreur PG 42P17: functions in index predicate must be marked IMMUTABLE).
+-- L'index couvre les statuts actifs ; le filtre cron_lock_at < NOW() - 10min
+-- est appliqué dans la requête fn_externalisations_a_traiter.
+CREATE INDEX IF NOT EXISTS idx_ext_actions_pending
+  ON public.externalisation_actions(statut, cree_le ASC)
+  WHERE statut IN ('PENDING', 'PENDING_AIFE', 'PROCESSING');
 
 -- 3. RPC pour sélectionner + lock un batch (utilisée par le worker)
 CREATE OR REPLACE FUNCTION public.fn_externalisations_a_traiter(p_limit int DEFAULT 50, p_worker_id text DEFAULT NULL)
