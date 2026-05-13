@@ -148,3 +148,32 @@ Apprises à la dure le 2026-05-12 (3 deploy-supabase échoués sur Sprint 1 PR 1
 - Admin tranche MAINTENIR/REDUIRE/ANNULER via `/admin/reclamations-score`
 - Propagation auto sur event + recalcul score + notif user
 - AUCUNE action automatique sur compte sans admin
+
+### Sprint 4.5 — Anti-triche pointage (cf. docs/ANTI_TRICHE_POINTAGE.md)
+
+Architecture défensive multi-couches contre la fraude au pointage. **Aucune photo selfie, aucune suspension auto, aucune pénalité financière soignant.**
+
+#### Hiérarchie UX `<CartePointage />`
+1. **Scanner QR (recommandé)** — bouton principal large (PR 6 + PR 12)
+2. **GPS + Code secours** — boutons secondaires en grille 50/50
+3. **Indicateur file offline** quand `qr-offline-queue` non vide
+
+#### Couches anti-triche
+- **QR backend** (PR 4) : `fn_generer_qr_mission` + `fn_valider_scan_qr` + auto-génération au signe contrat (trigger). Token UUID + suffix 16 hex.
+- **Mock GPS** (PR 2) : `src/lib/mock-detection.ts` heuristiques `accuracy=0`, coords rondes, vitesse aberrante.
+- **Téléportation** (PR 2) : `fn_vitesse_entre_pointages` IMMUTABLE + cron `*/15 min` Haversine + alerte si > 200 km/h.
+- **Tolérance adaptive** (PR 8) : `tolerance_gps_metres` CHECK `[30, 1000]` DEFAULT 100.
+- **Code secours bcrypt** (PR 9) : `fn_generer_code_secours_mission` (clair UNE fois) + `fn_valider_code_secours` (`crypt()` comparison).
+- **Ping GPS background** (PR 10) : opt-in RGPD strict, `@capacitor-community/background-geolocation`, table `pings_gps_mission`, purge 30j.
+- **Cohérence temporelle** (PR 11) : `fn_evaluer_coherence_pointage` IMMUTABLE 7 codes incidents + worker cron `*/30 min` + `alertes_systeme`.
+
+#### Crons actifs
+| Cron | Schedule |
+|---|---|
+| `jolene_alerte_teleportation` | `*/15 min` |
+| `jolene_purger_pings_gps` | `0 3 * * *` |
+| `jolene_verifier_pointages_incoherents` | `*/30 min` |
+
+#### Tests (PR 13)
+- 12 tests DB-level dans `e2e/flows/anti-triche-pointage.spec.ts`
+- Tests UI exclus (QR scanners + background-geolocation non testables headless)
