@@ -313,3 +313,25 @@ Cf. docs/ONBOARDING_TUTORIEL.md, docs/EVALUATION_POST_MISSION_SOIGNANT.md, docs/
 - ✅ **12/15 P1 Sprint 5 résolus** (P1-1, P1-2, P1-3, P1-6, P1-7, P1-8, P1-9, P1-10, P1-12, P1-13, P1-14, P1-15)
 - 3 P1 reportés Sprint 7 (P1-4, P1-5, P1-11)
 - Prêt pour Sprint 7 (3 P1 restants + P2 polish)
+
+### Sprint 7 — P1 restants + P2 cosmétiques (10 PRs)
+
+Cf. docs/RECAP_MISSION_AVANT_PUBLICATION.md, docs/SCORE_BREAKDOWN_INLINE.md, docs/ADMIN_AUDIT_RLS.md.
+
+| PR | # | Chantier | Fix |
+|---|---|---|---|
+| 1 | #173 | ModalRecapMission avant publication étab | P1-4 |
+| 2 | #172 | PopoverScoreSoignant inline candidatures | P1-5 |
+| 3 | #174 | Page admin /admin/audit-rls | P1-11 |
+| 4 | #175 | BannerMediflashExplication + BoutonCopyHash | P2 |
+| 5 | #176 | BadgeNetEstime + BoutonResendEmail + iconesNotifs | P2 |
+| 6 | #177 | AdminScoreTriage + BoutonsBulkFactures | P2 |
+| 7 | #178 | AdminRGPDTools | P2 |
+| 8 | this | BadgeChampImmutable | Follow-up |
+| 9 | this | Tests playwright Sprint 7 | — |
+| 10 | this | Documentation Sprint 7 | — |
+
+#### Bilan Sprint 7
+- ✅ **15/15 P1 Sprint 5 résolus** (3 P1 restants traités)
+- ✅ **9 P2 traités** ; reportés Sprint 8 : majorations breakdown, fusion AdminLitiges/Moderation, actions admin missions, sous-titres vidéos
+- Prêt pour Sprint 8 (P2 résiduels) ou Sprint 9 (esthétique Y2K Gen Z)
