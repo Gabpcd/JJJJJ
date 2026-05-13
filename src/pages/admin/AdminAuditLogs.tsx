@@ -17,7 +17,20 @@ const ACTIONS_COLORS: Record<string, string> = {
   'SMS_CONSENTEMENT_RETIRE': 'bg-warning/10 text-warning',
   'DONNEES_PERSO_MODIFICATION': 'bg-info/10 text-info',
   'DONNEES_PERSO_CONSULTATION': 'bg-muted text-muted-foreground',
+  // Sprint 6 PR 11 — anti-triche pointage filtres (Fix P1-15)
+  'POINTAGE': 'bg-warning/10 text-warning',
+  'ADMIN_ACTION': 'bg-primary/10 text-primary',
 };
+
+// Sprint 6 PR 11 — Evenements anti-triche dans details->>'evenement' (Fix P1-15)
+const EVENEMENTS_ANTITRICHE = [
+  'TELEPORTATION_DETECTED',
+  'POINTAGE_INCOHERENT',
+  'QR_SCAN_GPS_ELOIGNE',
+  'GPS_SPOOFING_DETECTED',
+  'MOCK_GPS_DETECTED',
+  'ALERTE_POINTAGE_TRAITEE',
+];
 
 const PAGE_SIZE = 50;
 
@@ -30,6 +43,7 @@ export default function AdminAuditLogs() {
   const [search, setSearch] = useState('');
   const [filterAction, setFilterAction] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterEvenement, setFilterEvenement] = useState('');
 
   const charger = async () => {
     setLoading(true);
@@ -41,6 +55,10 @@ export default function AdminAuditLogs() {
 
     if (filterAction) query = query.eq('action', filterAction);
     if (filterType) query = query.eq('type_acteur', filterType);
+    if (filterEvenement) {
+      // Sprint 6 PR 11 — filtre événements anti-triche via details->>'evenement' jsonb
+      query = (query as any).eq('details->>evenement', filterEvenement);
+    }
     if (search) query = query.or(`action.ilike.%${search}%,type_ressource.ilike.%${search}%`);
 
     const { data } = await query;
@@ -49,9 +67,9 @@ export default function AdminAuditLogs() {
     setLoading(false);
   };
 
-  useEffect(() => { charger(); }, [page, filterAction, filterType]);
+  useEffect(() => { charger(); }, [page, filterAction, filterType, filterEvenement]);
 
-  const actions = ['RGPD_SUPPRESSION_COMPTE', 'RGPD_EXPORT_DONNEES', 'DOCUMENT_VERIFICATION_AUTO', 'GPS_CONSENTEMENT_ACTIVE', 'GPS_CONSENTEMENT_RETIRE', 'SMS_CONSENTEMENT_ACTIVE', 'SMS_CONSENTEMENT_RETIRE', 'DONNEES_PERSO_MODIFICATION', 'DONNEES_PERSO_CONSULTATION'];
+  const actions = ['RGPD_SUPPRESSION_COMPTE', 'RGPD_EXPORT_DONNEES', 'DOCUMENT_VERIFICATION_AUTO', 'GPS_CONSENTEMENT_ACTIVE', 'GPS_CONSENTEMENT_RETIRE', 'SMS_CONSENTEMENT_ACTIVE', 'SMS_CONSENTEMENT_RETIRE', 'DONNEES_PERSO_MODIFICATION', 'DONNEES_PERSO_CONSULTATION', 'POINTAGE', 'ADMIN_ACTION'];
   const types = ['SOIGNANT', 'ADMIN_ETABLISSEMENT', 'ADMIN_PLATEFORME', 'SYSTEME'];
 
   return (
@@ -87,6 +105,10 @@ export default function AdminAuditLogs() {
         <select value={filterType} onChange={e => { setFilterType(e.target.value); setPage(0); }} className="input-base w-auto">
           <option value="">Tous les acteurs</option>
           {types.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={filterEvenement} onChange={e => { setFilterEvenement(e.target.value); setPage(0); }} className="input-base w-auto" aria-label="Filtrer par événement anti-triche">
+          <option value="">Tous les événements</option>
+          {EVENEMENTS_ANTITRICHE.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
       </div>
 
