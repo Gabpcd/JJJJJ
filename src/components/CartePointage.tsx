@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { format, differenceInMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Clock, Pause, Play } from 'lucide-react';
+import { Clock, Pause, Play, QrCode, KeyRound, WifiOff } from 'lucide-react';
 import { BoutonPointage } from './BoutonPointage';
-import { SaisieCodePointage } from './SaisieCodePointage';
+import { ScannerQRPointageSoignant } from './soignant/ScannerQRPointageSoignant';
+import { SaisieCodeSecours } from './soignant/SaisieCodeSecours';
 
 import { ResultatPointage } from './ResultatPointage';
 import { BadgeCertification } from './BadgeCertification';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { toast } from 'sonner';
+import { ajouterAQueueQr, initSyncQrOfflineQueue, tailleQueueQr } from '@/lib/qr-offline-queue';
 
 interface CartePointageProps {
   mission: any;
@@ -27,6 +29,26 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
 
   const aPointeArrivee = !!presence?.pointage_arrivee_le;
   const aPointeDepart = !!presence?.pointage_depart_le;
+
+  // Sprint 4.5 PR 12 : modal Scan QR / Code secours + indicateur offline
+  const [modalActif, setModalActif] = useState<'qr' | 'code' | null>(null);
+  const [tailleQueue, setTailleQueue] = useState<number>(() => tailleQueueQr());
+
+  useEffect(() => {
+    initSyncQrOfflineQueue(() => setTailleQueue(tailleQueueQr())).catch(() => {});
+    const handler = () => setTailleQueue(tailleQueueQr());
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+
+  function fermerModalEtRecharger() {
+    setModalActif(null);
+    onRecharger?.();
+  }
+
+  function fallbackVersCode() {
+    setModalActif('code');
+  }
 
   // Determine state
   let etat: 'futur' | 'trop_tot' | 'pret' | 'en_mission' | 'termine';
@@ -93,23 +115,21 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
         </div>
       )}
 
-      {/* État 2: Prêt */}
+      {/* État 2: Prêt — Sprint 4.5 PR 12 : QR (recommandé) + GPS + Code secours */}
       {etat === 'pret' && (
-        <div className="space-y-2">
-          <BoutonPointage type="arrivee" onPointage={onPointerArrivee} />
-          <SaisieCodePointage
-            type="arrivee"
-            onValider={async (code) => {
-              const { data, error } = await supabase.rpc('fn_pointer_arrivee_code' as any, {
-                p_mission_id: mission.id,
-                p_code: code,
-              });
-              if (error) return { success: false, message: extraireMessageErreur(error) };
-              if (data?.success === false) return { success: false, message: data.error };
-              onRecharger?.();
-              return { success: true, message: 'Arrivée pointée par code ✅' };
-            }}
-          />
+        <div className="space-y-3">
+          <BoutonScannerQrPrincipal onClick={() => setModalActif('qr')} />
+          <div className="grid grid-cols-2 gap-2">
+            <BoutonPointage type="arrivee" onPointage={onPointerArrivee} />
+            <button
+              onClick={() => setModalActif('code')}
+              className="rounded-2xl border-2 border-border bg-background py-4 text-sm font-bold text-foreground hover:bg-muted active:scale-95 transition-all flex flex-col items-center justify-center gap-1 min-h-[60px]"
+            >
+              <KeyRound className="h-5 w-5 text-primary" />
+              Code secours
+            </button>
+          </div>
+          {tailleQueue > 0 && <IndicateurFileOffline taille={tailleQueue} />}
         </div>
       )}
 
@@ -120,6 +140,26 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
           presence={presence}
           onPointerDepart={onPointerDepart}
           onRecharger={onRecharger}
+          onScanQr={() => setModalActif('qr')}
+          onCodeSecours={() => setModalActif('code')}
+          tailleQueue={tailleQueue}
+        />
+      )}
+
+      {/* Modals scan QR / code secours */}
+      {modalActif === 'qr' && (
+        <ScannerQRPointageSoignant
+          missionId={mission.id}
+          onValide={fermerModalEtRecharger}
+          onAnnuler={() => setModalActif(null)}
+          onFallbackCode={fallbackVersCode}
+        />
+      )}
+      {modalActif === 'code' && (
+        <SaisieCodeSecours
+          missionId={mission.id}
+          onValide={fermerModalEtRecharger}
+          onAnnuler={() => setModalActif(null)}
         />
       )}
 
@@ -179,9 +219,35 @@ export function CartePointage({ mission, presence, onPointerArrivee, onPointerDe
   );
 }
 
+/** Bouton principal scan QR (Sprint 4.5 PR 12) */
+function BoutonScannerQrPrincipal({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full py-6 rounded-2xl text-lg font-bold shadow-lg transition-all active:scale-95 bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center gap-3 min-h-[68px]"
+    >
+      <QrCode className="h-6 w-6" />
+      <span>SCANNER LE QR (recommandé)</span>
+    </button>
+  );
+}
+
+/** Indicateur file offline (Sprint 4.5 PR 12) */
+function IndicateurFileOffline({ taille }: { taille: number }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+      <WifiOff className="h-4 w-4 shrink-0" />
+      <span>
+        {taille} pointage{taille > 1 ? 's' : ''} en attente de synchronisation. Reconnectez-vous à Internet.
+      </span>
+    </div>
+  );
+}
+
 /** Sub-component for en_mission state with pause support */
-function EnMissionBlock({ mission, presence, onPointerDepart, onRecharger }: {
+function EnMissionBlock({ mission, presence, onPointerDepart, onRecharger, onScanQr, onCodeSecours, tailleQueue }: {
   mission: any; presence: any; onPointerDepart: () => Promise<void>; onRecharger?: () => void;
+  onScanQr: () => void; onCodeSecours: () => void; tailleQueue: number;
 }) {
   const [enPause, setEnPause] = useState(!!presence.pause_debut_le && !presence.pause_fin_le);
   const [pauseLoading, setPauseLoading] = useState(false);
@@ -260,20 +326,18 @@ function EnMissionBlock({ mission, presence, onPointerDepart, onRecharger }: {
 
       {!enPause && (
         <>
-          <BoutonPointage type="depart" onPointage={onPointerDepart} />
-          <SaisieCodePointage
-            type="depart"
-            onValider={async (code) => {
-              const { data, error } = await supabase.rpc('fn_pointer_depart_code' as any, {
-                p_presence_id: presence.id,
-                p_code: code,
-              });
-              if (error) return { success: false, message: extraireMessageErreur(error) };
-              if (data?.success === false) return { success: false, message: data.error };
-              onRecharger?.();
-              return { success: true, message: 'Départ pointé par code ✅' };
-            }}
-          />
+          <BoutonScannerQrPrincipal onClick={onScanQr} />
+          <div className="grid grid-cols-2 gap-2">
+            <BoutonPointage type="depart" onPointage={onPointerDepart} />
+            <button
+              onClick={onCodeSecours}
+              className="rounded-2xl border-2 border-border bg-background py-4 text-sm font-bold text-foreground hover:bg-muted active:scale-95 transition-all flex flex-col items-center justify-center gap-1 min-h-[60px]"
+            >
+              <KeyRound className="h-5 w-5 text-primary" />
+              Code secours
+            </button>
+          </div>
+          {tailleQueue > 0 && <IndicateurFileOffline taille={tailleQueue} />}
         </>
       )}
       {enPause && (
