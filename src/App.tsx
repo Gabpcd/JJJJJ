@@ -127,6 +127,8 @@ const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUtilisateurs = lazy(() => import("./pages/admin/AdminUtilisateurs"));
 const AdminModeration = lazy(() => import("./pages/admin/AdminModeration"));
 const AdminLitiges = lazy(() => import("./pages/admin/AdminLitiges"));
+const AdminTemplatesContrats = lazy(() => import("./pages/admin/AdminTemplatesContrats"));
+const AdminEditerTemplateContrat = lazy(() => import("./pages/admin/AdminEditerTemplateContrat"));
 const AdminReclamationsScore = lazy(() => import("./pages/admin/AdminReclamationsScore"));
 const AdminExternalisationsActions = lazy(() => import("./pages/admin/AdminExternalisationsActions"));
 const AdminStatus = lazy(() => import("./pages/admin/AdminStatus"));
@@ -290,6 +292,8 @@ function AppRoutes() {
           <Route path="/admin/utilisateurs/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminDetailUtilisateur /></RouteProtegee>} />
           <Route path="/admin/moderation" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminModeration /></RouteProtegee>} />
           <Route path="/admin/litiges" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminLitiges /></RouteProtegee>} />
+          <Route path="/admin/templates-contrats" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminTemplatesContrats /></RouteProtegee>} />
+          <Route path="/admin/templates-contrats/:id" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEditerTemplateContrat /></RouteProtegee>} />
           <Route path="/admin/reclamations-score" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminReclamationsScore /></RouteProtegee>} />
           <Route path="/admin/externalisations-actions" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminExternalisationsActions /></RouteProtegee>} />
           <Route path="/admin/status" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminStatus /></RouteProtegee>} />
