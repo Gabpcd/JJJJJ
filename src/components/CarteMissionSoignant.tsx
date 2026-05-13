@@ -6,6 +6,7 @@ import { BadgeStatut } from '@/components/BadgeStatut';
 import { BoutonFavoriEtab } from '@/components/BoutonFavoriEtab';
 import { getLabelProfession, getLabelTypeEtablissement, extraireContratPreference, getContratBadge, getTypeContratRechercheBadge } from '@/lib/constantes';
 import { getMissionMatchInfo } from '@/lib/profession-hierarchy';
+import { detecterMajorations, calculerTauxAvecMajorations } from '@/lib/majorationsCCN';
 
 interface CarteMissionSoignantProps {
   mission: any;
@@ -103,7 +104,29 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
       </div>
 
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-primary font-bold text-sm">💰 {m.taux_horaire_base?.toFixed(2)} €/h</span>
+        {(() => {
+          const majos = m.debut_le && m.fin_le ? detecterMajorations(m.debut_le, m.fin_le) : [];
+          const tauxBase = m.taux_horaire_base ?? 0;
+          const tauxFinal = majos.length > 0 ? calculerTauxAvecMajorations(tauxBase, majos) : tauxBase;
+          const tooltip = majos.length > 0
+            ? majos.map((maj) => `${maj.libelle} : +${maj.pourcentage}% (${maj.reference})`).join('\n')
+                + `\n${tauxBase.toFixed(2)} €/h base + majorations = ${tauxFinal.toFixed(2)} €/h estimé`
+            : undefined;
+          return (
+            <span
+              className="text-primary font-bold text-sm inline-flex items-center gap-1"
+              title={tooltip}
+              aria-label={tooltip ? `Taux horaire avec majorations CCN : ${tooltip}` : undefined}
+            >
+              💰 {tauxBase.toFixed(2)} €/h
+              {majos.length > 0 && (
+                <span className="text-[10px] font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full" aria-hidden="true">
+                  +{majos.reduce((s, m) => s + m.pourcentage, 0)}% CCN
+                </span>
+              )}
+            </span>
+          );
+        })()}
         {(m.net_estime ?? m.net_a_payer ?? 0) > 0 ? (
           <span className="text-xs text-muted-foreground">Net estimé* : ~{fmt(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : null))}</span>
         ) : (
