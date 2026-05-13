@@ -11,6 +11,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { CarteMission } from '@/components/CarteMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { ModaleAnnulationMissionEtab } from '@/components/etablissement/ModaleAnnulationMissionEtab';
 import { EtatVide } from '@/components/EtatVide';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
@@ -269,13 +270,7 @@ export default function DashboardEtablissement() {
 
   const queryClient = useQueryClient();
 
-  const handleAnnuler = async (mission: Record<string, unknown>) => {
-    const { data, error } = await supabase.rpc('fn_annuler_mission_etablissement' as any, { p_mission_id: mission.id });
-    const result = data as unknown as { success?: boolean; error?: string } | null;
-    if (error) afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-    else if (result?.success === false) afficherNotification({ type: 'erreur', message: result.error || 'Erreur' });
-    else { afficherNotification({ type: 'succes', message: 'Mission annulée.' }); queryClient.invalidateQueries({ queryKey: ['dashboard-etablissement'] }); }
-  };
+  // handleAnnuler legacy supprimé : remplacé par ModaleAnnulationMissionEtab (Sprint 5.5 PR 3).
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><SkeletonDashboard /></LayoutApp>;
 
@@ -534,10 +529,29 @@ export default function DashboardEtablissement() {
       <ModalConfirmation ouvert={!!modalDupliquer} onFermer={() => setModalDupliquer(null)}
         onConfirmer={() => navigate(`/etablissement/missions/creer?dupliquer=${modalDupliquer.id}`)}
         titre="Dupliquer cette mission ?" message={`Une copie de « ${modalDupliquer?.intitule} » sera créée.`} labelConfirmer="Dupliquer" />
-      <ModalConfirmation ouvert={!!modalAnnuler} onFermer={() => setModalAnnuler(null)}
-        onConfirmer={() => handleAnnuler(modalAnnuler)}
-        titre="Annuler cette mission ?" message={`La mission « ${modalAnnuler?.intitule} » sera définitivement annulée.`}
-        labelConfirmer="Annuler la mission" variante="danger" />
+      {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5 */}
+      {modalAnnuler && (
+        <ModaleAnnulationMissionEtab
+          ouvert={true}
+          onFermer={() => setModalAnnuler(null)}
+          onAnnulee={() => {
+            setModalAnnuler(null);
+            queryClient.invalidateQueries({ queryKey: ['dashboard-etablissement'] });
+          }}
+          mission={{
+            id: (modalAnnuler as any).id,
+            intitule: (modalAnnuler as any).intitule,
+            statut: (modalAnnuler as any).statut,
+            debut_le: (modalAnnuler as any).debut_le,
+            fin_le: (modalAnnuler as any).fin_le,
+            duree_heures: (modalAnnuler as any).duree_heures,
+            taux_horaire_base: (modalAnnuler as any).taux_horaire_base,
+            total_brut: (modalAnnuler as any).total_brut,
+            type_contrat_applique: (modalAnnuler as any).type_contrat_applique,
+            type_contrat_recherche: (modalAnnuler as any).type_contrat_recherche,
+          }}
+        />
+      )}
     </LayoutApp>
   );
 }

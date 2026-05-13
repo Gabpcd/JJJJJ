@@ -11,6 +11,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { CarteMission } from '@/components/CarteMission';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { ModaleAnnulationMissionEtab } from '@/components/etablissement/ModaleAnnulationMissionEtab';
 import { EtatVide, IllustrationMegaphone } from '@/components/EtatVide';
 import { ChargementPage } from '@/components/ChargementPage';
 import { FABCreerMission } from '@/components/FABCreerMission';
@@ -150,19 +151,10 @@ export default function ListeMissions() {
     return result;
   }, [missions]);
 
-  const handleAnnuler = async (mission: any) => {
-    const { data, error } = await supabase.rpc('fn_annuler_mission_etablissement' as any, { p_mission_id: mission.id });
-    if (error) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-    } else if ((data as any)?.success === false) {
-      afficherNotification({ type: 'erreur', message: (data as any).error });
-    } else {
-      afficherNotification({ type: 'succes', message: 'Mission annulée.' });
-      queryClient.invalidateQueries({ queryKey: ['liste-missions'] });
-    }
-  };
+  // handleAnnuler legacy supprimé : remplacé par ModaleAnnulationMissionEtab (Sprint 5.5 PR 3)
+  // qui appelle fn_annuler_mission_etab avec décomposition L1243-8 / 1231-5.
 
-  // M5: Atomic serie cancellation via RPC
+  // M5: Atomic serie cancellation via RPC (séries OUVERTE uniquement — pas de conséquences)
   const handleAnnulerSerie = async (missionsSerieOuvertes: any[]) => {
     const ids = missionsSerieOuvertes.map((m: any) => m.id);
     const { data, error } = await supabase.rpc('fn_annuler_serie_etablissement' as any, { p_mission_ids: ids });
@@ -282,10 +274,29 @@ export default function ListeMissions() {
         titre="Dupliquer cette mission ?" message={`Une copie de « ${modalDupliquer?.intitule} » sera créée.`}
         labelConfirmer="Dupliquer" />
 
-      <ModalConfirmation ouvert={!!modalAnnuler} onFermer={() => setModalAnnuler(null)}
-        onConfirmer={() => handleAnnuler(modalAnnuler)}
-        titre="Annuler cette mission ?" message={`La mission « ${modalAnnuler?.intitule} » sera définitivement annulée.`}
-        labelConfirmer="Annuler la mission" variante="danger" />
+      {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5 */}
+      {modalAnnuler && (
+        <ModaleAnnulationMissionEtab
+          ouvert={true}
+          onFermer={() => setModalAnnuler(null)}
+          onAnnulee={() => {
+            setModalAnnuler(null);
+            queryClient.invalidateQueries({ queryKey: ['liste-missions'] });
+          }}
+          mission={{
+            id: modalAnnuler.id,
+            intitule: modalAnnuler.intitule,
+            statut: modalAnnuler.statut,
+            debut_le: modalAnnuler.debut_le,
+            fin_le: modalAnnuler.fin_le,
+            duree_heures: modalAnnuler.duree_heures,
+            taux_horaire_base: modalAnnuler.taux_horaire_base,
+            total_brut: modalAnnuler.total_brut,
+            type_contrat_applique: modalAnnuler.type_contrat_applique,
+            type_contrat_recherche: modalAnnuler.type_contrat_recherche,
+          }}
+        />
+      )}
 
       <ModalConfirmation ouvert={!!modalAnnulerSerie} onFermer={() => setModalAnnulerSerie(null)}
         onConfirmer={() => { if (modalAnnulerSerie) handleAnnulerSerie(modalAnnulerSerie); setModalAnnulerSerie(null); }}

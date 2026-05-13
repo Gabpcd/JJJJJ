@@ -16,6 +16,7 @@ import { BlocContratTravailMission } from '@/components/BlocContratTravailMissio
 import { CodesPointageMission } from '@/components/CodesPointageMission';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { ModaleAnnulationMissionEtab } from '@/components/etablissement/ModaleAnnulationMissionEtab';
 import { EvaluationPostMission } from '@/components/EvaluationPostMission';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BandeauRappelDPAE } from '@/components/BandeauRappelDPAE';
@@ -353,17 +354,8 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
     setProposing(null);
   };
 
-  const handleAnnuler = async () => {
-    const { data, error } = await supabase.rpc('fn_annuler_mission_etablissement' as any, { p_mission_id: id! });
-    if (error) {
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(error) });
-    } else if ((data as any)?.success === false) {
-      afficherNotification({ type: 'erreur', message: (data as any).error });
-    } else {
-      afficherNotification({ type: 'succes', message: 'Mission annulée.' });
-      navigate(role === 'ADMIN_PLATEFORME' ? '/admin/calendrier' : '/etablissement/missions');
-    }
-  };
+  // handleAnnuler legacy supprimé : remplacé par ModaleAnnulationMissionEtab (Sprint 5.5 PR 3)
+  // qui appelle fn_annuler_mission_etab avec motif structuré + décomposition L1243-8 / 1231-5.
 
   const handleBack = () => {
     if (window.history.length > 2) {
@@ -827,14 +819,26 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         )}
       </div>
 
-      <ModalConfirmation
+      {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5 */}
+      <ModaleAnnulationMissionEtab
         ouvert={modalAnnuler}
         onFermer={() => setModalAnnuler(false)}
-        onConfirmer={handleAnnuler}
-        titre="Annuler cette mission ?"
-        message={`La mission « ${m.intitule} » sera définitivement annulée.`}
-        labelConfirmer="Annuler la mission"
-        variante="danger"
+        onAnnulee={() => {
+          setModalAnnuler(false);
+          navigate(role === 'ADMIN_PLATEFORME' ? '/admin/calendrier' : '/etablissement/missions');
+        }}
+        mission={{
+          id: m.id,
+          intitule: m.intitule,
+          statut: m.statut,
+          debut_le: m.debut_le,
+          fin_le: m.fin_le,
+          duree_heures: m.duree_heures,
+          taux_horaire_base: m.taux_horaire_base,
+          total_brut: m.total_brut,
+          type_contrat_applique: (m as any).type_contrat_applique,
+          type_contrat_recherche: (m as any).type_contrat_recherche,
+        }}
       />
 
       <ModalConfirmation
