@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { FormulaireAccord } from '@/components/litige/FormulaireAccord';
 
 interface Props {
   litige: any;
@@ -205,6 +206,29 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
           </div>
         </div>
       )}
+
+      {/* PR 3 Sprint 3.5 — Formulaire d'accord structuré */}
+      {isOpen && (() => {
+        const monRole = litige.soignant_id === user?.id ? 'soignant'
+          : (litige.etablissement_id === user?.id ? 'etablissement' : null);
+        if (!monRole) return null;
+        const proposition = litige.payload_modifications;
+        const dejaAccordSoignant = !!litige.accord_soignant;
+        const dejaAccordEtab = !!litige.accord_etablissement;
+        const propositionExistante = proposition ? {
+          ...proposition,
+          proposeur_role: dejaAccordSoignant && !dejaAccordEtab ? 'soignant' as const
+            : (dejaAccordEtab && !dejaAccordSoignant ? 'etablissement' as const : monRole),
+        } : null;
+        return (
+          <FormulaireAccord
+            litigeId={litige.id}
+            propositionExistante={propositionExistante}
+            roleUtilisateur={monRole}
+            onResolu={onUpdate}
+          />
+        );
+      })()}
     </div>
   );
 }
