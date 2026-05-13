@@ -1,12 +1,22 @@
-// send-push — Web Push natif (RFC 8030 + VAPID)
-// Pas besoin de Firebase ni de clé de service Google.
-// Utilise la VAPID key déjà configurée (FIREBASE_VAPID_KEY = clé publique VAPID)
-// + une clé privée VAPID (VAPID_PRIVATE_KEY) à générer une seule fois.
+// send-push — Dispatcher push multi-plateforme (Sprint 4 PR 1)
+//
+// Routing par tokens_push.plateforme :
+//   WEB    → web-push (RFC 8030 + VAPID) — déjà opérationnel
+//   IOS    → FCM HTTP v1 (qui dispatch APNS via clé p8 uploadée
+//            dans Firebase Console côté Sprint final)
+//   ANDROID → FCM HTTP v1
+//
+// FCM HTTP v1 nécessite FIREBASE_SERVICE_ACCOUNT_JSON en Vault.
+// Si absent (cas actuel jusqu'au Sprint final création projet Firebase),
+// les tokens IOS/ANDROID sont skip avec log WARNING — Web Push continue
+// à fonctionner sans régression.
 //
 // Secrets requis :
-//   VAPID_PUBLIC_KEY  (= ta FIREBASE_VAPID_KEY existante, encodée en base64url)
-//   VAPID_PRIVATE_KEY (à générer, voir ci-dessous)
-//   VAPID_SUBJECT     (= mailto:contact@jolene.app)
+//   VAPID_PUBLIC_KEY                 (déjà OK)
+//   VAPID_PRIVATE_KEY                (déjà OK)
+//   VAPID_SUBJECT                    (déjà OK)
+//   FIREBASE_SERVICE_ACCOUNT_JSON    (Sprint final, OPTIONNEL pour PR 1)
+//   FIREBASE_PROJECT_ID              (Sprint final, OPTIONNEL pour PR 1)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -24,6 +34,144 @@ function getCorsOrigin(req: Request): string {
   }
   return "https://jolene.app";
 }
+
+// ─── FCM HTTP v1 helper — Sprint 4 PR 1 ──────────────────────────────
+
+interface ServiceAccount {
+  client_email: string;
+  private_key: string;
+  project_id: string;
+}
+
+let cachedAccessToken: { token: string; expiresAt: number } | null = null;
+
+function pemToArrayBuffer(pem: string): ArrayBuffer {
+  const b64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s+/g, "");
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function base64url(input: string | Uint8Array): string {
+  const b64 = typeof input === "string" ? btoa(input)
+    : btoa(String.fromCharCode(...input));
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * Génère un OAuth2 access token Firebase via le flow service account JWT.
+ * Cache 50 min (token Google valide 1h).
+ */
+async function getFcmAccessToken(sa: ServiceAccount): Promise<string> {
+  if (cachedAccessToken && cachedAccessToken.expiresAt > Date.now() + 60_000) {
+    return cachedAccessToken.token;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: sa.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  };
+  const headerB64 = base64url(JSON.stringify(header));
+  const payloadB64 = base64url(JSON.stringify(payload));
+  const toSign = `${headerB64}.${payloadB64}`;
+
+  const keyBuffer = pemToArrayBuffer(sa.private_key);
+  const cryptoKey = await crypto.subtle.importKey(
+    "pkcs8", keyBuffer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false, ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5", cryptoKey, new TextEncoder().encode(toSign),
+  );
+  const signatureB64 = base64url(new Uint8Array(signature));
+  const jwt = `${toSign}.${signatureB64}`;
+
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+  if (!tokenRes.ok) {
+    const errText = await tokenRes.text();
+    throw new Error(`FCM OAuth token failed: ${tokenRes.status} ${errText}`);
+  }
+  const tokenJson = await tokenRes.json();
+  cachedAccessToken = {
+    token: tokenJson.access_token,
+    expiresAt: Date.now() + (tokenJson.expires_in - 60) * 1000,
+  };
+  return cachedAccessToken.token;
+}
+
+/**
+ * Envoie un push via FCM HTTP v1.
+ * FCM dispatche automatiquement vers APNS (iOS) si la clé p8 est uploadée
+ * dans Firebase Console.
+ *
+ * Retourne true si succès, false si token expiré (404/UNREGISTERED).
+ * Throw sur autres erreurs réseau.
+ */
+async function sendViaFcm(opts: {
+  accessToken: string;
+  projectId: string;
+  token: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  channelId?: string;
+}): Promise<{ ok: boolean; expired: boolean; error?: string }> {
+  const message: Record<string, unknown> = {
+    token: opts.token,
+    notification: { title: opts.title, body: opts.body },
+    data: opts.data || {},
+    android: {
+      priority: "HIGH",
+      notification: {
+        channel_id: opts.channelId || "jolene_info",
+        sound: "default",
+      },
+    },
+    apns: {
+      headers: { "apns-priority": "10" },
+      payload: {
+        aps: { sound: "default", "mutable-content": 1 },
+      },
+    },
+  };
+  const res = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${opts.projectId}/messages:send`,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${opts.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message }),
+    },
+  );
+  if (res.ok) return { ok: true, expired: false };
+  const errText = await res.text();
+  // Token expiré / désinscrit
+  if (res.status === 404 || errText.includes("UNREGISTERED") || errText.includes("registration-token-not-registered")) {
+    return { ok: false, expired: true };
+  }
+  return { ok: false, expired: false, error: `FCM ${res.status}: ${errText.slice(0, 200)}` };
+}
+
+// ─── Edge function principale ────────────────────────────────────────
 
 Deno.serve(async (req) => {
   const corsHeaders = {
@@ -49,14 +197,14 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Token invalide" }), { status: 401, headers: corsHeaders });
     }
 
-    const { destinataire_id, titre, corps, lien, type_evenement } = await req.json();
+    const { destinataire_id, titre, corps, lien, type_evenement, channel_id } = await req.json();
     if (!destinataire_id || !titre) {
       return new Response(JSON.stringify({ error: "destinataire_id et titre requis" }), { status: 400, headers: corsHeaders });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // [J2.3.A] Préférences notifications canal PUSH
+    // Préférences notifications canal PUSH
     if (type_evenement) {
       const { data: should } = await supabaseAdmin.rpc('fn_doit_notifier' as any, {
         p_utilisateur_id: destinataire_id,
@@ -76,84 +224,115 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Récupérer les tokens push (subscriptions Web Push) du destinataire
+    // Récupérer tous les tokens du destinataire (Web + IOS + ANDROID)
     const { data: tokens } = await supabaseAdmin
       .from("tokens_push")
-      .select("token, endpoint, p256dh, auth_key")
-      .eq("utilisateur_id", destinataire_id);
+      .select("id, token, plateforme, endpoint, p256dh, auth_key")
+      .eq("utilisateur_id", destinataire_id)
+      .eq("actif", true);
 
-    let sent = 0;
+    let sentWeb = 0;
+    let sentFcm = 0;
+    let skippedFcm = 0;
     const totalTokens = tokens?.length || 0;
+    const expiredTokenIds: string[] = [];
 
-    // Configuration VAPID
+    // ─── Configuration VAPID Web Push ──────────────────────────
     const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
     const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
     const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:contact@jolene.app";
+    const vapidConfigured = Boolean(vapidPublicKey && vapidPrivateKey);
+    if (vapidConfigured) {
+      webpush.setVapidDetails(vapidSubject, vapidPublicKey!, vapidPrivateKey!);
+    }
 
-    if (totalTokens > 0 && vapidPublicKey && vapidPrivateKey) {
-      webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    // ─── Configuration FCM (Sprint final) ──────────────────────
+    const firebaseSaJson = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON");
+    let serviceAccount: ServiceAccount | null = null;
+    let fcmAccessToken: string | null = null;
+    let firebaseProjectId: string | null = null;
+    if (firebaseSaJson) {
+      try {
+        serviceAccount = JSON.parse(firebaseSaJson) as ServiceAccount;
+        firebaseProjectId = Deno.env.get("FIREBASE_PROJECT_ID") || serviceAccount.project_id;
+        fcmAccessToken = await getFcmAccessToken(serviceAccount);
+      } catch (e) {
+        console.error("[send-push] FIREBASE_SERVICE_ACCOUNT_JSON parse/auth failed:", e);
+      }
+    }
 
-      const payload = JSON.stringify({
-        title: titre,
-        body: corps || "",
-        icon: "/favicon.svg",
-        badge: "/icon-192x192.png",
-        data: { url: lien || "https://jolene.app" },
-      });
+    // Payload Web Push
+    const webPayload = JSON.stringify({
+      title: titre,
+      body: corps || "",
+      icon: "/favicon.svg",
+      badge: "/icon-192x192.png",
+      data: { url: lien || "https://jolene.app", type_evenement, ...{} },
+    });
 
-      const expiredTokenIds: string[] = [];
+    // FCM payload data (in-app navigation après tap)
+    const fcmData: Record<string, string> = {
+      lien: lien || "/",
+      type_evenement: type_evenement || "",
+    };
 
-      for (const t of tokens!) {
-        try {
-          // Essai Web Push standard (endpoint + p256dh + auth)
-          if (t.endpoint && t.p256dh && t.auth_key) {
+    for (const t of tokens || []) {
+      const plat = (t.plateforme || "").toUpperCase();
+      try {
+        if (plat === "WEB" || (!plat && t.endpoint && t.p256dh && t.auth_key)) {
+          // Web Push standard
+          if (vapidConfigured && t.endpoint && t.p256dh && t.auth_key) {
             await webpush.sendNotification(
-              {
-                endpoint: t.endpoint,
-                keys: { p256dh: t.p256dh, auth: t.auth_key },
-              },
-              payload,
-              { TTL: 86400 } // 24h
+              { endpoint: t.endpoint, keys: { p256dh: t.p256dh, auth: t.auth_key } },
+              webPayload,
+              { TTL: 86400 },
             );
-            sent++;
+            sentWeb++;
           }
-          // Fallback FCM legacy si c'est un token FCM sans endpoint
-          else if (t.token) {
-            const fcmKey = Deno.env.get("FCM_SERVER_KEY");
-            if (fcmKey) {
-              const res = await fetch("https://fcm.googleapis.com/fcm/send", {
-                method: "POST",
-                headers: { "Authorization": `key=${fcmKey}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  to: t.token,
-                  notification: { title: titre, body: corps || "", click_action: lien || "https://jolene.app", icon: "/favicon.svg" },
-                  data: { lien: lien || "/" },
-                }),
-              });
-              if (res.ok) sent++;
-            }
-          }
-        } catch (err: unknown) {
-          // Si le push échoue avec 404 ou 410, le token est expiré — le supprimer
-          if (err instanceof Error && (err.message.includes("404") || err.message.includes("410") || err.message.includes("expired"))) {
-            expiredTokenIds.push(t.token || t.endpoint || "");
+        } else if (plat === "IOS" || plat === "ANDROID") {
+          // FCM HTTP v1 (dispatche APNS pour IOS via clé p8 uploadée)
+          if (fcmAccessToken && firebaseProjectId && t.token) {
+            const result = await sendViaFcm({
+              accessToken: fcmAccessToken,
+              projectId: firebaseProjectId,
+              token: t.token,
+              title: titre,
+              body: corps || "",
+              data: fcmData,
+              channelId: channel_id || channelForType(type_evenement),
+            });
+            if (result.ok) sentFcm++;
+            else if (result.expired) expiredTokenIds.push(t.id);
+            else console.warn("[send-push] FCM error:", result.error);
+          } else {
+            // FIREBASE_SERVICE_ACCOUNT_JSON pas configuré → skip propre
+            skippedFcm++;
           }
         }
-      }
-
-      // Nettoyer les tokens expirés
-      if (expiredTokenIds.length > 0) {
-        for (const tokenId of expiredTokenIds) {
-          await supabaseAdmin.from("tokens_push")
-            .delete()
-            .eq("utilisateur_id", destinataire_id)
-            .or(`token.eq.${tokenId},endpoint.eq.${tokenId}`);
+      } catch (err: unknown) {
+        if (err instanceof Error && (err.message.includes("404") || err.message.includes("410") || err.message.includes("expired"))) {
+          expiredTokenIds.push(t.id);
+        } else {
+          console.error("[send-push] dispatch error:", err);
         }
       }
     }
 
-    // Fallback : envoyer un email si aucun push n'a été livré
-    if (sent === 0) {
+    // Cleanup tokens expirés (404/410 Web Push ou UNREGISTERED FCM)
+    if (expiredTokenIds.length > 0) {
+      await supabaseAdmin.from("tokens_push")
+        .update({ actif: false })
+        .in("id", expiredTokenIds);
+    }
+
+    if (skippedFcm > 0) {
+      console.warn(`[send-push] FCM not configured, ${skippedFcm} native tokens skipped (waiting for Sprint final Firebase setup)`);
+    }
+
+    const sent = sentWeb + sentFcm;
+
+    // Fallback email si aucun push livré
+    if (sent === 0 && totalTokens > 0) {
       try {
         const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         await fetch(`${supabaseUrl}/functions/v1/send-email`, {
@@ -169,11 +348,30 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ sent, total: totalTokens, email_fallback: sent === 0 }),
-      { headers: corsHeaders }
+      JSON.stringify({
+        sent, sentWeb, sentFcm,
+        total: totalTokens, skippedFcm,
+        fcm_configured: Boolean(fcmAccessToken),
+        email_fallback: sent === 0 && totalTokens > 0,
+      }),
+      { headers: corsHeaders },
     );
   } catch (err) {
     console.error("send-push error:", err);
-    return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "Erreur interne" }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": getCorsOrigin(req) } });
   }
 });
+
+/**
+ * Mapping type_evenement → channel Android (Sprint 4 PR 7 déclarera les
+ * channels côté MainActivity Java/Kotlin).
+ */
+function channelForType(type?: string): string {
+  if (!type) return "jolene_info";
+  if (type.startsWith("URGENCE") || type === "POOL_URGENCE_NOTIFICATIONS_ENVOYEES") return "jolene_urgence";
+  if (type.startsWith("CONTRAT")) return "jolene_signature";
+  if (type.includes("PAIEMENT") || type.includes("FACTURE")) return "jolene_paiement";
+  if (type === "MESSAGE_LITIGE" || type === "NOUVEAU_MESSAGE") return "jolene_messagerie";
+  if (type.includes("POINTAGE") || type.includes("DPAE")) return "jolene_pointage";
+  return "jolene_info";
+}
