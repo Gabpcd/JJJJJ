@@ -134,11 +134,12 @@ export default function ContratMission() {
   useEffect(() => {
     if (!id) return;
     const load = async () => {
-      const { data } = await supabase
+      const { data: dataRaw } = await supabase
         .from('contrats_mission')
-        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, dpae_effectuee, dpae_effectuee_le, mode_signature')
+        .select('*' as any)
         .eq('id', id)
         .single();
+      const data = dataRaw as any;
 
       if (data) {
         const [missionRes, soignantRes, etabRes, templateRes] = await Promise.all([
@@ -182,9 +183,14 @@ export default function ContratMission() {
   }, [id]);
 
   // Calcul du hash SHA-256 réel du contenu HTML affiché (preuve d'intégrité
-  // signée avec l'OTP). Recalculé dès que le HTML change (template chargé,
-  // fallback construit).
+  // signée avec l'OTP). Si le contrat a un hash_document figé côté serveur
+  // (rendu via generate-contrat-mission-pdf), on l'utilise. Sinon fallback
+  // sur un hash calculé localement.
   useEffect(() => {
+    if (contrat?.hash_document) {
+      setHashContratAffiche(contrat.hash_document);
+      return;
+    }
     const html = contrat?.contenu_html || fallbackHtml;
     if (!html) {
       setHashContratAffiche(null);
@@ -197,7 +203,28 @@ export default function ContratMission() {
       if (!cancelled) setHashContratAffiche(null);
     });
     return () => { cancelled = true; };
-  }, [contrat?.contenu_html, fallbackHtml]);
+  }, [contrat?.contenu_html, contrat?.hash_document, fallbackHtml]);
+
+  // Auto-trigger : si le contrat n'a pas encore été figé en Storage,
+  // appelle l'edge function pour le rendre (idempotent côté serveur grâce
+  // à upsert: false sur le path timestamped).
+  useEffect(() => {
+    if (!contrat?.id || contrat.storage_path) return;
+    if (contrat.statut === 'ANNULE' || contrat.statut === 'EXPIRE' || contrat.statut === 'REFUSE') return;
+    let cancelled = false;
+    supabase.functions.invoke('generate-contrat-mission-pdf', {
+      body: { contrat_id: contrat.id },
+    }).then(({ data, error }) => {
+      if (cancelled || error || !(data as any)?.success) return;
+      // Reload le contrat pour récupérer storage_path + hash
+      supabase.from('contrats_mission')
+        .select('*' as any)
+        .eq('id', contrat.id)
+        .single()
+        .then(({ data: updated }) => { if (!cancelled && updated) setContrat(updated); });
+    }).catch(() => { /* silencieux : si ça échoue, on garde le fallback */ });
+    return () => { cancelled = true; };
+  }, [contrat?.id, contrat?.storage_path, contrat?.statut]);
 
   const handleYousignCreate = async () => {
     if (!contrat || !user) return;
@@ -236,7 +263,7 @@ export default function ContratMission() {
       // Reload contract to get updated mode_signature
       const { data: updated } = await supabase
         .from('contrats_mission')
-        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, dpae_effectuee, dpae_effectuee_le, mode_signature')
+        .select('*' as any)
         .eq('id', contrat.id)
         .single();
       if (updated) setContrat(updated);
@@ -440,6 +467,13 @@ export default function ContratMission() {
 
         {/* Contract HTML render */}
         <div className="card-base mb-4 max-h-[60vh] overflow-y-auto contrat-print">
+          {contrat.contenu_html_rendu_le && (
+            <p className="text-[10px] text-muted-foreground mb-2 italic flex items-center gap-1">
+              <Shield className="h-3 w-3" />
+              Document officiel figé le {format(new Date(contrat.contenu_html_rendu_le), "dd/MM/yyyy 'à' HH:mm", { locale: fr })}
+              {contrat.hash_document && ` — empreinte ${contrat.hash_document.slice(0, 8)}…${contrat.hash_document.slice(-4)}`}
+            </p>
+          )}
           {!contrat.contenu_html && contractHtml && (
             <p className="text-xs text-muted-foreground mb-4">
               Le document original n'était pas stocké ; cette version a été reconstituée automatiquement à partir des données de la mission.
@@ -591,7 +625,7 @@ export default function ContratMission() {
                       // Refresh contrat après signature
                       const { data: updated } = await supabase
                         .from('contrats_mission')
-                        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, dpae_effectuee, dpae_effectuee_le, mode_signature')
+                        .select('*' as any)
                         .eq('id', contrat.id)
                         .single();
                       if (updated) setContrat(updated as any);
