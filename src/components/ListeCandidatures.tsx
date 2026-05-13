@@ -3,6 +3,7 @@ import { CheckCircle, XCircle, Clock, Send, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { ModalPaiementCommission } from '@/components/ModalPaiementCommission';
+import { PopoverScoreSoignant } from '@/components/score/PopoverScoreSoignant';
 import { getLabelProfession } from '@/lib/constantes';
 
 function scoreBadge(score: number) {
@@ -222,8 +223,9 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                   )}
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     {c.soignant?.score_fiabilite != null && c.soignant?.total_missions_terminees >= 3 ? (
-                      <span className={`badge-base text-[10px] ${scoreBadge(c.soignant.score_fiabilite)}`}>
+                      <span className={`badge-base text-[10px] ${scoreBadge(c.soignant.score_fiabilite)} inline-flex items-center gap-1`}>
                         ⭐ {c.soignant.score_fiabilite}/100
+                        <PopoverScoreSoignant soignantId={c.soignant.id} scoreFiabilite={c.soignant.score_fiabilite} />
                       </span>
                     ) : (
                       <span className="badge-base text-[10px] bg-muted text-muted-foreground">Pas encore d'évaluation</span>
