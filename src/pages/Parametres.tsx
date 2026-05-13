@@ -10,6 +10,7 @@ import { AssuranceMissionContent } from './AssuranceMission';
 import { NotificationsContent } from './PageNotifications';
 import { APIContent } from './APIEtablissement';
 import { ExclusionsContent } from './ExclusionsEtablissement';
+import { TolerancePointageGps } from '@/components/etablissement/TolerancePointageGps';
 
 const TABS = ['profil', 'groupe', 'contrats', 'config', 'exclusions'] as const;
 type Tab = typeof TABS[number];
@@ -64,6 +65,7 @@ export default function Parametres() {
         </TabsContent>
 
         <TabsContent value="config" className="mt-0 space-y-8">
+          <TolerancePointageGps />
           <NotificationsContent />
           <APIContent />
         </TabsContent>
