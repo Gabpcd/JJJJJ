@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { BandeauAlertesAntiTricheAdmin } from '@/components/admin/BandeauAlertesAntiTricheAdmin';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
 const formatEurPrecis = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(v);
@@ -190,6 +191,8 @@ export default function AdminDashboard() {
     <LayoutAdmin>
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Dashboard Admin</h1>
+
+        <BandeauAlertesAntiTricheAdmin />
 
         {/* KPI Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
