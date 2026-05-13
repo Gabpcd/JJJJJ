@@ -40,6 +40,7 @@ export default function PresencesEtablissement() {
           depart_lat, depart_lng, depart_precision_gps_m,
           distance_etablissement_m, perimetre_gps_valide,
           alerte_teleportation, alertes_fraude,
+          arrivee_mock_detected, depart_mock_detected, coherence_incidents,
           valide_par_etablissement, valide_le, motif_litige,
           missions!inner(intitule, service, debut_le, fin_le, duree_heures, etablissement_id)
         `)
