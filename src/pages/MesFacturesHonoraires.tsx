@@ -6,6 +6,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ModalCessionCreance } from '@/components/ModalCessionCreance';
@@ -210,23 +211,21 @@ export default function MesFacturesHonoraires() {
         )}
 
         {factures.length === 0 ? (
-          <div className="card-base text-center py-10">
-            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="font-semibold text-foreground">Aucune facture d'honoraires pour le moment</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {mandatSigne
-                ? 'Les factures apparaîtront dès que vos missions seront terminées et validées.'
-                : 'Signez d\'abord le mandat de facturation pour commencer à recevoir des factures automatiques.'}
-            </p>
-          </div>
+          <EmptyState
+            icone={<FileText />}
+            titre="Aucune facture d'honoraires pour le moment"
+            description={mandatSigne
+              ? 'Les factures apparaîtront dès que vos missions seront terminées et validées.'
+              : "Signez d'abord le mandat de facturation pour commencer à recevoir des factures automatiques."}
+            variant={mandatSigne ? 'info' : 'warning'}
+          />
         ) : facturesFiltrees.length === 0 ? (
-          <div className="card-base text-center py-10">
-            <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="font-semibold text-foreground">Aucune facture ne correspond aux filtres</p>
-            <button type="button" onClick={reinitialiserFiltres} className="text-sm text-primary hover:underline mt-2">
-              Réinitialiser les filtres
-            </button>
-          </div>
+          <EmptyState
+            icone={<FileText />}
+            titre="Aucune facture ne correspond aux filtres"
+            cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }}
+            compact
+          />
         ) : (
           <div className="space-y-2">
             {facturesFiltrees.map((f: any) => {

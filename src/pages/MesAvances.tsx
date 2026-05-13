@@ -6,6 +6,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -91,16 +92,15 @@ export default function MesAvances() {
         </div>
 
         {avances.length === 0 ? (
-          <div className="card-base text-center py-10">
-            <Zap className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="font-semibold text-foreground">Aucune avance pour le moment</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Demandez le paiement rapide depuis vos factures d'honoraires.
-            </p>
-            <Button className="mt-4" onClick={() => navigate('/soignant/mes-factures-honoraires')}>
-              Voir mes factures
-            </Button>
-          </div>
+          <EmptyState
+            icone={<Zap />}
+            titre="Aucune avance pour le moment"
+            description="Demandez le paiement rapide depuis vos factures d'honoraires."
+            cta={{
+              label: 'Voir mes factures',
+              onClick: () => navigate('/soignant/mes-factures-honoraires'),
+            }}
+          />
         ) : (
           <div className="space-y-2">
             {avances.map((a) => {
