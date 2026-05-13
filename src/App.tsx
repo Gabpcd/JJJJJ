@@ -112,6 +112,7 @@ const Parametres = lazy(() => import("./pages/Parametres"));
 
 /* ─── Shared protected ─── */
 const ContratMission = lazy(() => import("./pages/ContratMission"));
+const CertificatSignaturePage = lazy(() => import("./pages/CertificatSignaturePage"));
 const ListeContrats = lazy(() => import("./pages/ListeContrats"));
 const PageNotifications = lazy(() => import("./pages/PageNotifications"));
 const DashboardGroupe = lazy(() => import("./pages/DashboardGroupe"));
@@ -265,6 +266,7 @@ function AppRoutes() {
 
           {/* Contrat (accessible par soignant et établissement) */}
           <Route path="/contrat/:id" element={<RouteProtegee rolesAutorises={['SOIGNANT', 'ADMIN_ETABLISSEMENT']}><ContratMission /></RouteProtegee>} />
+          <Route path="/contrat/:id/certificat" element={<RouteProtegee rolesAutorises={['SOIGNANT', 'ADMIN_ETABLISSEMENT', 'ADMIN_PLATEFORME', 'ADMIN_GROUPE']}><CertificatSignaturePage /></RouteProtegee>} />
 
           {/* Groupe */}
           <Route path="/groupe/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_GROUPE']}><DashboardGroupe /></RouteProtegee>} />
