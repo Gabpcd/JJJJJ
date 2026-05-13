@@ -654,14 +654,14 @@ Ces items empêchent un workflow critique de fonctionner correctement ou exposen
 | P1-1 | §3 | Onboarding sans tutoriel/aide contextuelle + DPAE exilée | Abandon possible inscription | ✅ **RÉSOLU Sprint 6 PR 5** |
 | P1-2 | §10 | Évaluation post-mission soignant absente d'historique | Action critique cachée | ✅ **RÉSOLU Sprint 6 PR 2** |
 | P1-3 | §11 | Pas de page évaluations reçues dédiée (top 5 dans Profil) | Pas d'accès historique complet | ✅ **RÉSOLU Sprint 6 PR 1** |
-| P1-4 | §25 | Pas de modal récap mission avant publication + radio LIBERAL non disabled | Risque erreur publication | ⏭️ Reporté Sprint 7 |
-| P1-5 | §27 | Score breakdown soignant non inline dans ListeCandidatures | Navigation supplémentaire | ⏭️ Reporté Sprint 7 |
+| P1-4 | §25 | Pas de modal récap mission avant publication + radio LIBERAL non disabled | Risque erreur publication | ✅ **RÉSOLU Sprint 7 PR 1** (#173) |
+| P1-5 | §27 | Score breakdown soignant non inline dans ListeCandidatures | Navigation supplémentaire | ✅ **RÉSOLU Sprint 7 PR 2** (#172) |
 | P1-6 | §28 | Pas de countdown 72h signature contrat | Risque expiration silencieuse | ✅ **RÉSOLU Sprint 6 PR 3** |
 | P1-7 | §29 | Alertes cohérence Sprint 4.5 absentes côté étab | Détection fraude incomplète | ✅ **RÉSOLU Sprint 6 PR 11** |
 | P1-8 | §34 | Détail payload accord exécuté non affiché timeline litige | Opacité résolution | ✅ **RÉSOLU Sprint 6 PR 8** |
 | P1-9 | §35 | Pas de contestation événements score côté étab | Score étab non contestable | ✅ **RÉSOLU Sprint 6 PR 4** |
 | P1-10 | §37 | Dashboard admin sans alertes Sprint 4.5 | Admin aveugle aux fraudes | ✅ **RÉSOLU Sprint 6 PR 6** |
-| P1-11 | §49 | Page admin RLS audit manquante | `fn_audit_rls_strict` non exposée | ⏭️ Reporté Sprint 7 |
+| P1-11 | §49 | Page admin RLS audit manquante | `fn_audit_rls_strict` non exposée | ✅ **RÉSOLU Sprint 7 PR 3** (#174) |
 | P1-12 | §55 | Pas d'OTP SMS téléphone (juste regex) | Vérif téléphone faible | ✅ **RÉSOLU Sprint 6 PR 9** |
 | P1-13 | §4 | Mandat facturation upload/signature UI absent | Workflow Voie A factor incomplet | ✅ **RÉSOLU Sprint 6 PR 10** (workflow déjà complet — banner ajouté) |
 | P1-14 | §21 | KBIS upload séparé de l'inscription | Friction inscription étab | ✅ **RÉSOLU Sprint 6 PR 12** |
