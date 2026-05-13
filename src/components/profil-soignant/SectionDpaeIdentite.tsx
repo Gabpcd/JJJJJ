@@ -39,6 +39,8 @@ export function SectionDpaeIdentite({ soignantId, typeExercice }: Props) {
   const [departementNaissance, setDepartementNaissance] = useState('');
   const [paysNaissance, setPaysNaissance] = useState('France');
   const [nationalite, setNationalite] = useState('Française');
+  const [nir, setNir] = useState<string>('');
+  const [nirInitial, setNirInitial] = useState<string>('');
   const [manquants, setManquants] = useState<string[]>([]);
 
   const cacher = typeExercice === 'LIBERAL';
@@ -49,7 +51,7 @@ export function SectionDpaeIdentite({ soignantId, typeExercice }: Props) {
       setLoading(true);
       const { data, error } = await supabase
         .from('soignants')
-        .select('sexe, lieu_naissance_commune, lieu_naissance_departement, pays_naissance, nationalite')
+        .select('sexe, lieu_naissance_commune, lieu_naissance_departement, pays_naissance, nationalite, numero_securite_sociale' as any)
         .eq('id', soignantId)
         .maybeSingle();
       if (!error && data) {
@@ -59,6 +61,8 @@ export function SectionDpaeIdentite({ soignantId, typeExercice }: Props) {
         setDepartementNaissance(d.lieu_naissance_departement || '');
         setPaysNaissance(d.pays_naissance || 'France');
         setNationalite(d.nationalite || 'Française');
+        setNir(d.numero_securite_sociale || '');
+        setNirInitial(d.numero_securite_sociale || '');
       }
       const { data: dpaeData } = await supabase.rpc('fn_soignant_dpae_complet' as any, { p_soignant_id: soignantId });
       if (dpaeData) setManquants(((dpaeData as any).manquants || []) as string[]);
@@ -69,6 +73,7 @@ export function SectionDpaeIdentite({ soignantId, typeExercice }: Props) {
   async function enregistrer() {
     setSaving(true);
     try {
+      // 1. Maj infos DPAE (sexe, lieu naissance, nationalité)
       const { data, error } = await supabase.rpc('fn_maj_infos_dpae' as any, {
         p_sexe: sexe || null,
         p_lieu_naissance_commune: communeNaissance || null,
@@ -81,7 +86,28 @@ export function SectionDpaeIdentite({ soignantId, typeExercice }: Props) {
         afficherNotification({ type: 'erreur', message: (data as any)?.error || 'Erreur enregistrement' });
         return;
       }
-      // Recharger le statut DPAE
+
+      // 2. Maj NIR si modifié (RPC dédiée Sprint 5.5 PR 10 — validation format strict)
+      if (nir.trim().length > 0 && nir.trim() !== nirInitial) {
+        const { data: nirData, error: nirError } = await supabase.rpc('fn_maj_nir_soignant' as any, {
+          p_nir: nir.trim(),
+        });
+        if (nirError) {
+          afficherNotification({ type: 'erreur', message: nirError.message });
+          return;
+        }
+        const result = nirData as any;
+        if (!result?.success) {
+          const msg = result?.error || (result?.error_code === 'NIR_FORMAT_INVALIDE'
+            ? 'Le NIR doit faire 13 ou 15 chiffres au format français.'
+            : 'Erreur NIR.');
+          afficherNotification({ type: 'erreur', message: msg });
+          return;
+        }
+        setNirInitial(nir.trim());
+      }
+
+      // 3. Recharger le statut DPAE
       const { data: dpaeData } = await supabase.rpc('fn_soignant_dpae_complet' as any, { p_soignant_id: soignantId });
       if (dpaeData) setManquants(((dpaeData as any).manquants || []) as string[]);
       afficherNotification({ type: 'succes', message: 'Informations DPAE enregistrées.' });
@@ -190,6 +216,25 @@ export function SectionDpaeIdentite({ soignantId, typeExercice }: Props) {
           <datalist id="nationalites-usuelles-dpae">
             {NATIONALITES_USUELLES.map(n => <option key={n} value={n} />)}
           </datalist>
+        </label>
+
+        <label className="block sm:col-span-2">
+          <span className="text-xs font-medium text-foreground mb-1 block">
+            Numéro de sécurité sociale (NIR) *
+          </span>
+          <input
+            type="text"
+            value={nir}
+            onChange={e => setNir(e.target.value.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 15))}
+            placeholder="Ex : 184057514213562 (15 chiffres)"
+            className="input-base font-mono"
+            maxLength={15}
+            inputMode="numeric"
+            autoComplete="off"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Sur votre carte vitale, 13 ou 15 chiffres. Stocké chiffré, transmis uniquement à l'établissement pour la DPAE URSSAF.
+          </p>
         </label>
       </div>
 
