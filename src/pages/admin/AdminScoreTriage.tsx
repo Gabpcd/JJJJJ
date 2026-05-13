@@ -108,8 +108,7 @@ export default function AdminScoreTriage() {
       } catch (err: any) {
         afficherNotification({
           type: 'erreur',
-          titre: 'Erreur de chargement',
-          message: err?.message ?? 'Impossible de charger les scores.',
+          message: `Erreur de chargement : ${err?.message ?? 'Impossible de charger les scores.'}`,
         });
       } finally {
         setLoading(false);
