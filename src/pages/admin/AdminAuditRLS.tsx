@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LayoutAdmin } from '@/components/admin/LayoutAdmin';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
 import {
   ShieldCheck,
   ShieldAlert,
