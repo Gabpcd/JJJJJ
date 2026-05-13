@@ -149,6 +149,39 @@ Apprises à la dure le 2026-05-12 (3 deploy-supabase échoués sur Sprint 1 PR 1
 - Propagation auto sur event + recalcul score + notif user
 - AUCUNE action automatique sur compte sans admin
 
+### Sprint 4 — Backend & infra mobile production
+
+#### Push natif (cf. docs/PUSH_NATIVE_FINAL.md)
+- `send-push` refacto multi-plateforme : Web Push (VAPID) + FCM HTTP v1 (qui dispatche APNS)
+- OAuth2 JWT service account signé via Web Crypto API (RSASSA-PKCS1-v1_5)
+- Fallback gracieux si `FIREBASE_SERVICE_ACCOUNT_JSON` absent : Web Push continue, tokens natifs skip avec WARNING
+- Channels Android déclarés dans `MainActivity.onCreate` (6 channels selon type_evenement)
+- Navigation in-app smart par `type_evenement` (`navigationPathForEvent`)
+
+#### Worker `externalisation_actions` (cf. docs/WORKER_EXTERNALISATION.md)
+- Edge function `process-externalisation-actions` + cron pg_cron 5 min
+- Dispatch Stripe / Chorus / DPAE / Email / Push / AVOIR PDF
+- Backoff exponentiel 1/5/30 min + PENDING_AIFE 24h pour Chorus
+- Lock distribué via `FOR UPDATE SKIP LOCKED` + récupération orphelins > 10 min
+- Page admin `/admin/externalisations-actions` (retry/cancel/détail)
+
+#### Capacitor wrappers (cf. docs/CAPACITOR_PRODUCTION.md)
+- `src/lib/geoloc.ts` : routing native/web pour GPS pointage
+- `src/lib/camera.ts` : photo + QR scanner (mlkit natif / html5-qrcode web)
+- Plugins : push-notifications, geolocation, camera, network, barcode-scanning
+- Permissions iOS `UIBackgroundModes ['remote-notification']` + Android `WAKE_LOCK`/`RECEIVE_BOOT_COMPLETED`/`ACCESS_NETWORK_STATE`
+
+#### Variables d'env requises (Sprint final pour Firebase)
+- `FIREBASE_SERVICE_ACCOUNT_JSON` (Vault) — service account JSON Firebase
+- `FIREBASE_PROJECT_ID` (Vault) — ID projet
+- Si absents : Web Push continue, push natifs désactivés (fallback gracieux)
+
+#### Chantiers reportés post-Sprint 4
+- **Sprint final** : création projet Firebase + comptes Apple/Google Developer + APNs p8 key + Xcode capabilities + uploads stores
+- **Sprint 4.5** : anti-triche pointage (alerte_teleportation cron + signalement admin)
+- **Sprint 5** : UI dette (refacto pages legacy)
+- **Sprint 5.5** : CGV à jour + tests E2E Playwright complets
+
 ### Sprint 4.5 — Anti-triche pointage (cf. docs/ANTI_TRICHE_POINTAGE.md)
 
 Architecture défensive multi-couches contre la fraude au pointage. **Aucune photo selfie, aucune suspension auto, aucune pénalité financière soignant.**
