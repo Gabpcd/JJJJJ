@@ -211,3 +211,33 @@ Cf. docs/ANNULATION_CANDIDATURE.md, docs/ANNULATION_MISSION_ETAB.md, docs/PARAME
 - P0-9 : Page admin consultation contrats (hash + certificat + audit)
 - P0-10 : Page admin templates contrats Sprint 2 (CRUD 14 templates)
 - P0-11 : Page admin alertes anti-triche Sprint 4.5
+
+### Sprint 5.7 — Fixes 5 P0 majeurs restants (5/5 P0 résolus)
+
+Cf. docs/EQUIPE_ETAB.md, docs/EVALUATION_REVERSE_ETAB.md, docs/ADMIN_CONTRATS.md, docs/ADMIN_TEMPLATES_CONTRATS.md, docs/ADMIN_ALERTES_POINTAGE.md.
+
+12 PRs enchaînées en mode autonome :
+
+#### Workflows produits livrés
+- **Équipe étab multi-utilisateurs P0-5** (#147 + #148 + #149) : tables `membres_etablissement` + `invitations_etablissement`, 5 rôles (PROPRIETAIRE / ADMIN_GROUPE / RH / POINTAGE_ONLY / LECTURE_SEULE) × 10 permissions, hook `useEtabPermissions`, wrapper `<SiPermissionEtab>`, page `/etablissement/equipe`, page `/etab/invitation/:token`, email `INVITATION_EQUIPE_ETAB`.
+- **Évaluation reverse étab→soignant P0-8** (#151 + #152) : réutilise `notations_missions` sens `ETAB_VERS_SOIGNANT`, 4 critères (ponctualité, technique, relationnel, conformité), page `/etablissement/evaluations-a-faire`.
+- **Page admin contrats P0-9** (#153) : `/admin/contrats` + `/admin/contrats/:id` avec hash SHA-256 + signatures détaillées IP/UA + DPAE + PDF embedded + audit trail.
+- **Page admin templates contrats P0-10** (#154) : 14 templates Sprint 2 éditables, layout 2-cols avec sidebar 16 variables jinja-like, versioning auto.
+- **Page admin alertes anti-triche P0-11** (#155 + #156) : 5 KPIs Sprint 4.5, 4 décisions admin (LEGITIME / FRAUDE_AVERTISSEMENT / FRAUDE_SUSPENSION_PROPOSEE / IGNORER), aucune action automatique sur compte.
+
+#### Sécurité + garde-fous
+- Tous les RPCs `fn_admin_*` Sprint 5.7 vérifient `est_admin()` côté serveur
+- Dernier PROPRIETAIRE étab protégé (`MIN_PROPRIETAIRE_REQUIS`)
+- Aucune suspension automatique (alertes pointage : task admin manuelle uniquement)
+- Aucune pénalité financière soignant
+- Contrats signés : immutables (template d'origine conservé en snapshot)
+- Audit trail complet `journaux_audit` sur toutes les actions admin
+
+#### Tests playwright (#157)
+- 5 tests structure équipe étab (tables, bootstrap PROPRIETAIRE, RPCs rejet sans auth)
+- 8 tests sécurité admin RPCs (NON_AUTORISE sans auth + 14 templates présents)
+- 3 tests évaluation reverse (enum sens ETAB_VERS_SOIGNANT + signalement)
+
+#### Bilan
+- ✅ **13/13 P0 Sprint 5 résolus** (8 Sprint 5.5 + 5 Sprint 5.7)
+- Prêt pour Sprint 6 (P1/P2 audit Sprint 5)
