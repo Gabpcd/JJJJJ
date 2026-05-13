@@ -101,10 +101,28 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        shimmer:
+          "shimmer 1.6s linear infinite, fade-in 200ms ease-out",
+        "fade-in": "fade-in 200ms ease-out",
+      },
+      backgroundImage: {
+        shimmer:
+          "linear-gradient(90deg, hsl(var(--muted)) 0%, hsl(var(--muted-foreground) / 0.08) 50%, hsl(var(--muted)) 100%)",
+      },
+      backgroundSize: {
+        "shimmer-2x": "200% 100%",
       },
     },
   },
