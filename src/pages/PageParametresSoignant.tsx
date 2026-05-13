@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, User, FileText, Sliders, Calendar, Shield, Bell, Search } from 'lucide-react';
+import { ArrowLeft, User, FileText, Sliders, Calendar, Shield, Bell, Search, Mail, Phone } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse';
+import { useAuth } from '@/contexts/AuthContext';
 
 type SectionKey = 'compte' | 'identite' | 'preferences' | 'dispos' | 'rgpd' | 'avance';
 
@@ -174,16 +176,26 @@ function SectionContent({ section, onNavigate }: { section: SectionKey; onNaviga
 }
 
 function PlaceholderCompte() {
+  const { user } = useAuth();
   return (
-    <div className="space-y-3 text-sm text-muted-foreground">
-      <p>
-        La gestion de votre adresse e-mail, numéro de téléphone et mot de passe est centralisée ici.
-      </p>
-      <div className="rounded-lg border border-dashed border-border p-4 text-center">
-        <p className="text-foreground font-medium mb-1">Changement de mot de passe</p>
-        <p className="text-xs text-muted-foreground">
-          Le formulaire dédié est disponible (Sprint 5.5 PR 6) dans cette section.
-        </p>
+    <div className="space-y-5">
+      {/* Email + téléphone affichés en read-only avec lien vers profil pour édition */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm">
+          <Mail className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">E-mail :</span>
+          <span className="text-foreground font-mono">{user?.email || '—'}</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <Phone className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Téléphone :</span>
+          <span className="text-muted-foreground italic">éditable depuis le profil</span>
+        </div>
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3">Changer mon mot de passe</h3>
+        <ChangementMotDePasse />
       </div>
     </div>
   );
