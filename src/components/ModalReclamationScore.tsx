@@ -18,6 +18,17 @@ interface Props {
   onSuccess: () => void;
 }
 
+/**
+ * @deprecated Composant legacy. Utilise la table `reclamations_scoring` (legacy)
+ * et fait un INSERT direct, ce qui contourne le workflow admin Sprint 3.5
+ * (`/admin/reclamations-score` qui lit la table `reclamations_score`).
+ *
+ * Remplacé par `src/components/score/ModaleReclamationScore.tsx` qui appelle
+ * la RPC `fn_creer_reclamation_score`.
+ *
+ * À SUPPRIMER complètement Sprint 5.5 après vérification qu'aucune autre page
+ * n'importe ce composant. Voir `docs/AUDIT_FRONTEND_EXHAUSTIF.md` §6.D Bug P0-1.
+ */
 export function ModalReclamationScore({ onClose, onSuccess }: Props) {
   const { user } = useAuth();
   const [missions, setMissions] = useState<any[]>([]);
