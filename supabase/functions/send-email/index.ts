@@ -130,6 +130,8 @@ const ALLOWED_TYPES = new Set([
   'COMPTE_SUSPENDU','COMPTE_REACTIVE',
   // [Refonte.D.3] rappel notation J+1
   'RAPPEL_NOTATION_ETAB','RAPPEL_NOTATION_SOIGNANT',
+  // [Sprint 5.7 PR 4] invitation équipe étab multi-utilisateurs
+  'INVITATION_EQUIPE_ETAB',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -155,6 +157,35 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
           ${BUTTON('Compléter mon profil →', `${APP_URL}/soignant/profil`)}
         `),
       };
+
+    case 'INVITATION_EQUIPE_ETAB': {
+      const lienAcceptation = `${APP_URL}/etab/invitation/${data.token || ''}`;
+      const roleLabels: Record<string, string> = {
+        ADMIN_GROUPE: 'Admin groupe (tout sauf gestion équipe)',
+        RH: 'Ressources humaines (missions, candidatures, contrats, pointage)',
+        POINTAGE_ONLY: 'Pointage uniquement',
+        LECTURE_SEULE: 'Lecture seule (consultations sans actions)',
+      };
+      const roleLabel = roleLabels[data.role || ''] || data.role || '';
+      return {
+        subject: `Invitation à rejoindre ${data.nom_etablissement || 'une équipe'} sur Jolene`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Vous êtes invité(e) à rejoindre une équipe</h2>
+          <p style="color:#334155;">
+            <strong>${data.invite_par_nom || 'L\'administrateur'}</strong> vous invite à rejoindre l'équipe
+            <strong>${data.nom_etablissement || ''}</strong> sur Jolene avec le rôle :
+          </p>
+          ${INFO_BOX(`
+            <strong style="color:#0F172A;">${roleLabel}</strong>
+          `)}
+          <p style="color:#334155;">Cliquez sur le bouton ci-dessous pour accepter l'invitation. Le lien expire dans 7 jours.</p>
+          ${BUTTON('Accepter l\'invitation →', lienAcceptation)}
+          <p style="color:#64748B;font-size:13px;margin-top:24px;">
+            Si vous n'êtes pas concerné(e) par cette invitation, vous pouvez ignorer cet e-mail. L'invitation s'auto-annulera après 7 jours.
+          </p>
+        `),
+      };
+    }
 
     case 'BIENVENUE_ETABLISSEMENT':
       return {

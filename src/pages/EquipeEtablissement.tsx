@@ -265,6 +265,7 @@ function ModaleInviterMembre({ onFermer, onInvite }: { onFermer: () => void; onI
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('RH');
   const [loading, setLoading] = useState(false);
+  const [lienGenere, setLienGenere] = useState<string | null>(null);
 
   async function envoyer() {
     if (!email.trim() || !email.includes('@')) {
@@ -288,8 +289,38 @@ function ModaleInviterMembre({ onFermer, onInvite }: { onFermer: () => void; onI
       afficherNotification({ type: 'erreur', message });
       return;
     }
-    afficherNotification({ type: 'succes', message: `Invitation envoyée à ${email}.` });
-    onInvite();
+    const token = result.token as string;
+    const lien = `${window.location.origin}/etab/invitation/${token}`;
+    setLienGenere(lien);
+
+    // Best-effort : envoi email via send-email si l'utilisateur existe déjà
+    // Sinon, le PROPRIETAIRE copie le lien et l'envoie manuellement.
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (accessToken && supabaseUrl) {
+        // Cherche si user existe déjà avec cet email
+        const { data: userExist } = await supabase
+          .from('membres_etablissement' as any)
+          .select('user_id')
+          .limit(1);
+        void userExist;
+        // Note : l'envoi email natif nécessite l'extension send-email pour accepter destinataire_email
+        // (à faire dans une PR séparée). Pour l'instant, lien à copier manuellement.
+      }
+    } catch { /* best-effort */ }
+
+    afficherNotification({ type: 'succes', message: `Invitation créée pour ${email}.` });
+  }
+
+  function copierLien() {
+    if (!lienGenere) return;
+    navigator.clipboard.writeText(lienGenere).then(() => {
+      afficherNotification({ type: 'succes', message: 'Lien copié dans le presse-papiers.' });
+    }).catch(() => {
+      afficherNotification({ type: 'erreur', message: 'Impossible de copier automatiquement, sélectionnez et copiez manuellement.' });
+    });
   }
 
   return (
@@ -325,18 +356,36 @@ function ModaleInviterMembre({ onFermer, onInvite }: { onFermer: () => void; onI
           <p className="text-[11px] text-muted-foreground mt-1">{ROLE_INFO[role].description}</p>
         </label>
 
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <p>Un e-mail d'invitation sera envoyé. Le lien expire dans 7 jours. Le rôle PROPRIETAIRE ne peut être attribué que via promotion d'un membre existant.</p>
-        </div>
-
-        <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
-          <button onClick={envoyer} disabled={loading || !email.trim()} className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2">
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            Envoyer l'invitation
-          </button>
-        </div>
+        {lienGenere ? (
+          <div className="space-y-3">
+            <div className="rounded-lg bg-success/10 border border-success/30 p-3 text-xs text-success">
+              <p className="font-semibold mb-1">✅ Invitation créée</p>
+              <p>Copiez ce lien et envoyez-le à <strong>{email}</strong>. Le lien expire dans 7 jours.</p>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/40 p-3">
+              <p className="text-[10px] text-muted-foreground mb-1">Lien d'invitation</p>
+              <p className="text-xs font-mono break-all text-foreground select-all">{lienGenere}</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={copierLien} className="btn-secondary flex-1">📋 Copier le lien</button>
+              <button onClick={() => { onInvite(); }} className="btn-primary flex-1">Terminer</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <p>Un lien d'invitation sera généré pour ce membre. Le lien expire dans 7 jours. Le rôle PROPRIETAIRE ne peut être attribué que via promotion d'un membre existant.</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
+              <button onClick={envoyer} disabled={loading || !email.trim()} className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                Créer l'invitation
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
