@@ -627,23 +627,23 @@ Ces items empêchent un workflow critique de fonctionner correctement ou exposen
 | P0-2 | **§6** | Fenêtre annulation candidature 30 min absente + conséquences score invisibles | Sprint 3.5 grille annulation soignant inapplicable côté UI | ✅ **RÉSOLU Sprint 5.5 #134** + tests #135 |
 | P0-3 | **§20** | Pas de page parente `/soignant/parametres` + changement password absent | Friction majeure paramètres soignant | ✅ **RÉSOLU Sprint 5.5 #138 + #139 + #140** |
 | P0-4 | **§22** | `tolerance_gps_metres` Sprint 4.5 non éditable côté étab | Feature Sprint 4.5 invisible — étab ne peut pas régler 30-1000m | ✅ **RÉSOLU Sprint 5.5 #141** |
-| P0-5 | **§23** | Gestion équipe étab (ADMIN_GROUPE/RH) absente | Impossible de manager rôles/permissions multi-utilisateurs | ⏳ **Reporté Sprint 5.7** |
+| P0-5 | **§23** | Gestion équipe étab (ADMIN_GROUPE/RH) absente | Impossible de manager rôles/permissions multi-utilisateurs | ✅ **RÉSOLU Sprint 5.7** (#147+#148+#149) |
 | P0-6 | **§26** | Modale conséquences annulation mission étab (4 buckets) absente | Étab ne voit pas indem L1243-8 / clause pénale 1231-5 avant clic | ✅ **RÉSOLU Sprint 5.5 #136** + tests #137 |
 | P0-7 | **§32** | Page `/etablissement/obligations` redirige (pas de consolidation) | Brief section 32 non couvert | ✅ **RÉSOLU Sprint 5.5 #142** |
-| P0-8 | **§33** | Évaluation étab → soignant absente | Pas de note étab donnée au soignant | ⏳ **Reporté Sprint 5.7** |
-| P0-9 | **§40** | Pas de page admin consultation contrats hash/certificat/audit | Audit légal contrats impossible côté admin | ⏳ **Reporté Sprint 5.7** |
-| P0-10 | **§50** | Pas de page admin pour 14 templates contrats Sprint 2 | Templates invisibles, non éditables | ⏳ **Reporté Sprint 5.7** |
-| P0-11 | **§52** | Pas de page admin pour alertes anti-triche Sprint 4.5 | Téléportation, mock GPS, cohérence temporelle non remontés | ⏳ **Reporté Sprint 5.7** |
+| P0-8 | **§33** | Évaluation étab → soignant absente | Pas de note étab donnée au soignant | ✅ **RÉSOLU Sprint 5.7** (#151+#152) |
+| P0-9 | **§40** | Pas de page admin consultation contrats hash/certificat/audit | Audit légal contrats impossible côté admin | ✅ **RÉSOLU Sprint 5.7** (#153) |
+| P0-10 | **§50** | Pas de page admin pour 14 templates contrats Sprint 2 | Templates invisibles, non éditables | ✅ **RÉSOLU Sprint 5.7** (#154 → direct push) |
+| P0-11 | **§52** | Pas de page admin pour alertes anti-triche Sprint 4.5 | Téléportation, mock GPS, cohérence temporelle non remontés | ✅ **RÉSOLU Sprint 5.7** (#155+#156 → direct push) |
 | P0-12 | **§16** | Soignant pas de page DPAE (n° URSSAF non visible) | Sprint 2 visibilité DPAE générées manquante | ✅ **RÉSOLU Sprint 5.5 #143** |
 | P0-13 | **§4** | NIR (numéro sécu) absent du UI DPAE soignant | Sprint 2 "DPAE complète" incomplète (NIR dans listManquant mais pas dans formulaire) | ✅ **RÉSOLU Sprint 5.5 #143** |
 
-### 📊 Bilan Sprint 5.5 (8/13 P0 résolus)
+### 📊 Bilan Sprint 5.5 + 5.7 (13/13 P0 résolus ✅)
 
-| Résolus Sprint 5.5 | Reportés Sprint 5.7 |
+| Résolus Sprint 5.5 | Résolus Sprint 5.7 |
 |---|---|
-| P0-1, P0-2, P0-3, P0-4, P0-6, P0-7, P0-12, P0-13 | P0-5 (équipe étab), P0-8 (évaluation reverse), P0-9 (admin contrats), P0-10 (templates admin), P0-11 (alertes pointage admin) |
+| P0-1, P0-2, P0-3, P0-4, P0-6, P0-7, P0-12, P0-13 | P0-5, P0-8, P0-9, P0-10, P0-11 |
 
-Les 5 P0 reportés concernent des features étab (équipe + évaluation reverse) et admin (templates, audit contrats, alertes pointage) plus volumineuses (estimation initiale 8+ jours chacune).
+**Tous les P0 audit Sprint 5 sont désormais résolus.** Place aux P1/P2 sur Sprint 6.
 
 ### 🟡 P1 — Frictions importantes (15 items)
 
