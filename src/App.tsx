@@ -156,6 +156,7 @@ const AdminDPIA = lazy(() => import("./pages/admin/AdminDPIA"));
 const AdminHealthcheck = lazy(() => import("./pages/admin/AdminHealthcheck"));
 const AdminCohortEconomics = lazy(() => import("./pages/admin/AdminCohortEconomics"));
 const AdminAuditRLS = lazy(() => import("./pages/admin/AdminAuditRLS"));
+const AdminRGPDTools = lazy(() => import("./pages/admin/AdminRGPDTools"));
 
 const queryClient = new QueryClient();
 
@@ -334,6 +335,7 @@ function AppRoutes() {
           <Route path="/admin/healthcheck" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminHealthcheck /></RouteProtegee>} />
           <Route path="/admin/cohort" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCohortEconomics /></RouteProtegee>} />
           <Route path="/admin/audit-rls" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAuditRLS /></RouteProtegee>} />
+          <Route path="/admin/rgpd-tools" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminRGPDTools /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
