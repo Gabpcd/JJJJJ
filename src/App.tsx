@@ -47,6 +47,7 @@ const PageAideArticle = lazy(() => import("./pages/PageAideArticle"));
 const PageAideProSanteConnect = lazy(() => import("./pages/PageAideProSanteConnect"));
 const PageParametresNotifications = lazy(() => import("./pages/PageParametresNotifications"));
 const PageRecherchesSauvegardees = lazy(() => import("./pages/PageRecherchesSauvegardees"));
+const PageParametresSoignant = lazy(() => import("./pages/PageParametresSoignant"));
 const PageInscriptionSucces = lazy(() => import("./pages/PageInscriptionSucces"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const WidgetRecrutement = lazy(() => import("./pages/WidgetRecrutement"));
@@ -225,6 +226,7 @@ function AppRoutes() {
           {/* Établissement */}
           <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/finaliser-inscription" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FinaliserInscriptionEtab /></RouteProtegee>} />
+          <Route path="/soignant/parametres" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresSoignant /></RouteProtegee>} />
           <Route path="/soignant/parametres/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresNotifications /></RouteProtegee>} />
           <Route path="/etablissement/parametres/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParametresNotifications /></RouteProtegee>} />
           <Route path="/soignant/parametres/recherches-sauvegardees" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageRecherchesSauvegardees role="SOIGNANT" /></RouteProtegee>} />
