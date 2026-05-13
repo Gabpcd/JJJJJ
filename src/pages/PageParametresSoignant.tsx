@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, User, FileText, Sliders, Calendar, Shield, Bell, Search, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, User, FileText, Sliders, Calendar, Shield, Bell, Search, Mail, Phone, MapPin } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse';
+import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
 import { useAuth } from '@/contexts/AuthContext';
 
 type SectionKey = 'compte' | 'identite' | 'preferences' | 'dispos' | 'rgpd' | 'avance';
@@ -203,11 +204,26 @@ function PlaceholderCompte() {
 
 function PlaceholderPreferences({ onNavigate }: { onNavigate: () => void }) {
   return (
-    <div className="space-y-3 text-sm text-muted-foreground">
-      <p>Configurez vos professions, votre rayon de déplacement, vos types de contrat acceptés, votre taux minimum, et activez ou non le pool urgence et le suivi GPS (opt-in RGPD).</p>
-      <button onClick={onNavigate} className="btn-secondary text-sm">
-        Éditer mes préférences
-      </button>
+    <div className="space-y-5 text-sm">
+      <div className="space-y-3 text-muted-foreground">
+        <p>Configurez vos professions, votre rayon de déplacement, vos types de contrat acceptés, votre taux minimum, et activez ou non le pool urgence.</p>
+        <button onClick={onNavigate} className="btn-secondary text-sm">
+          Éditer mes préférences pro
+        </button>
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+          <MapPin className="h-4 w-4 text-primary" />
+          Suivi GPS pendant les missions
+        </h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Option facultative Sprint 4.5 : si activée, votre position GPS est enregistrée toutes les minutes pendant la durée de vos missions, pour renforcer la fiabilité du pointage et faciliter la résolution de litiges. Données conservées 30 jours puis supprimées.
+        </p>
+        <div className="rounded-lg border border-border bg-background p-0 overflow-hidden">
+          <ConsentementPingGps />
+        </div>
+      </div>
     </div>
   );
 }
