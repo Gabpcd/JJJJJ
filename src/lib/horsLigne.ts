@@ -1,4 +1,5 @@
 import { genererIdTerminal } from './terminal';
+import { getCurrentPosition } from './geoloc';
 
 export interface PointageHorsLigne {
   missionId: string;
@@ -12,19 +13,20 @@ export interface PointageHorsLigne {
 }
 
 export function stockerPointageHorsLigne(missionId: string, type: 'arrivee' | 'depart', presenceId?: string) {
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
+  // Sprint 4 PR 5 : wrapper unifié Capacitor/web — natif si app, web sinon
+  getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 })
+    .then((result) => {
       sauvegarderLocal({
         missionId, type,
         horodatage: new Date().toISOString(),
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        precision: pos.coords.accuracy,
+        lat: result.coords.latitude,
+        lng: result.coords.longitude,
+        precision: result.coords.accuracy,
         idTerminal: genererIdTerminal(),
         presenceId,
       });
-    },
-    () => {
+    })
+    .catch(() => {
       sauvegarderLocal({
         missionId, type,
         horodatage: new Date().toISOString(),
@@ -32,8 +34,7 @@ export function stockerPointageHorsLigne(missionId: string, type: 'arrivee' | 'd
         idTerminal: genererIdTerminal(),
         presenceId,
       });
-    }
-  );
+    });
 }
 
 function sauvegarderLocal(pointage: PointageHorsLigne) {

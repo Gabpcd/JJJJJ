@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { getCurrentPosition as obtenirGeoloc, JoleneGeolocError } from '@/lib/geoloc';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
@@ -238,12 +239,15 @@ export default function PresencesSoignant() {
     queryClient.invalidateQueries({ queryKey: ['presences-soignant'] });
   }, [queryClient]);
 
-  const obtenirPosition = async (): Promise<GeolocationPosition> => {
-    return new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true, timeout: 10000, maximumAge: 0,
-      });
-    });
+  // Wrapper unifié Capacitor native / Web (Sprint 4 PR 5)
+  const obtenirPosition = async (): Promise<{ coords: { latitude: number; longitude: number; accuracy: number } }> => {
+    try {
+      const result = await obtenirGeoloc({ enableHighAccuracy: true, timeout: 10000 });
+      return { coords: { latitude: result.coords.latitude, longitude: result.coords.longitude, accuracy: result.coords.accuracy } };
+    } catch (err) {
+      if (err instanceof JoleneGeolocError) throw new Error(err.message);
+      throw err;
+    }
   };
 
   const pointerArrivee = async (missionId: string) => {
@@ -261,7 +265,7 @@ export default function PresencesSoignant() {
       return;
     }
 
-    let position: GeolocationPosition | null = null;
+    let position: { coords: { latitude: number; longitude: number; accuracy: number } } | null = null;
 
     if (consentementGPS) {
       try {
@@ -330,7 +334,7 @@ export default function PresencesSoignant() {
       return;
     }
 
-    let position: GeolocationPosition | null = null;
+    let position: { coords: { latitude: number; longitude: number; accuracy: number } } | null = null;
 
     if (consentementGPS) {
       try {
