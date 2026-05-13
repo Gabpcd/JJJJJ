@@ -11,6 +11,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { FileText, Printer, CheckCircle, Clock, Shield, ExternalLink, Download } from 'lucide-react';
 import { BandeauRappelDPAE } from '@/components/BandeauRappelDPAE';
+import { Countdown72hSignature } from '@/components/Countdown72hSignature';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -122,9 +123,8 @@ export default function ContratMission() {
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [showConfirmSign, setShowConfirmSign] = useState(false);
   const [showCheckAnim, setShowCheckAnim] = useState(false);
-  const [modeSignature, setModeSignature] = useState<'CANVAS' | 'YOUSIGN' | 'OTP_SMS'>('OTP_SMS');
-  const [yousignLoading, setYousignLoading] = useState(false);
-  const [yousignUrl, setYousignUrl] = useState<string | null>(null);
+  // [Sprint 6 PR 6 — Fix P1-6] Mode YOUSIGN legacy retiré. Seuls OTP_SMS et CANVAS restent.
+  const [modeSignature, setModeSignature] = useState<'CANVAS' | 'OTP_SMS'>('OTP_SMS');
   const [fallbackHtml, setFallbackHtml] = useState('');
   const [hashContratAffiche, setHashContratAffiche] = useState<string | null>(null);
 
@@ -226,58 +226,9 @@ export default function ContratMission() {
     return () => { cancelled = true; };
   }, [contrat?.id, contrat?.storage_path, contrat?.statut]);
 
-  const handleYousignCreate = async () => {
-    if (!contrat || !user) return;
-    setYousignLoading(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) throw new Error('Non authentifié');
-
-      const res = await fetch(
-        `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/yousign-create`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ contrat_id: contrat.id }),
-        }
-      );
-
-      const data = await res.json();
-
-      if (data.fallback) {
-        afficherNotification({ type: 'info', message: data.message || 'Yousign non disponible — utilisez la signature manuscrite.' });
-        setModeSignature('CANVAS');
-        return;
-      }
-
-      if (!res.ok) throw new Error(data.error || 'Erreur Yousign');
-
-      const isSoignant = contrat.soignant_id === user.id;
-      const url = isSoignant ? data.soignant_signing_url : data.etablissement_signing_url;
-      setYousignUrl(url);
-
-      // Reload contract to get updated mode_signature
-      const { data: updated } = await supabase
-        .from('contrats_mission')
-        .select('*' as any)
-        .eq('id', contrat.id)
-        .single();
-      if (updated) setContrat(updated);
-
-      afficherNotification({ type: 'succes', message: 'Procédure Yousign initialisée ! Cliquez sur le bouton pour signer.' });
-    } catch (err: any) {
-      logger.error('Yousign create error', err);
-      capturerErreurSentry(err, 'ContratMission', 'yousign_create');
-      afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'initialisation Yousign. Veuillez réessayer.' });
-      setModeSignature('CANVAS');
-    } finally {
-      setYousignLoading(false);
-    }
-  };
+  // [Sprint 6 PR 6 — Fix P1-6] handleYousignCreate retiré : mode Yousign legacy déprécié,
+  // seuls OTP_SMS Sprint 2 et CANVAS restent. Les contrats existants en mode_signature='YOUSIGN'
+  // sont affichés en lecture seule (badge "Signé via Yousign legacy").
 
   const handleFallbackCanvas = async () => {
     setModeSignature('CANVAS');
@@ -436,6 +387,17 @@ export default function ContratMission() {
             </p>
           </div>
         )}
+        {/* Sprint 6 PR 6 — Fix P1-6 : Countdown 72h signature */}
+        {contrat.statut !== 'SIGNE_COMPLET' &&
+         contrat.statut !== 'ANNULE' &&
+         contrat.statut !== 'EXPIRE' &&
+         contrat.statut !== 'REFUSE' &&
+         (contrat as any).cree_le && (
+          <div className="mb-4">
+            <Countdown72hSignature contratCreeLe={(contrat as any).cree_le} />
+          </div>
+        )}
+
         <div className="flex items-center gap-3 mb-4">
           <FileText className="h-6 w-6 text-primary" />
           <div>
@@ -557,23 +519,21 @@ export default function ContratMission() {
           <div className="card-base space-y-4">
             <h3 className="font-bold text-foreground">Votre signature</h3>
 
-            {/* Yousign active — show status */}
+            {/* Sprint 6 PR 6 — Yousign legacy en lecture seule (suspension du flow actif).
+                Les contrats créés avant Sprint 6 en mode_signature='YOUSIGN' peuvent encore
+                être visualisés mais doivent maintenant être basculés en OTP_SMS via admin. */}
             {contrat.mode_signature === 'YOUSIGN' ? (
-              <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+              <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-3">
                 <div className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-primary" />
-                  <span className="font-semibold text-foreground">🔒 Signature Yousign en cours</span>
+                  <Shield className="h-5 w-5 text-warning" />
+                  <span className="font-semibold text-foreground">⚠️ Contrat en mode Yousign legacy (déprécié)</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  La procédure de signature électronique eIDAS est en cours. Vous recevrez un email de Yousign pour signer le contrat.
+                  Ce contrat a été créé avec le mode Yousign désormais déprécié. Contactez l'admin Jolene
+                  pour basculer en signature OTP SMS.
                 </p>
-                {yousignUrl && (
-                  <a
-                    href={yousignUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-primary inline-flex items-center gap-2"
-                  >
+                {false && (
+                  <a className="btn-primary inline-flex items-center gap-2">
                     Signer avec Yousign <ExternalLink className="h-4 w-4" />
                   </a>
                 )}
@@ -586,7 +546,7 @@ export default function ContratMission() {
                 {/* Mode selector */}
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-foreground">Choisissez votre mode de signature :</p>
-                  <RadioGroup value={modeSignature} onValueChange={(v) => setModeSignature(v as 'CANVAS' | 'YOUSIGN' | 'OTP_SMS')}>
+                  <RadioGroup value={modeSignature} onValueChange={(v) => setModeSignature(v as 'CANVAS' | 'OTP_SMS')}>
                     <label className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
                       <RadioGroupItem value="OTP_SMS" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
                       <div className="flex-1">
@@ -604,16 +564,7 @@ export default function ContratMission() {
                         <p className="text-xs text-muted-foreground">Signez directement sur votre écran</p>
                       </div>
                     </label>
-                    <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors opacity-60">
-                      <RadioGroupItem value="YOUSIGN" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-foreground">🔒 Yousign (legacy)</span>
-                          <span className="text-[10px] text-muted-foreground italic">(déprécié)</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Conservé pour contrats en cours seulement. Préférer OTP SMS pour les nouveaux contrats.</p>
-                      </div>
-                    </label>
+                    {/* Sprint 6 PR 6 — Yousign legacy radio retiré. Seul OTP_SMS et CANVAS restent. */}
                   </RadioGroup>
                 </div>
 
@@ -631,16 +582,9 @@ export default function ContratMission() {
                       if (updated) setContrat(updated as any);
                     }}
                   />
-                ) : modeSignature === 'YOUSIGN' ? (
+                ) : false ? (
                   <div className="space-y-3">
-                    <button
-                      onClick={handleYousignCreate}
-                      disabled={yousignLoading}
-                      className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      <Shield className="h-4 w-4" />
-                      {yousignLoading ? 'Initialisation Yousign...' : '🔒 Lancer la signature Yousign'}
-                    </button>
+                    {/* Yousign legacy branche désactivée (Sprint 6 PR 6 — Fix P1-6) */}
                   </div>
                 ) : (
                   <>
