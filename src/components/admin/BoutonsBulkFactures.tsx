@@ -48,15 +48,13 @@ export function BoutonsBulkFactures({ selection, onActionTerminee, className }: 
       if (error) throw error;
       afficherNotification({
         type: 'succes',
-        titre: 'Mise à jour effectuée',
         message: `${ids.length} facture(s) marquée(s) comme ${statut === 'PAYEE' ? 'payée(s)' : 'impayée(s)'}.`,
       });
       onActionTerminee?.();
     } catch (err: any) {
       afficherNotification({
         type: 'erreur',
-        titre: 'Erreur',
-        message: err?.message ?? 'Impossible de mettre à jour le statut.',
+        message: `Erreur : ${err?.message ?? 'Impossible de mettre à jour le statut.'}`,
       });
     } finally {
       setEnCours(null);
@@ -89,14 +87,12 @@ export function BoutonsBulkFactures({ selection, onActionTerminee, className }: 
       URL.revokeObjectURL(url);
       afficherNotification({
         type: 'succes',
-        titre: 'Export effectué',
-        message: `${selection.length} ligne(s) exportée(s).`,
+        message: `Export effectué : ${selection.length} ligne(s) exportée(s).`,
       });
     } catch (err: any) {
       afficherNotification({
         type: 'erreur',
-        titre: 'Erreur export',
-        message: err?.message ?? "Impossible d'exporter le CSV.",
+        message: `Erreur export : ${err?.message ?? "Impossible d'exporter le CSV."}`,
       });
     } finally {
       setEnCours(null);
