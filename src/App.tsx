@@ -73,6 +73,7 @@ const MesGains = lazy(() => import("./pages/MesGains"));
 const HistoriqueMissions = lazy(() => import("./pages/HistoriqueMissions"));
 const PageScoreSoignant = lazy(() => import("./pages/PageScoreSoignant"));
 const PageScoreEtablissement = lazy(() => import("./pages/PageScoreEtablissement"));
+const EvaluationsSoignant = lazy(() => import("./pages/EvaluationsSoignant"));
 const PrevoyanceSoignant = lazy(() => import("./pages/PrevoyanceSoignant"));
 const AttestationHeures = lazy(() => import("./pages/AttestationHeures"));
 const MesDPAE = lazy(() => import("./pages/MesDPAE"));
@@ -216,6 +217,7 @@ function AppRoutes() {
           <Route path="/soignant/historique-missions" element={<Navigate to="/soignant/planning?tab=historique" replace />} />
           <Route path="/soignant/fiabilite" element={<Navigate to="/soignant/score" replace />} />
           <Route path="/soignant/score" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageScoreSoignant /></RouteProtegee>} />
+          <Route path="/soignant/evaluations" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><EvaluationsSoignant /></RouteProtegee>} />
           <Route path="/etablissement/score" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageScoreEtablissement /></RouteProtegee>} />
           <Route path="/soignant/fiabilite-legacy" element={<Navigate to="/soignant/score" replace />} />
           <Route path="/soignant/parcours-3200h" element={<Navigate to="/soignant/passer-en-liberal" replace />} />
