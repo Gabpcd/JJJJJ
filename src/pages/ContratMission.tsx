@@ -16,6 +16,9 @@ import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { UserRole } from '@/lib/types';
 import SignatureCanvas from '@/components/SignatureCanvas';
+import { SignerContratOtp } from '@/components/SignerContratOtp';
+import { CertificatSignature } from '@/components/CertificatSignature';
+import { DPAEStatus } from '@/components/DPAEStatus';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { logger } from '@/lib/logger';
@@ -118,7 +121,7 @@ export default function ContratMission() {
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [showConfirmSign, setShowConfirmSign] = useState(false);
   const [showCheckAnim, setShowCheckAnim] = useState(false);
-  const [modeSignature, setModeSignature] = useState<'CANVAS' | 'YOUSIGN'>('CANVAS');
+  const [modeSignature, setModeSignature] = useState<'CANVAS' | 'YOUSIGN' | 'OTP_SMS'>('OTP_SMS');
   const [yousignLoading, setYousignLoading] = useState(false);
   const [yousignUrl, setYousignUrl] = useState<string | null>(null);
   const [fallbackHtml, setFallbackHtml] = useState('');
@@ -415,6 +418,29 @@ export default function ContratMission() {
           )}
         </div>
 
+        {/* DPAE : visible pour étab + admin sur contrats CDD signés */}
+        {(role === 'ETABLISSEMENT' || role === 'ADMIN_ETABLISSEMENT' || role === 'ADMIN') &&
+         contrat.statut === 'SIGNE_COMPLET' &&
+         contrat.type_contrat && ['CDD', 'CDDU', 'SALARIE'].includes(contrat.type_contrat) && (
+          <div className="mb-4">
+            <DPAEStatus
+              contratId={contrat.id}
+              typeContrat={contrat.type_contrat}
+              dpaeNumero={(contrat as any).dpae_numero}
+            />
+          </div>
+        )}
+
+        {/* Certificat de signature (visible parties + admin) une fois signé */}
+        {(contrat.signature_soignant || contrat.signature_etablissement) && (
+          <div className="mb-4">
+            <CertificatSignature
+              contratId={contrat.id}
+              variant={role === 'ADMIN' ? 'detail' : 'resume'}
+            />
+          </div>
+        )}
+
         {/* Signatures section */}
         <div className="card-base mb-4 space-y-4">
           <h3 className="font-bold text-foreground">Signatures</h3>
@@ -492,7 +518,17 @@ export default function ContratMission() {
                 {/* Mode selector */}
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-foreground">Choisissez votre mode de signature :</p>
-                  <RadioGroup value={modeSignature} onValueChange={(v) => setModeSignature(v as 'CANVAS' | 'YOUSIGN')}>
+                  <RadioGroup value={modeSignature} onValueChange={(v) => setModeSignature(v as 'CANVAS' | 'YOUSIGN' | 'OTP_SMS')}>
+                    <label className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
+                      <RadioGroupItem value="OTP_SMS" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">📱 Signature électronique OTP SMS</span>
+                          <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">RECOMMANDÉE</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil.</p>
+                      </div>
+                    </label>
                     <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors">
                       <RadioGroupItem value="CANVAS" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
                       <div>
@@ -500,21 +536,34 @@ export default function ContratMission() {
                         <p className="text-xs text-muted-foreground">Signez directement sur votre écran</p>
                       </div>
                     </label>
-                    <label className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
+                    <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors opacity-60">
                       <RadioGroupItem value="YOUSIGN" className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-foreground">🔒 Signature électronique Yousign</span>
-                          <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">eIDAS</span>
-                          <span className="text-[10px] text-muted-foreground italic">(recommandée)</span>
+                          <span className="text-sm font-medium text-foreground">🔒 Yousign (legacy)</span>
+                          <span className="text-[10px] text-muted-foreground italic">(déprécié)</span>
                         </div>
-                        <p className="text-xs text-muted-foreground">Signature à valeur juridique renforcée, conforme au règlement européen eIDAS.</p>
+                        <p className="text-xs text-muted-foreground">Conservé pour contrats en cours seulement. Préférer OTP SMS pour les nouveaux contrats.</p>
                       </div>
                     </label>
                   </RadioGroup>
                 </div>
 
-                {modeSignature === 'YOUSIGN' ? (
+                {modeSignature === 'OTP_SMS' ? (
+                  <SignerContratOtp
+                    contratId={contrat.id}
+                    hashDocument={contrat.contenu_html ? `sha256-len-${contrat.contenu_html.length}` : null}
+                    onSigne={async () => {
+                      // Refresh contrat après signature
+                      const { data: updated } = await supabase
+                        .from('contrats_mission')
+                        .select('id, mission_id, numero_contrat, type_contrat, statut, contenu_html, soignant_id, etablissement_id, signature_soignant, signature_soignant_le, signature_etablissement, signature_etablissement_le, signature_image_soignant, signature_image_etablissement, dpae_effectuee, dpae_effectuee_le, mode_signature')
+                        .eq('id', contrat.id)
+                        .single();
+                      if (updated) setContrat(updated as any);
+                    }}
+                  />
+                ) : modeSignature === 'YOUSIGN' ? (
                   <div className="space-y-3">
                     <button
                       onClick={handleYousignCreate}
