@@ -177,3 +177,37 @@ Architecture défensive multi-couches contre la fraude au pointage. **Aucune pho
 #### Tests (PR 13)
 - 12 tests DB-level dans `e2e/flows/anti-triche-pointage.spec.ts`
 - Tests UI exclus (QR scanners + background-geolocation non testables headless)
+
+### Sprint 5 — Audit frontend exhaustif (cf. docs/AUDIT_FRONTEND_EXHAUSTIF.md)
+
+Audit Phase 1 diagnostic, 63 sections, 13 P0 / 15 P1 / 15 P2 identifiés. 6 sub-agents Explore en parallèle, 209 RPCs orphelines détectées.
+
+Suivi par hotfix #133 (bug import `ModalReclamationScore` → `score/ModaleReclamationScore` Sprint 3.5).
+
+### Sprint 5.5 — Fixes P0 critiques (8/13 P0 résolus)
+
+Cf. docs/ANNULATION_CANDIDATURE.md, docs/ANNULATION_MISSION_ETAB.md, docs/PARAMETRES_SOIGNANT.md, docs/TOLERANCE_GPS_ETAB.md, docs/DPAE_SOIGNANT.md.
+
+#### Workflows produits livrés
+- **Annulation candidature soignant Sprint 3.5** (#134) : fenêtre rétractation 30 min + grille pénalité (5/10/25/30 pts), motif structuré, justificatif optionnel, contestable via page score.
+- **Annulation mission étab Sprint 3.5** (#136) : 4 buckets (OUVERTE / ACCEPTEE sans contrat / CDD signé L1243-8 / Libéral signé clause pénale 1231-5 / Après pointage), décomposition financière AVANT confirmation, cadre légal cité.
+- **Page paramètres soignant unifiée** (#138 + #139 + #140) : `/soignant/parametres` avec 6 sections (compte/identité/préférences/dispos/RGPD/avancé), `ChangementMotDePasse` (validation 5 critères force), wiring `ConsentementPingGps`.
+- **Tolérance GPS étab éditable** (#141) : RPC dédiée `fn_modifier_tolerance_pointage_etab`, slider range [30, 1000] dans tab "config".
+- **Page obligations financières étab** (#142) : `/etablissement/obligations` consolidée via `fn_obligations_financieres`, 3 KPI cards, filtres par type, liens vers facturation.
+- **DPAE soignant + NIR** (#143) : champ NIR avec validation regex français, page `/soignant/dpae` listant DPAE générées + numéro URSSAF.
+
+#### Nettoyage legacy
+- `ModalReclamationScore.tsx` supprimé (#144)
+- `AdminReclamations` tab "scoring" : bandeau pointant `/admin/reclamations-score` Sprint 3.5
+- Table `reclamations_scoring` conservée pour historique audit
+
+#### Tests playwright (#135 + #137)
+- 10 tests annulation candidature soignant (grille 5 buckets + helpers)
+- 12 tests annulation mission étab (4 buckets + L1243-8 + 1231-5)
+
+#### P0 reportés Sprint 5.7
+- P0-5 : Gestion équipe étab (ADMIN_GROUPE / RH multi-utilisateurs)
+- P0-8 : Évaluation reverse étab → soignant
+- P0-9 : Page admin consultation contrats (hash + certificat + audit)
+- P0-10 : Page admin templates contrats Sprint 2 (CRUD 14 templates)
+- P0-11 : Page admin alertes anti-triche Sprint 4.5
