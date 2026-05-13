@@ -39,6 +39,8 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
+import { ModaleAnnulationCandidature } from '@/components/soignant/ModaleAnnulationCandidature';
+import { AnnulationCandidatureTimer } from '@/components/soignant/AnnulationCandidatureTimer';
 
 type SoignantData = Database['public']['Tables']['soignants']['Row'];
 
@@ -72,6 +74,10 @@ export default function DetailMissionSoignant() {
   const [choixContratDialog, setChoixContratDialog] = useState<{ open: boolean; options: any[]; action: 'postuler' | 'accepter' }>({ open: false, options: [], action: 'postuler' });
   const postulationLockRef = useRef(false);
   const acceptationLockRef = useRef(false);
+
+  // Sprint 5.5 PR 1 : annulation candidature avec fenêtre rétractation 30 min
+  const [candidatureRec, setCandidatureRec] = useState<{ id: string; acceptee_a: string | null } | null>(null);
+  const [modalAnnulationCandidature, setModalAnnulationCandidature] = useState(false);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -107,6 +113,21 @@ export default function DetailMissionSoignant() {
         const { data: cands } = await supabase.from('candidatures')
           .select('id').eq('mission_id', id).eq('soignant_id', user.id).limit(1);
         if (cands && cands.length > 0) setCandidatureEnvoyee(true);
+      }
+
+      // Sprint 5.5 PR 1 : récupère candidature acceptée (id + acceptee_a) pour annulation
+      if (m && (m as any).soignant_assigne_id === user.id && ['ASSIGNEE', 'EN_COURS'].includes((m as any).statut)) {
+        const { data: candRec } = await supabase.from('candidatures' as any)
+          .select('id, acceptee_a, statut')
+          .eq('mission_id', id)
+          .eq('soignant_id', user.id)
+          .eq('statut', 'ACCEPTEE')
+          .order('acceptee_a', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (candRec) {
+          setCandidatureRec({ id: (candRec as any).id, acceptee_a: (candRec as any).acceptee_a });
+        }
       }
 
       setLoading(false);
@@ -599,6 +620,17 @@ export default function DetailMissionSoignant() {
                 <div className="bg-success/5 border border-success/20 rounded-xl p-3 mb-4 text-center">
                   <p className="text-sm font-semibold text-success">✅ Vous êtes assigné(e) à cette mission</p>
                 </div>
+
+                {/* Sprint 5.5 PR 1 : statut rétractation Sprint 3.5 */}
+                {candidatureRec?.acceptee_a && (
+                  <div className="mb-4">
+                    <AnnulationCandidatureTimer
+                      accepteeA={candidatureRec.acceptee_a}
+                      debutMission={mission.debut_le}
+                      estAsap={Boolean((mission as any).est_urgente)}
+                    />
+                  </div>
+                )}
                 <div className="mb-4">
                   <BlocContratTravailMission
                     missionId={mission.id}
@@ -630,7 +662,10 @@ export default function DetailMissionSoignant() {
                 >
                   💬 Contacter l'établissement
                 </button>
-                <button onClick={() => setModalAnnuler(true)} className="w-full border-2 border-destructive text-destructive rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-destructive/5 transition-colors">
+                <button
+                  onClick={() => candidatureRec ? setModalAnnulationCandidature(true) : setModalAnnuler(true)}
+                  className="w-full border-2 border-destructive text-destructive rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-destructive/5 transition-colors"
+                >
                   Annuler ma participation
                 </button>
               </>
@@ -702,6 +737,28 @@ export default function DetailMissionSoignant() {
       />
 
       {modalCodeTravail && <ModalCodeTravail erreur={modalCodeTravail} onFermer={() => setModalCodeTravail(null)} />}
+
+      {/* Sprint 5.5 PR 1 : modale annulation candidature avec grille Sprint 3.5 */}
+      {candidatureRec && (
+        <ModaleAnnulationCandidature
+          ouvert={modalAnnulationCandidature}
+          onFermer={() => setModalAnnulationCandidature(false)}
+          onAnnulee={() => {
+            setModalAnnulationCandidature(false);
+            navigate('/soignant/missions');
+          }}
+          candidatureId={candidatureRec.id}
+          accepteeA={candidatureRec.acceptee_a || new Date().toISOString()}
+          debutMission={mission.debut_le}
+          estAsap={Boolean((mission as any).est_urgente)}
+          missionInfo={{
+            intitule: mission.intitule,
+            etablissementNom: etablissement?.nom || 'Établissement',
+            debut_le: mission.debut_le,
+            fin_le: mission.fin_le,
+          }}
+        />
+      )}
 
       {modalPerdu && (
         <ModalPerduDeVitesse
