@@ -91,3 +91,32 @@ Apprises à la dure le 2026-05-12 (3 deploy-supabase échoués sur Sprint 1 PR 1
 
 - **Utiliser `npx tsc -b` (pas `--noEmit`) pour valider en local** avant push. La config racine `tsconfig.json` a `files: []` + `references` → `tsc --noEmit` sans flag ne traverse pas les references et ne vérifie RIEN, laissant passer des comparaisons de types incompatibles (ex: `role === 'ETABLISSEMENT'` quand `UserRole = 'ADMIN_ETABLISSEMENT' | ...`). Le CI utilise `tsc -b` strict, donc reproduire localement avec la même commande.
 - **Toujours utiliser les valeurs exactes des enums `UserRole`** : `SOIGNANT` | `ADMIN_ETABLISSEMENT` | `ADMIN_PLATEFORME` | `ADMIN_GROUPE`. Pas de raccourcis `ETABLISSEMENT` ou `ADMIN`.
+- **Colonnes DB non encore dans les types TS générés** : si une migration ajoute des colonnes mais que le deploy-supabase ne s'est pas encore exécuté pour régénérer les types, utiliser `as any` ciblé (`select('*' as any)` + cast du résultat). Pas de hack global — juste sur la query concernée.
+
+## Workflows produits (Sprint 1 + Sprint 2)
+
+### Workflow signature électronique (cf. docs/SIGNATURE_ELECTRONIQUE.md)
+- Flow utilisateur OTP SMS via `SignerContratOtp.tsx`
+- Ordre obligatoire soignant-puis-étab (art. L1242-13)
+- Anti-abus : 3 SMS / 24h × rôle, 5 tentatives OTP, expiration 10 min
+- Hash SHA-256 réel du document via Web Crypto API (PR 1 Sprint 2 fix bug critique)
+- Audit trail dans `signatures_contrats` (IP, UA, hash, OTP, RPPS, PSC)
+- Codes d'erreur structurés `error_code` enum côté RPC → mapping FR côté UI
+
+### Workflow contrat (cf. docs/TEMPLATES_CONTRATS.md)
+- 14 templates en DB : CDD master (18 professions via `{{profession}}`) + REMPLACEMENT_LIBERAL master + 12 LIBERAL_* spécifiques
+- Edge function `generate-contrat-mission-pdf` rend HTML figé → bucket `contrats-signes` → hash SHA-256
+- Auto-trigger au premier affichage du contrat si `storage_path` est NULL
+- RPC `fn_resolve_template_contrat(type_contrat, profession, type_etab)` pour matching spécifique ou fallback master
+
+### Workflow DPAE (cf. docs/DPAE_OPTION_A.md)
+- **Option A** (actuelle) : payload pré-rempli + copier/coller sur net-entreprises.fr + saisie n° DPAE retour URSSAF
+- Schéma complet : `sexe`, `lieu_naissance_commune/departement`, `pays_naissance`, `nationalite` (PR 2 Sprint 2)
+- Soignant complète son profil DPAE via `SectionDpaeIdentite.tsx`
+- Étab génère + saisit le n° URSSAF via `DPAEStatus.tsx`
+- Helper `fn_soignant_dpae_complet` retourne liste champs manquants
+
+### Restrictions Mediflash (matrice profession × type_etab)
+- Trigger `dec_valider_compatibilite_mission_liberal` (PR 2 Sprint 1) bloque les missions libérales sur paires incompatibles (ex: IDE LIBERAL en CLINIQUE)
+- 8 `CABINET_*` distincts + `ESPIC` ajoutés aux enums type_etablissement
+- Helpers `peutExercer()`, `peutExercerLiberal()` côté front (cf. `src/lib/constantes.ts`)
