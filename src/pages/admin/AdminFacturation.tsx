@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
+import { BoutonsBulkFactures } from '@/components/admin/BoutonsBulkFactures';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -64,7 +66,7 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
 
   if (loading) return (
     <TableRow>
-      <TableCell colSpan={9} className="bg-muted/30 py-4">
+      <TableCell colSpan={10} className="bg-muted/30 py-4">
         <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
       </TableCell>
     </TableRow>
@@ -72,7 +74,7 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
 
   if (missions.length === 0) return (
     <TableRow>
-      <TableCell colSpan={9} className="bg-muted/30 py-4 text-center text-xs text-muted-foreground">
+      <TableCell colSpan={10} className="bg-muted/30 py-4 text-center text-xs text-muted-foreground">
         Aucune mission rattachée à cette facture
       </TableCell>
     </TableRow>
@@ -80,7 +82,7 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
 
   return (
     <TableRow>
-      <TableCell colSpan={9} className="bg-muted/30 p-0">
+      <TableCell colSpan={10} className="bg-muted/30 p-0">
         <div className="px-6 py-3">
           <p className="text-xs font-semibold text-muted-foreground mb-2">Missions rattachées ({missions.length})</p>
           <table className="w-full text-xs">
@@ -214,6 +216,7 @@ export default function AdminFacturation() {
   const [filtreStatut, setFiltreStatut] = useState('TOUS');
   const [recherche, setRecherche] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const navigate = useNavigate();
 
@@ -278,7 +281,7 @@ export default function AdminFacturation() {
     if (lignes.length === 0) { toast.info('Aucune donnée FEC pour ' + annee); return; }
     const cols = Object.keys(lignes[0]);
     const csv = [cols.join('\t'), ...lignes.map((l: any) => cols.map(c => l[c] ?? '').join('\t'))].join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `FEC_${annee}.csv`; a.click();
     URL.revokeObjectURL(url);
@@ -371,10 +374,35 @@ export default function AdminFacturation() {
           </Select>
         </div>
 
+        <BoutonsBulkFactures
+          selection={filtered.filter((f: any) => selectedIds.has(f.id)).map((f: any) => ({
+            id: f.id,
+            numero: f.numero_facture,
+            montant_ttc: f.montant_ttc,
+            statut: f.statut,
+            date_emission: f.date_emission,
+            etablissement_nom: (f.etablissements as any)?.nom ?? null,
+          }))}
+          onActionTerminee={() => {
+            setSelectedIds(new Set());
+            charger();
+          }}
+        />
+
         <div className="rounded-lg border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox
+                    aria-label="Tout sélectionner"
+                    checked={filtered.length > 0 && filtered.every((f: any) => selectedIds.has(f.id))}
+                    onCheckedChange={(checked) => {
+                      if (checked) setSelectedIds(new Set(filtered.map((f: any) => f.id)));
+                      else setSelectedIds(new Set());
+                    }}
+                  />
+                </TableHead>
                 <TableHead className="w-8"></TableHead>
                 <TableHead>N° Facture</TableHead>
                 <TableHead>Établissement</TableHead>
@@ -395,6 +423,18 @@ export default function AdminFacturation() {
                       className="cursor-pointer hover:bg-muted/50 transition-colors"
                       onClick={() => setExpandedId(isExpanded ? null : f.id)}
                     >
+                      <TableCell className="w-8 pr-0" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          aria-label={`Sélectionner facture ${f.numero_facture ?? f.id}`}
+                          checked={selectedIds.has(f.id)}
+                          onCheckedChange={(checked) => {
+                            const next = new Set(selectedIds);
+                            if (checked) next.add(f.id);
+                            else next.delete(f.id);
+                            setSelectedIds(next);
+                          }}
+                        />
+                      </TableCell>
                       <TableCell className="w-8 pr-0">
                         {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                       </TableCell>
@@ -482,7 +522,7 @@ export default function AdminFacturation() {
                   </React.Fragment>
                 );
               })}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Aucune facture</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">Aucune facture</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
