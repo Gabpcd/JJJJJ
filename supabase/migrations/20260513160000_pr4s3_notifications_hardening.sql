@@ -40,8 +40,10 @@ $function$;
 
 GRANT EXECUTE ON FUNCTION public.fn_supprimer_mes_tokens_push() TO authenticated;
 
--- 2. Cron quotidien pour purger les tokens inactifs > 90 jours
-DO $$
+-- 2. Cron quotidien pour purger les tokens inactifs > 90 jours.
+-- Dollar-quoting : DO block en $body$ pour ne pas conflicter avec les
+-- strings de cron.schedule (cf. PR 3 Sprint 3 fix).
+DO $body$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
     PERFORM cron.unschedule('jolene_nettoyer_tokens_push')
@@ -50,10 +52,10 @@ BEGIN
     PERFORM cron.schedule(
       'jolene_nettoyer_tokens_push',
       '30 3 * * *',  -- chaque jour à 03:30
-      $$SELECT public.fn_nettoyer_tokens_push()$$
+      'SELECT public.fn_nettoyer_tokens_push()'
     );
   END IF;
-END $$;
+END $body$;
 
 -- 3. Trigger AFTER INSERT contrats_mission → push CONTRAT_A_SIGNER au soignant
 CREATE OR REPLACE FUNCTION public.dec_push_contrat_a_signer()

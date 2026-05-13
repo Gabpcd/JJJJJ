@@ -302,9 +302,11 @@ $function$;
 
 GRANT EXECUTE ON FUNCTION public.fn_valider_presences_72h_auto() TO service_role;
 
--- 7. Scheduler pg_cron (idempotent — drop d'abord si existe)
--- Vérifier que pg_cron est dispo
-DO $$
+-- 7. Scheduler pg_cron (idempotent — drop d'abord si existe).
+-- Note dollar-quoting : on utilise $body$ pour le DO block externe et garde
+-- $$ pour la string cron.schedule (équivalent guillemets simples doublés).
+-- C'est ce que le supabase CLI / db push parse correctement.
+DO $body$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
     PERFORM cron.unschedule('jolene_valider_presences_72h')
@@ -313,10 +315,10 @@ BEGIN
     PERFORM cron.schedule(
       'jolene_valider_presences_72h',
       '15 */6 * * *',  -- toutes les 6h à minute 15
-      $$SELECT public.fn_valider_presences_72h_auto()$$
+      'SELECT public.fn_valider_presences_72h_auto()'
     );
   END IF;
-END $$;
+END $body$;
 
 -- 8. Audit
 INSERT INTO public.journaux_audit (

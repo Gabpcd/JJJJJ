@@ -87,6 +87,10 @@ Apprises à la dure le 2026-05-12 (3 deploy-supabase échoués sur Sprint 1 PR 1
 
 6. **Surveillance post-merge obligatoire** : après merge, vérifier IMMÉDIATEMENT via MCP Supabase que la migration est bien dans `schema_migrations` ET que les enums/tables sont dans l'état attendu. Ne PAS attendre qu'un user signale un bug. Attendre 10 min minimum avant de conclure que le déploiement a échoué (et non juste en cours).
 
+7. **Dollar-quoting imbriqué interdit avec `$$`** (apprises à la dure 2026-05-13 Sprint 3) : si une migration contient un `DO $$ ... $$` ET à l'intérieur un `cron.schedule(..., $$SELECT...$$)`, le parser PostgreSQL voit le 2e `$$` comme fermeture du DO block → `42601: syntax error at or near "SELECT"`. Le `supabase db push` échoue, mais l'erreur n'apparaît pas si on teste via `mcp__execute_sql` qui parse différemment.
+   - **Solution** : utiliser un tag distinct pour le DO block (`DO $body$ ... $body$`) OU passer le SQL cron en simple quote (`'SELECT public.fn_xxx()'`) au lieu de `$$SELECT...$$`.
+   - **Prévention** : tester chaque migration contenant pg_cron via `supabase db push --dry-run` avant push, pas seulement via MCP.
+
 ## Règles TypeScript / build (apprises 2026-05-13)
 
 - **Utiliser `npx tsc -b` (pas `--noEmit`) pour valider en local** avant push. La config racine `tsconfig.json` a `files: []` + `references` → `tsc --noEmit` sans flag ne traverse pas les references et ne vérifie RIEN, laissant passer des comparaisons de types incompatibles (ex: `role === 'ETABLISSEMENT'` quand `UserRole = 'ADMIN_ETABLISSEMENT' | ...`). Le CI utilise `tsc -b` strict, donc reproduire localement avec la même commande.

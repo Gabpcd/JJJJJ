@@ -193,23 +193,25 @@ $function$;
 
 GRANT EXECUTE ON FUNCTION public.fn_rappel_pointage_arrivee() TO service_role;
 
--- 4. Schedule des 2 crons via pg_cron
-DO $$
+-- 4. Schedule des 2 crons via pg_cron.
+-- Dollar-quoting : DO block en $body$ + strings cron.schedule en simple quote
+-- pour éviter le parser conflit qui faisait échouer supabase db push.
+DO $body$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
     PERFORM cron.unschedule('jolene_rappel_dpae_quotidien')
       WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'jolene_rappel_dpae_quotidien');
     PERFORM cron.schedule('jolene_rappel_dpae_quotidien',
       '0 9 * * *',  -- chaque jour à 09:00
-      $$SELECT public.fn_rappel_dpae_quotidien()$$);
+      'SELECT public.fn_rappel_dpae_quotidien()');
 
     PERFORM cron.unschedule('jolene_rappel_pointage')
       WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'jolene_rappel_pointage');
     PERFORM cron.schedule('jolene_rappel_pointage',
       '*/15 * * * *',  -- toutes les 15 min
-      $$SELECT public.fn_rappel_pointage_arrivee()$$);
+      'SELECT public.fn_rappel_pointage_arrivee()');
   END IF;
-END $$;
+END $body$;
 
 -- 5. Audit
 INSERT INTO public.journaux_audit (
