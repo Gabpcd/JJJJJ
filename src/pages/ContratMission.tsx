@@ -23,6 +23,7 @@ import { sanitizeHTML } from '@/lib/sanitize';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { logger } from '@/lib/logger';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { sha256Hex } from '@/lib/crypto-hash';
 
 function escapeContractValue(value: unknown): string {
   return String(value ?? '')
@@ -125,6 +126,7 @@ export default function ContratMission() {
   const [yousignLoading, setYousignLoading] = useState(false);
   const [yousignUrl, setYousignUrl] = useState<string | null>(null);
   const [fallbackHtml, setFallbackHtml] = useState('');
+  const [hashContratAffiche, setHashContratAffiche] = useState<string | null>(null);
 
   const { role: serverRole } = useRole();
   const role: UserRole = serverRole === 'INCONNU' ? 'SOIGNANT' : serverRole;
@@ -178,6 +180,24 @@ export default function ContratMission() {
     };
     load();
   }, [id]);
+
+  // Calcul du hash SHA-256 réel du contenu HTML affiché (preuve d'intégrité
+  // signée avec l'OTP). Recalculé dès que le HTML change (template chargé,
+  // fallback construit).
+  useEffect(() => {
+    const html = contrat?.contenu_html || fallbackHtml;
+    if (!html) {
+      setHashContratAffiche(null);
+      return;
+    }
+    let cancelled = false;
+    sha256Hex(html).then(h => {
+      if (!cancelled) setHashContratAffiche(h);
+    }).catch(() => {
+      if (!cancelled) setHashContratAffiche(null);
+    });
+    return () => { cancelled = true; };
+  }, [contrat?.contenu_html, fallbackHtml]);
 
   const handleYousignCreate = async () => {
     if (!contrat || !user) return;
@@ -375,6 +395,20 @@ export default function ContratMission() {
             <p className="text-sm font-semibold text-warning">⏰ Contrat expiré — non signé dans les 72h. La mission a été annulée.</p>
           </div>
         )}
+        {contrat.statut === 'REFUSE' && (
+          <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 mb-4 text-center">
+            <p className="text-sm font-semibold text-destructive">❌ Ce contrat a été refusé par l'une des parties.</p>
+          </div>
+        )}
+        {!isSoignant && !contrat.signature_soignant && contrat.statut !== 'SIGNE_COMPLET'
+         && contrat.statut !== 'ANNULE' && contrat.statut !== 'EXPIRE' && contrat.statut !== 'REFUSE' && (
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-4">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">⏳ En attente de la signature du soignant</p>
+            <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+              Le soignant doit signer en premier (art. L1242-13 Code du travail). Vous serez notifié(e) par email dès que sa signature sera enregistrée.
+            </p>
+          </div>
+        )}
         <div className="flex items-center gap-3 mb-4">
           <FileText className="h-6 w-6 text-primary" />
           <div>
@@ -552,7 +586,7 @@ export default function ContratMission() {
                 {modeSignature === 'OTP_SMS' ? (
                   <SignerContratOtp
                     contratId={contrat.id}
-                    hashDocument={contrat.contenu_html ? `sha256-len-${contrat.contenu_html.length}` : null}
+                    hashDocument={hashContratAffiche}
                     onSigne={async () => {
                       // Refresh contrat après signature
                       const { data: updated } = await supabase

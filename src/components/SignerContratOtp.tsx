@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Loader2, ShieldCheck, MessageSquare, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, ShieldCheck, MessageSquare, Clock, AlertCircle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 
 interface Props {
   contratId: string;
-  /** Hash SHA-256 du PDF/HTML affiché à l'utilisateur (preuve d'intégrité). */
+  /** Hash SHA-256 du contenu HTML/PDF affiché à l'utilisateur (preuve d'intégrité). */
   hashDocument?: string | null;
   /** Image base64 de la signature manuscrite (optionnel, complément). */
   signatureImage?: string | null;
@@ -17,22 +17,37 @@ type Etape = 'idle' | 'otp_envoye' | 'signe';
 
 const OTP_DUREE_SEC = 10 * 60;
 
+const MESSAGES_ERREUR: Record<string, string> = {
+  NON_AUTHENTIFIE: 'Session expirée. Reconnectez-vous puis réessayez.',
+  NON_AUTORISE: 'Vous n\'êtes pas autorisé(e) à signer ce contrat.',
+  CONTRAT_INTROUVABLE: 'Contrat introuvable. Rechargez la page.',
+  CONTRAT_INACTIF: 'Ce contrat a été annulé ou a expiré et ne peut plus être signé.',
+  CONTRAT_DEJA_COMPLET: 'Ce contrat est déjà entièrement signé par les deux parties.',
+  ETAB_AVANT_SOIGNANT: 'Le soignant doit signer en premier. Vous serez notifié(e) par email dès que sa signature sera enregistrée.',
+  TELEPHONE_MANQUANT: 'Votre numéro de téléphone est manquant. Mettez à jour votre profil avant de signer.',
+  TROP_DE_SMS: 'Trop de SMS envoyés (3 max / 24h). Réessayez plus tard ou contactez le support.',
+  OTP_NON_DEMANDE: 'Demandez d\'abord un code SMS en cliquant sur le bouton.',
+  OTP_EXPIRE: 'Le code SMS a expiré (10 min). Demandez un nouveau code.',
+  OTP_INCORRECT: 'Code incorrect. Vérifiez votre SMS et réessayez.',
+  TROP_DE_TENTATIVES: 'Trop de tentatives. Renvoyez un nouveau code SMS.',
+  DEJA_SIGNE: 'Vous avez déjà signé ce contrat.',
+  HASH_DOCUMENT_CHANGE: 'Le contrat a été modifié depuis votre chargement. Rechargez la page avant de signer.',
+};
+
+function messageDepuisCode(code: string | undefined, fallback: string | undefined): string {
+  if (code && MESSAGES_ERREUR[code]) return MESSAGES_ERREUR[code];
+  return fallback || 'Une erreur est survenue. Réessayez.';
+}
+
 /**
  * Module signature électronique sécurisée Jolene avec OTP SMS systématique
- * (PR 4 Sprint 1).
+ * (PR 4 Sprint 1 + PR 1 Sprint 2).
  *
- * Flow utilisateur :
- *   1. Coche "j'ai lu et j'accepte" → clic "Recevoir code SMS"
- *   2. SMS reçu avec OTP 6 chiffres (valide 10 min, max 5 tentatives)
- *   3. Saisit OTP + clic "Signer"
- *   4. Backend valide OTP + hash + insère signatures_contrats + update
- *      contrats_mission (mode_signature='JOLENE_OTP')
+ * Sécurité : OTP SMS (max 3 / 24h, 5 tentatives), hash SHA-256 du document,
+ * IP/UA capturés serveur, audit dans signatures_contrats. Ordre obligatoire :
+ * soignant signe avant l'établissement.
  *
- * Sécurité : OTP SMS (Option A max), hash SHA-256 du document, IP/UA
- * capturés serveur via request.headers, audit dans signatures_contrats.
- *
- * Mention juridique art. 1366-1367 Code civil (signature électronique
- * simple/avancée renforcée par OTP + horodatage + IP).
+ * Mention juridique art. 1366-1367 Code civil.
  */
 export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSigne }: Props) {
   const { afficherNotification } = useNotification();
@@ -43,8 +58,9 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
   const [telMasked, setTelMasked] = useState<string | null>(null);
   const [tentativesRestantes, setTentativesRestantes] = useState<number | null>(null);
   const [secondesRestantes, setSecondesRestantes] = useState(0);
+  const [smsRestants, setSmsRestants] = useState<number | null>(null);
+  const [erreurBloquante, setErreurBloquante] = useState<{ code?: string; message: string } | null>(null);
 
-  // Timer countdown 10 min après envoi OTP
   useEffect(() => {
     if (etape !== 'otp_envoye' || secondesRestantes <= 0) return;
     const interval = setInterval(() => {
@@ -56,24 +72,44 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
   const otpExpire = etape === 'otp_envoye' && secondesRestantes === 0;
   const mmss = `${String(Math.floor(secondesRestantes / 60)).padStart(2, '0')}:${String(secondesRestantes % 60).padStart(2, '0')}`;
 
+  function gererErreur(result: any, fallback: string) {
+    const code = result?.error_code;
+    const msg = messageDepuisCode(code, result?.error || fallback);
+    const bloquantes = new Set([
+      'ETAB_AVANT_SOIGNANT', 'TELEPHONE_MANQUANT', 'TROP_DE_SMS',
+      'CONTRAT_INACTIF', 'CONTRAT_DEJA_COMPLET', 'DEJA_SIGNE',
+      'NON_AUTORISE', 'HASH_DOCUMENT_CHANGE',
+    ]);
+    if (code && bloquantes.has(code)) {
+      setErreurBloquante({ code, message: msg });
+    } else {
+      afficherNotification({ type: 'erreur', message: msg });
+    }
+  }
+
   async function envoyerOtp() {
     setLoading(true);
     setTentativesRestantes(null);
+    setErreurBloquante(null);
     try {
       const { data, error } = await supabase.rpc('fn_envoyer_otp_signature' as any, { p_contrat_id: contratId });
       if (error) throw error;
       const result = data as any;
       if (!result?.success) {
-        afficherNotification({ type: 'erreur', message: result?.error || 'Erreur envoi OTP' });
+        gererErreur(result, 'Erreur envoi OTP');
         return;
       }
       setTelMasked(result.telephone_masked || null);
+      setSmsRestants(typeof result.sms_restants === 'number' ? result.sms_restants : null);
       setSecondesRestantes(OTP_DUREE_SEC);
       setOtp('');
       setEtape('otp_envoye');
-      afficherNotification({ type: 'succes', message: `Code envoyé au ${result.telephone_masked}. Valide ${result.expire_dans_minutes} min.` });
+      afficherNotification({
+        type: 'succes',
+        message: `Code envoyé au ${result.telephone_masked}. Valide ${result.expire_dans_minutes} min.`,
+      });
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err?.message || 'Erreur envoi OTP' });
+      afficherNotification({ type: 'erreur', message: err?.message || 'Erreur réseau. Réessayez.' });
     } finally {
       setLoading(false);
     }
@@ -99,17 +135,20 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
       if (error) throw error;
       const result = data as any;
       if (!result?.success) {
-        afficherNotification({ type: 'erreur', message: result?.error || 'Erreur de signature' });
+        gererErreur(result, 'Erreur de signature');
         if (typeof result?.tentatives_restantes === 'number') {
           setTentativesRestantes(result.tentatives_restantes);
         }
         return;
       }
       setEtape('signe');
-      afficherNotification({ type: 'succes', message: `Contrat signé ✅${result.contrat_complet ? ' — Mission confirmée par les 2 parties.' : ''}` });
+      afficherNotification({
+        type: 'succes',
+        message: `Contrat signé ✅${result.contrat_complet ? ' — Mission confirmée par les 2 parties.' : ''}`,
+      });
       onSigne?.({ role: result.role, contratComplet: result.contrat_complet });
     } catch (err: any) {
-      afficherNotification({ type: 'erreur', message: err?.message || 'Erreur de signature' });
+      afficherNotification({ type: 'erreur', message: err?.message || 'Erreur réseau. Réessayez.' });
     } finally {
       setLoading(false);
     }
@@ -129,6 +168,21 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
     );
   }
 
+  if (erreurBloquante && (erreurBloquante.code === 'ETAB_AVANT_SOIGNANT'
+    || erreurBloquante.code === 'CONTRAT_INACTIF'
+    || erreurBloquante.code === 'CONTRAT_DEJA_COMPLET'
+    || erreurBloquante.code === 'DEJA_SIGNE')) {
+    return (
+      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-4 flex items-start gap-3">
+        <Info className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <p className="font-semibold text-amber-900 dark:text-amber-200">Signature non disponible pour le moment</p>
+          <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">{erreurBloquante.message}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3">
       <div className="flex items-start gap-2">
@@ -137,10 +191,17 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
           <p className="text-sm font-semibold text-foreground">Signature électronique sécurisée</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             Recevez un code à 6 chiffres par SMS et saisissez-le ci-dessous pour signer.
-            La signature inclut horodatage, IP et hash du document (preuve juridique art. 1366 Code civil).
+            La signature inclut horodatage, IP et hash SHA-256 du document (preuve juridique art. 1366 Code civil).
           </p>
         </div>
       </div>
+
+      {erreurBloquante && (
+        <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-xs text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{erreurBloquante.message}</span>
+        </div>
+      )}
 
       <label className="flex items-start gap-2 cursor-pointer">
         <input
@@ -158,7 +219,7 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
         <button
           type="button"
           onClick={envoyerOtp}
-          disabled={!accepte || loading}
+          disabled={!accepte || loading || !!erreurBloquante}
           className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -171,6 +232,11 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">
               Code envoyé au <strong>{telMasked || 'numéro masqué'}</strong>
+              {smsRestants !== null && (
+                <span className="ml-2 text-[10px] text-muted-foreground/70">
+                  ({smsRestants === 0 ? 'dernier envoi possible' : `${smsRestants} envoi${smsRestants > 1 ? 's' : ''} restant${smsRestants > 1 ? 's' : ''}`})
+                </span>
+              )}
             </span>
             <span className={`inline-flex items-center gap-1 font-mono ${otpExpire ? 'text-destructive' : 'text-muted-foreground'}`}>
               <Clock className="h-3 w-3" />
@@ -204,7 +270,8 @@ export function SignerContratOtp({ contratId, hashDocument, signatureImage, onSi
             <button
               type="button"
               onClick={envoyerOtp}
-              disabled={loading}
+              disabled={loading || smsRestants === 0}
+              title={smsRestants === 0 ? '3 SMS max par 24h atteints' : undefined}
               className="btn-secondary flex-1 disabled:opacity-50"
             >
               {otpExpire ? 'Recevoir un nouveau code' : 'Renvoyer le code'}
