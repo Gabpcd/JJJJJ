@@ -647,23 +647,33 @@ Ces items empêchent un workflow critique de fonctionner correctement ou exposen
 
 ### 🟡 P1 — Frictions importantes (15 items)
 
-| # | Section | Item | Impact UX |
-|---|---|---|---|
-| P1-1 | §3 | Onboarding sans tutoriel/aide contextuelle + DPAE exilée | Abandon possible inscription |
-| P1-2 | §10 | Évaluation post-mission soignant absente d'historique | Action critique cachée |
-| P1-3 | §11 | Pas de page évaluations reçues dédiée (top 5 dans Profil) | Pas d'accès historique complet |
-| P1-4 | §25 | Pas de modal récap mission avant publication + radio LIBERAL non disabled | Risque erreur publication |
-| P1-5 | §27 | Score breakdown soignant non inline dans ListeCandidatures | Navigation supplémentaire |
-| P1-6 | §28 | Pas de countdown 72h signature contrat | Risque expiration silencieuse |
-| P1-7 | §29 | Alertes cohérence Sprint 4.5 absentes côté étab | Détection fraude incomplète |
-| P1-8 | §34 | Détail payload accord exécuté non affiché timeline litige | Opacité résolution |
-| P1-9 | §35 | Pas de contestation événements score côté étab | Score étab non contestable |
-| P1-10 | §37 | Dashboard admin sans alertes Sprint 4.5 | Admin aveugle aux fraudes |
-| P1-11 | §49 | Page admin RLS audit manquante | `fn_audit_rls_strict` non exposée |
-| P1-12 | §55 | Pas d'OTP SMS téléphone (juste regex) | Vérif téléphone faible |
-| P1-13 | §4 | Mandat facturation upload/signature UI absent | Workflow Voie A factor incomplet |
-| P1-14 | §21 | KBIS upload séparé de l'inscription | Friction inscription étab |
-| P1-15 | §48 | Filtres anti-triche absents `AdminAuditLogs` | Recherche alertes difficile |
+> **MISE À JOUR Sprint 6** : 12 items sur 15 ont été résolus. Voir colonne "Statut".
+
+| # | Section | Item | Impact UX | Statut |
+|---|---|---|---|---|
+| P1-1 | §3 | Onboarding sans tutoriel/aide contextuelle + DPAE exilée | Abandon possible inscription | ✅ **RÉSOLU Sprint 6 PR 5** |
+| P1-2 | §10 | Évaluation post-mission soignant absente d'historique | Action critique cachée | ✅ **RÉSOLU Sprint 6 PR 2** |
+| P1-3 | §11 | Pas de page évaluations reçues dédiée (top 5 dans Profil) | Pas d'accès historique complet | ✅ **RÉSOLU Sprint 6 PR 1** |
+| P1-4 | §25 | Pas de modal récap mission avant publication + radio LIBERAL non disabled | Risque erreur publication | ⏭️ Reporté Sprint 7 |
+| P1-5 | §27 | Score breakdown soignant non inline dans ListeCandidatures | Navigation supplémentaire | ⏭️ Reporté Sprint 7 |
+| P1-6 | §28 | Pas de countdown 72h signature contrat | Risque expiration silencieuse | ✅ **RÉSOLU Sprint 6 PR 3** |
+| P1-7 | §29 | Alertes cohérence Sprint 4.5 absentes côté étab | Détection fraude incomplète | ✅ **RÉSOLU Sprint 6 PR 11** |
+| P1-8 | §34 | Détail payload accord exécuté non affiché timeline litige | Opacité résolution | ✅ **RÉSOLU Sprint 6 PR 8** |
+| P1-9 | §35 | Pas de contestation événements score côté étab | Score étab non contestable | ✅ **RÉSOLU Sprint 6 PR 4** |
+| P1-10 | §37 | Dashboard admin sans alertes Sprint 4.5 | Admin aveugle aux fraudes | ✅ **RÉSOLU Sprint 6 PR 6** |
+| P1-11 | §49 | Page admin RLS audit manquante | `fn_audit_rls_strict` non exposée | ⏭️ Reporté Sprint 7 |
+| P1-12 | §55 | Pas d'OTP SMS téléphone (juste regex) | Vérif téléphone faible | ✅ **RÉSOLU Sprint 6 PR 9** |
+| P1-13 | §4 | Mandat facturation upload/signature UI absent | Workflow Voie A factor incomplet | ✅ **RÉSOLU Sprint 6 PR 10** (workflow déjà complet — banner ajouté) |
+| P1-14 | §21 | KBIS upload séparé de l'inscription | Friction inscription étab | ✅ **RÉSOLU Sprint 6 PR 12** |
+| P1-15 | §48 | Filtres anti-triche absents `AdminAuditLogs` | Recherche alertes difficile | ✅ **RÉSOLU Sprint 6 PR 7** |
+
+### 📊 Bilan Sprint 6 (12/15 P1 résolus ✅)
+
+| Résolus Sprint 6 | Reportés Sprint 7 |
+|---|---|
+| P1-1, P1-2, P1-3, P1-6, P1-7, P1-8, P1-9, P1-10, P1-12, P1-13, P1-14, P1-15 | P1-4, P1-5, P1-11 |
+
+**Cf. `docs/ONBOARDING_TUTORIEL.md`, `docs/EVALUATION_POST_MISSION_SOIGNANT.md`, `docs/SCORE_ETAB_CONTESTATION.md`, `docs/OTP_SMS_TELEPHONE.md`, `docs/MANDAT_FACTURATION_SOIGNANT.md` pour les détails Sprint 6.**
 
 ### 🟢 P2 — Cosmétique / améliorations futures (15 items)
 
