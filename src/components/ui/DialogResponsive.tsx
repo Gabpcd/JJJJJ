@@ -38,7 +38,8 @@ const DialogResponsiveOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+      // Sprint 9-D : glassmorphism subtle (dégradé jolene-midnight semi-transparent + backdrop-blur)
+      'fixed inset-0 z-50 bg-jolene-midnight/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       className,
     )}
     {...props}
@@ -72,8 +73,9 @@ const DialogResponsiveContent = React.forwardRef<
         'fixed inset-0 z-50 flex flex-col bg-background',
         'data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-4 data-[state=open]:fade-in-0',
         'data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-4 data-[state=closed]:fade-out-0',
-        // Desktop (>= md) : centered modal
-        'md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:rounded-2xl md:shadow-xl md:max-h-[85vh]',
+        // Desktop (>= md) : centered modal Y2K avec border subtle + shadow holographique
+        'md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:rounded-3xl md:max-h-[85vh]',
+        'md:border md:border-jolene-rose-200/60 md:shadow-holographic',
         MAX_WIDTH_CLASS[maxWidth],
         'duration-200',
         className,
