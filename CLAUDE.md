@@ -124,6 +124,16 @@ Cf. docs/SPRINT_8_5_FINAL.md.
 - Mesure Lighthouse absolue mobile soignant
 - P2 §12 RPCs backend admin missions
 
+### Sprint 9-D — Animations + glassmorphism + doc finale (4 PRs)
+Cf. docs/SPRINT_9_FINAL.md.
+
+- **PR 1** : `src/lib/animations.ts` (EASINGS bouncy/soft/snap cubic-bezier, DURATIONS, TRANSITIONS compositions) + classes CSS `.transition-bouncy/soft/snap` dans `index.css`. Pure CSS, pas de framer-motion.
+- **PR 2** : `DialogResponsive` glassmorphism — overlay `bg-jolene-midnight/40 backdrop-blur-sm`, content `rounded-3xl border-jolene-rose-200/60 shadow-holographic` (desktop).
+- **PR 3** : `LayoutAdmin` mobile header + bottom nav glassmorphism `bg-card/85 backdrop-blur-xl` + border `jolene-rose-200/40`. (BarreNavigation soignant/étab déjà glassmorphism, audit lucide.)
+- **PR 4** : `docs/SPRINT_9_FINAL.md` récap complet Sprint 9 (A→D) + CLAUDE.md.
+
+**Sprint 9 clos.** 16 PRs total. Pas de dépendance externe ajoutée (économie ~80KB bundle). Migration progressive non-breaking.
+
 ### Sprint 9-C — Refonte dashboards Y2K (5 PRs)
 Cf. docs/COMPOSANTS_Y2K.md.
 
