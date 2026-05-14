@@ -125,6 +125,13 @@ Cf. docs/SPRINT_8_5_FINAL.md.
 - Mesure Lighthouse absolue mobile soignant
 - P2 §12 RPCs backend admin missions
 
+### Sprint 11-A — Admin mobile-first AdminFinances + AdminGroupes (3 PRs)
+Cf. docs/SPRINT_11_A.md.
+
+- **PR 1** (#277) : `AdminFinances` table "Détail par établissement" (9 cols) → `TableOuCartes`. Tri par colonne préservé (desktop : click header, mobile : select + ↑↓). KPIs/chart/export CSV inchangés.
+- **PR 2** (#278) : `AdminGroupes` tableau "Détail par clinique" (9 cols + email form inline `colSpan=9` + édition taux per-row) → pattern `hidden md:block` + cards mobile parallèles (préserve l'expansion + état local par row que TableOuCartes ne supporte pas).
+- **PR 3** : doc Sprint 11-A + CLAUDE.md.
+
 ### Sprint 9-D — Animations + glassmorphism + doc finale (4 PRs)
 Cf. docs/SPRINT_9_FINAL.md.
 
