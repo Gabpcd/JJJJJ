@@ -1,15 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Star, Send } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Star, Send, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeText } from '@/lib/sanitize';
 import { toast } from 'sonner';
-import {
-  DialogResponsive,
-  DialogResponsiveHeader,
-  DialogResponsiveBody,
-  DialogResponsiveFooter,
-} from '@/components/ui/DialogResponsive';
 
 interface Props {
   missionId: string;
@@ -21,21 +16,7 @@ interface Props {
 
 const CRITERES_ETABLISSEMENT = ['Ponctualité', 'Compétence', 'Attitude'];
 
-/**
- * Modale d'évaluation post-mission.
- *
- * - Si typeEvaluateur = ETABLISSEMENT : un étab évalue un soignant
- *   (critères affichés : Ponctualité / Compétence / Attitude).
- * - Si typeEvaluateur = SOIGNANT : un soignant évalue un établissement.
- *
- * Pré-check via .eq('mission_id') + .eq('type_evaluateur') pour éviter la
- * faille où le modal réouvrait à chaque visite côté admin de groupe.
- *
- * Sprint 8 ter-E : migré vers <DialogResponsive /> (fullscreen mobile / centered desktop maxWidth=md).
- * createPortal supprimé — DialogResponsive utilise déjà Radix Portal en interne.
- * Étoiles + bouton envoyer min-h-[44px] pour touch targets mobile.
- */
-export function EvaluationPostMission({ missionId, evalueId: _evalueId, typeEvaluateur, nomEvalue, onTermine }: Props) {
+export function EvaluationPostMission({ missionId, evalueId, typeEvaluateur, nomEvalue, onTermine }: Props) {
   const { user } = useAuth();
   const [note, setNote] = useState(0);
   const [hoverNote, setHoverNote] = useState(0);
@@ -90,21 +71,24 @@ export function EvaluationPostMission({ missionId, evalueId: _evalueId, typeEval
   };
 
   const isSoignant = typeEvaluateur === 'SOIGNANT';
-  const description = isSoignant
+  const titre = isSoignant
     ? `Évaluez l'établissement « ${nomEvalue} »`
     : `Évaluez le soignant « ${nomEvalue} »`;
 
-  return (
-    <DialogResponsive
-      open={true}
-      onOpenChange={(o) => { if (!o && !envoi) onTermine(); }}
-      maxWidth="md"
-    >
-      <DialogResponsiveHeader
-        title="Mission terminée 🎉"
-        description={description}
-      />
-      <DialogResponsiveBody>
+  const modal = (
+    <div className="fixed inset-0 z-[100] flex min-h-screen items-center justify-center bg-black/50 p-4">
+      <div className="relative w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <button
+          onClick={onTermine}
+          className="absolute right-4 top-4 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label="Fermer"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        <h2 className="mb-1 text-lg font-bold text-foreground">Mission terminée 🎉</h2>
+        <p className="mb-5 text-sm text-muted-foreground">{titre}</p>
+
         <div className="mb-4 flex items-center justify-center gap-1">
           {[1, 2, 3, 4, 5].map((v) => (
             <button
@@ -113,8 +97,7 @@ export function EvaluationPostMission({ missionId, evalueId: _evalueId, typeEval
               onMouseEnter={() => setHoverNote(v)}
               onMouseLeave={() => setHoverNote(0)}
               onClick={() => setNote(v)}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center transition-transform hover:scale-110"
-              aria-label={`Note ${v} étoile${v > 1 ? 's' : ''}`}
+              className="transition-transform hover:scale-110"
             >
               <Star
                 className={`h-8 w-8 transition-colors ${
@@ -152,18 +135,19 @@ export function EvaluationPostMission({ missionId, evalueId: _evalueId, typeEval
           rows={3}
           className="mb-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
         />
-        <p className="text-right text-xs text-muted-foreground">{commentaire.length}/500</p>
-      </DialogResponsiveBody>
-      <DialogResponsiveFooter>
+        <p className="mb-4 text-right text-xs text-muted-foreground">{commentaire.length}/500</p>
+
         <button
           onClick={soumettre}
           disabled={note === 0 || envoi}
-          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           <Send className="h-4 w-4" />
           {envoi ? 'Envoi…' : 'Envoyer mon évaluation'}
         </button>
-      </DialogResponsiveFooter>
-    </DialogResponsive>
+      </div>
+    </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
 }
