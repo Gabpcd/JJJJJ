@@ -5,6 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { telechargerBulletinPaiePdf } from '@/lib/bulletin-paie-pdf';
@@ -170,71 +171,115 @@ export default function BulletinsPaie() {
           </div>
         )}
 
-        {bulletins.length === 0 ? (
-          <EmptyState
-            icone={<FileText />}
-            titre="Aucun bulletin de paie pour le moment"
-            description="Les bulletins apparaîtront ici dès que vos missions salariées seront terminées."
-          />
+        {(() => {
+          const etatVide = bulletins.length === 0
+            ? <EmptyState icone={<FileText />} titre="Aucun bulletin de paie pour le moment" description="Les bulletins apparaîtront ici dès que vos missions salariées seront terminées." />
+            : <EmptyState icone={<FileText />} titre="Aucun bulletin ne correspond aux filtres" cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }} compact />;
 
-        ) : bulletinsFiltres.length === 0 ? (
-          <EmptyState
-            icone={<FileText />}
-            titre="Aucun bulletin ne correspond aux filtres"
-            cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }}
-            compact
-          />
+          const colonnes: ColonneTableau<BulletinRow>[] = [
+            { cle: 'periode', titre: 'Mois' },
+            { cle: 'mission', titre: 'Mission' },
+            { cle: 'brut', titre: 'Brut', align: 'right' },
+            { cle: 'net', titre: 'Net', align: 'right' },
+            { cle: 'statut', titre: 'Statut' },
+            { cle: 'actions', titre: '', align: 'right', largeur: 'w-32' },
+          ];
 
-        ) : (
-          <div className="space-y-2">
-            {bulletinsFiltres.map((b) => {
-              const config = STATUT_CONFIG[b.statut] || STATUT_CONFIG.EMIS;
-              const downloading = downloadingId === b.id;
-              return (
-                <div key={b.id} className="card-base hover:border-primary/30 transition-colors">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-xs font-bold text-foreground">{b.numero_bulletin}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${config.classes}`}>
-                          {config.label}
-                        </span>
+          return (
+            <TableOuCartes
+              colonnes={colonnes}
+              donnees={bulletinsFiltres}
+              getId={(b) => b.id}
+              etatVide={etatVide}
+              renduCellule={(b, col) => {
+                const config = STATUT_CONFIG[b.statut] || STATUT_CONFIG.EMIS;
+                const downloading = downloadingId === b.id;
+                switch (col.cle) {
+                  case 'periode':
+                    return (
+                      <span className="text-sm whitespace-nowrap">
+                        {format(new Date(b.periode_debut), 'MMM yyyy', { locale: fr })}
+                      </span>
+                    );
+                  case 'mission':
+                    return (
+                      <div>
+                        <p className="font-medium text-foreground line-clamp-1">{b.mission_intitule || '—'}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{b.etablissement_nom || '—'}</p>
                       </div>
-                      <p className="text-sm text-foreground font-medium">{b.mission_intitule || '—'}</p>
-                      <p className="text-xs text-muted-foreground">{b.etablissement_nom || '—'}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        Période : {format(new Date(b.periode_debut), 'dd/MM/yyyy', { locale: fr })}
-                        {' → '}
-                        {format(new Date(b.periode_fin), 'dd/MM/yyyy', { locale: fr })}
-                        {' · Émis le '}
-                        {format(new Date(b.date_emission), 'dd/MM/yyyy', { locale: fr })}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground">Net à payer</p>
-                        <p className="text-lg font-bold text-foreground">{fmt(b.net_avant_impot)}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          Brut {fmt(b.salaire_brut)} · Cot. -{fmt(b.total_cotisations_salariales)}
-                        </p>
-                      </div>
+                    );
+                  case 'brut':
+                    return <span className="text-sm tabular-nums">{fmt(b.salaire_brut)}</span>;
+                  case 'net':
+                    return <span className="font-semibold text-foreground tabular-nums">{fmt(b.net_avant_impot)}</span>;
+                  case 'statut':
+                    return (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${config.classes}`}>
+                        {config.label}
+                      </span>
+                    );
+                  case 'actions':
+                    return (
                       <Button
                         size="sm"
                         variant="outline"
-                        className="gap-1 text-xs"
+                        className="h-8 gap-1 text-xs"
                         disabled={downloading}
-                        onClick={() => telecharger(b.id)}
+                        onClick={(e) => { e.stopPropagation(); telecharger(b.id); }}
                       >
                         {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                         PDF
                       </Button>
+                    );
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(b) => {
+                const config = STATUT_CONFIG[b.statut] || STATUT_CONFIG.EMIS;
+                const downloading = downloadingId === b.id;
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="font-mono text-xs font-bold text-foreground">{b.numero_bulletin}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${config.classes}`}>
+                            {config.label}
+                          </span>
+                        </div>
+                        <p className="text-sm text-foreground font-medium line-clamp-1">{b.mission_intitule || '—'}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{b.etablissement_nom || '—'}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          {format(new Date(b.periode_debut), 'dd/MM/yyyy', { locale: fr })}
+                          {' → '}
+                          {format(new Date(b.periode_fin), 'dd/MM/yyyy', { locale: fr })}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] text-muted-foreground">Net à payer</p>
+                        <p className="text-lg font-bold text-foreground tabular-nums">{fmt(b.net_avant_impot)}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Brut {fmt(b.salaire_brut)}
+                        </p>
+                      </div>
                     </div>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="w-full gap-1.5 min-h-[44px]"
+                      disabled={downloading}
+                      onClick={(e) => { e.stopPropagation(); telecharger(b.id); }}
+                    >
+                      {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                      Télécharger PDF
+                    </Button>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              }}
+            />
+          );
+        })()}
 
         <div className="card-base bg-muted/30 text-xs text-muted-foreground">
           <p>
