@@ -23,6 +23,7 @@ import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAt
 import { BandeauBlocageAuto } from '@/components/BandeauBlocageAuto';
 
 import { BadgePalier } from '@/components/BadgePalier';
+import { Mascotte } from '@/components/mascotte/Mascotte';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { OnboardingGuide } from '@/components/OnboardingGuide';
@@ -293,23 +294,30 @@ export default function DashboardEtablissement() {
         </div>
       )}
 
+      {/* Sprint 9-C PR 4 — Header Y2K avec mascotte cœur Jolene */}
       {etab ? (
-        <div className="mb-6">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-xl font-bold text-foreground">Bienvenue, <span className="text-primary">{etab.nom}</span></h1>
-            {etab.paliers_commission && (
-              <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={etab.taux_commission_negocie ?? 15} />
+        <div className="mb-6 flex items-start gap-4">
+          <Mascotte etat="happy" taille="md" className="shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-xl font-bold text-foreground">
+                Bonjour, <span className="text-gradient-hero">{etab.nom}</span>
+              </h1>
+              {etab.paliers_commission && (
+                <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={etab.taux_commission_negocie ?? 15} />
+              )}
+            </div>
+            {etab.groupes_sante && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm text-muted-foreground">Groupe</span>
+                <span className="badge-base bg-primary/10 text-primary">{etab.groupes_sante.nom}</span>
+              </div>
             )}
           </div>
-          {etab.groupes_sante && (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm text-muted-foreground">Groupe</span>
-              <span className="badge-base bg-primary/10 text-primary">{etab.groupes_sante.nom}</span>
-            </div>
-          )}
         </div>
       ) : (
-        <div className="mb-6">
+        <div className="mb-6 flex items-center gap-4">
+          <Mascotte etat="idle" taille="md" />
           <h1 className="text-xl font-bold text-foreground">Tableau de bord</h1>
         </div>
       )}
