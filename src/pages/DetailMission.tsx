@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
 import { logger } from '@/lib/logger';
@@ -16,8 +16,17 @@ import { BlocContratTravailMission } from '@/components/BlocContratTravailMissio
 import { CodesPointageMission } from '@/components/CodesPointageMission';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
-import { ModaleAnnulationMissionEtab } from '@/components/etablissement/ModaleAnnulationMissionEtab';
-import { EvaluationPostMission } from '@/components/EvaluationPostMission';
+// Sprint 8 ter-G PR 1 — modales chargées à la demande (code splitting)
+const ModaleAnnulationMissionEtab = lazy(() =>
+  import('@/components/etablissement/ModaleAnnulationMissionEtab').then((m) => ({
+    default: m.ModaleAnnulationMissionEtab,
+  })),
+);
+const EvaluationPostMission = lazy(() =>
+  import('@/components/EvaluationPostMission').then((m) => ({
+    default: m.EvaluationPostMission,
+  })),
+);
 import { ChargementPage } from '@/components/ChargementPage';
 import { BandeauRappelDPAE } from '@/components/BandeauRappelDPAE';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
@@ -819,27 +828,32 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         )}
       </div>
 
-      {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5 */}
-      <ModaleAnnulationMissionEtab
-        ouvert={modalAnnuler}
-        onFermer={() => setModalAnnuler(false)}
-        onAnnulee={() => {
-          setModalAnnuler(false);
-          navigate(role === 'ADMIN_PLATEFORME' ? '/admin/calendrier' : '/etablissement/missions');
-        }}
-        mission={{
-          id: m.id,
-          intitule: m.intitule,
-          statut: m.statut,
-          debut_le: m.debut_le,
-          fin_le: m.fin_le,
-          duree_heures: m.duree_heures,
-          taux_horaire_base: m.taux_horaire_base,
-          total_brut: m.total_brut,
-          type_contrat_applique: (m as any).type_contrat_applique,
-          type_contrat_recherche: (m as any).type_contrat_recherche,
-        }}
-      />
+      {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5
+          Sprint 8 ter-G : lazy mount uniquement quand ouverte (code splitting) */}
+      {modalAnnuler && (
+        <Suspense fallback={null}>
+          <ModaleAnnulationMissionEtab
+            ouvert={true}
+            onFermer={() => setModalAnnuler(false)}
+            onAnnulee={() => {
+              setModalAnnuler(false);
+              navigate(role === 'ADMIN_PLATEFORME' ? '/admin/calendrier' : '/etablissement/missions');
+            }}
+            mission={{
+              id: m.id,
+              intitule: m.intitule,
+              statut: m.statut,
+              debut_le: m.debut_le,
+              fin_le: m.fin_le,
+              duree_heures: m.duree_heures,
+              taux_horaire_base: m.taux_horaire_base,
+              total_brut: m.total_brut,
+              type_contrat_applique: (m as any).type_contrat_applique,
+              type_contrat_recherche: (m as any).type_contrat_recherche,
+            }}
+          />
+        </Suspense>
+      )}
 
       <ModalConfirmation
         ouvert={modalDupliquer}
@@ -872,13 +886,15 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
       />
 
       {!isAdmin && m.statut === 'TERMINEE' && m.soignant_assigne_id && showEvaluation && (
-        <EvaluationPostMission
-          missionId={m.id}
-          evalueId={m.soignant_assigne_id}
-          typeEvaluateur="ETABLISSEMENT"
-          nomEvalue={m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : 'Soignant'}
-          onTermine={() => setShowEvaluation(false)}
-        />
+        <Suspense fallback={null}>
+          <EvaluationPostMission
+            missionId={m.id}
+            evalueId={m.soignant_assigne_id}
+            typeEvaluateur="ETABLISSEMENT"
+            nomEvalue={m.soignants ? `${m.soignants.prenom} ${m.soignants.nom}` : 'Soignant'}
+            onTermine={() => setShowEvaluation(false)}
+          />
+        </Suspense>
       )}
 
       {showConnectCheckout && connectClientSecret && (
