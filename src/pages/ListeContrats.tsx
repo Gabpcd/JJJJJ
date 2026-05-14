@@ -4,10 +4,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
+import { Button } from '@/components/ui/button';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText } from 'lucide-react';
+import { FileText, ChevronRight } from 'lucide-react';
 import { IllustrationStylo } from '@/components/ui/EmptyState';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -82,61 +84,109 @@ export function ListeContratsContent({ role }: { role: UserRole }) {
         ))}
       </div>
 
-      {filtered.length === 0 ? (() => {
+      {(() => {
         const isEtab = role === 'ADMIN_ETABLISSEMENT';
-        let titre = 'Aucun contrat';
-        let sousTitre: string;
+        let titreVide = 'Aucun contrat';
+        let descVide: string;
         if (filtre === 'EN_ATTENTE_SIGNATURES') {
-          titre = 'Aucun contrat en attente';
-          sousTitre = isEtab
+          titreVide = 'Aucun contrat en attente';
+          descVide = isEtab
             ? 'Aucun contrat en attente de signature. Les contrats apparaîtront ici quand un soignant acceptera une mission.'
             : 'Aucun contrat en attente de signature pour le moment.';
         } else if (filtre === 'SIGNE_COMPLET') {
-          sousTitre = isEtab
+          descVide = isEtab
             ? 'Aucun contrat finalisé pour le moment. Les contrats signés par vos soignants s\'afficheront ici.'
             : 'Aucun contrat signé pour le moment.';
         } else if (filtre === 'ANNULE') {
-          sousTitre = isEtab
-            ? 'Aucun contrat annulé.'
-            : 'Aucun contrat annulé.';
+          descVide = 'Aucun contrat annulé.';
         } else {
-          sousTitre = isEtab
+          descVide = isEtab
             ? 'Les contrats apparaîtront ici après qu\'un soignant ait accepté une de vos missions.'
             : 'Vos contrats apparaîtront ici après avoir accepté une mission.';
         }
+
+        const colonnes: ColonneTableau<any>[] = [
+          { cle: 'numero', titre: 'N° contrat' },
+          { cle: 'mission', titre: 'Mission' },
+          { cle: 'type', titre: 'Type' },
+          { cle: 'date', titre: 'Créé le' },
+          { cle: 'statut', titre: 'Statut' },
+          { cle: 'actions', titre: '', align: 'right', largeur: 'w-28' },
+        ];
+
+        const aSigner = (c: any) =>
+          c.statut !== 'ANNULE' &&
+          ((role === 'SOIGNANT' && !c.signature_soignant) ||
+            (role === 'ADMIN_ETABLISSEMENT' && !c.signature_etablissement));
+
+        const badgeStatut = (statut: string) => (
+          <span className={`badge-base text-[10px] ${statut === 'SIGNE_COMPLET' ? 'bg-success/10 text-success' : statut === 'ANNULE' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'}`}>
+            {statut === 'SIGNE_COMPLET' ? '✅ Signé' : statut === 'ANNULE' ? '❌ Annulé' : '⏳ En attente'}
+          </span>
+        );
+
         return (
-          <EmptyState
-            illustration={<IllustrationStylo />}
-            titre={titre}
-            description={sousTitre}
+          <TableOuCartes
+            colonnes={colonnes}
+            donnees={filtered}
+            getId={(c: any) => c.id}
+            onClickLigne={(c: any) => navigate(`/contrat/${c.id}`)}
+            etatVide={<EmptyState illustration={<IllustrationStylo />} titre={titreVide} description={descVide} />}
+            renduCellule={(c: any, col) => {
+              switch (col.cle) {
+                case 'numero':
+                  return (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                      <FileText className="h-3.5 w-3.5 text-primary" />
+                      {c.numero_contrat || '—'}
+                    </span>
+                  );
+                case 'mission':
+                  return <span className="text-sm text-muted-foreground line-clamp-1">{(c.missions as any)?.intitule || '—'}</span>;
+                case 'type':
+                  return <span className="text-xs">{c.type_contrat}</span>;
+                case 'date':
+                  return <span className="text-xs text-muted-foreground whitespace-nowrap">{format(new Date(c.cree_le), 'dd/MM/yyyy', { locale: fr })}</span>;
+                case 'statut':
+                  return badgeStatut(c.statut);
+                case 'actions':
+                  return aSigner(c) ? (
+                    <Button size="sm" variant="default" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/contrat/${c.id}`); }}>
+                      ✍️ Signer
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/contrat/${c.id}`); }}>
+                      Voir
+                    </Button>
+                  );
+                default:
+                  return null;
+              }
+            }}
+            renduCarte={(c: any) => (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-primary shrink-0" />
+                    <span className="text-sm font-semibold text-foreground truncate">{c.numero_contrat || '—'}</span>
+                  </div>
+                  {badgeStatut(c.statut)}
+                </div>
+                <p className="text-xs text-muted-foreground line-clamp-1">📋 {(c.missions as any)?.intitule || '—'}</p>
+                <p className="text-xs text-muted-foreground">{c.type_contrat} · Créé le {format(new Date(c.cree_le), 'dd/MM/yyyy', { locale: fr })}</p>
+                <Button
+                  size="sm"
+                  variant={aSigner(c) ? 'default' : 'outline'}
+                  className="w-full gap-1.5 min-h-[44px]"
+                  onClick={(e) => { e.stopPropagation(); navigate(`/contrat/${c.id}`); }}
+                >
+                  {aSigner(c) ? '✍️ Signer le contrat' : <>Voir le contrat <ChevronRight className="h-4 w-4" /></>}
+                </Button>
+              </div>
+            )}
           />
         );
-      })() : (
-        <div className="space-y-3">
-          {filtered.map((c: any) => (
-            <div key={c.id} onClick={() => navigate(`/contrat/${c.id}`)} className="card-base hover:shadow-md cursor-pointer transition-all">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold text-foreground">{c.numero_contrat || '—'}</span>
-                </div>
-                <span className={`badge-base text-[10px] ${c.statut === 'SIGNE_COMPLET' ? 'bg-success/10 text-success' : c.statut === 'ANNULE' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'}`}>
-                  {c.statut === 'SIGNE_COMPLET' ? '✅ Signé' : c.statut === 'ANNULE' ? '❌ Annulé' : '⏳ En attente'}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground">Type : {c.type_contrat}</p>
-              <p className="text-xs text-muted-foreground">Mission : {(c.missions as any)?.intitule || '—'}</p>
-              <p className="text-xs text-muted-foreground">Créé le {format(new Date(c.cree_le), 'dd/MM/yyyy', { locale: fr })}</p>
-              {!c.signature_soignant && role === 'SOIGNANT' && c.statut !== 'ANNULE' && (
-                <p className="text-xs text-primary font-medium mt-1">✍️ Signer →</p>
-              )}
-              {!c.signature_etablissement && role === 'ADMIN_ETABLISSEMENT' && c.statut !== 'ANNULE' && (
-                <p className="text-xs text-primary font-medium mt-1">✍️ Signer →</p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      })()}
     </>
   );
 }
