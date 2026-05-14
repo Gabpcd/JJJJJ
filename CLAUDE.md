@@ -132,6 +132,17 @@ Cf. docs/SPRINT_11_A.md.
 - **PR 2** (#278) : `AdminGroupes` tableau "Détail par clinique" (9 cols + email form inline `colSpan=9` + édition taux per-row) → pattern `hidden md:block` + cards mobile parallèles (préserve l'expansion + état local par row que TableOuCartes ne supporte pas).
 - **PR 3** : doc Sprint 11-A + CLAUDE.md.
 
+### Sprint 11-B — Admin mobile-first AdminConformite + AdminModeration (3 PRs)
+Cf. docs/SPRINT_11_B.md.
+
+- **PR 1** (#280) : `AdminConformite` table détail drill-down (5-6 cols, 7 indicateurs) → refactor `Indicateur` interface vers `champs[]` unifié (titre + render + primary?). Desktop table + mobile cards label/value depuis la même config. Couplage `colonnes` + `renderRow` original éliminé.
+- **PR 2** (#281) : `AdminModeration` 6 tabs composite → refactor partiel par tab (audit-first) :
+  * Documents (4 cols), Identité (8 cols — la pire UX mobile) : `hidden md:block` + cards. Identité cards = 3 noms label/value + grid 3 cols pour matches ✓/✗.
+  * Litiges + Évaluations : skip honnête (déjà cards mobile-friendly).
+  * Avoirs + Legacy : sous-composants externes hors scope ce fichier.
+  * Bonus : `TabsList` wrappée en `overflow-x-auto + w-max` (6 tabs sur 375px).
+- **PR 3** : doc Sprint 11-B + CLAUDE.md.
+
 ### Sprint 9-D — Animations + glassmorphism + doc finale (4 PRs)
 Cf. docs/SPRINT_9_FINAL.md.
 
