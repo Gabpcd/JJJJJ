@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
@@ -17,6 +16,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 
 export default function AdminUtilisateurs() {
   const navigate = useNavigate();
@@ -143,6 +143,44 @@ export default function AdminUtilisateurs() {
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
+  const colonnesSoignants: ColonneTableau<any>[] = [
+    { cle: 'nom', titre: 'Nom' },
+    { cle: 'profession', titre: 'Profession' },
+    { cle: 'rpps', titre: 'RPPS' },
+    { cle: 'score', titre: 'Score' },
+    { cle: 'missions', titre: 'Missions' },
+    { cle: 'statut', titre: 'Statut' },
+    { cle: 'actions', titre: 'Actions', align: 'right' },
+  ];
+
+  const colonnesEtabs: ColonneTableau<any>[] = [
+    { cle: 'nom', titre: 'Nom' },
+    { cle: 'type', titre: 'Type' },
+    { cle: 'siret', titre: 'SIRET' },
+    { cle: 'verification', titre: 'Vérification' },
+    { cle: 'statut', titre: 'Statut' },
+    { cle: 'actions', titre: 'Actions', align: 'right' },
+  ];
+
+  const renduVerificationBadge = (statut: string) =>
+    statut === 'VERIFIE' ? (
+      <Badge className="bg-success text-success-foreground text-[10px]">
+        <ShieldCheck className="h-3 w-3 mr-1" />Vérifié
+      </Badge>
+    ) : statut === 'REJETE' ? (
+      <Badge variant="destructive" className="text-[10px]">
+        <ShieldX className="h-3 w-3 mr-1" />Rejeté
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="text-amber-600 border-amber-300 text-[10px]">
+        <Clock className="h-3 w-3 mr-1" />En attente
+      </Badge>
+    );
+
+  const renduStatutBadge = (supprime: boolean) =>
+    supprime ? <Badge variant="destructive" className="text-[10px]">Suspendu</Badge>
+             : <Badge className="bg-success text-success-foreground text-[10px]">Actif</Badge>;
+
   return (
     <>
     <LayoutAdmin>
@@ -161,21 +199,21 @@ export default function AdminUtilisateurs() {
             </div>
             <div className="space-y-2">
               {etabsEnAttente.map(e => (
-                <div key={e.id} className="flex items-center justify-between bg-card rounded-lg p-3 border">
+                <div key={e.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-card rounded-lg p-3 border">
                   <div>
                     <p className="font-medium text-foreground">{e.nom}</p>
                     <p className="text-xs text-muted-foreground font-mono">{e.siret} · {e.type}</p>
                     {e.siret_raison_sociale && <p className="text-xs text-muted-foreground">INSEE: {e.siret_raison_sociale}</p>}
                     {e.siret_code_naf && <p className="text-xs text-muted-foreground">NAF: {e.siret_code_naf}</p>}
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white">
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white min-h-[40px]">
                       <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
                     </Button>
-                    <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }}>
+                    <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }} className="min-h-[40px]">
                       <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}>
+                    <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="min-h-[40px]">
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -197,163 +235,228 @@ export default function AdminUtilisateurs() {
           </TabsList>
 
           <TabsContent value="soignants">
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nom</TableHead>
-                    <TableHead>Profession</TableHead>
-                    <TableHead>RPPS</TableHead>
-                    <TableHead>Score</TableHead>
-                    <TableHead>Missions</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSoignants.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="p-0">
-                        <EmptyState
-                          icone={<Users />}
-                          titre="Aucun soignant trouvé"
-                          description="Aucun soignant ne correspond à votre recherche."
-                          compact
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredSoignants.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-medium">{s.prenom} {s.nom}</TableCell>
-                      <TableCell>{s.profession}</TableCell>
-                      <TableCell>{s.rpps_verifie ? <Badge className="bg-success text-success-foreground text-[10px]">Vérifié</Badge> : <Badge variant="outline" className="text-[10px]">Non</Badge>}</TableCell>
-                      <TableCell>{s.score_fiabilite != null && s.total_missions_terminees > 0 ? `${s.score_fiabilite}/100` : '—'}</TableCell>
-                      <TableCell>{s.total_missions_terminees}</TableCell>
-                      <TableCell>{s.supprime_le ? <Badge variant="destructive" className="text-[10px]">Suspendu</Badge> : <Badge className="bg-success text-success-foreground text-[10px]">Actif</Badge>}</TableCell>
-                      <TableCell className="text-right space-x-1 whitespace-nowrap">
+            <TableOuCartes
+              colonnes={colonnesSoignants}
+              donnees={filteredSoignants}
+              getId={(s) => s.id}
+              etatVide={
+                <EmptyState
+                  icone={<Users />}
+                  titre="Aucun soignant trouvé"
+                  description="Aucun soignant ne correspond à votre recherche."
+                  compact
+                />
+              }
+              renduCellule={(s, col) => {
+                switch (col.cle) {
+                  case 'nom':
+                    return <span className="font-medium">{s.prenom} {s.nom}</span>;
+                  case 'profession':
+                    return <span className="text-sm">{s.profession}</span>;
+                  case 'rpps':
+                    return s.rpps_verifie
+                      ? <Badge className="bg-success text-success-foreground text-[10px]">Vérifié</Badge>
+                      : <Badge variant="outline" className="text-[10px]">Non</Badge>;
+                  case 'score':
+                    return <span className="text-sm">{s.score_fiabilite != null && s.total_missions_terminees > 0 ? `${s.score_fiabilite}/100` : '—'}</span>;
+                  case 'missions':
+                    return <span className="text-sm">{s.total_missions_terminees}</span>;
+                  case 'statut':
+                    return renduStatutBadge(!!s.supprime_le);
+                  case 'actions':
+                    return (
+                      <div className="flex items-center justify-end gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
                         {s.email && (
-                          <Button asChild size="sm" variant="outline">
-                            <a href={`mailto:${s.email}`}>
-                              <Mail className="h-3.5 w-3.5 mr-1" />Email
-                            </a>
+                          <Button asChild size="sm" variant="outline" className="h-8">
+                            <a href={`mailto:${s.email}`}><Mail className="h-3.5 w-3.5 mr-1" />Email</a>
                           </Button>
                         )}
                         {s.telephone && (
-                          <Button asChild size="sm" variant="outline">
-                            <a href={`tel:${s.telephone}`}>
-                              <Phone className="h-3.5 w-3.5 mr-1" />Appeler
-                            </a>
+                          <Button asChild size="sm" variant="outline" className="h-8">
+                            <a href={`tel:${s.telephone}`}><Phone className="h-3.5 w-3.5 mr-1" />Appeler</a>
                           </Button>
                         )}
                         {s.supprime_le ? (
-                          <Button size="sm" variant="outline" onClick={() => reactiver('soignants', s.id)}>
+                          <Button size="sm" variant="outline" onClick={() => reactiver('soignants', s.id)} className="h-8">
                             <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
                           </Button>
                         ) : (
-                          <Button size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)}>
+                          <Button size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)} className="h-8">
                             <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}>
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)} className="h-8 w-8 p-0">
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      </div>
+                    );
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(s) => (
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground truncate">{s.prenom} {s.nom}</p>
+                      <p className="text-xs text-muted-foreground">{s.profession}</p>
+                    </div>
+                    {renduStatutBadge(!!s.supprime_le)}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {s.rpps_verifie
+                      ? <Badge className="bg-success text-success-foreground text-[10px]">RPPS Vérifié</Badge>
+                      : <Badge variant="outline" className="text-[10px]">RPPS Non vérifié</Badge>}
+                    {s.score_fiabilite != null && s.total_missions_terminees > 0 && (
+                      <Badge variant="outline" className="text-[10px]">Score {s.score_fiabilite}/100</Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px]">{s.total_missions_terminees} missions</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+                    {s.email && (
+                      <Button asChild size="sm" variant="outline" className="min-h-[44px]">
+                        <a href={`mailto:${s.email}`}><Mail className="h-3.5 w-3.5 mr-1" />Email</a>
+                      </Button>
+                    )}
+                    {s.telephone && (
+                      <Button asChild size="sm" variant="outline" className="min-h-[44px]">
+                        <a href={`tel:${s.telephone}`}><Phone className="h-3.5 w-3.5 mr-1" />Appeler</a>
+                      </Button>
+                    )}
+                    {s.supprime_le ? (
+                      <Button size="sm" variant="outline" onClick={() => reactiver('soignants', s.id)} className="min-h-[44px]">
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)} className="min-h-[44px]">
+                        <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)} className="min-h-[44px]">
+                      <Eye className="h-3.5 w-3.5 mr-1" />Détails
+                    </Button>
+                  </div>
+                </div>
+              )}
+            />
           </TabsContent>
 
           <TabsContent value="etablissements">
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nom</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>SIRET</TableHead>
-                    <TableHead>Vérification</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredEtabs.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="p-0">
-                        <EmptyState
-                          icone={<Users />}
-                          titre="Aucun établissement trouvé"
-                          description="Aucun établissement ne correspond à votre recherche."
-                          compact
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredEtabs.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell className="font-medium">{e.nom}</TableCell>
-                      <TableCell>{e.type}</TableCell>
-                      <TableCell className="font-mono text-xs">{e.siret}</TableCell>
-                      <TableCell>
-                        {e.statut_verification === 'VERIFIE' ? (
-                          <Badge className="bg-success text-success-foreground text-[10px]">
-                            <ShieldCheck className="h-3 w-3 mr-1" />Vérifié
-                          </Badge>
-                        ) : e.statut_verification === 'REJETE' ? (
-                          <Badge variant="destructive" className="text-[10px]">
-                            <ShieldX className="h-3 w-3 mr-1" />Rejeté
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-amber-600 border-amber-300 text-[10px]">
-                            <Clock className="h-3 w-3 mr-1" />En attente
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>{e.supprime_le ? <Badge variant="destructive" className="text-[10px]">Suspendu</Badge> : <Badge className="bg-success text-success-foreground text-[10px]">Actif</Badge>}</TableCell>
-                      <TableCell className="text-right space-x-1 whitespace-nowrap">
+            <TableOuCartes
+              colonnes={colonnesEtabs}
+              donnees={filteredEtabs}
+              getId={(e) => e.id}
+              etatVide={
+                <EmptyState
+                  icone={<Users />}
+                  titre="Aucun établissement trouvé"
+                  description="Aucun établissement ne correspond à votre recherche."
+                  compact
+                />
+              }
+              renduCellule={(e, col) => {
+                switch (col.cle) {
+                  case 'nom':
+                    return <span className="font-medium">{e.nom}</span>;
+                  case 'type':
+                    return <span className="text-sm">{e.type}</span>;
+                  case 'siret':
+                    return <span className="font-mono text-xs">{e.siret}</span>;
+                  case 'verification':
+                    return renduVerificationBadge(e.statut_verification);
+                  case 'statut':
+                    return renduStatutBadge(!!e.supprime_le);
+                  case 'actions':
+                    return (
+                      <div className="flex items-center justify-end gap-1 flex-wrap" onClick={(ev) => ev.stopPropagation()}>
                         {e.statut_verification === 'EN_ATTENTE' && (
                           <>
-                            <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white">
+                            <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white h-8">
                               <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
                             </Button>
-                            <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }}>
+                            <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }} className="h-8">
                               <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
                             </Button>
                           </>
                         )}
                         {e.email_contact && (
-                          <Button asChild size="sm" variant="outline">
-                            <a href={`mailto:${e.email_contact}`}>
-                              <Mail className="h-3.5 w-3.5 mr-1" />Email
-                            </a>
+                          <Button asChild size="sm" variant="outline" className="h-8">
+                            <a href={`mailto:${e.email_contact}`}><Mail className="h-3.5 w-3.5 mr-1" />Email</a>
                           </Button>
                         )}
                         {e.telephone_contact && (
-                          <Button asChild size="sm" variant="outline">
-                            <a href={`tel:${e.telephone_contact}`}>
-                              <Phone className="h-3.5 w-3.5 mr-1" />Appeler
-                            </a>
+                          <Button asChild size="sm" variant="outline" className="h-8">
+                            <a href={`tel:${e.telephone_contact}`}><Phone className="h-3.5 w-3.5 mr-1" />Appeler</a>
                           </Button>
                         )}
                         {e.supprime_le ? (
-                          <Button size="sm" variant="outline" onClick={() => reactiver('etablissements', e.id)}>
+                          <Button size="sm" variant="outline" onClick={() => reactiver('etablissements', e.id)} className="h-8">
                             <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
                           </Button>
                         ) : (
-                          <Button size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)}>
+                          <Button size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)} className="h-8">
                             <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)}>
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="h-8 w-8 p-0">
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      </div>
+                    );
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(e) => (
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground truncate">{e.nom}</p>
+                      <p className="text-xs text-muted-foreground">{e.type}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{e.siret}</p>
+                    </div>
+                    {renduStatutBadge(!!e.supprime_le)}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {renduVerificationBadge(e.statut_verification)}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+                    {e.statut_verification === 'EN_ATTENTE' && (
+                      <>
+                        <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white min-h-[44px]">
+                          <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }} className="min-h-[44px]">
+                          <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
+                        </Button>
+                      </>
+                    )}
+                    {e.email_contact && (
+                      <Button asChild size="sm" variant="outline" className="min-h-[44px]">
+                        <a href={`mailto:${e.email_contact}`}><Mail className="h-3.5 w-3.5 mr-1" />Email</a>
+                      </Button>
+                    )}
+                    {e.telephone_contact && (
+                      <Button asChild size="sm" variant="outline" className="min-h-[44px]">
+                        <a href={`tel:${e.telephone_contact}`}><Phone className="h-3.5 w-3.5 mr-1" />Appeler</a>
+                      </Button>
+                    )}
+                    {e.supprime_le ? (
+                      <Button size="sm" variant="outline" onClick={() => reactiver('etablissements', e.id)} className="min-h-[44px]">
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)} className="min-h-[44px]">
+                        <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="min-h-[44px]">
+                      <Eye className="h-3.5 w-3.5 mr-1" />Détails
+                    </Button>
+                  </div>
+                </div>
+              )}
+            />
           </TabsContent>
         </Tabs>
       </div>
