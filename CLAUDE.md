@@ -124,6 +124,17 @@ Cf. docs/SPRINT_8_5_FINAL.md.
 - Mesure Lighthouse absolue mobile soignant
 - P2 §12 RPCs backend admin missions
 
+### Sprint 9-B — Mascotte + composants Y2K (5 PRs)
+Cf. docs/COMPOSANTS_Y2K.md.
+
+- **PR 1** : `Mascotte.tsx` (cœur arrondi Y2K, 5 états : idle/happy/thinking/celebrating/empty). SVG vectoriel avec dégradé rose→mauve + animations CSS (pas de framer-motion, bundle plus léger). Tailles sm/md/lg/xl.
+- **PR 2** : `BoutonY2K.tsx` (primary/secondary/ghost variants, gradient hero + shadow holographique sur primary).
+- **PR 3** : `CardY2K.tsx` (default/holographic/glass variants, glassmorphism `backdrop-blur-xl`).
+- **PR 4** : `BadgeY2K.tsx` (success/warning/error/info/premium, le dernier en gradient celebrate).
+- **PR 5** : `docs/COMPOSANTS_Y2K.md` + rappel ton de voix sobre PRO.
+
+**Ton de voix préservé** : vouvoiement, pas d'argot ("slay/iconic/girlie" interdits). L'effet Gen Z vient à 100% de l'UI visuelle.
+
 ### Sprint 9-A — Fondations CSS Y2K Gen Z (4 PRs)
 Cf. docs/IDENTITE_VISUELLE_JOLENE.md.
 
