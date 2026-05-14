@@ -133,7 +133,74 @@ Tailles : `sm` (text-[10px]) / `md` (text-xs).
 
 L'effet Y2K vient à 100% de l'UI : palette, dégradés holographiques, mascotte. Le copy reste healthcare professionnel.
 
-## Reportés Sprint 9-C / 9-D
+## CarteKPIY2K (Sprint 9-C PR 1)
 
-- Sprint 9-C : Refonte dashboards (Mascotte intégrée header + ListeSwipe + CarteKPI Y2K)
-- Sprint 9-D : Spring animations + glassmorphism étendu nav/modales + bouncy interactions
+```tsx
+import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
+import { Briefcase } from 'lucide-react';
+
+<CarteKPIY2K
+  icone={<Briefcase className="h-4 w-4" />}
+  label="Missions ce mois"
+  valeur={12}
+  variation={{ pct: 25, sens: 'up', label: 'vs mois dernier' }}
+  variant="default"
+  onClick={() => navigate('/missions')}
+/>
+
+<CarteKPIY2K
+  label="Revenus du mois"
+  valeur="1 250 €"
+  variation={{ pct: -10, sens: 'down' }}
+  variant="holographic"
+/>
+```
+
+### Variants
+- `default` : surface cloud + border rose subtile + shadow rose
+- `holographic` : bg-gradient-hero + text-white + shadow-holographic
+- `soft` : bg-gradient-soft + text-midnight
+
+Hover : `-translate-y-1` + shadow upgrade si `onClick`. Variation flèche up/down/neutral colorée selon sens.
+
+## ListeSwipe (Sprint 9-C PR 2)
+
+```tsx
+import { ListeSwipe } from '@/components/y2k/ListeSwipe';
+
+<ListeSwipe titre="Missions ouvertes" voirToutHref="/soignant/missions">
+  {missions.map(m => <CarteMission key={m.id} mission={m} />)}
+</ListeSwipe>
+```
+
+### Comportement
+- Mobile : 1 item par swipe, scroll-snap mandatory (CSS natif, pas de dep externe)
+- Desktop : scroll horizontal libre + boutons précédent/suivant si overflow
+- Dots indicator mobile (hidden sm:)
+- IntersectionObserver pour détecter item actif (threshold 0.6)
+- A11y : `aria-roledescription="carousel"`, boutons navigation accessibles
+
+### Props
+| Prop | Type | Défaut | Usage |
+|---|---|---|---|
+| `titre` | `string` | — | Header au-dessus |
+| `voirToutHref` | `string` | — | Lien optionnel droite header |
+| `boutonsNav` | `boolean` | `true` | Boutons prev/next desktop |
+| `dots` | `boolean` | `true` | Indicateurs mobile |
+
+## Intégrations dashboards Y2K (Sprint 9-C PR 3-4)
+
+**DashboardSoignant** :
+- Header avec `<Mascotte etat="happy|thinking" taille="md" />` à gauche
+- "Hiii [prénom]" en `text-gradient-hero` (titre arc-en-ciel)
+- État mascotte selon documents : `happy` si OK, `thinking` si incomplet
+
+**DashboardEtablissement** :
+- Header avec `<Mascotte etat="happy" taille="md" />`
+- "Bonjour [nom étab]" en `text-gradient-hero`
+- Fallback `etat="idle"` si pas d'étab chargé
+
+## Reportés Sprint 9-D
+
+- Spring animations + glassmorphism étendu nav/modales + bouncy interactions
+- Adaptation pages soignant utilisant ListeSwipe (HistoriqueMissions, MesCandidatures, BulletinsPaie) — à faire au cas par cas après validation pattern

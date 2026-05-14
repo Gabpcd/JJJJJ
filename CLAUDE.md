@@ -124,6 +124,17 @@ Cf. docs/SPRINT_8_5_FINAL.md.
 - Mesure Lighthouse absolue mobile soignant
 - P2 §12 RPCs backend admin missions
 
+### Sprint 9-C — Refonte dashboards Y2K (5 PRs)
+Cf. docs/COMPOSANTS_Y2K.md.
+
+- **PR 1** : `CarteKPIY2K.tsx` (3 variants : default/holographic/soft, icône + valeur tabular + variation up/down/neutral + contexte optionnel, hover lift).
+- **PR 2** : `ListeSwipe.tsx` (carousel horizontal swipe-snap CSS natif, dots mobile + boutons prev/next desktop, `aria-roledescription="carousel"`).
+- **PR 3** : DashboardSoignant header Y2K — `<Mascotte etat="happy|thinking" />` + "Hiii [prénom]" en `text-gradient-hero`.
+- **PR 4** : DashboardEtablissement header Y2K — `<Mascotte etat="happy" />` + "Bonjour [étab]" en `text-gradient-hero`.
+- **PR 5** : doc CarteKPIY2K + ListeSwipe + intégrations dashboards.
+
+**Touche progressive** : composants existants (CarteKPI, sections KPI) inchangés. Les composants Y2K sont disponibles pour adoption page par page.
+
 ### Sprint 9-B — Mascotte + composants Y2K (5 PRs)
 Cf. docs/COMPOSANTS_Y2K.md.
 
