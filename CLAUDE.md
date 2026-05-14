@@ -143,6 +143,13 @@ Cf. docs/SPRINT_11_B.md.
   * Bonus : `TabsList` wrappée en `overflow-x-auto + w-max` (6 tabs sur 375px).
 - **PR 3** : doc Sprint 11-B + CLAUDE.md.
 
+### Sprint 11-C — Admin mobile-first AdminChorusPro + AdminDetailUtilisateur (3 PRs)
+Cf. docs/SPRINT_11_C.md.
+
+- **PR 1** (#283) : `AdminChorusPro` (3 tabs Dashboard/Submissions/Config) → 3 tables refactorées vers `hidden md:block` + cards mobile : Dashboard 5 cols (compactes), Submissions 8 cols (cards complètes avec bouton "Voir détail"), Config 6 cols (Switch Actif + bouton "Éditer config"). KPIs/filtres/dialogs externes préservés.
+- **PR 2** (#284) : `AdminDetailUtilisateur` page detail composite (6 tabs) → 2 tabs refactorées : Documents (5 cols) + Missions (6-7 cols selon type soignant/etab). 4 autres tabs skip honnête (Informations/Score/Profil complet/Actions admin déjà responsive). Audit RGPD + 2 ModalConfirmation préservés.
+- **PR 3** : doc Sprint 11-C + CLAUDE.md.
+
 ### Sprint 9-D — Animations + glassmorphism + doc finale (4 PRs)
 Cf. docs/SPRINT_9_FINAL.md.
 
