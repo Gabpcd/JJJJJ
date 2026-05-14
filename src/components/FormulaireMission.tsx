@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { extraireContratPreference, injecterContratTag, peutExercerLiberal, type ContratPreference } from '@/lib/constantes';
@@ -10,7 +10,13 @@ import { EncartCommissionDegressif } from '@/components/EncartCommissionDegressi
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
 import { FormulaireRecurrence, type RecurrenceFlexConfig, type CreneauFlex, type ValidationFlexResult } from '@/components/FormulaireRecurrence';
 import { BarreProgressionBulk } from '@/components/BarreProgressionBulk';
-import { ModalRecapMission, type RecapMissionData } from '@/components/mission/ModalRecapMission';
+import type { RecapMissionData } from '@/components/mission/ModalRecapMission';
+// Sprint 8 ter-G PR 3 — lazy load modal récap (code splitting, ~8KB)
+const ModalRecapMission = lazy(() =>
+  import('@/components/mission/ModalRecapMission').then((m) => ({
+    default: m.ModalRecapMission,
+  })),
+);
 import { useAuth } from '@/contexts/AuthContext';
 import { useRole } from '@/hooks/useRole';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -770,14 +776,19 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         <BarreProgressionBulk progression={progression} total={creneaux.length} actuel={progressionActuel} />
       )}
 
-      {/* Sprint 7 PR 1 — Modal récap avant publication finale (P1-4) */}
-      <ModalRecapMission
-        ouvert={modalRecapOuvert}
-        data={recapData}
-        onModifier={() => setModalRecapOuvert(false)}
-        onConfirmer={publierMissionPonctuelle}
-        loading={loading}
-      />
+      {/* Sprint 7 PR 1 — Modal récap avant publication finale (P1-4)
+          Sprint 8 ter-G : lazy mount (code splitting) */}
+      {modalRecapOuvert && (
+        <Suspense fallback={null}>
+          <ModalRecapMission
+            ouvert={true}
+            data={recapData}
+            onModifier={() => setModalRecapOuvert(false)}
+            onConfirmer={publierMissionPonctuelle}
+            loading={loading}
+          />
+        </Suspense>
+      )}
     </>
   );
 }
