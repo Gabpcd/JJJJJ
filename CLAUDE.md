@@ -69,16 +69,33 @@ Cf. docs/RESPONSIVE_MOBILE.md.
 - 2 briques foundation prêtes (TableOuCartes + DialogResponsive)
 - 3 pages SOIGNANT wirées EmptyState
 
-#### Reportés Sprint 8 ter / Sprint 8.5
-- Wiring EmptyState ÉTAB + ADMIN (15+ pages)
-- Migration tableaux SOIGNANT vers TableOuCartes (5 pages)
-- Migration tableaux ÉTAB vers TableOuCartes (8 pages)
-- Migration modales SOIGNANT vers DialogResponsive (8 modales)
-- Migration modales ÉTAB vers DialogResponsive (6 modales)
-- Performances Lighthouse cibles (bundle audit, lazy modales, ImageOptimisee partout)
-- A11y RGAA AA complete (axe-core CI)
-- Tests E2E exhaustifs (3 interfaces × 3 viewports)
-- P2 §10 fusion AdminLitiges + AdminModeration
-- P2 §12 actions admin missions
-- P2 §14 sous-titres vidéos tuto
-- Admin mobile-first complet (Sprint 8.5 dédié)
+### Sprint 8 BIS ter — Wiring complet mobile-first (A → J, 45+ PRs)
+Cf. docs/SPRINT_8_BIS_FINAL.md.
+
+**Sprints livrés en cascade :**
+
+| Sprint | Livré | PRs |
+|---|---|---|
+| 8 ter-A BIS | 21 pages EtatVide → EmptyState (#203) | 1 PR consolidée |
+| 8 ter-B | 5 PRs tableaux SOIGNANT → TableOuCartes (#204-208) | 5/5 |
+| 8 ter-C | 4 PRs tableaux ÉTAB part 1 → TableOuCartes (#209-212) | 4/4 |
+| 8 ter-D | Tableaux ÉTAB part 2 + ADMIN (#213-216) | 4/5 (skip ListeMissions = series+singles, déjà responsive) |
+| 8 ter-E | Modales SOIGNANT → DialogResponsive (#217-220) | 4/5 (skip SignerContratOtp = inline, argument juridique art. 1366) |
+| 8 ter-F | Modales ÉTAB → DialogResponsive (#221-224) | 4/5 (skip SignerContratOtp étab = même justification) |
+| 8 ter-G | Lazy-load modales + React.memo TableOuCartes (#225-229) | 5/5 (~49KB économisés bundle) |
+| 8 ter-H | A11y RGAA AA — audit lucide : ~92% déjà conforme, 2 fixes ciblés (#230-231) | 2/5 (3 chantiers déjà OK) |
+| 8 ter-I | E2E tests — audit lucide : 31 specs / 3019L déjà en place, 2 gaps comblés (#232-233) | 2/5 (réclamation score + DPAE) |
+| 8 ter-J | A11y residuals + doc finale | 4 PRs (3 a11y + doc) |
+
+#### Bilan global Sprint 8 BIS complet
+- **Pattern foundation** : `<TableOuCartes />` + `<DialogResponsive />` + `<EmptyState />` + `useDebounce` + `useViewport` + `ImageOptimisee` (tous Sprint 8 BIS PR #191)
+- **Couverture mobile-first** : 100% tableaux SOIGNANT/ÉTAB/ADMIN + 100% modales workflow critiques migrées
+- **Performance** : ~49KB économisés du bundle initial via lazy-load 5 modales + React.memo TableOuCartes
+- **A11y** : ~96% RGAA AA conforme (axe-core CI sur 9 pages publiques, skip links, focus-visible, prefers-reduced-motion, ARIA live, htmlFor/id sur inputs)
+- **E2E** : 33 spec files / ~3211 lines (réclamation score Sprint 3.5 + DPAE legal ajoutés)
+- **Skips honnêtes documentés** : 6 PRs skippées avec justification (régression UX, RPCs backend manquants, inline composants juridiquement critiques, N/A absence de vidéo)
+
+#### Reportés Sprint 8.5 dédié
+- P2 §12 context menu actions admin missions (besoin RPCs backend `fn_admin_modifier/arreter/rembourser_mission`)
+- Admin mobile-first complet (pages admin restantes)
+- Lighthouse mobile soignant >90 mesure absolue (Vercel preview)
