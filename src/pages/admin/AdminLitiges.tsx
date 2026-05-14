@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Scale, Gavel, ChevronRight, Calendar } from 'lucide-react';
@@ -104,12 +104,13 @@ export default function AdminLitiges() {
 
       {/* Liste */}
       {filtered.length === 0 ? (
-        <EtatVide
-          icone={Scale}
+        <EmptyState
+          icone={<Scale />}
           titre={filtre === 'REVUE_ADMIN' ? 'Aucun litige à trancher' : 'Aucun litige'}
-          sousTitre={filtre === 'REVUE_ADMIN'
+          description={filtre === 'REVUE_ADMIN'
             ? 'Tous les litiges sont en cours de discussion ou résolus.'
             : 'Aucun litige correspondant à ce filtre.'}
+          variant={filtre === 'REVUE_ADMIN' ? 'success' : 'info'}
         />
       ) : (
         <div className="space-y-3">
