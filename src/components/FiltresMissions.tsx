@@ -58,19 +58,32 @@ export function FiltresMissions({ rayonDefaut, onFiltreChange }: FiltresMissions
           {/* Date range */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-muted-foreground">Du</label>
-              <input type="date" value={filtres.dateDebut} onChange={e => maj({ dateDebut: e.target.value })} className="input-base text-xs py-1.5" />
+              <label htmlFor="filtres-missions-date-debut" className="text-[10px] text-muted-foreground">Du</label>
+              <input
+                id="filtres-missions-date-debut"
+                type="date"
+                value={filtres.dateDebut}
+                onChange={e => maj({ dateDebut: e.target.value })}
+                className="input-base text-xs py-1.5"
+              />
             </div>
             <div>
-              <label className="text-[10px] text-muted-foreground">Au</label>
-              <input type="date" value={filtres.dateFin} onChange={e => maj({ dateFin: e.target.value })} className="input-base text-xs py-1.5" />
+              <label htmlFor="filtres-missions-date-fin" className="text-[10px] text-muted-foreground">Au</label>
+              <input
+                id="filtres-missions-date-fin"
+                type="date"
+                value={filtres.dateFin}
+                onChange={e => maj({ dateFin: e.target.value })}
+                className="input-base text-xs py-1.5"
+              />
             </div>
           </div>
 
           {/* Taux min */}
           <div>
-            <label className="text-[10px] text-muted-foreground">À partir de {filtres.tauxMin || '—'} €/h</label>
+            <label htmlFor="filtres-missions-taux-min" className="text-[10px] text-muted-foreground">À partir de {filtres.tauxMin || '—'} €/h</label>
             <input
+              id="filtres-missions-taux-min"
               type="range" min={0} max={80} step={5} value={filtres.tauxMin}
               onChange={e => maj({ tauxMin: Number(e.target.value) })}
               className="w-full accent-primary"
@@ -79,8 +92,9 @@ export function FiltresMissions({ rayonDefaut, onFiltreChange }: FiltresMissions
 
           {/* Rayon */}
           <div>
-            <label className="text-[10px] text-muted-foreground">Dans un rayon de {filtres.rayonKm} km</label>
+            <label htmlFor="filtres-missions-rayon-km" className="text-[10px] text-muted-foreground">Dans un rayon de {filtres.rayonKm} km</label>
             <input
+              id="filtres-missions-rayon-km"
               type="range" min={5} max={100} step={5} value={filtres.rayonKm}
               onChange={e => maj({ rayonKm: Number(e.target.value) })}
               className="w-full accent-primary"
