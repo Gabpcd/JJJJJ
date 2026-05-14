@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileCheck2, AlertCircle, ExternalLink, Clock } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
+import { Button } from '@/components/ui/button';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -125,24 +128,83 @@ export default function MesDPAE() {
       </div>
 
       {/* Liste */}
-      {filtrees.length === 0 ? (
-        <div className="rounded-xl bg-muted/30 border border-border p-6 text-center text-sm text-muted-foreground">
-          {dpae.length === 0
-            ? 'Aucun contrat CDD signé. Les DPAE apparaîtront ici une fois un contrat CDD signé avec un établissement.'
-            : `Aucune DPAE dans cette catégorie.`}
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {filtrees.map((d) => (
-            <DpaeCard
-              key={d.contrat_id}
-              dpae={d}
-              onVoirContrat={() => navigate(`/contrat/${d.contrat_id}`)}
-              onVoirMission={() => navigate(`/soignant/missions/${d.mission_id}`)}
-            />
-          ))}
-        </ul>
-      )}
+      {(() => {
+        const colonnes: ColonneTableau<DpaeContrat>[] = [
+          { cle: 'mission', titre: 'Mission' },
+          { cle: 'etab', titre: 'Établissement' },
+          { cle: 'periode', titre: 'Période' },
+          { cle: 'type', titre: 'Type' },
+          { cle: 'numero', titre: 'N° URSSAF' },
+          { cle: 'statut', titre: 'Statut' },
+          { cle: 'actions', titre: '', align: 'right', largeur: 'w-32' },
+        ];
+
+        return (
+          <TableOuCartes
+            colonnes={colonnes}
+            donnees={filtrees}
+            getId={(d) => d.contrat_id}
+            etatVide={(
+              <EmptyState
+                icone={<FileCheck2 />}
+                titre={dpae.length === 0 ? 'Aucun contrat CDD signé' : 'Aucune DPAE dans cette catégorie'}
+                description={dpae.length === 0
+                  ? "Les DPAE apparaîtront ici une fois un contrat CDD signé avec un établissement."
+                  : 'Changez de filtre pour voir d\'autres DPAE.'}
+              />
+            )}
+            renduCellule={(d, col) => {
+              const validee = d.dpae_effectuee && d.dpae_numero;
+              switch (col.cle) {
+                case 'mission':
+                  return <span className="font-medium text-foreground">{d.mission_intitule}</span>;
+                case 'etab':
+                  return <span className="text-sm text-muted-foreground">{d.etablissement_nom}</span>;
+                case 'periode':
+                  return (
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(d.debut_le), 'dd/MM/yy', { locale: fr })} → {format(new Date(d.fin_le), 'dd/MM/yy', { locale: fr })}
+                    </span>
+                  );
+                case 'type':
+                  return <span className="text-xs">{d.type_contrat}</span>;
+                case 'numero':
+                  return validee
+                    ? <span className="font-mono text-xs select-all">{d.dpae_numero}</span>
+                    : <span className="text-xs text-muted-foreground">—</span>;
+                case 'statut':
+                  return (
+                    <span className={`text-[11px] px-2 py-1 rounded-full font-medium whitespace-nowrap ${
+                      validee ? 'bg-success text-success-foreground' : 'bg-warning/30 text-warning'
+                    }`}>
+                      {validee ? '✅ Validée' : '⏳ En attente'}
+                    </span>
+                  );
+                case 'actions':
+                  return (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={(e) => { e.stopPropagation(); navigate(`/soignant/missions/${d.mission_id}`); }}
+                    >
+                      Détail
+                    </Button>
+                  );
+                default:
+                  return null;
+              }
+            }}
+            renduCarte={(d) => (
+              <DpaeCardContent
+                dpae={d}
+                onVoirContrat={() => navigate(`/contrat/${d.contrat_id}`)}
+                onVoirMission={() => navigate(`/soignant/missions/${d.mission_id}`)}
+              />
+            )}
+          />
+        );
+      })()}
 
       <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground mt-6">
         <p className="font-semibold text-foreground mb-1">À propos des DPAE</p>
@@ -162,17 +224,14 @@ export default function MesDPAE() {
   );
 }
 
-function DpaeCard({ dpae, onVoirContrat, onVoirMission }: {
+function DpaeCardContent({ dpae, onVoirContrat, onVoirMission }: {
   dpae: DpaeContrat;
   onVoirContrat: () => void;
   onVoirMission: () => void;
 }) {
   const validee = dpae.dpae_effectuee && dpae.dpae_numero;
-  const styleBorder = validee
-    ? 'border-success/30 bg-success/5'
-    : 'border-warning/30 bg-warning/5';
   return (
-    <li className={`rounded-xl border-2 ${styleBorder} p-4 space-y-2`}>
+    <div className="space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground truncate">{dpae.mission_intitule}</p>
@@ -210,14 +269,14 @@ function DpaeCard({ dpae, onVoirContrat, onVoirMission }: {
         </div>
       )}
 
-      <div className="flex gap-2 pt-1">
-        <button onClick={onVoirMission} className="btn-secondary text-xs py-1.5 px-3">
-          Voir la mission
-        </button>
-        <button onClick={onVoirContrat} className="btn-secondary text-xs py-1.5 px-3">
+      <div className="flex gap-2 pt-1 flex-wrap">
+        <Button size="sm" variant="default" className="text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); onVoirMission(); }}>
+          Détail mission
+        </Button>
+        <Button size="sm" variant="secondary" className="text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); onVoirContrat(); }}>
           Voir le contrat
-        </button>
+        </Button>
       </div>
-    </li>
+    </div>
   );
 }
