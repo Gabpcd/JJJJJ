@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ModalCessionCreance } from '@/components/ModalCessionCreance';
@@ -210,74 +211,135 @@ export default function MesFacturesHonoraires() {
           </div>
         )}
 
-        {factures.length === 0 ? (
-          <EmptyState
-            icone={<FileText />}
-            titre="Aucune facture d'honoraires pour le moment"
-            description={mandatSigne
-              ? 'Les factures apparaîtront dès que vos missions seront terminées et validées.'
-              : "Signez d'abord le mandat de facturation pour commencer à recevoir des factures automatiques."}
-            variant={mandatSigne ? 'info' : 'warning'}
-          />
-        ) : facturesFiltrees.length === 0 ? (
-          <EmptyState
-            icone={<FileText />}
-            titre="Aucune facture ne correspond aux filtres"
-            cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }}
-            compact
-          />
-        ) : (
-          <div className="space-y-2">
-            {facturesFiltrees.map((f: any) => {
-              const config = STATUT_CONFIG[f.statut] || STATUT_CONFIG.EMISE;
-              return (
-                <div key={f.id} className="card-base hover:border-primary/30 transition-colors">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-xs font-bold text-foreground">{f.numero_facture}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${config.color}`}>
-                          {config.icon} {config.label}
-                        </span>
-                        {(!f.template_version || f.template_version === 'v1') && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground" title="Facture générée avec l'ancien template (avant Factur-X)">Format historique</span>
-                        )}
+        {(() => {
+          const etatVide = factures.length === 0
+            ? <EmptyState
+                icone={<FileText />}
+                titre="Aucune facture d'honoraires pour le moment"
+                description={mandatSigne
+                  ? 'Les factures apparaîtront dès que vos missions seront terminées et validées.'
+                  : "Signez d'abord le mandat de facturation pour commencer à recevoir des factures automatiques."}
+                variant={mandatSigne ? 'info' : 'warning'}
+              />
+            : <EmptyState
+                icone={<FileText />}
+                titre="Aucune facture ne correspond aux filtres"
+                cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }}
+                compact
+              />;
+
+          const colonnes: ColonneTableau<any>[] = [
+            { cle: 'numero', titre: 'N° facture' },
+            { cle: 'mission', titre: 'Mission' },
+            { cle: 'date', titre: 'Émise le' },
+            { cle: 'montant', titre: 'Montant', align: 'right' },
+            { cle: 'statut', titre: 'Statut' },
+            { cle: 'actions', titre: '', align: 'right', largeur: 'w-40' },
+          ];
+
+          return (
+            <TableOuCartes
+              colonnes={colonnes}
+              donnees={facturesFiltrees}
+              getId={(f: any) => f.id}
+              etatVide={etatVide}
+              renduCellule={(f: any, col) => {
+                const config = STATUT_CONFIG[f.statut] || STATUT_CONFIG.EMISE;
+                switch (col.cle) {
+                  case 'numero':
+                    return <span className="font-mono text-xs font-bold text-foreground">{f.numero_facture}</span>;
+                  case 'mission':
+                    return (
+                      <div>
+                        <p className="font-medium text-foreground line-clamp-1">{f.mission_intitule || '—'}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{f.etablissement_nom}</p>
                       </div>
-                      <p className="text-sm text-foreground font-medium">{f.mission_intitule || '—'}</p>
-                      <p className="text-xs text-muted-foreground">{f.etablissement_nom}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        Émise le {f.date_emission ? format(new Date(f.date_emission), 'dd/MM/yyyy', { locale: fr }) : '—'}
-                        {f.date_echeance && ` · Échéance ${format(new Date(f.date_echeance), 'dd/MM/yyyy', { locale: fr })}`}
-                        {f.date_paiement && ` · Payée le ${format(new Date(f.date_paiement), 'dd/MM/yyyy', { locale: fr })}`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-foreground">{fmt(f.montant_ttc)}</p>
-                        <p className="text-[10px] text-muted-foreground">Exonéré TVA (art. 261-4 CGI)</p>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => telechargerFacturePDF(f.id)}>
+                    );
+                  case 'date':
+                    return (
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {f.date_emission ? format(new Date(f.date_emission), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                      </span>
+                    );
+                  case 'montant':
+                    return <span className="font-semibold text-foreground tabular-nums">{fmt(f.montant_ttc)}</span>;
+                  case 'statut':
+                    return (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${config.color}`}>
+                        {config.icon} {config.label}
+                      </span>
+                    );
+                  case 'actions':
+                    return (
+                      <div className="flex items-center justify-end gap-1">
+                        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={(e) => { e.stopPropagation(); telechargerFacturePDF(f.id); }}>
                           <Download className="h-3.5 w-3.5" /> PDF
                         </Button>
                         {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
-                          <Button
-                            size="sm"
-                            className="gap-1 text-xs"
-                            onClick={() => ouvrirCession(f)}
-                          >
-                            <Zap className="h-3 w-3" />
-                            Recevoir maintenant
+                          <Button size="sm" className="h-8 gap-1 text-xs" onClick={(e) => { e.stopPropagation(); ouvrirCession(f); }}>
+                            <Zap className="h-3 w-3" /> Avance
                           </Button>
                         )}
                       </div>
+                    );
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(f: any) => {
+                const config = STATUT_CONFIG[f.statut] || STATUT_CONFIG.EMISE;
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="font-mono text-xs font-bold text-foreground">{f.numero_facture}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${config.color}`}>
+                            {config.icon} {config.label}
+                          </span>
+                          {(!f.template_version || f.template_version === 'v1') && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground" title="Facture générée avec l'ancien template (avant Factur-X)">Format historique</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-foreground font-medium line-clamp-1">{f.mission_intitule || '—'}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{f.etablissement_nom}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Émise le {f.date_emission ? format(new Date(f.date_emission), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                          {f.date_echeance && ` · Échéance ${format(new Date(f.date_echeance), 'dd/MM/yyyy', { locale: fr })}`}
+                          {f.date_paiement && ` · Payée le ${format(new Date(f.date_paiement), 'dd/MM/yyyy', { locale: fr })}`}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-lg font-bold text-foreground tabular-nums">{fmt(f.montant_ttc)}</p>
+                        <p className="text-[10px] text-muted-foreground">Exonéré TVA</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="flex-1 gap-1.5 min-h-[44px]"
+                        onClick={(e) => { e.stopPropagation(); telechargerFacturePDF(f.id); }}
+                      >
+                        <Download className="h-4 w-4" /> Télécharger Factur-X
+                      </Button>
+                      {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="gap-1.5 min-h-[44px]"
+                          onClick={(e) => { e.stopPropagation(); ouvrirCession(f); }}
+                        >
+                          <Zap className="h-3.5 w-3.5" /> Recevoir maintenant
+                        </Button>
+                      )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              }}
+            />
+          );
+        })()}
       </div>
 
       {cessionModal && (
