@@ -5,7 +5,9 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { AnnulationCandidatureTimer } from './AnnulationCandidatureTimer';
 import {
   DialogResponsive,
+  DialogResponsiveContent,
   DialogResponsiveHeader,
+  DialogResponsiveTitle,
   DialogResponsiveBody,
   DialogResponsiveFooter,
 } from '@/components/ui/DialogResponsive';
@@ -52,7 +54,7 @@ const MOTIFS = [
  *   - notifie l'établissement (push + email)
  *   - audit trail
  *
- * Sprint 8 ter-E : migré vers <DialogResponsive /> (fullscreen mobile / centered desktop maxWidth=lg).
+ * Sprint 8 ter-E PR 2 — Migration vers DialogResponsive (fullscreen mobile).
  */
 export function ModaleAnnulationCandidature({
   ouvert, onFermer, onAnnulee, candidatureId, accepteeA, debutMission, estAsap = false, missionInfo,
@@ -97,7 +99,6 @@ export function ModaleAnnulationCandidature({
     try {
       const justificatifPath = fichier ? await uploadJustificatif() : null;
       if (fichier && !justificatifPath) {
-        // upload échoué — on n'enregistre pas
         setLoading(false);
         return;
       }
@@ -130,14 +131,12 @@ export function ModaleAnnulationCandidature({
   }
 
   return (
-    <DialogResponsive
-      open={ouvert}
-      onOpenChange={(o) => { if (!o && !loading) onFermer(); }}
-      maxWidth="lg"
-    >
-      <DialogResponsiveHeader title="Annuler votre candidature" />
-      <DialogResponsiveBody>
-        <div className="space-y-4">
+    <DialogResponsive open={ouvert} onOpenChange={(o) => { if (!o) onFermer(); }}>
+      <DialogResponsiveContent maxWidth="lg">
+        <DialogResponsiveHeader>
+          <DialogResponsiveTitle>Annuler votre candidature</DialogResponsiveTitle>
+        </DialogResponsiveHeader>
+        <DialogResponsiveBody className="space-y-4">
           {/* Récap mission */}
           <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-0.5">
             <p className="font-semibold text-foreground">{missionInfo.intitule}</p>
@@ -218,25 +217,21 @@ export function ModaleAnnulationCandidature({
             <AlertCircle className="h-4 w-4 shrink-0" />
             <p>L'établissement sera notifié immédiatement. Si la pénalité vous semble injuste, vous pourrez la contester depuis votre page score.</p>
           </div>
-        </div>
-      </DialogResponsiveBody>
-      <DialogResponsiveFooter>
-        <button
-          onClick={onFermer}
-          disabled={loading}
-          className="btn-secondary flex-1 disabled:opacity-50 min-h-[44px]"
-        >
-          Garder la candidature
-        </button>
-        <button
-          onClick={confirmer}
-          disabled={loading || !motif || texte.trim().length < 20 || !accepte}
-          className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2 min-h-[44px]"
-        >
-          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-          Confirmer l'annulation
-        </button>
-      </DialogResponsiveFooter>
+        </DialogResponsiveBody>
+        <DialogResponsiveFooter>
+          <button onClick={onFermer} disabled={loading} className="btn-secondary min-h-[44px] disabled:opacity-50">
+            Garder la candidature
+          </button>
+          <button
+            onClick={confirmer}
+            disabled={loading || !motif || texte.trim().length < 20 || !accepte}
+            className="btn-primary min-h-[44px] disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            Confirmer l'annulation
+          </button>
+        </DialogResponsiveFooter>
+      </DialogResponsiveContent>
     </DialogResponsive>
   );
 }
