@@ -4,6 +4,8 @@ import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, S
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { useScrollDirection } from '@/hooks/useScrollDirection';
+import { cn } from '@/lib/utils';
 
 /* ── Types ── */
 interface NavItem { icone: LucideIcon; label: string; route: string; }
@@ -127,6 +129,8 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { deconnexion } = useAuth();
   const [menuOuvert, setMenuOuvert] = useState(false);
+  // Sprint 8.5-A PR 1 — Header mobile se cache au scroll down, réapparaît au scroll up
+  const scrollDirection = useScrollDirection();
 
   const handleDeconnexion = async () => {
     await deconnexion();
@@ -175,8 +179,14 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* ── Mobile: top header with logout ── */}
-      <header className="fixed top-0 left-0 right-0 h-14 bg-card border-b border-border flex md:hidden items-center justify-between px-4 z-50">
+      {/* ── Mobile: top header with logout (auto-hide on scroll down) ── */}
+      <header
+        className={cn(
+          'fixed top-0 left-0 right-0 h-14 bg-card border-b border-border flex md:hidden items-center justify-between px-4 z-50',
+          'transition-transform duration-200 motion-reduce:transition-none',
+          scrollDirection === 'down' ? '-translate-y-full' : 'translate-y-0',
+        )}
+      >
         <div className="flex items-center gap-2">
           <HeartPulse className="h-5 w-5 text-primary" />
           <span className="font-bold text-foreground">Admin</span>
