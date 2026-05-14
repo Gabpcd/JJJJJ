@@ -1140,3 +1140,41 @@
     animation: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Sprint 9-B PR 1 — Mascotte Jolene animations
+ * Pure CSS keyframes (pas de framer-motion pour limiter bundle).
+ * Tailwind classes : animate-bounce-y2k / animate-wiggle-y2k / animate-float-y2k / animate-spin-slow-y2k
+ * `prefers-reduced-motion` : géré via @media global (index.css L732 zone).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes mascotte-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8%) scale(1.03); }
+}
+@keyframes mascotte-wiggle {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+@keyframes mascotte-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3%); }
+}
+@keyframes mascotte-spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-bounce-y2k { animation: mascotte-bounce 0.8s ease-in-out infinite; }
+.animate-wiggle-y2k { animation: mascotte-wiggle 2s ease-in-out infinite; }
+.animate-float-y2k { animation: mascotte-float 3s ease-in-out infinite; }
+.animate-spin-slow-y2k { animation: mascotte-spin-slow 8s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-bounce-y2k,
+  .animate-wiggle-y2k,
+  .animate-float-y2k,
+  .animate-spin-slow-y2k {
+    animation: none;
+  }
+}
