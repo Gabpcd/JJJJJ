@@ -5,7 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -300,62 +300,120 @@ export default function AdminFinances() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Détail par établissement</CardTitle>
+            {/* Mobile : tri visible via select */}
+            <div className="md:hidden flex items-center gap-2 mt-2">
+              <label className="text-xs text-muted-foreground">Trier par</label>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
+              >
+                <option value="commissions_ht">Com. HT</option>
+                <option value="commissions_ttc">Com. TTC</option>
+                <option value="impayes">Impayés</option>
+                <option value="nb_missions">Missions</option>
+                <option value="taux_com">Taux</option>
+                <option value="nom">Nom</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                className="rounded-lg border border-border px-2 py-1 text-xs"
+                aria-label={`Tri ${sortDir === 'asc' ? 'ascendant' : 'descendant'}`}
+              >
+                {sortDir === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {([
-                      ['nom', 'Établissement'],
-                      ['type', 'Type'],
-                      ['nb_missions', 'Missions'],
-                      ['taux_com', 'Taux'],
-                      ['commissions_ht', 'Com. HT'],
-                      ['commissions_ttc', 'Com. TTC'],
-                      ['impayes', 'Impayés'],
-                    ] as [SortKey, string][]).map(([key, label]) => (
-                      <TableHead key={key} className="cursor-pointer select-none hover:bg-muted/50 text-xs" onClick={() => toggleSort(key)}>
-                        {label} {sortKey === key ? (sortDir === 'asc' ? '↑' : '↓') : ''}
-                      </TableHead>
-                    ))}
-                    <TableHead className="text-xs">Soignants</TableHead>
-                    <TableHead className="text-xs">Dernière mission</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedEtab.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Aucune donnée</TableCell></TableRow>
-                  ) : sortedEtab.map(e => (
-                    <TableRow key={e.id} className={`hover:bg-muted/30 ${e.impayes > 0 ? 'bg-destructive/5' : ''}`}>
-                      <TableCell>
-                        <button onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="text-primary hover:underline font-medium inline-flex items-center gap-1 text-sm">
-                          {e.nom}
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                        </button>
-                      </TableCell>
-                      <TableCell><Badge variant="secondary" className="text-[10px]">{e.type}</Badge></TableCell>
-                      <TableCell className="font-medium">{e.nb_missions}</TableCell>
-                      <TableCell className="font-medium text-primary">{e.taux_com}%</TableCell>
-                      <TableCell className="font-medium">{formatEur(e.commissions_ht)}</TableCell>
-                      <TableCell>{formatEur(e.commissions_ttc)}</TableCell>
-                      <TableCell>
-                        {e.impayes > 0 ? (
-                          <button onClick={() => navigate('/admin/impayees')} className="text-destructive font-bold hover:underline inline-flex items-center gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            {formatEur(e.impayes)}
-                          </button>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs">{e.nb_soignants}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{e.derniere_mission ? formatDate(e.derniere_mission) : '—'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <TableOuCartes
+              colonnes={[
+                { cle: 'nom', titre: 'Établissement' },
+                { cle: 'type', titre: 'Type' },
+                { cle: 'nb_missions', titre: 'Missions' },
+                { cle: 'taux_com', titre: 'Taux' },
+                { cle: 'commissions_ht', titre: 'Com. HT' },
+                { cle: 'commissions_ttc', titre: 'Com. TTC' },
+                { cle: 'impayes', titre: 'Impayés' },
+                { cle: 'nb_soignants', titre: 'Soignants' },
+                { cle: 'derniere_mission', titre: 'Dernière mission' },
+              ] as ColonneTableau<typeof sortedEtab[number]>[]}
+              donnees={sortedEtab}
+              getId={(e) => e.id}
+              etatVide={<p className="text-center text-muted-foreground py-8 text-sm">Aucune donnée</p>}
+              renduCellule={(e, col) => {
+                switch (col.cle) {
+                  case 'nom':
+                    return (
+                      <button onClick={(ev) => { ev.stopPropagation(); navigate(`/admin/utilisateurs/${e.id}`); }} className="text-primary hover:underline font-medium inline-flex items-center gap-1 text-sm">
+                        {e.nom}
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </button>
+                    );
+                  case 'type': return <Badge variant="secondary" className="text-[10px]">{e.type}</Badge>;
+                  case 'nb_missions': return <span className="font-medium">{e.nb_missions}</span>;
+                  case 'taux_com': return <span className="font-medium text-primary">{e.taux_com}%</span>;
+                  case 'commissions_ht': return <span className="font-medium">{formatEur(e.commissions_ht)}</span>;
+                  case 'commissions_ttc': return formatEur(e.commissions_ttc);
+                  case 'impayes': return e.impayes > 0 ? (
+                    <button onClick={(ev) => { ev.stopPropagation(); navigate('/admin/impayees'); }} className="text-destructive font-bold hover:underline inline-flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {formatEur(e.impayes)}
+                    </button>
+                  ) : <span className="text-muted-foreground">—</span>;
+                  case 'nb_soignants': return <span className="text-xs">{e.nb_soignants}</span>;
+                  case 'derniere_mission': return <span className="text-xs text-muted-foreground">{e.derniere_mission ? formatDate(e.derniere_mission) : '—'}</span>;
+                  default: return null;
+                }
+              }}
+              renduCarte={(e) => (
+                <div className={`rounded-xl border p-3 space-y-2 ${e.impayes > 0 ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-card'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={(ev) => { ev.stopPropagation(); navigate(`/admin/utilisateurs/${e.id}`); }}
+                      className="text-primary hover:underline font-semibold text-sm inline-flex items-center gap-1 text-left"
+                    >
+                      <Building2 className="h-3.5 w-3.5 shrink-0" />
+                      {e.nom}
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                    </button>
+                    <Badge variant="secondary" className="text-[10px] shrink-0">{e.type}</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Missions</p>
+                      <p className="font-semibold">{e.nb_missions} · {e.nb_soignants} soignant(s)</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Taux com.</p>
+                      <p className="font-semibold text-primary">{e.taux_com}%</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Com. HT</p>
+                      <p className="font-semibold">{formatEur(e.commissions_ht)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Com. TTC</p>
+                      <p className="font-semibold">{formatEur(e.commissions_ttc)}</p>
+                    </div>
+                  </div>
+                  {e.impayes > 0 && (
+                    <button
+                      type="button"
+                      onClick={(ev) => { ev.stopPropagation(); navigate('/admin/impayees'); }}
+                      className="w-full inline-flex items-center justify-center gap-1.5 text-destructive font-bold text-sm py-1.5 rounded-lg bg-destructive/10 hover:bg-destructive/15 min-h-[36px]"
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Impayés : {formatEur(e.impayes)}
+                    </button>
+                  )}
+                  {e.derniere_mission && (
+                    <p className="text-[10px] text-muted-foreground">Dernière mission : {formatDate(e.derniere_mission)}</p>
+                  )}
+                </div>
+              )}
+            />
           </CardContent>
         </Card>
       </div>
