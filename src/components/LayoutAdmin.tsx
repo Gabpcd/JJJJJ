@@ -4,7 +4,6 @@ import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, S
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { BannerAdminMobile } from '@/components/admin/BannerAdminMobile';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
 import { cn } from '@/lib/utils';
 
@@ -265,7 +264,6 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         className="flex-1 md:ml-[240px] mt-14 md:mt-0 overflow-x-hidden"
       >
         <div className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6">
-          <BannerAdminMobile />
           {children}
         </div>
         <FooterLegal />
