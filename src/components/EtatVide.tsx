@@ -1,8 +1,29 @@
+/**
+ * @deprecated Sprint 8 ter-A BIS — utiliser `<EmptyState />` de `@/components/ui/EmptyState`.
+ *
+ * Migration :
+ *   <EtatVide icone={Search} titre="..." sousTitre="..." boutonLabel="X" boutonRoute="/y" />
+ * Devient :
+ *   <EmptyState icone={<Search />} titre="..." description="..." cta={{ label: "X", onClick: () => navigate('/y') }} />
+ *
+ * Pour les illustrations :
+ *   <EtatVide illustration={<IllustrationBoussole />} ... />
+ * Devient :
+ *   import { EmptyState, IllustrationBoussole } from '@/components/ui/EmptyState';
+ *   <EmptyState illustration={<IllustrationBoussole />} ... />
+ *
+ * Les illustrations vectorielles sont maintenant exportées depuis
+ * `@/components/ui/EmptyStateIllustrations` (re-export via EmptyState).
+ *
+ * Ce fichier sera supprimé en Sprint 8 ter-A BIS PR 4.
+ */
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-/* ── Inline SVG illustrations (line-art, teal stroke, 100×100) ── */
+/* ── Inline SVG illustrations (line-art, teal stroke, 100×100) ──
+ * @deprecated — utiliser les exports de `@/components/ui/EmptyStateIllustrations` (ou `EmptyState`).
+ */
 
 export function IllustrationBoussole() {
   return (
@@ -118,6 +139,9 @@ interface EtatVideProps {
   boutonDisabled?: boolean;
 }
 
+/**
+ * @deprecated Utiliser `<EmptyState />` de `@/components/ui/EmptyState`. Voir JSDoc en tête de fichier.
+ */
 export function EtatVide({ icone: Icone, illustration, titre, sousTitre, boutonLabel, boutonRoute, boutonDisabled }: EtatVideProps) {
   const navigate = useNavigate();
 
