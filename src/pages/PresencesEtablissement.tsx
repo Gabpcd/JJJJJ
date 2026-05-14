@@ -5,6 +5,9 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { CarteValidation } from '@/components/CarteValidation';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -197,6 +200,79 @@ export default function PresencesEtablissement() {
 
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
 
+  // Helpers pour rendu TableOuCartes
+  const colonnesPresences: ColonneTableau<any>[] = [
+    { cle: 'soignant', titre: 'Soignant' },
+    { cle: 'mission', titre: 'Mission' },
+    { cle: 'date', titre: 'Date' },
+    { cle: 'heures', titre: 'Heures', align: 'right' },
+    { cle: 'alertes', titre: 'Alertes' },
+    { cle: 'actions', titre: '', align: 'right', largeur: 'w-32' },
+  ];
+
+  const calculHeures = (p: any): string => {
+    if (!p.pointage_arrivee_le || !p.pointage_depart_le) return '—';
+    const h = (new Date(p.pointage_depart_le).getTime() - new Date(p.pointage_arrivee_le).getTime()) / 3600000;
+    return `${h.toFixed(1)}h`;
+  };
+
+  const renduCellulePresence = (p: any, col: ColonneTableau<any>) => {
+    const sg = p.soignants;
+    const nomComplet = sg ? `${sg.prenom} ${sg.nom}` : 'Soignant';
+    switch (col.cle) {
+      case 'soignant':
+        return (
+          <div>
+            <p className="font-medium text-foreground">{nomComplet}</p>
+            {sg?.profession && <p className="text-xs text-muted-foreground">{sg.profession}</p>}
+          </div>
+        );
+      case 'mission':
+        return <span className="text-sm text-muted-foreground line-clamp-1">{p.missions?.intitule || '—'}</span>;
+      case 'date':
+        return (
+          <span className="text-xs whitespace-nowrap">
+            {p.pointage_arrivee_le && new Date(p.pointage_arrivee_le).toLocaleDateString('fr-FR')}
+          </span>
+        );
+      case 'heures':
+        return <span className="text-sm tabular-nums">{calculHeures(p)}</span>;
+      case 'alertes':
+        return (
+          <div className="flex flex-wrap gap-1">
+            {p.alerte_teleportation && <Badge className="bg-destructive/10 text-destructive text-[10px]">🚨 Téléport.</Badge>}
+            {p.perimetre_gps_valide === false && <Badge className="bg-warning/10 text-warning text-[10px]">📍 Hors zone</Badge>}
+            {(p.arrivee_mock_detected || p.depart_mock_detected) && <Badge className="bg-destructive/10 text-destructive text-[10px]">🤖 GPS truqué</Badge>}
+            {p.valide_par_etablissement && <Badge className="bg-success/10 text-success text-[10px]">✅ Validée</Badge>}
+            {!p.valide_par_etablissement && p.pointage_depart_le && !p.alerte_teleportation && p.perimetre_gps_valide && <Badge className="bg-muted text-muted-foreground text-[10px]">À valider</Badge>}
+            {!p.pointage_depart_le && <Badge className="bg-info/10 text-info text-[10px]">⏳ En cours</Badge>}
+          </div>
+        );
+      case 'actions':
+        if (!p.valide_par_etablissement && p.pointage_depart_le) {
+          return (
+            <Button size="sm" variant="default" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); validerUne(p.id); }}>
+              <CheckCircle className="h-3.5 w-3.5 mr-1" /> Valider
+            </Button>
+          );
+        }
+        return <span className="text-xs text-muted-foreground">—</span>;
+      default:
+        return null;
+    }
+  };
+
+  const renduCartePresence = (p: any) => (
+    <CarteValidation
+      presence={p}
+      litigeExistant={litiges[p.mission_id]}
+      onValider={validerUne}
+      onContester={contester}
+      onOuvrirLitige={ouvrirLitige}
+      onUpdate={charger}
+    />
+  );
+
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="mb-6">
@@ -245,69 +321,47 @@ export default function PresencesEtablissement() {
               </p>
             </div>
           )}
-          {aValider.length > 0 ? (
-            <div className="space-y-4">
-              {aValider.map(p => (
-                <CarteValidation key={p.id} presence={p} litigeExistant={litiges[p.mission_id]} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} onUpdate={charger} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icone={<CheckCircle />}
-              titre="Aucune présence à valider"
-              description="Les pointages de vos soignants apparaîtront ici."
-              variant="success"
-            />
-          )}
+          <TableOuCartes
+            colonnes={colonnesPresences}
+            donnees={aValider}
+            getId={(p: any) => p.id}
+            etatVide={<EmptyState icone={<CheckCircle />} titre="Aucune présence à valider" description="Les pointages de vos soignants apparaîtront ici." variant="success" />}
+            renduCellule={renduCellulePresence}
+            renduCarte={renduCartePresence}
+          />
         </TabsContent>
 
         <TabsContent value="en_cours">
-          {enCours.length > 0 ? (
-            <div className="space-y-4">
-              {enCours.map(p => (
-                <CarteValidation key={p.id} presence={p} litigeExistant={litiges[p.mission_id]} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} onUpdate={charger} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icone={<Clock />}
-              titre="Aucune mission en cours"
-              description="Les soignants actuellement en mission apparaîtront ici."
-            />
-          )}
+          <TableOuCartes
+            colonnes={colonnesPresences}
+            donnees={enCours}
+            getId={(p: any) => p.id}
+            etatVide={<EmptyState icone={<Clock />} titre="Aucune mission en cours" description="Les soignants actuellement en mission apparaîtront ici." />}
+            renduCellule={renduCellulePresence}
+            renduCarte={renduCartePresence}
+          />
         </TabsContent>
 
         <TabsContent value="validees">
-          {validees.length > 0 ? (
-            <div className="space-y-4">
-              {validees.map(p => (
-                <CarteValidation key={p.id} presence={p} litigeExistant={litiges[p.mission_id]} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} onUpdate={charger} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icone={<CheckCircle />}
-              titre="Aucune présence validée"
-              description="Les présences validées seront archivées ici."
-            />
-          )}
+          <TableOuCartes
+            colonnes={colonnesPresences}
+            donnees={validees}
+            getId={(p: any) => p.id}
+            etatVide={<EmptyState icone={<CheckCircle />} titre="Aucune présence validée" description="Les présences validées seront archivées ici." />}
+            renduCellule={renduCellulePresence}
+            renduCarte={renduCartePresence}
+          />
         </TabsContent>
 
         <TabsContent value="alertes">
-          {alertes.length > 0 ? (
-            <div className="space-y-4">
-              {alertes.map(p => (
-                <CarteValidation key={p.id} presence={p} litigeExistant={litiges[p.mission_id]} onValider={validerUne} onContester={contester} onOuvrirLitige={ouvrirLitige} onUpdate={charger} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icone={<AlertTriangle />}
-              titre="Aucune alerte"
-              description="Les présences avec des alertes de fraude apparaîtront ici."
-              variant="success"
-            />
-          )}
+          <TableOuCartes
+            colonnes={colonnesPresences}
+            donnees={alertes}
+            getId={(p: any) => p.id}
+            etatVide={<EmptyState icone={<AlertTriangle />} titre="Aucune alerte" description="Les présences avec des alertes de fraude apparaîtront ici." variant="success" />}
+            renduCellule={renduCellulePresence}
+            renduCarte={renduCartePresence}
+          />
         </TabsContent>
       </Tabs>
 
