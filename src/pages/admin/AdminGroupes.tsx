@@ -401,7 +401,8 @@ export default function AdminGroupes() {
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                   Détail par clinique
                 </h3>
-                <div className="overflow-x-auto">
+                {/* Desktop : table 9 colonnes */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -504,6 +505,111 @@ export default function AdminGroupes() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile : cards par clinique */}
+                <div className="md:hidden space-y-3">
+                  {g.cliniques.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-6 text-sm">Aucune clinique</p>
+                  ) : g.cliniques.map(c => (
+                    <div key={c.id} className={`rounded-xl border p-3 space-y-3 ${c.ca_impayees > 0 ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-card'}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/utilisateurs/${c.id}`)}
+                          className="text-left flex-1 min-w-0"
+                        >
+                          <p className="text-primary hover:underline font-semibold text-sm truncate">{c.nom}</p>
+                          <p className="text-[10px] text-muted-foreground">{c.adresse_ville} · {c.type}</p>
+                        </button>
+                        {c.nb_missions_en_cours > 0 && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 shrink-0">
+                            {c.nb_missions_en_cours} en cours
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <p className="text-muted-foreground">Missions</p>
+                          <p className="font-semibold">{c.nb_missions} · {c.nb_soignants} soignant(s)</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Taux com.</p>
+                          {editingTaux?.etabId === c.id ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number" step="0.5" min="0" max="50"
+                                value={editingTaux.taux}
+                                onChange={e => setEditingTaux({ ...editingTaux, taux: e.target.value })}
+                                className="w-14 h-7 text-xs text-center"
+                              />
+                              <span className="text-xs">%</span>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={modifierTaux} disabled={savingTaux}>
+                                {savingTaux ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                              </Button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingTaux({ etabId: c.id, taux: String(c.taux_commission_negocie ?? 15) })}
+                              className="font-bold text-primary hover:underline min-h-[28px] text-sm"
+                            >
+                              {c.taux_commission_negocie ?? 15}%
+                            </button>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">CA com.</p>
+                          <p className="font-semibold">{fmt(c.ca_commissions)}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Payé</p>
+                          <p className="font-semibold text-success">{fmt(c.ca_payees)}</p>
+                        </div>
+                      </div>
+
+                      {c.ca_impayees > 0 && (
+                        <p className="text-center text-destructive font-bold text-sm py-1.5 bg-destructive/10 rounded-lg">
+                          Impayé : {fmt(c.ca_impayees)}
+                        </p>
+                      )}
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-1 text-xs min-h-[36px]"
+                        onClick={() => {
+                          setEmailClinicId(c.id);
+                          setEmailGroupeId(g.id);
+                        }}
+                      >
+                        <Mail className="h-3 w-3" /> Envoyer un email
+                      </Button>
+
+                      {emailClinicId === c.id && emailGroupeId === g.id && (
+                        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                          <p className="text-xs font-semibold">Email à {c.nom}</p>
+                          <Input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Sujet" className="text-xs h-8" />
+                          <textarea
+                            value={emailBody} onChange={e => setEmailBody(e.target.value)}
+                            placeholder="Contenu..." rows={3}
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={() => envoyerEmail(
+                              c.email_contact ? [c.email_contact] : [],
+                              c.nom
+                            )} disabled={sendingEmail} className="gap-1 text-xs flex-1 min-h-[36px]">
+                              {sendingEmail ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                              Envoyer
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-xs min-h-[36px]" onClick={() => setEmailClinicId(null)}>Annuler</Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </CardContent>
