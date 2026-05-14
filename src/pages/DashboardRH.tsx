@@ -5,6 +5,7 @@ import { BarChart3, Users, TrendingUp, Download, Loader2, Target, Coins, Calenda
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
@@ -337,68 +338,144 @@ export default function DashboardRH() {
       )}
 
       {/* Prochaines missions */}
-      {stats.prochaines_missions?.length > 0 && (
-        <div className="card-base mb-6">
-          <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-primary" /> Prochaines missions
-          </h2>
-          <div className="space-y-2">
-            {stats.prochaines_missions.map((m: any) => (
-              <button
-                key={m.mission_id}
-                onClick={() => navigate(`/etablissement/missions/${m.mission_id}`)}
-                className="w-full flex items-center justify-between p-3 rounded-xl border border-border hover:bg-muted/30 transition-colors text-left"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-foreground truncate">{m.intitule}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {m.debut_le ? new Date(m.debut_le).toLocaleDateString('fr-FR') : '—'} · {fmtEur(m.total_brut ?? 0)}{m.montant_commission_ttc ? ` + ${fmtEur(m.montant_commission_ttc)} com.` : ''}
+      {stats.prochaines_missions?.length > 0 && (() => {
+        const colonnes: ColonneTableau<any>[] = [
+          { cle: 'intitule', titre: 'Mission' },
+          { cle: 'soignant', titre: 'Soignant' },
+          { cle: 'date', titre: 'Date' },
+          { cle: 'brut', titre: 'Total brut', align: 'right' },
+          { cle: 'commission', titre: 'Commission', align: 'right' },
+          { cle: 'statut', titre: 'Statut' },
+        ];
+        const badgeStatut = (statut: string) => (
+          <Badge variant={statut === 'ASSIGNEE' ? 'default' : 'secondary'} className={statut === 'OUVERTE' ? 'bg-warning/10 text-warning border-warning/30' : ''}>
+            {statut === 'ASSIGNEE' ? '✅ Assignée' : statut === 'EN_COURS' ? '▶️ En cours' : '🟠 Ouverte'}
+          </Badge>
+        );
+        return (
+          <div className="card-base mb-6">
+            <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary" /> Prochaines missions
+            </h2>
+            <TableOuCartes
+              colonnes={colonnes}
+              donnees={stats.prochaines_missions}
+              getId={(m: any) => m.mission_id}
+              onClickLigne={(m: any) => navigate(`/etablissement/missions/${m.mission_id}`)}
+              renduCellule={(m: any, col) => {
+                switch (col.cle) {
+                  case 'intitule':
+                    return <span className="font-medium text-foreground line-clamp-1">{m.intitule}</span>;
+                  case 'soignant':
+                    return <span className="text-sm text-muted-foreground">{m.soignant_nom || '—'}</span>;
+                  case 'date':
+                    return <span className="text-xs whitespace-nowrap">{m.debut_le ? new Date(m.debut_le).toLocaleDateString('fr-FR') : '—'}</span>;
+                  case 'brut':
+                    return <span className="font-medium tabular-nums">{fmtEur(m.total_brut ?? 0)}</span>;
+                  case 'commission':
+                    return <span className="text-xs tabular-nums">{m.montant_commission_ttc ? fmtEur(m.montant_commission_ttc) : '—'}</span>;
+                  case 'statut':
+                    return badgeStatut(m.statut);
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(m: any) => (
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium text-foreground line-clamp-2 flex-1">{m.intitule}</p>
+                    {badgeStatut(m.statut)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {m.debut_le ? new Date(m.debut_le).toLocaleDateString('fr-FR') : '—'}
                     {m.soignant_nom && <> · {m.soignant_nom}</>}
                   </p>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-sm font-semibold tabular-nums">{fmtEur(m.total_brut ?? 0)}</span>
+                    {m.montant_commission_ttc > 0 && (
+                      <span className="text-xs text-muted-foreground tabular-nums">+ {fmtEur(m.montant_commission_ttc)} com.</span>
+                    )}
+                  </div>
                 </div>
-                <Badge variant={m.statut === 'ASSIGNEE' ? 'default' : 'secondary'} className={m.statut === 'OUVERTE' ? 'bg-warning/10 text-warning border-warning/30' : ''}>
-                  {m.statut === 'ASSIGNEE' ? '✅ Assignée' : m.statut === 'EN_COURS' ? '▶️ En cours' : '🟠 Ouverte'}
-                </Badge>
-              </button>
-            ))}
+              )}
+            />
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Top soignants */}
       <div id="top-soignants" className="card-base mb-6">
         <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
           <Users className="h-5 w-5 text-primary" /> Top soignants
         </h2>
-        {stats.top_soignants?.length > 0 ? (
-          <div className="space-y-3">
-            {stats.top_soignants.map((s: any, i: number) => (
-              <button key={i} onClick={() => s.soignant_id && navigate(`/etablissement/soignants/${s.soignant_id}`)} className="w-full flex items-center justify-between py-2 border-b border-border/50 last:border-0 hover:bg-muted/30 rounded-lg transition-colors text-left">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg font-bold text-muted-foreground w-6">#{i + 1}</span>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{s.nom}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{s.profession}</span>
-                      {s.score_fiabilite != null && (
-                        <span className="text-xs text-primary font-medium">Score : {s.score_fiabilite}</span>
-                      )}
-                      {s.note_moyenne != null && s.note_moyenne > 0 && (
-                        <span className="text-xs text-warning font-medium">⭐ {s.note_moyenne.toFixed(1)}</span>
-                      )}
+        {(() => {
+          const colonnes: ColonneTableau<any>[] = [
+            { cle: 'rang', titre: '#', largeur: 'w-12' },
+            { cle: 'nom', titre: 'Soignant' },
+            { cle: 'profession', titre: 'Profession' },
+            { cle: 'score', titre: 'Score', align: 'right' },
+            { cle: 'note', titre: 'Note', align: 'right' },
+            { cle: 'missions', titre: 'Missions', align: 'right' },
+            { cle: 'total', titre: 'Total facturé', align: 'right' },
+          ];
+          const donnees = (stats.top_soignants || []).map((s: any, i: number) => ({ ...s, _rang: i + 1 }));
+          return (
+            <TableOuCartes
+              colonnes={colonnes}
+              donnees={donnees}
+              getId={(s: any) => s.soignant_id || `rang-${s._rang}`}
+              onClickLigne={(s: any) => s.soignant_id && navigate(`/etablissement/soignants/${s.soignant_id}`)}
+              etatVide={<EmptyState icone={<Users />} titre="Aucun soignant" description="Les statistiques apparaîtront une fois vos premières missions terminées." />}
+              renduCellule={(s: any, col) => {
+                switch (col.cle) {
+                  case 'rang':
+                    return <span className="text-lg font-bold text-muted-foreground">#{s._rang}</span>;
+                  case 'nom':
+                    return <span className="font-medium text-foreground">{s.nom}</span>;
+                  case 'profession':
+                    return <span className="text-sm text-muted-foreground">{s.profession}</span>;
+                  case 'score':
+                    return s.score_fiabilite != null
+                      ? <span className="text-sm text-primary font-medium tabular-nums">{s.score_fiabilite}</span>
+                      : <span className="text-xs text-muted-foreground">—</span>;
+                  case 'note':
+                    return s.note_moyenne != null && s.note_moyenne > 0
+                      ? <span className="text-sm text-warning font-medium tabular-nums">⭐ {s.note_moyenne.toFixed(1)}</span>
+                      : <span className="text-xs text-muted-foreground">—</span>;
+                  case 'missions':
+                    return <span className="font-semibold tabular-nums">{s.nb_missions}</span>;
+                  case 'total':
+                    return <span className="font-semibold tabular-nums">{fmtEur(s.total_facture, 2)}</span>;
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(s: any) => (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-lg font-bold text-muted-foreground w-6 shrink-0">#{s._rang}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{s.nom}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-muted-foreground">{s.profession}</span>
+                        {s.score_fiabilite != null && (
+                          <span className="text-xs text-primary font-medium">Score : {s.score_fiabilite}</span>
+                        )}
+                        {s.note_moyenne != null && s.note_moyenne > 0 && (
+                          <span className="text-xs text-warning font-medium">⭐ {s.note_moyenne.toFixed(1)}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-foreground">{s.nb_missions} mission{s.nb_missions > 1 ? 's' : ''}</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">{fmtEur(s.total_facture, 2)}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-foreground">{s.nb_missions} mission{s.nb_missions > 1 ? 's' : ''}</p>
-                  <p className="text-xs text-muted-foreground">{fmtEur(s.total_facture, 2)}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <EmptyState icone={<Users />} titre="Aucun soignant" description="Les statistiques apparaîtront une fois vos premières missions terminées." />
-        )}
+              )}
+            />
+          );
+        })()}
       </div>
         </TabsContent>
 
