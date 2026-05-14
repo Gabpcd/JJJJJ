@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, Power, Loader2 } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -94,47 +96,102 @@ export default function AdminTemplatesContrats() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-              <th className="text-left py-2 px-2">Nom</th>
-              <th className="text-left py-2 px-2">Type</th>
-              <th className="text-left py-2 px-2">Version</th>
-              <th className="text-left py-2 px-2">Statut</th>
-              <th className="text-left py-2 px-2">Taille</th>
-              <th className="text-left py-2 px-2">Modifié</th>
-              <th className="text-right py-2 px-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {templates.map((t) => (
-              <tr key={t.id} className="border-b border-border hover:bg-muted/30">
-                <td className="py-2 px-2 font-medium">{t.nom}</td>
-                <td className="py-2 px-2 text-xs"><code className="text-xs">{t.type_contrat}</code></td>
-                <td className="py-2 px-2 text-xs">v{t.version}</td>
-                <td className="py-2 px-2">
-                  {t.est_actif ? (
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-success/20 text-success font-medium">ACTIF</span>
-                  ) : (
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">INACTIF</span>
-                  )}
-                </td>
-                <td className="py-2 px-2 text-xs text-muted-foreground">{(t.contenu_taille / 1024).toFixed(1)} KB</td>
-                <td className="py-2 px-2 text-[11px] text-muted-foreground">
-                  {format(new Date(t.modifie_le), 'dd MMM yy HH:mm', { locale: fr })}
-                </td>
-                <td className="py-2 px-2 text-right flex justify-end gap-2">
+      {(() => {
+        const colonnes: ColonneTableau<TemplateLigne>[] = [
+          { cle: 'nom', titre: 'Nom' },
+          { cle: 'type', titre: 'Type' },
+          { cle: 'version', titre: 'Version' },
+          { cle: 'statut', titre: 'Statut' },
+          { cle: 'taille', titre: 'Taille' },
+          { cle: 'modifie', titre: 'Modifié' },
+          { cle: 'actions', titre: '', align: 'right', largeur: 'w-48' },
+        ];
+
+        const statutBadge = (actif: boolean) =>
+          actif ? (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-success/20 text-success font-medium">ACTIF</span>
+          ) : (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">INACTIF</span>
+          );
+
+        return (
+          <TableOuCartes
+            colonnes={colonnes}
+            donnees={templates}
+            getId={(t) => t.id}
+            etatVide={<EmptyState titre="Aucun template enregistré" description="Les 14 templates Sprint 2 devraient être présents." />}
+            renduCellule={(t, col) => {
+              switch (col.cle) {
+                case 'nom':
+                  return <span className="font-medium">{t.nom}</span>;
+                case 'type':
+                  return <code className="text-xs">{t.type_contrat}</code>;
+                case 'version':
+                  return <span className="text-xs">v{t.version}</span>;
+                case 'statut':
+                  return statutBadge(t.est_actif);
+                case 'taille':
+                  return <span className="text-xs text-muted-foreground">{(t.contenu_taille / 1024).toFixed(1)} KB</span>;
+                case 'modifie':
+                  return (
+                    <span className="text-[11px] text-muted-foreground">
+                      {format(new Date(t.modifie_le), 'dd MMM yy HH:mm', { locale: fr })}
+                    </span>
+                  );
+                case 'actions':
+                  return (
+                    <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => navigate(`/admin/templates-contrats/${t.id}`)}
+                        className="btn-secondary text-xs py-1 px-3"
+                      >
+                        Éditer
+                      </button>
+                      <button
+                        onClick={() => toggle(t)}
+                        disabled={toggling === t.id}
+                        className={`text-xs py-1 px-3 rounded-lg font-medium border-2 ${
+                          t.est_actif
+                            ? 'border-warning text-warning hover:bg-warning/5'
+                            : 'border-success text-success hover:bg-success/5'
+                        } disabled:opacity-50`}
+                      >
+                        {toggling === t.id ? <Loader2 className="h-3 w-3 animate-spin inline" /> : (
+                          <>
+                            <Power className="h-3 w-3 inline mr-1" />
+                            {t.est_actif ? 'Désactiver' : 'Activer'}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                default:
+                  return null;
+              }
+            }}
+            renduCarte={(t) => (
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground truncate">{t.nom}</p>
+                    <p className="text-xs"><code>{t.type_contrat}</code> · v{t.version} · {(t.contenu_taille / 1024).toFixed(1)} KB</p>
+                  </div>
+                  {statutBadge(t.est_actif)}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Modifié le {format(new Date(t.modifie_le), 'dd MMM yy HH:mm', { locale: fr })}
+                </p>
+                <div className="flex gap-2 pt-2 border-t border-border">
                   <button
-                    onClick={() => navigate(`/admin/templates-contrats/${t.id}`)}
-                    className="btn-secondary text-xs py-1 px-3"
+                    onClick={(e) => { e.stopPropagation(); navigate(`/admin/templates-contrats/${t.id}`); }}
+                    className="btn-secondary text-xs py-2 px-3 flex-1 min-h-[44px]"
                   >
                     Éditer
                   </button>
                   <button
-                    onClick={() => toggle(t)}
+                    onClick={(e) => { e.stopPropagation(); toggle(t); }}
                     disabled={toggling === t.id}
-                    className={`text-xs py-1 px-3 rounded-lg font-medium border-2 ${
+                    className={`text-xs py-2 px-3 rounded-lg font-medium border-2 flex-1 min-h-[44px] ${
                       t.est_actif
                         ? 'border-warning text-warning hover:bg-warning/5'
                         : 'border-success text-success hover:bg-success/5'
@@ -147,19 +204,12 @@ export default function AdminTemplatesContrats() {
                       </>
                     )}
                   </button>
-                </td>
-              </tr>
-            ))}
-            {templates.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-sm text-muted-foreground italic">
-                  Aucun template enregistré.
-                </td>
-              </tr>
+                </div>
+              </div>
             )}
-          </tbody>
-        </table>
-      </div>
+          />
+        );
+      })()}
 
       <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground mt-6">
         <p className="font-semibold text-foreground mb-1">⚠️ Mises en garde</p>
