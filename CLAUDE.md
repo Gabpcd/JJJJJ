@@ -23,12 +23,13 @@
 ## Règles migrations Supabase
 
 1. Format obligatoire `YYYYMMDDHHMMSS_*.sql` (14 chiffres)
-2. PAS de `BEGIN;`/`COMMIT;` internes
-3. Avant tout `INSERT INTO journaux_audit` : vérifier CHECK constraint
-4. Si migration échoue : supprimer le fichier
-5. Test deploy manuel `supabase db push --dry-run` si possible
-6. Surveillance post-merge via MCP Supabase
-7. Dollar-quoting imbriqué interdit avec `$$` — utiliser tags distincts (`$body$`)
+2. **Timestamps DOIVENT être la date courante** (ou postérieure). Avant de pusher une nouvelle migration, vérifier `list_migrations` pour s'assurer qu'aucune version remote n'est postérieure — sinon `supabase db push` refuse l'ordre out-of-order et le workflow `deploy-supabase` devient rouge (incident Sprint 10-A v3 PR #264-267 → hotfix manuel via MCP `execute_sql` + `INSERT INTO supabase_migrations.schema_migrations`)
+3. PAS de `BEGIN;`/`COMMIT;` internes
+4. Avant tout `INSERT INTO journaux_audit` : vérifier CHECK constraint
+5. Si migration échoue : supprimer le fichier
+6. Test deploy manuel `supabase db push --dry-run` si possible
+7. Surveillance post-merge via MCP Supabase
+8. Dollar-quoting imbriqué interdit avec `$$` — utiliser tags distincts (`$body$`)
 
 ## Règles TypeScript / build
 
