@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
       if (['rejected'].includes(newStatus)) {
         let detailMsg = motifRefus ? String(motifRefus) : '';
         try {
-          const cr = await consulterCRDetaille(config, token, sub.piste_request_id!);
+          const cr = await consulterCRDetaille(pisteConfig, accessToken, sub.piste_request_id!);
           if (cr.ok) {
             const dpErrors = (cr.erreurs ?? []).map((e: any) => e.libelleErreurDP ?? e.libelle ?? JSON.stringify(e)).join(' | ');
             const techErrors = (cr.erreursTechniques ?? []).map((e: any) => e.libelleErreur ?? e.libelle ?? JSON.stringify(e)).join(' | ');

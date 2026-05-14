@@ -22,6 +22,20 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_SECRET_KEY = Deno.env.get("SUPABASE_SECRET_KEY") ?? Deno.env.get("SB_SECRET_KEY") ?? "";
+
+// Cache mémoire du secret vault (sb_secret_*) utilisé par pg_cron.
+// fn_lire_secret_cron lit vault.decrypted_secrets where name='service_role_key'.
+let _cachedVaultSecret: string | null = null;
+async function getVaultCronSecret(sb: any): Promise<string> {
+  if (_cachedVaultSecret) return _cachedVaultSecret;
+  if (SUPABASE_SECRET_KEY) { _cachedVaultSecret = SUPABASE_SECRET_KEY; return SUPABASE_SECRET_KEY; }
+  try {
+    const { data } = await sb.rpc("fn_lire_secret_cron");
+    if (data && typeof data === "string") { _cachedVaultSecret = data; return data; }
+  } catch { /* ignore */ }
+  return "";
+}
 
 function corsHeaders(req: Request) {
   return {
@@ -51,14 +65,20 @@ interface DispatchResult {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
 
-  // Auth : service_role only
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  // Auth : service_role only — accepte legacy JWT (env var), nouveau sb_secret_*
+  // (env var ou vault.decrypted_secrets via fn_lire_secret_cron pour pg_cron).
   const authHeader = req.headers.get("Authorization") || "";
-  if (!authHeader.includes(SERVICE_ROLE_KEY)) {
+  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const vaultSecret = await getVaultCronSecret(admin);
+  const matchesLegacy = SERVICE_ROLE_KEY && bearer === SERVICE_ROLE_KEY;
+  const matchesNew = vaultSecret && bearer === vaultSecret;
+  if (!matchesLegacy && !matchesNew) {
     return new Response(JSON.stringify({ error: "Service role required" }),
       { status: 401, headers: corsHeaders(req) });
   }
 
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
   const workerId = `worker_${crypto.randomUUID().slice(0, 8)}`;
 
   // Récupérer batch

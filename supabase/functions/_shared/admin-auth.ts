@@ -31,6 +31,20 @@ export type AdminAuthResult =
 
 const ADMIN_ROLES = new Set(['ADMIN', 'ADMIN_PLATEFORME']);
 
+// Cache mémoire du secret vault (sb_secret_*) lu via RPC fn_lire_secret_cron.
+// Pg_cron envoie ce secret comme Bearer ; il n'est pas auto-injecté en env var.
+let _cachedVaultSecret: string | null = null;
+async function fetchVaultCronSecret(supabaseUrl: string, serviceRoleKey: string): Promise<string> {
+  if (_cachedVaultSecret) return _cachedVaultSecret;
+  if (!supabaseUrl || !serviceRoleKey) return '';
+  try {
+    const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+    const { data } = await admin.rpc('fn_lire_secret_cron');
+    if (data && typeof data === 'string') { _cachedVaultSecret = data; return data; }
+  } catch { /* ignore */ }
+  return '';
+}
+
 /** Vérifie que la requête provient d'un admin authentifié OU d'un appel
  *  server-to-server avec la service_role. Retourne un objet stable. */
 export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthResult> {
@@ -51,6 +65,14 @@ export async function verifyAdminOrServiceRole(req: Request): Promise<AdminAuthR
   // Match strict pour éviter la fuite par préfixe.
   if ((serviceRoleKey && bearer === serviceRoleKey) ||
       (newSecretKey && bearer === newSecretKey)) {
+    return { ok: true, isServiceRole: true, userId: null, userEmail: null };
+  }
+
+  // Fallback vault : pg_cron envoie le sb_secret_* stocké dans vault.decrypted_secrets
+  // (name='service_role_key'). Quand SUPABASE_SECRET_KEY n'est pas configuré dans les
+  // Edge Functions Secrets, on lit le secret via fn_lire_secret_cron pour valider.
+  const vaultSecret = await fetchVaultCronSecret(supabaseUrl, serviceRoleKey);
+  if (vaultSecret && bearer === vaultSecret) {
     return { ok: true, isServiceRole: true, userId: null, userEmail: null };
   }
 
