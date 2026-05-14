@@ -2,7 +2,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { CarteConformite } from '@/components/CarteConformite';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -112,10 +112,10 @@ export default function ConformiteSoignant() {
       </div>
 
       {controles.length === 0 ? (
-        <EtatVide
-          icone={ShieldCheck}
+        <EmptyState
+          icone={<ShieldCheck />}
           titre="Aucun contrôle de conformité"
-          sousTitre="Les contrôles apparaîtront ici lorsque vous accepterez des missions."
+          description="Les contrôles apparaîtront ici lorsque vous accepterez des missions."
         />
       ) : (
         <div className="space-y-6">

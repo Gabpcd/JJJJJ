@@ -2,7 +2,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide, IllustrationBouclier } from '@/components/EtatVide';
+import { EmptyState, IllustrationBouclier } from '@/components/ui/EmptyState';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -80,7 +80,7 @@ export function ExclusionsContent() {
       </h2>
 
       {exclusions.length === 0 ? (
-        <EtatVide illustration={<IllustrationBouclier />} titre="Aucune exclusion" sousTitre="Vous n'avez bloqué personne." />
+        <EmptyState illustration={<IllustrationBouclier />} titre="Aucune exclusion" description="Vous n'avez bloqué personne." />
       ) : (
         <div className="space-y-3">
           {exclusions.map((e: any) => (
