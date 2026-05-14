@@ -224,16 +224,18 @@ export default function AdminModeration() {
         />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="litiges" className="gap-1.5"><MessageSquare className="h-4 w-4" />Litiges ({litiges.length})</TabsTrigger>
-            <TabsTrigger value="avoirs" className="gap-1.5"><Receipt className="h-4 w-4" />Avoirs</TabsTrigger>
-            <TabsTrigger value="legacy" className="gap-1.5">
-              <Tag className="h-4 w-4" />Legacy{legacyCount > 0 ? ` (${legacyCount})` : ''}
-            </TabsTrigger>
-            <TabsTrigger value="evaluations" className="gap-1.5"><Eye className="h-4 w-4" />Évaluations ({evaluations.length})</TabsTrigger>
-            <TabsTrigger value="documents" className="gap-1.5"><FileCheck className="h-4 w-4" />Documents ({documents.length})</TabsTrigger>
-            <TabsTrigger value="incoherences" className="gap-1.5"><ShieldAlert className="h-4 w-4" />Identité ({incoherences.length})</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+            <TabsList className="w-max md:w-auto">
+              <TabsTrigger value="litiges" className="gap-1.5"><MessageSquare className="h-4 w-4" />Litiges ({litiges.length})</TabsTrigger>
+              <TabsTrigger value="avoirs" className="gap-1.5"><Receipt className="h-4 w-4" />Avoirs</TabsTrigger>
+              <TabsTrigger value="legacy" className="gap-1.5">
+                <Tag className="h-4 w-4" />Legacy{legacyCount > 0 ? ` (${legacyCount})` : ''}
+              </TabsTrigger>
+              <TabsTrigger value="evaluations" className="gap-1.5"><Eye className="h-4 w-4" />Évaluations ({evaluations.length})</TabsTrigger>
+              <TabsTrigger value="documents" className="gap-1.5"><FileCheck className="h-4 w-4" />Documents ({documents.length})</TabsTrigger>
+              <TabsTrigger value="incoherences" className="gap-1.5"><ShieldAlert className="h-4 w-4" />Identité ({incoherences.length})</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="litiges" className="space-y-4" data-testid="tab-litiges">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -347,7 +349,8 @@ export default function AdminModeration() {
           </TabsContent>
 
           <TabsContent value="documents">
-            <div className="overflow-x-auto rounded-lg border">
+            {/* Desktop : table */}
+            <div className="hidden md:block overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -373,10 +376,34 @@ export default function AdminModeration() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Mobile : cards */}
+            <div className="md:hidden space-y-3">
+              {documents.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Aucun document en attente</p>
+              ) : documents.map((d) => (
+                <div key={d.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium text-sm break-words flex-1 min-w-0">{d.nom_fichier}</p>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{d.type_document}</Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{d.televerse_le ? `Téléversé le ${formatDate(d.televerse_le)}` : 'Date inconnue'}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button size="sm" variant="outline" className="min-h-[36px]" onClick={() => validerDocument(d.id)}>
+                      <Check className="mr-1 h-3.5 w-3.5" />Valider
+                    </Button>
+                    <Button size="sm" variant="destructive" className="min-h-[36px]" onClick={() => rejeterDocument(d.id)}>
+                      <X className="mr-1 h-3.5 w-3.5" />Rejeter
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </TabsContent>
 
           <TabsContent value="incoherences">
-            <div className="overflow-x-auto rounded-lg border">
+            {/* Desktop : table 8 cols */}
+            <div className="hidden md:block overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -429,6 +456,63 @@ export default function AdminModeration() {
                   {incoherences.length === 0 && <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">Aucune incohérence identitaire détectée 🎉</TableCell></TableRow>}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* Mobile : cards avec 3 matches résumés visuellement */}
+            <div className="md:hidden space-y-3">
+              {incoherences.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Aucune incohérence identitaire détectée 🎉</p>
+              ) : incoherences.map((inc: any) => {
+                const matchProfilRpps = inc.nom_profil && inc.nom_rpps
+                  ? inc.nom_profil.toUpperCase() === inc.nom_rpps.toUpperCase()
+                  : null;
+                const matchProfilCni = inc.nom_profil && inc.nom_cni
+                  ? inc.nom_profil.toUpperCase() === inc.nom_cni.toUpperCase()
+                  : null;
+                const matchRppsCni = inc.nom_rpps && inc.nom_cni
+                  ? inc.nom_rpps.toUpperCase() === inc.nom_cni.toUpperCase()
+                  : null;
+                const renderMatch = (m: boolean | null) =>
+                  m === null ? <span className="text-muted-foreground">—</span>
+                    : m ? <Check className="h-4 w-4 text-success" />
+                    : <X className="h-4 w-4 text-destructive" />;
+                return (
+                  <div key={inc.soignant_id} className="rounded-xl border border-border bg-card p-3 space-y-3">
+                    <p className="font-semibold text-sm text-foreground">{inc.prenom_profil} {inc.nom_profil}</p>
+                    <div className="grid grid-cols-1 gap-1.5 text-xs">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-muted-foreground shrink-0">Nom Profil</span>
+                        <span className="text-foreground text-right break-words">{inc.nom_profil || '—'}</span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-muted-foreground shrink-0">Nom RPPS</span>
+                        <span className="text-foreground text-right break-words">{inc.nom_rpps || '—'}</span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-muted-foreground shrink-0">Nom CNI</span>
+                        <span className="text-foreground text-right break-words">{inc.nom_cni || '—'}</span>
+                      </div>
+                    </div>
+                    <div className="border-t border-border/50 pt-2 grid grid-cols-3 gap-1 text-[10px]">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-muted-foreground">Profil ↔ RPPS</span>
+                        {renderMatch(matchProfilRpps)}
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-muted-foreground">Profil ↔ CNI</span>
+                        {renderMatch(matchProfilCni)}
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-muted-foreground">RPPS ↔ CNI</span>
+                        {renderMatch(matchRppsCni)}
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" className="w-full min-h-[36px]" onClick={() => navigate(`/admin/utilisateurs/${inc.soignant_id}`)}>
+                      <Eye className="mr-1 h-3.5 w-3.5" />Voir le détail
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           </TabsContent>
         </Tabs>
