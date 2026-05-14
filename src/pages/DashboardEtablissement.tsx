@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, lazy, Suspense } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { handleErrorSilent } from '@/lib/handleError';
@@ -11,7 +11,12 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { CarteMission } from '@/components/CarteMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
-import { ModaleAnnulationMissionEtab } from '@/components/etablissement/ModaleAnnulationMissionEtab';
+// Sprint 8 ter-G PR 2 — lazy load modale annulation (code splitting)
+const ModaleAnnulationMissionEtab = lazy(() =>
+  import('@/components/etablissement/ModaleAnnulationMissionEtab').then((m) => ({
+    default: m.ModaleAnnulationMissionEtab,
+  })),
+);
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
@@ -529,8 +534,10 @@ export default function DashboardEtablissement() {
       <ModalConfirmation ouvert={!!modalDupliquer} onFermer={() => setModalDupliquer(null)}
         onConfirmer={() => navigate(`/etablissement/missions/creer?dupliquer=${modalDupliquer.id}`)}
         titre="Dupliquer cette mission ?" message={`Une copie de « ${modalDupliquer?.intitule} » sera créée.`} labelConfirmer="Dupliquer" />
-      {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5 */}
+      {/* Sprint 5.5 PR 3 : modale annulation avec décomposition L1243-8 / 1231-5
+          Sprint 8 ter-G : lazy mount (code splitting) */}
       {modalAnnuler && (
+        <Suspense fallback={null}>
         <ModaleAnnulationMissionEtab
           ouvert={true}
           onFermer={() => setModalAnnuler(null)}
@@ -551,6 +558,7 @@ export default function DashboardEtablissement() {
             type_contrat_recherche: (modalAnnuler as any).type_contrat_recherche,
           }}
         />
+        </Suspense>
       )}
     </LayoutApp>
   );
