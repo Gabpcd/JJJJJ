@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Eye, Ban, RefreshCw, Mail, Phone, ShieldCheck, ShieldX, Clock } from 'lucide-react';
+import { Search, Eye, Ban, RefreshCw, Mail, Phone, ShieldCheck, ShieldX, Clock, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function AdminUtilisateurs() {
   const navigate = useNavigate();
@@ -210,7 +211,18 @@ export default function AdminUtilisateurs() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSoignants.map((s) => (
+                  {filteredSoignants.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="p-0">
+                        <EmptyState
+                          icone={<Users />}
+                          titre="Aucun soignant trouvé"
+                          description="Aucun soignant ne correspond à votre recherche."
+                          compact
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredSoignants.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell className="font-medium">{s.prenom} {s.nom}</TableCell>
                       <TableCell>{s.profession}</TableCell>
@@ -267,7 +279,18 @@ export default function AdminUtilisateurs() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEtabs.map((e) => (
+                  {filteredEtabs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="p-0">
+                        <EmptyState
+                          icone={<Users />}
+                          titre="Aucun établissement trouvé"
+                          description="Aucun établissement ne correspond à votre recherche."
+                          compact
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredEtabs.map((e) => (
                     <TableRow key={e.id}>
                       <TableCell className="font-medium">{e.nom}</TableCell>
                       <TableCell>{e.type}</TableCell>
