@@ -219,12 +219,18 @@ Deno.serve(async (req) => {
       const nomCorrespond = !nomFourni || nomNorm.includes(nomFourni) || nomFourni.includes(nomNorm);
       const prenomCorrespond = !prenomFourni || prenomNorm.slice(0, 3) === prenomFourni.slice(0, 3);
       const correspond = nomCorrespond && prenomCorrespond;
-      if (soignant_id && correspond && isServiceRole) {
-        // [BUG 1 fix] L'update soignants n'est autorisée qu'avec le
-        // service-role token. Sinon un appelant anonyme pourrait passer
-        // un soignant_id arbitraire et marquer le profil RPPS-vérifié.
-        // Les call-sites légitimes (admin healthcheck, batch RPPS) utilisent
-        // tous le service-role.
+      let callerUid: string | null = null;
+      if (token && !isServiceRole && !isAnonKey) {
+        try {
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+          const aKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+          const sbUser = createClient(supabaseUrl, aKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+          const { data: ud } = await sbUser.auth.getUser(token);
+          if (ud?.user?.id) callerUid = ud.user.id;
+        } catch { /* ignore */ }
+      }
+      const canWriteDb = isServiceRole || (!!callerUid && callerUid === soignant_id);
+      if (soignant_id && correspond && canWriteDb) {
         try {
           const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
           const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
