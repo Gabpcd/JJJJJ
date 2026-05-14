@@ -9,6 +9,8 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
+import { Button } from '@/components/ui/button';
 
 interface Obligations {
   total_du: number;
@@ -194,21 +196,79 @@ export default function ObligationsFinancieresEtab() {
           <h2 className="text-lg font-bold text-foreground mb-3 flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" /> Missions à payer
           </h2>
-          {missionsNonPayees.length === 0 ? (
-            <EmptyState
-              icone={<Users />}
-              titre="Aucune mission en attente de paiement"
-              description="Toutes vos missions terminées ont été réglées."
-              variant="success"
-              compact
-            />
-          ) : (
-            <ul className="space-y-2">
-              {missionsNonPayees.map((m) => (
-                <MissionNonPayeeCard key={m.mission_id} mission={m} onVoir={() => navigate(`/etablissement/missions/${m.mission_id}`)} />
-              ))}
-            </ul>
-          )}
+          {(() => {
+            const colonnes: ColonneTableau<MissionNonPayee>[] = [
+              { cle: 'mission', titre: 'Mission' },
+              { cle: 'soignant', titre: 'Soignant' },
+              { cle: 'fin', titre: 'Fin mission' },
+              { cle: 'retard', titre: 'Retard' },
+              { cle: 'montant', titre: 'Net à payer', align: 'right' },
+              { cle: 'actions', titre: '', align: 'right', largeur: 'w-28' },
+            ];
+            return (
+              <TableOuCartes
+                colonnes={colonnes}
+                donnees={missionsNonPayees}
+                getId={(m) => m.mission_id}
+                onClickLigne={(m) => navigate(`/etablissement/missions/${m.mission_id}`)}
+                etatVide={
+                  <EmptyState
+                    icone={<Users />}
+                    titre="Aucune mission en attente de paiement"
+                    description="Toutes vos missions terminées ont été réglées."
+                    variant="success"
+                    compact
+                  />
+                }
+                renduCellule={(m, col) => {
+                  const jours = m.jours_depuis_fin ?? differenceInDays(new Date(), new Date(m.fin_le));
+                  const urgent = jours >= 30;
+                  switch (col.cle) {
+                    case 'mission':
+                      return (
+                        <div>
+                          <p className="font-medium text-foreground line-clamp-1">{m.intitule}</p>
+                          {m.a_paiement_conteste && (
+                            <span className="text-[10px] text-destructive inline-flex items-center gap-0.5">
+                              <AlertTriangle className="h-3 w-3" /> Paiement contesté
+                            </span>
+                          )}
+                        </div>
+                      );
+                    case 'soignant':
+                      return (
+                        <div>
+                          <p className="text-sm">{m.soignant_nom}</p>
+                          <p className="text-xs text-muted-foreground">{m.soignant_profession}{m.type_contrat_applique && ` · ${m.type_contrat_applique}`}</p>
+                        </div>
+                      );
+                    case 'fin':
+                      return <span className="text-xs whitespace-nowrap">{format(new Date(m.fin_le), 'dd MMM yyyy', { locale: fr })}</span>;
+                    case 'retard':
+                      return jours > 0
+                        ? <span className={`text-xs font-medium ${urgent ? 'text-destructive' : 'text-warning'}`}>{jours}j{urgent ? ' ⚠️' : ''}</span>
+                        : <span className="text-xs text-muted-foreground">—</span>;
+                    case 'montant':
+                      return <span className="font-bold text-foreground tabular-nums">{formatEur(m.net_a_payer)}</span>;
+                    case 'actions':
+                      return (
+                        <Button size="sm" variant="default" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/missions/${m.mission_id}`); }}>
+                          Régler
+                        </Button>
+                      );
+                    default:
+                      return null;
+                  }
+                }}
+                renduCarte={(m) => (
+                  <MissionNonPayeeCardContent
+                    mission={m}
+                    onVoir={() => navigate(`/etablissement/missions/${m.mission_id}`)}
+                  />
+                )}
+              />
+            );
+          })()}
         </section>
       )}
 
@@ -217,30 +277,69 @@ export default function ObligationsFinancieresEtab() {
           <h2 className="text-lg font-bold text-foreground mb-3 flex items-center gap-2">
             <FileText className="h-5 w-5 text-warning" /> Paiements déclarés en attente de confirmation soignant
           </h2>
-          <ul className="space-y-2">
-            {paiementsEnAttente.map((p) => (
-              <li key={p.paiement_id} className="card-base flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground truncate">{p.mission_intitule}</p>
-                  <p className="text-xs text-muted-foreground">{p.soignant_nom}{p.soignant_profession ? ` · ${p.soignant_profession}` : ''}</p>
-                  {p.date_paiement && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Déclaré le {format(new Date(p.date_paiement), 'dd MMM yyyy', { locale: fr })}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-base font-bold text-warning">{formatEur(p.montant_net)}</span>
-                  <button
-                    onClick={() => navigate(`/etablissement/missions/${p.mission_id}`)}
-                    className="btn-secondary text-xs py-1.5 px-3"
-                  >
-                    Voir
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {(() => {
+            const colonnes: ColonneTableau<PaiementEnAttente>[] = [
+              { cle: 'mission', titre: 'Mission' },
+              { cle: 'soignant', titre: 'Soignant' },
+              { cle: 'date', titre: 'Déclaré le' },
+              { cle: 'montant', titre: 'Montant', align: 'right' },
+              { cle: 'actions', titre: '', align: 'right', largeur: 'w-24' },
+            ];
+            return (
+              <TableOuCartes
+                colonnes={colonnes}
+                donnees={paiementsEnAttente}
+                getId={(p) => p.paiement_id}
+                onClickLigne={(p) => navigate(`/etablissement/missions/${p.mission_id}`)}
+                renduCellule={(p, col) => {
+                  switch (col.cle) {
+                    case 'mission':
+                      return <span className="font-medium text-foreground line-clamp-1">{p.mission_intitule}</span>;
+                    case 'soignant':
+                      return <span className="text-sm">{p.soignant_nom}{p.soignant_profession ? ` · ${p.soignant_profession}` : ''}</span>;
+                    case 'date':
+                      return p.date_paiement
+                        ? <span className="text-xs whitespace-nowrap">{format(new Date(p.date_paiement), 'dd MMM yyyy', { locale: fr })}</span>
+                        : <span className="text-xs text-muted-foreground">—</span>;
+                    case 'montant':
+                      return <span className="text-base font-bold text-warning tabular-nums">{formatEur(p.montant_net)}</span>;
+                    case 'actions':
+                      return (
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/missions/${p.mission_id}`); }}>
+                          Voir
+                        </Button>
+                      );
+                    default:
+                      return null;
+                  }
+                }}
+                renduCarte={(p) => (
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground line-clamp-1">{p.mission_intitule}</p>
+                        <p className="text-xs text-muted-foreground">{p.soignant_nom}{p.soignant_profession ? ` · ${p.soignant_profession}` : ''}</p>
+                        {p.date_paiement && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Déclaré le {format(new Date(p.date_paiement), 'dd MMM yyyy', { locale: fr })}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-base font-bold text-warning tabular-nums shrink-0">{formatEur(p.montant_net)}</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="w-full min-h-[44px]"
+                      onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/missions/${p.mission_id}`); }}
+                    >
+                      Voir la mission
+                    </Button>
+                  </div>
+                )}
+              />
+            );
+          })()}
         </section>
       )}
 
@@ -315,14 +414,14 @@ function KPICard({
   );
 }
 
-function MissionNonPayeeCard({ mission, onVoir }: { mission: MissionNonPayee; onVoir: () => void }) {
+function MissionNonPayeeCardContent({ mission, onVoir }: { mission: MissionNonPayee; onVoir: () => void }) {
   const jours = mission.jours_depuis_fin ?? differenceInDays(new Date(), new Date(mission.fin_le));
   const urgent = jours >= 30;
   return (
-    <li className={`card-base ${urgent ? 'border-destructive/40 bg-destructive/5' : ''}`}>
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
+    <div className={`space-y-2 ${urgent ? '-m-4 p-4 border-2 border-destructive/40 bg-destructive/5 rounded-lg' : ''}`}>
+      <div className="flex flex-col gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-foreground truncate">{mission.intitule}</p>
+          <p className="text-sm font-medium text-foreground line-clamp-2">{mission.intitule}</p>
           <p className="text-xs text-muted-foreground">
             {mission.soignant_nom} · {mission.soignant_profession}
             {mission.type_contrat_applique && ` · ${mission.type_contrat_applique}`}
@@ -342,17 +441,17 @@ function MissionNonPayeeCard({ mission, onVoir }: { mission: MissionNonPayee; on
             </p>
           )}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-right">
-            <p className="text-base font-bold text-foreground">{formatEur(mission.net_a_payer)}</p>
+        <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
+          <div>
+            <p className="text-base font-bold text-foreground tabular-nums">{formatEur(mission.net_a_payer)}</p>
             <p className="text-[11px] text-muted-foreground">net soignant</p>
           </div>
-          <button onClick={onVoir} className="btn-secondary text-xs py-1.5 px-3 whitespace-nowrap">
+          <Button size="sm" variant="default" className="min-h-[44px]" onClick={(e) => { e.stopPropagation(); onVoir(); }}>
             Régler
-          </button>
+          </Button>
         </div>
       </div>
-    </li>
+    </div>
   );
 }
 
