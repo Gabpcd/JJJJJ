@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Loader2, X, AlertCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Loader2, AlertCircle, AlertTriangle, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 
 interface Props {
   ouvert: boolean;
@@ -129,8 +137,6 @@ export function ModaleAnnulationMissionEtab({
     return () => { cancelled = true; };
   }, [ouvert, mission]);
 
-  if (!ouvert) return null;
-
   const bucket = determinerBucket(mission.statut, contratSigne, pointageEnCours);
   const indemniteMontant = indemnite?.montant ?? 0;
 
@@ -176,103 +182,97 @@ export function ModaleAnnulationMissionEtab({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div
-        className="bg-card border border-border rounded-2xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Annuler cette mission</h2>
-          <button onClick={onFermer} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Récap mission */}
-        <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-0.5">
-          <p className="font-semibold text-foreground">{mission.intitule}</p>
-          {soignantNom && <p className="text-muted-foreground">Soignant : {soignantNom}</p>}
-          <p className="text-muted-foreground">
-            Du {new Date(mission.debut_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
-            {' '}au{' '}
-            {new Date(mission.fin_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
-          </p>
-          <p className="text-muted-foreground">
-            {mission.duree_heures}h × {mission.taux_horaire_base.toFixed(2)} €/h = {formatEur(mission.total_brut ?? mission.duree_heures * mission.taux_horaire_base)} brut
-          </p>
-        </div>
-
-        {/* Décomposition des conséquences */}
-        {calculLoading ? (
-          <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">Calcul des conséquences…</span>
+    <DialogResponsive open={ouvert} onOpenChange={(o) => { if (!o && !loading) onFermer(); }}>
+      <DialogResponsiveContent maxWidth="xl">
+        <DialogResponsiveHeader>
+          <DialogResponsiveTitle>Annuler cette mission</DialogResponsiveTitle>
+        </DialogResponsiveHeader>
+        <DialogResponsiveBody className="space-y-4">
+          {/* Récap mission */}
+          <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-0.5">
+            <p className="font-semibold text-foreground">{mission.intitule}</p>
+            {soignantNom && <p className="text-muted-foreground">Soignant : {soignantNom}</p>}
+            <p className="text-muted-foreground">
+              Du {new Date(mission.debut_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+              {' '}au{' '}
+              {new Date(mission.fin_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+            </p>
+            <p className="text-muted-foreground">
+              {mission.duree_heures}h × {mission.taux_horaire_base.toFixed(2)} €/h = {formatEur(mission.total_brut ?? mission.duree_heures * mission.taux_horaire_base)} brut
+            </p>
           </div>
-        ) : (
-          <ConsequencesBlock bucket={bucket} indemniteMontant={indemniteMontant} indemnite={indemnite} />
-        )}
 
-        {/* Motif structuré */}
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Motif de l'annulation *</span>
-          <select value={motif} onChange={(e) => setMotif(e.target.value)} className="input-base">
-            <option value="">— Sélectionnez —</option>
-            {MOTIFS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
-        </label>
+          {/* Décomposition des conséquences */}
+          {calculLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Calcul des conséquences…</span>
+            </div>
+          ) : (
+            <ConsequencesBlock bucket={bucket} indemniteMontant={indemniteMontant} indemnite={indemnite} />
+          )}
 
-        {/* Texte libre */}
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Explication détaillée * (min 10 caractères)</span>
-          <textarea
-            value={texte}
-            onChange={(e) => setTexte(e.target.value)}
-            className="input-base"
-            rows={3}
-            placeholder="Expliquez la situation : pourquoi annuler la mission ?"
-          />
-          <span className="text-[10px] text-muted-foreground">{texte.length} / 10+</span>
-        </label>
-
-        {/* Coche obligatoire si conséquences */}
-        {bucket.points < 0 && (
-          <label className="flex items-start gap-2 rounded-lg border border-border bg-background p-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={accepte}
-              onChange={(e) => setAccepte(e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-border"
-              disabled={loading}
-            />
-            <span className="text-xs text-foreground">
-              J'ai compris les conséquences financières {indemniteMontant > 0 ? `(${formatEur(indemniteMontant)} à verser au soignant)` : ''} et l'impact sur mon score établissement ({bucket.points} pts).
-              {indemniteMontant > 0 && ' Cette somme sera prélevée sur mon compte Stripe Connect et transférée au soignant.'}
-            </span>
+          {/* Motif structuré */}
+          <label className="block">
+            <span className="text-xs font-medium text-foreground mb-1 block">Motif de l'annulation *</span>
+            <select value={motif} onChange={(e) => setMotif(e.target.value)} className="input-base">
+              <option value="">— Sélectionnez —</option>
+              {MOTIFS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
           </label>
-        )}
 
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <p>Le soignant sera notifié immédiatement (push + email). L'impact sur votre score établissement est contestable depuis votre page score.</p>
-        </div>
+          {/* Texte libre */}
+          <label className="block">
+            <span className="text-xs font-medium text-foreground mb-1 block">Explication détaillée * (min 10 caractères)</span>
+            <textarea
+              value={texte}
+              onChange={(e) => setTexte(e.target.value)}
+              className="input-base"
+              rows={3}
+              placeholder="Expliquez la situation : pourquoi annuler la mission ?"
+            />
+            <span className="text-[10px] text-muted-foreground">{texte.length} / 10+</span>
+          </label>
 
-        <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">
+          {/* Coche obligatoire si conséquences */}
+          {bucket.points < 0 && (
+            <label className="flex items-start gap-2 rounded-lg border border-border bg-background p-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={accepte}
+                onChange={(e) => setAccepte(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-border"
+                disabled={loading}
+              />
+              <span className="text-xs text-foreground">
+                J'ai compris les conséquences financières {indemniteMontant > 0 ? `(${formatEur(indemniteMontant)} à verser au soignant)` : ''} et l'impact sur mon score établissement ({bucket.points} pts).
+                {indemniteMontant > 0 && ' Cette somme sera prélevée sur mon compte Stripe Connect et transférée au soignant.'}
+              </span>
+            </label>
+          )}
+
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <p>Le soignant sera notifié immédiatement (push + email). L'impact sur votre score établissement est contestable depuis votre page score.</p>
+          </div>
+        </DialogResponsiveBody>
+        <DialogResponsiveFooter>
+          <button onClick={onFermer} disabled={loading} className="btn-secondary min-h-[44px] disabled:opacity-50">
             Garder la mission
           </button>
           <button
             onClick={confirmer}
             disabled={loading || calculLoading || !motif || texte.trim().length < 10 || (bucket.points < 0 && !accepte)}
-            className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+            className="btn-primary min-h-[44px] disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             Confirmer l'annulation
           </button>
-        </div>
-      </div>
-    </div>
+        </DialogResponsiveFooter>
+      </DialogResponsiveContent>
+    </DialogResponsive>
   );
 }
 
