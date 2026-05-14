@@ -12,7 +12,7 @@ import { CarteKPI } from '@/components/CarteKPI';
 import { CarteMission } from '@/components/CarteMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ModaleAnnulationMissionEtab } from '@/components/etablissement/ModaleAnnulationMissionEtab';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { BandeauBlocageAuto } from '@/components/BandeauBlocageAuto';
@@ -518,7 +518,7 @@ export default function DashboardEtablissement() {
             ))}
           </div>
         ) : aDejaPublie === false ? (
-          <EtatVide icone={ClipboardList} titre="Publiez votre première mission" sousTitre="Les soignants qualifiés de votre zone seront notifiés immédiatement" boutonLabel="Publier une mission" boutonRoute="/etablissement/missions/creer" />
+          <EmptyState icone={<ClipboardList />} titre="Publiez votre première mission" description="Les soignants qualifiés de votre zone seront notifiés immédiatement" cta={{ label: 'Publier une mission', onClick: () => navigate('/etablissement/missions/creer') }} />
         ) : (
           <p className="text-sm text-muted-foreground text-center py-6">Aucune mission récente.</p>
         )}
