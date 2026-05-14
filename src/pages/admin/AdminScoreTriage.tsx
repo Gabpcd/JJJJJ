@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Search, Eye, MessageSquare, Award } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -192,41 +194,49 @@ export default function AdminScoreTriage() {
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
-        ) : lignesFiltrees.length === 0 ? (
-          <div className="text-center py-16 text-sm text-muted-foreground border rounded-md">
-            Aucun compte ne correspond aux filtres sélectionnés.
-          </div>
-        ) : (
-          <div className="overflow-x-auto border rounded-md">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Type</th>
-                  <th className="px-3 py-2 font-medium">Nom</th>
-                  <th className="px-3 py-2 font-medium">Email</th>
-                  <th className="px-3 py-2 font-medium">Score</th>
-                  <th className="px-3 py-2 font-medium">Niveau</th>
-                  <th className="px-3 py-2 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lignesFiltrees.map((l) => (
-                  <tr key={`${l.type}-${l.user_id}`} className="border-t hover:bg-slate-50">
-                    <td className="px-3 py-2">
-                      <span className="px-2 py-0.5 text-xs rounded bg-slate-100">
-                        {l.type === 'SOIGNANT' ? 'Soignant' : 'Étab'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 font-medium">{l.nom}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{l.email}</td>
-                    <td className="px-3 py-2 font-mono">{l.score.toFixed(1)}</td>
-                    <td className="px-3 py-2">
-                      <span className={`px-2 py-0.5 text-xs rounded border ${badgeNiveauClasses(l.niveau)}`}>
-                        {l.niveau}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex justify-end gap-2">
+        ) : (() => {
+          const colonnes: ColonneTableau<LigneScore>[] = [
+            { cle: 'type', titre: 'Type' },
+            { cle: 'nom', titre: 'Nom' },
+            { cle: 'email', titre: 'Email' },
+            { cle: 'score', titre: 'Score' },
+            { cle: 'niveau', titre: 'Niveau' },
+            { cle: 'actions', titre: 'Actions', align: 'right' },
+          ];
+
+          const typeBadge = (l: LigneScore) => (
+            <span className="px-2 py-0.5 text-xs rounded bg-slate-100">
+              {l.type === 'SOIGNANT' ? 'Soignant' : 'Étab'}
+            </span>
+          );
+          const niveauBadge = (l: LigneScore) => (
+            <span className={`px-2 py-0.5 text-xs rounded border ${badgeNiveauClasses(l.niveau)}`}>
+              {l.niveau}
+            </span>
+          );
+
+          return (
+            <TableOuCartes
+              colonnes={colonnes}
+              donnees={lignesFiltrees}
+              getId={(l) => `${l.type}-${l.user_id}`}
+              onClickLigne={(l) => ouvrirProfil(l)}
+              etatVide={<EmptyState titre="Aucun compte trouvé" description="Aucun compte ne correspond aux filtres sélectionnés." />}
+              renduCellule={(l, col) => {
+                switch (col.cle) {
+                  case 'type':
+                    return typeBadge(l);
+                  case 'nom':
+                    return <span className="font-medium">{l.nom}</span>;
+                  case 'email':
+                    return <span className="text-muted-foreground">{l.email}</span>;
+                  case 'score':
+                    return <span className="font-mono">{l.score.toFixed(1)}</span>;
+                  case 'niveau':
+                    return niveauBadge(l);
+                  case 'actions':
+                    return (
+                      <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => ouvrirProfil(l)}
@@ -244,13 +254,45 @@ export default function AdminScoreTriage() {
                           <MessageSquare className="w-3.5 h-3.5" /> Message
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                    );
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(l) => (
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        {typeBadge(l)}
+                        {niveauBadge(l)}
+                      </div>
+                      <p className="font-semibold text-foreground truncate">{l.nom}</p>
+                      <p className="text-xs text-muted-foreground truncate">{l.email}</p>
+                    </div>
+                    <p className="font-mono text-lg font-bold tabular-nums shrink-0">{l.score.toFixed(1)}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => ouvrirProfil(l)}
+                      className="inline-flex items-center justify-center gap-1 px-2 py-2 text-xs border rounded hover:bg-slate-100 min-h-[44px]"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Voir le profil
+                    </button>
+                    <button
+                      type="button"
+                      onClick={ouvrirMessagerie}
+                      className="inline-flex items-center justify-center gap-1 px-2 py-2 text-xs border rounded hover:bg-slate-100 min-h-[44px]"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" /> Message
+                    </button>
+                  </div>
+                </div>
+              )}
+            />
+          );
+        })()}
       </div>
     </LayoutAdmin>
   );
