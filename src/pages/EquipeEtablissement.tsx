@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, UserPlus, Mail, Crown, Briefcase, ClipboardCheck, Eye, Trash2, Loader2, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus, Mail, Crown, Briefcase, ClipboardCheck, Eye, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -9,6 +9,14 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { EmptyState } from '@/components/ui/EmptyState';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 
 type Role = 'PROPRIETAIRE' | 'ADMIN_GROUPE' | 'RH' | 'POINTAGE_ONLY' | 'LECTURE_SEULE';
 type StatutInvitation = 'EN_ATTENTE' | 'ACCEPTEE' | 'EXPIREE' | 'ANNULEE';
@@ -305,52 +313,49 @@ function ModaleInviterMembre({ onFermer, onInvite }: { onFermer: () => void; onI
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Inviter un membre</h2>
-          <button onClick={onFermer} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <DialogResponsive open={true} onOpenChange={(o) => { if (!o && !loading) onFermer(); }}>
+      <DialogResponsiveContent maxWidth="md">
+        <DialogResponsiveHeader>
+          <DialogResponsiveTitle>Inviter un membre</DialogResponsiveTitle>
+        </DialogResponsiveHeader>
+        <DialogResponsiveBody className="space-y-4">
+          <label className="block">
+            <span className="text-xs font-medium text-foreground mb-1 block">Adresse e-mail *</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input-base"
+              placeholder="nom@etablissement.fr"
+              autoFocus
+              disabled={loading}
+            />
+          </label>
 
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Adresse e-mail *</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input-base"
-            placeholder="nom@etablissement.fr"
-            autoFocus
-            disabled={loading}
-          />
-        </label>
+          <label className="block">
+            <span className="text-xs font-medium text-foreground mb-1 block">Rôle proposé *</span>
+            <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-base" disabled={loading}>
+              {ROLES_INVITABLES.map((r) => (
+                <option key={r} value={r}>{ROLE_INFO[r].label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground mt-1">{ROLE_INFO[role].description}</p>
+          </label>
 
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Rôle proposé *</span>
-          <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-base" disabled={loading}>
-            {ROLES_INVITABLES.map((r) => (
-              <option key={r} value={r}>{ROLE_INFO[r].label}</option>
-            ))}
-          </select>
-          <p className="text-[11px] text-muted-foreground mt-1">{ROLE_INFO[role].description}</p>
-        </label>
-
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <p>Un e-mail d'invitation sera envoyé. Le lien expire dans 7 jours. Le rôle PROPRIETAIRE ne peut être attribué que via promotion d'un membre existant.</p>
-        </div>
-
-        <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
-          <button onClick={envoyer} disabled={loading || !email.trim()} className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <p>Un e-mail d'invitation sera envoyé. Le lien expire dans 7 jours. Le rôle PROPRIETAIRE ne peut être attribué que via promotion d'un membre existant.</p>
+          </div>
+        </DialogResponsiveBody>
+        <DialogResponsiveFooter>
+          <button onClick={onFermer} disabled={loading} className="btn-secondary min-h-[44px] disabled:opacity-50">Annuler</button>
+          <button onClick={envoyer} disabled={loading || !email.trim()} className="btn-primary min-h-[44px] disabled:opacity-50 inline-flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             Envoyer l'invitation
           </button>
-        </div>
-      </div>
-    </div>
+        </DialogResponsiveFooter>
+      </DialogResponsiveContent>
+    </DialogResponsive>
   );
 }
 
@@ -384,36 +389,33 @@ function ModaleModifierRole({ membre, onFermer, onModifie }: { membre: Membre; o
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Modifier le rôle</h2>
-          <button onClick={onFermer} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <DialogResponsive open={true} onOpenChange={(o) => { if (!o && !loading) onFermer(); }}>
+      <DialogResponsiveContent maxWidth="md">
+        <DialogResponsiveHeader>
+          <DialogResponsiveTitle>Modifier le rôle</DialogResponsiveTitle>
+        </DialogResponsiveHeader>
+        <DialogResponsiveBody className="space-y-4">
+          <p className="text-sm text-muted-foreground">Membre : <strong className="text-foreground">{membre.email}</strong></p>
 
-        <p className="text-sm text-muted-foreground">Membre : <strong className="text-foreground">{membre.email}</strong></p>
-
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Nouveau rôle *</span>
-          <select value={nouveauRole} onChange={(e) => setNouveauRole(e.target.value as Role)} className="input-base" disabled={loading}>
-            {ROLES_MODIFIABLES.map((r) => (
-              <option key={r} value={r}>{ROLE_INFO[r].label}</option>
-            ))}
-          </select>
-          <p className="text-[11px] text-muted-foreground mt-1">{ROLE_INFO[nouveauRole].description}</p>
-        </label>
-
-        <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
-          <button onClick={modifier} disabled={loading || nouveauRole === membre.role} className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+          <label className="block">
+            <span className="text-xs font-medium text-foreground mb-1 block">Nouveau rôle *</span>
+            <select value={nouveauRole} onChange={(e) => setNouveauRole(e.target.value as Role)} className="input-base" disabled={loading}>
+              {ROLES_MODIFIABLES.map((r) => (
+                <option key={r} value={r}>{ROLE_INFO[r].label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground mt-1">{ROLE_INFO[nouveauRole].description}</p>
+          </label>
+        </DialogResponsiveBody>
+        <DialogResponsiveFooter>
+          <button onClick={onFermer} disabled={loading} className="btn-secondary min-h-[44px] disabled:opacity-50">Annuler</button>
+          <button onClick={modifier} disabled={loading || nouveauRole === membre.role} className="btn-primary min-h-[44px] disabled:opacity-50 inline-flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             Modifier
           </button>
-        </div>
-      </div>
-    </div>
+        </DialogResponsiveFooter>
+      </DialogResponsiveContent>
+    </DialogResponsive>
   );
 }
 
@@ -439,32 +441,29 @@ function ModaleRevoquerMembre({ membre, onFermer, onRevoque }: { membre: Membre;
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Révoquer ce membre ?</h2>
-          <button onClick={onFermer} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-xs text-destructive flex gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <p>
-            <strong className="block">{membre.email}</strong>
-            Ce membre perdra immédiatement son accès à l'établissement. Cette action est réversible (vous pouvez le réinviter ensuite).
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
-          <button onClick={revoquer} disabled={loading} className="bg-destructive text-destructive-foreground rounded-xl px-4 py-2 text-sm font-medium hover:bg-destructive/90 disabled:opacity-50 flex-1 inline-flex items-center justify-center gap-2">
+    <DialogResponsive open={true} onOpenChange={(o) => { if (!o && !loading) onFermer(); }}>
+      <DialogResponsiveContent maxWidth="md">
+        <DialogResponsiveHeader>
+          <DialogResponsiveTitle>Révoquer ce membre ?</DialogResponsiveTitle>
+        </DialogResponsiveHeader>
+        <DialogResponsiveBody>
+          <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-xs text-destructive flex gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <p>
+              <strong className="block">{membre.email}</strong>
+              Ce membre perdra immédiatement son accès à l'établissement. Cette action est réversible (vous pouvez le réinviter ensuite).
+            </p>
+          </div>
+        </DialogResponsiveBody>
+        <DialogResponsiveFooter>
+          <button onClick={onFermer} disabled={loading} className="btn-secondary min-h-[44px] disabled:opacity-50">Annuler</button>
+          <button onClick={revoquer} disabled={loading} className="bg-destructive text-destructive-foreground rounded-xl px-4 py-2 text-sm font-medium hover:bg-destructive/90 disabled:opacity-50 min-h-[44px] inline-flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             Révoquer
           </button>
-        </div>
-      </div>
-    </div>
+        </DialogResponsiveFooter>
+      </DialogResponsiveContent>
+    </DialogResponsive>
   );
 }
 
