@@ -118,3 +118,6 @@ verify_jwt = false
 
 [functions.chorus-pro-verify]
 verify_jwt = true
+
+[functions.messagerie-validate]
+verify_jwt = false
