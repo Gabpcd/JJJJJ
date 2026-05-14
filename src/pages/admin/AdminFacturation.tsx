@@ -40,10 +40,129 @@ const statutLabel: Record<string, string> = {
   ANNULEE: 'Annulée',
 };
 
-function FactureDetailRow({ factureId }: { factureId: string }) {
+/**
+ * Bloc détail factures rattachées — utilisé en desktop (TableRow colSpan)
+ * et mobile (div standalone à l'intérieur d'une card).
+ */
+function FactureDetailContenu({ missions, loading, mode }: { missions: any[]; loading: boolean; mode: 'desktop' | 'mobile' }) {
+  const navigate = useNavigate();
+
+  if (loading) return (
+    <div className="py-4">
+      <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
+    </div>
+  );
+
+  if (missions.length === 0) return (
+    <p className="py-4 text-center text-xs text-muted-foreground">Aucune mission rattachée à cette facture</p>
+  );
+
+  if (mode === 'mobile') {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground">Missions rattachées ({missions.length})</p>
+        {missions.map((m: any) => {
+          const sg = m.soignants as any;
+          return (
+            <div key={m.id} className="rounded-lg border border-border/60 bg-background p-2.5 space-y-1.5">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); navigate(`/admin/missions?mission=${m.id}`); }}
+                className="font-semibold text-primary hover:underline text-left inline-flex items-center gap-1 text-xs"
+              >
+                {m.intitule}
+                <ExternalLink className="h-3 w-3 shrink-0" />
+              </button>
+              {sg && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); navigate(`/admin/utilisateurs/${m.soignant_assigne_id}`); }}
+                  className="text-primary hover:underline inline-flex items-center gap-1 text-xs"
+                >
+                  {sg.prenom} {sg.nom}
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                </button>
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                {m.profession_requise} · {formatDateTime(m.debut_le)} → {formatDateTime(m.fin_le)}
+              </p>
+              <div className="grid grid-cols-2 gap-1 text-[11px] pt-1 border-t border-border/40">
+                <span className="text-muted-foreground">Heures : <span className="text-foreground font-medium">{m.duree_heures}h</span></span>
+                <span className="text-muted-foreground">Taux : <span className="text-foreground font-medium">{formatEur(m.taux_horaire_base)}</span></span>
+                <span className="text-muted-foreground">Brut : <span className="text-foreground font-medium">{formatEur(m.total_brut || 0)}</span></span>
+                <span className="text-muted-foreground">Com. HT : <span className="text-primary font-semibold">{formatEur(m.montant_commission_ht || 0)}</span></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6 py-3">
+      <p className="text-xs font-semibold text-muted-foreground mb-2">Missions rattachées ({missions.length})</p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-border">
+            <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Intitulé</th>
+            <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Soignant</th>
+            <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Profession</th>
+            <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Dates</th>
+            <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Heures</th>
+            <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Taux/h</th>
+            <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Brut soignant</th>
+            <th className="text-right py-1.5 font-medium text-muted-foreground">Commission HT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {missions.map((m: any) => {
+            const sg = m.soignants as any;
+            return (
+              <tr key={m.id} className="border-b border-border/40 hover:bg-muted/50">
+                <td className="py-1.5 pr-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/admin/missions?mission=${m.id}`); }}
+                    className="font-medium text-primary hover:underline text-left inline-flex items-center gap-1"
+                  >
+                    {m.intitule}
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </button>
+                </td>
+                <td className="py-1.5 pr-2">
+                  {sg ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/admin/utilisateurs/${m.soignant_assigne_id}`); }}
+                      className="text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      {sg.prenom} {sg.nom}
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                    </button>
+                  ) : '—'}
+                </td>
+                <td className="py-1.5 pr-2 text-muted-foreground">{m.profession_requise}</td>
+                <td className="py-1.5 pr-2 text-muted-foreground">{formatDateTime(m.debut_le)} → {formatDateTime(m.fin_le)}</td>
+                <td className="py-1.5 pr-2 text-right">{m.duree_heures}h</td>
+                <td className="py-1.5 pr-2 text-right">{formatEur(m.taux_horaire_base)}</td>
+                <td className="py-1.5 pr-2 text-right">{formatEur(m.total_brut || 0)}</td>
+                <td className="py-1.5 text-right font-semibold text-primary">{formatEur(m.montant_commission_ht || 0)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Hook : charge la liste des missions rattachées à une facture.
+ * Permet de partager la logique entre FactureDetailRow (desktop)
+ * et le rendu mobile inline.
+ */
+function useMissionsFacture(factureId: string) {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
     (supabase
@@ -62,82 +181,29 @@ function FactureDetailRow({ factureId }: { factureId: string }) {
         setMissions(mList.map((m: any) => ({ ...m, soignants: m.soignant_assigne_id ? sgMap[m.soignant_assigne_id] || null : null })));
         setLoading(false);
       })
-      .catch((err: any) => { console.warn('FactureDetailRow fetch error:', err); setLoading(false); });
+      .catch((err: any) => { console.warn('useMissionsFacture fetch error:', err); setLoading(false); });
   }, [factureId]);
 
-  if (loading) return (
-    <TableRow>
-      <TableCell colSpan={10} className="bg-muted/30 py-4">
-        <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
-      </TableCell>
-    </TableRow>
-  );
+  return { missions, loading };
+}
 
-  if (missions.length === 0) return (
-    <TableRow>
-      <TableCell colSpan={10} className="bg-muted/30 py-4 text-center text-xs text-muted-foreground">
-        Aucune mission rattachée à cette facture
-      </TableCell>
-    </TableRow>
-  );
-
+function FactureDetailRow({ factureId }: { factureId: string }) {
+  const { missions, loading } = useMissionsFacture(factureId);
   return (
     <TableRow>
       <TableCell colSpan={10} className="bg-muted/30 p-0">
-        <div className="px-6 py-3">
-          <p className="text-xs font-semibold text-muted-foreground mb-2">Missions rattachées ({missions.length})</p>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Intitulé</th>
-                <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Soignant</th>
-                <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Profession</th>
-                <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Dates</th>
-                <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Heures</th>
-                <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Taux/h</th>
-                <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Brut soignant</th>
-                <th className="text-right py-1.5 font-medium text-muted-foreground">Commission HT</th>
-              </tr>
-            </thead>
-            <tbody>
-              {missions.map((m: any) => {
-                const sg = m.soignants as any;
-                return (
-                  <tr key={m.id} className="border-b border-border/40 hover:bg-muted/50">
-                    <td className="py-1.5 pr-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); navigate(`/admin/missions?mission=${m.id}`); }}
-                        className="font-medium text-primary hover:underline text-left inline-flex items-center gap-1"
-                      >
-                        {m.intitule}
-                        <ExternalLink className="h-3 w-3 shrink-0" />
-                      </button>
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      {sg ? (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/admin/utilisateurs/${m.soignant_assigne_id}`); }}
-                          className="text-primary hover:underline inline-flex items-center gap-1"
-                        >
-                          {sg.prenom} {sg.nom}
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                        </button>
-                      ) : '—'}
-                    </td>
-                    <td className="py-1.5 pr-2 text-muted-foreground">{m.profession_requise}</td>
-                    <td className="py-1.5 pr-2 text-muted-foreground">{formatDateTime(m.debut_le)} → {formatDateTime(m.fin_le)}</td>
-                    <td className="py-1.5 pr-2 text-right">{m.duree_heures}h</td>
-                    <td className="py-1.5 pr-2 text-right">{formatEur(m.taux_horaire_base)}</td>
-                    <td className="py-1.5 pr-2 text-right">{formatEur(m.total_brut || 0)}</td>
-                    <td className="py-1.5 text-right font-semibold text-primary">{formatEur(m.montant_commission_ht || 0)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <FactureDetailContenu missions={missions} loading={loading} mode="desktop" />
       </TableCell>
     </TableRow>
+  );
+}
+
+function FactureDetailMobile({ factureId }: { factureId: string }) {
+  const { missions, loading } = useMissionsFacture(factureId);
+  return (
+    <div className="bg-muted/30 rounded-lg p-3 -mx-1">
+      <FactureDetailContenu missions={missions} loading={loading} mode="mobile" />
+    </div>
   );
 }
 
@@ -390,7 +456,8 @@ export default function AdminFacturation() {
           }}
         />
 
-        <div className="rounded-lg border overflow-x-auto">
+        {/* Desktop : table 10 colonnes */}
+        <div className="hidden md:block rounded-lg border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -537,6 +604,172 @@ export default function AdminFacturation() {
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* Mobile : cards */}
+        <div className="md:hidden space-y-3">
+          {filtered.length === 0 ? (
+            <EmptyState
+              icone={<FileText />}
+              titre="Aucune facture"
+              description="Aucune facture ne correspond aux filtres sélectionnés."
+              compact
+            />
+          ) : (
+            <>
+              {/* Sélection globale mobile */}
+              <div className="rounded-lg border border-border bg-card p-2 flex items-center justify-between text-xs">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    aria-label="Tout sélectionner"
+                    checked={filtered.length > 0 && filtered.every((f: any) => selectedIds.has(f.id))}
+                    onCheckedChange={(checked) => {
+                      if (checked) setSelectedIds(new Set(filtered.map((f: any) => f.id)));
+                      else setSelectedIds(new Set());
+                    }}
+                  />
+                  <span className="font-medium">Tout sélectionner</span>
+                </label>
+                {selectedIds.size > 0 && (
+                  <span className="text-primary font-semibold">{selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}</span>
+                )}
+              </div>
+
+              {filtered.map((f: any) => {
+                const isExpanded = expandedId === f.id;
+                const isSelected = selectedIds.has(f.id);
+                return (
+                  <div
+                    key={f.id}
+                    className={`rounded-xl border bg-card p-3 space-y-2 ${isSelected ? 'border-primary/50 bg-primary/5' : 'border-border'}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        aria-label={`Sélectionner facture ${f.numero_facture ?? f.id}`}
+                        checked={isSelected}
+                        onCheckedChange={(checked) => {
+                          const next = new Set(selectedIds);
+                          if (checked) next.add(f.id);
+                          else next.delete(f.id);
+                          setSelectedIds(next);
+                        }}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-mono text-xs font-semibold truncate">{f.numero_facture}</p>
+                          <Badge variant={(statutColor[f.statut] || 'secondary') as any} className="text-[10px] shrink-0">
+                            {statutLabel[f.statut] ?? f.statut}
+                          </Badge>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/utilisateurs/${f.etablissement_id}`)}
+                          className="text-primary hover:underline inline-flex items-center gap-1 text-sm font-medium mt-0.5"
+                        >
+                          {(f.etablissements as any)?.nom ?? '—'}
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs pl-7">
+                      <div>
+                        <p className="text-muted-foreground">HT</p>
+                        <p className="font-medium">{formatEur(f.montant_ht)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">TTC</p>
+                        <p className="font-semibold">{formatEur(f.montant_ttc)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Missions</p>
+                        <p className="font-medium">{f.nombre_missions}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Émise le</p>
+                        <p className="font-medium">{f.date_emission ? formatDate(f.date_emission) : '—'}</p>
+                      </div>
+                    </div>
+
+                    {f.statut === 'VIREMENT_DECLARE' && f.virement_reference && (
+                      <p className="text-[10px] text-muted-foreground pl-7">Réf: {f.virement_reference}</p>
+                    )}
+
+                    {f.statut === 'VIREMENT_DECLARE' && (
+                      <div className="grid grid-cols-2 gap-2 pl-7">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="min-h-[36px] text-xs gap-1"
+                          disabled={actionId === f.id}
+                          onClick={async () => {
+                            setActionId(f.id);
+                            const { data, error } = await supabase.rpc('fn_confirmer_virement_admin' as any, { p_facture_id: f.id });
+                            if (error || (data as any)?.error) {
+                              toast.error('Erreur lors de la confirmation du virement.');
+                            } else {
+                              toast.success('Virement confirmé ✅');
+                              charger();
+                            }
+                            setActionId(null);
+                          }}
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" /> Confirmer
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="min-h-[36px] text-xs gap-1"
+                          disabled={actionId === f.id}
+                          onClick={async () => {
+                            setActionId(f.id);
+                            const { data, error } = await supabase.rpc('fn_rejeter_virement_admin' as any, { p_facture_id: f.id });
+                            if (error || (data as any)?.error) {
+                              toast.error('Erreur lors du rejet du virement.');
+                            } else {
+                              toast.success('Virement rejeté — facture remise en Émise');
+                              charger();
+                            }
+                            setActionId(null);
+                          }}
+                        >
+                          <XCircle className="h-3.5 w-3.5" /> Rejeter
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 pl-7">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 min-h-[36px] text-xs gap-1"
+                        onClick={() => setExpandedId(isExpanded ? null : f.id)}
+                      >
+                        {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        {isExpanded ? 'Masquer missions' : 'Voir missions'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-[36px] px-3"
+                        title="Télécharger la facture PDF"
+                        onClick={() => genererFacturePDF(f)}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="pl-7 pt-1">
+                        <FactureDetailMobile factureId={f.id} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       </div>
     </LayoutAdmin>
