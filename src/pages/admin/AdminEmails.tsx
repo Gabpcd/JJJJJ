@@ -5,7 +5,8 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -119,50 +120,81 @@ export default function AdminEmails() {
           <p className="text-muted-foreground mt-1">Prévisualisez et testez les 14 templates transactionnels.</p>
         </div>
 
-        {/* Templates table */}
-        <div className="rounded-lg border border-border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[50%]">Template</TableHead>
-                <TableHead className="text-center">Prévisualiser</TableHead>
-                <TableHead className="text-center">Envoyer un test</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {TEMPLATES.map((t) => (
-                <TableRow key={t} className={previewType === t ? 'bg-muted/50' : ''}>
-                  <TableCell className="font-mono text-sm">{t}</TableCell>
-                  <TableCell className="text-center">
+        {/* Templates */}
+        {(() => {
+          const colonnes: ColonneTableau<string>[] = [
+            { cle: 'template', titre: 'Template' },
+            { cle: 'preview', titre: 'Prévisualiser', align: 'center' },
+            { cle: 'test', titre: 'Envoyer un test', align: 'center' },
+          ];
+          return (
+            <TableOuCartes
+              colonnes={colonnes}
+              donnees={TEMPLATES as unknown as string[]}
+              getId={(t) => t}
+              renduCellule={(t, col) => {
+                switch (col.cle) {
+                  case 'template':
+                    return <span className="font-mono text-sm">{t}</span>;
+                  case 'preview':
+                    return (
+                      <Button
+                        variant={previewType === t ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); setPreviewType(previewType === t ? null : t); }}
+                        className="gap-1.5"
+                        aria-label={previewType === t ? `Masquer l'aperçu de ${t}` : `Prévisualiser ${t}`}
+                      >
+                        <Eye className="h-4 w-4" />
+                        {previewType === t ? 'Masquer' : 'Prévisualiser'}
+                      </Button>
+                    );
+                  case 'test':
+                    return (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); envoyerTest(t); }}
+                        disabled={sending !== null}
+                        className="gap-1.5"
+                        aria-label={`Envoyer un email test pour ${t}`}
+                      >
+                        {sending === t ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Envoyer
+                      </Button>
+                    );
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(t) => (
+                <div className="space-y-3">
+                  <p className="font-mono text-sm break-all">{t}</p>
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant={previewType === t ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setPreviewType(previewType === t ? null : t)}
-                      className="gap-1.5"
-                      aria-label={previewType === t ? `Masquer l'aperçu de ${t}` : `Prévisualiser ${t}`}
+                      onClick={(e) => { e.stopPropagation(); setPreviewType(previewType === t ? null : t); }}
+                      className="gap-1.5 min-h-[44px]"
                     >
-                      <Eye className="h-4 w-4" />
-                      {previewType === t ? 'Masquer' : 'Prévisualiser'}
+                      <Eye className="h-4 w-4" /> {previewType === t ? 'Masquer' : 'Aperçu'}
                     </Button>
-                  </TableCell>
-                  <TableCell className="text-center">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => envoyerTest(t)}
+                      onClick={(e) => { e.stopPropagation(); envoyerTest(t); }}
                       disabled={sending !== null}
-                      className="gap-1.5"
-                      aria-label={`Envoyer un email test pour ${t}`}
+                      className="gap-1.5 min-h-[44px]"
                     >
                       {sending === t ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Envoyer
+                      Test
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                  </div>
+                </div>
+              )}
+            />
+          );
+        })()}
 
         {/* Preview iframe */}
         {previewType && (
@@ -185,52 +217,62 @@ export default function AdminEmails() {
         {/* Historique */}
         <div className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">Derniers emails envoyés</h2>
-          <div className="rounded-lg border border-border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Destinataire</TableHead>
-                  <TableHead className="text-center">Statut</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {histLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Chargement…
-                    </TableCell>
-                  </TableRow>
-                ) : historique.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      Aucun email envoyé.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  historique.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell className="text-sm">{formatDate(e.cree_le)}</TableCell>
-                      <TableCell className="font-mono text-xs">{e.type}</TableCell>
-                      <TableCell className="text-sm">{e.destinataire_email}</TableCell>
-                      <TableCell className="text-center">
-                        {e.statut === 'ENVOYE' ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1">
-                            <CheckCircle className="h-3 w-3" /> Envoyé
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="gap-1">
-                            <XCircle className="h-3 w-3" /> Erreur
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+          {histLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Chargement…
+            </div>
+          ) : (() => {
+            const colonnes: ColonneTableau<any>[] = [
+              { cle: 'date', titre: 'Date' },
+              { cle: 'type', titre: 'Type' },
+              { cle: 'destinataire', titre: 'Destinataire' },
+              { cle: 'statut', titre: 'Statut', align: 'center' },
+            ];
+            const statutBadge = (e: any) =>
+              e.statut === 'ENVOYE' ? (
+                <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1">
+                  <CheckCircle className="h-3 w-3" /> Envoyé
+                </Badge>
+              ) : (
+                <Badge variant="destructive" className="gap-1">
+                  <XCircle className="h-3 w-3" /> Erreur
+                </Badge>
+              );
+            return (
+              <TableOuCartes
+                colonnes={colonnes}
+                donnees={historique}
+                getId={(e: any) => e.id}
+                etatVide={<EmptyState titre="Aucun email envoyé" description="L'historique des emails transactionnels apparaîtra ici." />}
+                renduCellule={(e: any, col) => {
+                  switch (col.cle) {
+                    case 'date':
+                      return <span className="text-sm">{formatDate(e.cree_le)}</span>;
+                    case 'type':
+                      return <span className="font-mono text-xs">{e.type}</span>;
+                    case 'destinataire':
+                      return <span className="text-sm">{e.destinataire_email}</span>;
+                    case 'statut':
+                      return statutBadge(e);
+                    default:
+                      return null;
+                  }
+                }}
+                renduCarte={(e: any) => (
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-mono text-xs text-foreground break-all">{e.type}</span>
+                      {statutBadge(e)}
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      <p>📧 {e.destinataire_email}</p>
+                      <p>📅 {formatDate(e.cree_le)}</p>
+                    </div>
+                  </div>
                 )}
-              </TableBody>
-            </Table>
-          </div>
+              />
+            );
+          })()}
         </div>
       </div>
     </LayoutAdmin>
