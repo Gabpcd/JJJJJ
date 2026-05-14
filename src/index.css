@@ -71,6 +71,67 @@
     --sidebar-ring: 330 85% 60%;
 
     --sidebar-background: 270 40% 97%;
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * Sprint 9-A — Palette Y2K Gen Z (HSL pour cohérence Tailwind)
+     * Couleurs signature ajoutées en parallèle du design system existant.
+     * Usage : hsl(var(--jolene-rose)) ou via Tailwind ('jolene-rose', etc.)
+     * ═══════════════════════════════════════════════════════════════════════ */
+
+    /* Couleurs primaires */
+    --jolene-rose: 326 100% 71%;        /* #FF6BBE — Rose Jolene vif signature */
+    --jolene-rose-50: 326 100% 96%;
+    --jolene-rose-100: 326 100% 91%;
+    --jolene-rose-200: 326 100% 86%;
+    --jolene-rose-300: 326 100% 81%;
+    --jolene-rose-400: 326 100% 76%;
+    --jolene-rose-500: 326 100% 71%;    /* base */
+    --jolene-rose-600: 326 85% 58%;
+    --jolene-rose-700: 326 75% 48%;
+    --jolene-rose-800: 326 70% 38%;
+    --jolene-rose-900: 326 65% 28%;
+
+    --jolene-mauve: 267 100% 75%;       /* #B57EFF — Mauve holographique */
+    --jolene-mauve-50: 267 100% 96%;
+    --jolene-mauve-100: 267 100% 91%;
+    --jolene-mauve-200: 267 100% 86%;
+    --jolene-mauve-300: 267 100% 81%;
+    --jolene-mauve-400: 267 100% 78%;
+    --jolene-mauve-500: 267 100% 75%;   /* base */
+    --jolene-mauve-600: 267 85% 62%;
+    --jolene-mauve-700: 267 70% 52%;
+    --jolene-mauve-800: 267 65% 42%;
+    --jolene-mauve-900: 267 60% 32%;
+
+    --jolene-cyan: 192 100% 72%;        /* #6FE5FF — Cyan dream accent */
+    --jolene-cyan-50: 192 100% 96%;
+    --jolene-cyan-100: 192 100% 91%;
+    --jolene-cyan-200: 192 100% 86%;
+    --jolene-cyan-300: 192 100% 81%;
+    --jolene-cyan-400: 192 100% 76%;
+    --jolene-cyan-500: 192 100% 72%;    /* base */
+    --jolene-cyan-600: 192 85% 58%;
+    --jolene-cyan-700: 192 75% 45%;
+    --jolene-cyan-800: 192 70% 35%;
+    --jolene-cyan-900: 192 65% 25%;
+
+    --jolene-butter: 50 100% 70%;       /* #FFE066 — Jaune butter warning friendly */
+    --jolene-butter-50: 50 100% 96%;
+    --jolene-butter-100: 50 100% 91%;
+    --jolene-butter-200: 50 100% 86%;
+    --jolene-butter-300: 50 100% 81%;
+    --jolene-butter-400: 50 100% 75%;
+    --jolene-butter-500: 50 100% 70%;   /* base */
+    --jolene-butter-600: 50 85% 55%;
+    --jolene-butter-700: 50 75% 42%;
+    --jolene-butter-800: 50 70% 32%;
+    --jolene-butter-900: 50 65% 22%;
+
+    /* Couleurs neutres Y2K */
+    --jolene-lavender: 270 100% 96%;    /* #F4EDFF — Lavender mist background */
+    --jolene-cloud: 320 100% 99%;       /* #FFFAFF — Cloud white surface */
+    --jolene-midnight: 268 38% 18%;     /* #2B1B3D — Midnight purple texte sombre */
+    --jolene-bubblegum: 271 16% 67%;    /* #A89BB8 — Bubblegum gray texte secondaire */
   }
 
   .dark {
@@ -133,6 +194,60 @@
     --sidebar-ring: 330 85% 62%;
 
     --sidebar-background: 270 40% 18%;
+
+    /* Sprint 9-A — Palette Y2K Gen Z (variantes dark) */
+    --jolene-rose: 326 90% 65%;
+    --jolene-rose-50: 326 50% 12%;
+    --jolene-rose-100: 326 55% 18%;
+    --jolene-rose-200: 326 60% 24%;
+    --jolene-rose-300: 326 70% 35%;
+    --jolene-rose-400: 326 80% 48%;
+    --jolene-rose-500: 326 90% 65%;
+    --jolene-rose-600: 326 95% 72%;
+    --jolene-rose-700: 326 100% 80%;
+    --jolene-rose-800: 326 100% 88%;
+    --jolene-rose-900: 326 100% 94%;
+
+    --jolene-mauve: 267 85% 70%;
+    --jolene-mauve-50: 267 50% 12%;
+    --jolene-mauve-100: 267 55% 18%;
+    --jolene-mauve-200: 267 60% 24%;
+    --jolene-mauve-300: 267 70% 38%;
+    --jolene-mauve-400: 267 80% 55%;
+    --jolene-mauve-500: 267 85% 70%;
+    --jolene-mauve-600: 267 90% 78%;
+    --jolene-mauve-700: 267 95% 85%;
+    --jolene-mauve-800: 267 100% 91%;
+    --jolene-mauve-900: 267 100% 95%;
+
+    --jolene-cyan: 192 90% 68%;
+    --jolene-cyan-50: 192 50% 12%;
+    --jolene-cyan-100: 192 55% 18%;
+    --jolene-cyan-200: 192 60% 24%;
+    --jolene-cyan-300: 192 70% 35%;
+    --jolene-cyan-400: 192 80% 52%;
+    --jolene-cyan-500: 192 90% 68%;
+    --jolene-cyan-600: 192 95% 76%;
+    --jolene-cyan-700: 192 100% 84%;
+    --jolene-cyan-800: 192 100% 90%;
+    --jolene-cyan-900: 192 100% 95%;
+
+    --jolene-butter: 50 90% 65%;
+    --jolene-butter-50: 50 50% 12%;
+    --jolene-butter-100: 50 55% 18%;
+    --jolene-butter-200: 50 60% 24%;
+    --jolene-butter-300: 50 70% 38%;
+    --jolene-butter-400: 50 80% 52%;
+    --jolene-butter-500: 50 90% 65%;
+    --jolene-butter-600: 50 95% 75%;
+    --jolene-butter-700: 50 100% 82%;
+    --jolene-butter-800: 50 100% 89%;
+    --jolene-butter-900: 50 100% 94%;
+
+    --jolene-lavender: 270 25% 16%;
+    --jolene-cloud: 268 25% 12%;
+    --jolene-midnight: 270 30% 95%;
+    --jolene-bubblegum: 271 15% 55%;
   }
 
   * {
@@ -937,5 +1052,91 @@
 
   footer {
     display: none !important;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Sprint 9-A PR 3 — Dégradés holographiques Y2K signature
+ * Classes utilitaires réutilisables avec animations conic-gradient pour le
+ * variant 'celebrate'. Respecte prefers-reduced-motion.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.bg-gradient-hero {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--jolene-rose)) 0%,
+    hsl(var(--jolene-mauve)) 50%,
+    hsl(var(--jolene-cyan)) 100%
+  );
+}
+
+.bg-gradient-soft {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--jolene-lavender)) 0%,
+    hsl(var(--jolene-rose-100)) 100%
+  );
+}
+
+.bg-gradient-celebrate {
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    hsl(var(--jolene-rose)),
+    hsl(var(--jolene-mauve)),
+    hsl(var(--jolene-cyan)),
+    hsl(var(--jolene-butter)),
+    hsl(var(--jolene-rose))
+  );
+}
+
+.bg-holographic {
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    hsl(var(--jolene-rose)),
+    hsl(var(--jolene-mauve)),
+    hsl(var(--jolene-cyan)),
+    hsl(var(--jolene-butter)),
+    hsl(var(--jolene-rose))
+  );
+  background-size: 200% 200%;
+  animation: holographic-spin 8s linear infinite;
+}
+
+@keyframes holographic-spin {
+  0% {
+    background-position: 0% 50%;
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    background-position: 100% 50%;
+    filter: hue-rotate(360deg);
+  }
+}
+
+/* Text-clip variant (texte holographique) */
+.text-gradient-hero {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--jolene-rose)) 0%,
+    hsl(var(--jolene-mauve)) 50%,
+    hsl(var(--jolene-cyan)) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Glow shadow Y2K */
+.shadow-holographic {
+  box-shadow:
+    0 4px 24px hsl(var(--jolene-rose) / 0.25),
+    0 8px 48px hsl(var(--jolene-mauve) / 0.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-holographic {
+    animation: none;
   }
 }
