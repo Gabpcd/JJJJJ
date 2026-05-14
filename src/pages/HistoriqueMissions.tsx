@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
@@ -7,7 +7,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { ModalCotisations } from '@/components/ModalCotisations';
 import { BoutonNoterMission } from '@/components/BoutonNoterMission';
-import { WizardOuvertureLitige } from '@/components/litige/WizardOuvertureLitige';
+// Sprint 8 ter-G PR 4 — lazy load wizard litige (code splitting, ~10KB)
+const WizardOuvertureLitige = lazy(() =>
+  import('@/components/litige/WizardOuvertureLitige').then((m) => ({
+    default: m.WizardOuvertureLitige,
+  })),
+);
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
@@ -252,14 +257,16 @@ export function HistoriqueMissionsContent() {
       <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
 
       {wizardLitige && (
-        <WizardOuvertureLitige
-          missionId={wizardLitige.id}
-          missionIntitule={wizardLitige.intitule}
-          onClose={() => setWizardLitige(null)}
-          onSuccess={() => {
-            setLitiges(prev => new Set(prev).add(wizardLitige.id));
-          }}
-        />
+        <Suspense fallback={null}>
+          <WizardOuvertureLitige
+            missionId={wizardLitige.id}
+            missionIntitule={wizardLitige.intitule}
+            onClose={() => setWizardLitige(null)}
+            onSuccess={() => {
+              setLitiges(prev => new Set(prev).add(wizardLitige.id));
+            }}
+          />
+        </Suspense>
       )}
     </>
   );
