@@ -1,5 +1,14 @@
 import React from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveDescription,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 
 export interface RecapMissionData {
   intitule: string;
@@ -42,8 +51,6 @@ export function ModalRecapMission({
   onConfirmer,
   loading = false,
 }: ModalRecapMissionProps) {
-  if (!ouvert) return null;
-
   const {
     intitule,
     description,
@@ -110,34 +117,17 @@ export function ModalRecapMission({
   majorationsCcn.push('IFM 10% + ICP 10% (CDD salarié)');
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-recap-titre"
-    >
-      <div className="bg-card w-full md:max-w-2xl md:rounded-2xl rounded-t-2xl shadow-xl max-h-[92vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-card border-b border-border px-5 py-4 flex items-center justify-between z-10">
-          <div>
-            <h2 id="modal-recap-titre" className="text-lg font-bold text-foreground">
-              📋 Récapitulatif avant publication
-            </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Vérifiez les informations avant de publier la mission.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onModifier}
-            aria-label="Fermer"
-            className="p-2 rounded-lg hover:bg-muted transition-colors"
-          >
-            <X className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-5">
+    <DialogResponsive open={ouvert} onOpenChange={(o) => { if (!o && !loading) onModifier(); }}>
+      <DialogResponsiveContent maxWidth="2xl" aria-labelledby="modal-recap-titre">
+        <DialogResponsiveHeader>
+          <DialogResponsiveTitle id="modal-recap-titre">
+            📋 Récapitulatif avant publication
+          </DialogResponsiveTitle>
+          <DialogResponsiveDescription>
+            Vérifiez les informations avant de publier la mission.
+          </DialogResponsiveDescription>
+        </DialogResponsiveHeader>
+        <DialogResponsiveBody className="space-y-5">
           {/* Section 1 — Infos mission */}
           <section className="space-y-2">
             <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">
@@ -275,15 +265,13 @@ export function ModalRecapMission({
               </div>
             </div>
           </section>
-        </div>
-
-        {/* Footer actions */}
-        <div className="sticky bottom-0 bg-card border-t border-border px-5 py-4 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
+        </DialogResponsiveBody>
+        <DialogResponsiveFooter>
           <button
             type="button"
             onClick={onModifier}
             disabled={loading}
-            className="btn-secondary flex-1 disabled:opacity-50"
+            className="btn-secondary flex-1 min-h-[44px] disabled:opacity-50"
           >
             ← Modifier
           </button>
@@ -291,13 +279,13 @@ export function ModalRecapMission({
             type="button"
             onClick={onConfirmer}
             disabled={loading}
-            className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
+            className="btn-primary flex-1 min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             📤 Publier
           </button>
-        </div>
-      </div>
-    </div>
+        </DialogResponsiveFooter>
+      </DialogResponsiveContent>
+    </DialogResponsive>
   );
 }
