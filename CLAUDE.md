@@ -123,3 +123,13 @@ Cf. docs/SPRINT_8_5_FINAL.md.
 - Refactor AdminModeration (6 tabs)
 - Mesure Lighthouse absolue mobile soignant
 - P2 §12 RPCs backend admin missions
+
+### Sprint 9-A — Fondations CSS Y2K Gen Z (4 PRs)
+Cf. docs/IDENTITE_VISUELLE_JOLENE.md.
+
+- **PR 1** : Variables CSS palette Y2K dans `src/index.css` — `--jolene-rose/mauve/cyan/butter` (avec variantes 50→900) + neutres `--jolene-lavender/cloud/midnight/bubblegum`. Light + dark mode.
+- **PR 2** : Tailwind config étendu — alias `jolene-rose`, `jolene-mauve`, etc. utilisables comme `bg-jolene-rose-500`.
+- **PR 3** : Dégradés utility classes — `.bg-gradient-hero` (linear rose→mauve→cyan), `.bg-gradient-soft` (lavender→rose pâle), `.bg-gradient-celebrate` (conic 4 couleurs), `.bg-holographic` (animé 8s, `prefers-reduced-motion` respecté), `.text-gradient-hero`, `.shadow-holographic`.
+- **PR 4** : Documentation `docs/IDENTITE_VISUELLE_JOLENE.md` (HEX/HSL/usage Tailwind/accessibilité).
+
+**Non-breaking** : palette ajoutée EN PARALLÈLE du design system existant (`--primary`, `--rose`, etc.). Migration progressive.
