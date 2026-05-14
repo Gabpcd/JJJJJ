@@ -99,3 +99,27 @@ Cf. docs/SPRINT_8_BIS_FINAL.md.
 - P2 §12 context menu actions admin missions (besoin RPCs backend `fn_admin_modifier/arreter/rembourser_mission`)
 - Admin mobile-first complet (pages admin restantes)
 - Lighthouse mobile soignant >90 mesure absolue (Vercel preview)
+
+### Sprint 8.5 — Admin mobile-first (A → D, 8 PRs)
+Cf. docs/SPRINT_8_5_FINAL.md.
+
+| Sprint | Livré | PRs |
+|---|---|---|
+| 8.5-A | Navigation admin : useScrollDirection + suppression BannerAdminMobile | 2 (#238 #240) |
+| 8.5-B | Tableaux admin part 1 : AdminMissions / AdminContrats / AdminTemplatesContrats | 3 (#241-243) |
+| 8.5-C | Tableaux admin part 2 : AdminScoreTriage / AdminAuditLogs | 2 (#244-245) |
+| 8.5-D | AdminEmails + doc finale | 2 |
+
+#### Bilan Sprint 8.5
+- **8 PRs livrées** sur 18 pages admin auditées
+- **Pages migrées (8) avec TableOuCartes** : AdminUtilisateurs, AdminMissions, AdminContrats, AdminTemplatesContrats, AdminScoreTriage, AdminAuditLogs, AdminEmails + LayoutAdmin scroll-aware
+- **Pages N/A (4)** : AdminDashboard (KPI grid), AdminReclamationsScore, AdminAlertesPointage, AdminExternalisationsActions (déjà cards)
+- **Pages reportées post-launch (7)** : AdminFacturation, AdminChorusPro, AdminConformite, AdminModeration, AdminFinances, AdminGroupes, AdminDetailUtilisateur (haute complexité, refactors dédiés nécessaires)
+
+#### Reportés post-launch (Sprint 10+)
+- Refactor AdminFacturation (expandable + bulk + multi-status actions)
+- Refactor AdminChorusPro (3 tables workflow)
+- Refactor AdminConformite (audit multi-sections)
+- Refactor AdminModeration (6 tabs)
+- Mesure Lighthouse absolue mobile soignant
+- P2 §12 RPCs backend admin missions
