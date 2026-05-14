@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, MapPin, Clock, Smartphone, Loader2 } from 'lucide-react';
+import { AlertTriangle, MapPin, Clock, Smartphone, Loader2, ShieldCheck } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -198,8 +199,13 @@ export default function AdminAlertesPointage() {
           </li>
         ))}
         {alertes.length === 0 && !loading && (
-          <li className="card-base text-center py-8 text-sm text-muted-foreground italic">
-            Aucune alerte ne correspond à ces critères.
+          <li className="list-none">
+            <EmptyState
+              icone={<ShieldCheck />}
+              titre="Aucune alerte détectée"
+              description="Aucune alerte anti-triche ne correspond à ces critères. Les alertes (téléportation, mock GPS, incohérence) apparaîtront ici."
+              variant="success"
+            />
           </li>
         )}
       </ul>

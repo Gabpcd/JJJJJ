@@ -4,6 +4,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -137,7 +138,12 @@ export default function AdminExternalisationsActions() {
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : filtered.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8 italic">Aucune action</p>
+          <EmptyState
+            icone={<CheckCircle />}
+            titre="Toutes les actions ont été traitées"
+            description="Aucune action d'externalisation en attente, en cours ou en échec ne correspond à ces filtres."
+            variant="success"
+          />
         ) : (
           <div className="space-y-2">
             {filtered.map(a => (

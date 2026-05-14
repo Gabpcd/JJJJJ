@@ -4,6 +4,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -72,7 +73,12 @@ export default function AdminReclamationsScore() {
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : reclamations.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8 italic">Aucune réclamation</p>
+          <EmptyState
+            icone={<FileText />}
+            titre={filtre === 'PENDING' ? 'Aucune réclamation à traiter' : 'Aucune réclamation'}
+            description={filtre === 'PENDING' ? 'Toutes les réclamations en attente ont été traitées.' : undefined}
+            variant={filtre === 'PENDING' ? 'success' : 'info'}
+          />
         ) : (
           <div className="space-y-2">
             {reclamations.map(r => (
