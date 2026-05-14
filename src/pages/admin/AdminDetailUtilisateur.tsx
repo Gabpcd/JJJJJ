@@ -381,41 +381,66 @@ export default function AdminDetailUtilisateur() {
                 {documents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Aucun document téléversé.</p>
                 ) : (
-                  <div className="rounded-lg border overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Fichier</TableHead>
-                          <TableHead>Statut</TableHead>
-                          <TableHead>Validité</TableHead>
-                          <TableHead>Téléversé le</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {documents.map((doc) => {
-                          const statutInfo = STATUTS_VERIFICATION[doc.statut_verification] || { label: doc.statut_verification, couleur: 'bg-muted text-muted-foreground' };
-                          return (
-                            <TableRow key={doc.id}>
-                              <TableCell className="font-medium">{TYPES_DOCUMENTS[doc.type_document] || doc.type_document}</TableCell>
-                              <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{doc.nom_fichier}</TableCell>
-                              <TableCell>
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statutInfo.couleur}`}>
-                                  {statutInfo.label}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                {doc.valide_jusqua ? new Date(doc.valide_jusqua).toLocaleDateString('fr-FR') : '—'}
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                {doc.televerse_le ? new Date(doc.televerse_le).toLocaleDateString('fr-FR') : '—'}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <>
+                    {/* Desktop : table */}
+                    <div className="hidden md:block rounded-lg border overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Fichier</TableHead>
+                            <TableHead>Statut</TableHead>
+                            <TableHead>Validité</TableHead>
+                            <TableHead>Téléversé le</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {documents.map((doc) => {
+                            const statutInfo = STATUTS_VERIFICATION[doc.statut_verification] || { label: doc.statut_verification, couleur: 'bg-muted text-muted-foreground' };
+                            return (
+                              <TableRow key={doc.id}>
+                                <TableCell className="font-medium">{TYPES_DOCUMENTS[doc.type_document] || doc.type_document}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{doc.nom_fichier}</TableCell>
+                                <TableCell>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statutInfo.couleur}`}>
+                                    {statutInfo.label}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {doc.valide_jusqua ? new Date(doc.valide_jusqua).toLocaleDateString('fr-FR') : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {doc.televerse_le ? new Date(doc.televerse_le).toLocaleDateString('fr-FR') : '—'}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile : cards */}
+                    <div className="md:hidden space-y-3">
+                      {documents.map((doc) => {
+                        const statutInfo = STATUTS_VERIFICATION[doc.statut_verification] || { label: doc.statut_verification, couleur: 'bg-muted text-muted-foreground' };
+                        return (
+                          <div key={doc.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-foreground">{TYPES_DOCUMENTS[doc.type_document] || doc.type_document}</p>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0 ${statutInfo.couleur}`}>
+                                {statutInfo.label}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground break-words">{doc.nom_fichier}</p>
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40 pt-2">
+                              <span>Téléversé : {doc.televerse_le ? new Date(doc.televerse_le).toLocaleDateString('fr-FR') : '—'}</span>
+                              <span>Validité : {doc.valide_jusqua ? new Date(doc.valide_jusqua).toLocaleDateString('fr-FR') : '—'}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -430,36 +455,77 @@ export default function AdminDetailUtilisateur() {
               {missions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Aucune mission.</p>
               ) : (
-                <div className="rounded-lg border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Intitulé</TableHead>
-                        {type === 'soignant' && <TableHead>Établissement</TableHead>}
-                        {type === 'etablissement' && <TableHead>Soignant</TableHead>}
-                        <TableHead>Début</TableHead>
-                        <TableHead>Durée</TableHead>
-                        <TableHead>Statut</TableHead>
-                        {type === 'soignant' && <TableHead>Net</TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {missions.map((m: any) => (
-                        <TableRow key={m.id}>
-                          <TableCell className="font-medium">{m.intitule}</TableCell>
-                          {type === 'soignant' && <TableCell className="text-xs">{(m.etablissements as any)?.nom || '—'}</TableCell>}
-                          {type === 'etablissement' && <TableCell className="text-xs">{(m.soignants as any) ? `${(m.soignants as any).prenom} ${(m.soignants as any).nom}` : '—'}</TableCell>}
-                          <TableCell className="text-xs">{new Date(m.debut_le).toLocaleDateString('fr-FR')}</TableCell>
-                          <TableCell className="text-xs">{m.duree_heures ? `${m.duree_heures}h` : '—'}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-[10px]">{m.statut === "OUVERTE" ? "Ouverte" : m.statut === "ASSIGNEE" ? "Assignée" : m.statut === "EN_COURS" ? "En cours" : m.statut === "TERMINEE" ? "Terminée" : m.statut}</Badge>
-                          </TableCell>
-                          {type === 'soignant' && <TableCell className="text-xs font-mono">{m.net_a_payer ? `${Number(m.net_a_payer).toFixed(2)} €` : '—'}</TableCell>}
+                <>
+                  {/* Desktop : table */}
+                  <div className="hidden md:block rounded-lg border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Intitulé</TableHead>
+                          {type === 'soignant' && <TableHead>Établissement</TableHead>}
+                          {type === 'etablissement' && <TableHead>Soignant</TableHead>}
+                          <TableHead>Début</TableHead>
+                          <TableHead>Durée</TableHead>
+                          <TableHead>Statut</TableHead>
+                          {type === 'soignant' && <TableHead>Net</TableHead>}
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {missions.map((m: any) => (
+                          <TableRow key={m.id}>
+                            <TableCell className="font-medium">{m.intitule}</TableCell>
+                            {type === 'soignant' && <TableCell className="text-xs">{(m.etablissements as any)?.nom || '—'}</TableCell>}
+                            {type === 'etablissement' && <TableCell className="text-xs">{(m.soignants as any) ? `${(m.soignants as any).prenom} ${(m.soignants as any).nom}` : '—'}</TableCell>}
+                            <TableCell className="text-xs">{new Date(m.debut_le).toLocaleDateString('fr-FR')}</TableCell>
+                            <TableCell className="text-xs">{m.duree_heures ? `${m.duree_heures}h` : '—'}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-[10px]">{m.statut === "OUVERTE" ? "Ouverte" : m.statut === "ASSIGNEE" ? "Assignée" : m.statut === "EN_COURS" ? "En cours" : m.statut === "TERMINEE" ? "Terminée" : m.statut}</Badge>
+                            </TableCell>
+                            {type === 'soignant' && <TableCell className="text-xs font-mono">{m.net_a_payer ? `${Number(m.net_a_payer).toFixed(2)} €` : '—'}</TableCell>}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile : cards */}
+                  <div className="md:hidden space-y-3">
+                    {missions.map((m: any) => {
+                      const statutLabel = m.statut === "OUVERTE" ? "Ouverte" : m.statut === "ASSIGNEE" ? "Assignée" : m.statut === "EN_COURS" ? "En cours" : m.statut === "TERMINEE" ? "Terminée" : m.statut;
+                      const contrepartie = type === 'soignant'
+                        ? ((m.etablissements as any)?.nom || '—')
+                        : ((m.soignants as any) ? `${(m.soignants as any).prenom} ${(m.soignants as any).nom}` : '—');
+                      return (
+                        <div key={m.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold truncate">{m.intitule}</p>
+                            <Badge variant="outline" className="text-[10px] shrink-0">{statutLabel}</Badge>
+                          </div>
+                          <div className="grid grid-cols-1 gap-1 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-muted-foreground shrink-0">{type === 'soignant' ? 'Établissement' : 'Soignant'}</span>
+                              <span className="text-foreground text-right truncate">{contrepartie}</span>
+                            </div>
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-muted-foreground shrink-0">Début</span>
+                              <span className="text-foreground">{new Date(m.debut_le).toLocaleDateString('fr-FR')}</span>
+                            </div>
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-muted-foreground shrink-0">Durée</span>
+                              <span className="text-foreground">{m.duree_heures ? `${m.duree_heures}h` : '—'}</span>
+                            </div>
+                            {type === 'soignant' && (
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-muted-foreground shrink-0">Net</span>
+                                <span className="text-foreground font-mono">{m.net_a_payer ? `${Number(m.net_a_payer).toFixed(2)} €` : '—'}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
