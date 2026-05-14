@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react';
-import { Loader2, X, Star, AlertCircle } from 'lucide-react';
+import { Loader2, Star, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import {
+  DialogResponsive,
+  DialogResponsiveContent,
+  DialogResponsiveHeader,
+  DialogResponsiveTitle,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 
 interface Props {
   mission: {
@@ -34,6 +42,8 @@ const CRITERES = [
  *  - Propagation au score soignant (composante "notation étab" 35%)
  *  - Notification push + email au soignant
  *  - Audit trail
+ *
+ * Sprint 8 ter-F PR 4 — Migration vers DialogResponsive (fullscreen mobile).
  */
 export function ModaleEvaluerSoignant({ mission, onFermer, onEvaluee }: Props) {
   const { afficherNotification } = useNotification();
@@ -83,96 +93,91 @@ export function ModaleEvaluerSoignant({ mission, onFermer, onEvaluee }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div
-        className="bg-card border border-border rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Évaluer le soignant</h2>
-          <button onClick={onFermer} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Récap */}
-        <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-0.5">
-          <p className="font-semibold text-foreground">{mission.intitule}</p>
-          <p className="text-muted-foreground">{mission.soignant_prenom} {mission.soignant_nom} · {mission.soignant_profession}</p>
-        </div>
-
-        {/* Critères */}
-        <div className="space-y-4">
-          {CRITERES.map((c) => (
-            <div key={c.key} className="space-y-1">
-              <div className="flex items-baseline justify-between">
-                <label className="text-sm font-medium text-foreground">{c.label} *</label>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {criteres[c.key] ? `${criteres[c.key]}/5` : '—/5'}
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground">{c.description}</p>
-              <div className="flex gap-1.5">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setCriteres((prev) => ({ ...prev, [c.key]: n }))}
-                    className={`flex-1 py-2 rounded-lg border-2 transition-all text-sm font-medium ${
-                      criteres[c.key] === n
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-background text-muted-foreground hover:border-primary/40'
-                    }`}
-                    disabled={loading}
-                  >
-                    <Star className={`h-4 w-4 inline ${criteres[c.key] && n <= criteres[c.key] ? 'fill-current' : ''}`} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Note globale */}
-        {noteGlobale !== null && (
-          <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-3 text-center">
-            <p className="text-xs text-muted-foreground">Note globale calculée</p>
-            <p className="text-2xl font-bold text-primary tabular-nums">{noteGlobale} / 5</p>
+    <DialogResponsive open={true} onOpenChange={(o) => { if (!o && !loading) onFermer(); }}>
+      <DialogResponsiveContent maxWidth="lg">
+        <DialogResponsiveHeader>
+          <DialogResponsiveTitle>Évaluer le soignant</DialogResponsiveTitle>
+        </DialogResponsiveHeader>
+        <DialogResponsiveBody className="space-y-4">
+          {/* Récap */}
+          <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-0.5">
+            <p className="font-semibold text-foreground">{mission.intitule}</p>
+            <p className="text-muted-foreground">{mission.soignant_prenom} {mission.soignant_nom} · {mission.soignant_profession}</p>
           </div>
-        )}
 
-        {/* Commentaire */}
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Commentaire (optionnel, max 500 caractères)</span>
-          <textarea
-            value={commentaire}
-            onChange={(e) => setCommentaire(e.target.value.slice(0, 500))}
-            className="input-base"
-            rows={3}
-            placeholder="Vos retours qualitatifs sur le soignant…"
-            maxLength={500}
-            disabled={loading}
-          />
-          <span className="text-[10px] text-muted-foreground">{commentaire.length} / 500</span>
-        </label>
+          {/* Critères */}
+          <div className="space-y-4">
+            {CRITERES.map((c) => (
+              <div key={c.key} className="space-y-1">
+                <div className="flex items-baseline justify-between">
+                  <label className="text-sm font-medium text-foreground">{c.label} *</label>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {criteres[c.key] ? `${criteres[c.key]}/5` : '—/5'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{c.description}</p>
+                <div className="flex gap-1.5">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setCriteres((prev) => ({ ...prev, [c.key]: n }))}
+                      className={`flex-1 min-h-[44px] rounded-lg border-2 transition-all text-sm font-medium ${
+                        criteres[c.key] === n
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+                      }`}
+                      disabled={loading}
+                      aria-label={`${c.label} : ${n}/5`}
+                    >
+                      <Star className={`h-4 w-4 inline ${criteres[c.key] && n <= criteres[c.key] ? 'fill-current' : ''}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
 
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <p>L'évaluation alimente le score de fiabilité du soignant (Sprint 3.5). Le soignant sera notifié de cette évaluation et pourra la contester via le support si elle paraît injuste.</p>
-        </div>
+          {/* Note globale */}
+          {noteGlobale !== null && (
+            <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-3 text-center">
+              <p className="text-xs text-muted-foreground">Note globale calculée</p>
+              <p className="text-2xl font-bold text-primary tabular-nums">{noteGlobale} / 5</p>
+            </div>
+          )}
 
-        <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
+          {/* Commentaire */}
+          <label className="block">
+            <span className="text-xs font-medium text-foreground mb-1 block">Commentaire (optionnel, max 500 caractères)</span>
+            <textarea
+              value={commentaire}
+              onChange={(e) => setCommentaire(e.target.value.slice(0, 500))}
+              className="input-base"
+              rows={3}
+              placeholder="Vos retours qualitatifs sur le soignant…"
+              maxLength={500}
+              disabled={loading}
+            />
+            <span className="text-[10px] text-muted-foreground">{commentaire.length} / 500</span>
+          </label>
+
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <p>L'évaluation alimente le score de fiabilité du soignant (Sprint 3.5). Le soignant sera notifié de cette évaluation et pourra la contester via le support si elle paraît injuste.</p>
+          </div>
+        </DialogResponsiveBody>
+        <DialogResponsiveFooter>
+          <button onClick={onFermer} disabled={loading} className="btn-secondary min-h-[44px] disabled:opacity-50">Annuler</button>
           <button
             onClick={soumettre}
             disabled={loading || !valide}
-            className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+            className="btn-primary min-h-[44px] disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             Envoyer l'évaluation
           </button>
-        </div>
-      </div>
-    </div>
+        </DialogResponsiveFooter>
+      </DialogResponsiveContent>
+    </DialogResponsive>
   );
 }
