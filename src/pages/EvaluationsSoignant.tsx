@@ -4,6 +4,8 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
@@ -215,45 +217,89 @@ function EvaluationsContent() {
         {total} évaluation{total > 1 ? 's' : ''}
       </p>
 
-      {notations.length === 0 ? (
-        <EmptyState icone={<Star />} titre="Aucune évaluation" description="Les évaluations reçues apparaîtront ici." />
-      ) : (
-        <ul className="space-y-2">
-          {notations.map((n) => (
-            <li key={n.id} className="card-base">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <StarsRow note={n.note_moyenne} />
-                    <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {format(new Date(n.cree_le), 'd MMM yyyy', { locale: fr })}
-                    </span>
+      {(() => {
+        const colonnes: ColonneTableau<Notation>[] = [
+          { cle: 'note', titre: 'Note' },
+          { cle: 'mission', titre: 'Mission' },
+          { cle: 'etab', titre: 'Établissement' },
+          { cle: 'commentaire', titre: 'Commentaire' },
+          { cle: 'date', titre: 'Date' },
+          { cle: 'actions', titre: '', align: 'right', largeur: 'w-32' },
+        ];
+        return (
+          <TableOuCartes
+            colonnes={colonnes}
+            donnees={notations}
+            getId={(n) => n.id}
+            etatVide={<EmptyState icone={<Star />} titre="Aucune évaluation" description="Les évaluations reçues apparaîtront ici." />}
+            renduCellule={(n, col) => {
+              switch (col.cle) {
+                case 'note':
+                  return <StarsRow note={n.note_moyenne} />;
+                case 'mission':
+                  return <span className="font-medium text-foreground line-clamp-1">{n.mission_intitule}</span>;
+                case 'etab':
+                  return <span className="text-sm text-muted-foreground">{n.etablissement_nom}</span>;
+                case 'commentaire':
+                  return n.commentaire
+                    ? <span className="text-xs italic line-clamp-2">« {n.commentaire} »</span>
+                    : <span className="text-xs text-muted-foreground">—</span>;
+                case 'date':
+                  return <span className="text-xs text-muted-foreground whitespace-nowrap">{format(new Date(n.cree_le), 'd MMM yyyy', { locale: fr })}</span>;
+                case 'actions':
+                  return (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-xs gap-1"
+                      disabled={n.signale}
+                      onClick={(e) => { e.stopPropagation(); setNotationSignaler(n); }}
+                    >
+                      <Flag className="h-3 w-3" />
+                      {n.signale ? 'Signalée' : 'Signaler'}
+                    </Button>
+                  );
+                default:
+                  return null;
+              }
+            }}
+            renduCarte={(n) => (
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <StarsRow note={n.note_moyenne} />
+                      <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {format(new Date(n.cree_le), 'd MMM yyyy', { locale: fr })}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground line-clamp-1">{n.mission_intitule}</p>
+                    <p className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-0.5">
+                      <Building2 className="h-3 w-3" /> {n.etablissement_nom}
+                    </p>
+                    {n.commentaire && (
+                      <p className="text-xs text-foreground mt-2 italic">« {n.commentaire} »</p>
+                    )}
                   </div>
-                  <p className="text-sm font-semibold text-foreground line-clamp-1">{n.mission_intitule}</p>
-                  <p className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-0.5">
-                    <Building2 className="h-3 w-3" /> {n.etablissement_nom}
-                  </p>
-                  {n.commentaire && (
-                    <p className="text-xs text-foreground mt-2 italic">« {n.commentaire} »</p>
-                  )}
+                </div>
+                <div className="pt-2 border-t border-border flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs min-h-[44px] gap-1.5 text-muted-foreground hover:text-destructive"
+                    disabled={n.signale}
+                    onClick={(e) => { e.stopPropagation(); setNotationSignaler(n); }}
+                  >
+                    <Flag className="h-3.5 w-3.5" />
+                    {n.signale ? 'Déjà signalée' : 'Signaler cette évaluation'}
+                  </Button>
                 </div>
               </div>
-              <div className="mt-2 pt-2 border-t border-border flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setNotationSignaler(n)}
-                  className="text-[11px] text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
-                  disabled={n.signale}
-                >
-                  <Flag className="h-3 w-3" />
-                  {n.signale ? 'Déjà signalée' : 'Signaler cette évaluation'}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+            )}
+          />
+        );
+      })()}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
