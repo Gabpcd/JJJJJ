@@ -13,7 +13,7 @@ import {
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { getChorusStatutBadge } from '@/lib/chorus-helpers';
-import { EtatVide, IllustrationCalculatrice } from '@/components/EtatVide';
+import { EmptyState, IllustrationCalculatrice } from '@/components/ui/EmptyState';
 import { BadgePalier } from '@/components/BadgePalier';
 import { PaiementVirement } from '@/components/PaiementVirement';
 import { StripeEmbeddedCheckout } from '@/components/StripeEmbeddedCheckout';
