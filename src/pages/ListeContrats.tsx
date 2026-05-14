@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { FileText } from 'lucide-react';
-import { IllustrationStylo } from '@/components/EtatVide';
+import { IllustrationStylo } from '@/components/ui/EmptyState';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { UserRole } from '@/lib/types';
@@ -105,10 +105,10 @@ export function ListeContratsContent({ role }: { role: UserRole }) {
             : 'Vos contrats apparaîtront ici après avoir accepté une mission.';
         }
         return (
-          <EtatVide
+          <EmptyState
             illustration={<IllustrationStylo />}
             titre={titre}
-            sousTitre={sousTitre}
+            description={sousTitre}
           />
         );
       })() : (

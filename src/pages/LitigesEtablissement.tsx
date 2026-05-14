@@ -3,7 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Scale, PlusCircle, MessageCircle } from 'lucide-react';
@@ -137,7 +137,12 @@ export default function LitigesEtablissement() {
       </div>
 
       {litiges.length === 0 ? (
-        <EtatVide icone={Scale} titre="Aucun litige" sousTitre="Aucun litige sur vos missions. Cliquez sur « Ouvrir un litige » pour contester une mission." />
+        <EmptyState
+          icone={<Scale />}
+          titre="Aucun litige"
+          description="Aucun litige sur vos missions. Cliquez sur « Ouvrir un litige » pour contester une mission."
+          variant="success"
+        />
       ) : (
         <div className="space-y-4">
           {litiges.map((l: any) => {

@@ -12,7 +12,7 @@ import { CarteMission } from '@/components/CarteMission';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ModaleAnnulationMissionEtab } from '@/components/etablissement/ModaleAnnulationMissionEtab';
-import { EtatVide, IllustrationMegaphone } from '@/components/EtatVide';
+import { EmptyState, IllustrationMegaphone } from '@/components/ui/EmptyState';
 import { ChargementPage } from '@/components/ChargementPage';
 import { FABCreerMission } from '@/components/FABCreerMission';
 import { useAuth } from '@/contexts/AuthContext';
@@ -242,8 +242,8 @@ export default function ListeMissions() {
           )}
         </>
       ) : filtreStatut ? (
-        <EtatVide
-          icone={Search}
+        <EmptyState
+          icone={<Search />}
           titre={
             filtreStatut === 'OUVERTE' ? 'Aucune mission ouverte' :
             filtreStatut === 'ASSIGNEE' ? 'Aucune mission assignée' :
@@ -254,17 +254,23 @@ export default function ListeMissions() {
             filtreStatut === 'LITIGE' ? 'Aucun litige' :
             'Aucune mission trouvée'
           }
-          sousTitre="Essayez un autre filtre ou publiez une nouvelle mission."
-          boutonLabel="Voir toutes les missions"
-          boutonRoute="/etablissement/missions"
+          description="Essayez un autre filtre ou publiez une nouvelle mission."
+          cta={{ label: 'Voir toutes les missions', onClick: () => navigate('/etablissement/missions') }}
         />
       ) : (counts[''] ?? 0) > 0 ? (
-        <EtatVide icone={Search} titre="Aucune mission récente" sousTitre="Vos missions précédentes n'apparaissent pas dans ce filtre."
-          boutonLabel="Publier une mission" boutonRoute="/etablissement/missions/creer" />
+        <EmptyState
+          icone={<Search />}
+          titre="Aucune mission récente"
+          description="Vos missions précédentes n'apparaissent pas dans ce filtre."
+          cta={{ label: 'Publier une mission', onClick: () => navigate('/etablissement/missions/creer') }}
+        />
       ) : (
-        <EtatVide illustration={<IllustrationMegaphone />} titre="Publiez votre première mission"
-          sousTitre="Trouvez un soignant qualifié en quelques heures."
-          boutonLabel="Créer une mission →" boutonRoute="/etablissement/missions/creer" />
+        <EmptyState
+          illustration={<IllustrationMegaphone />}
+          titre="Publiez votre première mission"
+          description="Trouvez un soignant qualifié en quelques heures."
+          cta={{ label: 'Créer une mission →', onClick: () => navigate('/etablissement/missions/creer') }}
+        />
       )}
 
       <FABCreerMission />

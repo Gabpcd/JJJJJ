@@ -4,7 +4,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CarteValidation } from '@/components/CarteValidation';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -252,7 +252,12 @@ export default function PresencesEtablissement() {
               ))}
             </div>
           ) : (
-            <EtatVide icone={CheckCircle} titre="Aucune présence à valider" sousTitre="Les pointages de vos soignants apparaîtront ici." />
+            <EmptyState
+              icone={<CheckCircle />}
+              titre="Aucune présence à valider"
+              description="Les pointages de vos soignants apparaîtront ici."
+              variant="success"
+            />
           )}
         </TabsContent>
 
@@ -264,7 +269,11 @@ export default function PresencesEtablissement() {
               ))}
             </div>
           ) : (
-            <EtatVide icone={Clock} titre="Aucune mission en cours" sousTitre="Les soignants actuellement en mission apparaîtront ici." />
+            <EmptyState
+              icone={<Clock />}
+              titre="Aucune mission en cours"
+              description="Les soignants actuellement en mission apparaîtront ici."
+            />
           )}
         </TabsContent>
 
@@ -276,7 +285,11 @@ export default function PresencesEtablissement() {
               ))}
             </div>
           ) : (
-            <EtatVide icone={CheckCircle} titre="Aucune présence validée" sousTitre="Les présences validées seront archivées ici." />
+            <EmptyState
+              icone={<CheckCircle />}
+              titre="Aucune présence validée"
+              description="Les présences validées seront archivées ici."
+            />
           )}
         </TabsContent>
 
@@ -288,7 +301,12 @@ export default function PresencesEtablissement() {
               ))}
             </div>
           ) : (
-            <EtatVide icone={AlertTriangle} titre="Aucune alerte" sousTitre="Les présences avec des alertes de fraude apparaîtront ici." />
+            <EmptyState
+              icone={<AlertTriangle />}
+              titre="Aucune alerte"
+              description="Les présences avec des alertes de fraude apparaîtront ici."
+              variant="success"
+            />
           )}
         </TabsContent>
       </Tabs>
