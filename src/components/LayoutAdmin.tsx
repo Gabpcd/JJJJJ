@@ -179,10 +179,12 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* ── Mobile: top header with logout (auto-hide on scroll down) ── */}
+      {/* ── Mobile: top header with logout (auto-hide on scroll down)
+           Sprint 9-D : glassmorphism subtle (bg-card/85 + backdrop-blur) ── */}
       <header
         className={cn(
-          'fixed top-0 left-0 right-0 h-14 bg-card border-b border-border flex md:hidden items-center justify-between px-4 z-50',
+          'fixed top-0 left-0 right-0 h-14 flex md:hidden items-center justify-between px-4 z-50',
+          'bg-card/85 backdrop-blur-xl supports-[backdrop-filter]:bg-card/70 border-b border-jolene-rose-200/40',
           'transition-transform duration-200 motion-reduce:transition-none',
           scrollDirection === 'down' ? '-translate-y-full' : 'translate-y-0',
         )}
@@ -199,9 +201,9 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* ── Mobile bottom nav ── */}
+      {/* ── Mobile bottom nav (Sprint 9-D : glassmorphism subtle) ── */}
       <nav
-        className="fixed bottom-0 left-0 right-0 flex md:hidden z-50 bg-card border-t border-border shadow-lg"
+        className="fixed bottom-0 left-0 right-0 flex md:hidden z-50 bg-card/85 backdrop-blur-xl supports-[backdrop-filter]:bg-card/70 border-t border-jolene-rose-200/40 shadow-lg"
         style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }}
         role="navigation"
         aria-label="Navigation mobile admin"
