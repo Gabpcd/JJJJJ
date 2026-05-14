@@ -22,7 +22,7 @@
  *     )}
  *   />
  */
-import { ReactNode } from 'react';
+import { ReactNode, memo } from 'react';
 import { useViewport } from '@/hooks/useViewport';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
@@ -53,7 +53,13 @@ type Props<T> = {
   className?: string;
 };
 
-export function TableOuCartes<T>({
+/**
+ * Sprint 8 ter-G PR 5 — mémoïsé via React.memo (shallow equality).
+ * Évite les re-renders quand le parent ne change ni `donnees` ni `colonnes`.
+ * Bénéfice CPU sur pages avec listes > 30 items (FacturationEtablissement, AdminUtilisateurs…).
+ * Note : `as typeof TableOuCartesImpl` préserve la signature générique perdue par React.memo.
+ */
+function TableOuCartesImpl<T>({
   colonnes,
   donnees,
   getId,
@@ -141,4 +147,5 @@ export function TableOuCartes<T>({
   );
 }
 
+export const TableOuCartes = memo(TableOuCartesImpl) as typeof TableOuCartesImpl;
 export default TableOuCartes;
