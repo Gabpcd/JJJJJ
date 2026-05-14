@@ -150,6 +150,25 @@ Cf. docs/SPRINT_11_C.md.
 - **PR 2** (#284) : `AdminDetailUtilisateur` page detail composite (6 tabs) → 2 tabs refactorées : Documents (5 cols) + Missions (6-7 cols selon type soignant/etab). 4 autres tabs skip honnête (Informations/Score/Profil complet/Actions admin déjà responsive). Audit RGPD + 2 ModalConfirmation préservés.
 - **PR 3** : doc Sprint 11-C + CLAUDE.md.
 
+### Sprint 11-D — Admin mobile-first AdminFacturation (la plus complexe) (2 PRs)
+Cf. docs/SPRINT_11_D.md + docs/SPRINT_11_FINAL.md.
+
+- **PR 1** (#286) : `AdminFacturation` (page unique, pas de tabs comme supposé initialement) — table 10 cols + nested expandable 8 cols + bulk actions Stripe/Chorus/CSV + multi-status VIREMENT_DECLARE workflow. Refactor :
+  * Extraction logique fetch missions → hook `useMissionsFacture` (réutilisable desktop+mobile)
+  * Extraction rendu → `FactureDetailContenu` component avec `mode: 'desktop' | 'mobile'`
+  * `hidden md:block` cards mobile avec bandeau "Tout sélectionner" + cards par facture (checkbox + grid 2x2 HT/TTC/Missions/Émise + actions VIREMENT_DECLARE + expand inline)
+  * `BoutonsBulkFactures` (Stripe Connect, Chorus Pro, CSV) inchangé mobile+desktop
+  * Toutes RPC actions + PDF jsPDF + edge function `sepa-auto-charge` préservés
+- **PR 2** : doc Sprint 11-D + docs/SPRINT_11_FINAL.md (récap Sprint 11 A→D) + CLAUDE.md.
+
+#### Bilan Sprint 11 complet (A → D)
+- **11 PRs livrées en prod**
+- **7 pages admin mobile-first 100%** (les 7 reportées Sprint 8.5)
+- **11 tables denses refactorées** (3399 lignes touchées)
+- Pattern `hidden md:block` + cards mobile parallèles privilégié sur TableOuCartes (incompatible avec expansion / state local per-row / tabs imbriquées)
+- Refactor `champs[]` unifié uniquement pour AdminConformite (config déclarative pure)
+- Audit-first systématique : skip honnête (Litiges/Évaluations AdminModeration ; Informations/Score/Profil/Actions admin AdminDetailUtilisateur)
+
 ### Sprint 9-D — Animations + glassmorphism + doc finale (4 PRs)
 Cf. docs/SPRINT_9_FINAL.md.
 
