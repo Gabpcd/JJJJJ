@@ -1,13 +1,30 @@
-import { useState, useEffect, useRef } from 'react';
-import { Send } from 'lucide-react';
+/**
+ * `<ChatConversation />` — Sprint 10-B PR 2 refonte Meta-grade Y2K
+ *
+ * Composant chat inline pour une mission donnée, inspiré WhatsApp/Messenger.
+ *
+ * Structure :
+ *  - Header : avatar interlocuteur + nom + status text + indicateur typing
+ *  - Zone messages avec bulles Y2K :
+ *      * Soi (droite) : gradient rose-mauve, white text, rounded-br-md
+ *      * Autre (gauche) : bg-cloud-white, midnight text, rounded-bl-md
+ *      * Bulle système (centrée italic) : "Conversation ouverte" / archivée
+ *      * Groupement temporel : "Aujourd'hui" / "Hier" / "12 mai" entre groupes
+ *      * Read receipts : 1 check sent (gris) / 2 checks read (cyan)
+ *  - InputMessage (PR 3) avec validation anti-leak + typing event
+ *
+ * Realtime via useConversationRealtime (PR 5) : presence + typing.
+ */
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Check, CheckCheck, MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { sanitizeText } from '@/lib/sanitize';
-import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
-import { hapticImpact } from '@/lib/haptics';
+import { useConversationRealtime } from '@/hooks/useConversationRealtime';
+import { InputMessage } from '@/components/messagerie/InputMessage';
+import { AvatarDisplay } from '@/components/AvatarUpload';
 
 interface Message {
   id: string;
@@ -19,31 +36,59 @@ interface Message {
   cree_le: string;
 }
 
+interface AutreInfo {
+  prenom: string;
+  nom: string;
+  avatar: string | null;
+}
+
 interface ChatConversationProps {
   missionId: string;
   autreUserId: string;
-  /** If the other party is an établissement record ID (not a user ID), set this to true to resolve via RPC */
   isEtablissement?: boolean;
 }
 
-/**
- * Chat component that uses conversations + messages_chat tables.
- * Resolves/creates a conversation for a given mission and counterpart,
- * then sends/receives messages via fn_envoyer_message and realtime.
- */
+function formatGroupLabel(date: Date): string {
+  if (isToday(date)) return "Aujourd'hui";
+  if (isYesterday(date)) return 'Hier';
+  return format(date, 'd MMMM', { locale: fr });
+}
+
+function presenceLabel(presence: 'ONLINE' | 'AWAY' | 'OFFLINE', lastSeen: Date | null): string {
+  if (presence === 'ONLINE') return 'En ligne';
+  if (presence === 'AWAY') return 'Absent';
+  if (lastSeen) {
+    if (isToday(lastSeen)) return `Vu à ${format(lastSeen, 'HH:mm')}`;
+    if (isYesterday(lastSeen)) return `Vu hier`;
+    return `Vu le ${format(lastSeen, 'd MMM', { locale: fr })}`;
+  }
+  return 'Hors ligne';
+}
+
+const PRESENCE_DOT_CLASS: Record<'ONLINE' | 'AWAY' | 'OFFLINE', string> = {
+  ONLINE: 'bg-green-500',
+  AWAY: 'bg-jolene-butter-500',
+  OFFLINE: 'bg-muted-foreground/40',
+};
+
 export function ChatConversation({ missionId, autreUserId, isEtablissement }: ChatConversationProps) {
   const { user } = useAuth();
   const [convId, setConvId] = useState<string | null>(null);
+  const [resolvedAutreId, setResolvedAutreId] = useState<string | null>(null);
+  const [autreInfo, setAutreInfo] = useState<AutreInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [texte, setTexte] = useState('');
-  const [envoi, setEnvoi] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [archived, setArchived] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Resolve conversation
+  const { typing, presence, lastSeen } = useConversationRealtime({
+    conversationId: convId,
+    autreUserId: resolvedAutreId,
+  });
+
   useEffect(() => {
     if (!user || !missionId || !autreUserId) return;
+    let cancelled = false;
 
     const resolve = async () => {
       let resolvedUserId = autreUserId;
@@ -52,11 +97,14 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
         const { data: uid, error: resolveErr } = await supabase.rpc('fn_user_id_pour_etablissement' as any, { p_etablissement_id: autreUserId });
         if (resolveErr || !uid) {
           logger.error('ChatConversation: cannot resolve etablissement user ID', resolveErr);
-          setLoading(false);
+          if (!cancelled) setLoading(false);
           return;
         }
         resolvedUserId = uid as string;
       }
+
+      if (cancelled) return;
+      setResolvedAutreId(resolvedUserId);
 
       const { data, error } = await supabase.rpc('fn_obtenir_conversation', {
         p_autre_id: resolvedUserId,
@@ -65,21 +113,50 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
 
       if (error || !data) {
         logger.error('ChatConversation: fn_obtenir_conversation error', error);
-        setLoading(false);
+        if (!cancelled) setLoading(false);
         return;
       }
 
-      setConvId(data as string);
+      if (!cancelled) setConvId(data as string);
     };
 
     resolve();
+    return () => { cancelled = true; };
   }, [user, missionId, autreUserId, isEtablissement]);
 
-  // Load messages when convId is set
+  useEffect(() => {
+    if (!resolvedAutreId) return;
+    let cancelled = false;
+
+    (async () => {
+      const [{ data: soignant }, { data: etab }] = await Promise.all([
+        supabase.from('soignants').select('prenom, nom, avatar_url').eq('id', resolvedAutreId).maybeSingle(),
+        supabase.from('etablissements').select('nom, logo_url').eq('id', resolvedAutreId).maybeSingle(),
+      ]);
+      if (cancelled) return;
+      if (soignant) {
+        setAutreInfo({ prenom: (soignant as any).prenom, nom: (soignant as any).nom, avatar: (soignant as any).avatar_url });
+      } else if (etab) {
+        setAutreInfo({ prenom: (etab as any).nom, nom: '', avatar: (etab as any).logo_url });
+      } else {
+        setAutreInfo({ prenom: 'Jolene', nom: '', avatar: null });
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [resolvedAutreId]);
+
   useEffect(() => {
     if (!convId) return;
 
     const load = async () => {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('archived_at')
+        .eq('id', convId)
+        .maybeSingle();
+      setArchived(!!(conv as any)?.archived_at);
+
       const { data } = await supabase
         .from('messages_chat')
         .select('id, conversation_id, auteur_id, contenu, est_admin, lu, cree_le')
@@ -90,7 +167,6 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
       setMessages((data as Message[]) || []);
       setLoading(false);
 
-      // Mark as read
       supabase.rpc('fn_marquer_messages_lus', { p_conversation_id: convId }).then(({ error }) => {
         if (error) logger.error('ChatConversation: fn_marquer_messages_lus error', error);
       });
@@ -98,7 +174,6 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
 
     load();
 
-    // Realtime
     const channel = supabase
       .channel(`chat-conv-inline-${convId}`)
       .on('postgres_changes', {
@@ -115,50 +190,41 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
           });
         }
       })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages_chat',
+        filter: `conversation_id=eq.${convId}`,
+      }, (payload) => {
+        const msg = payload.new as Message;
+        setMessages(prev => prev.map(m => m.id === msg.id ? msg : m));
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [convId, user]);
 
-  // Auto-scroll
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, typing]);
 
-  const envoyer = async () => {
-    const contenuBrut = texte.trim();
-    if (!contenuBrut || !convId || !user) return;
-
-    const contenu = sanitizeText(contenuBrut);
-    if (!contenu) return;
-
-    setEnvoi(true);
-    setTexte('');
-
-    const { data, error } = await supabase.rpc('fn_envoyer_message', {
-      p_conversation_id: convId,
-      p_contenu: contenu,
-    });
-
-    if (error || (data && typeof data === 'object' && (data as any).error)) {
-      logger.error('ChatConversation: fn_envoyer_message error', error || data);
-      toast.error("Impossible d'envoyer le message.");
-      setTexte(contenuBrut);
-    } else {
-      hapticImpact('light');
+  const groupedMessages = useMemo(() => {
+    const groups: Array<{ label: string; date: Date; items: Message[] }> = [];
+    for (const m of messages) {
+      const d = new Date(m.cree_le);
+      const last = groups[groups.length - 1];
+      if (!last || !isSameDay(last.date, d)) {
+        groups.push({ label: formatGroupLabel(d), date: d, items: [m] });
+      } else {
+        last.items.push(m);
+      }
     }
-
-    setEnvoi(false);
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); }
-  };
+    return groups;
+  }, [messages]);
 
   if (loading) {
     return (
-      <div className="card-base flex items-center justify-center" style={{ height: 'min(400px, 60vh)' }}>
+      <div className="card-base flex items-center justify-center" style={{ height: 'min(500px, 65vh)' }}>
         <p className="text-sm text-muted-foreground">Chargement de la conversation…</p>
       </div>
     );
@@ -166,61 +232,108 @@ export function ChatConversation({ missionId, autreUserId, isEtablissement }: Ch
 
   if (!convId) {
     return (
-      <div className="card-base flex items-center justify-center" style={{ height: 'min(400px, 60vh)' }}>
+      <div className="card-base flex items-center justify-center" style={{ height: 'min(500px, 65vh)' }}>
         <p className="text-sm text-muted-foreground">Impossible de charger la conversation.</p>
       </div>
     );
   }
 
+  const nomComplet = autreInfo ? `${autreInfo.prenom} ${autreInfo.nom}`.trim() : 'Interlocuteur';
+
   return (
-    <div className="card-base flex flex-col" style={{ height: 'min(400px, 60vh)' }}>
-      <div className="flex items-center justify-between pb-3 border-b border-border mb-3">
-        <h3 className="font-semibold text-sm text-foreground">💬 Messagerie</h3>
-        <span className="text-[10px] text-muted-foreground">{messages.length} message{messages.length !== 1 ? 's' : ''}</span>
+    <div
+      className="card-base p-0 flex flex-col overflow-hidden bg-card"
+      style={{ height: 'min(560px, 70vh)' }}
+    >
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/85 backdrop-blur-sm">
+        <div className="relative shrink-0">
+          <AvatarDisplay src={autreInfo?.avatar || null} prenom={autreInfo?.prenom || ''} nom={autreInfo?.nom || ''} size={40} rounded="full" />
+          <span
+            className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card ${PRESENCE_DOT_CLASS[presence]}`}
+            aria-label={`Statut : ${presenceLabel(presence, lastSeen)}`}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">{nomComplet}</p>
+          <p className="text-[11px] text-muted-foreground truncate">
+            {typing ? (
+              <span className="italic text-jolene-rose-500 inline-flex items-center gap-1">
+                <span className="inline-flex gap-0.5">
+                  <span className="h-1 w-1 bg-jolene-rose-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="h-1 w-1 bg-jolene-rose-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="h-1 w-1 bg-jolene-rose-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+                est en train d'écrire…
+              </span>
+            ) : (
+              presenceLabel(presence, lastSeen)
+            )}
+          </p>
+        </div>
+        <div className="text-[10px] text-muted-foreground">{messages.length} msg</div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
-        {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground text-center">Aucun message. Envoyez le premier !</p>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-4 min-h-0 bg-jolene-lavender-50/40">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center gap-2 text-muted-foreground">
+            <MessageCircle className="h-8 w-8 opacity-40" />
+            <p className="text-sm">Aucun message. Envoyez le premier !</p>
+          </div>
+        ) : (
+          groupedMessages.map((groupe, gi) => (
+            <div key={gi} className="space-y-2">
+              <div className="flex justify-center">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-card/80 px-2.5 py-0.5 rounded-full">
+                  {groupe.label}
+                </span>
+              </div>
+              {groupe.items.map((msg) => {
+                if (msg.est_admin && msg.auteur_id === '00000000-0000-0000-0000-000000000000') {
+                  return (
+                    <div key={msg.id} className="flex justify-center">
+                      <p className="text-[11px] italic text-muted-foreground bg-card/60 px-3 py-1 rounded-full max-w-[85%] text-center">
+                        {msg.contenu}
+                      </p>
+                    </div>
+                  );
+                }
+                const mine = msg.auteur_id === user?.id;
+                return (
+                  <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[80%] px-3.5 py-2 ${
+                        mine
+                          ? 'bg-gradient-hero text-white rounded-2xl rounded-br-md shadow-sm'
+                          : 'bg-card text-foreground rounded-2xl rounded-bl-md border border-border'
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
+                      <div className={`text-[9px] mt-1 flex items-center justify-end gap-1 ${mine ? 'text-white/70' : 'text-muted-foreground/70'}`}>
+                        <span>{format(new Date(msg.cree_le), 'HH:mm')}</span>
+                        {mine && (
+                          msg.lu ? <CheckCheck className="h-3 w-3 text-jolene-cyan-300" aria-label="Lu" />
+                                 : <Check className="h-3 w-3" aria-label="Envoyé" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        )}
+        {typing && messages.length > 0 && (
+          <div className="flex justify-start">
+            <div className="bg-card border border-border rounded-2xl rounded-bl-md px-3 py-2 inline-flex gap-1">
+              <span className="h-1.5 w-1.5 bg-jolene-rose-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="h-1.5 w-1.5 bg-jolene-rose-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="h-1.5 w-1.5 bg-jolene-rose-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
           </div>
         )}
-        {messages.map(msg => {
-          const mine = msg.auteur_id === user?.id;
-          return (
-            <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md'}`}>
-                <p className="text-sm whitespace-pre-wrap break-words">{msg.contenu}</p>
-                <p className={`text-[9px] mt-1 text-right ${mine ? 'text-primary-foreground/60' : 'text-muted-foreground/60'}`}>
-                  {format(new Date(msg.cree_le), "HH'h'mm", { locale: fr })}
-                </p>
-              </div>
-            </div>
-          );
-        })}
       </div>
 
-      <div className="flex items-center gap-2 pt-3 border-t border-border mt-3">
-        <input
-          ref={inputRef}
-          type="text"
-          value={texte}
-          onChange={e => setTexte(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Votre message…"
-          className="input-base flex-1 text-sm py-2"
-          maxLength={1000}
-          disabled={envoi}
-        />
-        <button
-          onClick={envoyer}
-          disabled={envoi || !texte.trim()}
-          className="rounded-xl p-2.5 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
-          aria-label="Envoyer"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </div>
+      <InputMessage conversationId={convId} archived={archived} />
     </div>
   );
 }
