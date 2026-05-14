@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { SearchX, MapPin, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { BandeauDocumentsManquants } from '@/components/BandeauDocumentsManquants';
 import { BandeauProfilIncomplet } from '@/components/BandeauProfilIncomplet';
@@ -483,10 +483,10 @@ export default function RechercheMissions() {
                 )}
               </>
             ) : (
-              <EtatVide
-                icone={SearchX}
+              <EmptyState
+                icone={<SearchX />}
                 titre="Aucune mission trouvée"
-                sousTitre="Essayez d'élargir vos filtres ou d'augmenter le rayon de recherche."
+                description="Essayez d'élargir vos filtres ou d'augmenter le rayon de recherche."
               />
             )}
           </TabsContent>

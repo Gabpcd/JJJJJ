@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -306,10 +306,10 @@ export function AssuranceMissionContent() {
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : polices.length === 0 ? (
-              <EtatVide
-                icone={Shield}
+              <EmptyState
+                icone={<Shield />}
                 titre="Aucune police d'assurance"
-                sousTitre="Les polices seront creees automatiquement lors de la confirmation de vos missions."
+                description="Les polices seront creees automatiquement lors de la confirmation de vos missions."
               />
             ) : (
               <div className="overflow-x-auto">

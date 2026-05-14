@@ -7,7 +7,7 @@ import { BoutonFavori } from '@/components/BoutonFavori';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { JaugeScoreFiabilite } from '@/components/JaugeScoreFiabilite';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
@@ -441,10 +441,10 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
         {/* Table */}
         {filtered.length === 0 ? (
-          <EtatVide
-            icone={Flame}
+          <EmptyState
+            icone={<Flame />}
             titre="Aucun soignant dans le pool"
-            sousTitre="Aucun soignant n'a activé le pool d'urgence correspondant à vos critères."
+            description="Aucun soignant n'a activé le pool d'urgence correspondant à vos critères."
           />
         ) : (
           <div className="card-base p-0 overflow-hidden">

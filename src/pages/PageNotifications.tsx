@@ -3,12 +3,12 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ExternalLink, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { IllustrationCloche } from '@/components/EtatVide';
+import { IllustrationCloche } from '@/components/ui/EmptyState';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { UserRole } from '@/lib/types';
@@ -113,7 +113,7 @@ export function NotificationsContent() {
       </div>
 
       {filtered.length === 0 ? (
-        <EtatVide illustration={<IllustrationCloche />} titre="Tout est lu !" sousTitre="Vous n'avez aucune notification." />
+        <EmptyState illustration={<IllustrationCloche />} titre="Tout est lu !" description="Vous n'avez aucune notification." variant="success" />
       ) : (
         <div className="space-y-2">
           {filtered.map((n: any) => (

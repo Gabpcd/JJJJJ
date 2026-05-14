@@ -3,7 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { ModalCotisations } from '@/components/ModalCotisations';
 import { BoutonNoterMission } from '@/components/BoutonNoterMission';
 import { WizardOuvertureLitige } from '@/components/litige/WizardOuvertureLitige';
@@ -182,7 +182,7 @@ export function HistoriqueMissionsContent() {
           )}
         </div>
       ) : (
-        <EtatVide icone={ClipboardList} titre="Aucune mission terminée" sousTitre="Vos missions terminées apparaîtront ici." />
+        <EmptyState icone={<ClipboardList />} titre="Aucune mission terminée" description="Vos missions terminées apparaîtront ici." />
       )}
 
       <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />

@@ -9,7 +9,7 @@ import { CartePointage } from '@/components/CartePointage';
 import { SaisieCodePointage } from '@/components/SaisieCodePointage';
 import { BandeauHorsLigne } from '@/components/BandeauHorsLigne';
 import { PanneauContestation } from '@/components/PanneauContestation';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { ConsentementGPS } from '@/components/ConsentementGPS';
 import { BandeauSansGPS } from '@/components/BandeauSansGPS';
@@ -447,12 +447,11 @@ export default function PresencesSoignant() {
               ))}
             </div>
           ) : (
-            <EtatVide
-              icone={CalendarDays}
+            <EmptyState
+              icone={<CalendarDays />}
               titre="Aucune mission à venir"
-              sousTitre="Vos prochaines missions assignées apparaîtront ici."
-              boutonLabel="Chercher des missions"
-              boutonRoute="/soignant/missions"
+              description="Vos prochaines missions assignées apparaîtront ici."
+              cta={{ label: 'Chercher des missions', onClick: () => navigate('/soignant/missions') }}
             />
           )}
         </TabsContent>
@@ -475,10 +474,10 @@ export default function PresencesSoignant() {
               })}
             </div>
           ) : (
-            <EtatVide
-              icone={Activity}
+            <EmptyState
+              icone={<Activity />}
               titre="Aucune mission en cours"
-              sousTitre="Les missions avec une arrivée pointée apparaîtront ici."
+              description="Les missions avec une arrivée pointée apparaîtront ici."
             />
           )}
         </TabsContent>
@@ -529,10 +528,10 @@ export default function PresencesSoignant() {
               })}
             </div>
           ) : (
-            <EtatVide
-              icone={CalendarDays}
+            <EmptyState
+              icone={<CalendarDays />}
               titre="Aucune mission aujourd'hui"
-              sousTitre="Vos missions assignées apparaîtront ici le jour J pour le pointage."
+              description="Vos missions assignées apparaîtront ici le jour J pour le pointage."
             />
           )}
 
@@ -646,7 +645,7 @@ export default function PresencesSoignant() {
               })}
             </div>
           ) : (
-            <EtatVide icone={History} titre="Aucune présence enregistrée" sousTitre="Votre historique de pointages apparaîtra ici." />
+            <EmptyState icone={<History />} titre="Aucune présence enregistrée" description="Votre historique de pointages apparaîtra ici." />
           )}
         </TabsContent>
       </Tabs>

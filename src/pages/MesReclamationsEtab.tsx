@@ -3,7 +3,7 @@ import { Scale, Clock, CheckCircle2, FileText } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
@@ -118,10 +118,10 @@ function MesReclamationsContent() {
       </div>
 
       {reclamations.length === 0 ? (
-        <EtatVide
-          icone={Scale}
+        <EmptyState
+          icone={<Scale />}
           titre="Aucune réclamation"
-          sousTitre="Contestez un événement de score depuis la page « Mon score »."
+          description="Contestez un événement de score depuis la page « Mon score »."
         />
       ) : (
         <ul className="space-y-3">

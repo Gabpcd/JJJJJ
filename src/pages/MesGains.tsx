@@ -5,7 +5,7 @@ import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileTe
 import { LayoutApp } from '@/components/LayoutApp';
 import { CarteKPI } from '@/components/CarteKPI';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
+import { EmptyState, IllustrationTirelire } from '@/components/ui/EmptyState';
 const GraphiqueGains6Mois = lazy(() =>
   import('@/components/GraphiqueGains6Mois').then(m => ({ default: m.GraphiqueGains6Mois }))
 );
@@ -302,7 +302,7 @@ export default function MesGains() {
           )}
         </div>
       ) : (
-        <EtatVide illustration={<IllustrationTirelire />} titre="Pas encore de gains" sousTitre="Vos gains apparaîtront ici après votre première mission terminée." />
+        <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Vos gains apparaîtront ici après votre première mission terminée." />
       )}
 
       <ModalAttestation open={modalAttestation} onClose={() => setModalAttestation(false)} />

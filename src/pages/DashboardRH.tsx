@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart3, Users, TrendingUp, Download, Loader2, Target, Coins, Calendar, Briefcase, CheckCircle, Activity } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
@@ -119,7 +119,7 @@ export default function DashboardRH() {
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
   if (!stats) return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <EtatVide icone={BarChart3} titre="Données indisponibles" sousTitre="Impossible de charger les statistiques RH." />
+      <EmptyState icone={<BarChart3 />} titre="Données indisponibles" description="Impossible de charger les statistiques RH." />
     </LayoutApp>
   );
 
@@ -397,7 +397,7 @@ export default function DashboardRH() {
             ))}
           </div>
         ) : (
-          <EtatVide icone={Users} titre="Aucun soignant" sousTitre="Les statistiques apparaîtront une fois vos premières missions terminées." />
+          <EmptyState icone={<Users />} titre="Aucun soignant" description="Les statistiques apparaîtront une fois vos premières missions terminées." />
         )}
       </div>
         </TabsContent>

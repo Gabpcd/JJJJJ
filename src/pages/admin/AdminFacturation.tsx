@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import { BoutonsBulkFactures } from '@/components/admin/BoutonsBulkFactures';
 import { Checkbox } from '@/components/ui/checkbox';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -522,7 +523,18 @@ export default function AdminFacturation() {
                   </React.Fragment>
                 );
               })}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">Aucune facture</TableCell></TableRow>}
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={10} className="p-0">
+                    <EmptyState
+                      icone={<FileText />}
+                      titre="Aucune facture"
+                      description="Aucune facture ne correspond aux filtres sélectionnés."
+                      compact
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </div>
