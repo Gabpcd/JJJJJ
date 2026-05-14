@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Scale, PlusCircle, ChevronRight } from 'lucide-react';
@@ -168,7 +168,7 @@ export function LitigesSoignantContent() {
 
       {/* Litiges list */}
       {filteredLitiges.length === 0 ? (
-        <EtatVide icone={Scale} titre={filtre === 'TOUS' ? 'Aucun litige' : `Aucun litige ${filtre.toLowerCase()}`} sousTitre="Vous n'avez aucun litige en cours." />
+        <EmptyState icone={<Scale />} titre={filtre === 'TOUS' ? 'Aucun litige' : `Aucun litige ${filtre.toLowerCase()}`} description="Vous n'avez aucun litige en cours." variant="success" />
       ) : (
         <div className="space-y-3">
           {filteredLitiges.map(l => {

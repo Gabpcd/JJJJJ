@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { FileSpreadsheet, Download, Loader2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,7 +24,7 @@ function downloadCSV(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-const BOM = '\uFEFF';
+const BOM = '﻿';
 
 function generateStandardCSV(missions: any[], sgMap: Record<string, any>): string {
   const headers = ['Nom', 'Prenom', 'Matricule_RPPS', 'Mission', 'Date_debut', 'Date_fin', 'Heures_travaillees', 'Taux_horaire', 'Maj_nuit', 'Maj_dimanche', 'Maj_ferie', 'IFM', 'ICP', 'Brut', 'Cotisations_salariales', 'Net'];
@@ -289,7 +289,7 @@ export default function ExportPaie() {
           <p className="text-xs text-muted-foreground px-3 py-2">{missions.length} missions salariées · cliquez sur une ligne pour voir le détail des pointages</p>
         </div>
       ) : (
-        <EtatVide icone={FileSpreadsheet} titre="Aucune mission salariée terminée" sousTitre={`Aucune mission avec bulletin de paie en ${moisLabel}.`} />
+        <EmptyState icone={<FileSpreadsheet />} titre="Aucune mission salariée terminée" description={`Aucune mission avec bulletin de paie en ${moisLabel}.`} />
       )}
 
       <p className="text-xs text-muted-foreground italic mt-4">
