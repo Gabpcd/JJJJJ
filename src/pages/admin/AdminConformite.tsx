@@ -10,13 +10,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, UserX, FileX, ChevronDown, Loader2, ExternalLink } from 'lucide-react';
 
+interface Champ {
+  /** Titre de colonne (desktop) / label (mobile) */
+  titre: string;
+  /** Rendu de la valeur, identique desktop/mobile */
+  render: (item: any) => React.ReactNode;
+  /** Marqué primary = affiché en grand/bold sur la card mobile (1er champ) */
+  primary?: boolean;
+}
+
 interface Indicateur {
   cle: string;
   rpcCle: string;
   label: string;
   icone: React.ElementType;
-  colonnes: string[];
-  renderRow: (item: any) => React.ReactNode;
+  champs: Champ[];
 }
 
 const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -55,122 +63,97 @@ const INDICATEURS: Indicateur[] = [
     rpcCle: 'repos_11h_violations',
     label: 'Violations repos 11h',
     icone: Clock,
-    colonnes: ['Soignant', 'Mission', 'Établissement', 'Résultat', 'Date'],
-    renderRow: (item: any) => (
-      <>
-        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
-        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
-        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
-        <TableCell><Badge variant="destructive" className="text-[10px]">{item.resultat}</Badge></TableCell>
-        <TableCell className="text-muted-foreground">{formatDate(item.controle_le)}</TableCell>
-      </>
-    ),
+    champs: [
+      { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
+      { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
+      { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
+      { titre: 'Résultat', render: (i) => <Badge variant="destructive" className="text-[10px]">{i.resultat}</Badge> },
+      { titre: 'Date', render: (i) => <span className="text-muted-foreground">{formatDate(i.controle_le)}</span> },
+    ],
   },
   {
     cle: 'alertes_48h',
     rpcCle: 'plafond_48h_alertes',
     label: 'Alertes 48h',
     icone: ShieldAlert,
-    colonnes: ['Soignant', 'Mission', 'Établissement', 'Profession', 'Heures semaine'],
-    renderRow: (item: any) => (
-      <>
-        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
-        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
-        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
-        <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
-        <TableCell className="font-semibold text-destructive">{item.heures_semaine}h</TableCell>
-      </>
-    ),
+    champs: [
+      { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
+      { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
+      { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
+      { titre: 'Profession', render: (i) => <Badge variant="outline" className="text-[10px]">{i.profession}</Badge> },
+      { titre: 'Heures semaine', render: (i) => <span className="font-semibold text-destructive">{i.heures_semaine}h</span> },
+    ],
   },
   {
     cle: 'docs_expires',
     rpcCle: 'documents_expires',
     label: 'Documents expirés',
     icone: FileWarning,
-    colonnes: ['Soignant', 'Mission', 'Établissement', 'Profession', 'Document', 'Expiré le'],
-    renderRow: (item: any) => (
-      <>
-        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
-        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
-        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
-        <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
-        <TableCell>{item.type_document}</TableCell>
-        <TableCell className="text-destructive">{formatDate(item.valide_jusqua)}</TableCell>
-      </>
-    ),
+    champs: [
+      { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
+      { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
+      { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
+      { titre: 'Profession', render: (i) => <Badge variant="outline" className="text-[10px]">{i.profession}</Badge> },
+      { titre: 'Document', render: (i) => i.type_document },
+      { titre: 'Expiré le', render: (i) => <span className="text-destructive">{formatDate(i.valide_jusqua)}</span> },
+    ],
   },
   {
     cle: 'docs_en_attente',
     rpcCle: 'documents_en_attente',
     label: 'Documents en attente',
     icone: FileQuestion,
-    colonnes: ['Soignant', 'Mission', 'Établissement', 'Profession', 'Document', 'Téléversé le'],
-    renderRow: (item: any) => (
-      <>
-        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
-        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
-        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
-        <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
-        <TableCell>{item.type_document}</TableCell>
-        <TableCell className="text-muted-foreground">{formatDate(item.televerse_le)}</TableCell>
-      </>
-    ),
+    champs: [
+      { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
+      { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
+      { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
+      { titre: 'Profession', render: (i) => <Badge variant="outline" className="text-[10px]">{i.profession}</Badge> },
+      { titre: 'Document', render: (i) => i.type_document },
+      { titre: 'Téléversé le', render: (i) => <span className="text-muted-foreground">{formatDate(i.televerse_le)}</span> },
+    ],
   },
   {
     cle: 'cddu_repetitifs',
     rpcCle: 'cddu_repetitifs',
     label: 'CDD répétitifs (risque requalification CDI)',
     icone: Repeat,
-    colonnes: ['Soignant', 'Mission', 'Établissement', 'Nb missions', 'Première', 'Dernière'],
-    renderRow: (item: any) => (
-      <>
-        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
-        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
-        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
-        <TableCell className="font-semibold">{item.nb_missions}</TableCell>
-        <TableCell className="text-muted-foreground">{formatDate(item.premiere_mission)}</TableCell>
-        <TableCell className="text-muted-foreground">{formatDate(item.derniere_mission)}</TableCell>
-      </>
-    ),
+    champs: [
+      { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
+      { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
+      { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
+      { titre: 'Nb missions', render: (i) => <span className="font-semibold">{i.nb_missions}</span> },
+      { titre: 'Première', render: (i) => <span className="text-muted-foreground">{formatDate(i.premiere_mission)}</span> },
+      { titre: 'Dernière', render: (i) => <span className="text-muted-foreground">{formatDate(i.derniere_mission)}</span> },
+    ],
   },
   {
     cle: 'soignants_sans_docs',
     rpcCle: 'soignants_sans_docs',
     label: 'Soignants sans documents',
     icone: UserX,
-    colonnes: ['Soignant', 'Mission', 'Établissement', 'Profession', 'Email', 'Inscrit le'],
-    renderRow: (item: any) => (
-      <>
-        <TableCell className="font-medium"><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
-        <TableCell><LienMission id={item.mission_id} intitule={item.mission_intitule} /></TableCell>
-        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
-        <TableCell><Badge variant="outline" className="text-[10px]">{item.profession}</Badge></TableCell>
-        <TableCell className="text-muted-foreground">
-          {item.email ? (
-            <a href={`mailto:${item.email}`} className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
-              {item.email}
-            </a>
-          ) : '—'}
-        </TableCell>
-        <TableCell className="text-muted-foreground">{formatDate(item.cree_le)}</TableCell>
-      </>
-    ),
+    champs: [
+      { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
+      { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
+      { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
+      { titre: 'Profession', render: (i) => <Badge variant="outline" className="text-[10px]">{i.profession}</Badge> },
+      { titre: 'Email', render: (i) => i.email
+        ? <a href={`mailto:${i.email}`} className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>{i.email}</a>
+        : <span className="text-muted-foreground">—</span> },
+      { titre: 'Inscrit le', render: (i) => <span className="text-muted-foreground">{formatDate(i.cree_le)}</span> },
+    ],
   },
   {
     cle: 'missions_sans_contrat',
     rpcCle: 'missions_sans_contrat',
     label: 'Missions sans contrat',
     icone: FileX,
-    colonnes: ['Mission', 'Établissement', 'Soignant', 'Statut', 'Début'],
-    renderRow: (item: any) => (
-      <>
-        <TableCell className="font-medium"><LienMission id={item.mission_id ?? item.id} intitule={item.intitule} /></TableCell>
-        <TableCell><LienEtablissement id={item.etablissement_id} nom={item.etablissement_nom} /></TableCell>
-        <TableCell><LienSoignant id={item.soignant_id} nom={item.soignant_nom} /></TableCell>
-        <TableCell><Badge variant="secondary" className="text-[10px]">{item.statut}</Badge></TableCell>
-        <TableCell className="text-muted-foreground">{formatDate(item.debut_le)}</TableCell>
-      </>
-    ),
+    champs: [
+      { titre: 'Mission', primary: true, render: (i) => <LienMission id={i.mission_id ?? i.id} intitule={i.intitule} /> },
+      { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
+      { titre: 'Soignant', render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
+      { titre: 'Statut', render: (i) => <Badge variant="secondary" className="text-[10px]">{i.statut}</Badge> },
+      { titre: 'Début', render: (i) => <span className="text-muted-foreground">{formatDate(i.debut_le)}</span> },
+    ],
   },
 ];
 
@@ -274,24 +257,56 @@ export default function AdminConformite() {
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : detail && detail.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {selectedInd.colonnes.map((col) => (
-                          <TableHead key={col} className="text-xs">{col}</TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {detail.map((item: any, i: number) => (
-                        <TableRow key={item.id ? `${item.id}-${i}` : i} className="text-sm">
-                          {selectedInd.renderRow(item)}
+                <>
+                  {/* Desktop : table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {selectedInd.champs.map((c) => (
+                            <TableHead key={c.titre} className="text-xs">{c.titre}</TableHead>
+                          ))}
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {detail.map((item: any, i: number) => (
+                          <TableRow key={item.id ? `${item.id}-${i}` : i} className="text-sm">
+                            {selectedInd.champs.map((c) => (
+                              <TableCell key={c.titre} className={c.primary ? 'font-medium' : ''}>
+                                {c.render(item)}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile : cards label/value */}
+                  <div className="md:hidden space-y-3">
+                    {detail.map((item: any, i: number) => {
+                      const primaryChamp = selectedInd.champs.find((c) => c.primary);
+                      const autresChamps = selectedInd.champs.filter((c) => !c.primary);
+                      return (
+                        <div key={item.id ? `${item.id}-${i}` : i} className="rounded-xl border border-border bg-card p-3 space-y-2">
+                          {primaryChamp && (
+                            <div className="text-sm font-semibold text-foreground border-b border-border/50 pb-2">
+                              {primaryChamp.render(item)}
+                            </div>
+                          )}
+                          <div className="space-y-1.5">
+                            {autresChamps.map((c) => (
+                              <div key={c.titre} className="flex items-start justify-between gap-3 text-xs">
+                                <span className="text-muted-foreground shrink-0">{c.titre}</span>
+                                <span className="text-foreground text-right min-w-0 break-words">{c.render(item)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">Aucun élément à afficher</p>
               )}
