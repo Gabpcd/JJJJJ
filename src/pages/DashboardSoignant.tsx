@@ -10,6 +10,7 @@ import { CarteProposition } from '@/components/CarteProposition';
 import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
 import { RappelsFiscaux } from '@/components/RappelsFiscaux';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
+import { Mascotte } from '@/components/mascotte/Mascotte';
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
 import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
 import { BadgeNiveau } from '@/components/BadgeNiveau';
@@ -218,16 +219,26 @@ export default function DashboardSoignant() {
         </div>
       )}
 
-      <div className="mb-6">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-xl font-bold text-foreground">Bonjour, <span className="text-primary">{soignantWithCounts.prenom}</span> 👋</h1>
-          <BadgeRPPS rppsVerifie={(soignantWithCounts as any).rpps_verifie} rpps={(soignantWithCounts as any).numero_rpps} profession={soignantWithCounts.profession} />
+      {/* Sprint 9-C PR 3 — Header Y2K avec mascotte cœur + "Hiii" accueil */}
+      <div className="mb-6 flex items-start gap-4">
+        <Mascotte
+          etat={soignantWithCounts.tous_documents_valides ? 'happy' : 'thinking'}
+          taille="md"
+          className="shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl font-bold text-foreground">
+              Hiii, <span className="text-gradient-hero">{soignantWithCounts.prenom}</span>
+            </h1>
+            <BadgeRPPS rppsVerifie={(soignantWithCounts as any).rpps_verifie} rpps={(soignantWithCounts as any).numero_rpps} profession={soignantWithCounts.profession} />
+          </div>
+          {!soignantWithCounts.tous_documents_valides ? (
+            <p className="text-sm text-warning mt-1">⚠️ Complétez votre profil pour postuler aux missions</p>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-1">Voici votre activité</p>
+          )}
         </div>
-        {!soignantWithCounts.tous_documents_valides ? (
-          <p className="text-sm text-warning mt-1">⚠️ Complétez votre profil pour postuler aux missions</p>
-        ) : (
-          <p className="text-sm text-muted-foreground mt-1">Voici votre activité</p>
-        )}
       </div>
 
       {/* Missions à venir (planning) */}
