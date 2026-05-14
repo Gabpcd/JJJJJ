@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { ExternalLink, Clock, CheckCircle, PlayCircle, Send, ClipboardList } from 'lucide-react';
 
 type FiltreStatut = 'TOUTES' | 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE';
@@ -38,6 +37,7 @@ function statutBadge(statut: string) {
 
 export default function AdminMissions() {
   usePageTitle('Missions');
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   // Support both ?filtre= (legacy) and ?statut= (from AdminGroupes)
   const filtreParam = (searchParams.get('filtre') || searchParams.get('statut') || 'TOUTES').toUpperCase() as FiltreStatut;
@@ -130,69 +130,93 @@ export default function AdminMissions() {
           ))}
         </div>
 
-        {missions.length === 0 ? (
-          <EmptyState titre="Aucune mission" description={`Aucune mission avec le statut "${filtre}".`} />
-        ) : (
-          <Card>
-            <CardContent className="pt-5">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Mission</TableHead>
-                      <TableHead className="text-xs">Établissement</TableHead>
-                      <TableHead className="text-xs">Soignant</TableHead>
-                      <TableHead className="text-xs">Statut</TableHead>
-                      <TableHead className="text-xs">Début</TableHead>
-                      <TableHead className="text-xs">Durée</TableHead>
-                      <TableHead className="text-xs">Taux horaire</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {missions.map((m: any) => {
-                      const soignantNom = m.soignants ? `${m.soignants.prenom ?? ''} ${m.soignants.nom ?? ''}`.trim() : null;
-                      const etabNom = (m.etablissements as any)?.nom ?? null;
-                      return (
-                        <TableRow key={m.id} className="text-sm">
-                          <TableCell className="font-medium">
-                            <Link
-                              to={`/admin/missions/${m.id}`}
-                              className="text-primary hover:underline inline-flex items-center gap-1 group"
-                            >
-                              {m.intitule}
-                              <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </Link>
-                          </TableCell>
-                          <TableCell>
-                            {m.etablissement_id ? (
-                              <Link to={`/admin/utilisateurs/${m.etablissement_id}`} className="text-primary hover:underline text-sm">
-                                {etabNom ?? 'Établissement'}
-                              </Link>
-                            ) : '—'}
-                          </TableCell>
-                          <TableCell>
-                            {m.soignant_assigne_id ? (
-                              <Link to={`/admin/utilisateurs/${m.soignant_assigne_id}`} className="text-primary hover:underline text-sm">
-                                {soignantNom || 'Soignant'}
-                              </Link>
-                            ) : <span className="text-muted-foreground">Non assigné</span>}
-                          </TableCell>
-                          <TableCell>{statutBadge(m.statut)}</TableCell>
-                          <TableCell className="text-muted-foreground whitespace-nowrap">
-                            {formatDate(m.debut_le)}
-                            <span className="text-[10px] ml-1">{formatHeure(m.debut_le)}</span>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{m.duree_heures ? `${m.duree_heures}h` : '—'}</TableCell>
-                          <TableCell className="text-muted-foreground">{formatEur(m.taux_horaire_base)}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {(() => {
+          const colonnes: ColonneTableau<any>[] = [
+            { cle: 'mission', titre: 'Mission' },
+            { cle: 'etab', titre: 'Établissement' },
+            { cle: 'soignant', titre: 'Soignant' },
+            { cle: 'statut', titre: 'Statut' },
+            { cle: 'debut', titre: 'Début' },
+            { cle: 'duree', titre: 'Durée' },
+            { cle: 'taux', titre: 'Taux horaire' },
+          ];
+
+          return (
+            <TableOuCartes
+              colonnes={colonnes}
+              donnees={missions}
+              getId={(m: any) => m.id}
+              onClickLigne={(m: any) => navigate(`/admin/missions/${m.id}`)}
+              etatVide={<EmptyState titre="Aucune mission" description={`Aucune mission avec le statut "${filtre}".`} />}
+              renduCellule={(m: any, col) => {
+                const soignantNom = m.soignants ? `${m.soignants.prenom ?? ''} ${m.soignants.nom ?? ''}`.trim() : null;
+                const etabNom = (m.etablissements as any)?.nom ?? null;
+                switch (col.cle) {
+                  case 'mission':
+                    return (
+                      <Link
+                        to={`/admin/missions/${m.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-medium text-primary hover:underline inline-flex items-center gap-1 group"
+                      >
+                        {m.intitule}
+                        <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </Link>
+                    );
+                  case 'etab':
+                    return m.etablissement_id ? (
+                      <Link to={`/admin/utilisateurs/${m.etablissement_id}`} onClick={(e) => e.stopPropagation()} className="text-primary hover:underline text-sm">
+                        {etabNom ?? 'Établissement'}
+                      </Link>
+                    ) : '—';
+                  case 'soignant':
+                    return m.soignant_assigne_id ? (
+                      <Link to={`/admin/utilisateurs/${m.soignant_assigne_id}`} onClick={(e) => e.stopPropagation()} className="text-primary hover:underline text-sm">
+                        {soignantNom || 'Soignant'}
+                      </Link>
+                    ) : <span className="text-muted-foreground">Non assigné</span>;
+                  case 'statut':
+                    return statutBadge(m.statut);
+                  case 'debut':
+                    return (
+                      <span className="text-muted-foreground whitespace-nowrap">
+                        {formatDate(m.debut_le)}
+                        <span className="text-[10px] ml-1">{formatHeure(m.debut_le)}</span>
+                      </span>
+                    );
+                  case 'duree':
+                    return <span className="text-muted-foreground">{m.duree_heures ? `${m.duree_heures}h` : '—'}</span>;
+                  case 'taux':
+                    return <span className="text-muted-foreground">{formatEur(m.taux_horaire_base)}</span>;
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(m: any) => {
+                const soignantNom = m.soignants ? `${m.soignants.prenom ?? ''} ${m.soignants.nom ?? ''}`.trim() : null;
+                const etabNom = (m.etablissements as any)?.nom ?? null;
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-foreground inline-flex items-center gap-1 min-w-0">
+                        <span className="truncate">{m.intitule}</span>
+                        <ExternalLink className="h-3.5 w-3.5 text-primary shrink-0" />
+                      </p>
+                      {statutBadge(m.statut)}
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      <p>🏥 {etabNom ?? '—'}</p>
+                      <p>👤 {soignantNom || 'Non assigné'}</p>
+                      <p className="whitespace-nowrap">
+                        📅 {formatDate(m.debut_le)} {formatHeure(m.debut_le)} · {m.duree_heures ? `${m.duree_heures}h` : '—'} · {formatEur(m.taux_horaire_base)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }}
+            />
+          );
+        })()}
       </div>
     </LayoutAdmin>
   );
