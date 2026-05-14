@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Search, FileText, Loader2 } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -115,74 +117,111 @@ export default function AdminContrats() {
       <p className="text-xs text-muted-foreground mb-2">{total} contrat{total > 1 ? 's' : ''} {loading && <Loader2 className="inline h-3 w-3 animate-spin" />}</p>
 
       {/* Liste */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-              <th className="text-left py-2 px-2">N° / Mission</th>
-              <th className="text-left py-2 px-2">Soignant</th>
-              <th className="text-left py-2 px-2">Établissement</th>
-              <th className="text-left py-2 px-2">Type</th>
-              <th className="text-left py-2 px-2">Statut</th>
-              <th className="text-left py-2 px-2">Hash</th>
-              <th className="text-left py-2 px-2">Signé le</th>
-              <th className="text-left py-2 px-2">DPAE</th>
-              <th className="text-right py-2 px-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contrats.map((c) => (
-              <tr key={c.id} className="border-b border-border hover:bg-muted/30">
-                <td className="py-2 px-2">
-                  <p className="font-mono text-xs">{c.numero_contrat || '—'}</p>
-                  <p className="text-[11px] text-muted-foreground truncate max-w-[200px]">{c.mission_intitule}</p>
-                </td>
-                <td className="py-2 px-2 text-xs">{c.soignant_nom}</td>
-                <td className="py-2 px-2 text-xs">{c.etablissement_nom}</td>
-                <td className="py-2 px-2 text-xs">{c.type_contrat}</td>
-                <td className="py-2 px-2">
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                    c.statut === 'SIGNE_COMPLET' ? 'bg-success/20 text-success' :
-                    c.statut === 'ANNULE' ? 'bg-destructive/20 text-destructive' :
-                    c.statut?.startsWith('EXPIRE') ? 'bg-muted text-muted-foreground' :
-                    'bg-warning/20 text-warning'
-                  }`}>
-                    {c.statut}
-                  </span>
-                </td>
-                <td className="py-2 px-2 text-xs font-mono text-muted-foreground">{c.hash_court || '—'}</td>
-                <td className="py-2 px-2 text-[11px]">
-                  {c.signature_soignant_le && c.signature_etablissement_le
-                    ? format(new Date(Math.max(new Date(c.signature_soignant_le).getTime(), new Date(c.signature_etablissement_le).getTime())), 'dd MMM yyyy', { locale: fr })
-                    : '—'}
-                </td>
-                <td className="py-2 px-2 text-xs">
-                  {c.dpae_effectuee && c.dpae_numero ? (
-                    <span className="text-success">✅ {c.dpae_numero.slice(0, 8)}…</span>
-                  ) : c.type_contrat?.startsWith('CDD') || c.type_contrat === 'CDDU' || c.type_contrat === 'SALARIE' ? (
-                    <span className="text-warning">⏳</span>
-                  ) : <span className="text-muted-foreground">N/A</span>}
-                </td>
-                <td className="py-2 px-2 text-right">
-                  <button
-                    onClick={() => navigate(`/admin/contrats/${c.id}`)}
-                    className="btn-secondary text-xs py-1 px-3"
-                  >
-                    Voir
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {contrats.length === 0 && !loading && (
-              <tr>
-                <td colSpan={9} className="py-8 text-center text-sm text-muted-foreground italic">
-                  Aucun contrat ne correspond à ces critères.
-                </td>
-              </tr>
+      {(() => {
+        const colonnes: ColonneTableau<ContratLigne>[] = [
+          { cle: 'numero', titre: 'N° / Mission' },
+          { cle: 'soignant', titre: 'Soignant' },
+          { cle: 'etab', titre: 'Établissement' },
+          { cle: 'type', titre: 'Type' },
+          { cle: 'statut', titre: 'Statut' },
+          { cle: 'hash', titre: 'Hash' },
+          { cle: 'signe', titre: 'Signé le' },
+          { cle: 'dpae', titre: 'DPAE' },
+          { cle: 'actions', titre: '', align: 'right' },
+        ];
+
+        const statutBadge = (statut: string) => (
+          <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+            statut === 'SIGNE_COMPLET' ? 'bg-success/20 text-success' :
+            statut === 'ANNULE' ? 'bg-destructive/20 text-destructive' :
+            statut?.startsWith('EXPIRE') ? 'bg-muted text-muted-foreground' :
+            'bg-warning/20 text-warning'
+          }`}>
+            {statut}
+          </span>
+        );
+
+        const dpaeBadge = (c: ContratLigne) =>
+          c.dpae_effectuee && c.dpae_numero ? (
+            <span className="text-success text-xs">✅ {c.dpae_numero.slice(0, 8)}…</span>
+          ) : c.type_contrat?.startsWith('CDD') || c.type_contrat === 'CDDU' || c.type_contrat === 'SALARIE' ? (
+            <span className="text-warning text-xs">⏳</span>
+          ) : <span className="text-muted-foreground text-xs">N/A</span>;
+
+        const dateSigne = (c: ContratLigne) =>
+          c.signature_soignant_le && c.signature_etablissement_le
+            ? format(new Date(Math.max(new Date(c.signature_soignant_le).getTime(), new Date(c.signature_etablissement_le).getTime())), 'dd MMM yyyy', { locale: fr })
+            : '—';
+
+        return (
+          <TableOuCartes
+            colonnes={colonnes}
+            donnees={contrats}
+            getId={(c) => c.id}
+            onClickLigne={(c) => navigate(`/admin/contrats/${c.id}`)}
+            etatVide={<EmptyState titre="Aucun contrat" description="Aucun contrat ne correspond à ces critères." />}
+            renduCellule={(c, col) => {
+              switch (col.cle) {
+                case 'numero':
+                  return (
+                    <div>
+                      <p className="font-mono text-xs">{c.numero_contrat || '—'}</p>
+                      <p className="text-[11px] text-muted-foreground truncate max-w-[200px]">{c.mission_intitule}</p>
+                    </div>
+                  );
+                case 'soignant':
+                  return <span className="text-xs">{c.soignant_nom}</span>;
+                case 'etab':
+                  return <span className="text-xs">{c.etablissement_nom}</span>;
+                case 'type':
+                  return <span className="text-xs">{c.type_contrat}</span>;
+                case 'statut':
+                  return statutBadge(c.statut);
+                case 'hash':
+                  return <span className="text-xs font-mono text-muted-foreground">{c.hash_court || '—'}</span>;
+                case 'signe':
+                  return <span className="text-[11px]">{dateSigne(c)}</span>;
+                case 'dpae':
+                  return dpaeBadge(c);
+                case 'actions':
+                  return (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/admin/contrats/${c.id}`); }}
+                      className="btn-secondary text-xs py-1 px-3"
+                    >
+                      Voir
+                    </button>
+                  );
+                default:
+                  return null;
+              }
+            }}
+            renduCarte={(c) => (
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs text-foreground">{c.numero_contrat || '—'}</p>
+                    <p className="text-sm text-foreground truncate">{c.mission_intitule}</p>
+                  </div>
+                  {statutBadge(c.statut)}
+                </div>
+                <div className="text-xs text-muted-foreground space-y-0.5">
+                  <p>👤 {c.soignant_nom}</p>
+                  <p>🏥 {c.etablissement_nom}</p>
+                  <p className="flex items-center gap-2">
+                    <span>{c.type_contrat}</span>
+                    {c.hash_court && <span className="font-mono">#{c.hash_court}</span>}
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <span>Signé : {dateSigne(c)}</span>
+                    <span>DPAE : {dpaeBadge(c)}</span>
+                  </p>
+                </div>
+              </div>
             )}
-          </tbody>
-        </table>
-      </div>
+          />
+        );
+      })()}
 
       {/* Pagination */}
       {totalPages > 1 && (
