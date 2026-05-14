@@ -5,7 +5,7 @@ import { SkeletonList } from '@/components/SkeletonCard';
 import { FadeInView } from '@/components/FadeInView';
 import { Briefcase, History } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
+import { EmptyState, IllustrationBoussole } from '@/components/ui/EmptyState';
 import { CarteMissionSoignant } from '@/components/CarteMissionSoignant';
 import { CarteSerie, extraireSerieId } from '@/components/CarteSerie';
 import { FiltresMissions, type FiltresMissionsState } from '@/components/FiltresMissions';
@@ -268,9 +268,12 @@ export default function MissionsSoignant() {
                 )}
               </>
             ) : (
-              <EtatVide illustration={<IllustrationBoussole />} titre="Aucune mission pour le moment"
-                sousTitre="Les missions apparaîtront ici dès qu'un établissement en publiera une correspondant à votre profil."
-                boutonLabel="Rechercher des missions →" boutonRoute="/soignant/recherche-missions" />
+              <EmptyState
+                illustration={<IllustrationBoussole />}
+                titre="Aucune mission pour le moment"
+                description="Les missions apparaîtront ici dès qu'un établissement en publiera une correspondant à votre profil."
+                cta={{ label: 'Rechercher des missions →', onClick: () => navigate('/soignant/recherche-missions') }}
+              />
             )
           )}
 
@@ -305,9 +308,7 @@ export default function MissionsSoignant() {
                 })}
               </div>
             ) : (
-              <EtatVide icone={Briefcase} titre="Vous n'avez pas encore de mission en cours"
-                sousTitre="Consultez les missions disponibles et postulez !"
-                boutonLabel="Voir les missions disponibles" boutonRoute="/soignant/missions" boutonDisabled={false} />
+              <EmptyState icone={<Briefcase />} titre="Vous n'avez pas encore de mission en cours" description="Consultez les missions disponibles et postulez !" cta={{ label: 'Voir les missions disponibles', onClick: () => navigate('/soignant/missions') }} />
             )
           )}
 
@@ -336,8 +337,8 @@ export default function MissionsSoignant() {
                 )}
               </>
             ) : (
-              <EtatVide icone={History} titre="Aucune mission dans l'historique"
-                sousTitre="Vos missions terminées et annulées apparaîtront ici." />
+              <EmptyState icone={<History />} titre="Aucune mission dans l'historique"
+                description="Vos missions terminées et annulées apparaîtront ici." />
             )
           )}
 
