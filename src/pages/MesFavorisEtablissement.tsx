@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, ShieldCheck, ChevronRight, Send, ArrowRight } from 'lucide-react';
+import { Star, ShieldCheck, ChevronRight, Send } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -11,6 +11,8 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { getLabelProfession } from '@/lib/constantes';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
+import { Button } from '@/components/ui/button';
 
 interface FavoriSoignant {
   soignant_id: string;
@@ -63,7 +65,6 @@ export default function MesFavorisEtablissement() {
   useEffect(() => { charger(); }, [etablissementId]);
 
   const inviter = async (soignant: FavoriSoignant, mission: MissionOuverte) => {
-    // On crée une candidature statut PROPOSEE pour le soignant favori
     const { data, error } = await supabase
       .from('candidatures')
       .insert({
@@ -93,6 +94,53 @@ export default function MesFavorisEtablissement() {
     charger();
   };
 
+  const Avatar = ({ s, taille = 'sm' }: { s: FavoriSoignant; taille?: 'sm' | 'md' }) => {
+    const sizeClass = taille === 'md' ? 'h-14 w-14 text-lg' : 'h-10 w-10 text-sm';
+    return s.avatar_url ? (
+      <img src={s.avatar_url} alt="" className={`${sizeClass} rounded-2xl object-cover border border-border shrink-0`} />
+    ) : (
+      <div className={`${sizeClass} rounded-2xl border border-border bg-muted flex items-center justify-center font-bold shrink-0`}>
+        {(s.prenom?.[0] ?? '') + (s.nom_initiale?.[0] ?? '')}
+      </div>
+    );
+  };
+
+  const SelecteurMission = ({ s }: { s: FavoriSoignant }) => (
+    <div className="flex items-center gap-2 flex-1">
+      <select
+        onChange={(e) => {
+          const m = missions.find((mm) => mm.id === e.target.value);
+          if (m) inviter(s, m);
+        }}
+        className="text-xs px-2 py-1.5 rounded-lg border border-border bg-background flex-1"
+        defaultValue=""
+        onClick={(e) => e.stopPropagation()}
+      >
+        <option value="" disabled>Choisir une mission…</option>
+        {missions.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.intitule} · {format(new Date(m.debut_le), 'd MMM HH:mm', { locale: fr })}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpenSend(null); }}
+        className="text-xs text-muted-foreground hover:underline"
+      >
+        Annuler
+      </button>
+    </div>
+  );
+
+  const colonnes: ColonneTableau<FavoriSoignant>[] = [
+    { cle: 'soignant', titre: 'Soignant' },
+    { cle: 'score', titre: 'Score / Note' },
+    { cle: 'badges', titre: 'Vérifications' },
+    { cle: 'depuis', titre: 'Favori depuis' },
+    { cle: 'actions', titre: '', align: 'right', largeur: 'w-72' },
+  ];
+
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
       <div className="mb-6">
@@ -106,47 +154,41 @@ export default function MesFavorisEtablissement() {
 
       {loading ? (
         <ChargementPage />
-      ) : items.length === 0 ? (
-        <EmptyState
-          icone={<Star />}
-          titre="Aucun soignant favori"
-          description="Ajoutez des soignants depuis l'annuaire ou la fiche profil détaillée."
-          cta={{
-            label: "Aller à l'annuaire",
-            onClick: () => navigate('/etablissement/soignants'),
-            variant: 'secondary',
-          }}
-        />
       ) : (
-        <div className="space-y-3">
-          {items.map((s) => (
-            <article key={s.soignant_id} className="card-base">
-              <div className="flex items-start gap-3">
-                {s.avatar_url ? (
-                  <img src={s.avatar_url} alt="" className="h-14 w-14 rounded-2xl object-cover border border-border shrink-0" />
-                ) : (
-                  <div className="h-14 w-14 rounded-2xl border border-border bg-muted flex items-center justify-center text-lg font-bold shrink-0">
-                    {(s.prenom?.[0] ?? '') + (s.nom_initiale?.[0] ?? '')}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 mb-1">
+        <TableOuCartes
+          colonnes={colonnes}
+          donnees={items}
+          getId={(s) => s.soignant_id}
+          onClickLigne={(s) => navigate(`/etablissement/soignants/${s.soignant_id}`)}
+          etatVide={
+            <EmptyState
+              icone={<Star />}
+              titre="Aucun soignant favori"
+              description="Ajoutez des soignants depuis l'annuaire ou la fiche profil détaillée."
+              cta={{
+                label: "Aller à l'annuaire",
+                onClick: () => navigate('/etablissement/soignants'),
+                variant: 'secondary',
+              }}
+            />
+          }
+          renduCellule={(s, col) => {
+            switch (col.cle) {
+              case 'soignant':
+                return (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Avatar s={s} />
                     <div className="min-w-0">
-                      <h2 className="font-semibold text-foreground truncate">{s.prenom} {s.nom_initiale}</h2>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="font-medium text-foreground truncate">{s.prenom} {s.nom_initiale}</p>
+                      <p className="text-xs text-muted-foreground truncate">
                         {getLabelProfession(s.profession)}
                         {s.specialite_medicale && ` · ${s.specialite_medicale}`}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/etablissement/soignants/${s.soignant_id}`)}
-                      className="text-xs text-primary hover:underline inline-flex items-center gap-1"
-                    >
-                      Profil <ChevronRight className="h-3 w-3" />
-                    </button>
                   </div>
-
+                );
+              case 'score':
+                return (
                   <div className="flex flex-wrap items-center gap-1.5 text-xs">
                     {s.score_fiabilite != null && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 font-medium">
@@ -158,67 +200,120 @@ export default function MesFavorisEtablissement() {
                         ⭐ {Number(s.note_moyenne).toFixed(1)}
                       </span>
                     )}
-                    {s.rpps_verifie && <span className="badge-base bg-success/10 text-success text-[10px]">RPPS ✓</span>}
-                    {s.tous_documents_valides && <span className="badge-base bg-success/10 text-success text-[10px]">Docs ✓</span>}
-                    {s.disponible_urgence && <span className="badge-base bg-orange-50 text-orange-700 text-[10px]">🚨 Urgence</span>}
                   </div>
-
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Favori depuis le {format(new Date(s.cree_le), 'd MMM yyyy', { locale: fr })}
-                  </p>
-
-                  <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border">
+                );
+              case 'badges':
+                return (
+                  <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                    {s.rpps_verifie && <span className="badge-base bg-success/10 text-success">RPPS ✓</span>}
+                    {s.tous_documents_valides && <span className="badge-base bg-success/10 text-success">Docs ✓</span>}
+                    {s.disponible_urgence && <span className="badge-base bg-orange-50 text-orange-700">🚨 Urgence</span>}
+                  </div>
+                );
+              case 'depuis':
+                return <span className="text-xs text-muted-foreground whitespace-nowrap">{format(new Date(s.cree_le), 'd MMM yyyy', { locale: fr })}</span>;
+              case 'actions':
+                return (
+                  <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                     {missions.length > 0 ? (
                       openSend === s.soignant_id ? (
-                        <div className="flex items-center gap-2 flex-1">
-                          <select
-                            onChange={(e) => {
-                              const m = missions.find((mm) => mm.id === e.target.value);
-                              if (m) inviter(s, m);
-                            }}
-                            className="text-xs px-2 py-1.5 rounded-lg border border-border bg-background flex-1"
-                            defaultValue=""
-                          >
-                            <option value="" disabled>Choisir une mission…</option>
-                            {missions.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.intitule} · {format(new Date(m.debut_le), 'd MMM HH:mm', { locale: fr })}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => setOpenSend(null)}
-                            className="text-xs text-muted-foreground hover:underline"
-                          >
-                            Annuler
-                          </button>
-                        </div>
+                        <SelecteurMission s={s} />
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => setOpenSend(s.soignant_id)}
-                          className="btn-primary text-xs inline-flex items-center gap-1.5"
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-8 text-xs"
+                          onClick={(e) => { e.stopPropagation(); setOpenSend(s.soignant_id); }}
                         >
-                          <Send className="h-3.5 w-3.5" /> Inviter à une mission
-                        </button>
+                          <Send className="h-3.5 w-3.5 mr-1" /> Inviter
+                        </Button>
                       )
                     ) : (
-                      <span className="text-xs text-muted-foreground italic">Pas de mission ouverte à proposer</span>
+                      <span className="text-[11px] text-muted-foreground italic">Aucune mission ouverte</span>
                     )}
                     <button
                       type="button"
-                      onClick={() => retirer(s.soignant_id)}
-                      className="text-xs text-muted-foreground hover:text-destructive hover:underline ml-auto"
+                      onClick={(e) => { e.stopPropagation(); retirer(s.soignant_id); }}
+                      className="text-xs text-muted-foreground hover:text-destructive hover:underline"
                     >
                       Retirer
                     </button>
                   </div>
+                );
+              default:
+                return null;
+            }
+          }}
+          renduCarte={(s) => (
+            <div className="flex items-start gap-3">
+              <Avatar s={s} taille="md" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-foreground truncate">{s.prenom} {s.nom_initiale}</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {getLabelProfession(s.profession)}
+                      {s.specialite_medicale && ` · ${s.specialite_medicale}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/soignants/${s.soignant_id}`); }}
+                    className="text-xs text-primary hover:underline inline-flex items-center gap-1 shrink-0"
+                  >
+                    Profil <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  {s.score_fiabilite != null && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 font-medium">
+                      <ShieldCheck className="h-3 w-3" /> {s.score_fiabilite}/100
+                    </span>
+                  )}
+                  {s.note_moyenne != null && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 font-medium">
+                      ⭐ {Number(s.note_moyenne).toFixed(1)}
+                    </span>
+                  )}
+                  {s.rpps_verifie && <span className="badge-base bg-success/10 text-success text-[10px]">RPPS ✓</span>}
+                  {s.tous_documents_valides && <span className="badge-base bg-success/10 text-success text-[10px]">Docs ✓</span>}
+                  {s.disponible_urgence && <span className="badge-base bg-orange-50 text-orange-700 text-[10px]">🚨 Urgence</span>}
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-2">
+                  Favori depuis le {format(new Date(s.cree_le), 'd MMM yyyy', { locale: fr })}
+                </p>
+
+                <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                  {missions.length > 0 ? (
+                    openSend === s.soignant_id ? (
+                      <SelecteurMission s={s} />
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="min-h-[44px] text-xs"
+                        onClick={(e) => { e.stopPropagation(); setOpenSend(s.soignant_id); }}
+                      >
+                        <Send className="h-3.5 w-3.5 mr-1.5" /> Inviter à une mission
+                      </Button>
+                    )
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">Pas de mission ouverte à proposer</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); retirer(s.soignant_id); }}
+                    className="text-xs text-muted-foreground hover:text-destructive hover:underline ml-auto min-h-[44px] px-2"
+                  >
+                    Retirer
+                  </button>
                 </div>
               </div>
-            </article>
-          ))}
-        </div>
+            </div>
+          )}
+        />
       )}
     </LayoutApp>
   );
