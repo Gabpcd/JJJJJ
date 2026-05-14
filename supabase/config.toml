@@ -96,9 +96,6 @@ verify_jwt = false
 [functions.submit-to-chorus]
 verify_jwt = false
 
-[functions.sync-chorus-status]
-verify_jwt = false
-
 [functions.admin-invoke]
 verify_jwt = true
 
@@ -126,4 +123,13 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.sync-chorus-status]
+verify_jwt = false
+
+[functions.generate-contrat-mission-pdf]
+verify_jwt = false
+
+[functions.psc-logout]
+verify_jwt = false
+
+[functions.psc-test-connexion]
 verify_jwt = false

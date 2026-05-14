@@ -37,6 +37,50 @@
 - Valeurs exactes des enums `UserRole` : `SOIGNANT` | `ADMIN_ETABLISSEMENT` | `ADMIN_PLATEFORME` | `ADMIN_GROUPE`
 - Colonnes DB non encore dans types TS : utiliser `as any` ciblé
 
+## Règles edge functions Supabase
+
+### verify_jwt — `config.toml` PAS lu par `--use-api`
+
+Le workflow `deploy-supabase` utilise `supabase functions deploy --use-api`. Ce mode
+**ne lit pas** la valeur `verify_jwt` du `supabase/config.toml`. Conséquence : modifier
+`config.toml` n'a aucun effet sur prod tant qu'on ne redéploie pas via Management API
+ou Dashboard avec `verify_jwt` explicite.
+
+Incident Sprint 12-A : PR #271 a posé `verify_jwt = false` dans config.toml pour
+`process-externalisation-actions` + `sync-chorus-status`. Le workflow s'est déployé
+en succès mais l'API Gateway gardait `verify_jwt = true` → 401 toutes les 5 min
+(process-externalisation-actions) et 2h (sync-chorus-status). Fix : redéploiement
+via MCP `deploy_edge_function` avec `verify_jwt: false` explicite.
+
+**Règle** : quand on change `verify_jwt` d'une fonction, redéployer via MCP
+`deploy_edge_function` (paramètre `verify_jwt`) ou Dashboard. Le `config.toml`
+est un mémo de traçabilité, pas une source de vérité côté API Gateway.
+
+### Auth crons pg_cron — Bearer sb_secret_* (vault v2)
+
+Le vault stocke `service_role_key` au format `sb_secret_*` (41 chars, asymétrique v2),
+PAS le JWT legacy ~213 chars. Pg_cron envoie ce sb_secret_* comme Bearer. Or l'env var
+auto-injectée `SUPABASE_SERVICE_ROLE_KEY` dans les edge functions reste le JWT legacy.
+
+**Conséquence** : si une edge function fait `bearer === SERVICE_ROLE_KEY` strict, le
+cron échoue 401. Pattern correct (cf. `process-stripe-refunds`, `_shared/admin-auth.ts`
+post-Sprint 12-A) : fallback via RPC `fn_lire_secret_cron` qui lit
+`vault.decrypted_secrets` server-side et matche le bearer.
+
+```ts
+let _cachedVaultSecret: string | null = null;
+async function getVaultCronSecret(sb: any): Promise<string> {
+  if (_cachedVaultSecret) return _cachedVaultSecret;
+  const env = Deno.env.get("SUPABASE_SECRET_KEY") || "";
+  if (env) { _cachedVaultSecret = env; return env; }
+  try {
+    const { data } = await sb.rpc("fn_lire_secret_cron");
+    if (data) { _cachedVaultSecret = data; return data; }
+  } catch { /* ignore */ }
+  return "";
+}
+```
+
 ## Workflows produits
 
 ### Sprint 1 + 2 — Signature électronique, contrats, DPAE, restrictions Mediflash
