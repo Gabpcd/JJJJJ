@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
@@ -166,35 +167,52 @@ export function AnalyticsContent() {
       </div>
 
       {/* Soignants récurrents */}
-      {recurrents.length > 0 && (
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-4">Soignants les plus sollicités</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-muted-foreground">
-                  <th className="text-left py-2 px-3 font-medium">Soignant</th>
-                  <th className="text-left py-2 px-3 font-medium">Profession</th>
-                  <th className="text-center py-2 px-3 font-medium">Missions</th>
-                  <th className="text-center py-2 px-3 font-medium">Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recurrents.map((s: any) => (
-                  <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30 transition">
-                    <td className="py-2.5 px-3 font-medium text-foreground">{s.prenom} {s.nom}</td>
-                    <td className="py-2.5 px-3 text-muted-foreground">{s.profession}</td>
-                    <td className="py-2.5 px-3 text-center">
+      {recurrents.length > 0 && (() => {
+        const colonnes: ColonneTableau<any>[] = [
+          { cle: 'nom', titre: 'Soignant' },
+          { cle: 'profession', titre: 'Profession' },
+          { cle: 'missions', titre: 'Missions', align: 'center' },
+          { cle: 'note', titre: 'Note', align: 'center' },
+        ];
+        return (
+          <div className="card-base">
+            <h2 className="text-base font-semibold text-foreground mb-4">Soignants les plus sollicités</h2>
+            <TableOuCartes
+              colonnes={colonnes}
+              donnees={recurrents}
+              getId={(s: any) => s.id}
+              renduCellule={(s: any, col) => {
+                switch (col.cle) {
+                  case 'nom':
+                    return <span className="font-medium text-foreground">{s.prenom} {s.nom}</span>;
+                  case 'profession':
+                    return <span className="text-sm text-muted-foreground">{s.profession}</span>;
+                  case 'missions':
+                    return (
                       <span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold">{s.nb_missions}</span>
-                    </td>
-                    <td className="py-2.5 px-3 text-center">{s.note_moyenne > 0 ? `${s.note_moyenne}/5` : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    );
+                  case 'note':
+                    return <span className="text-sm">{s.note_moyenne > 0 ? `${s.note_moyenne}/5` : '—'}</span>;
+                  default:
+                    return null;
+                }
+              }}
+              renduCarte={(s: any) => (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{s.prenom} {s.nom}</p>
+                    <p className="text-xs text-muted-foreground">{s.profession}</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold">{s.nb_missions} mission{s.nb_missions > 1 ? 's' : ''}</span>
+                    {s.note_moyenne > 0 && <span className="text-xs text-warning font-medium">⭐ {s.note_moyenne}/5</span>}
+                  </div>
+                </div>
+              )}
+            />
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {!mpm.length && !professions.length && (
         <div className="card-base text-center py-12">
