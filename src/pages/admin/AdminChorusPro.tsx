@@ -197,33 +197,56 @@ function DashboardChorus() {
         {recent.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucune soumission.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-muted-foreground border-b">
-                  <th className="py-2 pr-2">Créée</th>
-                  <th className="py-2 pr-2">Facture</th>
-                  <th className="py-2 pr-2">Étab</th>
-                  <th className="py-2 pr-2">Type</th>
-                  <th className="py-2">Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map(s => {
-                  const b = getChorusStatutBadge(s.status);
-                  return (
-                    <tr key={s.id} className="border-b hover:bg-muted/30">
-                      <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.created_at)}</td>
-                      <td className="py-2 pr-2">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</td>
-                      <td className="py-2 pr-2">{s.facture?.etablissement?.nom ?? '—'}</td>
-                      <td className="py-2 pr-2">{s.type_document ?? '—'}</td>
-                      <td className="py-2"><span className={`badge-base text-[10px] ${b.classes}`}>{b.label}</span></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Desktop : table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-muted-foreground border-b">
+                    <th className="py-2 pr-2">Créée</th>
+                    <th className="py-2 pr-2">Facture</th>
+                    <th className="py-2 pr-2">Étab</th>
+                    <th className="py-2 pr-2">Type</th>
+                    <th className="py-2">Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map(s => {
+                    const b = getChorusStatutBadge(s.status);
+                    return (
+                      <tr key={s.id} className="border-b hover:bg-muted/30">
+                        <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.created_at)}</td>
+                        <td className="py-2 pr-2">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</td>
+                        <td className="py-2 pr-2">{s.facture?.etablissement?.nom ?? '—'}</td>
+                        <td className="py-2 pr-2">{s.type_document ?? '—'}</td>
+                        <td className="py-2"><span className={`badge-base text-[10px] ${b.classes}`}>{b.label}</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile : cards */}
+            <div className="md:hidden space-y-2">
+              {recent.map(s => {
+                const b = getChorusStatutBadge(s.status);
+                return (
+                  <div key={s.id} className="rounded-lg border border-border p-2.5 space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium truncate">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</p>
+                      <span className={`badge-base text-[10px] shrink-0 ${b.classes}`}>{b.label}</span>
+                    </div>
+                    <p className="text-xs text-foreground truncate">{s.facture?.etablissement?.nom ?? '—'}</p>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>{s.type_document ?? '—'}</span>
+                      <span>{fmtDate(s.created_at)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </section>
     </div>
@@ -329,41 +352,80 @@ function SubmissionsChorus() {
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">Aucune soumission.</p>
       ) : (
-        <div className="card-base overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-muted-foreground border-b">
-                <th className="py-2 pr-2">Créée</th>
-                <th className="py-2 pr-2">Facture</th>
-                <th className="py-2 pr-2">Étab</th>
-                <th className="py-2 pr-2">Soignant</th>
-                <th className="py-2 pr-2">Type</th>
-                <th className="py-2 pr-2">Statut</th>
-                <th className="py-2 pr-2">Sync</th>
-                <th className="py-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(s => {
-                const b = getChorusStatutBadge(s.status);
-                return (
-                  <tr key={s.id} className="border-b hover:bg-muted/30">
-                    <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.created_at)}</td>
-                    <td className="py-2 pr-2 font-medium">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</td>
-                    <td className="py-2 pr-2">{s.facture?.etablissement?.nom ?? '—'}</td>
-                    <td className="py-2 pr-2">{s.facture?.soignant ? `${s.facture.soignant.prenom} ${s.facture.soignant.nom}` : '—'}</td>
-                    <td className="py-2 pr-2 text-xs">{s.type_document ?? '—'}</td>
-                    <td className="py-2 pr-2"><span className={`badge-base text-[10px] ${b.classes}`}>{b.label}</span></td>
-                    <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.last_checked_at)}</td>
-                    <td className="py-2">
-                      <Button variant="ghost" size="sm" onClick={() => setDetail(s)}>Détail</Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Desktop : table 8 cols */}
+          <div className="hidden md:block card-base overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b">
+                  <th className="py-2 pr-2">Créée</th>
+                  <th className="py-2 pr-2">Facture</th>
+                  <th className="py-2 pr-2">Étab</th>
+                  <th className="py-2 pr-2">Soignant</th>
+                  <th className="py-2 pr-2">Type</th>
+                  <th className="py-2 pr-2">Statut</th>
+                  <th className="py-2 pr-2">Sync</th>
+                  <th className="py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(s => {
+                  const b = getChorusStatutBadge(s.status);
+                  return (
+                    <tr key={s.id} className="border-b hover:bg-muted/30">
+                      <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.created_at)}</td>
+                      <td className="py-2 pr-2 font-medium">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</td>
+                      <td className="py-2 pr-2">{s.facture?.etablissement?.nom ?? '—'}</td>
+                      <td className="py-2 pr-2">{s.facture?.soignant ? `${s.facture.soignant.prenom} ${s.facture.soignant.nom}` : '—'}</td>
+                      <td className="py-2 pr-2 text-xs">{s.type_document ?? '—'}</td>
+                      <td className="py-2 pr-2"><span className={`badge-base text-[10px] ${b.classes}`}>{b.label}</span></td>
+                      <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.last_checked_at)}</td>
+                      <td className="py-2">
+                        <Button variant="ghost" size="sm" onClick={() => setDetail(s)}>Détail</Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile : cards */}
+          <div className="md:hidden space-y-3">
+            {filtered.map(s => {
+              const b = getChorusStatutBadge(s.status);
+              return (
+                <div key={s.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold truncate">{s.facture?.numero_facture ?? s.invoice_id.slice(0, 8)}</p>
+                    <span className={`badge-base text-[10px] shrink-0 ${b.classes}`}>{b.label}</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-1 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Étab</span>
+                      <span className="text-foreground text-right truncate">{s.facture?.etablissement?.nom ?? '—'}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Soignant</span>
+                      <span className="text-foreground text-right truncate">{s.facture?.soignant ? `${s.facture.soignant.prenom} ${s.facture.soignant.nom}` : '—'}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">Type</span>
+                      <span className="text-foreground text-right">{s.type_document ?? '—'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>Créée {fmtDate(s.created_at)}</span>
+                    {s.last_checked_at && <span>Sync {fmtDate(s.last_checked_at)}</span>}
+                  </div>
+                  <Button variant="outline" size="sm" className="w-full min-h-[36px]" onClick={() => setDetail(s)}>
+                    Voir le détail
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <ChorusSubmissionDetailDialog
@@ -425,7 +487,8 @@ function ConfigEtabsChorus() {
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{etabs.length} établissements secteur public. Activez Chorus Pro et configurez le numéro de structure pour chaque étab destinataire.</p>
 
-      <div className="card-base overflow-x-auto">
+      {/* Desktop : table 6 cols */}
+      <div className="hidden md:block card-base overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-muted-foreground border-b">
@@ -459,6 +522,40 @@ function ConfigEtabsChorus() {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile : cards */}
+      <div className="md:hidden space-y-3">
+        {etabs.map(e => {
+          const cfg = e.chorus_pro_config?.[0];
+          return (
+            <div key={e.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold truncate">{e.nom}</p>
+                <Switch checked={!!cfg?.actif} onCheckedChange={v => toggleActif(e, v)} />
+              </div>
+              <div className="grid grid-cols-1 gap-1 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">SIRET</span>
+                  <span className="text-foreground text-right font-mono">{e.siret ?? '—'}</span>
+                </div>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Num. structure</span>
+                  <span className="text-foreground text-right">
+                    {cfg?.numero_structure ?? <span className="italic text-muted-foreground">non configuré</span>}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Code service</span>
+                  <span className="text-foreground text-right">{cfg?.code_service ?? '—'}</span>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" className="w-full min-h-[36px]" onClick={() => setEditing({ etab: e })}>
+                <Settings className="h-3.5 w-3.5 mr-1" /> Éditer la configuration
+              </Button>
+            </div>
+          );
+        })}
       </div>
 
       {editing && (
