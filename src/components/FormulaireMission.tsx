@@ -444,16 +444,16 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Intitulé */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">Intitulé *</label>
-          <input value={intitule} onChange={(e) => setIntitule(e.target.value.slice(0, 120))}
+          <label htmlFor="mission-intitule" className="text-sm font-medium text-foreground mb-1 block">Intitulé *</label>
+          <input id="mission-intitule" value={intitule} onChange={(e) => setIntitule(e.target.value.slice(0, 120))}
             placeholder="Ex: IDE de nuit — Service Urgences" required className="input-base" />
           <p className="text-[10px] text-muted-foreground mt-1 text-right">{intitule.length}/120</p>
         </div>
 
         {/* Description */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+          <label htmlFor="mission-description" className="text-sm font-medium text-foreground mb-1 block">Description</label>
+          <textarea id="mission-description" value={description} onChange={(e) => setDescription(e.target.value)}
             placeholder="Informations complémentaires pour le soignant..." rows={3} className="input-base resize-none" />
         </div>
 
@@ -512,8 +512,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
         {/* Service */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">Service</label>
-          <input value={service} onChange={(e) => setService(e.target.value)}
+          <label htmlFor="mission-service" className="text-sm font-medium text-foreground mb-1 block">Service</label>
+          <input id="mission-service" value={service} onChange={(e) => setService(e.target.value)}
             placeholder="Ex: Urgences, Gériatrie, Réa, Bloc, EHPAD" className="input-base" />
         </div>
 
@@ -575,8 +575,9 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             <p className="text-sm font-semibold text-foreground">📅 Horaires de la mission</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Date et heure de début *</label>
+                <label htmlFor="mission-debut-le" className="text-xs text-muted-foreground mb-1 block">Date et heure de début *</label>
                 <input
+                  id="mission-debut-le"
                   type="datetime-local"
                   value={debutLe}
                   onChange={(e) => setDebutLe(e.target.value)}
@@ -586,8 +587,8 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Date et heure de fin *</label>
-                <input type="datetime-local" value={finLe} onChange={(e) => setFinLe(e.target.value)} required className="input-base" />
+                <label htmlFor="mission-fin-le" className="text-xs text-muted-foreground mb-1 block">Date et heure de fin *</label>
+                <input id="mission-fin-le" type="datetime-local" value={finLe} onChange={(e) => setFinLe(e.target.value)} required className="input-base" />
               </div>
             </div>
             {erreurDates && <p className="text-xs text-destructive font-medium">{erreurDates === 'La mission ne peut pas commencer dans le passé' ? '⛔ La mission doit commencer dans le futur.' : erreurDates}</p>}
@@ -627,13 +628,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
         {/* Taux horaire */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">Taux horaire brut * (€/h)</label>
+          <label htmlFor="mission-taux-horaire" className="text-sm font-medium text-foreground mb-1 block">Taux horaire brut * (€/h)</label>
           <div className="relative">
-            <input type="number" step="0.01" min="11.65" value={tauxHoraire}
+            <input id="mission-taux-horaire" type="number" step="0.01" min="11.65" value={tauxHoraire}
               onChange={(e) => setTauxHoraire(e.target.value)} placeholder="25.00" required
               readOnly={modeEdition && missionSource?.statut !== 'OUVERTE'}
               className={`input-base pr-12 ${modeEdition && missionSource?.statut !== 'OUVERTE' ? 'bg-muted cursor-not-allowed' : ''}`} />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€/h</span>
+            <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€/h</span>
           </div>
           {modeEdition && missionSource?.statut !== 'OUVERTE' && (
             <p className="text-[10px] text-muted-foreground mt-1">🔒 Ces champs ne sont plus modifiables après acceptation.</p>
