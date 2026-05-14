@@ -312,16 +312,16 @@ export default function MandatFacturation() {
           </div>
         )}
 
-        <div className="card-base p-0 overflow-hidden">
+        <div className="card-base p-0 overflow-hidden flex flex-col max-h-[calc(100dvh-14rem)] md:max-h-[70vh]">
           <div
-            className="max-h-[50vh] overflow-y-auto px-5 py-4 border-b border-border"
+            className="flex-1 min-h-0 overflow-y-auto px-5 py-4 border-b border-border"
             onScroll={handleScroll}
           >
             {renderMarkdown(mandatTexte)}
           </div>
 
           {!alreadySigned && (
-            <div className="p-5 space-y-4 bg-muted/20">
+            <div className="p-5 space-y-4 bg-muted/20 shrink-0">
               {!hasScrolledToBottom && (
                 <p className="text-xs text-warning italic text-center font-medium" role="status">
                   ⚠️ Faites défiler le document jusqu'en bas pour pouvoir l'accepter
