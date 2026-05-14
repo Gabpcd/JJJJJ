@@ -17,7 +17,7 @@ import { BandeauGoalGradient, CelebrationJalonManager } from '@/components/GoalG
 import { LayoutApp } from '@/components/LayoutApp';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { CarteKPI } from '@/components/CarteKPI';
-import { EtatVide, IllustrationTirelire } from '@/components/EtatVide';
+import { EmptyState, IllustrationTirelire } from '@/components/ui/EmptyState';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { OnboardingGuide } from '@/components/OnboardingGuide';
 import { BandeauCompletionProfil } from '@/components/profil-soignant/BandeauCompletionProfil';
@@ -421,7 +421,7 @@ export default function DashboardSoignant() {
                 ))}
               </div>
             ) : (
-              <EtatVide icone={Search} titre="Aucune mission disponible" sousTitre="De nouvelles missions sont publiées chaque jour. Revenez bientôt !" />
+              <EmptyState icone={<Search />} titre="Aucune mission disponible" description="De nouvelles missions sont publiées chaque jour. Revenez bientôt !" />
             )}
           </div>
 
@@ -529,7 +529,7 @@ export default function DashboardSoignant() {
               </Suspense>
             ) : (
               <div className="mb-6">
-                <EtatVide illustration={<IllustrationTirelire />} titre="Pas encore de gains" sousTitre="Vos gains apparaîtront ici après votre première mission terminée." />
+                <EmptyState illustration={<IllustrationTirelire />} titre="Pas encore de gains" description="Vos gains apparaîtront ici après votre première mission terminée." />
               </div>
             )}
           </FadeInView>
