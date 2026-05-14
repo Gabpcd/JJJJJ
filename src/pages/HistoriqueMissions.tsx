@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { ModalCotisations } from '@/components/ModalCotisations';
 import { BoutonNoterMission } from '@/components/BoutonNoterMission';
 import { WizardOuvertureLitige } from '@/components/litige/WizardOuvertureLitige';
@@ -12,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { ClipboardList, MessageCircle, AlertTriangle, Download } from 'lucide-react';
+import { ClipboardList, MessageCircle, AlertTriangle, Download, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -122,67 +123,130 @@ export function HistoriqueMissionsContent() {
         </Button>
       </div>
 
-      {filtered.length > 0 ? (
-        <div className="space-y-3">
-          {filtered.map(m => {
-            const net = m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
-            const presence = m.presences?.[0];
-            const heuresReelles = presence?.pointage_arrivee_le && presence?.pointage_depart_le
-              ? ((new Date(presence.pointage_depart_le).getTime() - new Date(presence.pointage_arrivee_le).getTime()) / 3600000).toFixed(1)
-              : null;
-            const aLitige = litiges.has(m.id);
+      {(() => {
+        const colonnes: ColonneTableau<any>[] = [
+          { cle: 'mission', titre: 'Mission' },
+          { cle: 'etab', titre: 'Établissement' },
+          { cle: 'date', titre: 'Date' },
+          { cle: 'heures', titre: 'Heures', align: 'right' },
+          { cle: 'net', titre: 'Net estimé', align: 'right' },
+          { cle: 'actions', titre: '', align: 'right', largeur: 'w-32' },
+        ];
 
-            return (
-              <div key={m.id} className="card-base hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between cursor-pointer" onClick={() => navigate(`/soignant/missions/${m.id}`)}>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">🏥 {m.etablissements?.nom || '—'}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      📅 {format(new Date(m.debut_le), "d MMM yyyy · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
-                    </p>
-                    {heuresReelles && (
-                      <p className="text-xs text-muted-foreground mt-0.5">⏱️ Heures pointées : {heuresReelles}h</p>
+        const netDe = (m: any) => m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
+
+        return (
+          <TableOuCartes
+            colonnes={colonnes}
+            donnees={filtered}
+            getId={(m: any) => m.id}
+            etatVide={<EmptyState icone={<ClipboardList />} titre="Aucune mission terminée" description="Vos missions terminées apparaîtront ici." />}
+            renduCellule={(m: any, col) => {
+              switch (col.cle) {
+                case 'mission':
+                  return <span className="font-medium text-foreground">{m.intitule}</span>;
+                case 'etab':
+                  return <span className="text-muted-foreground">{m.etablissements?.nom || '—'}</span>;
+                case 'date':
+                  return <span className="text-xs text-muted-foreground">{format(new Date(m.debut_le), 'd MMM yyyy', { locale: fr })}</span>;
+                case 'heures':
+                  return <span className="text-sm">{m.duree_heures}h</span>;
+                case 'net':
+                  return (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {fmt(netDe(m))}
+                    </button>
+                  );
+                case 'actions': {
+                  const aLitige = litiges.has(m.id);
+                  return (
+                    <div className="flex items-center justify-end gap-1">
+                      {aLitige && <span className="text-[10px] text-destructive font-medium">⚠️ Litige</span>}
+                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/soignant/missions/${m.id}`); }}>
+                        Voir
+                      </Button>
+                    </div>
+                  );
+                }
+                default:
+                  return null;
+              }
+            }}
+            renduCarte={(m: any) => {
+              const presence = m.presences?.[0];
+              const heuresReelles = presence?.pointage_arrivee_le && presence?.pointage_depart_le
+                ? ((new Date(presence.pointage_depart_le).getTime() - new Date(presence.pointage_arrivee_le).getTime()) / 3600000).toFixed(1)
+                : null;
+              const aLitige = litiges.has(m.id);
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm text-foreground truncate">{m.intitule}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">🏥 {m.etablissements?.nom || '—'}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        📅 {format(new Date(m.debut_le), "d MMM yyyy · HH'h'mm", { locale: fr })} → {format(new Date(m.fin_le), "HH'h'mm", { locale: fr })}
+                      </p>
+                      {heuresReelles && (
+                        <p className="text-xs text-muted-foreground mt-0.5">⏱️ Heures pointées : {heuresReelles}h</p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}
+                        className="font-bold text-primary text-sm hover:underline"
+                      >
+                        {fmt(netDe(m))}
+                      </button>
+                      <p className="text-[10px] text-muted-foreground">{m.duree_heures}h</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-3 border-t border-border flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="gap-1.5 text-xs min-h-[44px]"
+                      onClick={(e) => { e.stopPropagation(); navigate(`/soignant/missions/${m.id}`); }}
+                    >
+                      Voir <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                    <BoutonNoterMission
+                      missionId={m.id}
+                      sens="SOIGNANT_VERS_ETAB"
+                      missionIntitule={m.intitule}
+                      variant="secondary"
+                    />
+                    <Button variant="ghost" size="sm" className="gap-1.5 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); ouvrirConversation(m.etablissement_id); }}>
+                      <MessageCircle className="h-3.5 w-3.5" /> Contacter
+                    </Button>
+                    {!aLitige && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-xs min-h-[44px] text-warning hover:text-warning"
+                        onClick={(e) => { e.stopPropagation(); setWizardLitige({ id: m.id, intitule: m.intitule }); }}
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5" /> Signaler
+                      </Button>
+                    )}
+                    {aLitige && (
+                      <span className="text-[10px] text-destructive font-medium">⚠️ Litige en cours</span>
                     )}
                   </div>
-                  <div className="text-right shrink-0 ml-3">
-                    <p className="font-bold text-primary text-sm cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setCotisationsMissionId(m.id); }}>{fmt(net)}</p>
-                    <p className="text-[10px] text-muted-foreground">{m.duree_heures}h</p>
-                  </div>
                 </div>
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border flex-wrap">
-                  <BoutonNoterMission
-                    missionId={m.id}
-                    sens="SOIGNANT_VERS_ETAB"
-                    missionIntitule={m.intitule}
-                    variant="secondary"
-                  />
-                  <Button variant="ghost" size="sm" className="gap-1.5 text-xs h-8" onClick={() => ouvrirConversation(m.etablissement_id)}>
-                    <MessageCircle className="h-3.5 w-3.5" /> Contacter
-                  </Button>
-                  {!aLitige && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-xs h-8 text-warning hover:text-warning"
-                      onClick={() => setWizardLitige({ id: m.id, intitule: m.intitule })}
-                    >
-                      <AlertTriangle className="h-3.5 w-3.5" /> Signaler un problème
-                    </Button>
-                  )}
-                  {aLitige && (
-                    <span className="text-[10px] text-destructive font-medium">⚠️ Litige en cours</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-          {missions.length === (page + 1) * PAGE_SIZE && (
-            <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
-          )}
-        </div>
-      ) : (
-        <EmptyState icone={<ClipboardList />} titre="Aucune mission terminée" description="Vos missions terminées apparaîtront ici." />
+              );
+            }}
+          />
+        );
+      })()}
+
+      {missions.length === (page + 1) * PAGE_SIZE && filtered.length > 0 && (
+        <button onClick={() => setPage(p => p + 1)} className="btn-secondary w-full mt-4">Charger plus de missions</button>
       )}
 
       <ModalCotisations missionId={cotisationsMissionId} open={!!cotisationsMissionId} onClose={() => setCotisationsMissionId(null)} />
