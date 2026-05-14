@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
 import { Search, RefreshCw, ChevronLeft, ChevronRight, Shield, Clock } from 'lucide-react';
 import { format } from 'date-fns';
@@ -114,57 +116,86 @@ export default function AdminAuditLogs() {
 
       {loading ? <ChargementPage /> : (
         <>
-          <div className="card-base overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left">
-                  <th className="py-2 px-3 font-medium text-muted-foreground">Date</th>
-                  <th className="py-2 px-3 font-medium text-muted-foreground">Acteur</th>
-                  <th className="py-2 px-3 font-medium text-muted-foreground">Action</th>
-                  <th className="py-2 px-3 font-medium text-muted-foreground">Ressource</th>
-                  <th className="py-2 px-3 font-medium text-muted-foreground">Détails</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {logs.map(log => (
-                  <tr key={log.id} className="hover:bg-muted/30 transition">
-                    <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
+          {(() => {
+            const colonnes: ColonneTableau<any>[] = [
+              { cle: 'date', titre: 'Date' },
+              { cle: 'acteur', titre: 'Acteur' },
+              { cle: 'action', titre: 'Action' },
+              { cle: 'ressource', titre: 'Ressource' },
+              { cle: 'details', titre: 'Détails' },
+            ];
+            const actionBadge = (log: any) => (
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${ACTIONS_COLORS[log.action] || 'bg-muted text-muted-foreground'}`}>
+                {log.action}
+              </span>
+            );
+            const dateFormatted = (log: any) => log.cree_le ? format(new Date(log.cree_le), 'dd/MM/yy HH:mm', { locale: fr }) : '—';
+            const detailsContent = (log: any) =>
+              log.details ? (
+                <details className="text-[10px]">
+                  <summary className="cursor-pointer text-primary hover:underline">Voir</summary>
+                  <pre className="mt-1 p-2 bg-muted/50 rounded text-[9px] text-muted-foreground overflow-x-auto max-w-[300px]">
+                    {JSON.stringify(log.details, null, 2)}
+                  </pre>
+                </details>
+              ) : <span className="text-muted-foreground/40">—</span>;
+
+            return (
+              <TableOuCartes
+                colonnes={colonnes}
+                donnees={logs}
+                getId={(log: any) => log.id}
+                etatVide={<EmptyState titre="Aucun log trouvé" description="Aucun événement audit ne correspond aux filtres." />}
+                renduCellule={(log: any, col) => {
+                  switch (col.cle) {
+                    case 'date':
+                      return (
+                        <div className="flex items-center gap-1.5 text-muted-foreground whitespace-nowrap">
+                          <Clock className="h-3 w-3" />
+                          {dateFormatted(log)}
+                        </div>
+                      );
+                    case 'acteur':
+                      return (
+                        <div>
+                          <span className="text-xs font-mono text-muted-foreground">{log.type_acteur}</span>
+                          <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[120px]">{log.acteur_id?.slice(0, 8)}...</p>
+                        </div>
+                      );
+                    case 'action':
+                      return actionBadge(log);
+                    case 'ressource':
+                      return (
+                        <div className="text-muted-foreground">
+                          <span className="text-xs">{log.type_ressource}</span>
+                          {log.id_ressource && <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[120px]">{log.id_ressource?.slice(0, 8)}...</p>}
+                        </div>
+                      );
+                    case 'details':
+                      return detailsContent(log);
+                    default:
+                      return null;
+                  }
+                }}
+                renduCarte={(log: any) => (
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      {actionBadge(log)}
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap shrink-0">
                         <Clock className="h-3 w-3" />
-                        {log.cree_le ? format(new Date(log.cree_le), 'dd/MM/yy HH:mm', { locale: fr }) : '—'}
+                        {dateFormatted(log)}
                       </div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span className="text-xs font-mono text-muted-foreground">{log.type_acteur}</span>
-                      <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[120px]">{log.acteur_id?.slice(0, 8)}...</p>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${ACTIONS_COLORS[log.action] || 'bg-muted text-muted-foreground'}`}>
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-muted-foreground">
-                      <span className="text-xs">{log.type_ressource}</span>
-                      {log.id_ressource && <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[120px]">{log.id_ressource?.slice(0, 8)}...</p>}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      {log.details ? (
-                        <details className="text-[10px]">
-                          <summary className="cursor-pointer text-primary hover:underline">Voir</summary>
-                          <pre className="mt-1 p-2 bg-muted/50 rounded text-[9px] text-muted-foreground overflow-x-auto max-w-[300px]">
-                            {JSON.stringify(log.details, null, 2)}
-                          </pre>
-                        </details>
-                      ) : <span className="text-muted-foreground/40">—</span>}
-                    </td>
-                  </tr>
-                ))}
-                {logs.length === 0 && (
-                  <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">Aucun log trouvé.</td></tr>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      <p>👤 <span className="font-mono">{log.type_acteur}</span> · {log.acteur_id?.slice(0, 8)}…</p>
+                      <p>📦 <span className="font-mono">{log.type_ressource}</span>{log.id_ressource && <> · {log.id_ressource?.slice(0, 8)}…</>}</p>
+                    </div>
+                    {log.details && <div className="pt-1 border-t border-border">{detailsContent(log)}</div>}
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
+              />
+            );
+          })()}
 
           {/* Pagination */}
           <div className="flex items-center justify-between mt-4">
