@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader2, Upload, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { DialogResponsive, DialogResponsiveHeader, DialogResponsiveBody, DialogResponsiveFooter } from '@/components/ui/DialogResponsive';
 
 interface Props {
   ouvert: boolean;
@@ -36,6 +37,9 @@ const MOTIFS = [
  *
  * La réclamation est créée en statut PENDING et examinée par un admin
  * Jolene (PR 8 Sprint 3.5).
+ *
+ * Sprint 8 ter-E PR 3 : migration vers DialogResponsive
+ * (fullscreen mobile / centered desktop maxWidth=md).
  */
 export function ModaleReclamationScore({
   ouvert, onFermer, onCreee, evenementId, evenementType, evenementInfo,
@@ -45,8 +49,6 @@ export function ModaleReclamationScore({
   const [texte, setTexte] = useState('');
   const [fichier, setFichier] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-
-  if (!ouvert) return null;
 
   async function uploadJustificatif(): Promise<string | null> {
     if (!fichier) return null;
@@ -101,10 +103,16 @@ export function ModaleReclamationScore({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div className="bg-card border border-border rounded-xl max-w-md w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-foreground">Contester cet événement de score</h2>
+    <DialogResponsive
+      open={ouvert}
+      onOpenChange={(o) => { if (!o && !loading) onFermer(); }}
+      maxWidth="md"
+    >
+      <DialogResponsiveHeader
+        title="Contester cet événement de score"
+      />
 
+      <DialogResponsiveBody>
         <div className="rounded-lg bg-muted/40 p-3 text-xs">
           <p className="font-semibold text-foreground">{evenementInfo.type_evenement}</p>
           <p className="text-muted-foreground mt-1">{evenementInfo.motif}</p>
@@ -154,17 +162,25 @@ export function ModaleReclamationScore({
           <AlertCircle className="h-4 w-4 shrink-0" />
           <p>Votre réclamation sera examinée par un administrateur Jolene. La décision (annulation, réduction ou maintien) sera notifiée par email + push.</p>
         </div>
+      </DialogResponsiveBody>
 
-        <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">
-            Annuler
-          </button>
-          <button onClick={soumettre} disabled={loading} className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2">
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            Envoyer
-          </button>
-        </div>
-      </div>
-    </div>
+      <DialogResponsiveFooter>
+        <button
+          onClick={onFermer}
+          disabled={loading}
+          className="btn-secondary flex-1 disabled:opacity-50 min-h-[44px]"
+        >
+          Annuler
+        </button>
+        <button
+          onClick={soumettre}
+          disabled={loading}
+          className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2 min-h-[44px]"
+        >
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          Envoyer
+        </button>
+      </DialogResponsiveFooter>
+    </DialogResponsive>
   );
 }
