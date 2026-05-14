@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { Loader2, Upload, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
-import { DialogResponsive, DialogResponsiveHeader, DialogResponsiveBody, DialogResponsiveFooter } from '@/components/ui/DialogResponsive';
+import {
+  DialogResponsive,
+  DialogResponsiveHeader,
+  DialogResponsiveBody,
+  DialogResponsiveFooter,
+} from '@/components/ui/DialogResponsive';
 
 interface Props {
   ouvert: boolean;
@@ -38,8 +43,7 @@ const MOTIFS = [
  * La réclamation est créée en statut PENDING et examinée par un admin
  * Jolene (PR 8 Sprint 3.5).
  *
- * Sprint 8 ter-E PR 3 : migration vers DialogResponsive
- * (fullscreen mobile / centered desktop maxWidth=md).
+ * Sprint 8 ter-E : migré vers <DialogResponsive /> (fullscreen mobile / centered desktop maxWidth=md).
  */
 export function ModaleReclamationScore({
   ouvert, onFermer, onCreee, evenementId, evenementType, evenementInfo,
@@ -108,75 +112,65 @@ export function ModaleReclamationScore({
       onOpenChange={(o) => { if (!o && !loading) onFermer(); }}
       maxWidth="md"
     >
-      <DialogResponsiveHeader
-        title="Contester cet événement de score"
-      />
-
+      <DialogResponsiveHeader title="Contester cet événement de score" />
       <DialogResponsiveBody>
-        <div className="rounded-lg bg-muted/40 p-3 text-xs">
-          <p className="font-semibold text-foreground">{evenementInfo.type_evenement}</p>
-          <p className="text-muted-foreground mt-1">{evenementInfo.motif}</p>
-          <p className="font-mono mt-1 text-destructive">{evenementInfo.points} pts</p>
-        </div>
+        <div className="space-y-4">
+          <div className="rounded-lg bg-muted/40 p-3 text-xs">
+            <p className="font-semibold text-foreground">{evenementInfo.type_evenement}</p>
+            <p className="text-muted-foreground mt-1">{evenementInfo.motif}</p>
+            <p className="font-mono mt-1 text-destructive">{evenementInfo.points} pts</p>
+          </div>
 
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Motif de la contestation *</span>
-          <select value={motif} onChange={e => setMotif(e.target.value)} className="input-base">
-            <option value="">— Sélectionnez —</option>
-            {MOTIFS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Explication détaillée * (min 20 caractères)</span>
-          <textarea
-            value={texte}
-            onChange={e => setTexte(e.target.value)}
-            className="input-base"
-            rows={5}
-            placeholder="Expliquez précisément la situation : que s'est-il passé, pourquoi cet événement ne devrait pas vous pénaliser..."
-          />
-          <span className="text-[10px] text-muted-foreground">{texte.length} / 20+</span>
-        </label>
-
-        <label className="block">
-          <span className="text-xs font-medium text-foreground mb-1 block">Justificatif (PDF, image, max 5 MB)</span>
-          <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border bg-muted/20 p-3 hover:bg-muted/40 transition">
-            <Upload className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground flex-1">
-              {fichier ? fichier.name : 'Choisir un fichier'}
-            </span>
-            <input
-              type="file"
-              accept="application/pdf,image/*"
-              className="hidden"
-              onChange={e => setFichier(e.target.files?.[0] || null)}
-            />
+          <label className="block">
+            <span className="text-xs font-medium text-foreground mb-1 block">Motif de la contestation *</span>
+            <select value={motif} onChange={e => setMotif(e.target.value)} className="input-base">
+              <option value="">— Sélectionnez —</option>
+              {MOTIFS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
           </label>
-          <p className="text-[10px] text-muted-foreground mt-1">
-            Un justificatif (certif médical, attestation, etc.) facilite la décision admin.
-          </p>
-        </label>
 
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <p>Votre réclamation sera examinée par un administrateur Jolene. La décision (annulation, réduction ou maintien) sera notifiée par email + push.</p>
+          <label className="block">
+            <span className="text-xs font-medium text-foreground mb-1 block">Explication détaillée * (min 20 caractères)</span>
+            <textarea
+              value={texte}
+              onChange={e => setTexte(e.target.value)}
+              className="input-base"
+              rows={5}
+              placeholder="Expliquez précisément la situation : que s'est-il passé, pourquoi cet événement ne devrait pas vous pénaliser..."
+            />
+            <span className="text-[10px] text-muted-foreground">{texte.length} / 20+</span>
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium text-foreground mb-1 block">Justificatif (PDF, image, max 5 MB)</span>
+            <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border bg-muted/20 p-3 hover:bg-muted/40 transition">
+              <Upload className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground flex-1">
+                {fichier ? fichier.name : 'Choisir un fichier'}
+              </span>
+              <input
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={e => setFichier(e.target.files?.[0] || null)}
+              />
+            </label>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Un justificatif (certif médical, attestation, etc.) facilite la décision admin.
+            </p>
+          </label>
+
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <p>Votre réclamation sera examinée par un administrateur Jolene. La décision (annulation, réduction ou maintien) sera notifiée par email + push.</p>
+          </div>
         </div>
       </DialogResponsiveBody>
-
       <DialogResponsiveFooter>
-        <button
-          onClick={onFermer}
-          disabled={loading}
-          className="btn-secondary flex-1 disabled:opacity-50 min-h-[44px]"
-        >
+        <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50 min-h-[44px]">
           Annuler
         </button>
-        <button
-          onClick={soumettre}
-          disabled={loading}
-          className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2 min-h-[44px]"
-        >
+        <button onClick={soumettre} disabled={loading} className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2 min-h-[44px]">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           Envoyer
         </button>
