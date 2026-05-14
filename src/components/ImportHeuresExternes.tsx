@@ -112,26 +112,26 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-foreground mb-1 block">Employeur *</label>
-            <input value={form.employeur} onChange={e => maj('employeur', e.target.value)} className="input-base" required />
+            <label htmlFor="heures-externes-employeur" className="text-sm font-medium text-foreground mb-1 block">Employeur *</label>
+            <input id="heures-externes-employeur" value={form.employeur} onChange={e => maj('employeur', e.target.value)} className="input-base" required />
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground mb-1 block">Type</label>
-            <select value={form.typeEmployeur} onChange={e => maj('typeEmployeur', e.target.value)} className="input-base">
+            <label htmlFor="heures-externes-type" className="text-sm font-medium text-foreground mb-1 block">Type</label>
+            <select id="heures-externes-type" value={form.typeEmployeur} onChange={e => maj('typeEmployeur', e.target.value)} className="input-base">
               {TYPES_EMPLOYEUR.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-sm font-medium text-foreground mb-1 block">Du *</label><input type="date" value={form.dateDebut} onChange={e => maj('dateDebut', e.target.value)} className="input-base" required /></div>
-            <div><label className="text-sm font-medium text-foreground mb-1 block">Au *</label><input type="date" value={form.dateFin} onChange={e => maj('dateFin', e.target.value)} className="input-base" required /></div>
+            <div><label htmlFor="heures-externes-date-debut" className="text-sm font-medium text-foreground mb-1 block">Du *</label><input id="heures-externes-date-debut" type="date" value={form.dateDebut} onChange={e => maj('dateDebut', e.target.value)} className="input-base" required /></div>
+            <div><label htmlFor="heures-externes-date-fin" className="text-sm font-medium text-foreground mb-1 block">Au *</label><input id="heures-externes-date-fin" type="date" value={form.dateFin} onChange={e => maj('dateFin', e.target.value)} className="input-base" required /></div>
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground mb-1 block">Heures déclarées *</label>
-            <input type="number" min="1" step="0.5" value={form.heures} onChange={e => maj('heures', e.target.value)} className="input-base" required />
+            <label htmlFor="heures-externes-heures" className="text-sm font-medium text-foreground mb-1 block">Heures déclarées *</label>
+            <input id="heures-externes-heures" type="number" min="1" step="0.5" value={form.heures} onChange={e => maj('heures', e.target.value)} className="input-base" required />
           </div>
           <div>
-            <label className="text-sm font-medium text-foreground mb-1 block">Type de justificatif</label>
-            <select value={form.typePreuve} onChange={e => maj('typePreuve', e.target.value)} className="input-base">
+            <label htmlFor="heures-externes-type-preuve" className="text-sm font-medium text-foreground mb-1 block">Type de justificatif</label>
+            <select id="heures-externes-type-preuve" value={form.typePreuve} onChange={e => maj('typePreuve', e.target.value)} className="input-base">
               <option value="BULLETIN_PAIE">Bulletin de paie</option>
               <option value="ATTESTATION_EMPLOYEUR">Attestation employeur</option>
               <option value="CERTIFICAT_TRAVAIL">Certificat de travail</option>
