@@ -67,9 +67,23 @@ export function FiltresPeriode({ onChange }: FiltresPeriodeProps) {
       ))}
       {selection === 'custom' && (
         <div className="flex items-center gap-2 mt-2 w-full">
-          <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="input-base text-xs flex-1" />
-          <span className="text-muted-foreground text-xs">→</span>
-          <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="input-base text-xs flex-1" />
+          <label htmlFor="filtres-periode-debut" className="sr-only">Date de début de la période</label>
+          <input
+            id="filtres-periode-debut"
+            type="date"
+            value={dateDebut}
+            onChange={e => setDateDebut(e.target.value)}
+            className="input-base text-xs flex-1"
+          />
+          <span aria-hidden="true" className="text-muted-foreground text-xs">→</span>
+          <label htmlFor="filtres-periode-fin" className="sr-only">Date de fin de la période</label>
+          <input
+            id="filtres-periode-fin"
+            type="date"
+            value={dateFin}
+            onChange={e => setDateFin(e.target.value)}
+            className="input-base text-xs flex-1"
+          />
           <button onClick={appliquerCustom} className="btn-primary text-xs px-3 py-2">OK</button>
         </div>
       )}
