@@ -5,6 +5,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { ModalPaiementCommission } from '@/components/ModalPaiementCommission';
 import { PopoverScoreSoignant } from '@/components/score/PopoverScoreSoignant';
 import { getLabelProfession } from '@/lib/constantes';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 function scoreBadge(score: number) {
   if (score >= 70) return 'bg-success/10 text-success';
@@ -172,11 +173,12 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
 
   if (candidatures.length === 0) {
     return (
-      <div className="text-center py-8">
-        <Clock className="h-10 w-10 text-muted-foreground/30 mx-auto mb-2" />
-        <p className="text-sm text-muted-foreground">Aucune candidature pour le moment</p>
-        <p className="text-xs text-muted-foreground/60 mt-1">Les soignants qualifiés peuvent postuler à cette mission.</p>
-      </div>
+      <EmptyState
+        icone={<Clock />}
+        titre="En attente de candidats"
+        description="Les soignants qualifiés peuvent postuler à cette mission. Vérifiez que les critères (profession, taux, dates) sont cohérents avec le marché."
+        variant="info"
+      />
     );
   }
 
