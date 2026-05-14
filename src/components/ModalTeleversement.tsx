@@ -180,19 +180,19 @@ export function ModalTeleversement({ typeDocument, onConfirmer, onFermer, aExpir
         {/* Metadata fields */}
         <div className="mt-4 space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground">Libellé (optionnel)</label>
-            <input value={libelle} onChange={e => setLibelle(e.target.value)} className="input-base text-sm mt-1" placeholder={placeholder} />
+            <label htmlFor="televersement-libelle" className="text-xs text-muted-foreground">Libellé (optionnel)</label>
+            <input id="televersement-libelle" value={libelle} onChange={e => setLibelle(e.target.value)} className="input-base text-sm mt-1" placeholder={placeholder} />
           </div>
           {!sansDate && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground">Valide depuis</label>
-                <input type="date" value={valideDepuis} onChange={e => setValideDepuis(e.target.value)} className="input-base text-sm mt-1" />
+                <label htmlFor="televersement-valide-depuis" className="text-xs text-muted-foreground">Valide depuis</label>
+                <input id="televersement-valide-depuis" type="date" value={valideDepuis} onChange={e => setValideDepuis(e.target.value)} className="input-base text-sm mt-1" />
               </div>
               {!sansExpiration && (
                 <div>
-                  <label className="text-xs text-muted-foreground">Valide jusqu'au</label>
-                  <input type="date" value={valideJusqua} onChange={e => setValideJusqua(e.target.value)} className="input-base text-sm mt-1" />
+                  <label htmlFor="televersement-valide-jusqua" className="text-xs text-muted-foreground">Valide jusqu'au</label>
+                  <input id="televersement-valide-jusqua" type="date" value={valideJusqua} onChange={e => setValideJusqua(e.target.value)} className="input-base text-sm mt-1" />
                 </div>
               )}
             </div>
