@@ -1,14 +1,24 @@
 /**
- * Composant `<EmptyState />` standardisé Sprint 8 PR 2.
+ * Composant `<EmptyState />` standardisé Sprint 8 PR 2 + enrichi Sprint 8 ter-A BIS.
  *
- * Usage :
+ * Usage avec icône Lucide (compact circulaire) :
  *   <EmptyState
  *     icone={<Search />}
  *     titre="Aucune mission disponible"
  *     description="Élargissez vos critères pour voir plus de résultats."
- *     cta={{ label: "Modifier mes préférences", onClick: () => navigate('/soignant/preferences') }}
+ *     cta={{ label: "Modifier mes préférences", onClick: () => navigate(...) }}
  *     variant="info"
  *   />
+ *
+ * Usage avec illustration vectorielle (100×100, sans cercle) :
+ *   <EmptyState
+ *     illustration={<IllustrationBoussole />}
+ *     titre="Publiez votre première mission"
+ *     description="Trouvez un soignant qualifié en quelques heures."
+ *     cta={{ label: "Créer une mission", onClick: () => navigate('/etablissement/missions/creer') }}
+ *   />
+ *
+ * `illustration` a priorité sur `icone` si les deux sont fournis.
  *
  * Variants :
  * - `info` (défaut) : neutre, informatif
@@ -29,8 +39,10 @@ type Cta = {
 };
 
 type EmptyStateProps = {
-  /** Icône Lucide ou autre ReactNode (sera placeholder mascotte Sprint 9) */
+  /** Icône Lucide ou autre ReactNode (rendu dans un cercle de couleur variant) */
   icone?: ReactNode;
+  /** Illustration vectorielle 100×100 (rendue sans cercle, opacité 70%) — prioritaire sur `icone` */
+  illustration?: ReactNode;
   /** Titre principal (clair, concis, sans ponctuation finale) */
   titre: string;
   /** Description complémentaire optionnelle */
@@ -64,6 +76,7 @@ const VARIANT_STYLES: Record<Variant, { wrapper: string; icon: string }> = {
 
 export function EmptyState({
   icone,
+  illustration,
   titre,
   description,
   cta,
@@ -84,7 +97,17 @@ export function EmptyState({
         className,
       )}
     >
-      {icone && (
+      {illustration ? (
+        <div
+          aria-hidden="true"
+          className={cn(
+            "opacity-70",
+            compact ? "mb-3 [&>svg]:h-16 [&>svg]:w-16" : "mb-4 [&>svg]:h-24 [&>svg]:w-24",
+          )}
+        >
+          {illustration}
+        </div>
+      ) : icone ? (
         <div
           aria-hidden="true"
           className={cn(
@@ -95,7 +118,7 @@ export function EmptyState({
         >
           {icone}
         </div>
-      )}
+      ) : null}
       <h3
         className={cn(
           "font-semibold text-foreground",
@@ -154,5 +177,17 @@ export function EmptyState({
     </div>
   );
 }
+
+// Re-export des illustrations pour usage centralisé via @/components/ui/EmptyState
+export {
+  IllustrationBoussole,
+  IllustrationMegaphone,
+  IllustrationDossier,
+  IllustrationStylo,
+  IllustrationCloche,
+  IllustrationBouclier,
+  IllustrationTirelire,
+  IllustrationCalculatrice,
+} from "./EmptyStateIllustrations";
 
 export default EmptyState;
