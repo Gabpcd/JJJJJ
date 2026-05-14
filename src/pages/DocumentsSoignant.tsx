@@ -237,12 +237,28 @@ export function DocumentsSoignantContent() {
     }
   };
 
-  const televerser = async (fichier: File, libelle: string, valideDepuis: string, valideJusqua: string) => {
+  const televerser = async (fichierOriginal: File, libelle: string, valideDepuis: string, valideJusqua: string) => {
     if (!user || !televersementType) return;
 
-    if (fichier.size > 10 * 1024 * 1024) {
+    if (fichierOriginal.size > 10 * 1024 * 1024) {
       toast.error('Fichier trop volumineux. Maximum : 10 Mo.');
       return;
+    }
+
+    let fichier = fichierOriginal;
+    if (/^image\/hei[cf]$/i.test(fichier.type) || /\.hei[cf]$/i.test(fichier.name)) {
+      try {
+        const bitmap = await createImageBitmap(fichier);
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(bitmap, 0, 0);
+        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
+        fichier = new File([blob], fichier.name.replace(/\.hei[cf]$/i, '.jpg'), { type: 'image/jpeg' });
+        bitmap.close();
+      } catch {
+        toast.error('Impossible de convertir le fichier HEIC. Merci de le re-prendre en JPEG.');
+        return;
+      }
     }
 
     const nomSanitise = fichier.name

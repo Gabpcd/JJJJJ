@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
     }
     const base64 = btoa(binary);
 
-    const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
+    const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
     if (doc.type_mime && !ALLOWED_MIME_TYPES.includes(doc.type_mime)) {
       await supabase.rpc("fn_update_document_verification", {
         p_document_id: document_id,
