@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Loader2, Upload, X, AlertCircle } from 'lucide-react';
+import { Loader2, Upload, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { AnnulationCandidatureTimer } from './AnnulationCandidatureTimer';
+import { DialogResponsive, DialogResponsiveHeader, DialogResponsiveBody, DialogResponsiveFooter } from '@/components/ui/DialogResponsive';
 
 interface Props {
   ouvert: boolean;
@@ -45,6 +46,9 @@ const MOTIFS = [
  *   - crée un évenement_score_soignant si applicable
  *   - notifie l'établissement (push + email)
  *   - audit trail
+ *
+ * Sprint 8 ter-E PR 2 : migration vers DialogResponsive
+ * (fullscreen mobile / centered desktop maxWidth=lg).
  */
 export function ModaleAnnulationCandidature({
   ouvert, onFermer, onAnnulee, candidatureId, accepteeA, debutMission, estAsap = false, missionInfo,
@@ -55,8 +59,6 @@ export function ModaleAnnulationCandidature({
   const [fichier, setFichier] = useState<File | null>(null);
   const [accepte, setAccepte] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  if (!ouvert) return null;
 
   async function uploadJustificatif(): Promise<string | null> {
     if (!fichier) return null;
@@ -124,18 +126,17 @@ export function ModaleAnnulationCandidature({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
-      <div
-        className="bg-card border border-border rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Annuler votre candidature</h2>
-          <button onClick={onFermer} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <DialogResponsive
+      open={ouvert}
+      onOpenChange={(o) => { if (!o && !loading) onFermer(); }}
+      maxWidth="lg"
+    >
+      <DialogResponsiveHeader
+        title="Annuler votre candidature"
+        description={missionInfo.intitule}
+      />
 
+      <DialogResponsiveBody>
         {/* Récap mission */}
         <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-0.5">
           <p className="font-semibold text-foreground">{missionInfo.intitule}</p>
@@ -216,22 +217,26 @@ export function ModaleAnnulationCandidature({
           <AlertCircle className="h-4 w-4 shrink-0" />
           <p>L'établissement sera notifié immédiatement. Si la pénalité vous semble injuste, vous pourrez la contester depuis votre page score.</p>
         </div>
+      </DialogResponsiveBody>
 
-        <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">
-            Garder la candidature
-          </button>
-          <button
-            onClick={confirmer}
-            disabled={loading || !motif || texte.trim().length < 20 || !accepte}
-            className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2"
-          >
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            Confirmer l'annulation
-          </button>
-        </div>
-      </div>
-    </div>
+      <DialogResponsiveFooter>
+        <button
+          onClick={onFermer}
+          disabled={loading}
+          className="btn-secondary flex-1 disabled:opacity-50 min-h-[44px]"
+        >
+          Garder la candidature
+        </button>
+        <button
+          onClick={confirmer}
+          disabled={loading || !motif || texte.trim().length < 20 || !accepte}
+          className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2 min-h-[44px]"
+        >
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          Confirmer l'annulation
+        </button>
+      </DialogResponsiveFooter>
+    </DialogResponsive>
   );
 }
 
