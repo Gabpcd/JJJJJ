@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type Role = 'PROPRIETAIRE' | 'ADMIN_GROUPE' | 'RH' | 'POINTAGE_ONLY' | 'LECTURE_SEULE';
 type StatutInvitation = 'EN_ATTENTE' | 'ACCEPTEE' | 'EXPIREE' | 'ANNULEE';
@@ -124,9 +125,16 @@ export default function EquipeEtablissement() {
       <section className="mb-6">
         <h2 className="text-lg font-bold text-foreground mb-3">Membres actifs ({membres.length})</h2>
         {membres.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic px-3 py-6 text-center bg-muted/30 rounded-lg">
-            Aucun membre actif.
-          </p>
+          <EmptyState
+            icone={<Users />}
+            titre="Invitez vos collaborateurs"
+            description="Aucun membre actif. Invitez votre équipe RH ou de pointage pour partager la gestion de cet établissement."
+            cta={estProprietaire ? {
+              label: 'Inviter un membre',
+              onClick: () => setModalInviter(true),
+            } : undefined}
+            compact
+          />
         ) : (
           <ul className="space-y-2">
             {membres.map((m) => {
@@ -174,9 +182,13 @@ export default function EquipeEtablissement() {
         <section className="mb-6">
           <h2 className="text-lg font-bold text-foreground mb-3">Invitations en attente ({invitations.length})</h2>
           {invitations.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic px-3 py-4 text-center bg-muted/30 rounded-lg">
-              Aucune invitation en attente.
-            </p>
+            <EmptyState
+              icone={<Mail />}
+              titre="Aucune invitation en attente"
+              description="Toutes les invitations envoyées ont été acceptées ou ont expiré."
+              variant="success"
+              compact
+            />
           ) : (
             <ul className="space-y-2">
               {invitations.map((inv) => (
