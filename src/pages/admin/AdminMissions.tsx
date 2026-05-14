@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { ExternalLink, Clock, CheckCircle, PlayCircle, Send, ClipboardList } from 'lucide-react';
 
 type FiltreStatut = 'TOUTES' | 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE';
@@ -131,7 +131,7 @@ export default function AdminMissions() {
         </div>
 
         {missions.length === 0 ? (
-          <EtatVide titre="Aucune mission" sousTitre={`Aucune mission avec le statut "${filtre}".`} />
+          <EmptyState titre="Aucune mission" description={`Aucune mission avec le statut "${filtre}".`} />
         ) : (
           <Card>
             <CardContent className="pt-5">
