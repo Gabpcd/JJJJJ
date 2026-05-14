@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { getLabelProfession } from '@/lib/constantes';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface FavoriSoignant {
   soignant_id: string;
@@ -106,16 +107,16 @@ export default function MesFavorisEtablissement() {
       {loading ? (
         <ChargementPage />
       ) : items.length === 0 ? (
-        <div className="card-base text-center py-10">
-          <Star className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm font-medium text-foreground">Aucun soignant favori</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Ajoutez des soignants depuis l'annuaire ou la fiche profil détaillée.
-          </p>
-          <button onClick={() => navigate('/etablissement/soignants')} className="btn-secondary text-sm mt-4">
-            Aller à l'annuaire
-          </button>
-        </div>
+        <EmptyState
+          icone={<Star />}
+          titre="Aucun soignant favori"
+          description="Ajoutez des soignants depuis l'annuaire ou la fiche profil détaillée."
+          cta={{
+            label: "Aller à l'annuaire",
+            onClick: () => navigate('/etablissement/soignants'),
+            variant: 'secondary',
+          }}
+        />
       ) : (
         <div className="space-y-3">
           {items.map((s) => (
