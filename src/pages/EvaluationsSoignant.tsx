@@ -3,7 +3,7 @@ import { Star, Calendar, Building2, TrendingUp, Flag, X } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { EtatVide } from '@/components/EtatVide';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
@@ -216,7 +216,7 @@ function EvaluationsContent() {
       </p>
 
       {notations.length === 0 ? (
-        <EtatVide icone={Star} titre="Aucune évaluation" sousTitre="Les évaluations reçues apparaîtront ici." />
+        <EmptyState icone={<Star />} titre="Aucune évaluation" description="Les évaluations reçues apparaîtront ici." />
       ) : (
         <ul className="space-y-2">
           {notations.map((n) => (
