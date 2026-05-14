@@ -10,7 +10,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { logger } from '@/lib/logger';
 import { handleErrorSilent } from '@/lib/handleError';
-import { EtatVide, IllustrationBoussole } from '@/components/EtatVide';
+import { EmptyState, IllustrationBoussole } from '@/components/ui/EmptyState';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -382,10 +382,10 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
             {loading ? (
               <div className="p-8 text-center text-sm text-muted-foreground">Chargement…</div>
             ) : conversations.length === 0 ? (
-              <EtatVide
+              <EmptyState
                 illustration={<IllustrationBoussole />}
                 titre="Aucune conversation"
-                sousTitre={emptyMessage}
+                description={emptyMessage}
               />
             ) : (
               conversations.map(c => (
