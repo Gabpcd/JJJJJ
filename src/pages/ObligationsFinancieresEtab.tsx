@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface Obligations {
   total_du: number;
@@ -194,9 +195,13 @@ export default function ObligationsFinancieresEtab() {
             <Users className="h-5 w-5 text-primary" /> Missions à payer
           </h2>
           {missionsNonPayees.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic px-3 py-6 text-center bg-muted/30 rounded-lg">
-              Aucune mission en attente de paiement.
-            </p>
+            <EmptyState
+              icone={<Users />}
+              titre="Aucune mission en attente de paiement"
+              description="Toutes vos missions terminées ont été réglées."
+              variant="success"
+              compact
+            />
           ) : (
             <ul className="space-y-2">
               {missionsNonPayees.map((m) => (
@@ -245,9 +250,13 @@ export default function ObligationsFinancieresEtab() {
             <Building2 className="h-5 w-5 text-info" /> Commissions Jolene
           </h2>
           {obligations.nb_factures_impayees === 0 ? (
-            <p className="text-sm text-muted-foreground italic px-3 py-6 text-center bg-muted/30 rounded-lg">
-              Aucune commission Jolene impayée.
-            </p>
+            <EmptyState
+              icone={<Building2 />}
+              titre="Aucune commission Jolene impayée"
+              description="Toutes les commissions Jolene sont réglées."
+              variant="success"
+              compact
+            />
           ) : (
             <button
               onClick={() => navigate('/etablissement/facturation?tab=commissions')}
