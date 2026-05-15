@@ -5,7 +5,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Activity, AlertCircle, AlertTriangle, Bug, CheckCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
@@ -86,9 +86,9 @@ export default function AdminStatus() {
   const cronsRetard = data.crons.crons.filter(c => c.retard && !c.echec);
   const cronsOk = data.crons.crons.filter(c => !c.retard && !c.echec);
 
-  const severiteBadge = (s: string) => s === 'CRITICAL' ? 'bg-destructive/10 text-destructive border-destructive/30'
-    : s === 'WARNING' ? 'bg-warning/10 text-warning border-warning/30'
-    : 'bg-info/10 text-info border-info/30';
+  const severiteVariant = (s: string): 'error' | 'warning' | 'info' => s === 'CRITICAL' ? 'error'
+    : s === 'WARNING' ? 'warning'
+    : 'info';
 
   return (
     <LayoutAdmin>
@@ -117,7 +117,7 @@ export default function AdminStatus() {
           <CardContent className="space-y-2">
             {data.alertes_actives.map(a => (
               <div key={a.id} className="flex items-start gap-2 p-2 rounded-lg bg-muted/30">
-                <Badge variant="outline" className={`text-[10px] ${severiteBadge(a.severite)}`}>{a.severite}</Badge>
+                <BadgeY2K variant={severiteVariant(a.severite)} size="sm">{a.severite}</BadgeY2K>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold">{a.type} — {a.source}</p>
                   <p className="text-xs text-muted-foreground line-clamp-2">{a.message}</p>
@@ -217,9 +217,9 @@ export default function AdminStatus() {
                       {c.dernier_run ? format(new Date(c.dernier_run), 'd MMM HH:mm', { locale: fr }) : '—'}
                     </td>
                     <td>
-                      {c.echec ? <Badge className="bg-destructive/10 text-destructive border-destructive/30 text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />Échec</Badge>
-                        : c.retard ? <Badge className="bg-warning/10 text-warning border-warning/30 text-[10px]"><AlertTriangle className="h-3 w-3 mr-1" />Retard</Badge>
-                        : <Badge className="bg-success/10 text-success border-success/30 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />OK</Badge>}
+                      {c.echec ? <BadgeY2K variant="error" size="sm" icone={<AlertCircle className="h-3 w-3" />}>Échec</BadgeY2K>
+                        : c.retard ? <BadgeY2K variant="warning" size="sm" icone={<AlertTriangle className="h-3 w-3" />}>Retard</BadgeY2K>
+                        : <BadgeY2K variant="success" size="sm" icone={<CheckCircle className="h-3 w-3" />}>OK</BadgeY2K>}
                     </td>
                   </tr>
                 ))}

@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
@@ -280,12 +280,12 @@ export function LitigePreuvesPanel({ litige, open, onOpenChange }: Props) {
                         )}
                         {p.methode && <span>({p.methode})</span>}
                         {p.is_geo_ok != null && (
-                          <Badge
-                            variant={p.is_geo_ok ? 'default' : 'destructive'}
-                            className="text-[10px]"
+                          <BadgeY2K
+                            variant={p.is_geo_ok ? 'success' : 'error'}
+                            size="sm"
                           >
                             {p.is_geo_ok ? 'Géo OK' : 'Hors zone'}
-                          </Badge>
+                          </BadgeY2K>
                         )}
                       </div>
                     </li>
@@ -361,16 +361,16 @@ export function LitigePreuvesPanel({ litige, open, onOpenChange }: Props) {
                         <span className="font-mono text-foreground">
                           {f.numero_facture ?? 'BROUILLON'}
                         </span>
-                        <Badge variant="outline" className="text-[10px]">
+                        <BadgeY2K variant="info" size="sm">
                           {f.type_document ?? '—'}
-                        </Badge>
-                        <Badge variant="secondary" className="text-[10px]">
+                        </BadgeY2K>
+                        <BadgeY2K variant="info" size="sm">
                           {f.statut ?? '—'}
-                        </Badge>
+                        </BadgeY2K>
                         {f.statut_litige && (
-                          <Badge variant="outline" className="text-[10px]">
+                          <BadgeY2K variant="warning" size="sm">
                             Litige : {f.statut_litige}
-                          </Badge>
+                          </BadgeY2K>
                         )}
                         <span>HT {formatMontant(f.montant_ht)}</span>
                         <span>TTC {formatMontant(f.montant_ttc)}</span>

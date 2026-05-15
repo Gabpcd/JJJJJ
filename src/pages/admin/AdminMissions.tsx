@@ -5,7 +5,7 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { ExternalLink, Clock, CheckCircle, PlayCircle, Send, ClipboardList } from 'lucide-react';
@@ -25,14 +25,14 @@ const formatHeure = (d: string) => d ? new Date(d).toLocaleTimeString('fr-FR', {
 const formatEur = (v: number | null) => v != null ? `${Number(v).toFixed(2)} €` : '—';
 
 function statutBadge(statut: string) {
-  const map: Record<string, string> = {
-    OUVERTE: 'bg-warning/10 text-warning border-warning/30',
-    ASSIGNEE: 'bg-info/10 text-info border-info/30',
-    EN_COURS: 'bg-primary/10 text-primary border-primary/30',
-    TERMINEE: 'bg-success/10 text-success border-success/30',
-    ANNULEE: 'bg-destructive/10 text-destructive border-destructive/30',
+  const map: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
+    OUVERTE: 'warning',
+    ASSIGNEE: 'info',
+    EN_COURS: 'info',
+    TERMINEE: 'success',
+    ANNULEE: 'error',
   };
-  return <Badge variant="outline" className={`text-[10px] ${map[statut] ?? ''}`}>{statut}</Badge>;
+  return <BadgeY2K variant={map[statut] ?? 'info'} size="sm">{statut}</BadgeY2K>;
 }
 
 export default function AdminMissions() {

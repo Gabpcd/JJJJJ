@@ -5,7 +5,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Scale, Gavel, ChevronRight, Calendar } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -135,10 +135,19 @@ export default function AdminLitiges() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <Badge variant="outline" className={`text-[10px] ${badge.classes}`}>
-                        <badge.icon className="h-3 w-3 mr-1" />
+                      <BadgeY2K
+                        variant={
+                          badge.groupe === 'OUVERT' ? 'warning'
+                          : badge.groupe === 'MEDIATION' ? 'info'
+                          : badge.groupe === 'ACTION_ATTENDUE' ? 'error'
+                          : badge.groupe === 'RESOLU_ACCORD' || badge.groupe === 'RESOLU_DECISION' ? 'success'
+                          : 'info'
+                        }
+                        size="sm"
+                        icone={<badge.icon className="h-3 w-3" />}
+                      >
                         {badge.label}
-                      </Badge>
+                      </BadgeY2K>
                       <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
                         <Calendar className="h-3 w-3" />
                         Ouvert il y a {ageLabel}

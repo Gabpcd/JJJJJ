@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -124,10 +124,10 @@ export function LegacyRecategorisation({ onChanged, onCountChange }: Props) {
   return (
     <div className="space-y-4" data-testid="legacy-list">
       <div className="flex items-center gap-2">
-        <Badge variant="secondary" data-testid="legacy-count">
+        <BadgeY2K variant="info" data-testid="legacy-count">
           {count} litige{count > 1 ? 's' : ''} legacy restant
           {count > 1 ? 's' : ''}
-        </Badge>
+        </BadgeY2K>
         <span className="text-xs text-muted-foreground">
           Litiges avec <code>type_legacy = TRUE</code> et{' '}
           <code>type_litige = AUTRE</code>. Recatégoriser lève le flag
@@ -159,9 +159,9 @@ export function LegacyRecategorisation({ onChanged, onCountChange }: Props) {
               <Card key={l.id} data-testid="legacy-card" data-litige-id={l.id}>
                 <CardContent className="space-y-3 pt-4">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline" className="text-[10px]">
+                    <BadgeY2K variant="info" size="sm">
                       Statut : {l.statut}
-                    </Badge>
+                    </BadgeY2K>
                     <span>Ouvert {formatDate(l.cree_le)}</span>
                   </div>
                   <div>

@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { TrendingUp, TrendingDown, Download, AlertTriangle, ExternalLink, Building2 } from 'lucide-react';
@@ -350,7 +350,7 @@ export default function AdminFinances() {
                         <ExternalLink className="h-3 w-3 shrink-0" />
                       </button>
                     );
-                  case 'type': return <Badge variant="secondary" className="text-[10px]">{e.type}</Badge>;
+                  case 'type': return <BadgeY2K variant="info" size="sm">{e.type}</BadgeY2K>;
                   case 'nb_missions': return <span className="font-medium">{e.nb_missions}</span>;
                   case 'taux_com': return <span className="font-medium text-primary">{e.taux_com}%</span>;
                   case 'commissions_ht': return <span className="font-medium">{formatEur(e.commissions_ht)}</span>;
@@ -378,7 +378,7 @@ export default function AdminFinances() {
                       {e.nom}
                       <ExternalLink className="h-3 w-3 shrink-0" />
                     </button>
-                    <Badge variant="secondary" className="text-[10px] shrink-0">{e.type}</Badge>
+                    <BadgeY2K variant="info" size="sm" className="shrink-0">{e.type}</BadgeY2K>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
