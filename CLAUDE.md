@@ -344,12 +344,34 @@ Cf. docs/SPRINT_12_E.md et docs/SPRINT_12_FINAL.md.
 
 **Helpers TS retypés strictement** vers union Y2K (pas de `as any`) : statutColor AdminFacturation, statutBadge AdminMissions, badgeStatut AvoirsList, badge.groupe AdminLitiges.
 
-### Sprint 12 FINAL (A → E)
+### Sprint 12-F — Migration Card shadcn → CardY2K complète (5 PRs)
+Cf. docs/SPRINT_12_F.md.
+
+| Sprint | PR | Chantier | Livré |
+|---|---|---|---|
+| 12-F-1 | #307 | Foundation CardY2K subcomponents | Drop-in shadcn (Header/Title/Description/Content/Footer) + prop noPadding |
+| 12-F-2 | #308 | Migration Card user-facing | 17 Cards sur 4 pages (Premium x2 + Contrat + Facturation) — levée blocage Sprint 12-D |
+| 12-F-3 | #309 | Migration Card admin part 1 | 49 Cards sur 5 pages (AdminDetailUtilisateur 19, AdminStatus 9, AdminDashboard 8, AdminFinances 7, AdminAffacturage 6) |
+| 12-F-4 | #310 | Migration Card admin part 2 + components | 19 Cards sur 9 fichiers (E2E data-testid préservés) |
+| 12-F-5 | (this) | Doc Sprint 12-F + Sprint 12 FINAL update | — |
+| **Total** | **5 PRs** | — | **85 Cards + 1 foundation** |
+
+**Adoption CardY2K** : 0% (1 foundation) → **100%** (85 ouvertures). Aucun Card shadcn restant sur cas migrables.
+
+**Pattern drop-in** :
+```tsx
+<CardY2K noPadding>
+  <CardY2KHeader><CardY2KTitle>X</CardY2KTitle></CardY2KHeader>
+  <CardY2KContent>Y</CardY2KContent>
+</CardY2K>
+```
+
+### Sprint 12 FINAL (A → F)
 Cf. docs/SPRINT_12_FINAL.md.
 
-- **22 PRs livrées** sur 5 sous-sprints (12-A hotfix + 12-B + 12-C + 12-D + 12-E)
-- **~280 migrations Y2K** au total
-- **Adoption finale** : BoutonY2K 75, BadgeY2K 103, CarteKPIY2K 40, Mascotte 61/66 EmptyState (100% si on compte les 9 illustrations Sprint 8 BIS)
+- **27 PRs livrées** sur 6 sous-sprints (12-A hotfix + 12-B + 12-C + 12-D + 12-E + 12-F)
+- **~365 migrations Y2K** au total (66 boutons + 6 dashboards + 36 KPIs + 103 badges + 46 Mascotte + 85 Cards + 1 destructive variant + foundations)
+- **Adoption finale 100%** sur composants migrables : BoutonY2K 75, BadgeY2K 103, CarteKPIY2K 40, CardY2K ~88-90, Mascotte 61/66 EmptyState (100% si on compte les 9 illustrations Sprint 8 BIS)
 - **0 PR ouverte** post Sprint 12
 - **0 régression CI**
-- Reportés post Sprint 12 : CardY2K adoption (variants pricing/status-coded), BadgeRPPS/Niveau/Statut/Palier custom rewrite, animations spring élargies (Dialog/FAB/notifs)
+- Reportés post Sprint 12 : BadgeRPPS/Niveau/Statut/Palier custom rewrite (composants métier), animations spring élargies (Dialog/FAB/notifs), ~239 Button shadcn restants (composants partagés / icon back nav / variant link / asChild légitime)

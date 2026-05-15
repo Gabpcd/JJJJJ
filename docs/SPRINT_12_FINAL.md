@@ -1,6 +1,8 @@
-# Sprint 12 FINAL — Adoption Y2K complète (A → E)
+# Sprint 12 FINAL — Adoption Y2K complète (A → F)
 
-Sprint 12 finalise l'adoption Y2K Gen Z définie Sprint 9. **22 PRs livrées en 5 sous-sprints**.
+Sprint 12 finalise l'adoption Y2K Gen Z définie Sprint 9. **27 PRs livrées en 6 sous-sprints**.
+
+> Sprint 12-F ajouté post-12-E pour migrer les 85 `<Card>` shadcn restants (foundation subcomponents drop-in + migration user-facing + admin part 1 + admin part 2).
 
 ## Sous-sprints
 
@@ -10,8 +12,9 @@ Sprint 12 finalise l'adoption Y2K Gen Z définie Sprint 9. **22 PRs livrées en 
 | **12-B** | BoutonY2K critiques | 5 (#289-#293) | 66 boutons migrés (16 pages soignant + étab + finance/légal) |
 | **12-C** | Cards + KPIs + dashboards | 4 (#294-#297) | Variant destructive BoutonY2K + 6 boutons dashboards + 36 CarteKPIY2K |
 | **12-D** | Mascotte EmptyState + animations + cards audit | 4 (#298-#301) | Foundation `mascotte` prop + 9 Mascotte EmptyState + spring animations 3 composants core + audit Card 4 pages |
-| **12-E** | Badges Y2K + Mascotte 100% + final | 5 (#302-#306) | 103 BadgeY2K + 37 Mascotte EmptyState (100% adoption) + doc finale |
-| **Total** | | **22 PRs** | |
+| **12-E** | Badges Y2K + Mascotte 100% + final | 5 (#302-#306) | 103 BadgeY2K + 37 Mascotte EmptyState (100% adoption) + doc Sprint 12-E |
+| **12-F** | Card → CardY2K complète | 5 (#307-#311) | Foundation subcomponents drop-in + 85 Cards migrés (17 user-facing + 49 admin part 1 + 19 admin part 2) + doc finale |
+| **Total** | | **27 PRs** | |
 
 ## Adoption Y2K finale (avant vs après Sprint 12)
 
@@ -20,7 +23,7 @@ Sprint 12 finalise l'adoption Y2K Gen Z définie Sprint 9. **22 PRs livrées en 
 | `<BoutonY2K>` | 2 | **75 ouvertures** | × 37 |
 | `<BadgeY2K>` | 1 | **103 ouvertures** | × 103 |
 | `<CarteKPIY2K>` | 0 | **40 ouvertures** | ∞ |
-| `<CardY2K>` | 0 | 1 foundation | reporté (décision UX) |
+| `<CardY2K>` | 0 | **~88-90 ouvertures** (Sprint 12-F) | 100% migration shadcn Card |
 | `<Mascotte>` dans EmptyState | 0 / 66 | **61 / 66 = 92.4%** (100% si on compte les 9 illustrations Sprint 8 BIS intentionnelles) | ∞ |
 | animations.ts cubic-bezier consumers | 0 | **3 composants Y2K core** | ∞ |
 | `variant destructive` BoutonY2K | absent | ajouté Sprint 12-C | nouveau |
