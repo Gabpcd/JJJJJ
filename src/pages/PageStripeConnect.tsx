@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CarteKPI } from '@/components/CarteKPI';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CreditCard, ExternalLink, RefreshCw, Loader2, CheckCircle, Clock, AlertTriangle, Banknote, Building2, FileText, ArrowRight, Shield, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -248,10 +249,10 @@ export default function PageStripeConnect() {
                   <p className="text-xs text-muted-foreground flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-success" /> Sécurisé par Stripe (certifié PCI DSS)</p>
                   <p className="text-xs text-muted-foreground flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-success" /> Aucun frais pour le soignant</p>
                 </div>
-                <Button onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
+                <BoutonY2K onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
                   {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
                   Connecter mon compte bancaire
-                </Button>
+                </BoutonY2K>
               </div>
             )}
 
@@ -267,13 +268,13 @@ export default function PageStripeConnect() {
                     </p>
                   </div>
                 </div>
-                <Button onClick={lancerOnboarding} disabled={actionLoading} variant="outline" className="gap-2">
+                <BoutonY2K onClick={lancerOnboarding} disabled={actionLoading} variant="secondary" className="gap-2">
                   {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
                   Reprendre l'inscription Stripe
-                </Button>
-                <Button onClick={rafraichirStatut} disabled={actionLoading} variant="ghost" size="sm" className="gap-2">
+                </BoutonY2K>
+                <BoutonY2K onClick={rafraichirStatut} disabled={actionLoading} variant="ghost" size="sm" className="gap-2">
                   <RefreshCw className="h-4 w-4" /> Actualiser le statut
-                </Button>
+                </BoutonY2K>
               </div>
             )}
 
@@ -291,10 +292,10 @@ export default function PageStripeConnect() {
                         )}
                       </div>
                     </div>
-                    <Button onClick={rafraichirStatut} disabled={actionLoading} variant="ghost" size="sm" className="gap-1.5">
+                    <BoutonY2K onClick={rafraichirStatut} disabled={actionLoading} variant="ghost" size="sm" className="gap-1.5">
                       {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                       Actualiser
-                    </Button>
+                    </BoutonY2K>
                   </div>
                 </div>
 
@@ -366,14 +367,14 @@ export default function PageStripeConnect() {
                     {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
                     Recommencer l'onboarding
                   </Button>
-                  <Button
+                  <BoutonY2K
                     onClick={() => navigate('/soignant/support')}
-                    variant="outline"
+                    variant="secondary"
                     className="gap-2"
                   >
                     <Info className="h-4 w-4" />
                     Contacter le support
-                  </Button>
+                  </BoutonY2K>
                 </div>
               </div>
             )}

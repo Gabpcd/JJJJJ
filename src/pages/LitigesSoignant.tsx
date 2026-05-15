@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Scale, PlusCircle, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -132,9 +132,9 @@ export function LitigesSoignantContent() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Suivez vos contestations de missions</p>
         </div>
-        <Button onClick={openNewLitige} className="gap-1.5">
+        <BoutonY2K onClick={openNewLitige} className="gap-1.5">
           <PlusCircle className="h-4 w-4" /> Ouvrir un litige
-        </Button>
+        </BoutonY2K>
       </div>
 
       {/* Counters */}
@@ -268,10 +268,10 @@ export function LitigesSoignantContent() {
               <p className="text-[10px] text-muted-foreground mt-1 text-right">{newMotif.length}/1000</p>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setShowNew(false)}>Annuler</Button>
-              <Button onClick={creerLitige} disabled={creating || !selectedMissionId || newMotif.trim().length < 10}>
+              <BoutonY2K variant="ghost" onClick={() => setShowNew(false)}>Annuler</BoutonY2K>
+              <BoutonY2K onClick={creerLitige} disabled={creating || !selectedMissionId || newMotif.trim().length < 10}>
                 {creating ? 'Création…' : '⚠️ Ouvrir le litige'}
-              </Button>
+              </BoutonY2K>
             </div>
           </div>
         </DialogContent>

@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { MessageCircle, Plus, Clock, CheckCircle, AlertCircle, Loader2, Send } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -116,18 +116,18 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
               <p className="text-sm text-muted-foreground">Signalez un problème ou suivez vos demandes</p>
             </div>
           </div>
-          <Button onClick={() => setShowForm(true)} className="gap-2">
+          <BoutonY2K onClick={() => setShowForm(true)} className="gap-2">
             <Plus className="h-4 w-4" /> Nouvelle réclamation
-          </Button>
+          </BoutonY2K>
         </div>
 
         {reclamations.length === 0 ? (
           <div className="card-base p-8 text-center">
             <MessageCircle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm text-muted-foreground mb-4">Aucune réclamation pour le moment.</p>
-            <Button onClick={() => setShowForm(true)} variant="outline" className="gap-2">
+            <BoutonY2K onClick={() => setShowForm(true)} variant="secondary" className="gap-2">
               <Plus className="h-4 w-4" /> Signaler un problème
-            </Button>
+            </BoutonY2K>
           </div>
         ) : (
           <div className="space-y-3">
@@ -205,11 +205,11 @@ export function ReclamationsContent({ role: _role }: { role: 'SOIGNANT' | 'ADMIN
               />
             </div>
             <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" onClick={() => setShowForm(false)}>Annuler</Button>
-              <Button onClick={soumettre} disabled={submitting || !sujet.trim() || !details.trim()} className="gap-2">
+              <BoutonY2K variant="secondary" onClick={() => setShowForm(false)}>Annuler</BoutonY2K>
+              <BoutonY2K onClick={soumettre} disabled={submitting || !sujet.trim() || !details.trim()} className="gap-2">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Envoyer
-              </Button>
+              </BoutonY2K>
             </div>
           </div>
         </DialogContent>

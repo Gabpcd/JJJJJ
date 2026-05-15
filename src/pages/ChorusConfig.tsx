@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Landmark, Loader2, Save, CheckCircle, Edit2, Search, XCircle } from 'lucide-react';
 import { FadeInView } from '@/components/FadeInView';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { capturerErreurSentry } from '@/lib/sentry';
 
 interface VerifyResult {
@@ -160,9 +160,9 @@ export default function ChorusConfig() {
                   <CheckCircle className="h-4 w-4 text-success" />
                   <span className="text-sm text-success font-medium">Configuration active</span>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => setEditMode(true)} className="text-xs gap-1">
+                <BoutonY2K size="sm" variant="ghost" onClick={() => setEditMode(true)} className="text-xs gap-1">
                   <Edit2 className="h-3 w-3" /> Modifier
-                </Button>
+                </BoutonY2K>
               </div>
             )}
 
@@ -180,9 +180,9 @@ export default function ChorusConfig() {
                   className="flex-1"
                 />
                 {!isReadOnly && (
-                  <Button
+                  <BoutonY2K
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={verifyStructure}
                     disabled={verify.status === 'loading' || !numeroStructure.trim()}
@@ -193,7 +193,7 @@ export default function ChorusConfig() {
                       : <Search className="h-4 w-4" />
                     }
                     <span className="ml-1.5">Vérifier</span>
-                  </Button>
+                  </BoutonY2K>
                 )}
               </div>
               {verify.status === 'found' && (
@@ -270,12 +270,12 @@ export default function ChorusConfig() {
             {/* Actions */}
             {!isReadOnly && (
               <div className="flex gap-2">
-                <Button onClick={sauvegarder} disabled={saving || !numeroStructure.trim()} className="flex-1 gap-2">
+                <BoutonY2K onClick={sauvegarder} disabled={saving || !numeroStructure.trim()} className="flex-1 gap-2">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Enregistrer
-                </Button>
+                </BoutonY2K>
                 {editMode && (
-                  <Button variant="ghost" onClick={() => setEditMode(false)}>Annuler</Button>
+                  <BoutonY2K variant="ghost" onClick={() => setEditMode(false)}>Annuler</BoutonY2K>
                 )}
               </div>
             )}
