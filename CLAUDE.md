@@ -254,3 +254,31 @@ Cf. docs/IDENTITE_VISUELLE_JOLENE.md.
 - **PR 4** : Documentation `docs/IDENTITE_VISUELLE_JOLENE.md` (HEX/HSL/usage Tailwind/accessibilité).
 
 **Non-breaking** : palette ajoutée EN PARALLÈLE du design system existant (`--primary`, `--rose`, etc.). Migration progressive.
+
+### Sprint 12-A — Hotfix verify_jwt edge functions
+Cf. section "Règles edge functions Supabase" ci-dessus.
+
+1 PR (#288) — fix auth crons sb_secret_* vault + config.toml + doc CLAUDE.md.
+
+### Sprint 12-B — Adoption Y2K boutons critiques (5 PRs)
+Cf. docs/SPRINT_12_B.md.
+
+| Sprint | PR | Pages | Boutons migrés |
+|---|---|---|---|
+| 12-B-1 | #289 | Flow soignant : HistoriqueMissions, RechercheMissions, MesFacturesHonoraires, BulletinsPaie | 14 |
+| 12-B-2 | #290 | Flow étab : FacturationEtablissement, FinaliserInscriptionEtab, LitigesEtablissement, ObligationsFinancieresEtab | 20 |
+| 12-B-3 | #291 | Litiges/finance : LitigesSoignant, MesReclamations, PageStripeConnect, ChorusConfig | 16 |
+| 12-B-4 | #292 | Finance/légal : MandatFacturation, ContratPlateforme, ChargesSociales, MesGains | 16 |
+| 12-B-5 | (this) | Doc | — |
+| **Total** | **5 PRs** | **16 pages** | **66 boutons** |
+
+**Variant mapping** :
+- shadcn `default/absent` → Y2K `primary` (gradient holographique)
+- `secondary` / `outline` → `secondary` (border rose)
+- `ghost` → `ghost`
+- `destructive` / `link` → **SKIP** (pas d'équivalent Y2K — garder shadcn)
+- `size="icon"` → **SKIP** (Y2K pas d'icon-only)
+
+**Skips** : 7 boutons préservés (4 ArrowLeft back nav `size="icon"` + 3 `variant="destructive"` actions irréversibles).
+
+**Adoption ratio** : avant Sprint 12-B = 2 BoutonY2K (0.9%) → après = 68 BoutonY2K, reste ~154 Button shadcn (pages admin + composants partagés reportés Sprint 12-C/D/E).
