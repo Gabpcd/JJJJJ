@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { Zap, FileText, MapPin, Bell, ArrowRight, Smartphone } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 /* ─── Inline QR Code SVG for https://jolene.app ─── */
@@ -166,9 +166,9 @@ export default function Telecharger() {
             <Smartphone className="h-10 w-10 text-primary mx-auto mb-4" />
             <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">En attendant</h2>
             <p className="text-muted-foreground mb-6">Vous pouvez déjà utiliser Jolene depuis votre navigateur mobile.</p>
-            <Button onClick={() => navigate('/connexion')} className="gap-2 mb-10">
-              Ouvrir l'app web <ArrowRight className="h-4 w-4" />
-            </Button>
+            <BoutonY2K onClick={() => navigate('/connexion')} className="mb-10" iconeDroite={<ArrowRight className="h-4 w-4" />}>
+              Ouvrir l'app web
+            </BoutonY2K>
 
             <div className="bg-card border border-border rounded-xl p-6 text-left max-w-md mx-auto">
               <h3 className="font-semibold text-foreground mb-4 text-center">Ajouter à l'écran d'accueil</h3>

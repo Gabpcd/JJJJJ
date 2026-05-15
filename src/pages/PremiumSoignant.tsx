@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { Crown, Zap, BarChart3, Award, Bell, FileText, Calculator, Receipt, ClipboardList, HelpCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Crown, Zap, BarChart3, Award, Bell, FileText, Calculator, Receipt, ClipboardList, HelpCircle, CheckCircle2 } from 'lucide-react';
 import {
   CardY2K,
   CardY2KHeader,
   CardY2KTitle,
   CardY2KContent,
 } from '@/components/y2k/CardY2K';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
@@ -84,9 +84,9 @@ export default function PremiumSoignant() {
                   </li>
                 ))}
               </ul>
-              <Button disabled className="w-full opacity-60 cursor-not-allowed">
+              <BoutonY2K disabled className="w-full opacity-60 cursor-not-allowed">
                 🚀 Bientôt disponible
-              </Button>
+              </BoutonY2K>
             </CardY2KContent>
           </CardY2K>
 
@@ -110,9 +110,9 @@ export default function PremiumSoignant() {
                   </li>
                 ))}
               </ul>
-              <Button disabled className="w-full opacity-60 cursor-not-allowed">
+              <BoutonY2K disabled className="w-full opacity-60 cursor-not-allowed">
                 🚀 Bientôt disponible
-              </Button>
+              </BoutonY2K>
             </CardY2KContent>
           </CardY2K>
         </div>
@@ -130,10 +130,9 @@ export default function PremiumSoignant() {
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && inscrire()}
               />
-              <Button onClick={inscrire} disabled={submitting} className="shrink-0 gap-2">
-                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              <BoutonY2K onClick={inscrire} disabled={submitting} loading={submitting} className="shrink-0">
                 S'inscrire
-              </Button>
+              </BoutonY2K>
             </div>
             <p className="text-[11px] text-muted-foreground">Sans engagement. Annulation à tout moment.</p>
           </CardY2KContent>

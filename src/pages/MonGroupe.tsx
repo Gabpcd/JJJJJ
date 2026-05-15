@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Building2, Mail } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getLabelTypeEtablissement } from '@/lib/constantes';
@@ -66,9 +66,9 @@ export function MonGroupeContent() {
           Votre établissement n'appartient à aucun groupe de santé.
           Contactez-nous pour rattacher votre établissement à un groupe existant.
         </p>
-        <Button className="gap-2" onClick={() => window.location.href = 'mailto:contact@jolene.app?subject=Rejoindre un groupe de santé'}>
-          <Mail className="h-4 w-4" /> Contacter Jolene
-        </Button>
+        <BoutonY2K onClick={() => window.location.href = 'mailto:contact@jolene.app?subject=Rejoindre un groupe de santé'} iconeGauche={<Mail className="h-4 w-4" />}>
+          Contacter Jolene
+        </BoutonY2K>
       </div>
     );
   }

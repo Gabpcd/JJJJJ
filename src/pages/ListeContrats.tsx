@@ -5,7 +5,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeStatut } from '@/components/BadgeStatut';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -151,13 +151,13 @@ export function ListeContratsContent({ role }: { role: UserRole }) {
                   return badgeStatut(c.statut);
                 case 'actions':
                   return aSigner(c) ? (
-                    <Button size="sm" variant="default" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/contrat/${c.id}`); }}>
+                    <BoutonY2K size="sm" variant="primary" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/contrat/${c.id}`); }}>
                       ✍️ Signer
-                    </Button>
+                    </BoutonY2K>
                   ) : (
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/contrat/${c.id}`); }}>
+                    <BoutonY2K size="sm" variant="secondary" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/contrat/${c.id}`); }}>
                       Voir
-                    </Button>
+                    </BoutonY2K>
                   );
                 default:
                   return null;
@@ -174,14 +174,15 @@ export function ListeContratsContent({ role }: { role: UserRole }) {
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-1">📋 {(c.missions as any)?.intitule || '—'}</p>
                 <p className="text-xs text-muted-foreground">{c.type_contrat} · Créé le {format(new Date(c.cree_le), 'dd/MM/yyyy', { locale: fr })}</p>
-                <Button
+                <BoutonY2K
                   size="sm"
-                  variant={aSigner(c) ? 'default' : 'outline'}
-                  className="w-full gap-1.5 min-h-[44px]"
+                  variant={aSigner(c) ? 'primary' : 'secondary'}
+                  className="w-full min-h-[44px]"
                   onClick={(e) => { e.stopPropagation(); navigate(`/contrat/${c.id}`); }}
+                  iconeDroite={!aSigner(c) ? <ChevronRight className="h-4 w-4" /> : undefined}
                 >
-                  {aSigner(c) ? '✍️ Signer le contrat' : <>Voir le contrat <ChevronRight className="h-4 w-4" /></>}
-                </Button>
+                  {aSigner(c) ? '✍️ Signer le contrat' : 'Voir le contrat'}
+                </BoutonY2K>
               </div>
             )}
           />

@@ -382,10 +382,9 @@ export default function MandatFacturation() {
               <BoutonY2K type="button" variant="secondary" disabled={revoking} onClick={() => setShowConfirmRevoke(false)}>
                 Annuler
               </BoutonY2K>
-              <Button type="button" variant="destructive" disabled={revoking} onClick={revoquer} className="gap-2">
-                {revoking && <Loader2 className="h-4 w-4 animate-spin" />}
+              <BoutonY2K type="button" variant="destructive" disabled={revoking} loading={revoking} onClick={revoquer}>
                 {revoking ? 'Révocation…' : 'Confirmer la révocation'}
-              </Button>
+              </BoutonY2K>
             </div>
           </div>
         </div>

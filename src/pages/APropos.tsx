@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { Linkedin, Download, ShieldCheck, Stethoscope, Scale, DatabaseZap, Building2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 const chiffres = [
   { icon: Stethoscope, label: '15+ professions', sub: 'de santé couvertes' },
@@ -127,9 +127,9 @@ export default function APropos() {
               Vous êtes journaliste ou partenaire potentiel ? Contactez-nous à{' '}
               <a href="mailto:contact@jolene.app" className="text-primary hover:underline font-medium">contact@jolene.app</a>.
             </p>
-            <Button variant="outline" disabled className="gap-2">
-              <Download className="h-4 w-4" /> Télécharger le dossier de presse
-            </Button>
+            <BoutonY2K variant="secondary" disabled iconeGauche={<Download className="h-4 w-4" />}>
+              Télécharger le dossier de presse
+            </BoutonY2K>
             <p className="text-xs text-muted-foreground mt-2">Bientôt disponible</p>
           </div>
         </section>

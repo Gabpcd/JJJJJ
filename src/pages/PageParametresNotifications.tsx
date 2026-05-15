@@ -6,6 +6,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
 
 type Canal = 'EMAIL' | 'SMS' | 'PUSH' | 'IN_APP';
@@ -279,10 +280,9 @@ export default function PageParametresNotifications() {
         </div>
 
         <div className="flex justify-end sticky bottom-4">
-          <Button onClick={enregistrer} disabled={saving} className="gap-2 shadow-lg">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          <BoutonY2K onClick={enregistrer} disabled={saving} loading={saving} className="shadow-lg" iconeGauche={!saving ? <Save className="h-4 w-4" /> : undefined}>
             Enregistrer
-          </Button>
+          </BoutonY2K>
         </div>
       </div>
     </LayoutApp>

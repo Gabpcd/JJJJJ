@@ -4,7 +4,7 @@ import { handleErrorSilent } from '@/lib/handleError';
 import { logger } from '@/lib/logger';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Star, Send, CreditCard, MessageCircle, BellRing, Loader2, Scale } from 'lucide-react';
+import { UserSearch, PlusCircle, Copy, XCircle, RotateCcw, Star, Send, CreditCard, MessageCircle, BellRing, Scale } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BadgeStatut } from '@/components/BadgeStatut';
@@ -46,7 +46,7 @@ import { payerMissionStripeConnectAvecGenerationAuto } from '@/lib/stripeMission
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -164,15 +164,16 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
           </p>
           <p className="text-xs text-muted-foreground mt-1">Alerter les soignants du pool d'urgence pour cette mission</p>
         </div>
-        <Button
+        <BoutonY2K
           variant="destructive"
           size="sm"
           onClick={alerterPool}
           disabled={alerting || alerted}
+          loading={alerting}
+          iconeGauche={!alerting ? <BellRing className="h-4 w-4" /> : undefined}
         >
-          {alerting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <BellRing className="h-4 w-4 mr-1" />}
           {alerted ? 'Pool alerté ✅' : '🚨 Alerter le pool'}
-        </Button>
+        </BoutonY2K>
       </div>
     </div>
   );
@@ -651,10 +652,10 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
                         <Textarea value={litigeMotif} onChange={e => setLitigeMotif(e.target.value)}
                           placeholder="Décrivez le problème rencontré (min. 10 caractères)..." rows={3} />
                         <div className="flex gap-2">
-                          <Button onClick={ouvrirLitige} disabled={litigeCreating || litigeMotif.trim().length < 10}>
+                          <BoutonY2K onClick={ouvrirLitige} disabled={litigeCreating || litigeMotif.trim().length < 10}>
                             {litigeCreating ? 'Création…' : '⚠️ Confirmer le litige'}
-                          </Button>
-                          <Button variant="ghost" onClick={() => setShowLitigeForm(false)}>Annuler</Button>
+                          </BoutonY2K>
+                          <BoutonY2K variant="ghost" onClick={() => setShowLitigeForm(false)}>Annuler</BoutonY2K>
                         </div>
                       </div>
                     ) : (

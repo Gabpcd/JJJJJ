@@ -42,7 +42,7 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 interface Conversation {
   id: string;
@@ -410,10 +410,9 @@ export default function PageMessagerie({ role }: PageMessagerieProps) {
                   Messagerie
                 </h2>
                 {isAdmin && (
-                  <Button size="sm" variant="outline" onClick={() => setShowNewConvModal(true)} className="rounded-full">
-                    <Plus className="h-4 w-4 mr-1" />
+                  <BoutonY2K size="sm" variant="secondary" onClick={() => setShowNewConvModal(true)} className="rounded-full" iconeGauche={<Plus className="h-4 w-4" />}>
                     Nouvelle
-                  </Button>
+                  </BoutonY2K>
                 )}
               </div>
               <div className="relative mb-2">

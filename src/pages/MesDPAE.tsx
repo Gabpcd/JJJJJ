@@ -5,7 +5,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -183,14 +183,14 @@ export default function MesDPAE() {
                   );
                 case 'actions':
                   return (
-                    <Button
+                    <BoutonY2K
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       className="h-8 text-xs"
                       onClick={(e) => { e.stopPropagation(); navigate(`/soignant/missions/${d.mission_id}`); }}
                     >
                       Détail
-                    </Button>
+                    </BoutonY2K>
                   );
                 default:
                   return null;
@@ -271,12 +271,12 @@ function DpaeCardContent({ dpae, onVoirContrat, onVoirMission }: {
       )}
 
       <div className="flex gap-2 pt-1 flex-wrap">
-        <Button size="sm" variant="default" className="text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); onVoirMission(); }}>
+        <BoutonY2K size="sm" variant="primary" className="text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); onVoirMission(); }}>
           Détail mission
-        </Button>
-        <Button size="sm" variant="secondary" className="text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); onVoirContrat(); }}>
+        </BoutonY2K>
+        <BoutonY2K size="sm" variant="secondary" className="text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); onVoirContrat(); }}>
           Voir le contrat
-        </Button>
+        </BoutonY2K>
       </div>
     </div>
   );
