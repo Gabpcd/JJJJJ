@@ -7,7 +7,12 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { Activity, AlertCircle, AlertTriangle, Bug, CheckCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  CardY2K,
+  CardY2KHeader,
+  CardY2KTitle,
+  CardY2KContent,
+} from '@/components/y2k/CardY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -108,13 +113,13 @@ export default function AdminStatus() {
 
       {/* Alertes actives */}
       {data.alertes_actives.length > 0 && (
-        <Card className="mb-4 border-destructive/30">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2 text-destructive">
+        <CardY2K noPadding className="mb-4 border-destructive/30">
+          <CardY2KHeader className="pb-2">
+            <CardY2KTitle className="text-base flex items-center gap-2 text-destructive">
               <AlertCircle className="h-4 w-4" /> Alertes actives ({data.alertes_actives.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
+            </CardY2KTitle>
+          </CardY2KHeader>
+          <CardY2KContent className="space-y-2">
             {data.alertes_actives.map(a => (
               <div key={a.id} className="flex items-start gap-2 p-2 rounded-lg bg-muted/30">
                 <BadgeY2K variant={severiteVariant(a.severite)} size="sm">{a.severite}</BadgeY2K>
@@ -128,38 +133,38 @@ export default function AdminStatus() {
                 <Button size="sm" variant="ghost" onClick={() => resoudre(a.id)}>Résoudre</Button>
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
       )}
 
       {/* Health checks systèmes */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><CheckCircle className="h-4 w-4 text-success" /> Database</CardTitle></CardHeader>
-          <CardContent><p className="text-xs text-muted-foreground">PG {data.database.version.split(' ')[0]}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Clock className="h-4 w-4 text-info" /> Crons actifs</CardTitle></CardHeader>
-          <CardContent>
+        <CardY2K noPadding>
+          <CardY2KHeader className="pb-2"><CardY2KTitle className="text-sm flex items-center gap-2"><CheckCircle className="h-4 w-4 text-success" /> Database</CardY2KTitle></CardY2KHeader>
+          <CardY2KContent><p className="text-xs text-muted-foreground">PG {data.database.version.split(' ')[0]}</p></CardY2KContent>
+        </CardY2K>
+        <CardY2K noPadding>
+          <CardY2KHeader className="pb-2"><CardY2KTitle className="text-sm flex items-center gap-2"><Clock className="h-4 w-4 text-info" /> Crons actifs</CardY2KTitle></CardY2KHeader>
+          <CardY2KContent>
             <div className="flex gap-2 text-xs">
               <span className="text-success font-semibold">{cronsOk.length} OK</span>
               {cronsRetard.length > 0 && <span className="text-warning font-semibold">{cronsRetard.length} retard</span>}
               {cronsCritiques.length > 0 && <span className="text-destructive font-semibold">{cronsCritiques.length} échec</span>}
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4 text-primary" /> Stripe Webhooks 24h</CardTitle></CardHeader>
-          <CardContent>
+          </CardY2KContent>
+        </CardY2K>
+        <CardY2K noPadding>
+          <CardY2KHeader className="pb-2"><CardY2KTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4 text-primary" /> Stripe Webhooks 24h</CardY2KTitle></CardY2KHeader>
+          <CardY2KContent>
             <p className="text-xs">{data.stripe_webhooks.total_24h} reçus · {data.stripe_webhooks.taux_erreur_pct}% erreur</p>
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
       </div>
 
       {/* Stats temps réel */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2"><CardTitle className="text-base">Stats temps réel</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+      <CardY2K noPadding className="mb-4">
+        <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Stats temps réel</CardY2KTitle></CardY2KHeader>
+        <CardY2KContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
           {[
             ['Soignants actifs 7j', data.stats_temps_reel.soignants_actifs_7j],
             ['Missions ouvertes', data.stats_temps_reel.missions_ouvertes],
@@ -173,13 +178,13 @@ export default function AdminStatus() {
               <p className="text-lg font-bold">{val}</p>
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </CardY2KContent>
+      </CardY2K>
 
       {/* Logs 24h */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2"><CardTitle className="text-base">Logs 24h</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+      <CardY2K noPadding className="mb-4">
+        <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Logs 24h</CardY2KTitle></CardY2KHeader>
+        <CardY2KContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           {[
             ['Audit', data.logs_recents.audit_24h],
             ['Emails', data.logs_recents.emails_24h],
@@ -191,13 +196,13 @@ export default function AdminStatus() {
               <p className="text-lg font-bold">{val}</p>
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </CardY2KContent>
+      </CardY2K>
 
       {/* Crons détail */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2"><CardTitle className="text-base">Crons (17 actifs)</CardTitle></CardHeader>
-        <CardContent>
+      <CardY2K noPadding className="mb-4">
+        <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Crons (17 actifs)</CardY2KTitle></CardY2KHeader>
+        <CardY2KContent>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="border-b border-border">
@@ -226,13 +231,13 @@ export default function AdminStatus() {
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
+        </CardY2KContent>
+      </CardY2K>
 
       {/* Liens dashboards externes */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Dashboards externes</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+      <CardY2K noPadding>
+        <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Dashboards externes</CardY2KTitle></CardY2KHeader>
+        <CardY2KContent className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
           {[
             ['Supabase', 'https://supabase.com/dashboard/project/flripxtsyegjshnhzjkz'],
             ['Vercel', 'https://vercel.com/dashboard'],
@@ -246,17 +251,17 @@ export default function AdminStatus() {
               <ExternalLink className="h-3 w-3" /> {label}
             </a>
           ))}
-        </CardContent>
-      </Card>
+        </CardY2KContent>
+      </CardY2K>
 
       {/* Outils diagnostic */}
-      <Card className="mb-4 border-warning/30">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
+      <CardY2K noPadding className="mb-4 border-warning/30">
+        <CardY2KHeader className="pb-2">
+          <CardY2KTitle className="text-base flex items-center gap-2">
             <Bug className="h-4 w-4 text-warning" /> Outils diagnostic
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </CardY2KTitle>
+        </CardY2KHeader>
+        <CardY2KContent className="space-y-3">
           <div>
             <p className="text-xs text-muted-foreground mb-2">
               Déclenche une exception volontaire avec tag <code className="bg-muted px-1.5 py-0.5 rounded">test=true</code> pour
@@ -285,8 +290,8 @@ export default function AdminStatus() {
             ℹ️ Si la VITE_SENTRY_DSN n'est pas configurée côté Vercel, ce bouton est inactif silencieusement.
             Voir <code>docs/sentry-setup.md</code> pour activer Sentry.
           </p>
-        </CardContent>
-      </Card>
+        </CardY2KContent>
+      </CardY2K>
     </LayoutAdmin>
   );
 }
