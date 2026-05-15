@@ -3,7 +3,7 @@ import { Database, Loader2, Trash2, Building2, Users, Briefcase, FileText } from
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -59,14 +59,12 @@ export default function AdminDemo() {
 
         {/* Actions */}
         <div className="flex flex-wrap gap-4">
-          <Button onClick={chargerDemo} disabled={loading !== null} size="lg" className="gap-2">
-            {loading === 'charger' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Database className="h-5 w-5" />}
+          <BoutonY2K onClick={chargerDemo} disabled={loading !== null} loading={loading === 'charger'} size="lg" className="gap-2" iconeGauche={loading === 'charger' ? undefined : <Database className="h-5 w-5" />}>
             Charger les données de démo
-          </Button>
-          <Button onClick={purgerDemo} disabled={loading !== null} variant="destructive" size="lg" className="gap-2">
-            {loading === 'purger' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+          </BoutonY2K>
+          <BoutonY2K onClick={purgerDemo} disabled={loading !== null} loading={loading === 'purger'} variant="destructive" size="lg" className="gap-2" iconeGauche={loading === 'purger' ? undefined : <Trash2 className="h-5 w-5" />}>
             Purger la démo
-          </Button>
+          </BoutonY2K>
         </div>
 
         {/* Résumé BDD */}

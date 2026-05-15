@@ -7,6 +7,7 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -207,15 +208,15 @@ export default function AdminUtilisateurs() {
                     {e.siret_code_naf && <p className="text-xs text-muted-foreground">NAF: {e.siret_code_naf}</p>}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white min-h-[40px]">
-                      <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }} className="min-h-[40px]">
-                      <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="min-h-[40px]">
+                    <BoutonY2K size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white min-h-[40px]" iconeGauche={<ShieldCheck className="h-3.5 w-3.5" />}>
+                      Valider
+                    </BoutonY2K>
+                    <BoutonY2K size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }} className="min-h-[40px]" iconeGauche={<ShieldX className="h-3.5 w-3.5" />}>
+                      Rejeter
+                    </BoutonY2K>
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="min-h-[40px]" aria-label="Détails">
                       <Eye className="h-3.5 w-3.5" />
-                    </Button>
+                    </BoutonY2K>
                   </div>
                 </div>
               ))}
@@ -278,17 +279,17 @@ export default function AdminUtilisateurs() {
                           </Button>
                         )}
                         {s.supprime_le ? (
-                          <Button size="sm" variant="outline" onClick={() => reactiver('soignants', s.id)} className="h-8">
-                            <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
-                          </Button>
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => reactiver('soignants', s.id)} className="h-8" iconeGauche={<RefreshCw className="h-3.5 w-3.5" />}>
+                            Réactiver
+                          </BoutonY2K>
                         ) : (
-                          <Button size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)} className="h-8">
-                            <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
-                          </Button>
+                          <BoutonY2K size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)} className="h-8" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
+                            Suspendre
+                          </BoutonY2K>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)} className="h-8 w-8 p-0">
+                        <BoutonY2K size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)} className="h-8 w-8 p-0" aria-label="Détails">
                           <Eye className="h-3.5 w-3.5" />
-                        </Button>
+                        </BoutonY2K>
                       </div>
                     );
                   default:
@@ -325,17 +326,17 @@ export default function AdminUtilisateurs() {
                       </Button>
                     )}
                     {s.supprime_le ? (
-                      <Button size="sm" variant="outline" onClick={() => reactiver('soignants', s.id)} className="min-h-[44px]">
-                        <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
-                      </Button>
+                      <BoutonY2K size="sm" variant="secondary" onClick={() => reactiver('soignants', s.id)} className="min-h-[44px]" iconeGauche={<RefreshCw className="h-3.5 w-3.5" />}>
+                        Réactiver
+                      </BoutonY2K>
                     ) : (
-                      <Button size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)} className="min-h-[44px]">
-                        <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
-                      </Button>
+                      <BoutonY2K size="sm" variant="destructive" onClick={() => suspendre('soignants', s.id)} className="min-h-[44px]" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
+                        Suspendre
+                      </BoutonY2K>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)} className="min-h-[44px]">
-                      <Eye className="h-3.5 w-3.5 mr-1" />Détails
-                    </Button>
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${s.id}`)} className="min-h-[44px]" iconeGauche={<Eye className="h-3.5 w-3.5" />}>
+                      Détails
+                    </BoutonY2K>
                   </div>
                 </div>
               )}
@@ -373,12 +374,12 @@ export default function AdminUtilisateurs() {
                       <div className="flex items-center justify-end gap-1 flex-wrap" onClick={(ev) => ev.stopPropagation()}>
                         {e.statut_verification === 'EN_ATTENTE' && (
                           <>
-                            <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white h-8">
-                              <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }} className="h-8">
-                              <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
-                            </Button>
+                            <BoutonY2K size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white h-8" iconeGauche={<ShieldCheck className="h-3.5 w-3.5" />}>
+                              Valider
+                            </BoutonY2K>
+                            <BoutonY2K size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }} className="h-8" iconeGauche={<ShieldX className="h-3.5 w-3.5" />}>
+                              Rejeter
+                            </BoutonY2K>
                           </>
                         )}
                         {e.email_contact && (
@@ -392,17 +393,17 @@ export default function AdminUtilisateurs() {
                           </Button>
                         )}
                         {e.supprime_le ? (
-                          <Button size="sm" variant="outline" onClick={() => reactiver('etablissements', e.id)} className="h-8">
-                            <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
-                          </Button>
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => reactiver('etablissements', e.id)} className="h-8" iconeGauche={<RefreshCw className="h-3.5 w-3.5" />}>
+                            Réactiver
+                          </BoutonY2K>
                         ) : (
-                          <Button size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)} className="h-8">
-                            <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
-                          </Button>
+                          <BoutonY2K size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)} className="h-8" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
+                            Suspendre
+                          </BoutonY2K>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="h-8 w-8 p-0">
+                        <BoutonY2K size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="h-8 w-8 p-0" aria-label="Détails">
                           <Eye className="h-3.5 w-3.5" />
-                        </Button>
+                        </BoutonY2K>
                       </div>
                     );
                   default:
@@ -425,12 +426,12 @@ export default function AdminUtilisateurs() {
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
                     {e.statut_verification === 'EN_ATTENTE' && (
                       <>
-                        <Button size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white min-h-[44px]">
-                          <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }} className="min-h-[44px]">
-                          <ShieldX className="h-3.5 w-3.5 mr-1" />Rejeter
-                        </Button>
+                        <BoutonY2K size="sm" onClick={() => validerEtablissement(e.id)} className="bg-green-600 hover:bg-green-700 text-white min-h-[44px]" iconeGauche={<ShieldCheck className="h-3.5 w-3.5" />}>
+                          Valider
+                        </BoutonY2K>
+                        <BoutonY2K size="sm" variant="destructive" onClick={() => { setRejectModalId(e.id); setRejectMotif(''); }} className="min-h-[44px]" iconeGauche={<ShieldX className="h-3.5 w-3.5" />}>
+                          Rejeter
+                        </BoutonY2K>
                       </>
                     )}
                     {e.email_contact && (
@@ -444,17 +445,17 @@ export default function AdminUtilisateurs() {
                       </Button>
                     )}
                     {e.supprime_le ? (
-                      <Button size="sm" variant="outline" onClick={() => reactiver('etablissements', e.id)} className="min-h-[44px]">
-                        <RefreshCw className="h-3.5 w-3.5 mr-1" />Réactiver
-                      </Button>
+                      <BoutonY2K size="sm" variant="secondary" onClick={() => reactiver('etablissements', e.id)} className="min-h-[44px]" iconeGauche={<RefreshCw className="h-3.5 w-3.5" />}>
+                        Réactiver
+                      </BoutonY2K>
                     ) : (
-                      <Button size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)} className="min-h-[44px]">
-                        <Ban className="h-3.5 w-3.5 mr-1" />Suspendre
-                      </Button>
+                      <BoutonY2K size="sm" variant="destructive" onClick={() => suspendre('etablissements', e.id)} className="min-h-[44px]" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
+                        Suspendre
+                      </BoutonY2K>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="min-h-[44px]">
-                      <Eye className="h-3.5 w-3.5 mr-1" />Détails
-                    </Button>
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => navigate(`/admin/utilisateurs/${e.id}`)} className="min-h-[44px]" iconeGauche={<Eye className="h-3.5 w-3.5" />}>
+                      Détails
+                    </BoutonY2K>
                   </div>
                 </div>
               )}
@@ -480,8 +481,8 @@ export default function AdminUtilisateurs() {
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setRejectModalId(null)}>Annuler</Button>
-          <Button variant="destructive" onClick={rejeterEtablissement}>Confirmer le rejet</Button>
+          <BoutonY2K variant="secondary" onClick={() => setRejectModalId(null)}>Annuler</BoutonY2K>
+          <BoutonY2K variant="destructive" onClick={rejeterEtablissement}>Confirmer le rejet</BoutonY2K>
         </DialogFooter>
       </DialogContent>
     </Dialog>

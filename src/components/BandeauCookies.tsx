@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 export function BandeauCookies() {
   const [visible, setVisible] = useState(false);
@@ -42,12 +42,12 @@ export function BandeauCookies() {
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={refuser} className="text-xs">
+            <BoutonY2K variant="secondary" size="sm" onClick={refuser} className="text-xs">
               Refuser
-            </Button>
-            <Button size="sm" onClick={accepter} className="text-xs">
+            </BoutonY2K>
+            <BoutonY2K size="sm" onClick={accepter} className="text-xs">
               Accepter
-            </Button>
+            </BoutonY2K>
           </div>
         </div>
       </div>

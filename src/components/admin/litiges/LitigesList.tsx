@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { AlertTriangle, Euro, Eye, Gavel } from 'lucide-react';
@@ -220,25 +220,26 @@ export function LitigesList({
                   </div>
 
                   <div className="flex flex-wrap gap-2 pt-1">
-                    <Button
+                    <BoutonY2K
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => onOpenPreuves(l)}
                       aria-label={`Voir preuves litige ${l.id}`}
+                      iconeGauche={<Eye className="h-3.5 w-3.5" />}
                     >
-                      <Eye className="mr-1.5 h-3.5 w-3.5" />
                       Voir preuves
-                    </Button>
+                    </BoutonY2K>
                     {!informatif && (
-                      <Button
+                      <BoutonY2K
                         size="sm"
                         onClick={() => onOpenResolution(l)}
                         disabled={actionEnCoursId === l.id}
+                        loading={actionEnCoursId === l.id}
                         aria-label={`Résoudre litige ${l.id}`}
+                        iconeGauche={actionEnCoursId === l.id ? undefined : <Gavel className="h-3.5 w-3.5" />}
                       >
-                        <Gavel className="mr-1.5 h-3.5 w-3.5" />
                         {actionEnCoursId === l.id ? 'Résolution…' : 'Résoudre'}
-                      </Button>
+                      </BoutonY2K>
                     )}
                   </div>
                 </div>

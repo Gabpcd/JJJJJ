@@ -13,7 +13,7 @@ import { Bell, BellOff, Save, Trash2, Edit2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -102,9 +102,9 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Pro
         <h3 className="font-medium flex items-center gap-2">
           <Search className="h-4 w-4" /> Mes recherches sauvegardées
         </h3>
-        <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)}>
-          <Save className="h-4 w-4 mr-1" /> Sauvegarder
-        </Button>
+        <BoutonY2K size="sm" variant="secondary" onClick={() => setSaveOpen(true)} iconeGauche={<Save className="h-4 w-4" />}>
+          Sauvegarder
+        </BoutonY2K>
       </div>
 
       {loading ? (
@@ -132,18 +132,19 @@ export function FiltresSauvegardes({ audience, filtresCourants, onCharger }: Pro
                 </div>
               </button>
               <div className="flex items-center gap-1 shrink-0">
-                <Button size="sm" variant="ghost" onClick={() => handleToggleAlerte(f)}
-                  title={f.alerte_active ? 'Désactiver alertes' : 'Activer alertes'}>
+                <BoutonY2K size="sm" variant="ghost" onClick={() => handleToggleAlerte(f)}
+                  title={f.alerte_active ? 'Désactiver alertes' : 'Activer alertes'}
+                  aria-label={f.alerte_active ? 'Désactiver alertes' : 'Activer alertes'}>
                   {f.alerte_active
                     ? <Bell className="h-4 w-4 text-blue-600" />
                     : <BellOff className="h-4 w-4 text-gray-400" />}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setEditing(f)} title="Modifier">
+                </BoutonY2K>
+                <BoutonY2K size="sm" variant="ghost" onClick={() => setEditing(f)} title="Modifier" aria-label="Modifier">
                   <Edit2 className="h-4 w-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => handleDelete(f)} title="Supprimer">
+                </BoutonY2K>
+                <BoutonY2K size="sm" variant="ghost" onClick={() => handleDelete(f)} title="Supprimer" aria-label="Supprimer">
                   <Trash2 className="h-4 w-4 text-red-500" />
-                </Button>
+                </BoutonY2K>
               </div>
             </li>
           ))}
@@ -251,10 +252,10 @@ function ModalSave({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Annuler</Button>
-          <Button onClick={submit} disabled={submitting}>
+          <BoutonY2K variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>Annuler</BoutonY2K>
+          <BoutonY2K onClick={submit} disabled={submitting} loading={submitting}>
             {submitting ? 'Enregistrement…' : 'Enregistrer'}
-          </Button>
+          </BoutonY2K>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -333,10 +334,10 @@ function ModalEdit({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Annuler</Button>
-          <Button onClick={submit} disabled={submitting}>
+          <BoutonY2K variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>Annuler</BoutonY2K>
+          <BoutonY2K onClick={submit} disabled={submitting} loading={submitting}>
             {submitting ? 'Enregistrement…' : 'Enregistrer'}
-          </Button>
+          </BoutonY2K>
         </DialogFooter>
       </DialogContent>
     </Dialog>

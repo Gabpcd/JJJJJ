@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { HelpCircle, RotateCcw, ExternalLink, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 interface Props {
   onComplete?: (recommandation: 'SECTEUR_2_ELIGIBLE' | 'SECTEUR_1_UNIQUEMENT') => void;
@@ -61,12 +61,12 @@ export function QuizSecteurMedecin({ onComplete }: Props) {
           </div>
           <p className="text-sm text-foreground font-medium">{QUESTIONS[step]}</p>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => answer(true)} className="flex-1">
+            <BoutonY2K type="button" variant="secondary" onClick={() => answer(true)} className="flex-1">
               Oui
-            </Button>
-            <Button type="button" variant="outline" onClick={() => answer(false)} className="flex-1">
+            </BoutonY2K>
+            <BoutonY2K type="button" variant="secondary" onClick={() => answer(false)} className="flex-1">
               Non
-            </Button>
+            </BoutonY2K>
           </div>
         </div>
       )}
@@ -95,9 +95,9 @@ export function QuizSecteurMedecin({ onComplete }: Props) {
             </div>
           )}
           <div className="flex gap-2 flex-wrap">
-            <Button type="button" variant="ghost" size="sm" onClick={reset} className="gap-1.5">
-              <RotateCcw className="h-3.5 w-3.5" /> Recommencer
-            </Button>
+            <BoutonY2K type="button" variant="ghost" size="sm" onClick={reset} className="gap-1.5" iconeGauche={<RotateCcw className="h-3.5 w-3.5" />}>
+              Recommencer
+            </BoutonY2K>
             <a
               href="https://www.ameli.fr/medecin/exercice-liberal/accompagnement-l-installation/avant-l-installation/le-conventionnement-avec-l-assurance-maladie"
               target="_blank"

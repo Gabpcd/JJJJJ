@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -104,10 +104,10 @@ export function ModalAttestation({ open, onClose }: ModalAttestationProps) {
           </div>
 
           <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" onClick={onClose}>Annuler</Button>
-            <Button onClick={generer} disabled={preview.nb === 0} className="bg-primary text-primary-foreground">
+            <BoutonY2K variant="secondary" onClick={onClose}>Annuler</BoutonY2K>
+            <BoutonY2K onClick={generer} disabled={preview.nb === 0}>
               Générer l'attestation
-            </Button>
+            </BoutonY2K>
           </div>
         </div>
       </DialogContent>

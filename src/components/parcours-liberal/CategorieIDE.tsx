@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ExternalLink, Info, Plus, MapPin } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import type { RegleInstallation } from '@/lib/regles-installation-liberal';
 import type { ParcoursLiberal, CompteurHeures, HeureExterne } from '@/hooks/useParcoursLiberal';
 import { ProgressBarParcours } from './ProgressBarParcours';
@@ -126,10 +126,9 @@ export function CategorieIDE({
         <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
           <h3 className="text-base font-bold text-foreground">Heures externes (hors Jolene)</h3>
           {!showFormHeures && (
-            <Button size="sm" onClick={() => setShowFormHeures(true)} className="gap-1.5">
-              <Plus className="h-4 w-4" />
+            <BoutonY2K size="sm" onClick={() => setShowFormHeures(true)} className="gap-1.5" iconeGauche={<Plus className="h-4 w-4" />}>
               Déclarer des heures
-            </Button>
+            </BoutonY2K>
           )}
         </div>
         <p className="text-sm text-muted-foreground mb-3">

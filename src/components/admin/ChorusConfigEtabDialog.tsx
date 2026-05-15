@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Loader2, Search, ChevronDown } from 'lucide-react';
+import { CheckCircle, XCircle, Search, ChevronDown } from 'lucide-react';
 
 interface ChorusConfig {
   etablissement_id: string;
@@ -124,20 +124,18 @@ export function ChorusConfigEtabDialog({ etabId, etabNom, config, open, onClose,
                 placeholder="ex. 10000071800067"
                 className="flex-1"
               />
-              <Button
+              <BoutonY2K
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={verifyStructure}
                 disabled={verify.status === 'loading' || !numeroStructure.trim()}
+                loading={verify.status === 'loading'}
                 className="shrink-0"
+                iconeGauche={verify.status === 'loading' ? undefined : <Search className="h-4 w-4" />}
               >
-                {verify.status === 'loading'
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <Search className="h-4 w-4" />
-                }
-                <span className="ml-1.5">Vérifier</span>
-              </Button>
+                Vérifier
+              </BoutonY2K>
             </div>
             {verify.status === 'found' && (
               <p className="text-xs text-success flex items-center gap-1 mt-1.5">
@@ -206,10 +204,10 @@ export function ChorusConfigEtabDialog({ etabId, etabNom, config, open, onClose,
         </div>
 
         <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
-          <Button variant="outline" onClick={onClose} disabled={saving}>Annuler</Button>
-          <Button onClick={save} disabled={saving}>
+          <BoutonY2K variant="secondary" onClick={onClose} disabled={saving}>Annuler</BoutonY2K>
+          <BoutonY2K onClick={save} disabled={saving} loading={saving}>
             {saving ? 'Enregistrement…' : 'Enregistrer'}
-          </Button>
+          </BoutonY2K>
         </div>
       </DialogContent>
     </Dialog>

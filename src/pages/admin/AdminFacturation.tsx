@@ -5,6 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -397,18 +398,17 @@ export default function AdminFacturation() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl font-bold text-foreground">Facturation</h1>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={exporterFEC} className="gap-2">
-              <Download className="h-4 w-4" /> Exporter FEC {new Date().getFullYear()}
-            </Button>
-            <Button variant="outline" onClick={genererRapportPDF} className="gap-2">
-              <FileText className="h-4 w-4" /> Rapport PDF
-            </Button>
-            <Button onClick={genererFactures} disabled={generating} className="gap-2">
-              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+            <BoutonY2K variant="secondary" onClick={exporterFEC} className="gap-2" iconeGauche={<Download className="h-4 w-4" />}>
+              Exporter FEC {new Date().getFullYear()}
+            </BoutonY2K>
+            <BoutonY2K variant="secondary" onClick={genererRapportPDF} className="gap-2" iconeGauche={<FileText className="h-4 w-4" />}>
+              Rapport PDF
+            </BoutonY2K>
+            <BoutonY2K onClick={genererFactures} disabled={generating} loading={generating} className="gap-2" iconeGauche={generating ? undefined : <Zap className="h-4 w-4" />}>
               Générer les factures du mois
-            </Button>
-            <Button
-              variant="outline"
+            </BoutonY2K>
+            <BoutonY2K
+              variant="secondary"
               onClick={async () => {
                 const { data, error } = await supabase.functions.invoke('sepa-auto-charge');
                 if (error) { toast.error('Erreur prélèvement SEPA'); return; }
@@ -417,9 +417,10 @@ export default function AdminFacturation() {
                 charger();
               }}
               className="gap-2"
+              iconeGauche={<CreditCard className="h-4 w-4" />}
             >
-              <CreditCard className="h-4 w-4" /> Prélever SEPA
-            </Button>
+              Prélever SEPA
+            </BoutonY2K>
           </div>
         </div>
 
@@ -532,11 +533,12 @@ export default function AdminFacturation() {
                         <div className="flex items-center gap-1">
                           {f.statut === 'VIREMENT_DECLARE' && (
                             <>
-                              <Button
-                                variant="default"
+                              <BoutonY2K
+                                variant="primary"
                                 size="sm"
                                 className="h-7 text-xs gap-1"
                                 disabled={actionId === f.id}
+                                iconeGauche={<CheckCircle className="h-3.5 w-3.5" />}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setActionId(f.id);
@@ -550,13 +552,14 @@ export default function AdminFacturation() {
                                   setActionId(null);
                                 }}
                               >
-                                <CheckCircle className="h-3.5 w-3.5" /> Confirmer
-                              </Button>
-                              <Button
+                                Confirmer
+                              </BoutonY2K>
+                              <BoutonY2K
                                 variant="destructive"
                                 size="sm"
                                 className="h-7 text-xs gap-1"
                                 disabled={actionId === f.id}
+                                iconeGauche={<XCircle className="h-3.5 w-3.5" />}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setActionId(f.id);
@@ -570,8 +573,8 @@ export default function AdminFacturation() {
                                   setActionId(null);
                                 }}
                               >
-                                <XCircle className="h-3.5 w-3.5" /> Rejeter
-                              </Button>
+                                Rejeter
+                              </BoutonY2K>
                             </>
                           )}
                           <Button
@@ -700,11 +703,12 @@ export default function AdminFacturation() {
 
                     {f.statut === 'VIREMENT_DECLARE' && (
                       <div className="grid grid-cols-2 gap-2 pl-7">
-                        <Button
-                          variant="default"
+                        <BoutonY2K
+                          variant="primary"
                           size="sm"
                           className="min-h-[36px] text-xs gap-1"
                           disabled={actionId === f.id}
+                          iconeGauche={<CheckCircle className="h-3.5 w-3.5" />}
                           onClick={async () => {
                             setActionId(f.id);
                             const { data, error } = await supabase.rpc('fn_confirmer_virement_admin' as any, { p_facture_id: f.id });
@@ -717,13 +721,14 @@ export default function AdminFacturation() {
                             setActionId(null);
                           }}
                         >
-                          <CheckCircle className="h-3.5 w-3.5" /> Confirmer
-                        </Button>
-                        <Button
+                          Confirmer
+                        </BoutonY2K>
+                        <BoutonY2K
                           variant="destructive"
                           size="sm"
                           className="min-h-[36px] text-xs gap-1"
                           disabled={actionId === f.id}
+                          iconeGauche={<XCircle className="h-3.5 w-3.5" />}
                           onClick={async () => {
                             setActionId(f.id);
                             const { data, error } = await supabase.rpc('fn_rejeter_virement_admin' as any, { p_facture_id: f.id });
@@ -736,30 +741,31 @@ export default function AdminFacturation() {
                             setActionId(null);
                           }}
                         >
-                          <XCircle className="h-3.5 w-3.5" /> Rejeter
-                        </Button>
+                          Rejeter
+                        </BoutonY2K>
                       </div>
                     )}
 
                     <div className="flex items-center gap-2 pl-7">
-                      <Button
-                        variant="outline"
+                      <BoutonY2K
+                        variant="secondary"
                         size="sm"
                         className="flex-1 min-h-[36px] text-xs gap-1"
                         onClick={() => setExpandedId(isExpanded ? null : f.id)}
+                        iconeGauche={isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                       >
-                        {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                         {isExpanded ? 'Masquer missions' : 'Voir missions'}
-                      </Button>
-                      <Button
+                      </BoutonY2K>
+                      <BoutonY2K
                         variant="ghost"
                         size="sm"
                         className="min-h-[36px] px-3"
                         title="Télécharger la facture PDF"
+                        aria-label="Télécharger la facture PDF"
                         onClick={() => genererFacturePDF(f)}
                       >
                         <Download className="h-4 w-4" />
-                      </Button>
+                      </BoutonY2K>
                     </div>
 
                     {isExpanded && (

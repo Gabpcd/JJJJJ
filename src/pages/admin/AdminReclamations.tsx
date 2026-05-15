@@ -8,7 +8,7 @@ import { extraireMessageErreur } from '@/lib/erreurs';
 import { CheckCircle, XCircle, Download, FileText, Loader2, MessageCircle, Clock, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 const TABS = [
   { id: 'generales', label: 'Réclamations générales' },
@@ -220,15 +220,16 @@ export default function AdminReclamations() {
                         ))}
                       </select>
                       <div className="flex-1" />
-                      <Button
+                      <BoutonY2K
                         size="sm"
                         onClick={() => traiterGenerale(r.id)}
                         disabled={traitementGen === r.id}
+                        loading={traitementGen === r.id}
                         className="gap-1"
+                        iconeGauche={traitementGen === r.id ? undefined : <Send className="h-3.5 w-3.5" />}
                       >
-                        {traitementGen === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                         Traiter
-                      </Button>
+                      </BoutonY2K>
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ExternalLink, Info, Plus, MapPin, Clock, RotateCcw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { RegleInstallation } from '@/lib/regles-installation-liberal';
 import type { ParcoursLiberal, CompteurHeures, HeureExterne } from '@/hooks/useParcoursLiberal';
@@ -194,9 +194,9 @@ export function CategorieKine({
               : "Voie de la zone sous-dotée (engagement 2 ans)"}
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setConfirmReset(true)} className="gap-1.5 text-xs">
-          <RotateCcw className="h-3.5 w-3.5" /> Changer de parcours
-        </Button>
+        <BoutonY2K variant="ghost" size="sm" onClick={() => setConfirmReset(true)} className="gap-1.5 text-xs" iconeGauche={<RotateCcw className="h-3.5 w-3.5" />}>
+          Changer de parcours
+        </BoutonY2K>
       </div>
 
       <ProgressBarParcours
@@ -222,10 +222,9 @@ export function CategorieKine({
             <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
               <h3 className="text-base font-bold text-foreground">Heures externes (hors Jolene)</h3>
               {!showFormHeures && (
-                <Button size="sm" onClick={() => setShowFormHeures(true)} className="gap-1.5">
-                  <Plus className="h-4 w-4" />
+                <BoutonY2K size="sm" onClick={() => setShowFormHeures(true)} className="gap-1.5" iconeGauche={<Plus className="h-4 w-4" />}>
                   Déclarer des heures
-                </Button>
+                </BoutonY2K>
               )}
             </div>
             <p className="text-sm text-muted-foreground mb-3">

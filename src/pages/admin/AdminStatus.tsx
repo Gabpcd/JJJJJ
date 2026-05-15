@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Activity, AlertCircle, AlertTriangle, Bug, CheckCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import {
   CardY2K,
   CardY2KHeader,
@@ -106,9 +106,9 @@ export default function AdminStatus() {
             Dernière vérification : {format(new Date(data.timestamp), 'd MMM yyyy HH:mm:ss', { locale: fr })}
           </p>
         </div>
-        <Button onClick={charger} disabled={refreshing} variant="outline" size="sm" className="gap-1.5">
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
+        <BoutonY2K onClick={charger} disabled={refreshing} variant="secondary" size="sm" className="gap-1.5" iconeGauche={<RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />}>
+          Refresh
+        </BoutonY2K>
       </div>
 
       {/* Alertes actives */}
@@ -130,7 +130,7 @@ export default function AdminStatus() {
                     {format(new Date(a.cree_le), 'd MMM HH:mm', { locale: fr })}
                   </p>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => resoudre(a.id)}>Résoudre</Button>
+                <BoutonY2K size="sm" variant="ghost" onClick={() => resoudre(a.id)}>Résoudre</BoutonY2K>
               </div>
             ))}
           </CardY2KContent>
@@ -267,10 +267,11 @@ export default function AdminStatus() {
               Déclenche une exception volontaire avec tag <code className="bg-muted px-1.5 py-0.5 rounded">test=true</code> pour
               vérifier la chaîne Sentry (DSN → release → sourcemaps → user context). À filtrer dans les alertes prod.
             </p>
-            <Button
+            <BoutonY2K
               size="sm"
-              variant="outline"
+              variant="secondary"
               className="border-warning/30 text-warning hover:bg-warning/5 gap-1.5"
+              iconeGauche={<Bug className="h-3.5 w-3.5" />}
               onClick={() => {
                 try {
                   Sentry.captureException(new Error('Sentry test event from /admin/status'), {
@@ -283,8 +284,8 @@ export default function AdminStatus() {
                 }
               }}
             >
-              <Bug className="h-3.5 w-3.5" /> Déclencher erreur test Sentry
-            </Button>
+              Déclencher erreur test Sentry
+            </BoutonY2K>
           </div>
           <p className="text-[11px] text-muted-foreground italic">
             ℹ️ Si la VITE_SENTRY_DSN n'est pas configurée côté Vercel, ce bouton est inactif silencieusement.

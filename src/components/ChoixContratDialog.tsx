@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { FileText, Banknote } from 'lucide-react';
 
 interface Option {
@@ -51,10 +51,10 @@ export function ChoixContratDialog({ open, options, onChoose, onClose, loading }
           ))}
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={onClose} disabled={loading}>Annuler</Button>
-          <Button onClick={() => selected && onChoose(selected)} disabled={!selected || loading}>
+          <BoutonY2K variant="secondary" onClick={onClose} disabled={loading}>Annuler</BoutonY2K>
+          <BoutonY2K onClick={() => selected && onChoose(selected)} disabled={!selected || loading} loading={loading}>
             {loading ? 'Envoi…' : 'Confirmer'}
-          </Button>
+          </BoutonY2K>
         </div>
       </DialogContent>
     </Dialog>

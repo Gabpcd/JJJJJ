@@ -3,7 +3,7 @@ import { Banknote, Check, X, ChevronDown, ChevronUp, Calendar, Clock, Hash, Cred
 import { supabase } from '@/integrations/supabase/client';
 import { fetchEtablissementsSafe } from '@/lib/etablissements';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -46,10 +46,10 @@ function MotifContestationModal({ onConfirm, onCancel }: { onConfirm: (motif: st
         maxLength={500}
       />
       <div className="flex gap-2">
-        <Button size="sm" variant="destructive" onClick={() => onConfirm(motif || 'Contesté par le soignant')} disabled={!motif.trim()}>
+        <BoutonY2K size="sm" variant="destructive" onClick={() => onConfirm(motif || 'Contesté par le soignant')} disabled={!motif.trim()}>
           Envoyer la contestation
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>Annuler</Button>
+        </BoutonY2K>
+        <BoutonY2K size="sm" variant="ghost" onClick={onCancel}>Annuler</BoutonY2K>
       </div>
     </div>
   );
@@ -276,23 +276,26 @@ export function BandeauPaiementDeclare() {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-1">
-                  <Button
+                  <BoutonY2K
                     size="sm"
                     onClick={(e) => { e.stopPropagation(); traiter(p.id, true); }}
                     disabled={processing === p.id}
+                    loading={processing === p.id}
                     className="gap-1.5"
+                    iconeGauche={processing === p.id ? undefined : <Check className="h-3.5 w-3.5" />}
                   >
-                    <Check className="h-3.5 w-3.5" /> Confirmer la réception
-                  </Button>
-                  <Button
-                    variant="outline"
+                    Confirmer la réception
+                  </BoutonY2K>
+                  <BoutonY2K
+                    variant="secondary"
                     size="sm"
                     onClick={(e) => { e.stopPropagation(); setContesting(isContesting ? null : p.id); }}
                     disabled={processing === p.id}
                     className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/5"
+                    iconeGauche={<X className="h-3.5 w-3.5" />}
                   >
-                    <X className="h-3.5 w-3.5" /> Contester
-                  </Button>
+                    Contester
+                  </BoutonY2K>
                 </div>
 
                 {/* Contest form */}

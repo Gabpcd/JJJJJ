@@ -3,7 +3,7 @@ import { FileText, Download, CheckCircle, Clock, AlertTriangle } from 'lucide-re
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { telechargerFactureHonorairesPDF } from '@/lib/facture-honoraires-pdf';
 
 interface Props {
@@ -102,9 +102,9 @@ export function FactureHonorairesCard({ missionId, viewerRole = 'ETAB' }: Props)
         </p>
       </div>
 
-      <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleDownload} disabled={downloading}>
-        <Download className="h-3.5 w-3.5" /> {downloading ? 'Génération…' : 'Télécharger PDF'}
-      </Button>
+      <BoutonY2K size="sm" variant="secondary" className="gap-1.5 text-xs" onClick={handleDownload} disabled={downloading} loading={downloading} iconeGauche={downloading ? undefined : <Download className="h-3.5 w-3.5" />}>
+        {downloading ? 'Génération…' : 'Télécharger PDF'}
+      </BoutonY2K>
 
       {viewerRole === 'ETAB' && (
         <p className="text-[10px] text-muted-foreground/70 italic">

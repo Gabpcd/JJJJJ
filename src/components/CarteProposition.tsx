@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format, differenceInSeconds, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { ModalAttestationHebdo } from '@/components/ModalAttestationHebdo';
 
 const EXPIRATION_MINUTES = 120; // 2h
@@ -175,12 +175,12 @@ export function CarteProposition({ proposition, onTraitee }: Props) {
         </div>
 
         <div className="flex gap-2 pt-1">
-          <Button size="sm" className="flex-1" disabled={!!loading} onClick={() => handleAction('ACCEPTEE')}>
+          <BoutonY2K size="sm" className="flex-1" disabled={!!loading} loading={loading === 'accept'} onClick={() => handleAction('ACCEPTEE')}>
             {loading === 'accept' ? '...' : '✅ Accepter'}
-          </Button>
-          <Button size="sm" variant="outline" className="flex-1" disabled={!!loading} onClick={() => handleAction('REFUSEE')}>
+          </BoutonY2K>
+          <BoutonY2K size="sm" variant="secondary" className="flex-1" disabled={!!loading} loading={loading === 'refuse'} onClick={() => handleAction('REFUSEE')}>
             {loading === 'refuse' ? '...' : '❌ Refuser'}
-          </Button>
+          </BoutonY2K>
         </div>
       </div>
 

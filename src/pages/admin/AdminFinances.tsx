@@ -11,7 +11,7 @@ import {
   CardY2KContent,
 } from '@/components/y2k/CardY2K';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -208,12 +208,12 @@ export default function AdminFinances() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl font-bold text-foreground">Finances Jolene</h1>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={exporterCSV} className="gap-2">
-              <Download className="h-4 w-4" /> Export CSV
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/admin/facturation')} className="gap-2">
+            <BoutonY2K variant="secondary" onClick={exporterCSV} className="gap-2" iconeGauche={<Download className="h-4 w-4" />}>
+              Export CSV
+            </BoutonY2K>
+            <BoutonY2K variant="secondary" onClick={() => navigate('/admin/facturation')} className="gap-2">
               Facturation
-            </Button>
+            </BoutonY2K>
           </div>
         </div>
 

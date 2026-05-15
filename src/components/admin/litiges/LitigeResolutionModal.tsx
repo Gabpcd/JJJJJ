@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -380,19 +380,20 @@ export function LitigeResolutionModal({
         </TooltipProvider>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => handleClose(false)}>
+          <BoutonY2K variant="ghost" onClick={() => handleClose(false)}>
             Fermer
-          </Button>
-          <Button
+          </BoutonY2K>
+          <BoutonY2K
             onClick={submit}
             disabled={
               submitting ||
               resolutionText.trim().length < 10 ||
               !enFaveurDe
             }
+            loading={submitting}
           >
             {submitting ? 'Résolution…' : 'Valider la résolution'}
-          </Button>
+          </BoutonY2K>
         </DialogFooter>
       </DialogContent>
     </Dialog>

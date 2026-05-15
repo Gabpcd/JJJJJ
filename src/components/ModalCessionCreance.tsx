@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Loader2, ShieldCheck, X, Zap } from 'lucide-react';
+import { ShieldCheck, X, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -180,17 +180,18 @@ export function ModalCessionCreance({ open, onClose, factureId, numeroFacture, m
           </div>
 
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose} disabled={signing}>
+            <BoutonY2K variant="ghost" onClick={onClose} disabled={signing}>
               Annuler
-            </Button>
-            <Button
+            </BoutonY2K>
+            <BoutonY2K
               onClick={signerEtDemander}
               disabled={!accepted || signing || !hasScrolledToBottom}
+              loading={signing}
               className="flex-1 gap-2"
+              iconeGauche={signing ? undefined : <ShieldCheck className="h-4 w-4" />}
             >
-              {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
               Signer et demander l'avance
-            </Button>
+            </BoutonY2K>
           </div>
 
           <p className="text-[10px] text-muted-foreground text-center">

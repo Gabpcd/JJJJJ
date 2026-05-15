@@ -3,7 +3,7 @@ import { Building2, Layers, Loader2, Pencil, Save, X } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -153,9 +153,9 @@ export default function AdminTauxCommission() {
                   <div className="text-right">
                     <p className="text-lg font-bold text-foreground">{fmtTaux(g.taux_commission_negocie)}</p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => ouvrirEdition('groupe', g.id, g.nom, g.taux_commission_negocie)} className="gap-1">
-                    <Pencil className="h-3.5 w-3.5" /> Modifier
-                  </Button>
+                  <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirEdition('groupe', g.id, g.nom, g.taux_commission_negocie)} className="gap-1" iconeGauche={<Pencil className="h-3.5 w-3.5" />}>
+                    Modifier
+                  </BoutonY2K>
                 </div>
               ))}
             </div>
@@ -187,9 +187,9 @@ export default function AdminTauxCommission() {
                     {SOURCE_LABEL[e.taux_resolu_source]}
                   </span>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => ouvrirEdition('etab', e.id, e.nom, e.taux_commission_negocie)} className="gap-1">
-                  <Pencil className="h-3.5 w-3.5" /> Modifier
-                </Button>
+                <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirEdition('etab', e.id, e.nom, e.taux_commission_negocie)} className="gap-1" iconeGauche={<Pencil className="h-3.5 w-3.5" />}>
+                  Modifier
+                </BoutonY2K>
               </div>
             ))}
           </div>
@@ -241,11 +241,10 @@ export default function AdminTauxCommission() {
               </p>
             </div>
             <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" disabled={saving} onClick={fermerEdition}>Annuler</Button>
-              <Button disabled={saving || !raison.trim()} onClick={enregistrer} className="gap-2">
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                <Save className="h-4 w-4" /> Enregistrer
-              </Button>
+              <BoutonY2K variant="secondary" disabled={saving} onClick={fermerEdition}>Annuler</BoutonY2K>
+              <BoutonY2K disabled={saving || !raison.trim()} loading={saving} onClick={enregistrer} className="gap-2" iconeGauche={saving ? undefined : <Save className="h-4 w-4" />}>
+                Enregistrer
+              </BoutonY2K>
             </div>
           </div>
         </div>

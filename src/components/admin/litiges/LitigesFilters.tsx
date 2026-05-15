@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -115,16 +115,16 @@ export function LitigesFilters({ filtres, onChange }: Props) {
         </Select>
       </div>
 
-      <Button
+      <BoutonY2K
         type="button"
         size="sm"
-        variant="outline"
+        variant="secondary"
         onClick={reset}
         aria-label="Réinitialiser les filtres"
+        iconeGauche={<RotateCcw className="h-3.5 w-3.5" />}
       >
-        <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
         Reset filtres
-      </Button>
+      </BoutonY2K>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { Upload, X, Loader2 } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 interface Props {
   onSubmit: (payload: {
@@ -128,10 +128,9 @@ export function FormulaireHeuresExternes({ onSubmit, onCancel, isLoading }: Prop
         <label className="text-sm font-medium text-foreground mb-1 block">Attestation *</label>
         <div className="flex items-center gap-2 flex-wrap">
           <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} className="hidden" id="attestation-file" />
-          <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={busy} className="gap-2">
-            <Upload className="h-4 w-4" />
+          <BoutonY2K type="button" variant="secondary" onClick={() => fileRef.current?.click()} disabled={busy} className="gap-2" iconeGauche={<Upload className="h-4 w-4" />}>
             {file ? 'Changer le fichier' : 'Choisir un fichier'}
-          </Button>
+          </BoutonY2K>
           {file && (
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="truncate max-w-[200px]">{file.name}</span>
@@ -145,13 +144,12 @@ export function FormulaireHeuresExternes({ onSubmit, onCancel, isLoading }: Prop
       </div>
 
       <div className="flex gap-2 pt-2">
-        <Button type="submit" disabled={busy} className="flex-1 gap-2">
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+        <BoutonY2K type="submit" disabled={busy} loading={busy} className="flex-1 gap-2">
           Ajouter ces heures
-        </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={busy} className="flex-1">
+        </BoutonY2K>
+        <BoutonY2K type="button" variant="secondary" onClick={onCancel} disabled={busy} className="flex-1">
           Annuler
-        </Button>
+        </BoutonY2K>
       </div>
     </form>
   );
