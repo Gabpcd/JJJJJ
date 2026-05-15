@@ -7,7 +7,7 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -240,12 +240,12 @@ export default function PresencesEtablissement() {
       case 'alertes':
         return (
           <div className="flex flex-wrap gap-1">
-            {p.alerte_teleportation && <Badge className="bg-destructive/10 text-destructive text-[10px]">🚨 Téléport.</Badge>}
-            {p.perimetre_gps_valide === false && <Badge className="bg-warning/10 text-warning text-[10px]">📍 Hors zone</Badge>}
-            {(p.arrivee_mock_detected || p.depart_mock_detected) && <Badge className="bg-destructive/10 text-destructive text-[10px]">🤖 GPS truqué</Badge>}
-            {p.valide_par_etablissement && <Badge className="bg-success/10 text-success text-[10px]">✅ Validée</Badge>}
-            {!p.valide_par_etablissement && p.pointage_depart_le && !p.alerte_teleportation && p.perimetre_gps_valide && <Badge className="bg-muted text-muted-foreground text-[10px]">À valider</Badge>}
-            {!p.pointage_depart_le && <Badge className="bg-info/10 text-info text-[10px]">⏳ En cours</Badge>}
+            {p.alerte_teleportation && <BadgeY2K variant="error" size="sm">🚨 Téléport.</BadgeY2K>}
+            {p.perimetre_gps_valide === false && <BadgeY2K variant="warning" size="sm">📍 Hors zone</BadgeY2K>}
+            {(p.arrivee_mock_detected || p.depart_mock_detected) && <BadgeY2K variant="error" size="sm">🤖 GPS truqué</BadgeY2K>}
+            {p.valide_par_etablissement && <BadgeY2K variant="success" size="sm">✅ Validée</BadgeY2K>}
+            {!p.valide_par_etablissement && p.pointage_depart_le && !p.alerte_teleportation && p.perimetre_gps_valide && <BadgeY2K variant="info" size="sm" className="bg-muted text-muted-foreground border-muted">À valider</BadgeY2K>}
+            {!p.pointage_depart_le && <BadgeY2K variant="info" size="sm">⏳ En cours</BadgeY2K>}
           </div>
         );
       case 'actions':

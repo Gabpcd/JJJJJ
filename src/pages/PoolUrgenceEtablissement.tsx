@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock, MessageCircle, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -502,7 +502,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="text-xs">{professionLabel(s.profession)}</Badge>
+                      <BadgeY2K variant="info">{professionLabel(s.profession)}</BadgeY2K>
                     </TableCell>
                     <TableCell>
                       <JaugeScoreFiabilite score={s.score_fiabilite} />
@@ -520,15 +520,15 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                       <div className="flex items-center gap-1">
                         <span className="font-bold text-foreground text-sm">{s.missions_urgence_terminees}</span>
                         {s.missions_urgence_terminees > 5 && (
-                          <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">🏅</Badge>
+                          <BadgeY2K variant="warning" size="sm">🏅</BadgeY2K>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>
                       {s.en_mission_maintenant ? (
-                        <Badge variant="destructive" className="text-[10px]">En mission</Badge>
+                        <BadgeY2K variant="error" size="sm">En mission</BadgeY2K>
                       ) : (
-                        <Badge className="bg-success/20 text-success border-success/30 text-[10px]">Disponible</Badge>
+                        <BadgeY2K variant="success" size="sm">Disponible</BadgeY2K>
                       )}
                     </TableCell>
                     <TableCell>
@@ -621,18 +621,18 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                       </TableCell>
                       <TableCell className="text-sm">
                         {delaiMin !== null && delaiMin > 0 ? (
-                          <Badge variant="secondary" className="text-[10px]">{delaiMin < 60 ? `${delaiMin} min` : `${Math.round(delaiMin / 60)}h`}</Badge>
+                          <BadgeY2K variant="info" size="sm">{delaiMin < 60 ? `${delaiMin} min` : `${Math.round(delaiMin / 60)}h`}</BadgeY2K>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={h.statut === 'TERMINEE' ? 'default' : h.statut === 'OUVERTE' ? 'destructive' : 'secondary'}
-                          className="text-[10px]"
+                        <BadgeY2K
+                          variant={h.statut === 'TERMINEE' ? 'info' : h.statut === 'OUVERTE' ? 'error' : 'info'}
+                          size="sm"
                         >
                           {h.statut}
-                        </Badge>
+                        </BadgeY2K>
                       </TableCell>
                     </TableRow>
                   );
@@ -693,8 +693,8 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                       <p className="text-sm font-medium text-foreground">{m.intitule}</p>
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                         <span>{format(new Date(m.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })}</span>
-                        <Badge variant="outline" className="text-[10px]">{professionLabel(m.profession_requise)}</Badge>
-                        {m.mode_attribution === 'CANDIDATURE' && <Badge variant="secondary" className="text-[10px]">Candidature</Badge>}
+                        <BadgeY2K variant="info" size="sm">{professionLabel(m.profession_requise)}</BadgeY2K>
+                        {m.mode_attribution === 'CANDIDATURE' && <BadgeY2K variant="info" size="sm">Candidature</BadgeY2K>}
                       </div>
                     </button>
                   ))}

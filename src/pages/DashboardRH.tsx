@@ -13,7 +13,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type jsPDF from 'jspdf';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AnalyticsContent } from './AnalyticsEtablissement';
 import { Progress } from '@/components/ui/progress';
@@ -227,9 +227,9 @@ export default function DashboardRH() {
             </div>
             <div className="text-right flex items-center gap-2">
               {isPrev && m.statut && (
-                <Badge variant={m.statut === 'ASSIGNEE' ? 'default' : 'secondary'} className={m.statut === 'OUVERTE' ? 'bg-warning/10 text-warning border-warning/30' : ''}>
+                <BadgeY2K variant={m.statut === 'ASSIGNEE' ? 'success' : m.statut === 'OUVERTE' ? 'warning' : 'info'}>
                   {m.statut === 'ASSIGNEE' ? '✅ Assignée' : m.statut === 'EN_COURS' ? '▶️ En cours' : '🟠 Ouverte'}
-                </Badge>
+                </BadgeY2K>
               )}
               <div>
                 <p className={`font-semibold text-sm ${grise ? 'text-muted-foreground' : 'text-foreground'}`}>{fmtEur(m.total_brut)}</p>
@@ -348,9 +348,9 @@ export default function DashboardRH() {
           { cle: 'statut', titre: 'Statut' },
         ];
         const badgeStatut = (statut: string) => (
-          <Badge variant={statut === 'ASSIGNEE' ? 'default' : 'secondary'} className={statut === 'OUVERTE' ? 'bg-warning/10 text-warning border-warning/30' : ''}>
+          <BadgeY2K variant={statut === 'ASSIGNEE' ? 'success' : statut === 'OUVERTE' ? 'warning' : 'info'}>
             {statut === 'ASSIGNEE' ? '✅ Assignée' : statut === 'EN_COURS' ? '▶️ En cours' : '🟠 Ouverte'}
-          </Badge>
+          </BadgeY2K>
         );
         return (
           <div className="card-base mb-6">
