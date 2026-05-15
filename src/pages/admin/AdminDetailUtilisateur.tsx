@@ -6,7 +6,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -293,11 +293,11 @@ export default function AdminDetailUtilisateur() {
             </button>
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <Badge variant="outline" className="text-xs">{type === 'soignant' ? 'Soignant' : 'Établissement'}</Badge>
+            <BadgeY2K variant="info">{type === 'soignant' ? 'Soignant' : 'Établissement'}</BadgeY2K>
             {isSuspended ? (
-              <Badge variant="destructive" className="text-xs">Suspendu</Badge>
+              <BadgeY2K variant="error">Suspendu</BadgeY2K>
             ) : (
-              <Badge className="bg-success text-success-foreground text-xs">Actif</Badge>
+              <BadgeY2K variant="success">Actif</BadgeY2K>
             )}
           </div>
         </div>
@@ -479,7 +479,7 @@ export default function AdminDetailUtilisateur() {
                             <TableCell className="text-xs">{new Date(m.debut_le).toLocaleDateString('fr-FR')}</TableCell>
                             <TableCell className="text-xs">{m.duree_heures ? `${m.duree_heures}h` : '—'}</TableCell>
                             <TableCell>
-                              <Badge variant="outline" className="text-[10px]">{m.statut === "OUVERTE" ? "Ouverte" : m.statut === "ASSIGNEE" ? "Assignée" : m.statut === "EN_COURS" ? "En cours" : m.statut === "TERMINEE" ? "Terminée" : m.statut}</Badge>
+                              <BadgeY2K variant="info" size="sm">{m.statut === "OUVERTE" ? "Ouverte" : m.statut === "ASSIGNEE" ? "Assignée" : m.statut === "EN_COURS" ? "En cours" : m.statut === "TERMINEE" ? "Terminée" : m.statut}</BadgeY2K>
                             </TableCell>
                             {type === 'soignant' && <TableCell className="text-xs font-mono">{m.net_a_payer ? `${Number(m.net_a_payer).toFixed(2)} €` : '—'}</TableCell>}
                           </TableRow>
@@ -499,7 +499,7 @@ export default function AdminDetailUtilisateur() {
                         <div key={m.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-sm font-semibold truncate">{m.intitule}</p>
-                            <Badge variant="outline" className="text-[10px] shrink-0">{statutLabel}</Badge>
+                            <BadgeY2K variant="info" size="sm" className="shrink-0">{statutLabel}</BadgeY2K>
                           </div>
                           <div className="grid grid-cols-1 gap-1 text-xs">
                             <div className="flex items-start justify-between gap-2">
@@ -785,9 +785,9 @@ function VerifRow({ label, ok }: { label: string; ok: boolean }) {
     <div className="flex items-center justify-between text-sm">
       <span className="text-muted-foreground">{label}</span>
       {ok ? (
-        <Badge className="bg-success text-success-foreground text-[10px]">✓ Oui</Badge>
+        <BadgeY2K variant="success" size="sm">✓ Oui</BadgeY2K>
       ) : (
-        <Badge variant="outline" className="text-[10px]">✗ Non</Badge>
+        <BadgeY2K variant="info" size="sm">✗ Non</BadgeY2K>
       )}
     </div>
   );

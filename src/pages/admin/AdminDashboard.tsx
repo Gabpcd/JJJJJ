@@ -9,7 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar, AreaChart, Area, ReferenceLine } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
@@ -422,7 +422,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-foreground">Seuil de rentabilité</h3>
                 {rentabilite.seuilAtteint ? (
-                  <Badge className="bg-success text-success-foreground">Seuil atteint ✅</Badge>
+                  <BadgeY2K variant="success">Seuil atteint ✅</BadgeY2K>
                 ) : (
                   <span className="text-xs text-muted-foreground">Plus que {formatEur(rentabilite.resteAvantSeuil)} de CA</span>
                 )}
@@ -549,7 +549,7 @@ export default function AdminDashboard() {
                 <div key={s.id} className="flex justify-between items-center text-sm">
                   <div>
                     <span className="font-medium text-foreground">{s.prenom} {s.nom}</span>
-                    <Badge variant="outline" className="ml-2 text-[10px]">{s.profession}</Badge>
+                    <BadgeY2K variant="info" size="sm" className="ml-2">{s.profession}</BadgeY2K>
                   </div>
                   <span className="text-muted-foreground text-xs">{formatDate(s.cree_le)}</span>
                 </div>
@@ -560,7 +560,7 @@ export default function AdminDashboard() {
                 <div key={e.id} className="flex justify-between items-center text-sm">
                   <div>
                     <span className="font-medium text-foreground">{e.nom}</span>
-                    <Badge variant="outline" className="ml-2 text-[10px]">{e.type}</Badge>
+                    <BadgeY2K variant="info" size="sm" className="ml-2">{e.type}</BadgeY2K>
                   </div>
                   <span className="text-muted-foreground text-xs">{formatDate(e.cree_le)}</span>
                 </div>
@@ -576,7 +576,7 @@ export default function AdminDashboard() {
                 <div key={l.id} className="text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/moderation')}>
                   <p className="font-medium text-foreground line-clamp-1">{l.motif}</p>
                   <div className="flex gap-2 mt-1">
-                    <Badge variant={l.statut === 'OUVERT' ? 'destructive' : 'secondary'} className="text-[10px]">{l.statut}</Badge>
+                    <BadgeY2K variant={l.statut === 'OUVERT' ? 'error' : 'info'} size="sm">{l.statut}</BadgeY2K>
                     <span className="text-muted-foreground text-xs">{formatDate(l.cree_le)}</span>
                   </div>
                 </div>

@@ -4,7 +4,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
@@ -230,13 +230,9 @@ export default function AdminEmails() {
             ];
             const statutBadge = (e: any) =>
               e.statut === 'ENVOYE' ? (
-                <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1">
-                  <CheckCircle className="h-3 w-3" /> Envoyé
-                </Badge>
+                <BadgeY2K variant="success" icone={<CheckCircle className="h-3 w-3" />}>Envoyé</BadgeY2K>
               ) : (
-                <Badge variant="destructive" className="gap-1">
-                  <XCircle className="h-3 w-3" /> Erreur
-                </Badge>
+                <BadgeY2K variant="error" icone={<XCircle className="h-3 w-3" />}>Erreur</BadgeY2K>
               );
             return (
               <TableOuCartes

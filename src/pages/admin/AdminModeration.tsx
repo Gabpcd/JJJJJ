@@ -4,7 +4,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -316,9 +316,9 @@ export default function AdminModeration() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <Badge variant={e.note <= 2 ? 'destructive' : e.note === 3 ? 'secondary' : 'outline'}>
+                            <BadgeY2K variant={e.note <= 2 ? 'error' : e.note === 3 ? 'warning' : 'info'}>
                               {'★'.repeat(e.note)}{'☆'.repeat(5 - e.note)}
-                            </Badge>
+                            </BadgeY2K>
                             <span className="text-xs text-muted-foreground">{formatDate(e.cree_le)}</span>
                           </div>
                           <p className="text-sm text-foreground">
@@ -364,7 +364,7 @@ export default function AdminModeration() {
                   {documents.map((d) => (
                     <TableRow key={d.id}>
                       <TableCell className="max-w-[200px] truncate font-medium">{d.nom_fichier}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-[10px]">{d.type_document}</Badge></TableCell>
+                      <TableCell><BadgeY2K variant="info" size="sm">{d.type_document}</BadgeY2K></TableCell>
                       <TableCell className="text-xs text-muted-foreground">{d.televerse_le ? formatDate(d.televerse_le) : '—'}</TableCell>
                       <TableCell className="space-x-1 text-right">
                         <Button size="sm" variant="outline" onClick={() => validerDocument(d.id)}><Check className="mr-1 h-3.5 w-3.5" />Valider</Button>
@@ -385,7 +385,7 @@ export default function AdminModeration() {
                 <div key={d.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium text-sm break-words flex-1 min-w-0">{d.nom_fichier}</p>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{d.type_document}</Badge>
+                    <BadgeY2K variant="info" size="sm" className="shrink-0">{d.type_document}</BadgeY2K>
                   </div>
                   <p className="text-[11px] text-muted-foreground">{d.televerse_le ? `Téléversé le ${formatDate(d.televerse_le)}` : 'Date inconnue'}</p>
                   <div className="grid grid-cols-2 gap-2">

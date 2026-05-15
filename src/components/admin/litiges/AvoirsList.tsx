@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -87,11 +87,11 @@ const formatMontant = (v: number | null | undefined): string => {
   }).format(Number(v));
 };
 
-function badgeStatut(statut: string) {
-  if (statut === 'REMBOURSE') return 'default' as const;
-  if (statut === 'ANNULEE') return 'secondary' as const;
-  if (statut === 'EMISE') return 'destructive' as const;
-  return 'outline' as const;
+function badgeStatut(statut: string): 'success' | 'warning' | 'error' | 'info' {
+  if (statut === 'REMBOURSE') return 'success';
+  if (statut === 'ANNULEE') return 'info';
+  if (statut === 'EMISE') return 'warning';
+  return 'info';
 }
 
 export function filtrerAvoirs(
@@ -293,16 +293,16 @@ export function AvoirsList({ onChanged }: Props) {
                       {formatMontant(a.montant_ht)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-[10px]">
+                      <BadgeY2K variant="info" size="sm">
                         {LABELS_MODE_REMB[
                           a.mode_remboursement as ModeRemboursement
                         ] ?? a.mode_remboursement ?? '—'}
-                      </Badge>
+                      </BadgeY2K>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={badgeStatut(a.statut)}>
+                      <BadgeY2K variant={badgeStatut(a.statut)}>
                         {LABELS_STATUT_AVOIR[a.statut as StatutAvoir] ?? a.statut}
-                      </Badge>
+                      </BadgeY2K>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {formatDate(a.date_emission)}

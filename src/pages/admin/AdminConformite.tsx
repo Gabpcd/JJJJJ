@@ -7,7 +7,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, UserX, FileX, ChevronDown, Loader2, ExternalLink } from 'lucide-react';
 
 interface Champ {
@@ -67,7 +67,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Résultat', render: (i) => <Badge variant="destructive" className="text-[10px]">{i.resultat}</Badge> },
+      { titre: 'Résultat', render: (i) => <BadgeY2K variant="error" size="sm">{i.resultat}</BadgeY2K> },
       { titre: 'Date', render: (i) => <span className="text-muted-foreground">{formatDate(i.controle_le)}</span> },
     ],
   },
@@ -80,7 +80,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Profession', render: (i) => <Badge variant="outline" className="text-[10px]">{i.profession}</Badge> },
+      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{i.profession}</BadgeY2K> },
       { titre: 'Heures semaine', render: (i) => <span className="font-semibold text-destructive">{i.heures_semaine}h</span> },
     ],
   },
@@ -93,7 +93,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Profession', render: (i) => <Badge variant="outline" className="text-[10px]">{i.profession}</Badge> },
+      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{i.profession}</BadgeY2K> },
       { titre: 'Document', render: (i) => i.type_document },
       { titre: 'Expiré le', render: (i) => <span className="text-destructive">{formatDate(i.valide_jusqua)}</span> },
     ],
@@ -107,7 +107,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Profession', render: (i) => <Badge variant="outline" className="text-[10px]">{i.profession}</Badge> },
+      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{i.profession}</BadgeY2K> },
       { titre: 'Document', render: (i) => i.type_document },
       { titre: 'Téléversé le', render: (i) => <span className="text-muted-foreground">{formatDate(i.televerse_le)}</span> },
     ],
@@ -135,7 +135,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Soignant', primary: true, render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
       { titre: 'Mission', render: (i) => <LienMission id={i.mission_id} intitule={i.mission_intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
-      { titre: 'Profession', render: (i) => <Badge variant="outline" className="text-[10px]">{i.profession}</Badge> },
+      { titre: 'Profession', render: (i) => <BadgeY2K variant="info" size="sm">{i.profession}</BadgeY2K> },
       { titre: 'Email', render: (i) => i.email
         ? <a href={`mailto:${i.email}`} className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>{i.email}</a>
         : <span className="text-muted-foreground">—</span> },
@@ -151,7 +151,7 @@ const INDICATEURS: Indicateur[] = [
       { titre: 'Mission', primary: true, render: (i) => <LienMission id={i.mission_id ?? i.id} intitule={i.intitule} /> },
       { titre: 'Établissement', render: (i) => <LienEtablissement id={i.etablissement_id} nom={i.etablissement_nom} /> },
       { titre: 'Soignant', render: (i) => <LienSoignant id={i.soignant_id} nom={i.soignant_nom} /> },
-      { titre: 'Statut', render: (i) => <Badge variant="secondary" className="text-[10px]">{i.statut}</Badge> },
+      { titre: 'Statut', render: (i) => <BadgeY2K variant="info" size="sm">{i.statut}</BadgeY2K> },
       { titre: 'Début', render: (i) => <span className="text-muted-foreground">{formatDate(i.debut_le)}</span> },
     ],
   },
@@ -249,7 +249,7 @@ export default function AdminConformite() {
               <div className="mb-4 flex items-center gap-2">
                 <selectedInd.icone className="h-5 w-5 text-foreground" />
                 <h2 className="text-base font-semibold text-foreground">{selectedInd.label}</h2>
-                <Badge variant="outline" className="ml-auto">{mappedData[selected] ?? 0} élément(s)</Badge>
+                <BadgeY2K variant="info" className="ml-auto">{mappedData[selected] ?? 0} élément(s)</BadgeY2K>
               </div>
 
               {loadingDetail ? (

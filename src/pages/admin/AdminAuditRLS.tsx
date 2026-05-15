@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -60,20 +60,18 @@ function badgeProbleme(type: string) {
   switch (type) {
     case 'RLS_DESACTIVEE':
       return (
-        <Badge variant="destructive" className="gap-1">
-          <ShieldAlert className="h-3 w-3" />
+        <BadgeY2K variant="error" icone={<ShieldAlert className="h-3 w-3" />}>
           RLS désactivée
-        </Badge>
+        </BadgeY2K>
       );
     case 'RLS_ACTIVE_SANS_POLICY':
       return (
-        <Badge variant="secondary" className="gap-1">
-          <Lock className="h-3 w-3" />
+        <BadgeY2K variant="warning" icone={<Lock className="h-3 w-3" />}>
           Sans policy
-        </Badge>
+        </BadgeY2K>
       );
     default:
-      return <Badge variant="outline">{type}</Badge>;
+      return <BadgeY2K variant="info">{type}</BadgeY2K>;
   }
 }
 

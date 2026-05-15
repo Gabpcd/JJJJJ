@@ -7,7 +7,7 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -164,22 +164,22 @@ export default function AdminUtilisateurs() {
 
   const renduVerificationBadge = (statut: string) =>
     statut === 'VERIFIE' ? (
-      <Badge className="bg-success text-success-foreground text-[10px]">
-        <ShieldCheck className="h-3 w-3 mr-1" />Vérifié
-      </Badge>
+      <BadgeY2K variant="success" size="sm" icone={<ShieldCheck className="h-3 w-3" />}>
+        Vérifié
+      </BadgeY2K>
     ) : statut === 'REJETE' ? (
-      <Badge variant="destructive" className="text-[10px]">
-        <ShieldX className="h-3 w-3 mr-1" />Rejeté
-      </Badge>
+      <BadgeY2K variant="error" size="sm" icone={<ShieldX className="h-3 w-3" />}>
+        Rejeté
+      </BadgeY2K>
     ) : (
-      <Badge variant="outline" className="text-amber-600 border-amber-300 text-[10px]">
-        <Clock className="h-3 w-3 mr-1" />En attente
-      </Badge>
+      <BadgeY2K variant="warning" size="sm" icone={<Clock className="h-3 w-3" />}>
+        En attente
+      </BadgeY2K>
     );
 
   const renduStatutBadge = (supprime: boolean) =>
-    supprime ? <Badge variant="destructive" className="text-[10px]">Suspendu</Badge>
-             : <Badge className="bg-success text-success-foreground text-[10px]">Actif</Badge>;
+    supprime ? <BadgeY2K variant="error" size="sm">Suspendu</BadgeY2K>
+             : <BadgeY2K variant="success" size="sm">Actif</BadgeY2K>;
 
   return (
     <>
@@ -255,8 +255,8 @@ export default function AdminUtilisateurs() {
                     return <span className="text-sm">{s.profession}</span>;
                   case 'rpps':
                     return s.rpps_verifie
-                      ? <Badge className="bg-success text-success-foreground text-[10px]">Vérifié</Badge>
-                      : <Badge variant="outline" className="text-[10px]">Non</Badge>;
+                      ? <BadgeY2K variant="success" size="sm">Vérifié</BadgeY2K>
+                      : <BadgeY2K variant="info" size="sm">Non</BadgeY2K>;
                   case 'score':
                     return <span className="text-sm">{s.score_fiabilite != null && s.total_missions_terminees > 0 ? `${s.score_fiabilite}/100` : '—'}</span>;
                   case 'missions':
@@ -305,12 +305,12 @@ export default function AdminUtilisateurs() {
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {s.rpps_verifie
-                      ? <Badge className="bg-success text-success-foreground text-[10px]">RPPS Vérifié</Badge>
-                      : <Badge variant="outline" className="text-[10px]">RPPS Non vérifié</Badge>}
+                      ? <BadgeY2K variant="success" size="sm">RPPS Vérifié</BadgeY2K>
+                      : <BadgeY2K variant="info" size="sm">RPPS Non vérifié</BadgeY2K>}
                     {s.score_fiabilite != null && s.total_missions_terminees > 0 && (
-                      <Badge variant="outline" className="text-[10px]">Score {s.score_fiabilite}/100</Badge>
+                      <BadgeY2K variant="info" size="sm">Score {s.score_fiabilite}/100</BadgeY2K>
                     )}
-                    <Badge variant="outline" className="text-[10px]">{s.total_missions_terminees} missions</Badge>
+                    <BadgeY2K variant="info" size="sm">{s.total_missions_terminees} missions</BadgeY2K>
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
                     {s.email && (

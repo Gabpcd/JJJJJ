@@ -6,7 +6,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { FileCheck, FileText, Search, CheckCircle, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -164,7 +164,7 @@ export default function AdminMandatsFacturation() {
                           <p className="text-xs text-muted-foreground">{s.email}</p>
                         </td>
                         <td className="p-3">
-                          <Badge variant="secondary" className="text-[10px]">{s.profession}</Badge>
+                          <BadgeY2K variant="info" size="sm">{s.profession}</BadgeY2K>
                         </td>
                         <td className="p-3">
                           {s.mandat_facturation_signe ? (

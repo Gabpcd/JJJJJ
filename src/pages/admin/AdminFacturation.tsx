@@ -5,7 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -23,13 +23,13 @@ const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day:
 const formatDateTime = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 const STATUTS = ['TOUS', 'BROUILLON', 'EMISE', 'VIREMENT_DECLARE', 'PAYEE', 'EN_RETARD', 'ANNULEE'];
-const statutColor: Record<string, string> = {
-  BROUILLON: 'secondary',
-  EMISE: 'outline',
-  VIREMENT_DECLARE: 'outline',
-  PAYEE: 'default',
-  EN_RETARD: 'destructive',
-  ANNULEE: 'secondary',
+const statutColor: Record<string, 'success' | 'warning' | 'error' | 'info' | 'premium'> = {
+  BROUILLON: 'info',
+  EMISE: 'info',
+  VIREMENT_DECLARE: 'warning',
+  PAYEE: 'success',
+  EN_RETARD: 'error',
+  ANNULEE: 'info',
 };
 const statutLabel: Record<string, string> = {
   BROUILLON: 'Brouillon',
@@ -521,9 +521,9 @@ export default function AdminFacturation() {
                       <TableCell>{f.nombre_missions}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{f.date_emission ? formatDate(f.date_emission) : '—'}</TableCell>
                       <TableCell>
-                        <Badge variant={(statutColor[f.statut] || 'secondary') as any} className="text-[10px]">
+                        <BadgeY2K variant={statutColor[f.statut] || 'info'} size="sm">
                           {statutLabel[f.statut] ?? f.statut}
-                        </Badge>
+                        </BadgeY2K>
                         {f.statut === 'VIREMENT_DECLARE' && f.virement_reference && (
                           <p className="text-[10px] text-muted-foreground mt-0.5">Réf: {f.virement_reference}</p>
                         )}
@@ -658,9 +658,9 @@ export default function AdminFacturation() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-mono text-xs font-semibold truncate">{f.numero_facture}</p>
-                          <Badge variant={(statutColor[f.statut] || 'secondary') as any} className="text-[10px] shrink-0">
+                          <BadgeY2K variant={statutColor[f.statut] || 'info'} size="sm" className="shrink-0">
                             {statutLabel[f.statut] ?? f.statut}
-                          </Badge>
+                          </BadgeY2K>
                         </div>
                         <button
                           type="button"
