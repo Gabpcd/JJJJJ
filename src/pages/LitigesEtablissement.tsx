@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Scale, PlusCircle, MessageCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -131,9 +131,9 @@ export default function LitigesEtablissement() {
         <div>
           <p className="text-sm text-muted-foreground">Contestations sur vos missions (pointage, paiement, qualité)</p>
         </div>
-        <Button onClick={openNewLitige} className="gap-1.5">
+        <BoutonY2K onClick={openNewLitige} className="gap-1.5">
           <PlusCircle className="h-4 w-4" /> Ouvrir un litige
-        </Button>
+        </BoutonY2K>
       </div>
 
       {litiges.length === 0 ? (
@@ -259,10 +259,10 @@ export default function LitigesEtablissement() {
               <Textarea value={newMotif} onChange={e => setNewMotif(e.target.value)} placeholder="Décrivez le problème rencontré..." rows={4} />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setShowNew(false)}>Annuler</Button>
-              <Button onClick={creerLitige} disabled={creating || !selectedMissionId || !newMotif.trim()}>
+              <BoutonY2K variant="ghost" onClick={() => setShowNew(false)}>Annuler</BoutonY2K>
+              <BoutonY2K onClick={creerLitige} disabled={creating || !selectedMissionId || !newMotif.trim()}>
                 {creating ? 'Création…' : '⚠️ Ouvrir le litige'}
-              </Button>
+              </BoutonY2K>
             </div>
           </div>
         </DialogContent>

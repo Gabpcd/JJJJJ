@@ -4,6 +4,7 @@ import { FileText, CheckCircle, Upload, Loader2, ArrowLeft, Shield, Download } f
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -239,9 +240,9 @@ export default function FinaliserInscriptionEtab() {
                 Votre contrat de service est signé et votre RIB est enregistré. Vous pouvez publier des missions.
               </p>
               <div className="flex gap-2 mt-3">
-                <Button size="sm" variant="outline" onClick={() => navigate('/etablissement')}>
+                <BoutonY2K size="sm" variant="secondary" onClick={() => navigate('/etablissement')}>
                   Aller au dashboard
-                </Button>
+                </BoutonY2K>
               </div>
             </div>
           </div>
@@ -325,10 +326,10 @@ export default function FinaliserInscriptionEtab() {
                   Fichier sélectionné : {ribFile.name} ({(ribFile.size / 1024).toFixed(0)} Ko)
                 </p>
               )}
-              <Button onClick={uploadRib} disabled={!ribFile || uploading} className="gap-2">
+              <BoutonY2K onClick={uploadRib} disabled={!ribFile || uploading} className="gap-2">
                 {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
                 <Upload className="h-4 w-4" /> Enregistrer le RIB
-              </Button>
+              </BoutonY2K>
             </div>
           </div>
         )}
