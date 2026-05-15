@@ -61,6 +61,8 @@ import { ArrowRight } from 'lucide-react';
 <BoutonY2K variant="secondary" loading>Sauvegarde…</BoutonY2K>
 
 <BoutonY2K variant="ghost" size="sm">Annuler</BoutonY2K>
+
+<BoutonY2K variant="destructive" onClick={revoquer}>Révoquer</BoutonY2K>
 ```
 
 ### Variants
@@ -68,8 +70,9 @@ import { ArrowRight } from 'lucide-react';
 - **primary** : `.bg-gradient-hero` + `.shadow-holographic`, scale hover 1.03 / active 0.98
 - **secondary** : surface `jolene-cloud` + border 2px `jolene-rose-300`, hover bg `jolene-rose-50`
 - **ghost** : transparent, hover bg `jolene-rose-50`
+- **destructive** : gradient `#FF4D6B → #FF6BBE` rouge-rose holographique + shadow rose vif (Sprint 12-C). Réservé aux actions irréversibles (révocation, suppression, annulation définitive).
 
-Touch targets : `min-h-[36/44/52]px` selon size (sm/md/lg). Focus visible ring `jolene-rose`.
+Touch targets : `min-h-[36/44/52]px` selon size (sm/md/lg). Focus visible ring couleur du variant.
 
 ## CardY2K
 
