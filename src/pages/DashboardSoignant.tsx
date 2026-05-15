@@ -439,7 +439,7 @@ export default function DashboardSoignant() {
                 ))}
               </div>
             ) : (
-              <EmptyState icone={<Search />} titre="Aucune mission disponible" description="De nouvelles missions sont publiées chaque jour. Revenez bientôt !" />
+              <EmptyState icone={<Search />} mascotte="thinking" titre="Aucune mission disponible" description="De nouvelles missions sont publiées chaque jour. Revenez bientôt !" />
             )}
           </div>
 

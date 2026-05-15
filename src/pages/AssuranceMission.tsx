@@ -308,6 +308,7 @@ export function AssuranceMissionContent() {
             ) : polices.length === 0 ? (
               <EmptyState
                 icone={<Shield />}
+                mascotte="empty"
                 titre="Aucune police d'assurance"
                 description="Les polices seront creees automatiquement lors de la confirmation de vos missions."
               />

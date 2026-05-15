@@ -120,7 +120,7 @@ export default function DashboardRH() {
   if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
   if (!stats) return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <EmptyState icone={<BarChart3 />} titre="Données indisponibles" description="Impossible de charger les statistiques RH." />
+      <EmptyState icone={<BarChart3 />} mascotte="empty" titre="Données indisponibles" description="Impossible de charger les statistiques RH." />
     </LayoutApp>
   );
 
@@ -425,7 +425,7 @@ export default function DashboardRH() {
               donnees={donnees}
               getId={(s: any) => s.soignant_id || `rang-${s._rang}`}
               onClickLigne={(s: any) => s.soignant_id && navigate(`/etablissement/soignants/${s.soignant_id}`)}
-              etatVide={<EmptyState icone={<Users />} titre="Aucun soignant" description="Les statistiques apparaîtront une fois vos premières missions terminées." />}
+              etatVide={<EmptyState icone={<Users />} mascotte="empty" titre="Aucun soignant" description="Les statistiques apparaîtront une fois vos premières missions terminées." />}
               renduCellule={(s: any, col) => {
                 switch (col.cle) {
                   case 'rang':

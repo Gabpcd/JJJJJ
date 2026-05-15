@@ -175,8 +175,8 @@ export default function BulletinsPaie() {
 
         {(() => {
           const etatVide = bulletins.length === 0
-            ? <EmptyState icone={<FileText />} titre="Aucun bulletin de paie pour le moment" description="Les bulletins apparaîtront ici dès que vos missions salariées seront terminées." />
-            : <EmptyState icone={<FileText />} titre="Aucun bulletin ne correspond aux filtres" cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }} compact />;
+            ? <EmptyState icone={<FileText />} mascotte="empty" titre="Aucun bulletin de paie pour le moment" description="Les bulletins apparaîtront ici dès que vos missions salariées seront terminées." />
+            : <EmptyState icone={<FileText />} mascotte="thinking" titre="Aucun bulletin ne correspond aux filtres" cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }} compact />;
 
           const colonnes: ColonneTableau<BulletinRow>[] = [
             { cle: 'periode', titre: 'Mois' },

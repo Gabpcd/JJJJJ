@@ -75,6 +75,7 @@ export default function AdminReclamationsScore() {
         ) : reclamations.length === 0 ? (
           <EmptyState
             icone={<FileText />}
+            mascotte={filtre === 'PENDING' ? 'happy' : 'empty'}
             titre={filtre === 'PENDING' ? 'Aucune réclamation à traiter' : 'Aucune réclamation'}
             description={filtre === 'PENDING' ? 'Toutes les réclamations en attente ont été traitées.' : undefined}
             variant={filtre === 'PENDING' ? 'success' : 'info'}

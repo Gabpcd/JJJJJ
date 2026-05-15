@@ -453,6 +453,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         {filtered.length === 0 ? (
           <EmptyState
             icone={<Flame />}
+            mascotte="empty"
             titre="Aucun soignant dans le pool"
             description="Aucun soignant n'a activé le pool d'urgence correspondant à vos critères."
           />

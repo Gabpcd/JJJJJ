@@ -214,6 +214,7 @@ export default function ObligationsFinancieresEtab() {
                 etatVide={
                   <EmptyState
                     icone={<Users />}
+                    mascotte="happy"
                     titre="Aucune mission en attente de paiement"
                     description="Toutes vos missions terminées ont été réglées."
                     variant="success"
@@ -351,6 +352,7 @@ export default function ObligationsFinancieresEtab() {
           {obligations.nb_factures_impayees === 0 ? (
             <EmptyState
               icone={<Building2 />}
+              mascotte="happy"
               titre="Aucune commission Jolene impayée"
               description="Toutes les commissions Jolene sont réglées."
               variant="success"

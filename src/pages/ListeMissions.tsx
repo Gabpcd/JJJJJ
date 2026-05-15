@@ -244,6 +244,7 @@ export default function ListeMissions() {
       ) : filtreStatut ? (
         <EmptyState
           icone={<Search />}
+          mascotte="thinking"
           titre={
             filtreStatut === 'OUVERTE' ? 'Aucune mission ouverte' :
             filtreStatut === 'ASSIGNEE' ? 'Aucune mission assignée' :
@@ -260,6 +261,7 @@ export default function ListeMissions() {
       ) : (counts[''] ?? 0) > 0 ? (
         <EmptyState
           icone={<Search />}
+          mascotte="thinking"
           titre="Aucune mission récente"
           description="Vos missions précédentes n'apparaissent pas dans ce filtre."
           cta={{ label: 'Publier une mission', onClick: () => navigate('/etablissement/missions/creer') }}

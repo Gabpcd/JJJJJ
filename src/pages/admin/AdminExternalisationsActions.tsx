@@ -140,6 +140,7 @@ export default function AdminExternalisationsActions() {
         ) : filtered.length === 0 ? (
           <EmptyState
             icone={<CheckCircle />}
+            mascotte="happy"
             titre="Toutes les actions ont été traitées"
             description="Aucune action d'externalisation en attente, en cours ou en échec ne correspond à ces filtres."
             variant="success"

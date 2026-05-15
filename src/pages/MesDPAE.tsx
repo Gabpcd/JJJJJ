@@ -147,6 +147,7 @@ export default function MesDPAE() {
             etatVide={(
               <EmptyState
                 icone={<FileCheck2 />}
+                mascotte="empty"
                 titre={dpae.length === 0 ? 'Aucun contrat CDD signé' : 'Aucune DPAE dans cette catégorie'}
                 description={dpae.length === 0
                   ? "Les DPAE apparaîtront ici une fois un contrat CDD signé avec un établissement."

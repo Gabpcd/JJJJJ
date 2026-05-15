@@ -135,6 +135,7 @@ export default function EquipeEtablissement() {
         {membres.length === 0 ? (
           <EmptyState
             icone={<Users />}
+            mascotte="thinking"
             titre="Invitez vos collaborateurs"
             description="Aucun membre actif. Invitez votre équipe RH ou de pointage pour partager la gestion de cet établissement."
             cta={estProprietaire ? {
@@ -192,6 +193,7 @@ export default function EquipeEtablissement() {
           {invitations.length === 0 ? (
             <EmptyState
               icone={<Mail />}
+              mascotte="happy"
               titre="Aucune invitation en attente"
               description="Toutes les invitations envoyées ont été acceptées ou ont expiré."
               variant="success"

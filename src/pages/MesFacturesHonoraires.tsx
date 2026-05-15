@@ -217,6 +217,7 @@ export default function MesFacturesHonoraires() {
           const etatVide = factures.length === 0
             ? <EmptyState
                 icone={<FileText />}
+                mascotte={mandatSigne ? 'empty' : 'thinking'}
                 titre="Aucune facture d'honoraires pour le moment"
                 description={mandatSigne
                   ? 'Les factures apparaîtront dès que vos missions seront terminées et validées.'
@@ -225,6 +226,7 @@ export default function MesFacturesHonoraires() {
               />
             : <EmptyState
                 icone={<FileText />}
+                mascotte="thinking"
                 titre="Aucune facture ne correspond aux filtres"
                 cta={{ label: 'Réinitialiser les filtres', onClick: reinitialiserFiltres, variant: 'secondary' }}
                 compact
