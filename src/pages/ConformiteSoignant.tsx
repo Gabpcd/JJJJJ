@@ -114,6 +114,7 @@ export default function ConformiteSoignant() {
       {controles.length === 0 ? (
         <EmptyState
           icone={<ShieldCheck />}
+          mascotte="empty"
           titre="Aucun contrôle de conformité"
           description="Les contrôles apparaîtront ici lorsque vous accepterez des missions."
         />

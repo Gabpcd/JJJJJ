@@ -139,6 +139,7 @@ export default function LitigesEtablissement() {
       {litiges.length === 0 ? (
         <EmptyState
           icone={<Scale />}
+          mascotte="happy"
           titre="Aucun litige"
           description="Aucun litige sur vos missions. Cliquez sur « Ouvrir un litige » pour contester une mission."
           variant="success"

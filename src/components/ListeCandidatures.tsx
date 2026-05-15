@@ -175,6 +175,7 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
     return (
       <EmptyState
         icone={<Clock />}
+        mascotte="thinking"
         titre="En attente de candidats"
         description="Les soignants qualifiés peuvent postuler à cette mission. Vérifiez que les critères (profession, taux, dates) sont cohérents avec le marché."
         variant="info"

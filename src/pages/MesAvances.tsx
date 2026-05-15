@@ -94,6 +94,7 @@ export default function MesAvances() {
         {avances.length === 0 ? (
           <EmptyState
             icone={<Zap />}
+            mascotte="thinking"
             titre="Aucune avance pour le moment"
             description="Demandez le paiement rapide depuis vos factures d'honoraires."
             cta={{

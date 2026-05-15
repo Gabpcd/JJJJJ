@@ -145,7 +145,7 @@ export function HistoriqueMissionsContent() {
             colonnes={colonnes}
             donnees={filtered}
             getId={(m: any) => m.id}
-            etatVide={<EmptyState icone={<ClipboardList />} titre="Aucune mission terminée" description="Vos missions terminées apparaîtront ici." />}
+            etatVide={<EmptyState icone={<ClipboardList />} mascotte="empty" titre="Aucune mission terminée" description="Vos missions terminées apparaîtront ici." />}
             renduCellule={(m: any, col) => {
               switch (col.cle) {
                 case 'mission':

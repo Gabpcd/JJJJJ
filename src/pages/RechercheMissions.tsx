@@ -485,6 +485,7 @@ export default function RechercheMissions() {
             ) : (
               <EmptyState
                 icone={<SearchX />}
+                mascotte="thinking"
                 titre="Aucune mission trouvée"
                 description="Essayez d'élargir vos filtres ou d'augmenter le rayon de recherche."
               />
