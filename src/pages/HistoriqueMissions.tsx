@@ -21,7 +21,7 @@ import { fr } from 'date-fns/locale';
 import { ClipboardList, MessageCircle, AlertTriangle, Download, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -123,9 +123,9 @@ export function HistoriqueMissionsContent() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" onClick={exporterCSV} className="gap-1.5">
+        <BoutonY2K variant="secondary" size="sm" onClick={exporterCSV} className="gap-1.5">
           <Download className="h-4 w-4" /> Exporter CSV
-        </Button>
+        </BoutonY2K>
       </div>
 
       {(() => {
@@ -171,9 +171,9 @@ export function HistoriqueMissionsContent() {
                   return (
                     <div className="flex items-center justify-end gap-1">
                       {aLitige && <span className="text-[10px] text-destructive font-medium">⚠️ Litige</span>}
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/soignant/missions/${m.id}`); }}>
+                      <BoutonY2K size="sm" variant="secondary" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/soignant/missions/${m.id}`); }}>
                         Voir
-                      </Button>
+                      </BoutonY2K>
                     </div>
                   );
                 }
@@ -212,32 +212,32 @@ export function HistoriqueMissionsContent() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-3 border-t border-border flex-wrap">
-                    <Button
+                    <BoutonY2K
                       size="sm"
-                      variant="default"
+                      variant="primary"
                       className="gap-1.5 text-xs min-h-[44px]"
                       onClick={(e) => { e.stopPropagation(); navigate(`/soignant/missions/${m.id}`); }}
                     >
                       Voir <ChevronRight className="h-3.5 w-3.5" />
-                    </Button>
+                    </BoutonY2K>
                     <BoutonNoterMission
                       missionId={m.id}
                       sens="SOIGNANT_VERS_ETAB"
                       missionIntitule={m.intitule}
                       variant="secondary"
                     />
-                    <Button variant="ghost" size="sm" className="gap-1.5 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); ouvrirConversation(m.etablissement_id); }}>
+                    <BoutonY2K variant="ghost" size="sm" className="gap-1.5 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); ouvrirConversation(m.etablissement_id); }}>
                       <MessageCircle className="h-3.5 w-3.5" /> Contacter
-                    </Button>
+                    </BoutonY2K>
                     {!aLitige && (
-                      <Button
+                      <BoutonY2K
                         variant="ghost"
                         size="sm"
                         className="gap-1.5 text-xs min-h-[44px] text-warning hover:text-warning"
                         onClick={(e) => { e.stopPropagation(); setWizardLitige({ id: m.id, intitule: m.intitule }); }}
                       >
                         <AlertTriangle className="h-3.5 w-3.5" /> Signaler
-                      </Button>
+                      </BoutonY2K>
                     )}
                     {aLitige && (
                       <span className="text-[10px] text-destructive font-medium">⚠️ Litige en cours</span>

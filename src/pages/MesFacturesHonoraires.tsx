@@ -6,6 +6,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { format } from 'date-fns';
@@ -110,6 +111,7 @@ export default function MesFacturesHonoraires() {
     <LayoutApp role="SOIGNANT">
       <div className="space-y-5">
         <div className="flex items-center gap-3">
+          {/* Sprint 12-B : conservé shadcn Button — size="icon" non supporté par BoutonY2K */}
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -130,9 +132,9 @@ export default function MesFacturesHonoraires() {
                 Pour que Jolene puisse produire automatiquement vos factures d'honoraires et préparer l'accès au paiement rapide,
                 vous devez d'abord signer le mandat de facturation.
               </p>
-              <Button onClick={() => navigate('/soignant/mandat-facturation')} className="mt-3 gap-2" size="sm">
+              <BoutonY2K onClick={() => navigate('/soignant/mandat-facturation')} className="mt-3 gap-2" size="sm">
                 Signer le mandat
-              </Button>
+              </BoutonY2K>
             </div>
           </div>
         )}
@@ -272,13 +274,13 @@ export default function MesFacturesHonoraires() {
                   case 'actions':
                     return (
                       <div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={(e) => { e.stopPropagation(); telechargerFacturePDF(f.id); }}>
+                        <BoutonY2K size="sm" variant="secondary" className="h-8 gap-1 text-xs" onClick={(e) => { e.stopPropagation(); telechargerFacturePDF(f.id); }}>
                           <Download className="h-3.5 w-3.5" /> PDF
-                        </Button>
+                        </BoutonY2K>
                         {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
-                          <Button size="sm" className="h-8 gap-1 text-xs" onClick={(e) => { e.stopPropagation(); ouvrirCession(f); }}>
+                          <BoutonY2K size="sm" className="h-8 gap-1 text-xs" onClick={(e) => { e.stopPropagation(); ouvrirCession(f); }}>
                             <Zap className="h-3 w-3" /> Avance
-                          </Button>
+                          </BoutonY2K>
                         )}
                       </div>
                     );
@@ -315,23 +317,23 @@ export default function MesFacturesHonoraires() {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1">
-                      <Button
+                      <BoutonY2K
                         size="sm"
-                        variant="default"
+                        variant="primary"
                         className="flex-1 gap-1.5 min-h-[44px]"
                         onClick={(e) => { e.stopPropagation(); telechargerFacturePDF(f.id); }}
                       >
                         <Download className="h-4 w-4" /> Télécharger Factur-X
-                      </Button>
+                      </BoutonY2K>
                       {(f.statut === 'EMISE' || f.statut === 'EN_RETARD') && (
-                        <Button
+                        <BoutonY2K
                           size="sm"
                           variant="secondary"
                           className="gap-1.5 min-h-[44px]"
                           onClick={(e) => { e.stopPropagation(); ouvrirCession(f); }}
                         >
                           <Zap className="h-3.5 w-3.5" /> Recevoir maintenant
-                        </Button>
+                        </BoutonY2K>
                       )}
                     </div>
                   </div>

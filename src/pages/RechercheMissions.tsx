@@ -25,7 +25,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { FiltresSauvegardes } from '@/components/FiltresSauvegardes';
@@ -299,10 +299,10 @@ export default function RechercheMissions() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-foreground">Recherche avancée</h1>
-          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-1.5 md:hidden">
+          <BoutonY2K variant="secondary" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-1.5 md:hidden">
             <SlidersHorizontal className="h-4 w-4" />
             Filtres
-          </Button>
+          </BoutonY2K>
         </div>
 
         <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} />
@@ -423,7 +423,7 @@ export default function RechercheMissions() {
               <Badge variant="outline">{filtered.length} mission{filtered.length > 1 ? 's' : ''}</Badge>
               <span>dans un rayon de {rayonKm} km</span>
             </div>
-            <Button
+            <BoutonY2K
               variant="ghost"
               size="sm"
               className="text-xs text-muted-foreground"
@@ -438,7 +438,7 @@ export default function RechercheMissions() {
               }}
             >
               Réinitialiser
-            </Button>
+            </BoutonY2K>
           </div>
         </div>
 
