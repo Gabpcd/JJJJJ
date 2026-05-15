@@ -80,7 +80,9 @@ export const BoutonY2K = forwardRef<HTMLButtonElement, Props>(function BoutonY2K
       disabled={disabled || loading}
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-2xl',
-        'transition-all duration-200 motion-reduce:transition-none',
+        // Sprint 12-D : transition-snap (cubic-bezier overshoot court) pour boutons.
+        // prefers-reduced-motion géré dans .transition-snap (src/index.css).
+        'transition-snap',
         'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100',
         TAILLES[size],
         VARIANTS[variant],
