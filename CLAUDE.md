@@ -282,3 +282,22 @@ Cf. docs/SPRINT_12_B.md.
 **Skips** : 7 boutons préservés (4 ArrowLeft back nav `size="icon"` + 3 `variant="destructive"` actions irréversibles).
 
 **Adoption ratio** : avant Sprint 12-B = 2 BoutonY2K (0.9%) → après = 68 BoutonY2K, reste ~154 Button shadcn (pages admin + composants partagés reportés Sprint 12-C/D/E).
+
+### Sprint 12-C — Adoption Y2K Cards + KPIs visuels (4 PRs)
+Cf. docs/SPRINT_12_C.md.
+
+| Sprint | PR | Chantier | Livré |
+|---|---|---|---|
+| 12-C-1 | #294 | BoutonY2K variant destructive | Gradient #FF4D6B → #FF6BBE rouge-rose holographique, foundation pour migrer les 3 destructive skippés Sprint 12-B |
+| 12-C-2 | #295 | Dashboards .btn-primary CSS → BoutonY2K | 6 quick actions dashboards soignant + étab |
+| 12-C-3 | #296 | CarteKPI → CarteKPIY2K | 36 KPIs sur 9 pages (8 holographic + 26 default + 2 soft) |
+| 12-C-4 | (this) | Doc | — |
+| **Total** | **4 PRs** | — | **42 migrations** |
+
+**Card → CardY2K SKIPPED Sprint 12-C** : refactor structurel (CardHeader/Title/Content → flatten Y2K) trop risqué sur Premium/Contrat/Facturation. Reporté Sprint 12-E avec audit visuel par page.
+
+**Mapping CarteKPI legacy → Y2K** :
+- `icone={Briefcase}` ref → `icone={<Briefcase className="h-4 w-4" />}` JSX
+- `lien="/path"` → `onClick={() => navigate("/path")}`
+- `sousLabel` → `contexte`
+- `couleurIcone/couleurFond` semantic → drop (palette Y2K rose unifiée)
