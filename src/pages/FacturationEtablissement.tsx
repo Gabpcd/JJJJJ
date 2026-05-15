@@ -23,6 +23,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -580,7 +581,7 @@ export default function FacturationEtablissement() {
                       </div>
 
                       {peutPayerStripe ? (
-                        <Button
+                        <BoutonY2K
                           size="sm"
                           onClick={() => payerStripeConnect(m.mission_id)}
                           disabled={connectPayingId === m.mission_id || enLitige}
@@ -588,9 +589,9 @@ export default function FacturationEtablissement() {
                         >
                           <CreditCard className="w-4 h-4 mr-2" />
                           {connectPayingId === m.mission_id ? 'Redirection…' : '💳 Payer via Stripe'}
-                        </Button>
+                        </BoutonY2K>
                       ) : (
-                        <Button
+                        <BoutonY2K
                           size="sm"
                           onClick={() => ouvrirDialogDeclarer(m)}
                           disabled={declaringId === m.mission_id || enLitige}
@@ -598,7 +599,7 @@ export default function FacturationEtablissement() {
                         >
                           <Banknote className="w-4 h-4 mr-2" />
                           {enLitige ? 'Paiement bloqué (litige)' : 'Déclarer un paiement'}
-                        </Button>
+                        </BoutonY2K>
                       )}
                     </div>
                   );
@@ -723,29 +724,29 @@ export default function FacturationEtablissement() {
                         )}
                         {!f.est_secteur_public && (
                         <div className="flex gap-2 flex-wrap">
-                          <Button
+                          <BoutonY2K
                             size="sm"
                             onClick={() => { setCheckoutFactureId(f.facture_id); setShowCheckout(true); }}
                           >
                             <CreditCard className="w-4 h-4 mr-1" /> Payer par carte
-                          </Button>
-                          <Button
+                          </BoutonY2K>
+                          <BoutonY2K
                             size="sm"
-                            variant="outline"
+                            variant="secondary"
                             onClick={() => navigate(`/etablissement/facturation/${f.facture_id}`)}
                           >
                             <Banknote className="w-4 h-4 mr-1" /> Virement
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
+                          </BoutonY2K>
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
                             <Download className="w-4 h-4 mr-1" /> PDF
-                          </Button>
+                          </BoutonY2K>
                         </div>
                         )}
                         {f.est_secteur_public && (
                         <div className="flex gap-2 flex-wrap">
-                          <Button size="sm" variant="outline" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => telechargerFactureCommissionPDF(f.facture_id)}>
                             <Download className="w-4 h-4 mr-1" /> PDF
-                          </Button>
+                          </BoutonY2K>
                         </div>
                         )}
                       </div>
@@ -860,7 +861,7 @@ export default function FacturationEtablissement() {
                       <Clock className="h-4 w-4 text-warning" />
                       Missions à facturer ({missionsNonFacturees.length})
                     </h3>
-                    <Button
+                    <BoutonY2K
                       size="sm"
                       onClick={genererFactureMensuelle}
                       disabled={generatingFacture}
@@ -868,7 +869,7 @@ export default function FacturationEtablissement() {
                     >
                       {generatingFacture ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                       {generatingFacture ? 'Génération…' : 'Générer la facture du mois'}
-                    </Button>
+                    </BoutonY2K>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -1108,8 +1109,8 @@ export default function FacturationEtablissement() {
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Button
-                      variant="outline"
+                    <BoutonY2K
+                      variant="secondary"
                       className="h-auto py-3 justify-start gap-2"
                       onClick={() => navigate('/etablissement/export-paie')}
                     >
@@ -1120,10 +1121,10 @@ export default function FacturationEtablissement() {
                           Fichier comptable (Silae, Sage, ADP, FEC)
                         </p>
                       </div>
-                    </Button>
+                    </BoutonY2K>
 
-                    <Button
-                      variant="outline"
+                    <BoutonY2K
+                      variant="secondary"
                       className="h-auto py-3 justify-start gap-2"
                       onClick={() => {
                         // Ouvre un onglet par facture commission PAYEE (historique)
@@ -1144,7 +1145,7 @@ export default function FacturationEtablissement() {
                           Télécharge les {facturesCommissionHistorique.length} dernières payées
                         </p>
                       </div>
-                    </Button>
+                    </BoutonY2K>
                   </div>
 
                   <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
@@ -1290,10 +1291,10 @@ export default function FacturationEtablissement() {
             </div>
 
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={fermerDialogDeclarer}>
+              <BoutonY2K variant="secondary" onClick={fermerDialogDeclarer}>
                 Annuler
-              </Button>
-              <Button
+              </BoutonY2K>
+              <BoutonY2K
                 onClick={validerDeclarationPaiement}
                 disabled={
                   !declarerAttestation ||
@@ -1304,7 +1305,7 @@ export default function FacturationEtablissement() {
                 }
               >
                 {declaringId === declarerDialogMission.mission_id ? 'Envoi…' : 'Valider la déclaration'}
-              </Button>
+              </BoutonY2K>
             </DialogFooter>
           </DialogContent>
         </Dialog>

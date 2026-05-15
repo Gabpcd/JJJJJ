@@ -10,7 +10,7 @@ import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 interface Obligations {
   total_du: number;
@@ -252,9 +252,9 @@ export default function ObligationsFinancieresEtab() {
                       return <span className="font-bold text-foreground tabular-nums">{formatEur(m.net_a_payer)}</span>;
                     case 'actions':
                       return (
-                        <Button size="sm" variant="default" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/missions/${m.mission_id}`); }}>
+                        <BoutonY2K size="sm" variant="primary" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/missions/${m.mission_id}`); }}>
                           Régler
-                        </Button>
+                        </BoutonY2K>
                       );
                     default:
                       return null;
@@ -305,9 +305,9 @@ export default function ObligationsFinancieresEtab() {
                       return <span className="text-base font-bold text-warning tabular-nums">{formatEur(p.montant_net)}</span>;
                     case 'actions':
                       return (
-                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/missions/${p.mission_id}`); }}>
+                        <BoutonY2K size="sm" variant="secondary" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/missions/${p.mission_id}`); }}>
                           Voir
-                        </Button>
+                        </BoutonY2K>
                       );
                     default:
                       return null;
@@ -327,14 +327,14 @@ export default function ObligationsFinancieresEtab() {
                       </div>
                       <span className="text-base font-bold text-warning tabular-nums shrink-0">{formatEur(p.montant_net)}</span>
                     </div>
-                    <Button
+                    <BoutonY2K
                       size="sm"
-                      variant="default"
+                      variant="primary"
                       className="w-full min-h-[44px]"
                       onClick={(e) => { e.stopPropagation(); navigate(`/etablissement/missions/${p.mission_id}`); }}
                     >
                       Voir la mission
-                    </Button>
+                    </BoutonY2K>
                   </div>
                 )}
               />
@@ -446,9 +446,9 @@ function MissionNonPayeeCardContent({ mission, onVoir }: { mission: MissionNonPa
             <p className="text-base font-bold text-foreground tabular-nums">{formatEur(mission.net_a_payer)}</p>
             <p className="text-[11px] text-muted-foreground">net soignant</p>
           </div>
-          <Button size="sm" variant="default" className="min-h-[44px]" onClick={(e) => { e.stopPropagation(); onVoir(); }}>
+          <BoutonY2K size="sm" variant="primary" className="min-h-[44px]" onClick={(e) => { e.stopPropagation(); onVoir(); }}>
             Régler
-          </Button>
+          </BoutonY2K>
         </div>
       </div>
     </div>
