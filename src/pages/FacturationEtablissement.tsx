@@ -11,7 +11,6 @@ import {
   Edit2, X, Scale, ChevronRight, ExternalLink, Landmark,
 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { CarteKPI } from '@/components/CarteKPI';
 import { getChorusStatutBadge } from '@/lib/chorus-helpers';
 import { EmptyState, IllustrationCalculatrice } from '@/components/ui/EmptyState';
 import { BadgePalier } from '@/components/BadgePalier';

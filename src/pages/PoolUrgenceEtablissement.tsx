@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutApp } from '@/components/LayoutApp';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { CarteKPI } from '@/components/CarteKPI';
+import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { BoutonFavori } from '@/components/BoutonFavori';
 import { AvatarDisplay } from '@/components/AvatarUpload';
 import { JaugeScoreFiabilite } from '@/components/JaugeScoreFiabilite';
@@ -388,20 +388,30 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
         {/* KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <CarteKPI icone={Users} valeur={kpiTotal} label="Soignants dans le pool" couleurIcone="text-destructive" couleurFond="bg-destructive/10" />
-          <div className="cursor-pointer" onClick={() => { setFiltreDispo(true); }}>
-            <CarteKPI icone={UserCheck} valeur={kpiDisponibles} label="Disponibles maintenant" couleurIcone="text-success" couleurFond="bg-success/10" />
-          </div>
-          <div
-            className="cursor-pointer"
+          <CarteKPIY2K
+            icone={<Users className="h-4 w-4" />}
+            valeur={kpiTotal}
+            label="Soignants dans le pool"
+            variant="holographic"
+          />
+          <CarteKPIY2K
+            icone={<UserCheck className="h-4 w-4" />}
+            valeur={kpiDisponibles}
+            label="Disponibles maintenant"
+            variant="default"
+            onClick={() => { setFiltreDispo(true); }}
+          />
+          <CarteKPIY2K
+            icone={<Trophy className="h-4 w-4" />}
+            valeur={kpiUrgencesMois}
+            label="Urgences pourvues ce mois"
+            variant="default"
             onClick={() => {
               setFiltreHistorique('POURVUES_MOIS');
               setSearchParams({ historique: 'pourvues_mois' }, { replace: true });
               document.getElementById('historique-urgences')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }}
-          >
-            <CarteKPI icone={Trophy} valeur={kpiUrgencesMois} label="Urgences pourvues ce mois" couleurIcone="text-warning" couleurFond="bg-warning/10" />
-          </div>
+          />
         </div>
 
         {/* Filters */}

@@ -8,7 +8,7 @@ import { FadeInView } from '@/components/FadeInView';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, ClipboardList, FileText, Users, Star, ClipboardCheck, ShieldAlert, MessageCircle, CreditCard } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { CarteKPI } from '@/components/CarteKPI';
+import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { CarteMission } from '@/components/CarteMission';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 // Sprint 8 ter-G PR 2 — lazy load modale annulation (code splitting)
@@ -429,26 +429,63 @@ export default function DashboardEtablissement() {
       {/* KPI row 1 — All from RPC */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
         <FadeInView delay={0}>
-          <CarteKPI icone={Briefcase} valeur={stats.missions_ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/etablissement/missions?statut=OUVERTE" />
+          <CarteKPIY2K
+            icone={<Briefcase className="h-4 w-4" />}
+            valeur={stats.missions_ouvertes}
+            label="Missions ouvertes"
+            variant="holographic"
+            onClick={() => navigate('/etablissement/missions?statut=OUVERTE')}
+          />
         </FadeInView>
         <FadeInView delay={50}>
-          <CarteKPI icone={ClipboardCheck} valeur={stats.missions_assignees} label="Assignées" couleurIcone="text-info" couleurFond="bg-info/10" lien="/etablissement/missions?statut=ASSIGNEE" />
+          <CarteKPIY2K
+            icone={<ClipboardCheck className="h-4 w-4" />}
+            valeur={stats.missions_assignees}
+            label="Assignées"
+            variant="default"
+            onClick={() => navigate('/etablissement/missions?statut=ASSIGNEE')}
+          />
         </FadeInView>
         <FadeInView delay={100}>
-          <CarteKPI icone={PlayCircle} valeur={stats.missions_en_cours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/missions?statut=EN_COURS" />
+          <CarteKPIY2K
+            icone={<PlayCircle className="h-4 w-4" />}
+            valeur={stats.missions_en_cours}
+            label="En cours"
+            variant="default"
+            onClick={() => navigate('/etablissement/missions?statut=EN_COURS')}
+          />
         </FadeInView>
         <FadeInView delay={150}>
-          <CarteKPI icone={CheckCircle} valeur={stats.missions_terminees} label="Terminées" couleurIcone="text-success" couleurFond="bg-success/10" lien="/etablissement/missions?statut=TERMINEE" />
+          <CarteKPIY2K
+            icone={<CheckCircle className="h-4 w-4" />}
+            valeur={stats.missions_terminees}
+            label="Terminées"
+            variant="default"
+            onClick={() => navigate('/etablissement/missions?statut=TERMINEE')}
+          />
         </FadeInView>
       </div>
 
       {/* KPI row 2 — Candidatures, Soignants ce mois, Impayés global */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
         <FadeInView delay={200}>
-          <CarteKPI icone={Star} valeur={stats.candidatures_en_attente} label="Candidatures en attente" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/etablissement/missions?statut=OUVERTE" />
+          <CarteKPIY2K
+            icone={<Star className="h-4 w-4" />}
+            valeur={stats.candidatures_en_attente}
+            label="Candidatures en attente"
+            variant="default"
+            onClick={() => navigate('/etablissement/missions?statut=OUVERTE')}
+          />
         </FadeInView>
         <FadeInView delay={250}>
-          <CarteKPI icone={Users} valeur={stats.soignants_ce_mois} label="Soignants ce mois" sousLabel={`Pool urgence : ${stats.pool_urgence_count}`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/etablissement/pool-urgence" />
+          <CarteKPIY2K
+            icone={<Users className="h-4 w-4" />}
+            valeur={stats.soignants_ce_mois}
+            label="Soignants ce mois"
+            contexte={`Pool urgence : ${stats.pool_urgence_count}`}
+            variant="default"
+            onClick={() => navigate('/etablissement/pool-urgence')}
+          />
         </FadeInView>
         <FadeInView delay={300}>
           {(() => {
@@ -457,15 +494,15 @@ export default function DashboardEtablissement() {
             const sousLabelParts: string[] = [];
             if (stats.missions_a_payer > 0) sousLabelParts.push(`${stats.missions_a_payer} soignant(s)`);
             if (stats.nb_factures_impayees > 0) sousLabelParts.push(`${stats.nb_factures_impayees} facture(s) Jolene`);
+            const IconeImpayes = hasImpayes ? CreditCard : CheckCircle;
             return (
-              <CarteKPI
-                icone={hasImpayes ? CreditCard : CheckCircle}
+              <CarteKPIY2K
+                icone={<IconeImpayes className="h-4 w-4" />}
                 valeur={hasImpayes ? totalImpayes : 0}
                 label={hasImpayes ? 'Impayés — ⚠️ Cliquez pour payer' : 'Paiements à jour'}
-                sousLabel={sousLabelParts.length > 0 ? sousLabelParts.join(' + ') : undefined}
-                couleurIcone={hasImpayes ? 'text-destructive' : 'text-success'}
-                couleurFond={hasImpayes ? 'bg-destructive/10' : 'bg-success/10'}
-                lien="/etablissement/facturation"
+                contexte={sousLabelParts.length > 0 ? sousLabelParts.join(' + ') : undefined}
+                variant="default"
+                onClick={() => navigate('/etablissement/facturation')}
               />
             );
           })()}

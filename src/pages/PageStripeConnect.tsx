@@ -6,7 +6,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ChargementPage } from '@/components/ChargementPage';
-import { CarteKPI } from '@/components/CarteKPI';
+import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CreditCard, ExternalLink, RefreshCw, Loader2, CheckCircle, Clock, AlertTriangle, Banknote, Building2, FileText, ArrowRight, Shield, Info } from 'lucide-react';
@@ -301,9 +301,27 @@ export default function PageStripeConnect() {
 
                 {revenus && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <CarteKPI icone={Banknote} valeur={formatEur(revenus.mois_en_cours)} label="Ce mois" couleurIcone="text-success" couleurFond="bg-success/10" lien="/soignant/mes-gains" />
-                    <CarteKPI icone={Banknote} valeur={formatEur(revenus.total)} label="Total reçu" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/soignant/mes-factures-honoraires" />
-                    <CarteKPI icone={Clock} valeur={formatEur(revenus.en_attente)} label="En attente" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/soignant/mes-avances" />
+                    <CarteKPIY2K
+                      icone={<Banknote className="h-4 w-4" />}
+                      valeur={formatEur(revenus.mois_en_cours)}
+                      label="Ce mois"
+                      variant="holographic"
+                      onClick={() => navigate('/soignant/mes-gains')}
+                    />
+                    <CarteKPIY2K
+                      icone={<Banknote className="h-4 w-4" />}
+                      valeur={formatEur(revenus.total)}
+                      label="Total reçu"
+                      variant="soft"
+                      onClick={() => navigate('/soignant/mes-factures-honoraires')}
+                    />
+                    <CarteKPIY2K
+                      icone={<Clock className="h-4 w-4" />}
+                      valeur={formatEur(revenus.en_attente)}
+                      label="En attente"
+                      variant="default"
+                      onClick={() => navigate('/soignant/mes-avances')}
+                    />
                   </div>
                 )}
 
