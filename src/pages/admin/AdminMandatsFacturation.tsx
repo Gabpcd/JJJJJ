@@ -4,7 +4,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Input } from '@/components/ui/input';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { FileCheck, FileText, Search, CheckCircle, AlertCircle } from 'lucide-react';
@@ -73,34 +73,34 @@ export default function AdminMandatsFacturation() {
 
         {/* KPIs — tous cliquables */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => { setFiltre('TOUS'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
-            <CardContent className="pt-4 pb-3">
+          <CardY2K noPadding className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => { setFiltre('TOUS'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground uppercase">Soignants total</p>
               <p className="text-2xl font-bold text-foreground">{stats?.total_soignants ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-success/30 bg-success/5 cursor-pointer hover:border-success/50 transition-colors" onClick={() => { setFiltre('SIGNE'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding className="border-success/30 bg-success/5 cursor-pointer hover:border-success/50 transition-colors" onClick={() => { setFiltre('SIGNE'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground uppercase">Mandat signé</p>
               <p className="text-2xl font-bold text-success">{stats?.mandat_signe ?? 0}</p>
               <p className="text-xs text-success mt-0.5">{tauxSignature}% du total</p>
-            </CardContent>
-          </Card>
-          <Card className="border-warning/30 bg-warning/5 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => { setFiltre('NON_SIGNE'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding className="border-warning/30 bg-warning/5 cursor-pointer hover:border-warning/50 transition-colors" onClick={() => { setFiltre('NON_SIGNE'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground uppercase">Non signé</p>
               <p className="text-2xl font-bold text-warning">{stats?.mandat_non_signe ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/admin/facturation')}>
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/admin/facturation')}>
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground uppercase">Factures honoraires émises</p>
               <p className="text-2xl font-bold text-foreground">{stats?.total_factures_honoraires ?? 0}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {fmt(Number(stats?.montant_factures_honoraires_total || 0))}
               </p>
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         </div>
 
         {/* Filtres */}
@@ -130,8 +130,8 @@ export default function AdminMandatsFacturation() {
         </div>
 
         {/* Tableau */}
-        <Card>
-          <CardContent className="p-0">
+        <CardY2K noPadding>
+          <CardY2KContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -192,8 +192,8 @@ export default function AdminMandatsFacturation() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
       </div>
     </LayoutAdmin>
   );

@@ -9,7 +9,7 @@ import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { toast } from 'sonner';
 import { Loader2, Search, Zap, Download, FileText, ChevronDown, ChevronRight, ExternalLink, CheckCircle, XCircle, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -424,8 +424,8 @@ export default function AdminFacturation() {
         </div>
 
         <div className="grid grid-cols-2 gap-4 max-w-md">
-          <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total HT</p><p className="text-xl font-bold text-foreground">{formatEur(totaux.ht)}</p></CardContent></Card>
-          <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total TTC</p><p className="text-xl font-bold text-foreground">{formatEur(totaux.ttc)}</p></CardContent></Card>
+          <CardY2K noPadding><CardY2KContent className="pt-4"><p className="text-xs text-muted-foreground">Total HT</p><p className="text-xl font-bold text-foreground">{formatEur(totaux.ht)}</p></CardY2KContent></CardY2K>
+          <CardY2K noPadding><CardY2KContent className="pt-4"><p className="text-xs text-muted-foreground">Total TTC</p><p className="text-xl font-bold text-foreground">{formatEur(totaux.ttc)}</p></CardY2KContent></CardY2K>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">

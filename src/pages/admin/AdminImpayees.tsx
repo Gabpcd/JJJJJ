@@ -4,7 +4,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -299,8 +299,8 @@ export default function AdminImpayees() {
                 'border-border bg-card';
 
               return (
-                <Card key={f.id} className={`${urgenceColor} transition-all`}>
-                  <CardContent className="pt-4 space-y-0">
+                <CardY2K noPadding key={f.id} className={`${urgenceColor} transition-all`}>
+                  <CardY2KContent className="pt-4 space-y-0">
                     {/* Header cliquable */}
                     <button
                       onClick={() => setExpandedId(isExpanded ? null : f.id)}
@@ -445,8 +445,8 @@ export default function AdminImpayees() {
                         </div>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </CardY2KContent>
+                </CardY2K>
               );
             })}
           </div>

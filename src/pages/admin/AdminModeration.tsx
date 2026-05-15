@@ -5,7 +5,7 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
@@ -311,8 +311,8 @@ export default function AdminModeration() {
             ) : (
               <div className="space-y-3">
                 {evaluations.map((e) => (
-                  <Card key={e.id}>
-                    <CardContent className="pt-4 space-y-3">
+                  <CardY2K noPadding key={e.id}>
+                    <CardY2KContent className="pt-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -341,8 +341,8 @@ export default function AdminModeration() {
                       {!e.commentaire && e.note <= 3 && (
                         <p className="text-xs text-warning">Note basse sans commentaire — vérification recommandée</p>
                       )}
-                    </CardContent>
-                  </Card>
+                    </CardY2KContent>
+                  </CardY2K>
                 ))}
               </div>
             )}

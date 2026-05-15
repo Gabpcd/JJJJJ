@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import {
   Select,
   SelectContent,
@@ -156,8 +156,8 @@ export function LegacyRecategorisation({ onChanged, onCountChange }: Props) {
             const choix = selections[l.id] ?? '';
             const busy = submittingId === l.id;
             return (
-              <Card key={l.id} data-testid="legacy-card" data-litige-id={l.id}>
-                <CardContent className="space-y-3 pt-4">
+              <CardY2K noPadding key={l.id} data-testid="legacy-card" data-litige-id={l.id}>
+                <CardY2KContent className="space-y-3 pt-4">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <BadgeY2K variant="info" size="sm">
                       Statut : {l.statut}
@@ -213,8 +213,8 @@ export function LegacyRecategorisation({ onChanged, onCountChange }: Props) {
                       {busy ? 'Recatégorisation…' : 'Recatégoriser'}
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
+                </CardY2KContent>
+              </CardY2K>
             );
           })}
         </div>
