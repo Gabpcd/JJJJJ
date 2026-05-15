@@ -20,7 +20,7 @@ import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe
 import { stripePromise } from '@/lib/stripe';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
@@ -62,9 +62,9 @@ const METHODE_LABELS: Record<MethodePaiement, string> = {
 // ─── Helpers cards missions ───
 function RetardBadge({ jours }: { jours: number }) {
   if (jours < 15) return null;
-  if (jours < 30) return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">⏳ {jours}j</Badge>;
-  if (jours < 60) return <Badge className="bg-destructive/10 text-destructive">🔴 {jours}j de retard</Badge>;
-  return <Badge className="bg-destructive text-destructive-foreground">⛔ {jours}j — risque de suspension</Badge>;
+  if (jours < 30) return <BadgeY2K variant="warning">⏳ {jours}j</BadgeY2K>;
+  if (jours < 60) return <BadgeY2K variant="error">🔴 {jours}j de retard</BadgeY2K>;
+  return <BadgeY2K variant="error" className="bg-destructive text-destructive-foreground border-destructive">⛔ {jours}j — risque de suspension</BadgeY2K>;
 }
 
 function TypeExerciceBadge({ type }: { type: string }) {
@@ -74,7 +74,7 @@ function TypeExerciceBadge({ type }: { type: string }) {
     MIXTE: { label: 'Mixte', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
   };
   const info = map[type] || { label: type, cls: 'bg-muted text-muted-foreground' };
-  return <Badge className={info.cls}>{info.label}</Badge>;
+  return <BadgeY2K variant="info" className={info.cls}>{info.label}</BadgeY2K>;
 }
 
 // Section IDs pour navigation rapide
@@ -396,7 +396,7 @@ export default function FacturationEtablissement() {
             <BadgePalier palierNom={etab.paliers_commission.nom || 'Standard'} taux={etab.taux_commission_negocie ?? 15} />
           )}
           {etab?.est_secteur_public && (
-            <Badge className="bg-info/10 text-info border-info/20">🏛️ Secteur public</Badge>
+            <BadgeY2K variant="info">🏛️ Secteur public</BadgeY2K>
           )}
         </div>
       </div>
@@ -534,12 +534,12 @@ export default function FacturationEtablissement() {
                           </p>
                           {typeContratMission && (
                             <div className="flex items-center gap-2 mt-2 flex-wrap">
-                              <Badge className={isSalarie
+                              <BadgeY2K variant="info" className={isSalarie
                                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                                 : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}
                               >
                                 Contrat {isSalarie ? 'salarié (CDD)' : 'libéral'}
-                              </Badge>
+                              </BadgeY2K>
                               {modePaiementLabel && (
                                 <span className="text-xs text-muted-foreground">→ {modePaiementLabel}</span>
                               )}
@@ -653,7 +653,7 @@ export default function FacturationEtablissement() {
                     <div className="text-right shrink-0 flex items-center gap-2">
                       <div>
                         <p className="font-bold">{fmt(p.montant_net)}</p>
-                        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">En attente</Badge>
+                        <BadgeY2K variant="warning">En attente</BadgeY2K>
                       </div>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
@@ -817,9 +817,9 @@ export default function FacturationEtablissement() {
                                   <td className="py-2 pr-3 text-xs">{modeLabel}</td>
                                   <td className="py-2 pr-3">
                                     {f.statut === 'PAYEE' ? (
-                                      <Badge className="bg-success/10 text-success">Payée</Badge>
+                                      <BadgeY2K variant="success">Payée</BadgeY2K>
                                     ) : (
-                                      <Badge className="bg-muted text-muted-foreground">{f.statut}</Badge>
+                                      <BadgeY2K variant="info" className="bg-muted text-muted-foreground border-muted">{f.statut}</BadgeY2K>
                                     )}
                                   </td>
                                   <td className="py-2">
@@ -975,9 +975,9 @@ export default function FacturationEtablissement() {
                             <td className="py-2 pr-3 text-right font-medium">{fmt(p.montant_ttc)}</td>
                             <td className="py-2 pr-3">
                               {p.statut === 'PRELEVE' ? (
-                                <Badge className="bg-success/10 text-success">Prélevé</Badge>
+                                <BadgeY2K variant="success">Prélevé</BadgeY2K>
                               ) : (
-                                <Badge className="bg-muted text-muted-foreground">{p.statut}</Badge>
+                                <BadgeY2K variant="info" className="bg-muted text-muted-foreground border-muted">{p.statut}</BadgeY2K>
                               )}
                             </td>
                           </tr>
@@ -1044,7 +1044,7 @@ export default function FacturationEtablissement() {
                               <td className="py-2 pr-3 text-primary">{p.mission_intitule}</td>
                               <td className="py-2 pr-3 text-right font-medium">{fmt(p.montant_net)}</td>
                               <td className="py-2 pr-3 text-xs text-muted-foreground">{p.reference_virement}</td>
-                              <td className="py-2"><Badge className="bg-success/10 text-success">✅</Badge></td>
+                              <td className="py-2"><BadgeY2K variant="success">✅</BadgeY2K></td>
                               <td className="py-2">
                                 <div className="flex items-center gap-1 justify-end">
                                   {p.facture_honoraires_id && (
