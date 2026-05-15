@@ -120,6 +120,7 @@ function MesReclamationsContent() {
       {reclamations.length === 0 ? (
         <EmptyState
           icone={<Scale />}
+          mascotte="empty"
           titre="Aucune réclamation"
           description="Contestez un événement de score depuis la page « Mon score »."
         />

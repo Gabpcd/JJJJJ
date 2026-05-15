@@ -168,7 +168,7 @@ export function LitigesSoignantContent() {
 
       {/* Litiges list */}
       {filteredLitiges.length === 0 ? (
-        <EmptyState icone={<Scale />} titre={filtre === 'TOUS' ? 'Aucun litige' : `Aucun litige ${filtre.toLowerCase()}`} description="Vous n'avez aucun litige en cours." variant="success" />
+        <EmptyState icone={<Scale />} mascotte="happy" titre={filtre === 'TOUS' ? 'Aucun litige' : `Aucun litige ${filtre.toLowerCase()}`} description="Vous n'avez aucun litige en cours." variant="success" />
       ) : (
         <div className="space-y-3">
           {filteredLitiges.map(l => {

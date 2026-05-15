@@ -163,6 +163,7 @@ export default function MesFavorisEtablissement() {
           etatVide={
             <EmptyState
               icone={<Star />}
+              mascotte="thinking"
               titre="Aucun soignant favori"
               description="Ajoutez des soignants depuis l'annuaire ou la fiche profil détaillée."
               cta={{
