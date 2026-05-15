@@ -10,6 +10,7 @@ import { CarteProposition } from '@/components/CarteProposition';
 import { estEligibleLiberal, getRegleInstallation } from '@/lib/regles-installation-liberal';
 import { RappelsFiscaux } from '@/components/RappelsFiscaux';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Mascotte } from '@/components/mascotte/Mascotte';
 import { WidgetAllerPointer } from '@/components/WidgetAllerPointer';
 import { BandeauOubliDepart } from '@/components/BandeauOubliDepart';
@@ -395,12 +396,12 @@ export default function DashboardSoignant() {
 
           {/* Quick actions */}
           <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
-            <button onClick={() => navigate('/soignant/planning')} className="btn-secondary text-sm whitespace-nowrap flex items-center gap-2">
-              <CalendarDays className="h-4 w-4" /> 📅 Voir mon planning
-            </button>
-            <button onClick={() => navigate('/soignant/missions')} className="btn-secondary text-sm whitespace-nowrap flex items-center gap-2">
-              <Search className="h-4 w-4" /> Chercher des missions
-            </button>
+            <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/planning')} className="whitespace-nowrap" iconeGauche={<CalendarDays className="h-4 w-4" />}>
+              📅 Voir mon planning
+            </BoutonY2K>
+            <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/missions')} className="whitespace-nowrap" iconeGauche={<Search className="h-4 w-4" />}>
+              Chercher des missions
+            </BoutonY2K>
           </div>
 
           <SuggestionsMissions />
@@ -637,9 +638,9 @@ export default function DashboardSoignant() {
               <p className="text-sm text-muted-foreground">
                 Vérifiez votre RPPS pour débloquer votre parcours professionnel.
               </p>
-              <button onClick={() => navigate('/soignant/profil')} className="btn-primary mt-3 text-sm">
+              <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/soignant/profil')} className="mt-3">
                 Compléter mon profil
-              </button>
+              </BoutonY2K>
             </div>
           )}
           </SectionErrorBoundary>
