@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { FileText, Upload, CheckCircle, Clock, Download, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -146,14 +146,14 @@ export function ContratPlateformeContent() {
               className="hidden"
               aria-label="Téléverser le contrat signé"
             />
-            <Button
+            <BoutonY2K
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
               className="w-full gap-2"
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {uploading ? 'Envoi en cours…' : 'Téléverser le contrat signé (PDF, max 10 Mo)'}
-            </Button>
+            </BoutonY2K>
           </CardContent>
         </Card>
       </div>
@@ -188,9 +188,9 @@ export function ContratPlateformeContent() {
               Il est en cours de vérification par notre équipe. Vous serez notifié dès qu'il sera validé.
             </p>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={telechargerContrat} className="gap-2">
+              <BoutonY2K variant="secondary" onClick={telechargerContrat} className="gap-2">
                 <ExternalLink className="h-4 w-4" /> Voir le contrat téléversé
-              </Button>
+              </BoutonY2K>
               <input
                 ref={fileRef}
                 type="file"
@@ -199,10 +199,10 @@ export function ContratPlateformeContent() {
                 className="hidden"
                 aria-label="Remplacer le contrat"
               />
-              <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} className="gap-2">
+              <BoutonY2K variant="secondary" onClick={() => fileRef.current?.click()} disabled={uploading} className="gap-2">
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 {uploading ? 'Envoi…' : 'Remplacer le contrat'}
-              </Button>
+              </BoutonY2K>
             </div>
           </CardContent>
         </Card>
@@ -250,9 +250,9 @@ export function ContratPlateformeContent() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={telechargerContrat} className="gap-2">
+            <BoutonY2K variant="secondary" onClick={telechargerContrat} className="gap-2">
               <Download className="h-4 w-4" /> Télécharger le contrat
-            </Button>
+            </BoutonY2K>
             <input
               ref={fileRef}
               type="file"
@@ -261,10 +261,10 @@ export function ContratPlateformeContent() {
               className="hidden"
               aria-label="Remplacer le contrat"
             />
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} className="gap-2">
+            <BoutonY2K variant="secondary" onClick={() => fileRef.current?.click()} disabled={uploading} className="gap-2">
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {uploading ? 'Envoi…' : 'Remplacer le contrat'}
-            </Button>
+            </BoutonY2K>
           </div>
         </CardContent>
       </Card>

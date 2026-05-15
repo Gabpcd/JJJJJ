@@ -4,6 +4,7 @@ import { FileText, CheckCircle, ShieldCheck, Loader2, ArrowLeft, ExternalLink, D
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -270,9 +271,9 @@ export default function MandatFacturation() {
                 sera émise après révocation. Les factures déjà émises restent valides et exigibles.
               </p>
               <div className="flex flex-wrap gap-2 mt-3">
-                <Button
+                <BoutonY2K
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={telechargerPdf}
                   disabled={!signatureMeta}
@@ -280,16 +281,16 @@ export default function MandatFacturation() {
                 >
                   <Download className="h-4 w-4" />
                   Télécharger mon mandat (PDF)
-                </Button>
-                <Button
+                </BoutonY2K>
+                <BoutonY2K
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={() => setShowConfirmRevoke(true)}
                   className="gap-2 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
                 >
                   Révoquer mon mandat
-                </Button>
+                </BoutonY2K>
               </div>
             </div>
           </div>
@@ -342,14 +343,14 @@ export default function MandatFacturation() {
                 </label>
               </div>
 
-              <Button
+              <BoutonY2K
                 onClick={signer}
                 disabled={!accepted || signing || !hasScrolledToBottom}
                 className="w-full gap-2"
               >
                 {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                 Signer électroniquement le mandat
-              </Button>
+              </BoutonY2K>
 
               <p className="text-[10px] text-muted-foreground text-center">
                 Votre signature sera horodatée et archivée comme preuve légale (Articles 1366 et 1367 du Code civil).
@@ -378,9 +379,9 @@ export default function MandatFacturation() {
               </div>
             </div>
             <div className="flex gap-2 justify-end pt-2">
-              <Button type="button" variant="outline" disabled={revoking} onClick={() => setShowConfirmRevoke(false)}>
+              <BoutonY2K type="button" variant="secondary" disabled={revoking} onClick={() => setShowConfirmRevoke(false)}>
                 Annuler
-              </Button>
+              </BoutonY2K>
               <Button type="button" variant="destructive" disabled={revoking} onClick={revoquer} className="gap-2">
                 {revoking && <Loader2 className="h-4 w-4 animate-spin" />}
                 {revoking ? 'Révocation…' : 'Confirmer la révocation'}
