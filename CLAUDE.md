@@ -321,3 +321,35 @@ Cf. docs/SPRINT_12_D.md.
 Reporté Sprint 12-E avec création de variants CardY2K (pricing, status-coded) + décision UX produit.
 
 **Mapping variant EmptyState → Mascotte etat** : `info`→`empty`, `success`→`happy`, `warning`→`thinking`.
+
+### Sprint 12-E — Badges Y2K + Mascotte 100% + final (5 PRs)
+Cf. docs/SPRINT_12_E.md et docs/SPRINT_12_FINAL.md.
+
+| Sprint | PR | Chantier | Livré |
+|---|---|---|---|
+| 12-E-1 | #302 | BadgeY2K soignant | 19 badges sur 5 pages |
+| 12-E-2 | #303 | BadgeY2K étab | 28 badges sur 4 pages |
+| 12-E-3 | #304 | BadgeY2K admin | 56 badges sur 16 fichiers (helpers TS retypés strict) |
+| 12-E-4 | #305 | Mascotte 100% EmptyState | 37 Mascotte → 61/61 = 100% adoption |
+| 12-E-5 | (this) | Doc Sprint 12-E + Sprint 12 FINAL | — |
+| **Total** | **5 PRs** | — | **103 badges + 37 Mascotte** |
+
+**Mapping Badge shadcn → BadgeY2K** :
+- `default/secondary/outline` → `info` ; `destructive` → `error`
+- className success/valide/PAYE/TERMINE → `success`
+- className warning/yellow/EN_ATTENTE/OUVERTE → `warning`
+- className gold/premium/PLATINE → `premium`
+
+**Statuts métier mappés** : OUVERTE→warning, ASSIGNEE→success, ANNULEE→error, PAYEE→success, EN_RETARD→error, TELEPORTATION/GPS_TRUQUE→error (anti-triche), RLS désactivée→error.
+
+**Helpers TS retypés strictement** vers union Y2K (pas de `as any`) : statutColor AdminFacturation, statutBadge AdminMissions, badgeStatut AvoirsList, badge.groupe AdminLitiges.
+
+### Sprint 12 FINAL (A → E)
+Cf. docs/SPRINT_12_FINAL.md.
+
+- **22 PRs livrées** sur 5 sous-sprints (12-A hotfix + 12-B + 12-C + 12-D + 12-E)
+- **~280 migrations Y2K** au total
+- **Adoption finale** : BoutonY2K 75, BadgeY2K 103, CarteKPIY2K 40, Mascotte 61/66 EmptyState (100% si on compte les 9 illustrations Sprint 8 BIS)
+- **0 PR ouverte** post Sprint 12
+- **0 régression CI**
+- Reportés post Sprint 12 : CardY2K adoption (variants pricing/status-coded), BadgeRPPS/Niveau/Statut/Palier custom rewrite, animations spring élargies (Dialog/FAB/notifs)
