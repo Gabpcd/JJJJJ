@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardY2K, CardY2KContent, CardY2KHeader, CardY2KTitle } from '@/components/y2k/CardY2K';
 import { Button } from '@/components/ui/button';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -176,7 +176,8 @@ export default function AdminAuditRLS() {
         {/* KPI cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Verdict global */}
-          <Card
+          <CardY2K
+            noPadding
             className={
               isLoading
                 ? ''
@@ -185,12 +186,12 @@ export default function AdminAuditRLS() {
                 : 'border-destructive/40 bg-destructive/5'
             }
           >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardY2KHeader className="pb-2">
+              <CardY2KTitle className="text-sm font-medium text-muted-foreground">
                 Verdict global
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </CardY2KTitle>
+            </CardY2KHeader>
+            <CardY2KContent>
               {isLoading ? (
                 <Skeleton className="h-10 w-24" />
               ) : verdictOK ? (
@@ -214,18 +215,18 @@ export default function AdminAuditRLS() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
 
           {/* Tables sans RLS */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          <CardY2K noPadding>
+            <CardY2KHeader className="pb-2">
+              <CardY2KTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <Database className="h-4 w-4" />
                 Tables sans RLS
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </CardY2KTitle>
+            </CardY2KHeader>
+            <CardY2KContent>
               {isLoading ? (
                 <Skeleton className="h-10 w-16" />
               ) : (
@@ -244,18 +245,18 @@ export default function AdminAuditRLS() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
 
           {/* Tables RLS active sans policy */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          <CardY2K noPadding>
+            <CardY2KHeader className="pb-2">
+              <CardY2KTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <Lock className="h-4 w-4" />
                 RLS active sans policy
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </CardY2KTitle>
+            </CardY2KHeader>
+            <CardY2KContent>
               {isLoading ? (
                 <Skeleton className="h-10 w-16" />
               ) : (
@@ -274,16 +275,16 @@ export default function AdminAuditRLS() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         </div>
 
         {/* Liste détaillée des problèmes */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Détail des problèmes</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <CardY2K noPadding>
+          <CardY2KHeader>
+            <CardY2KTitle className="text-lg">Détail des problèmes</CardY2KTitle>
+          </CardY2KHeader>
+          <CardY2KContent>
             {isLoading ? (
               <div className="space-y-2">
                 {[...Array(3)].map((_, i) => (
@@ -331,8 +332,8 @@ export default function AdminAuditRLS() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
 
         {/* Note d'aide */}
         <Alert>

@@ -5,7 +5,7 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { ShieldAlert, Clock, FileWarning, FileQuestion, Repeat, UserX, FileX, ChevronDown, Loader2, ExternalLink } from 'lucide-react';
@@ -223,12 +223,13 @@ export default function AdminConformite() {
             const val = mappedData[ind.cle] ?? 0;
             const isSelected = selected === ind.cle;
             return (
-              <Card
+              <CardY2K
+                noPadding
                 key={ind.cle}
                 className={`cursor-pointer border transition-all hover:shadow-md ${getBgCouleur(val)} ${isSelected ? 'ring-2 ring-primary' : ''}`}
                 onClick={() => toggleDetail(ind.cle)}
               >
-                <CardContent className="flex items-center gap-4 pt-5 pb-5">
+                <CardY2KContent className="flex items-center gap-4 pt-5 pb-5">
                   <div className={`rounded-xl p-2.5 ${getBgCouleur(val)}`}>
                     <ind.icone className={`h-5 w-5 ${getCouleur(val)}`} />
                   </div>
@@ -237,15 +238,15 @@ export default function AdminConformite() {
                     <p className="text-xs text-muted-foreground">{ind.label}</p>
                   </div>
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isSelected ? 'rotate-180' : ''}`} />
-                </CardContent>
-              </Card>
+                </CardY2KContent>
+              </CardY2K>
             );
           })}
         </div>
 
         {selected && selectedInd && (
-          <Card className="animate-in slide-in-from-top-2 fade-in-0 duration-200">
-            <CardContent className="pt-5">
+          <CardY2K noPadding className="animate-in slide-in-from-top-2 fade-in-0 duration-200">
+            <CardY2KContent className="pt-5">
               <div className="mb-4 flex items-center gap-2">
                 <selectedInd.icone className="h-5 w-5 text-foreground" />
                 <h2 className="text-base font-semibold text-foreground">{selectedInd.label}</h2>
@@ -310,8 +311,8 @@ export default function AdminConformite() {
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">Aucun élément à afficher</p>
               )}
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         )}
       </div>
     </LayoutAdmin>

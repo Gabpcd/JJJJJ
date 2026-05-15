@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { AlertTriangle, Euro, Eye, Gavel } from 'lucide-react';
 import {
   alerteTresorerie,
@@ -121,14 +121,15 @@ export function LitigesList({
         const informatif = Boolean(l.est_informatif);
 
         return (
-          <Card
+          <CardY2K
+            noPadding
             key={l.id}
             data-testid="litige-card"
             data-litige-id={l.id}
             data-gravite={rangGravite(l)}
             data-categorie={l.categorie_litige ?? 'AUTRE'}
           >
-            <CardContent className="pt-5">
+            <CardY2KContent className="pt-5">
               <div className="flex items-start gap-3">
                 <div
                   className={`mt-1 flex h-10 w-1.5 shrink-0 rounded-full ${
@@ -242,8 +243,8 @@ export function LitigesList({
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         );
       })}
     </div>

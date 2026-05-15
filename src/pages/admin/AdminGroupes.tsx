@@ -4,7 +4,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -258,8 +258,8 @@ export default function AdminGroupes() {
         )}
 
         {groupes.map(g => (
-          <Card key={g.id}>
-            <CardContent className="pt-6 space-y-5">
+          <CardY2K noPadding key={g.id}>
+            <CardY2KContent className="pt-6 space-y-5">
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
@@ -612,8 +612,8 @@ export default function AdminGroupes() {
                   ))}
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         ))}
       </div>
     </LayoutAdmin>
