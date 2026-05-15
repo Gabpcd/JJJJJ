@@ -17,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { handleErrorSilent } from '@/lib/handleError';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -171,16 +171,16 @@ export default function MesGains() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" onClick={exporterCSV} className="gap-1.5">
+        <BoutonY2K variant="secondary" size="sm" onClick={exporterCSV} className="gap-1.5">
           <Download className="h-4 w-4" /> CSV
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setModalAttestation(true)} className="gap-1.5">
+        </BoutonY2K>
+        <BoutonY2K variant="secondary" size="sm" onClick={() => setModalAttestation(true)} className="gap-1.5">
           <FileText className="h-4 w-4" /> Attestation
-        </Button>
+        </BoutonY2K>
         {isLiberal && (
-          <Button variant="outline" size="sm" onClick={() => navigate('/soignant/charges')} className="gap-1.5">
+          <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/soignant/charges')} className="gap-1.5">
             <Calculator className="h-4 w-4" /> Mes charges
-          </Button>
+          </BoutonY2K>
         )}
       </div>
 

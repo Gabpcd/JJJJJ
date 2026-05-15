@@ -4,7 +4,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { Calculator, Calendar, Shield, Building2, PieChart, Banknote, ChevronRight, Download, ExternalLink, ArrowLeft } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
@@ -336,9 +336,9 @@ export default function ChargesSociales() {
             <h2 className="text-base font-bold text-foreground flex items-center gap-2">
               <PieChart className="h-5 w-5 text-primary" /> Répartition
             </h2>
-            <Button variant="outline" size="sm" onClick={exporterCSV} className="gap-1.5 text-xs">
+            <BoutonY2K variant="secondary" size="sm" onClick={exporterCSV} className="gap-1.5 text-xs">
               <Download className="h-3.5 w-3.5" /> Exporter
-            </Button>
+            </BoutonY2K>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-6">
             <ResponsiveContainer width={200} height={200}>
@@ -370,15 +370,15 @@ export default function ChargesSociales() {
           ⚠️ Estimations indicatives. Consultez votre comptable pour les montants exacts.
         </p>
         <div className="flex flex-wrap gap-2 justify-center">
-          <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.autoentrepreneur.urssaf.fr')}>
+          <BoutonY2K variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.autoentrepreneur.urssaf.fr')}>
             URSSAF <ExternalLink className="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.carpimko.com')}>
+          </BoutonY2K>
+          <BoutonY2K variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.carpimko.com')}>
             CARPIMKO <ExternalLink className="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.impots.gouv.fr/professionnel')}>
+          </BoutonY2K>
+          <BoutonY2K variant="ghost" size="sm" className="text-xs gap-1" onClick={() => ouvrirLienExterne('https://www.impots.gouv.fr/professionnel')}>
             Impôts.gouv <ExternalLink className="h-3 w-3" />
-          </Button>
+          </BoutonY2K>
         </div>
       </div>
     </LayoutApp>
