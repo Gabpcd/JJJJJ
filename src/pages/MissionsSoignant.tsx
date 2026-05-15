@@ -308,7 +308,7 @@ export default function MissionsSoignant() {
                 })}
               </div>
             ) : (
-              <EmptyState icone={<Briefcase />} titre="Vous n'avez pas encore de mission en cours" description="Consultez les missions disponibles et postulez !" cta={{ label: 'Voir les missions disponibles', onClick: () => navigate('/soignant/missions') }} />
+              <EmptyState icone={<Briefcase />} mascotte="thinking" titre="Vous n'avez pas encore de mission en cours" description="Consultez les missions disponibles et postulez !" cta={{ label: 'Voir les missions disponibles', onClick: () => navigate('/soignant/missions') }} />
             )
           )}
 
@@ -337,7 +337,7 @@ export default function MissionsSoignant() {
                 )}
               </>
             ) : (
-              <EmptyState icone={<History />} titre="Aucune mission dans l'historique"
+              <EmptyState icone={<History />} mascotte="empty" titre="Aucune mission dans l'historique"
                 description="Vos missions terminées et annulées apparaîtront ici." />
             )
           )}

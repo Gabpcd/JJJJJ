@@ -569,7 +569,7 @@ export default function DashboardEtablissement() {
             ))}
           </div>
         ) : aDejaPublie === false ? (
-          <EmptyState icone={<ClipboardList />} titre="Publiez votre première mission" description="Les soignants qualifiés de votre zone seront notifiés immédiatement" cta={{ label: 'Publier une mission', onClick: () => navigate('/etablissement/missions/creer') }} />
+          <EmptyState icone={<ClipboardList />} mascotte="thinking" titre="Publiez votre première mission" description="Les soignants qualifiés de votre zone seront notifiés immédiatement" cta={{ label: 'Publier une mission', onClick: () => navigate('/etablissement/missions/creer') }} />
         ) : (
           <p className="text-sm text-muted-foreground text-center py-6">Aucune mission récente.</p>
         )}

@@ -325,7 +325,7 @@ export default function PresencesEtablissement() {
             colonnes={colonnesPresences}
             donnees={aValider}
             getId={(p: any) => p.id}
-            etatVide={<EmptyState icone={<CheckCircle />} titre="Aucune présence à valider" description="Les pointages de vos soignants apparaîtront ici." variant="success" />}
+            etatVide={<EmptyState icone={<CheckCircle />} mascotte="happy" titre="Aucune présence à valider" description="Les pointages de vos soignants apparaîtront ici." variant="success" />}
             renduCellule={renduCellulePresence}
             renduCarte={renduCartePresence}
           />
@@ -336,7 +336,7 @@ export default function PresencesEtablissement() {
             colonnes={colonnesPresences}
             donnees={enCours}
             getId={(p: any) => p.id}
-            etatVide={<EmptyState icone={<Clock />} titre="Aucune mission en cours" description="Les soignants actuellement en mission apparaîtront ici." />}
+            etatVide={<EmptyState icone={<Clock />} mascotte="empty" titre="Aucune mission en cours" description="Les soignants actuellement en mission apparaîtront ici." />}
             renduCellule={renduCellulePresence}
             renduCarte={renduCartePresence}
           />
@@ -347,7 +347,7 @@ export default function PresencesEtablissement() {
             colonnes={colonnesPresences}
             donnees={validees}
             getId={(p: any) => p.id}
-            etatVide={<EmptyState icone={<CheckCircle />} titre="Aucune présence validée" description="Les présences validées seront archivées ici." />}
+            etatVide={<EmptyState icone={<CheckCircle />} mascotte="empty" titre="Aucune présence validée" description="Les présences validées seront archivées ici." />}
             renduCellule={renduCellulePresence}
             renduCarte={renduCartePresence}
           />
@@ -358,7 +358,7 @@ export default function PresencesEtablissement() {
             colonnes={colonnesPresences}
             donnees={alertes}
             getId={(p: any) => p.id}
-            etatVide={<EmptyState icone={<AlertTriangle />} titre="Aucune alerte" description="Les présences avec des alertes de fraude apparaîtront ici." variant="success" />}
+            etatVide={<EmptyState icone={<AlertTriangle />} mascotte="happy" titre="Aucune alerte" description="Les présences avec des alertes de fraude apparaîtront ici." variant="success" />}
             renduCellule={renduCellulePresence}
             renduCarte={renduCartePresence}
           />

@@ -202,6 +202,7 @@ export default function AdminAlertesPointage() {
           <li className="list-none">
             <EmptyState
               icone={<ShieldCheck />}
+              mascotte="happy"
               titre="Aucune alerte détectée"
               description="Aucune alerte anti-triche ne correspond à ces critères. Les alertes (téléportation, mock GPS, incohérence) apparaîtront ici."
               variant="success"

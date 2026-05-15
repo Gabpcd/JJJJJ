@@ -595,6 +595,7 @@ export default function AdminFacturation() {
                   <TableCell colSpan={10} className="p-0">
                     <EmptyState
                       icone={<FileText />}
+                      mascotte="empty"
                       titre="Aucune facture"
                       description="Aucune facture ne correspond aux filtres sélectionnés."
                       compact
@@ -611,6 +612,7 @@ export default function AdminFacturation() {
           {filtered.length === 0 ? (
             <EmptyState
               icone={<FileText />}
+              mascotte="empty"
               titre="Aucune facture"
               description="Aucune facture ne correspond aux filtres sélectionnés."
               compact

@@ -242,6 +242,7 @@ export default function AdminUtilisateurs() {
               etatVide={
                 <EmptyState
                   icone={<Users />}
+                  mascotte="empty"
                   titre="Aucun soignant trouvé"
                   description="Aucun soignant ne correspond à votre recherche."
                   compact
@@ -349,6 +350,7 @@ export default function AdminUtilisateurs() {
               etatVide={
                 <EmptyState
                   icone={<Users />}
+                  mascotte="empty"
                   titre="Aucun établissement trouvé"
                   description="Aucun établissement ne correspond à votre recherche."
                   compact

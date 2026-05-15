@@ -106,6 +106,7 @@ export default function AdminLitiges() {
       {filtered.length === 0 ? (
         <EmptyState
           icone={<Scale />}
+          mascotte={filtre === 'REVUE_ADMIN' ? 'happy' : 'empty'}
           titre={filtre === 'REVUE_ADMIN' ? 'Aucun litige à trancher' : 'Aucun litige'}
           description={filtre === 'REVUE_ADMIN'
             ? 'Tous les litiges sont en cours de discussion ou résolus.'

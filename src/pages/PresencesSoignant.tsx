@@ -449,6 +449,7 @@ export default function PresencesSoignant() {
           ) : (
             <EmptyState
               icone={<CalendarDays />}
+              mascotte="thinking"
               titre="Aucune mission à venir"
               description="Vos prochaines missions assignées apparaîtront ici."
               cta={{ label: 'Chercher des missions', onClick: () => navigate('/soignant/missions') }}
@@ -476,6 +477,7 @@ export default function PresencesSoignant() {
           ) : (
             <EmptyState
               icone={<Activity />}
+              mascotte="empty"
               titre="Aucune mission en cours"
               description="Les missions avec une arrivée pointée apparaîtront ici."
             />
@@ -530,6 +532,7 @@ export default function PresencesSoignant() {
           ) : (
             <EmptyState
               icone={<CalendarDays />}
+              mascotte="empty"
               titre="Aucune mission aujourd'hui"
               description="Vos missions assignées apparaîtront ici le jour J pour le pointage."
             />
@@ -645,7 +648,7 @@ export default function PresencesSoignant() {
               })}
             </div>
           ) : (
-            <EmptyState icone={<History />} titre="Aucune présence enregistrée" description="Votre historique de pointages apparaîtra ici." />
+            <EmptyState icone={<History />} mascotte="empty" titre="Aucune présence enregistrée" description="Votre historique de pointages apparaîtra ici." />
           )}
         </TabsContent>
       </Tabs>

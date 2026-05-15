@@ -231,7 +231,7 @@ function EvaluationsContent() {
             colonnes={colonnes}
             donnees={notations}
             getId={(n) => n.id}
-            etatVide={<EmptyState icone={<Star />} titre="Aucune évaluation" description="Les évaluations reçues apparaîtront ici." />}
+            etatVide={<EmptyState icone={<Star />} mascotte="empty" titre="Aucune évaluation" description="Les évaluations reçues apparaîtront ici." />}
             renduCellule={(n, col) => {
               switch (col.cle) {
                 case 'note':
