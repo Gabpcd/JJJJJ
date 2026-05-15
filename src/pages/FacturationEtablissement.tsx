@@ -26,7 +26,12 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  CardY2K,
+  CardY2KHeader,
+  CardY2KTitle,
+  CardY2KContent,
+} from '@/components/y2k/CardY2K';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DialogFooter } from '@/components/ui/dialog';
 import { ENTREPRISE } from '@/constantes/entreprise';
@@ -472,26 +477,26 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.payer} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.payer]} onOpenChange={() => toggleSection(SECTIONS.payer)}>
           <CollapsibleTrigger className="w-full">
-            <Card>
-              <CardHeader className="py-3">
+            <CardY2K noPadding>
+              <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <CardY2KTitle className="flex items-center gap-2 text-base">
                     <AlertTriangle className="h-5 w-5 text-destructive" />
                     Missions à payer aux soignants ({missionsNonPayees.length})
-                  </CardTitle>
+                  </CardY2KTitle>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.payer] ? 'rotate-180' : ''}`} />
                 </div>
-              </CardHeader>
-            </Card>
+              </CardY2KHeader>
+            </CardY2K>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 space-y-3">
               {missionsNonPayees.length === 0 ? (
-                <Card>
-                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                <CardY2K noPadding>
+                  <CardY2KContent className="py-6 text-center text-sm text-muted-foreground">
                     Aucune mission en attente de paiement soignant.
-                  </CardContent>
-                </Card>
+                  </CardY2KContent>
+                </CardY2K>
               ) : (
                 missionsNonPayees.map((m: any) => {
                   const typeContratMission = m.type_contrat_applique as 'SALARIE' | 'LIBERAL' | null | undefined;
@@ -613,26 +618,26 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.attente} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.attente]} onOpenChange={() => toggleSection(SECTIONS.attente)}>
           <CollapsibleTrigger className="w-full">
-            <Card>
-              <CardHeader className="py-3">
+            <CardY2K noPadding>
+              <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <CardY2KTitle className="flex items-center gap-2 text-base">
                     <Clock className="h-5 w-5 text-warning" />
                     Paiements en attente ({paiementsEnAttente.length})
-                  </CardTitle>
+                  </CardY2KTitle>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.attente] ? 'rotate-180' : ''}`} />
                 </div>
-              </CardHeader>
-            </Card>
+              </CardY2KHeader>
+            </CardY2K>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 space-y-3">
               {paiementsEnAttente.length === 0 ? (
-                <Card>
-                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                <CardY2K noPadding>
+                  <CardY2KContent className="py-6 text-center text-sm text-muted-foreground">
                     Aucun paiement en attente de confirmation soignant.
-                  </CardContent>
-                </Card>
+                  </CardY2KContent>
+                </CardY2K>
               ) : (
                 paiementsEnAttente.map((p: any) => (
                   <button
@@ -669,17 +674,17 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.commissions} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.commissions]} onOpenChange={() => toggleSection(SECTIONS.commissions)}>
           <CollapsibleTrigger className="w-full">
-            <Card>
-              <CardHeader className="py-3">
+            <CardY2K noPadding>
+              <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <CardY2KTitle className="flex items-center gap-2 text-base">
                     <FileText className="h-5 w-5 text-primary" />
                     Commissions Jolene ({facturesImpayees.length} impayée{facturesImpayees.length > 1 ? 's' : ''})
-                  </CardTitle>
+                  </CardY2KTitle>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.commissions] ? 'rotate-180' : ''}`} />
                 </div>
-              </CardHeader>
-            </Card>
+              </CardY2KHeader>
+            </CardY2K>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 space-y-4">
@@ -754,11 +759,11 @@ export default function FacturationEtablissement() {
                   </div>
                 </div>
               ) : (
-                <Card>
-                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                <CardY2K noPadding>
+                  <CardY2KContent className="py-6 text-center text-sm text-muted-foreground">
                     Aucune facture commission impayée.
-                  </CardContent>
-                </Card>
+                  </CardY2KContent>
+                </CardY2K>
               )}
               {/* 4.2 — Historique factures commission (collapsible) */}
               {nbFacturesHistorique > 0 && (
@@ -996,29 +1001,29 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.historique} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.historique]} onOpenChange={() => toggleSection(SECTIONS.historique)}>
           <CollapsibleTrigger className="w-full">
-            <Card>
-              <CardHeader className="py-3">
+            <CardY2K noPadding>
+              <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <CardY2KTitle className="flex items-center gap-2 text-base">
                     <CheckCircle className="h-5 w-5 text-success" />
                     Historique paiements ({paiementsConfirmes.length} confirmé{paiementsConfirmes.length > 1 ? 's' : ''})
-                  </CardTitle>
+                  </CardY2KTitle>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.historique] ? 'rotate-180' : ''}`} />
                 </div>
-              </CardHeader>
-            </Card>
+              </CardY2KHeader>
+            </CardY2K>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2">
               {paiementsConfirmes.length === 0 ? (
-                <Card>
-                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                <CardY2K noPadding>
+                  <CardY2KContent className="py-6 text-center text-sm text-muted-foreground">
                     Aucun paiement confirmé pour l'instant.
-                  </CardContent>
-                </Card>
+                  </CardY2KContent>
+                </CardY2K>
               ) : (
-                <Card>
-                  <CardContent className="pt-4">
+                <CardY2K noPadding>
+                  <CardY2KContent className="pt-4">
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -1072,8 +1077,8 @@ export default function FacturationEtablissement() {
                     <p className="text-[11px] text-muted-foreground mt-3">
                       Les 10 derniers paiements confirmés par le soignant. Cliquez sur une ligne pour voir le détail mission.
                     </p>
-                  </CardContent>
-                </Card>
+                  </CardY2KContent>
+                </CardY2K>
               )}
               {/* Note : les paiements CONTESTE ne sont pas exposés par fn_obligations_financieres
                   (seulement DECLARE et CONFIRME). Pour voir les contestations en cours :
@@ -1087,22 +1092,22 @@ export default function FacturationEtablissement() {
       <div id={SECTIONS.exports} className="mb-4">
         <Collapsible open={sectionsOpen[SECTIONS.exports]} onOpenChange={() => toggleSection(SECTIONS.exports)}>
           <CollapsibleTrigger className="w-full">
-            <Card>
-              <CardHeader className="py-3">
+            <CardY2K noPadding>
+              <CardY2KHeader className="py-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <CardY2KTitle className="flex items-center gap-2 text-base">
                     <Download className="h-5 w-5 text-info" />
                     Exports comptables
-                  </CardTitle>
+                  </CardY2KTitle>
                   <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${sectionsOpen[SECTIONS.exports] ? 'rotate-180' : ''}`} />
                 </div>
-              </CardHeader>
-            </Card>
+              </CardY2KHeader>
+            </CardY2K>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="mt-2 space-y-3">
-              <Card>
-                <CardContent className="pt-4 space-y-3">
+              <CardY2K noPadding>
+                <CardY2KContent className="pt-4 space-y-3">
                   <p className="text-sm text-muted-foreground">
                     Téléchargez vos données financières pour votre comptabilité.
                   </p>
@@ -1154,8 +1159,8 @@ export default function FacturationEtablissement() {
                       individuellement depuis la section 5 (historique paiements).
                     </p>
                   </div>
-                </CardContent>
-              </Card>
+                </CardY2KContent>
+              </CardY2K>
             </div>
           </CollapsibleContent>
         </Collapsible>
