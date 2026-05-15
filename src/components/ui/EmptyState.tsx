@@ -29,6 +29,8 @@
  */
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Mascotte } from "@/components/mascotte/Mascotte";
+import type { EtatMascotte } from "@/components/mascotte/Mascotte";
 
 type Variant = "info" | "success" | "warning";
 
@@ -38,11 +40,26 @@ type Cta = {
   variant?: "primary" | "secondary";
 };
 
+/** Mapping variant → état mascotte par défaut. Cohérence émotionnelle Sprint 12-D. */
+const VARIANT_TO_MASCOTTE_ETAT: Record<Variant, EtatMascotte> = {
+  info: "empty",
+  success: "happy",
+  warning: "thinking",
+};
+
 type EmptyStateProps = {
   /** Icône Lucide ou autre ReactNode (rendu dans un cercle de couleur variant) */
   icone?: ReactNode;
   /** Illustration vectorielle 100×100 (rendue sans cercle, opacité 70%) — prioritaire sur `icone` */
   illustration?: ReactNode;
+  /**
+   * Mascotte Y2K Jolene. Sprint 12-D.
+   * - `true` : Mascotte avec état auto déduit du variant
+   * - `EtatMascotte` (string) : Mascotte avec état explicite
+   * - `false` : pas de Mascotte
+   * - non fourni : auto-rendu si ni `icone` ni `illustration`
+   */
+  mascotte?: boolean | EtatMascotte;
   /** Titre principal (clair, concis, sans ponctuation finale) */
   titre: string;
   /** Description complémentaire optionnelle */
@@ -77,6 +94,7 @@ const VARIANT_STYLES: Record<Variant, { wrapper: string; icon: string }> = {
 export function EmptyState({
   icone,
   illustration,
+  mascotte,
   titre,
   description,
   cta,
@@ -86,6 +104,17 @@ export function EmptyState({
   compact = false,
 }: EmptyStateProps) {
   const styles = VARIANT_STYLES[variant];
+
+  // Détermination du visuel : priorité explicit mascotte > illustration > icone > auto-Mascotte.
+  // L'auto-Mascotte s'active uniquement si aucun visuel n'est fourni (rétro-compat totale).
+  const hasMascotteExplicit = mascotte !== undefined && mascotte !== false;
+  const hasAutoMascotte = !icone && !illustration && mascotte !== false;
+  const mascotteEtat: EtatMascotte | null = hasMascotteExplicit
+    ? (typeof mascotte === "string" ? mascotte : VARIANT_TO_MASCOTTE_ETAT[variant])
+    : hasAutoMascotte
+      ? VARIANT_TO_MASCOTTE_ETAT[variant]
+      : null;
+
   return (
     <div
       role="status"
@@ -97,7 +126,13 @@ export function EmptyState({
         className,
       )}
     >
-      {illustration ? (
+      {mascotteEtat ? (
+        <Mascotte
+          etat={mascotteEtat}
+          taille={compact ? "sm" : "md"}
+          className={compact ? "mb-3" : "mb-4"}
+        />
+      ) : illustration ? (
         <div
           aria-hidden="true"
           className={cn(
