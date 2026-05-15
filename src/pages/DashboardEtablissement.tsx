@@ -23,6 +23,7 @@ import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAt
 import { BandeauBlocageAuto } from '@/components/BandeauBlocageAuto';
 
 import { BadgePalier } from '@/components/BadgePalier';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Mascotte } from '@/components/mascotte/Mascotte';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -398,16 +399,16 @@ export default function DashboardEtablissement() {
       )}
 
       <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
-        <button onClick={() => navigate('/etablissement/missions/creer')} className="btn-primary text-sm whitespace-nowrap flex items-center gap-2">
-          <FileText className="h-4 w-4" /> Publier une mission
-        </button>
-        <button onClick={() => navigate('/etablissement/missions')} className="btn-secondary text-sm whitespace-nowrap flex items-center gap-2">
-          <ClipboardList className="h-4 w-4" /> Mes missions
-        </button>
+        <BoutonY2K variant="primary" size="sm" onClick={() => navigate('/etablissement/missions/creer')} className="whitespace-nowrap" iconeGauche={<FileText className="h-4 w-4" />}>
+          Publier une mission
+        </BoutonY2K>
+        <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/etablissement/missions')} className="whitespace-nowrap" iconeGauche={<ClipboardList className="h-4 w-4" />}>
+          Mes missions
+        </BoutonY2K>
         {etab?.groupe_sante_id && (
-          <button onClick={() => navigate('/etablissement/mon-groupe')} className="btn-secondary text-sm whitespace-nowrap flex items-center gap-2">
-            <Users className="h-4 w-4" /> Mon groupe
-          </button>
+          <BoutonY2K variant="secondary" size="sm" onClick={() => navigate('/etablissement/mon-groupe')} className="whitespace-nowrap" iconeGauche={<Users className="h-4 w-4" />}>
+            Mon groupe
+          </BoutonY2K>
         )}
       </div>
 
