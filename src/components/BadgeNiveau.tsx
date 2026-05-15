@@ -1,15 +1,20 @@
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+
 interface BadgeNiveauProps {
   score: number | null | undefined;
   totalMissionsTerminees?: number | null;
   compact?: boolean;
 }
 
-function getNiveau(score: number) {
-  if (score >= 90) return { label: '💎 Diamant', classes: 'bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-800 border-emerald-300 animate-shimmer' };
-  if (score >= 70) return { label: '🔵 Platine', classes: 'bg-primary/10 text-primary border-primary/30' };
-  if (score >= 50) return { label: '🟡 Or', classes: 'bg-yellow-100 text-yellow-700 border-yellow-300' };
-  if (score >= 30) return { label: '🟠 Argent', classes: 'bg-amber-100 text-amber-700 border-amber-300' };
-  return { label: '🔴 Bronze', classes: 'bg-destructive/10 text-destructive border-destructive/30' };
+function getNiveau(score: number): {
+  label: string;
+  variant: 'success' | 'warning' | 'error' | 'info' | 'premium';
+} {
+  if (score >= 90) return { label: '💎 Diamant', variant: 'premium' };
+  if (score >= 70) return { label: '🔵 Platine', variant: 'premium' };
+  if (score >= 50) return { label: '🟡 Or', variant: 'warning' };
+  if (score >= 30) return { label: '🟠 Argent', variant: 'warning' };
+  return { label: '🔴 Bronze', variant: 'error' };
 }
 
 export function BadgeNiveau({ score, totalMissionsTerminees, compact }: BadgeNiveauProps) {
@@ -18,19 +23,16 @@ export function BadgeNiveau({ score, totalMissionsTerminees, compact }: BadgeNiv
 
   if (masque) {
     return (
-      <span
-        className={`inline-flex items-center border rounded-full font-semibold bg-muted text-muted-foreground border-border ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'}`}
-        title="Score disponible après 3 missions terminées"
-      >
+      <BadgeY2K variant="info" size={compact ? 'sm' : 'md'} title="Score disponible après 3 missions terminées">
         Non noté
-      </span>
+      </BadgeY2K>
     );
   }
 
-  const { label, classes } = getNiveau(Number(score));
+  const { label, variant } = getNiveau(Number(score));
   return (
-    <span className={`inline-flex items-center border rounded-full font-semibold ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'} ${classes}`}>
+    <BadgeY2K variant={variant} size={compact ? 'sm' : 'md'}>
       {label}
-    </span>
+    </BadgeY2K>
   );
 }

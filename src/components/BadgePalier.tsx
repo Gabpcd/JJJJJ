@@ -1,4 +1,5 @@
 import { Trophy } from 'lucide-react';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 
 interface BadgePalierProps {
   palierNom: string;
@@ -7,9 +8,8 @@ interface BadgePalierProps {
 
 export function BadgePalier({ palierNom, taux }: BadgePalierProps) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/20 text-accent-foreground text-xs font-semibold">
-      <Trophy className="h-3 w-3" />
+    <BadgeY2K variant="premium" size="md" icone={<Trophy className="h-3 w-3" />}>
       {palierNom} ({taux}%)
-    </span>
+    </BadgeY2K>
   );
 }

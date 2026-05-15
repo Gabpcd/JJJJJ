@@ -1,4 +1,5 @@
 import { ShieldCheck, ShieldAlert } from 'lucide-react';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 
 interface BadgeRPPSProps {
   rppsVerifie: boolean | null;
@@ -11,23 +12,20 @@ interface BadgeRPPSProps {
 const PROFESSIONS_SANS_RPPS = ['AS', 'AES'];
 
 export function BadgeRPPS({ rppsVerifie, rpps, profession }: BadgeRPPSProps) {
-  // Pas de badge RPPS pour les professions qui n'en ont pas
   if (profession && PROFESSIONS_SANS_RPPS.includes(profession)) return null;
   if (!rpps && !rppsVerifie) return null;
 
   if (rppsVerifie) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-        <ShieldCheck className="h-3.5 w-3.5" />
+      <BadgeY2K variant="success" size="sm" icone={<ShieldCheck className="h-3 w-3" />}>
         RPPS Vérifié
-      </span>
+      </BadgeY2K>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-      <ShieldAlert className="h-3.5 w-3.5" />
+    <BadgeY2K variant="warning" size="sm" icone={<ShieldAlert className="h-3 w-3" />}>
       RPPS Non vérifié
-    </span>
+    </BadgeY2K>
   );
 }
