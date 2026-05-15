@@ -3,7 +3,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { Crown, Zap, BarChart3, Award, Bell, FileText, Calculator, Receipt, ClipboardList, HelpCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -63,7 +63,7 @@ export default function PremiumSoignant() {
           <Card className="border-primary/20 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-1 bg-primary" />
             <CardHeader className="pb-2">
-              <Badge variant="secondary" className="w-fit text-xs mb-2">Premium</Badge>
+              <BadgeY2K variant="premium" className="w-fit mb-2">Premium</BadgeY2K>
               <CardTitle className="text-lg">Premium</CardTitle>
               <div className="mt-1">
                 <span className="text-3xl font-bold text-foreground">9,99 €</span>
@@ -89,7 +89,7 @@ export default function PremiumSoignant() {
           <Card className="border-warning/30 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-1 bg-warning" />
             <CardHeader className="pb-2">
-              <Badge className="w-fit text-xs mb-2 bg-warning/10 text-warning border-warning/30">Recommandé</Badge>
+              <BadgeY2K variant="warning" className="w-fit mb-2">Recommandé</BadgeY2K>
               <CardTitle className="text-lg">Pack Libéral</CardTitle>
               <div className="mt-1">
                 <span className="text-3xl font-bold text-foreground">19,99 €</span>

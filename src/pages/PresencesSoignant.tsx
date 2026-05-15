@@ -25,7 +25,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { CalendarDays, Clock, CheckCircle, History, AlertTriangle, MapPin, Hash, Eye, Activity } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Button } from '@/components/ui/button';
 
 export default function PresencesSoignant() {
@@ -416,7 +416,7 @@ export default function PresencesSoignant() {
 
       <Tabs defaultValue="avenir">
         <TabsList className="w-full max-w-lg mb-4">
-          <TabsTrigger value="avenir" className="flex-1 gap-1.5"><CalendarDays className="h-4 w-4" />À venir{missionsAVenir.length > 0 && <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] px-1 text-[10px]" aria-label={`${missionsAVenir.length} mission${missionsAVenir.length > 1 ? 's' : ''} à venir`}>{missionsAVenir.length}</Badge>}</TabsTrigger>
+          <TabsTrigger value="avenir" className="flex-1 gap-1.5"><CalendarDays className="h-4 w-4" />À venir{missionsAVenir.length > 0 && <BadgeY2K variant="info" size="sm" className="ml-1 h-5 min-w-[20px] justify-center px-1" aria-label={`${missionsAVenir.length} mission${missionsAVenir.length > 1 ? 's' : ''} à venir`}>{missionsAVenir.length}</BadgeY2K>}</TabsTrigger>
           <TabsTrigger value="encours" className="flex-1 gap-1.5"><Activity className="h-4 w-4" />En cours</TabsTrigger>
           <TabsTrigger value="aujourdhui" className="flex-1 gap-1.5"><Clock className="h-4 w-4" />Aujourd'hui</TabsTrigger>
           <TabsTrigger value="historique" className="flex-1 gap-1.5"><History className="h-4 w-4" />Historique</TabsTrigger>
@@ -598,9 +598,9 @@ export default function PresencesSoignant() {
                           <Eye className="h-3.5 w-3.5" /> Détail
                         </button>
                         {p.valide_par_etablissement ? (
-                          <Badge variant="outline" className="bg-success/10 text-success border-success/30 text-[10px]">✅ Validée</Badge>
+                          <BadgeY2K variant="success" size="sm">✅ Validée</BadgeY2K>
                         ) : (
-                          <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30 text-[10px]">⏳ Non validée</Badge>
+                          <BadgeY2K variant="warning" size="sm">⏳ Non validée</BadgeY2K>
                         )}
                       </div>
                     </div>
