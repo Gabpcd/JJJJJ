@@ -54,7 +54,9 @@ export const CardY2K = forwardRef<HTMLDivElement, Props>(function CardY2K(
       ref={ref}
       className={cn(
         'rounded-3xl p-5',
-        'transition-all duration-300 motion-reduce:transition-none',
+        // Sprint 12-D : transition-bouncy (cubic-bezier overshoot doux) pour cards.
+        // prefers-reduced-motion géré dans .transition-bouncy (src/index.css).
+        'transition-bouncy',
         hoverLift && 'hover:-translate-y-1 hover:shadow-holographic motion-reduce:hover:translate-y-0',
         VARIANTS[variant],
         className,

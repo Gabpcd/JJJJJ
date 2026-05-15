@@ -89,7 +89,9 @@ export function CarteKPIY2K({
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'rounded-3xl p-5 text-left transition-all duration-300 motion-reduce:transition-none',
+        // Sprint 12-D : transition-bouncy (cubic-bezier overshoot doux) pour KPIs cliquables.
+        // prefers-reduced-motion géré dans .transition-bouncy (src/index.css).
+        'rounded-3xl p-5 text-left transition-bouncy',
         onClick && 'hover:-translate-y-1 hover:shadow-holographic motion-reduce:hover:translate-y-0 cursor-pointer',
         onClick && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-jolene-rose focus-visible:ring-offset-2',
         VARIANTS[variant],
