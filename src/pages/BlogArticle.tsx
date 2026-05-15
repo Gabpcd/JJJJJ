@@ -5,6 +5,7 @@ import { articlesBlog, getTagClasses, getArticleGradient } from '@/lib/blog-data
 import { ArrowLeft, ArrowRight, Clock, Calendar, Link2, Linkedin, MessageCircle, Sparkles } from 'lucide-react';
 import { sanitizeHTML } from '@/lib/sanitize';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
 import { FadeInView } from '@/components/FadeInView';
 
@@ -61,7 +62,7 @@ export default function BlogArticle() {
         <div className="text-center">
           <p className="text-4xl mb-4">🔍</p>
           <h1 className="text-2xl font-bold text-foreground mb-2">Article introuvable</h1>
-          <Button variant="outline" onClick={() => navigate('/blog')}>Retour au blog</Button>
+          <BoutonY2K variant="secondary" onClick={() => navigate('/blog')}>Retour au blog</BoutonY2K>
         </div>
       </div>
     );
@@ -127,9 +128,9 @@ export default function BlogArticle() {
               <div className="border-t border-border mt-12 pt-8">
                 <p className="text-sm font-semibold text-foreground mb-4">Partager cet article 🩷</p>
                 <div className="flex gap-3">
-                  <Button variant="outline" size="sm" onClick={copierLien} className="gap-2 rounded-xl hover:bg-primary/5">
-                    <Link2 className="h-4 w-4" /> Copier le lien
-                  </Button>
+                  <BoutonY2K variant="secondary" size="sm" onClick={copierLien} className="rounded-xl" iconeGauche={<Link2 className="h-4 w-4" />}>
+                    Copier le lien
+                  </BoutonY2K>
                   <Button variant="outline" size="sm" asChild className="gap-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20">
                     <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer">
                       <Linkedin className="h-4 w-4 text-blue-600" /> LinkedIn

@@ -20,7 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -128,12 +128,12 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
           <div className="card-base p-8 text-center">
             <Search className="h-10 w-10 mx-auto text-gray-300 mb-3" />
             <p className="text-gray-500 mb-4">Aucune recherche sauvegardée pour l'instant.</p>
-            <Button onClick={() => {
+            <BoutonY2K onClick={() => {
               if (role === 'SOIGNANT') navigate('/soignant/recherche-missions');
               else navigate('/etablissement/tableau-de-bord');
             }}>
               Créer une recherche
-            </Button>
+            </BoutonY2K>
           </div>
         ) : (
           <ul className="space-y-2">
@@ -159,23 +159,23 @@ export default function PageRecherchesSauvegardees({ role }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button size="sm" variant="ghost" onClick={() => handleToggleAlerte(f)}
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => handleToggleAlerte(f)}
                       title={f.alerte_active ? 'Désactiver alertes' : 'Activer alertes'}>
                       {f.alerte_active
                         ? <Bell className="h-4 w-4 text-blue-600" />
                         : <BellOff className="h-4 w-4 text-gray-400" />}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(f)} title="Modifier">
+                    </BoutonY2K>
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => setEditing(f)} title="Modifier">
                       <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleDelete(f)} title="Supprimer">
+                    </BoutonY2K>
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => handleDelete(f)} title="Supprimer">
                       <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
+                    </BoutonY2K>
                   </div>
                 </div>
-                <Button size="sm" variant="outline" className="w-full" onClick={() => handleAllerRecherche(f)}>
-                  Aller à la recherche <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
+                <BoutonY2K size="sm" variant="secondary" className="w-full" onClick={() => handleAllerRecherche(f)} iconeDroite={<ChevronRight className="h-4 w-4" />}>
+                  Aller à la recherche
+                </BoutonY2K>
               </li>
             ))}
           </ul>
@@ -281,10 +281,10 @@ function ModalEditPage({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Annuler</Button>
-          <Button onClick={submit} disabled={submitting}>
+          <BoutonY2K variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>Annuler</BoutonY2K>
+          <BoutonY2K onClick={submit} disabled={submitting}>
             {submitting ? 'Enregistrement…' : 'Enregistrer'}
-          </Button>
+          </BoutonY2K>
         </DialogFooter>
       </DialogContent>
     </Dialog>

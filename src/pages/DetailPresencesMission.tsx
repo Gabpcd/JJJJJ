@@ -8,7 +8,7 @@ import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 
 function fmt(v: number) {
@@ -135,9 +135,9 @@ export default function DetailPresencesMission({ role = 'ADMIN_ETABLISSEMENT' }:
 
   return (
     <LayoutApp role={layoutRole}>
-      <Button variant="ghost" size="sm" className="mb-4 gap-1" onClick={() => navigate(-1)}>
-        <ArrowLeft className="h-4 w-4" /> Retour
-      </Button>
+      <BoutonY2K variant="ghost" size="sm" className="mb-4" onClick={() => navigate(-1)} iconeGauche={<ArrowLeft className="h-4 w-4" />}>
+        Retour
+      </BoutonY2K>
 
       {/* Mission header */}
       <div className="card-base mb-6">

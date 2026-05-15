@@ -7,7 +7,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ChargementPage } from '@/components/ChargementPage';
 import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
-import { Button } from '@/components/ui/button';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CreditCard, ExternalLink, RefreshCw, Loader2, CheckCircle, Clock, AlertTriangle, Banknote, Building2, FileText, ArrowRight, Shield, Info } from 'lucide-react';
 import { toast } from 'sonner';
@@ -359,10 +358,9 @@ export default function PageStripeConnect() {
                     </p>
                   </div>
                 </div>
-                <Button onClick={lancerOnboarding} disabled={actionLoading} variant="destructive" className="gap-2">
-                  {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                <BoutonY2K onClick={lancerOnboarding} disabled={actionLoading} loading={actionLoading} variant="destructive" iconeGauche={!actionLoading ? <ExternalLink className="h-4 w-4" /> : undefined}>
                   Compléter mon profil Stripe
-                </Button>
+                </BoutonY2K>
               </div>
             )}
 
@@ -381,10 +379,9 @@ export default function PageStripeConnect() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={lancerOnboarding} disabled={actionLoading} variant="destructive" className="gap-2">
-                    {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                  <BoutonY2K onClick={lancerOnboarding} disabled={actionLoading} loading={actionLoading} variant="destructive" iconeGauche={!actionLoading ? <ExternalLink className="h-4 w-4" /> : undefined}>
                     Recommencer l'onboarding
-                  </Button>
+                  </BoutonY2K>
                   <BoutonY2K
                     onClick={() => navigate('/soignant/support')}
                     variant="secondary"

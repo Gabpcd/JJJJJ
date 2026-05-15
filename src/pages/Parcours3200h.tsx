@@ -6,8 +6,8 @@ import { ProgressionJalons3200h } from '@/components/ProgressionJalons3200h';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { CheckCircle, Upload, FileText, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { CheckCircle, Upload, FileText } from 'lucide-react';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
 
 const OBJECTIF_HEURES_LIBERAL = 3200;
@@ -100,12 +100,12 @@ export default function Parcours3200h() {
             <p className="text-sm text-muted-foreground mt-2">SIRET : <span className="font-mono font-bold text-foreground">{soignant.siret_liberal}</span></p>
           )}
           <div className="mt-6 flex gap-3 justify-center flex-wrap">
-            <Button variant="outline" onClick={() => navigate('/soignant/documents')}>
-              <FileText className="h-4 w-4 mr-2" /> Mes documents libéraux
-            </Button>
-            <Button onClick={() => navigate('/soignant/missions')} aria-label="Voir les missions">
+            <BoutonY2K variant="secondary" onClick={() => navigate('/soignant/documents')} iconeGauche={<FileText className="h-4 w-4" />}>
+              Mes documents libéraux
+            </BoutonY2K>
+            <BoutonY2K onClick={() => navigate('/soignant/missions')} aria-label="Voir les missions">
               Voir les missions →
-            </Button>
+            </BoutonY2K>
           </div>
         </div>
       </LayoutApp>
@@ -127,10 +127,16 @@ export default function Parcours3200h() {
             Téléversez une attestation employeur ou un bulletin de salaire prouvant vos heures. Un administrateur vérifiera votre dossier.
           </p>
           <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={handleUpload3200h} />
-          <Button variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()} className="gap-1.5">
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          <BoutonY2K
+            variant="secondary"
+            size="sm"
+            disabled={uploading}
+            loading={uploading}
+            onClick={() => fileRef.current?.click()}
+            iconeGauche={!uploading ? <Upload className="h-4 w-4" /> : undefined}
+          >
             {uploading ? 'Envoi…' : 'Téléverser mon attestation'}
-          </Button>
+          </BoutonY2K>
         </div>
       )}
 

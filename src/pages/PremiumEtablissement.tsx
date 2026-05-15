@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { Building2, FileSpreadsheet, BarChart3, Globe, Plug, Headphones, FileText, CheckCircle2, Crown, Loader2 } from 'lucide-react';
+import { Building2, FileSpreadsheet, BarChart3, Globe, Plug, Headphones, FileText, CheckCircle2, Crown } from 'lucide-react';
 import {
   CardY2K,
   CardY2KHeader,
   CardY2KTitle,
   CardY2KContent,
 } from '@/components/y2k/CardY2K';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
@@ -75,9 +75,9 @@ export default function PremiumEtablissement() {
                 </li>
               ))}
             </ul>
-            <Button disabled className="w-full opacity-60" aria-label="Offre Pro non disponible pour le moment">
+            <BoutonY2K disabled className="w-full opacity-60" aria-label="Offre Pro non disponible pour le moment">
               🚀 Bientôt disponible
-            </Button>
+            </BoutonY2K>
             <p className="text-xs text-muted-foreground text-center">Disponible prochainement — inscrivez-vous ci-dessous pour être informé(e)</p>
           </CardY2KContent>
         </CardY2K>
@@ -95,10 +95,9 @@ export default function PremiumEtablissement() {
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && inscrire()}
               />
-              <Button onClick={inscrire} disabled={submitting} className="shrink-0 gap-2">
-                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              <BoutonY2K onClick={inscrire} disabled={submitting} loading={submitting} className="shrink-0">
                 S'inscrire
-              </Button>
+              </BoutonY2K>
             </div>
             <p className="text-[11px] text-muted-foreground">Sans engagement. Annulation à tout moment.</p>
           </CardY2KContent>

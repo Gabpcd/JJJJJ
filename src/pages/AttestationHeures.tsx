@@ -10,6 +10,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -191,13 +192,14 @@ export default function AttestationHeures() {
               )}
             </div>
 
-            <Button
+            <BoutonY2K
               onClick={genererAttestation}
               disabled={preview.nb === 0 || loadingPreview}
-              className="w-full gap-2"
+              className="w-full"
+              iconeGauche={<FileText className="h-4 w-4" />}
             >
-              <FileText className="h-4 w-4" /> Générer l'attestation
-            </Button>
+              Générer l'attestation
+            </BoutonY2K>
 
             {preview.nb === 0 && !loadingPreview && (
               <p className="text-xs text-muted-foreground text-center italic">

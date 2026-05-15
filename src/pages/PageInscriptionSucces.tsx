@@ -15,7 +15,7 @@
 import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertTriangle, Mail, ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 export default function PageInscriptionSucces() {
@@ -97,9 +97,9 @@ export default function PageInscriptionSucces() {
             </div>
           </div>
 
-          <Button onClick={() => navigate(target)} className="w-full">
-            Continuer vers mon tableau de bord <ArrowRight className="h-4 w-4 ml-2" />
-          </Button>
+          <BoutonY2K onClick={() => navigate(target)} className="w-full" iconeDroite={<ArrowRight className="h-4 w-4" />}>
+            Continuer vers mon tableau de bord
+          </BoutonY2K>
         </div>
       </div>
     </div>

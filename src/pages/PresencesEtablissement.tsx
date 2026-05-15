@@ -6,7 +6,7 @@ import { CarteValidation } from '@/components/CarteValidation';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -251,9 +251,9 @@ export default function PresencesEtablissement() {
       case 'actions':
         if (!p.valide_par_etablissement && p.pointage_depart_le) {
           return (
-            <Button size="sm" variant="default" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); validerUne(p.id); }}>
-              <CheckCircle className="h-3.5 w-3.5 mr-1" /> Valider
-            </Button>
+            <BoutonY2K size="sm" variant="primary" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); validerUne(p.id); }} iconeGauche={<CheckCircle className="h-3.5 w-3.5" />}>
+              Valider
+            </BoutonY2K>
           );
         }
         return <span className="text-xs text-muted-foreground">—</span>;
