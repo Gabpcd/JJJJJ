@@ -301,3 +301,23 @@ Cf. docs/SPRINT_12_C.md.
 - `lien="/path"` → `onClick={() => navigate("/path")}`
 - `sousLabel` → `contexte`
 - `couleurIcone/couleurFond` semantic → drop (palette Y2K rose unifiée)
+
+### Sprint 12-D — Mascotte EmptyState + animations + cards restantes (4 PRs)
+Cf. docs/SPRINT_12_D.md.
+
+| Sprint | PR | Chantier | Livré |
+|---|---|---|---|
+| 12-D-1 | #298 | EmptyState foundation `mascotte` prop | Nouvelle prop mascotte + auto-rendu (variant→état) + rétro-compat 100% |
+| 12-D-2 | #299 | animations.ts adoption Y2K core | BoutonY2K → transition-snap, CardY2K + CarteKPIY2K → transition-bouncy |
+| 12-D-3 | #300 | Mascotte sur 9 EmptyState | 4 thinking + 3 empty + 2 happy sur RechercheMissions, MesAvances, HistoriqueMissions, LitigesSoignant/Etab, etc. |
+| 12-D-4 | (this) | Doc Sprint 12-D | — |
+| **Total** | **4 PRs** | — | **9 Mascotte EmptyState + 3 transitions Y2K + 1 foundation** |
+
+**Card → CardY2K 4 pages user-facing SKIPPED** (audit explicite docs/SPRINT_12_D.md) :
+- PremiumSoignant + PremiumEtablissement : pricing layout avec borders sémantiques (besoin variant CardY2K dédié)
+- ContratPlateforme : 3 Cards state-coded (default/warning/success) — perte signalétique légale critique
+- FacturationEtablissement : 11 Cards dans `<DialogResponsive>` modales — cohérence shadcn requise
+
+Reporté Sprint 12-E avec création de variants CardY2K (pricing, status-coded) + décision UX produit.
+
+**Mapping variant EmptyState → Mascotte etat** : `info`→`empty`, `success`→`happy`, `warning`→`thinking`.
