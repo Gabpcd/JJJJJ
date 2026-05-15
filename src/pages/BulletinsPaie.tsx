@@ -4,6 +4,7 @@ import { ArrowLeft, FileText, Download, Loader2, Receipt, X } from 'lucide-react
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
@@ -107,6 +108,7 @@ export default function BulletinsPaie() {
     <LayoutApp role="SOIGNANT">
       <div className="space-y-5">
         <div className="flex items-center gap-3">
+          {/* Sprint 12-B : conservé shadcn Button — size="icon" non supporté par BoutonY2K */}
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -220,16 +222,16 @@ export default function BulletinsPaie() {
                     );
                   case 'actions':
                     return (
-                      <Button
+                      <BoutonY2K
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                         className="h-8 gap-1 text-xs"
                         disabled={downloading}
                         onClick={(e) => { e.stopPropagation(); telecharger(b.id); }}
                       >
                         {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                         PDF
-                      </Button>
+                      </BoutonY2K>
                     );
                   default:
                     return null;
@@ -264,16 +266,16 @@ export default function BulletinsPaie() {
                         </p>
                       </div>
                     </div>
-                    <Button
+                    <BoutonY2K
                       size="sm"
-                      variant="default"
+                      variant="primary"
                       className="w-full gap-1.5 min-h-[44px]"
                       disabled={downloading}
                       onClick={(e) => { e.stopPropagation(); telecharger(b.id); }}
                     >
                       {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                       Télécharger PDF
-                    </Button>
+                    </BoutonY2K>
                   </div>
                 );
               }}
