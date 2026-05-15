@@ -4,7 +4,12 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  CardY2K,
+  CardY2KHeader,
+  CardY2KTitle,
+  CardY2KContent,
+} from '@/components/y2k/CardY2K';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { Button } from '@/components/ui/button';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
@@ -214,8 +219,8 @@ export default function AdminFinances() {
 
         {/* KPIs du mois */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
-            <CardContent className="pt-4 pb-3">
+          <CardY2K noPadding className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
+            <CardY2KContent className="pt-4 pb-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase">Commissions HT du mois</p>
@@ -226,36 +231,37 @@ export default function AdminFinances() {
                   {variationPct !== 0 ? `${variationPositive ? '+' : ''}${variationPct.toFixed(0)}%` : '—'}
                 </div>
               </div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-[10px] text-muted-foreground uppercase">TTC du mois</p>
               <p className="text-xl font-bold text-foreground">{formatEur(commTTCMois)}</p>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/admin/facturation')}>
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-[10px] text-muted-foreground uppercase">TVA collectée du mois</p>
               <p className="text-xl font-bold text-foreground">{formatEur(tvaMois)}</p>
-            </CardContent>
-          </Card>
-          <Card
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K
+            noPadding
             className={`cursor-pointer hover:border-destructive/50 transition-colors ${nbImpayees > 0 ? 'border-destructive/30 bg-destructive/5' : ''}`}
             onClick={() => navigate('/admin/impayees')}
           >
-            <CardContent className="pt-4 pb-3">
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-[10px] text-muted-foreground uppercase">Factures impayées</p>
               <p className={`text-xl font-bold ${nbImpayees > 0 ? 'text-destructive' : 'text-foreground'}`}>{nbImpayees}</p>
               {nbImpayees > 0 && <p className="text-[10px] text-destructive">{formatEur(montantImpayees)} en attente</p>}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding>
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-[10px] text-muted-foreground uppercase">Taux com. moyen</p>
               <p className="text-xl font-bold text-foreground">{tauxParEtab.toFixed(1)}%</p>
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         </div>
 
         {/* Récap tout temps */}
@@ -280,9 +286,9 @@ export default function AdminFinances() {
         </div>
 
         {/* Chart */}
-        <Card>
-          <CardHeader><CardTitle className="text-base">Commissions — 6 derniers mois</CardTitle></CardHeader>
-          <CardContent>
+        <CardY2K noPadding>
+          <CardY2KHeader><CardY2KTitle className="text-base">Commissions — 6 derniers mois</CardY2KTitle></CardY2KHeader>
+          <CardY2KContent>
             <ChartContainer config={chartConfig} className="h-[280px] w-full">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -293,13 +299,13 @@ export default function AdminFinances() {
                 <Bar dataKey="ttc" fill="var(--color-ttc)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartContainer>
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
 
         {/* Table par établissement */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Détail par établissement</CardTitle>
+        <CardY2K noPadding>
+          <CardY2KHeader>
+            <CardY2KTitle className="text-base">Détail par établissement</CardY2KTitle>
             {/* Mobile : tri visible via select */}
             <div className="md:hidden flex items-center gap-2 mt-2">
               <label className="text-xs text-muted-foreground">Trier par</label>
@@ -324,8 +330,8 @@ export default function AdminFinances() {
                 {sortDir === 'asc' ? '↑' : '↓'}
               </button>
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
+          </CardY2KHeader>
+          <CardY2KContent className="p-0">
             <TableOuCartes
               colonnes={[
                 { cle: 'nom', titre: 'Établissement' },
@@ -414,8 +420,8 @@ export default function AdminFinances() {
                 </div>
               )}
             />
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
       </div>
     </LayoutAdmin>
   );

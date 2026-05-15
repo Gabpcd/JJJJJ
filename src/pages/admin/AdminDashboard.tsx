@@ -8,7 +8,12 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar, AreaChart, Area, ReferenceLine } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  CardY2K,
+  CardY2KHeader,
+  CardY2KTitle,
+  CardY2KContent,
+} from '@/components/y2k/CardY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -300,9 +305,9 @@ export default function AdminDashboard() {
 
         {/* Charts */}
         <div className="grid md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader><CardTitle className="text-sm font-medium">Missions terminées / semaine</CardTitle></CardHeader>
-            <CardContent>
+          <CardY2K noPadding>
+            <CardY2KHeader><CardY2KTitle className="text-sm font-medium">Missions terminées / semaine</CardY2KTitle></CardY2KHeader>
+            <CardY2KContent>
               <ChartContainer config={missionChartConfig} className="h-[250px] w-full">
                 <LineChart data={graphiques?.missions_par_semaine ?? []}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -312,11 +317,11 @@ export default function AdminDashboard() {
                   <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ChartContainer>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle className="text-sm font-medium">CA mensuel HT</CardTitle></CardHeader>
-            <CardContent>
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding>
+            <CardY2KHeader><CardY2KTitle className="text-sm font-medium">CA mensuel HT</CardY2KTitle></CardY2KHeader>
+            <CardY2KContent>
               <ChartContainer config={caChartConfig} className="h-[250px] w-full">
                 <BarChart data={graphiques?.ca_par_mois ?? []}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -326,16 +331,16 @@ export default function AdminDashboard() {
                   <Bar dataKey="ca_ht" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ChartContainer>
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         </div>
 
         {/* ══════════════ 💰 RENTABILITÉ ══════════════ */}
-        <Card className="border-primary/30">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold flex items-center gap-2">💰 Rentabilité estimée</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
+        <CardY2K noPadding className="border-primary/30">
+          <CardY2KHeader>
+            <CardY2KTitle className="text-lg font-bold flex items-center gap-2">💰 Rentabilité estimée</CardY2KTitle>
+          </CardY2KHeader>
+          <CardY2KContent className="space-y-6">
             {/* CA */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="rounded-lg bg-muted/50 p-4">
@@ -457,17 +462,17 @@ export default function AdminDashboard() {
             <p className="text-xs text-muted-foreground">
               *Estimation indicative SASU. Ne tient pas compte de la CFE, CVAE, ni des spécificités fiscales. Consultez votre expert-comptable.
             </p>
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
 
         {/* 💳 Stripe paiements */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
+        <CardY2K noPadding>
+          <CardY2KHeader>
+            <CardY2KTitle className="text-sm font-medium flex items-center gap-2">
               <CreditCard className="h-4 w-4 text-primary" /> 💳 Paiements Stripe
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </CardY2KTitle>
+          </CardY2KHeader>
+          <CardY2KContent>
             {stripeMoisNb > 0 ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -496,18 +501,18 @@ export default function AdminDashboard() {
                 </a>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
 
         {/* Stripe Connect */}
         {connectStats && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <CardY2K noPadding>
+            <CardY2KHeader>
+              <CardY2KTitle className="text-sm font-medium flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-primary" /> Stripe Connect
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+              </CardY2KTitle>
+            </CardY2KHeader>
+            <CardY2KContent className="space-y-3">
               <div className="rounded-lg bg-muted/50 p-3 text-center mb-3">
                 <p className="text-xs text-muted-foreground">Comptes Connect</p>
                 <p className="text-xl font-bold text-foreground">{connectStats.total_comptes}</p>
@@ -536,15 +541,15 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         )}
 
         {/* Lists */}
         <div className="grid md:grid-cols-3 gap-6">
-          <Card>
-            <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><UserPlus className="h-4 w-4" /> Dernières inscriptions</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
+          <CardY2K noPadding>
+            <CardY2KHeader><CardY2KTitle className="text-sm font-medium flex items-center gap-2"><UserPlus className="h-4 w-4" /> Dernières inscriptions</CardY2KTitle></CardY2KHeader>
+            <CardY2KContent className="space-y-3">
               {derniersSoignants.map((s) => (
                 <div key={s.id} className="flex justify-between items-center text-sm">
                   <div>
@@ -566,12 +571,12 @@ export default function AdminDashboard() {
                 </div>
               ))}
               {derniersEtabs.length === 0 && <p className="text-sm text-muted-foreground">Aucun</p>}
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
 
-          <Card>
-            <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-warning" /> Litiges ouverts</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
+          <CardY2K noPadding>
+            <CardY2KHeader><CardY2KTitle className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-warning" /> Litiges ouverts</CardY2KTitle></CardY2KHeader>
+            <CardY2KContent className="space-y-3">
               {litiges.map((l) => (
                 <div key={l.id} className="text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/moderation')}>
                   <p className="font-medium text-foreground line-clamp-1">{l.motif}</p>
@@ -582,12 +587,12 @@ export default function AdminDashboard() {
                 </div>
               ))}
               {litiges.length === 0 && <p className="text-sm text-muted-foreground">Aucun litige ouvert</p>}
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
 
-          <Card>
-            <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><FileText className="h-4 w-4 text-destructive" /> Factures impayées</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
+          <CardY2K noPadding>
+            <CardY2KHeader><CardY2KTitle className="text-sm font-medium flex items-center gap-2"><FileText className="h-4 w-4 text-destructive" /> Factures impayées</CardY2KTitle></CardY2KHeader>
+            <CardY2KContent className="space-y-3">
               {facturesImpayees.map((f: any) => (
                 <div key={f.id} className="text-sm cursor-pointer hover:bg-muted/50 rounded p-1.5 -mx-1.5" onClick={() => navigate('/admin/impayees')}>
                   <div className="flex justify-between">
@@ -598,8 +603,8 @@ export default function AdminDashboard() {
                 </div>
               ))}
               {facturesImpayees.length === 0 && <p className="text-sm text-muted-foreground">Aucune</p>}
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         </div>
       </div>
     </LayoutAdmin>

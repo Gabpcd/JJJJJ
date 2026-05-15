@@ -4,7 +4,10 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
+import {
+  CardY2K,
+  CardY2KContent,
+} from '@/components/y2k/CardY2K';
 import { Badge } from '@/components/ui/badge';
 import { Zap, TrendingUp, CheckCircle, XCircle, Clock, Loader2, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
@@ -70,36 +73,36 @@ export default function AdminAffacturage() {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Card>
-            <CardContent className="pt-4 pb-3">
+          <CardY2K noPadding>
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-[10px] text-muted-foreground uppercase">Demandes total</p>
               <p className="text-2xl font-bold text-foreground">{stats?.total_demandes ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-primary/30 bg-primary/5">
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding className="border-primary/30 bg-primary/5">
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-[10px] text-muted-foreground uppercase">En cours</p>
               <p className="text-2xl font-bold text-primary">{stats?.demandes_en_cours ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-success/30 bg-success/5">
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding className="border-success/30 bg-success/5">
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-[10px] text-muted-foreground uppercase">Financées</p>
               <p className="text-2xl font-bold text-success">{stats?.demandes_financees ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding>
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-[10px] text-muted-foreground uppercase">Volume financé</p>
               <p className="text-xl font-bold text-foreground">{fmt(Number(stats?.volume_finance_total || 0))}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-rose/30 bg-rose/5">
-            <CardContent className="pt-4 pb-3">
+            </CardY2KContent>
+          </CardY2K>
+          <CardY2K noPadding className="border-rose/30 bg-rose/5">
+            <CardY2KContent className="pt-4 pb-3">
               <p className="text-[10px] text-muted-foreground uppercase">Marge Jolene</p>
               <p className="text-xl font-bold text-rose">{fmt(Number(stats?.commission_jolene_total || 0))}</p>
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         </div>
 
         {/* Filtres */}
@@ -118,8 +121,8 @@ export default function AdminAffacturage() {
         </div>
 
         {/* Tableau */}
-        <Card>
-          <CardContent className="p-0">
+        <CardY2K noPadding>
+          <CardY2KContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -188,8 +191,8 @@ export default function AdminAffacturage() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
       </div>
     </LayoutAdmin>
   );
