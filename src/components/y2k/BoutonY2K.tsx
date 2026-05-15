@@ -3,9 +3,10 @@
  *
  * Bouton Y2K Gen Z signature avec dégradés holographiques + hover scale.
  * Variants :
- *  - primary   : gradient rose→mauve, shadow holographique, hover scale
- *  - secondary : surface neutre, border rose subtile
- *  - ghost     : transparent, hover bg-soft
+ *  - primary     : gradient rose→mauve, shadow holographique, hover scale
+ *  - secondary   : surface neutre, border rose subtile
+ *  - ghost       : transparent, hover bg-soft
+ *  - destructive : gradient rouge→rose holographique pour actions irréversibles
  *
  * Touch targets 44px min (mobile-first). `prefers-reduced-motion` respecté.
  *
@@ -17,7 +18,7 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
-type Variant = 'primary' | 'secondary' | 'ghost';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive';
 type Taille = 'sm' | 'md' | 'lg';
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -58,6 +59,13 @@ const VARIANTS: Record<Variant, string> = {
     'hover:bg-jolene-rose-50',
     'active:scale-[0.98] motion-reduce:active:scale-100',
     'focus-visible:ring-2 focus-visible:ring-jolene-rose focus-visible:ring-offset-2',
+  ),
+  destructive: cn(
+    'text-white font-semibold',
+    'bg-gradient-to-br from-[#FF4D6B] to-[#FF6BBE] shadow-[0_8px_24px_-4px_rgba(255,77,107,0.45)]',
+    'hover:scale-[1.03] hover:shadow-[0_12px_32px_-4px_rgba(255,77,107,0.6)] active:scale-[0.98]',
+    'motion-reduce:hover:scale-100 motion-reduce:active:scale-100',
+    'focus-visible:ring-2 focus-visible:ring-[#FF4D6B] focus-visible:ring-offset-2',
   ),
 };
 
