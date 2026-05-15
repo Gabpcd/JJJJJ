@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Banknote, Clock, Download, TrendingUp, ChevronRight, Calculator, FileText, Search, CheckCircle, AlertTriangle, Scale } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { CarteKPI } from '@/components/CarteKPI';
+import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState, IllustrationTirelire } from '@/components/ui/EmptyState';
 const GraphiqueGains6Mois = lazy(() =>
@@ -148,10 +148,34 @@ export default function MesGains() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <CarteKPI icone={Banknote} valeur={fmt(totalNetFiltre)} label={`Net estimé* · ${labelPeriode}`} couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/soignant/mes-factures-honoraires" />
-        <CarteKPI icone={TrendingUp} valeur={fmt(totalBrutFiltre)} label={`Brut · ${labelPeriode}`} couleurIcone="text-foreground" couleurFond="bg-muted" lien="/soignant/mes-factures-honoraires" />
-        <CarteKPI icone={Clock} valeur={`${totalHeures}h`} label={`${missions.length} mission${missions.length > 1 ? 's' : ''}`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/soignant/historique-missions" />
-        <CarteKPI icone={TrendingUp} valeur={fmt(totalNetToutTemps)} label="Total tout temps" couleurIcone="text-success" couleurFond="bg-success/10" lien="/soignant/mes-factures-honoraires" />
+        <CarteKPIY2K
+          icone={<Banknote className="h-4 w-4" />}
+          valeur={fmt(totalNetFiltre)}
+          label={`Net estimé* · ${labelPeriode}`}
+          variant="holographic"
+          onClick={() => navigate('/soignant/mes-factures-honoraires')}
+        />
+        <CarteKPIY2K
+          icone={<TrendingUp className="h-4 w-4" />}
+          valeur={fmt(totalBrutFiltre)}
+          label={`Brut · ${labelPeriode}`}
+          variant="default"
+          onClick={() => navigate('/soignant/mes-factures-honoraires')}
+        />
+        <CarteKPIY2K
+          icone={<Clock className="h-4 w-4" />}
+          valeur={`${totalHeures}h`}
+          label={`${missions.length} mission${missions.length > 1 ? 's' : ''}`}
+          variant="default"
+          onClick={() => navigate('/soignant/historique-missions')}
+        />
+        <CarteKPIY2K
+          icone={<TrendingUp className="h-4 w-4" />}
+          valeur={fmt(totalNetToutTemps)}
+          label="Total tout temps"
+          variant="soft"
+          onClick={() => navigate('/soignant/mes-factures-honoraires')}
+        />
       </div>
 
       {/* Graphique 6 mois */}

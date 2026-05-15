@@ -1,8 +1,9 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Briefcase, PlayCircle, CheckCircle, Building2 } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { CarteKPI } from '@/components/CarteKPI';
+import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { SelecteurEtablissement } from '@/components/SelecteurEtablissement';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,6 +12,7 @@ import { getLabelTypeEtablissement } from '@/lib/constantes';
 
 export default function DashboardGroupe() {
   usePageTitle('Dashboard Groupe');
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [etabSelectionne, setEtabSelectionne] = useState('tous');
   const [etablissements, setEtablissements] = useState<any[]>([]);
@@ -126,10 +128,33 @@ export default function DashboardGroupe() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <CarteKPI icone={Briefcase} valeur={kpi.ouvertes} label="Missions ouvertes" couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/groupe/missions?statut=OUVERTE" />
-        <CarteKPI icone={PlayCircle} valeur={kpi.enCours} label="En cours" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/groupe/missions?statut=EN_COURS" />
-        <CarteKPI icone={CheckCircle} valeur={kpi.terminees} label="Terminées ce mois" couleurIcone="text-success" couleurFond="bg-success/10" lien="/groupe/missions?statut=TERMINEE" />
-        <CarteKPI icone={Building2} valeur={kpi.actifs} label="Établissements actifs" couleurIcone="text-info" couleurFond="bg-info/10" />
+        <CarteKPIY2K
+          icone={<Briefcase className="h-4 w-4" />}
+          valeur={kpi.ouvertes}
+          label="Missions ouvertes"
+          variant="holographic"
+          onClick={() => navigate('/groupe/missions?statut=OUVERTE')}
+        />
+        <CarteKPIY2K
+          icone={<PlayCircle className="h-4 w-4" />}
+          valeur={kpi.enCours}
+          label="En cours"
+          variant="default"
+          onClick={() => navigate('/groupe/missions?statut=EN_COURS')}
+        />
+        <CarteKPIY2K
+          icone={<CheckCircle className="h-4 w-4" />}
+          valeur={kpi.terminees}
+          label="Terminées ce mois"
+          variant="default"
+          onClick={() => navigate('/groupe/missions?statut=TERMINEE')}
+        />
+        <CarteKPIY2K
+          icone={<Building2 className="h-4 w-4" />}
+          valeur={kpi.actifs}
+          label="Établissements actifs"
+          variant="default"
+        />
       </div>
 
       {/* Tableau de performance */}

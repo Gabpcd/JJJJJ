@@ -18,7 +18,7 @@ import { BadgeNiveau } from '@/components/BadgeNiveau';
 import { BandeauGoalGradient, CelebrationJalonManager } from '@/components/GoalGradient';
 import { LayoutApp } from '@/components/LayoutApp';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
-import { CarteKPI } from '@/components/CarteKPI';
+import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { EmptyState, IllustrationTirelire } from '@/components/ui/EmptyState';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { OnboardingGuide } from '@/components/OnboardingGuide';
@@ -359,9 +359,13 @@ export default function DashboardSoignant() {
           {/* KPI */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <FadeInView delay={0}>
-              <div className="cursor-pointer" onClick={() => navigate('/soignant/historique-missions')}>
-                <CarteKPI icone={CheckCircle} valeur={missionsTerminees} label="Missions terminées" couleurIcone="text-success" couleurFond="bg-success/10" lien="/soignant/historique-missions" />
-              </div>
+              <CarteKPIY2K
+                icone={<CheckCircle className="h-4 w-4" />}
+                valeur={missionsTerminees}
+                label="Missions terminées"
+                variant="holographic"
+                onClick={() => navigate('/soignant/historique-missions')}
+              />
             </FadeInView>
             <FadeInView delay={100}>
               {hasEvaluations ? (
@@ -375,22 +379,24 @@ export default function DashboardSoignant() {
               )}
             </FadeInView>
             <FadeInView delay={200}>
-              <div className="cursor-pointer" onClick={() => navigate('/soignant/planning?tab=historique')}>
-                <CarteKPI
-                  icone={Clock}
-                  valeur={`${heures}h`}
-                  label="Heures cumulées"
-                  sousLabel={seuilHeures ? `sur ${seuilHeures.toLocaleString('fr-FR')}h objectif` : undefined}
-                  couleurIcone="text-purple-600"
-                  couleurFond="bg-purple-100"
-                  lien={seuilHeures ? '/soignant/passer-en-liberal' : '/soignant/planning?tab=historique'}
-                />
-              </div>
+              <CarteKPIY2K
+                icone={<Clock className="h-4 w-4" />}
+                valeur={`${heures}h`}
+                label="Heures cumulées"
+                contexte={seuilHeures ? `sur ${seuilHeures.toLocaleString('fr-FR')}h objectif` : undefined}
+                variant="default"
+                onClick={() => navigate(seuilHeures ? '/soignant/passer-en-liberal' : '/soignant/planning?tab=historique')}
+              />
             </FadeInView>
             <FadeInView delay={300}>
-              <div className="cursor-pointer" onClick={() => navigate('/soignant/planning')}>
-                <CarteKPI icone={CalendarDays} valeur={mesMissions.length} label="Planning" sousLabel="missions à venir" couleurIcone="text-info" couleurFond="bg-info/10" lien="/soignant/planning" />
-              </div>
+              <CarteKPIY2K
+                icone={<CalendarDays className="h-4 w-4" />}
+                valeur={mesMissions.length}
+                label="Planning"
+                contexte="missions à venir"
+                variant="default"
+                onClick={() => navigate('/soignant/planning')}
+              />
             </FadeInView>
           </div>
 

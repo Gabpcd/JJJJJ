@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Users, Building2, CheckCircle, Clock, Banknote, TrendingUp, Target, Star, AlertTriangle, FileText, UserPlus, CreditCard, ExternalLink } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { CarteKPI } from '@/components/CarteKPI';
+import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -196,10 +196,37 @@ export default function AdminDashboard() {
 
         {/* KPI Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <CarteKPI icone={Users} valeur={kpi?.soignants_total ?? '—'} label="Soignants inscrits" sousLabel={`+${kpi?.soignants_semaine ?? 0} cette semaine`} couleurIcone="text-primary" couleurFond="bg-primary/10" lien="/admin/utilisateurs" />
-          <CarteKPI icone={Building2} valeur={kpi?.etablissements_total ?? '—'} label="Établissements" sousLabel={`+${kpi?.etablissements_semaine ?? 0} cette semaine`} couleurIcone="text-info" couleurFond="bg-info/10" lien="/admin/utilisateurs" />
-          <CarteKPI icone={CheckCircle} valeur={kpi?.missions_terminees_total ?? '—'} label="Missions terminées" sousLabel={`${kpi?.missions_terminees_mois ?? 0} ce mois`} couleurIcone="text-success" couleurFond="bg-success/10" lien="/admin/missions?filtre=TERMINEE" />
-          <CarteKPI icone={Clock} valeur={kpi?.missions_ouvertes ?? '—'} label="Missions ouvertes" couleurIcone="text-warning" couleurFond="bg-warning/10" lien="/admin/missions?filtre=OUVERTE" />
+          <CarteKPIY2K
+            icone={<Users className="h-4 w-4" />}
+            valeur={kpi?.soignants_total ?? '—'}
+            label="Soignants inscrits"
+            contexte={`+${kpi?.soignants_semaine ?? 0} cette semaine`}
+            variant="holographic"
+            onClick={() => navigate('/admin/utilisateurs')}
+          />
+          <CarteKPIY2K
+            icone={<Building2 className="h-4 w-4" />}
+            valeur={kpi?.etablissements_total ?? '—'}
+            label="Établissements"
+            contexte={`+${kpi?.etablissements_semaine ?? 0} cette semaine`}
+            variant="default"
+            onClick={() => navigate('/admin/utilisateurs')}
+          />
+          <CarteKPIY2K
+            icone={<CheckCircle className="h-4 w-4" />}
+            valeur={kpi?.missions_terminees_total ?? '—'}
+            label="Missions terminées"
+            contexte={`${kpi?.missions_terminees_mois ?? 0} ce mois`}
+            variant="default"
+            onClick={() => navigate('/admin/missions?filtre=TERMINEE')}
+          />
+          <CarteKPIY2K
+            icone={<Clock className="h-4 w-4" />}
+            valeur={kpi?.missions_ouvertes ?? '—'}
+            label="Missions ouvertes"
+            variant="default"
+            onClick={() => navigate('/admin/missions?filtre=OUVERTE')}
+          />
         </div>
 
         {/* Alertes et actions urgentes */}
@@ -238,40 +265,36 @@ export default function AdminDashboard() {
           <strong className="text-foreground"> GMV</strong> = volume brut des missions (argent qui passe par la plateforme mais va aux soignants — tu ne le touches pas).
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <CarteKPI
-            icone={Banknote}
+          <CarteKPIY2K
+            icone={<Banknote className="h-4 w-4" />}
             valeur={formatEur(kpi?.ca_commissions_ht_mois ?? 0)}
             label="Commission Jolene ce mois"
-            sousLabel={`Potentiel si tout se termine : ${formatEur(kpi?.ca_potentiel_mois ?? 0)}`}
-            couleurIcone="text-success"
-            couleurFond="bg-success/10"
-            lien="/admin/finances"
+            contexte={`Potentiel si tout se termine : ${formatEur(kpi?.ca_potentiel_mois ?? 0)}`}
+            variant="holographic"
+            onClick={() => navigate('/admin/finances')}
           />
-          <CarteKPI
-            icone={TrendingUp}
+          <CarteKPIY2K
+            icone={<TrendingUp className="h-4 w-4" />}
             valeur={formatEur(kpi?.ca_encaisse_total ?? 0)}
             label="Encaissé total (sur compte)"
-            sousLabel={`Facturable : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`}
-            couleurIcone="text-primary"
-            couleurFond="bg-primary/10"
-            lien="/admin/facturation"
+            contexte={`Facturable : ${formatEur(kpi?.ca_potentiel_total ?? 0)}`}
+            variant="default"
+            onClick={() => navigate('/admin/facturation')}
           />
-          <CarteKPI
-            icone={FileText}
+          <CarteKPIY2K
+            icone={<FileText className="h-4 w-4" />}
             valeur={formatEur(kpi?.gmv_total ?? 0)}
             label="GMV (volume transité)"
-            sousLabel={`Ce mois : ${formatEur(kpi?.gmv_mois ?? 0)}`}
-            couleurIcone="text-info"
-            couleurFond="bg-info/10"
-            lien="/admin/missions"
+            contexte={`Ce mois : ${formatEur(kpi?.gmv_mois ?? 0)}`}
+            variant="default"
+            onClick={() => navigate('/admin/missions')}
           />
-          <CarteKPI
-            icone={UserPlus}
+          <CarteKPIY2K
+            icone={<UserPlus className="h-4 w-4" />}
             valeur={`${(kpi?.soignants_semaine ?? 0) + (kpi?.etablissements_semaine ?? 0)}`}
             label="Nouveaux cette semaine"
-            couleurIcone="text-rose"
-            couleurFond="bg-rose/10"
-            lien="/admin/utilisateurs"
+            variant="default"
+            onClick={() => navigate('/admin/utilisateurs')}
           />
         </div>
 

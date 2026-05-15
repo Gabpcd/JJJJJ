@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { CarteKPI } from '@/components/CarteKPI';
+import { CarteKPIY2K } from '@/components/y2k/CarteKPIY2K';
 
 export default function AdminDemo() {
   usePageTitle('Données de démo');
@@ -78,10 +78,30 @@ export default function AdminDemo() {
             </div>
           ) : kpi ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <CarteKPI label="Soignants" valeur={kpi.total_soignants ?? 0} icone={Users} couleurIcone="text-primary" couleurFond="bg-primary/10" />
-              <CarteKPI label="Établissements" valeur={kpi.total_etablissements ?? 0} icone={Building2} couleurIcone="text-primary" couleurFond="bg-primary/10" />
-              <CarteKPI label="Missions" valeur={kpi.total_missions ?? 0} icone={Briefcase} couleurIcone="text-primary" couleurFond="bg-primary/10" />
-              <CarteKPI label="Factures" valeur={kpi.total_factures ?? 0} icone={FileText} couleurIcone="text-primary" couleurFond="bg-primary/10" />
+              <CarteKPIY2K
+                label="Soignants"
+                valeur={kpi.total_soignants ?? 0}
+                icone={<Users className="h-4 w-4" />}
+                variant="holographic"
+              />
+              <CarteKPIY2K
+                label="Établissements"
+                valeur={kpi.total_etablissements ?? 0}
+                icone={<Building2 className="h-4 w-4" />}
+                variant="default"
+              />
+              <CarteKPIY2K
+                label="Missions"
+                valeur={kpi.total_missions ?? 0}
+                icone={<Briefcase className="h-4 w-4" />}
+                variant="default"
+              />
+              <CarteKPIY2K
+                label="Factures"
+                valeur={kpi.total_factures ?? 0}
+                icone={<FileText className="h-4 w-4" />}
+                variant="default"
+              />
             </div>
           ) : (
             <p className="text-muted-foreground">Impossible de charger les KPI.</p>
