@@ -1,5 +1,5 @@
 /**
- * CardY2K — Sprint 9-B PR 3
+ * CardY2K — Sprint 9-B PR 3 + Sprint 12-F (sous-composants drop-in shadcn)
  *
  * Card Y2K Gen Z avec 3 variants :
  *  - default      : surface jolene-cloud + border subtile rose
@@ -9,11 +9,24 @@
  * Border-radius généreuse (rounded-3xl), shadow Y2K, hover lift subtle.
  * `prefers-reduced-motion` respecté.
  *
- * Usage :
+ * Usage simple :
  *   <CardY2K variant="glass" className="p-6">
  *     <h2>Bienvenue</h2>
- *     <p>...</p>
  *   </CardY2K>
+ *
+ * Usage avec sous-composants (drop-in shadcn) — Sprint 12-F :
+ *   <CardY2K>
+ *     <CardY2KHeader>
+ *       <CardY2KTitle>Titre</CardY2KTitle>
+ *       <CardY2KDescription>Sous-titre</CardY2KDescription>
+ *     </CardY2KHeader>
+ *     <CardY2KContent>Contenu</CardY2KContent>
+ *     <CardY2KFooter>Actions</CardY2KFooter>
+ *   </CardY2K>
+ *
+ * Note Sprint 12-F : si des sous-composants sont utilisés, le padding par défaut
+ * du wrapper CardY2K (`p-5`) DOIT être désactivé via `noPadding` pour éviter
+ * le double padding (sous-composants ont leur propre `p-6`).
  */
 import { HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
@@ -24,6 +37,8 @@ interface Props extends HTMLAttributes<HTMLDivElement> {
   variant?: Variant;
   /** Si true (défaut), hover lift effect */
   hoverLift?: boolean;
+  /** Si true, désactive le padding par défaut `p-5` (à utiliser avec les sous-composants CardY2KHeader/Content/Footer qui apportent leur propre padding). */
+  noPadding?: boolean;
 }
 
 const VARIANTS: Record<Variant, string> = {
@@ -46,14 +61,15 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 export const CardY2K = forwardRef<HTMLDivElement, Props>(function CardY2K(
-  { variant = 'default', hoverLift = true, className, children, ...rest },
+  { variant = 'default', hoverLift = true, noPadding = false, className, children, ...rest },
   ref,
 ) {
   return (
     <div
       ref={ref}
       className={cn(
-        'rounded-3xl p-5',
+        'rounded-3xl',
+        !noPadding && 'p-5',
         // Sprint 12-D : transition-bouncy (cubic-bezier overshoot doux) pour cards.
         // prefers-reduced-motion géré dans .transition-bouncy (src/index.css).
         'transition-bouncy',
@@ -67,5 +83,43 @@ export const CardY2K = forwardRef<HTMLDivElement, Props>(function CardY2K(
     </div>
   );
 });
+
+/* ─── Sous-composants drop-in shadcn (Sprint 12-F) ────────────────────────── */
+
+export const CardY2KHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  function CardY2KHeader({ className, ...rest }, ref) {
+    return <div ref={ref} className={cn('flex flex-col space-y-1.5 p-6', className)} {...rest} />;
+  },
+);
+
+export const CardY2KTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
+  function CardY2KTitle({ className, ...rest }, ref) {
+    return (
+      <h3
+        ref={ref}
+        className={cn('text-2xl font-semibold leading-none tracking-tight', className)}
+        {...rest}
+      />
+    );
+  },
+);
+
+export const CardY2KDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
+  function CardY2KDescription({ className, ...rest }, ref) {
+    return <p ref={ref} className={cn('text-sm text-jolene-bubblegum', className)} {...rest} />;
+  },
+);
+
+export const CardY2KContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  function CardY2KContent({ className, ...rest }, ref) {
+    return <div ref={ref} className={cn('p-6 pt-0', className)} {...rest} />;
+  },
+);
+
+export const CardY2KFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  function CardY2KFooter({ className, ...rest }, ref) {
+    return <div ref={ref} className={cn('flex items-center p-6 pt-0', className)} {...rest} />;
+  },
+);
 
 export default CardY2K;
