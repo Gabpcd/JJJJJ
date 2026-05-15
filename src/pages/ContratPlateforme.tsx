@@ -8,7 +8,7 @@ import { capturerErreurSentry } from '@/lib/sentry';
 import { FileText, Upload, CheckCircle, Clock, Download, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -173,7 +173,7 @@ export function ContratPlateformeContent() {
               </div>
               <div>
                 <CardTitle className="text-lg">En cours de vérification</CardTitle>
-                <Badge variant="secondary" className="mt-1 text-xs">En attente</Badge>
+                <BadgeY2K variant="warning" className="mt-1">En attente</BadgeY2K>
               </div>
             </div>
           </CardHeader>
@@ -222,7 +222,7 @@ export function ContratPlateformeContent() {
             </div>
             <div>
               <CardTitle className="text-lg">Contrat actif</CardTitle>
-              <Badge className="mt-1 text-xs bg-success text-success-foreground">Validé</Badge>
+              <BadgeY2K variant="success" className="mt-1">Validé</BadgeY2K>
             </div>
           </div>
         </CardHeader>

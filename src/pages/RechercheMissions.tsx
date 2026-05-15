@@ -24,7 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -420,7 +420,7 @@ export default function RechercheMissions() {
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Badge variant="outline">{filtered.length} mission{filtered.length > 1 ? 's' : ''}</Badge>
+              <BadgeY2K variant="info">{filtered.length} mission{filtered.length > 1 ? 's' : ''}</BadgeY2K>
               <span>dans un rayon de {rayonKm} km</span>
             </div>
             <BoutonY2K
@@ -445,12 +445,12 @@ export default function RechercheMissions() {
         {/* Active filter chips — visible even when filters are collapsed on mobile */}
         {!showFilters && (villeRecherche || tauxMin > 0 || urgentesOnly || horaire !== 'TOUS' || typeContrat !== 'TOUS') && (
           <div className="flex flex-wrap gap-1.5 md:hidden">
-            <Badge variant="outline" className="text-[10px]">{filtered.length} résultat{filtered.length > 1 ? 's' : ''}</Badge>
-            {villeRecherche && <Badge variant="secondary" className="text-[10px]">📍 {villeRecherche}</Badge>}
-            {tauxMin > 0 && <Badge variant="secondary" className="text-[10px]">≥ {tauxMin} €/h</Badge>}
-            {urgentesOnly && <Badge variant="secondary" className="text-[10px]">🔥 Urgentes</Badge>}
-            {horaire !== 'TOUS' && <Badge variant="secondary" className="text-[10px]">{horaire === 'NUIT' ? '🌙 Nuit' : horaire === 'WEEKEND' ? '📅 Weekend' : '☀️ Jour'}</Badge>}
-            {typeContrat !== 'TOUS' && <Badge variant="secondary" className="text-[10px]">{typeContrat}</Badge>}
+            <BadgeY2K variant="info" size="sm">{filtered.length} résultat{filtered.length > 1 ? 's' : ''}</BadgeY2K>
+            {villeRecherche && <BadgeY2K variant="info" size="sm">📍 {villeRecherche}</BadgeY2K>}
+            {tauxMin > 0 && <BadgeY2K variant="info" size="sm">≥ {tauxMin} €/h</BadgeY2K>}
+            {urgentesOnly && <BadgeY2K variant="info" size="sm">🔥 Urgentes</BadgeY2K>}
+            {horaire !== 'TOUS' && <BadgeY2K variant="info" size="sm">{horaire === 'NUIT' ? '🌙 Nuit' : horaire === 'WEEKEND' ? '📅 Weekend' : '☀️ Jour'}</BadgeY2K>}
+            {typeContrat !== 'TOUS' && <BadgeY2K variant="info" size="sm">{typeContrat}</BadgeY2K>}
           </div>
         )}
 

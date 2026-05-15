@@ -9,7 +9,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 
 function fmt(v: number) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
@@ -46,10 +46,10 @@ function computeRealHoursFromPresences(presences: any[] | null | undefined): num
 }
 
 function MethodeBadge({ methode }: { methode: string | null }) {
-  if (!methode) return <Badge variant="outline" className="text-[10px]"><Wifi className="h-3 w-3 mr-1" />GPS</Badge>;
-  if (methode === 'CODE') return <Badge variant="outline" className="text-[10px] border-primary/30 text-primary"><Keyboard className="h-3 w-3 mr-1" />Code</Badge>;
-  if (methode === 'QR') return <Badge variant="outline" className="text-[10px] border-primary/30 text-primary"><Keyboard className="h-3 w-3 mr-1" />Code</Badge>;
-  return <Badge variant="outline" className="text-[10px]">{methode}</Badge>;
+  if (!methode) return <BadgeY2K variant="info" size="sm" icone={<Wifi className="h-3 w-3" />}>GPS</BadgeY2K>;
+  if (methode === 'CODE') return <BadgeY2K variant="info" size="sm" icone={<Keyboard className="h-3 w-3" />}>Code</BadgeY2K>;
+  if (methode === 'QR') return <BadgeY2K variant="info" size="sm" icone={<Keyboard className="h-3 w-3" />}>Code</BadgeY2K>;
+  return <BadgeY2K variant="info" size="sm">{methode}</BadgeY2K>;
 }
 
 interface Props {
