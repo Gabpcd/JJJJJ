@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Crown, Zap, BarChart3, Award, Bell, FileText, Calculator, Receipt, ClipboardList, HelpCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  CardY2K,
+  CardY2KHeader,
+  CardY2KTitle,
+  CardY2KContent,
+} from '@/components/y2k/CardY2K';
 import { Button } from '@/components/ui/button';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
@@ -60,17 +65,17 @@ export default function PremiumSoignant() {
         {/* Two cards side by side */}
         <div className="grid md:grid-cols-2 gap-6">
           {/* Premium */}
-          <Card className="border-primary/20 relative overflow-hidden">
+          <CardY2K variant="holographic" noPadding className="relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-1 bg-primary" />
-            <CardHeader className="pb-2">
+            <CardY2KHeader className="pb-2">
               <BadgeY2K variant="premium" className="w-fit mb-2">Premium</BadgeY2K>
-              <CardTitle className="text-lg">Premium</CardTitle>
+              <CardY2KTitle className="text-lg">Premium</CardY2KTitle>
               <div className="mt-1">
                 <span className="text-3xl font-bold text-foreground">9,99 €</span>
                 <span className="text-muted-foreground text-sm"> / mois</span>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </CardY2KHeader>
+            <CardY2KContent className="space-y-4">
               <ul className="space-y-2.5">
                 {PREMIUM_FEATURES.map((f) => (
                   <li key={f.label} className="flex items-start gap-2.5 text-sm">
@@ -82,21 +87,21 @@ export default function PremiumSoignant() {
               <Button disabled className="w-full opacity-60 cursor-not-allowed">
                 🚀 Bientôt disponible
               </Button>
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
 
           {/* Pack Libéral */}
-          <Card className="border-warning/30 relative overflow-hidden">
+          <CardY2K variant="holographic" noPadding className="border-warning/30 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-1 bg-warning" />
-            <CardHeader className="pb-2">
+            <CardY2KHeader className="pb-2">
               <BadgeY2K variant="warning" className="w-fit mb-2">Recommandé</BadgeY2K>
-              <CardTitle className="text-lg">Pack Libéral</CardTitle>
+              <CardY2KTitle className="text-lg">Pack Libéral</CardY2KTitle>
               <div className="mt-1">
                 <span className="text-3xl font-bold text-foreground">19,99 €</span>
                 <span className="text-muted-foreground text-sm"> / mois</span>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </CardY2KHeader>
+            <CardY2KContent className="space-y-4">
               <ul className="space-y-2.5">
                 {LIBERAL_FEATURES.map((f) => (
                   <li key={f.label} className="flex items-start gap-2.5 text-sm">
@@ -108,13 +113,13 @@ export default function PremiumSoignant() {
               <Button disabled className="w-full opacity-60 cursor-not-allowed">
                 🚀 Bientôt disponible
               </Button>
-            </CardContent>
-          </Card>
+            </CardY2KContent>
+          </CardY2K>
         </div>
 
         {/* Waitlist */}
-        <Card>
-          <CardContent className="pt-6 text-center space-y-4">
+        <CardY2K noPadding>
+          <CardY2KContent className="pt-6 text-center space-y-4">
             <p className="font-semibold text-foreground">📬 Inscrivez-vous à la liste d'attente</p>
             <p className="text-xs text-muted-foreground">Soyez parmi les premiers informés du lancement.</p>
             <div className="flex gap-2 max-w-md mx-auto">
@@ -131,8 +136,8 @@ export default function PremiumSoignant() {
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground">Sans engagement. Annulation à tout moment.</p>
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
       </div>
     </LayoutApp>
   );

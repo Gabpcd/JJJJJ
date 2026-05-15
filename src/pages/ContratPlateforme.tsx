@@ -6,7 +6,12 @@ import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { supabase } from '@/integrations/supabase/client';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { FileText, Upload, CheckCircle, Clock, Download, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  CardY2K,
+  CardY2KHeader,
+  CardY2KTitle,
+  CardY2KContent,
+} from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { toast } from 'sonner';
@@ -116,16 +121,16 @@ export function ContratPlateformeContent() {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <h2 className="text-lg font-bold text-foreground">Contrat plateforme</h2>
-        <Card>
-          <CardHeader>
+        <CardY2K noPadding>
+          <CardY2KHeader>
             <div className="flex items-center gap-3">
               <div className="rounded-xl p-2.5 bg-warning/10">
                 <FileText className="h-6 w-6 text-warning" />
               </div>
-              <CardTitle className="text-lg">Contrat d'utilisation</CardTitle>
+              <CardY2KTitle className="text-lg">Contrat d'utilisation</CardY2KTitle>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          </CardY2KHeader>
+          <CardY2KContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Vous n'avez pas encore téléversé votre contrat d'utilisation de la plateforme Jolene.
               Téléchargez le modèle, signez-le, et uploadez-le ici.
@@ -154,8 +159,8 @@ export function ContratPlateformeContent() {
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {uploading ? 'Envoi en cours…' : 'Téléverser le contrat signé (PDF, max 10 Mo)'}
             </BoutonY2K>
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
       </div>
     );
   }
@@ -165,19 +170,19 @@ export function ContratPlateformeContent() {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <h2 className="text-lg font-bold text-foreground">Contrat plateforme</h2>
-        <Card className="border-warning/30">
-          <CardHeader>
+        <CardY2K noPadding className="border-warning/30">
+          <CardY2KHeader>
             <div className="flex items-center gap-3">
               <div className="rounded-xl p-2.5 bg-warning/10">
                 <Clock className="h-6 w-6 text-warning" />
               </div>
               <div>
-                <CardTitle className="text-lg">En cours de vérification</CardTitle>
+                <CardY2KTitle className="text-lg">En cours de vérification</CardY2KTitle>
                 <BadgeY2K variant="warning" className="mt-1">En attente</BadgeY2K>
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          </CardY2KHeader>
+          <CardY2KContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Votre contrat a été téléversé le{' '}
               <span className="font-medium text-foreground">
@@ -204,8 +209,8 @@ export function ContratPlateformeContent() {
                 {uploading ? 'Envoi…' : 'Remplacer le contrat'}
               </BoutonY2K>
             </div>
-          </CardContent>
-        </Card>
+          </CardY2KContent>
+        </CardY2K>
       </div>
     );
   }
@@ -214,19 +219,19 @@ export function ContratPlateformeContent() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <h2 className="text-lg font-bold text-foreground">Contrat plateforme</h2>
-      <Card className="border-success/30">
-        <CardHeader>
+      <CardY2K noPadding className="border-success/30">
+        <CardY2KHeader>
           <div className="flex items-center gap-3">
             <div className="rounded-xl p-2.5 bg-success/10">
               <CheckCircle className="h-6 w-6 text-success" />
             </div>
             <div>
-              <CardTitle className="text-lg">Contrat actif</CardTitle>
+              <CardY2KTitle className="text-lg">Contrat actif</CardY2KTitle>
               <BadgeY2K variant="success" className="mt-1">Validé</BadgeY2K>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </CardY2KHeader>
+        <CardY2KContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-muted-foreground">Établissement</p>
@@ -266,8 +271,8 @@ export function ContratPlateformeContent() {
               {uploading ? 'Envoi…' : 'Remplacer le contrat'}
             </BoutonY2K>
           </div>
-        </CardContent>
-      </Card>
+        </CardY2KContent>
+      </CardY2K>
     </div>
   );
 }
