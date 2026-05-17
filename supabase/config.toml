@@ -136,3 +136,6 @@ verify_jwt = false
 
 [functions.notif-match]
 verify_jwt = false
+
+[functions.notif-candidature-acceptee]
+verify_jwt = false
