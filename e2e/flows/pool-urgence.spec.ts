@@ -1,41 +1,34 @@
 /**
- * Flow H — Pool urgence : opt-in soignant + déclenchement notif sur mission urgente.
+ * Sprint 16 PR 2 — Tests E2E réels pool urgence.
  *
- * SMS réels non envoyés en test → vérifier seulement que les RPCs/UI répondent.
+ * Conversion des 2 stubs Sprint 7 en tests fonctionnels :
+ * - soignant authentifié → page paramètres accessible
+ * - étab authentifié → page /etablissement/pool-urgence accessible
+ *
+ * Note : SMS réels Twilio non envoyés en test (rate limit + côté tarification).
+ * Workflow d'envoi déclenché par fn_trg_auto_proposition_pool_urgence couvert
+ * en backend hors Playwright.
  */
 
 import { test, expect } from '@playwright/test';
-import { hasTestAccount } from '../helpers/seed';
-import { TEST_ACCOUNTS } from '../helpers/auth';
+import { loginAs } from '../helpers/auth';
 
 test.describe('Flow pool urgence', () => {
-  test('soignant authentifié peut accéder au pool urgence dans préférences', async ({ page }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement — flow testé manuellement');
-    const creds = TEST_ACCOUNTS.soignant;
-    await page.goto('/connexion');
-    await page.locator('input[type="email"]').fill(creds.email);
-    await page.locator('input[type="password"]').first().fill(creds.password);
-    await page.getByTestId('login-submit').click();
-    await page.waitForURL(/\/soignant/, { timeout: 15000 });
+  test('soignant authentifié peut accéder à /soignant/parametres (préférences pool urgence)', async ({ page }) => {
+    await loginAs(page, 'soignant');
 
     await page.goto('/soignant/parametres');
     await page.waitForLoadState('networkidle');
-    // Onglet préférences ou pool urgence accessible
-    await expect(page.locator('h1').first()).toBeVisible();
+
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test('étab peut accéder au pool urgence', async ({ page }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement — flow testé manuellement');
-    const creds = TEST_ACCOUNTS.etab;
-    await page.goto('/connexion');
-    await page.locator('input[type="email"]').fill(creds.email);
-    await page.locator('input[type="password"]').first().fill(creds.password);
-    await page.getByTestId('login-submit').click();
-    await page.waitForURL(/\/etablissement/, { timeout: 15000 });
+  test('étab authentifié peut accéder à /etablissement/pool-urgence', async ({ page }) => {
+    await loginAs(page, 'etab');
 
     await page.goto('/etablissement/pool-urgence');
     await page.waitForLoadState('networkidle');
-    // Page existe (peut être empty state)
-    await expect(page.locator('h1, h2').first()).toBeVisible();
+
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 });
   });
 });
