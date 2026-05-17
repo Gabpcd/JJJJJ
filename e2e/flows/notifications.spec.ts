@@ -1,23 +1,25 @@
 /**
- * Flow M — Notifications in-app : dropdown header, badge unread, click navigation.
+ * Sprint 16 PR 2 — Tests E2E réels notifications in-app.
+ *
+ * Conversion du stub Sprint 7 en test fonctionnel :
+ * - login soignant
+ * - dashboard chargé
+ * - bell icon notification présent dans le header (BarreNavigation)
  */
 
 import { test, expect } from '@playwright/test';
-import { hasTestAccount } from '../helpers/seed';
-import { TEST_ACCOUNTS } from '../helpers/auth';
+import { loginAs } from '../helpers/auth';
 
 test.describe('Notifications in-app', () => {
-  test('soignant connecté voit le bell icon dans le header', async ({ page }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement — flow testé manuellement');
-    const creds = TEST_ACCOUNTS.soignant;
-    await page.goto('/connexion');
-    await page.locator('input[type="email"]').fill(creds.email);
-    await page.locator('input[type="password"]').first().fill(creds.password);
-    await page.getByTestId('login-submit').click();
-    await page.waitForURL(/\/soignant/, { timeout: 15000 });
+  test('soignant connecté voit le bell icon notification dans le header', async ({ page }) => {
+    await loginAs(page, 'soignant');
 
-    // Bell icon (icone Notification) ou bouton avec aria-label notification
+    // Dashboard chargé après loginAs (heading visible)
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 });
+
+    // Bell icon (lucide Bell) — aria-label inclut "notification" ou "Notifications"
+    // Cf. BarreNavigation header soignant Sprint 7.
     const bell = page.getByRole('button', { name: /notification/i }).first();
-    await expect(bell).toBeVisible({ timeout: 8000 }).catch(() => {});
+    await expect(bell).toBeVisible({ timeout: 8_000 });
   });
 });
