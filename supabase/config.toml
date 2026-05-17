@@ -133,3 +133,6 @@ verify_jwt = false
 
 [functions.psc-test-connexion]
 verify_jwt = false
+
+[functions.notif-match]
+verify_jwt = false
