@@ -1,100 +1,230 @@
 /**
- * Sprint 13-A PR 5 — Tests E2E backend matching swipe Hinge-style.
+ * Sprint 14 PR 2 — Tests E2E réels backend matching swipe Hinge-style.
  *
- * Couvre :
- * - fn_calculer_score_matching : filtres durs (profession, distance) + softs
- * - fn_enregistrer_swipe : LIKE/DISLIKE/SUPER_LIKE + quota 5/jour
- * - fn_obtenir_missions_swipe : exclusion missions déjà swipées + ORDER score DESC
- * - RLS strict : un soignant ne voit pas les swipes d'un autre
+ * Remplace les stubs Sprint 13-A par 8 tests fonctionnels qui valident :
+ * - fn_calculer_score_matching : structure score + breakdown, filtre dur profession
+ * - fn_enregistrer_swipe : LIKE/DISLIKE/SUPER_LIKE, quota 5/jour, re-swipe interdit
+ * - fn_obtenir_missions_swipe : exclusion missions swipées + tri score DESC
+ * - RLS : un utilisateur non-soignant ne voit pas les swipes d'un soignant
  *
- * Pattern Jolene : seed via adminClient (service_role), RPC via clé anon
- * pour valider RLS, cleanup en fin de test.
+ * Pattern Jolene :
+ * - adminClient() (service_role) : seed/cleanup
+ * - userClient(email, password) : auth.uid() pour RPCs SECURITY DEFINER
  */
 
 import { test, expect } from '@playwright/test';
-import { adminClient } from '../helpers/db';
+import { adminClient, userClient, userIdByEmail } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
+import {
+  seedMissionMatching,
+  seedSwipe,
+  seedMatchingScore,
+  cleanupMatchingForSoignant,
+  cleanupMissionsTest,
+  getSuperLikesRestant,
+} from '../helpers/seed-matching';
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+test.describe('Sprint 14 — Backend matching (réels)', () => {
+  let soignantId: string | null = null;
 
-test.describe('Sprint 13-A — Backend matching', () => {
-  test('fn_calculer_score_matching : retourne score + breakdown JSONB', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement — RPC testée via Supabase Studio manuellement');
+  test.beforeAll(async () => {
+    soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
+    test.skip(!soignantId, 'Compte test playwright-soignant introuvable — seed Supabase requis');
+  });
 
+  test.afterEach(async () => {
+    if (soignantId) {
+      await cleanupMatchingForSoignant(soignantId);
+    }
+    await cleanupMissionsTest();
+  });
+
+  test('fn_calculer_score_matching : retourne score 0-100 + breakdown JSONB', async () => {
     const admin = adminClient();
-    // Cherche soignant + mission existants
-    const { data: soignants } = await admin.from('soignants' as any).select('id').limit(1);
-    const { data: missions } = await admin.from('missions' as any).select('id').limit(1);
-    if (!soignants?.[0] || !missions?.[0]) return;
+    const { data: soignant } = await admin
+      .from('soignants' as any)
+      .select('profession')
+      .eq('id', soignantId!)
+      .maybeSingle();
+    const profession = (soignant as any)?.profession || 'INFIRMIER';
+
+    const mission = await seedMissionMatching({ profession, tauxHoraire: 35 });
+    expect(mission, 'seedMissionMatching').toBeTruthy();
 
     const { data, error } = await admin.rpc('fn_calculer_score_matching' as any, {
-      p_soignant_id: soignants[0].id,
-      p_mission_id: missions[0].id,
+      p_soignant_id: soignantId!,
+      p_mission_id: mission!.id,
     });
+
     expect(error).toBeFalsy();
     expect(data).toHaveProperty('score');
     expect(data).toHaveProperty('breakdown');
-    expect(typeof (data as any).score).toBe('number');
-    expect((data as any).score).toBeGreaterThanOrEqual(0);
-    expect((data as any).score).toBeLessThanOrEqual(100);
+    const score = (data as any).score;
+    expect(typeof score).toBe('number');
+    expect(score).toBeGreaterThanOrEqual(0);
+    expect(score).toBeLessThanOrEqual(100);
+
+    const breakdown = (data as any).breakdown;
+    // Soit filtre dur (distance manquante OK car neutre) soit softs présents
+    if (!breakdown.filtre_dur_ko) {
+      expect(breakdown).toHaveProperty('tarif');
+      expect(breakdown).toHaveProperty('distance');
+      expect(breakdown).toHaveProperty('etablissement');
+      expect(breakdown).toHaveProperty('urgence');
+    }
   });
 
-  test('fn_calculer_score_matching : filtre dur profession incompatible → score 0', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement — seed soignant/mission incompatible manquant');
-    // Le test devrait créer un soignant profession=IDE et une mission profession_requise=KINE
-    // puis vérifier que le score retourne 0 avec breakdown.filtre_dur_ko = 'profession_incompatible'
+  test('fn_calculer_score_matching : profession incompatible → score 0 + breakdown filtre_dur_ko', async () => {
+    const admin = adminClient();
+    const { data: soignant } = await admin
+      .from('soignants' as any)
+      .select('profession')
+      .eq('id', soignantId!)
+      .maybeSingle();
+    const professionSoignant = (soignant as any)?.profession || 'INFIRMIER';
+    // Choisir une profession qui diffère
+    const professionIncompatible = professionSoignant === 'KINESITHERAPEUTE' ? 'INFIRMIER' : 'KINESITHERAPEUTE';
+
+    const mission = await seedMissionMatching({ profession: professionIncompatible });
+    expect(mission).toBeTruthy();
+
+    const { data, error } = await admin.rpc('fn_calculer_score_matching' as any, {
+      p_soignant_id: soignantId!,
+      p_mission_id: mission!.id,
+    });
+    expect(error).toBeFalsy();
+    expect((data as any).score).toBe(0);
+    expect((data as any).breakdown.filtre_dur_ko).toBe('profession_incompatible');
   });
 
-  test('fn_enregistrer_swipe : LIKE → INSERT swipe + ok:true', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement — auth user soignant requis');
-    // Login soignant + appel RPC fn_enregistrer_swipe avec direction LIKE
-    // Vérifier { ok: true, swipe_id, direction: 'LIKE' }
+  test('fn_enregistrer_swipe : LIKE → ok:true + INSERT swipes', async () => {
+    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    expect(mission).toBeTruthy();
+
+    const client = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
+    const { data, error } = await client.rpc('fn_enregistrer_swipe' as any, {
+      p_mission_id: mission!.id,
+      p_direction: 'LIKE',
+    });
+
+    expect(error).toBeFalsy();
+    expect((data as any).ok).toBe(true);
+    expect((data as any).direction).toBe('LIKE');
+    expect((data as any).swipe_id).toBeTruthy();
+
+    // Vérifier que le swipe est bien en DB
+    const { data: swipes } = await adminClient()
+      .from('swipes' as any)
+      .select('direction')
+      .eq('soignant_id', soignantId!)
+      .eq('mission_id', mission!.id);
+    expect(swipes).toHaveLength(1);
+    expect((swipes as any)[0].direction).toBe('LIKE');
   });
 
-  test('fn_enregistrer_swipe : SUPER_LIKE 6e tentative → quota_super_like_atteint', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement');
-    // Effectuer 5 SUPER_LIKE puis vérifier qu'un 6e retourne
-    // { ok: false, error: 'quota_super_like_atteint', quota_max: 5 }
+  test('fn_enregistrer_swipe : 6e SUPER_LIKE de la journée → quota_super_like_atteint', async () => {
+    // Pré-setup : 5 super-likes déjà consommés (via INSERT direct quota)
+    await adminClient()
+      .from('super_swipes_quota' as any)
+      .upsert(
+        { soignant_id: soignantId!, date: new Date().toISOString().slice(0, 10), count: 5 },
+        { onConflict: 'soignant_id,date' },
+      );
+
+    expect(await getSuperLikesRestant(soignantId!)).toBe(0);
+
+    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    expect(mission).toBeTruthy();
+
+    const client = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
+    const { data, error } = await client.rpc('fn_enregistrer_swipe' as any, {
+      p_mission_id: mission!.id,
+      p_direction: 'SUPER_LIKE',
+    });
+    expect(error).toBeFalsy();
+    expect((data as any).ok).toBe(false);
+    expect((data as any).error).toBe('quota_super_like_atteint');
+    expect((data as any).quota_max).toBe(5);
+
+    // Vérifier qu'aucun swipe n'a été créé
+    const { data: swipes } = await adminClient()
+      .from('swipes' as any)
+      .select('id')
+      .eq('soignant_id', soignantId!)
+      .eq('mission_id', mission!.id);
+    expect(swipes).toHaveLength(0);
   });
 
-  test('fn_enregistrer_swipe : re-swipe sur même mission → mission_deja_swipee', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement');
-    // Swipe LIKE puis re-swipe DISLIKE même mission → { ok: false, error: 'mission_deja_swipee' }
+  test('fn_enregistrer_swipe : re-swipe même mission → mission_deja_swipee', async () => {
+    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    expect(mission).toBeTruthy();
+
+    // 1er swipe LIKE (via INSERT direct pour bypass auth)
+    await seedSwipe(soignantId!, mission!.id, 'LIKE');
+
+    // 2e swipe via RPC (auth) avec direction différente
+    const client = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
+    const { data, error } = await client.rpc('fn_enregistrer_swipe' as any, {
+      p_mission_id: mission!.id,
+      p_direction: 'DISLIKE',
+    });
+    expect(error).toBeFalsy();
+    expect((data as any).ok).toBe(false);
+    expect((data as any).error).toBe('mission_deja_swipee');
   });
 
-  test('fn_obtenir_missions_swipe : exclut missions déjà swipées', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement');
-    // Swipe LIKE sur mission M1, puis appeler fn_obtenir_missions_swipe(10)
-    // Vérifier que M1 n'apparaît pas dans la liste retournée
+  test('fn_obtenir_missions_swipe : exclut les missions déjà swipées', async () => {
+    const m1 = await seedMissionMatching({ profession: 'INFIRMIER', intitule: '[playwright-test] m1' });
+    const m2 = await seedMissionMatching({ profession: 'INFIRMIER', intitule: '[playwright-test] m2' });
+    expect(m1 && m2).toBeTruthy();
+
+    // Soignant a déjà swipé m1
+    await seedSwipe(soignantId!, m1!.id, 'LIKE');
+
+    const client = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
+    const { data, error } = await client.rpc('fn_obtenir_missions_swipe' as any, { p_limit: 50 });
+    expect(error).toBeFalsy();
+
+    const missions = ((data as any).missions || []) as Array<{ mission_id: string }>;
+    const ids = missions.map((m) => m.mission_id);
+    expect(ids).not.toContain(m1!.id);
+    expect(ids).toContain(m2!.id);
   });
 
   test('fn_obtenir_missions_swipe : tri par score DESC', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement');
-    // Vérifier que les missions retournées sont triées par score décroissant
-    // missions[0].score >= missions[1].score >= ... >= missions[n].score
+    const m1 = await seedMissionMatching({ profession: 'INFIRMIER', intitule: '[playwright-test] low' });
+    const m2 = await seedMissionMatching({ profession: 'INFIRMIER', intitule: '[playwright-test] high' });
+    expect(m1 && m2).toBeTruthy();
+
+    // Forcer scores : m1=30, m2=85
+    await seedMatchingScore(soignantId!, m1!.id, 30);
+    await seedMatchingScore(soignantId!, m2!.id, 85);
+
+    const client = await userClient(TEST_ACCOUNTS.soignant.email, TEST_ACCOUNTS.soignant.password);
+    const { data } = await client.rpc('fn_obtenir_missions_swipe' as any, { p_limit: 50 });
+
+    const missions = ((data as any).missions || []) as Array<{ mission_id: string; score: number }>;
+    const seedIds = [m1!.id, m2!.id];
+    const seedOnly = missions.filter((m) => seedIds.includes(m.mission_id));
+    expect(seedOnly).toHaveLength(2);
+    // m2 (score 85) doit apparaître avant m1 (score 30)
+    const idxHigh = seedOnly.findIndex((m) => m.mission_id === m2!.id);
+    const idxLow = seedOnly.findIndex((m) => m.mission_id === m1!.id);
+    expect(idxHigh).toBeLessThan(idxLow);
   });
 
-  test('RLS : un soignant ne voit pas les swipes d\'un autre soignant', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement — multi-comptes nécessaire');
-    // Soignant A swipe sur mission X
-    // Soignant B se connecte et SELECT swipes WHERE mission_id=X → 0 row
-  });
+  test('RLS swipes : un compte étab ne voit pas les swipes d\'un soignant', async () => {
+    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    expect(mission).toBeTruthy();
+    await seedSwipe(soignantId!, mission!.id, 'LIKE');
 
-  test('RLS : un soignant ne voit pas les matching_scores d\'un autre soignant', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement — multi-comptes nécessaire');
-    // Cron pré-calcule scores pour soignant A
-    // Soignant B SELECT matching_scores WHERE soignant_id=A.id → 0 row
-  });
-
-  test('notif-match edge function : SUPER_LIKE → notification INSERT étab', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement — appel edge function manuel');
-    // Soignant A SUPER_LIKE mission M de l'étab E
-    // Vérifier qu'une notification type MATCHING_SUPER_LIKE est créée pour E
-    // Vérifier que la notif contient le bon lien /etablissement/missions/{id}/candidatures
-  });
-
-  test('notif-match : direction LIKE ignorée (skipped)', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement');
-    // Call edge function avec direction=LIKE → { ok: true, skipped: 'direction_not_super_like' }
+    // Connexion compte étab (pas soignant) → RLS doit cacher
+    const etabClient = await userClient(TEST_ACCOUNTS.etab.email, TEST_ACCOUNTS.etab.password);
+    const { data } = await etabClient
+      .from('swipes' as any)
+      .select('id')
+      .eq('soignant_id', soignantId!)
+      .eq('mission_id', mission!.id);
+    expect(data || []).toHaveLength(0);
   });
 });
