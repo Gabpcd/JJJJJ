@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Copy, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -120,9 +120,9 @@ export function ChorusSubmissionDetailDialog({ submission, open, onClose, onResu
                 <button onClick={() => setShowResponse(!showResponse)} className="text-sm font-semibold text-primary hover:underline">
                   {showResponse ? '▼' : '▶'} Response PISTE
                 </button>
-                <Button variant="ghost" size="sm" onClick={copyJson}>
-                  <Copy className="h-3.5 w-3.5 mr-1" /> Copier JSON
-                </Button>
+                <BoutonY2K variant="ghost" size="sm" onClick={copyJson} iconeGauche={<Copy className="h-3.5 w-3.5" />}>
+                  Copier JSON
+                </BoutonY2K>
               </div>
               {showResponse && (
                 <pre className="mt-2 text-xs bg-muted p-3 rounded overflow-x-auto max-h-64">
@@ -135,12 +135,11 @@ export function ChorusSubmissionDetailDialog({ submission, open, onClose, onResu
 
         <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
           {canResubmit && onResubmit && (
-            <Button onClick={() => onResubmit(submission.invoice_id)} disabled={resubmitLoading} variant="default">
-              <RefreshCw className={`h-4 w-4 mr-1 ${resubmitLoading ? 'animate-spin' : ''}`} />
+            <BoutonY2K onClick={() => onResubmit(submission.invoice_id)} disabled={resubmitLoading} loading={resubmitLoading} variant="primary" iconeGauche={resubmitLoading ? undefined : <RefreshCw className="h-4 w-4" />}>
               Resubmit
-            </Button>
+            </BoutonY2K>
           )}
-          <Button variant="outline" onClick={onClose}>Fermer</Button>
+          <BoutonY2K variant="secondary" onClick={onClose}>Fermer</BoutonY2K>
         </div>
       </DialogContent>
     </Dialog>

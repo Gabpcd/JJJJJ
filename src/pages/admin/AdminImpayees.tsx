@@ -5,7 +5,7 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
@@ -256,10 +256,9 @@ export default function AdminImpayees() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">{factures.length} facture{factures.length > 1 ? 's' : ''} en attente de paiement</p>
           </div>
-          <Button onClick={envoyerToutesRelances} disabled={sendingAll} variant="destructive" className="gap-2">
-            {sendingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          <BoutonY2K onClick={envoyerToutesRelances} disabled={sendingAll} loading={sendingAll} variant="destructive" className="gap-2" iconeGauche={sendingAll ? undefined : <Send className="h-4 w-4" />}>
             Relancer toutes les factures
-          </Button>
+          </BoutonY2K>
         </div>
 
         {/* KPIs */}
@@ -425,22 +424,23 @@ export default function AdminImpayees() {
                             )}
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <Button
+                            <BoutonY2K
                               size="sm" variant="destructive" className="gap-1 text-xs"
                               onClick={() => envoyerRelance(f)}
                               disabled={sendingRelance === f.id}
+                              loading={sendingRelance === f.id}
+                              iconeGauche={sendingRelance === f.id ? undefined : <Send className="h-3 w-3" />}
                             >
-                              {sendingRelance === f.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                               Envoyer une relance
-                            </Button>
+                            </BoutonY2K>
                             {f.statut === 'EMISE' && f.joursRetard > 0 && (
-                              <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => marquerEnRetard(f.id)}>
-                                <Clock className="h-3 w-3" /> Marquer EN_RETARD
-                              </Button>
+                              <BoutonY2K size="sm" variant="secondary" className="gap-1 text-xs" onClick={() => marquerEnRetard(f.id)} iconeGauche={<Clock className="h-3 w-3" />}>
+                                Marquer EN_RETARD
+                              </BoutonY2K>
                             )}
-                            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => navigate(`/admin/utilisateurs/${f.etablissement_id}`)}>
-                              <Building2 className="h-3 w-3" /> Fiche établissement
-                            </Button>
+                            <BoutonY2K size="sm" variant="secondary" className="gap-1 text-xs" onClick={() => navigate(`/admin/utilisateurs/${f.etablissement_id}`)} iconeGauche={<Building2 className="h-3 w-3" />}>
+                              Fiche établissement
+                            </BoutonY2K>
                           </div>
                         </div>
                       </div>

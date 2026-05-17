@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Handshake, ShieldAlert, CheckCircle, Gavel, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Handshake, ShieldAlert, CheckCircle, Gavel } from 'lucide-react';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -93,9 +93,9 @@ export function BoutonsActionLitige({ litige, role, onUpdate }: Props) {
     if (statut !== 'REVUE_ADMIN') return null;
     return (
       <>
-        <Button size="sm" onClick={() => setShowTrancher(true)} className="gap-1.5 bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-          <Gavel className="h-3.5 w-3.5" /> Trancher
-        </Button>
+        <BoutonY2K size="sm" variant="destructive" onClick={() => setShowTrancher(true)} className="gap-1.5" iconeGauche={<Gavel className="h-3.5 w-3.5" />}>
+          Trancher
+        </BoutonY2K>
 
         <Dialog open={showTrancher} onOpenChange={setShowTrancher}>
           <DialogContent>
@@ -151,10 +151,10 @@ export function BoutonsActionLitige({ litige, role, onUpdate }: Props) {
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setShowTrancher(false)} disabled={trancherLoading}>Annuler</Button>
-                <Button onClick={trancher} disabled={trancherLoading || motif.trim().length < 50}>
-                  {trancherLoading ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Décision…</> : <><Gavel className="h-3.5 w-3.5 mr-1" /> Confirmer la décision</>}
-                </Button>
+                <BoutonY2K variant="ghost" onClick={() => setShowTrancher(false)} disabled={trancherLoading}>Annuler</BoutonY2K>
+                <BoutonY2K onClick={trancher} disabled={trancherLoading || motif.trim().length < 50} loading={trancherLoading} iconeGauche={trancherLoading ? undefined : <Gavel className="h-3.5 w-3.5" />}>
+                  {trancherLoading ? 'Décision…' : 'Confirmer la décision'}
+                </BoutonY2K>
               </div>
             </div>
           </DialogContent>
@@ -175,28 +175,30 @@ export function BoutonsActionLitige({ litige, role, onUpdate }: Props) {
   return (
     <div className="flex flex-wrap gap-2">
       {peutProposerMediation(statut) && (
-        <Button
+        <BoutonY2K
           size="sm"
-          variant="outline"
+          variant="secondary"
           className="gap-1.5 border-warning/30 text-warning hover:bg-warning/10"
           disabled={loadingAction !== null}
+          loading={loadingAction === 'proposer'}
           onClick={proposerMediation}
+          iconeGauche={loadingAction === 'proposer' ? undefined : <ShieldAlert className="h-3.5 w-3.5" />}
         >
-          <ShieldAlert className="h-3.5 w-3.5" />
           {loadingAction === 'proposer' ? 'Envoi…' : 'Proposer médiation amiable'}
-        </Button>
+        </BoutonY2K>
       )}
 
       {peutConfirmerAccord(statut) && !monAccord && (
-        <Button
+        <BoutonY2K
           size="sm"
           className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
           disabled={loadingAction !== null}
+          loading={loadingAction === 'confirmer'}
           onClick={confirmerAccord}
+          iconeGauche={loadingAction === 'confirmer' ? undefined : <Handshake className="h-3.5 w-3.5" />}
         >
-          <Handshake className="h-3.5 w-3.5" />
           {loadingAction === 'confirmer' ? 'En cours…' : (autreAccord ? 'Accepter l\'accord' : 'Confirmer un accord')}
-        </Button>
+        </BoutonY2K>
       )}
 
       {monAccord && !autreAccord && peutConfirmerAccord(statut) && (

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -309,14 +309,14 @@ export function AvoirsList({ onChanged }: Props) {
                     </TableCell>
                     <TableCell className="text-right">
                       {remboursable ? (
-                        <Button
+                        <BoutonY2K
                           size="sm"
-                          variant="outline"
+                          variant="secondary"
                           onClick={() => ouvrirDialogConfirmation(a)}
                           aria-label={`Confirmer remboursement avoir ${a.numero_facture ?? a.id}`}
                         >
                           Confirmer remboursement
-                        </Button>
+                        </BoutonY2K>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -358,15 +358,16 @@ export function AvoirsList({ onChanged }: Props) {
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>
+            <BoutonY2K variant="ghost" onClick={() => setDialogOpen(false)}>
               Annuler
-            </Button>
-            <Button
+            </BoutonY2K>
+            <BoutonY2K
               onClick={confirmerRemboursement}
               disabled={submitting || reference.trim().length < 4}
+              loading={submitting}
             >
               {submitting ? 'Confirmation…' : 'Confirmer le remboursement'}
-            </Button>
+            </BoutonY2K>
           </DialogFooter>
         </DialogContent>
       </Dialog>

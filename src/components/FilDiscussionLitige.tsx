@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, ShieldAlert, Handshake, Shield, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -200,9 +200,9 @@ export function FilDiscussionLitige({ litige, onUpdate }: Props) {
             maxLength={1000}
           />
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={envoyerMessage} disabled={sending || newMsg.trim().length < 10} className="gap-1.5">
-              <Send className="h-3.5 w-3.5" /> {sending ? 'Envoi…' : 'Envoyer'}
-            </Button>
+            <BoutonY2K size="sm" onClick={envoyerMessage} disabled={sending || newMsg.trim().length < 10} loading={sending} className="gap-1.5" iconeGauche={sending ? undefined : <Send className="h-3.5 w-3.5" />}>
+              {sending ? 'Envoi…' : 'Envoyer'}
+            </BoutonY2K>
           </div>
         </div>
       )}

@@ -5,7 +5,7 @@ import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -282,23 +282,22 @@ export default function AdminGroupes() {
                         className="w-20 h-8 text-xs text-center"
                       />
                       <span className="text-xs">%</span>
-                      <Button size="sm" onClick={() => modifierTauxGroupe(g.id)} disabled={savingTaux} className="h-8 text-xs gap-1">
-                        {savingTaux ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                      <BoutonY2K size="sm" onClick={() => modifierTauxGroupe(g.id)} disabled={savingTaux} loading={savingTaux} className="h-8 text-xs gap-1" iconeGauche={savingTaux ? undefined : <Save className="h-3 w-3" />}>
                         Appliquer au groupe
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditingTauxGroupe(null)}>Annuler</Button>
+                      </BoutonY2K>
+                      <BoutonY2K size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditingTauxGroupe(null)}>Annuler</BoutonY2K>
                     </div>
                   ) : (
-                    <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setEditingTauxGroupe({ groupeId: g.id, taux: String(g.cliniques[0]?.taux_commission_negocie ?? 15) })}>
-                      <Percent className="h-3.5 w-3.5" /> Modifier taux du groupe
-                    </Button>
+                    <BoutonY2K size="sm" variant="secondary" className="gap-1 text-xs" onClick={() => setEditingTauxGroupe({ groupeId: g.id, taux: String(g.cliniques[0]?.taux_commission_negocie ?? 15) })} iconeGauche={<Percent className="h-3.5 w-3.5" />}>
+                      Modifier taux du groupe
+                    </BoutonY2K>
                   )}
-                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => {
+                  <BoutonY2K size="sm" variant="secondary" className="gap-1 text-xs" onClick={() => {
                     setEmailGroupeId(g.id);
                     setEmailClinicId(null);
-                  }}>
-                    <Mail className="h-3.5 w-3.5" /> Email au groupe
-                  </Button>
+                  }} iconeGauche={<Mail className="h-3.5 w-3.5" />}>
+                    Email au groupe
+                  </BoutonY2K>
                 </div>
               </div>
 
@@ -384,14 +383,13 @@ export default function AdminGroupes() {
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={() => envoyerEmail(
+                    <BoutonY2K size="sm" onClick={() => envoyerEmail(
                       g.cliniques.map(c => c.email_contact).filter(Boolean) as string[],
                       g.nom
-                    )} disabled={sendingEmail} className="gap-1">
-                      {sendingEmail ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                    )} disabled={sendingEmail} loading={sendingEmail} className="gap-1" iconeGauche={sendingEmail ? undefined : <Send className="h-3.5 w-3.5" />}>
                       Envoyer
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEmailGroupeId(null)}>Annuler</Button>
+                    </BoutonY2K>
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailGroupeId(null)}>Annuler</BoutonY2K>
                   </div>
                 </div>
               )}
@@ -451,9 +449,9 @@ export default function AdminGroupes() {
                                     className="w-16 h-7 text-xs text-center"
                                   />
                                   <span className="text-xs">%</span>
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={modifierTaux} disabled={savingTaux}>
-                                    {savingTaux ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                                  </Button>
+                                  <BoutonY2K size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={modifierTaux} disabled={savingTaux} loading={savingTaux} aria-label="Enregistrer">
+                                    {!savingTaux && <Save className="h-3 w-3" />}
+                                  </BoutonY2K>
                                 </div>
                               ) : (
                                 <button
@@ -466,12 +464,12 @@ export default function AdminGroupes() {
                             </td>
                             <td className="py-2.5 text-right">
                               <div className="flex gap-1 justify-end">
-                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => {
+                                <BoutonY2K size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => {
                                   setEmailClinicId(c.id);
                                   setEmailGroupeId(g.id);
-                                }}>
+                                }} aria-label="Envoyer un email">
                                   <Mail className="h-3 w-3" />
-                                </Button>
+                                </BoutonY2K>
                               </div>
                             </td>
                           </tr>
@@ -488,14 +486,13 @@ export default function AdminGroupes() {
                                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
                                   />
                                   <div className="flex gap-2">
-                                    <Button size="sm" onClick={() => envoyerEmail(
+                                    <BoutonY2K size="sm" onClick={() => envoyerEmail(
                                       c.email_contact ? [c.email_contact] : [],
                                       c.nom
-                                    )} disabled={sendingEmail} className="gap-1 text-xs">
-                                      {sendingEmail ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                                    )} disabled={sendingEmail} loading={sendingEmail} className="gap-1 text-xs" iconeGauche={sendingEmail ? undefined : <Send className="h-3 w-3" />}>
                                       Envoyer
-                                    </Button>
-                                    <Button size="sm" variant="ghost" className="text-xs" onClick={() => setEmailClinicId(null)}>Annuler</Button>
+                                    </BoutonY2K>
+                                    <BoutonY2K size="sm" variant="ghost" className="text-xs" onClick={() => setEmailClinicId(null)}>Annuler</BoutonY2K>
                                   </div>
                                 </div>
                               </td>
@@ -545,9 +542,9 @@ export default function AdminGroupes() {
                                 className="w-14 h-7 text-xs text-center"
                               />
                               <span className="text-xs">%</span>
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={modifierTaux} disabled={savingTaux}>
-                                {savingTaux ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                              </Button>
+                              <BoutonY2K size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={modifierTaux} disabled={savingTaux} loading={savingTaux} aria-label="Enregistrer">
+                                {!savingTaux && <Save className="h-3 w-3" />}
+                              </BoutonY2K>
                             </div>
                           ) : (
                             <button
@@ -575,17 +572,18 @@ export default function AdminGroupes() {
                         </p>
                       )}
 
-                      <Button
+                      <BoutonY2K
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                         className="w-full gap-1 text-xs min-h-[36px]"
                         onClick={() => {
                           setEmailClinicId(c.id);
                           setEmailGroupeId(g.id);
                         }}
+                        iconeGauche={<Mail className="h-3 w-3" />}
                       >
-                        <Mail className="h-3 w-3" /> Envoyer un email
-                      </Button>
+                        Envoyer un email
+                      </BoutonY2K>
 
                       {emailClinicId === c.id && emailGroupeId === g.id && (
                         <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
@@ -597,14 +595,13 @@ export default function AdminGroupes() {
                             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
                           />
                           <div className="flex gap-2">
-                            <Button size="sm" onClick={() => envoyerEmail(
+                            <BoutonY2K size="sm" onClick={() => envoyerEmail(
                               c.email_contact ? [c.email_contact] : [],
                               c.nom
-                            )} disabled={sendingEmail} className="gap-1 text-xs flex-1 min-h-[36px]">
-                              {sendingEmail ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                            )} disabled={sendingEmail} loading={sendingEmail} className="gap-1 text-xs flex-1 min-h-[36px]" iconeGauche={sendingEmail ? undefined : <Send className="h-3 w-3" />}>
                               Envoyer
-                            </Button>
-                            <Button size="sm" variant="ghost" className="text-xs min-h-[36px]" onClick={() => setEmailClinicId(null)}>Annuler</Button>
+                            </BoutonY2K>
+                            <BoutonY2K size="sm" variant="ghost" className="text-xs min-h-[36px]" onClick={() => setEmailClinicId(null)}>Annuler</BoutonY2K>
                           </div>
                         </div>
                       )}

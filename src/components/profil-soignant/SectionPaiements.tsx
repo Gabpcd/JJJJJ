@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, AlertTriangle, ExternalLink, CreditCard, Loader2, FileSignature, Banknote, Info } from 'lucide-react';
+import { CheckCircle, AlertTriangle, ExternalLink, CreditCard, FileSignature, Banknote, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
 
 interface Props {
@@ -84,10 +84,9 @@ function StripeConnectStatus({ userId }: { userId: string }) {
             <p className="text-xs text-muted-foreground mt-0.5">Finalisez-le pour recevoir vos honoraires automatiquement.</p>
           </div>
         </div>
-        <Button size="sm" variant="outline" onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
-          {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+        <BoutonY2K size="sm" variant="secondary" onClick={lancerOnboarding} disabled={actionLoading} loading={actionLoading} className="gap-2" iconeGauche={actionLoading ? undefined : <ExternalLink className="h-3.5 w-3.5" />}>
           Finaliser mon compte Stripe
-        </Button>
+        </BoutonY2K>
       </div>
     );
   }
@@ -102,10 +101,9 @@ function StripeConnectStatus({ userId }: { userId: string }) {
             <p className="text-xs text-muted-foreground mt-0.5">Recommencez l'onboarding pour recevoir vos paiements.</p>
           </div>
         </div>
-        <Button size="sm" variant="destructive" onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
-          {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+        <BoutonY2K size="sm" variant="destructive" onClick={lancerOnboarding} disabled={actionLoading} loading={actionLoading} className="gap-2" iconeGauche={actionLoading ? undefined : <ExternalLink className="h-3.5 w-3.5" />}>
           Recommencer l'onboarding
-        </Button>
+        </BoutonY2K>
       </div>
     );
   }
@@ -121,10 +119,9 @@ function StripeConnectStatus({ userId }: { userId: string }) {
           </p>
         </div>
       </div>
-      <Button size="sm" onClick={lancerOnboarding} disabled={actionLoading} className="gap-2">
-        {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+      <BoutonY2K size="sm" onClick={lancerOnboarding} disabled={actionLoading} loading={actionLoading} className="gap-2" iconeGauche={actionLoading ? undefined : <ExternalLink className="h-3.5 w-3.5" />}>
         Activer Stripe Connect
-      </Button>
+      </BoutonY2K>
     </div>
   );
 }

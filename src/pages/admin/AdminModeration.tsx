@@ -3,7 +3,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -243,17 +243,17 @@ export default function AdminModeration() {
             </div>
 
             <div className="flex items-center justify-end">
-              <Button
+              <BoutonY2K
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={() => telechargerCsv(filtrerEtTrier(litiges, filtres))}
                 disabled={litiges.length === 0}
                 aria-label="Exporter les litiges filtrés en CSV"
                 data-testid="btn-export-csv"
+                iconeGauche={<Download className="h-3.5 w-3.5" />}
               >
-                <Download className="mr-1.5 h-3.5 w-3.5" />
                 Exporter CSV
-              </Button>
+              </BoutonY2K>
             </div>
 
             <LitigesList
@@ -329,8 +329,8 @@ export default function AdminModeration() {
                           <p className="text-xs text-muted-foreground">Mission : {e.mission_intitule}</p>
                         </div>
                         <div className="flex gap-1.5 shrink-0">
-                          <Button size="sm" variant="outline" onClick={() => publierEvaluation(e.id)}><Check className="mr-1 h-3.5 w-3.5" />Publier</Button>
-                          <Button size="sm" variant="destructive" onClick={() => supprimerEvaluation(e.id)}><X className="mr-1 h-3.5 w-3.5" />Supprimer</Button>
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => publierEvaluation(e.id)} iconeGauche={<Check className="h-3.5 w-3.5" />}>Publier</BoutonY2K>
+                          <BoutonY2K size="sm" variant="destructive" onClick={() => supprimerEvaluation(e.id)} iconeGauche={<X className="h-3.5 w-3.5" />}>Supprimer</BoutonY2K>
                         </div>
                       </div>
                       {e.commentaire && (
@@ -367,8 +367,8 @@ export default function AdminModeration() {
                       <TableCell><BadgeY2K variant="info" size="sm">{d.type_document}</BadgeY2K></TableCell>
                       <TableCell className="text-xs text-muted-foreground">{d.televerse_le ? formatDate(d.televerse_le) : '—'}</TableCell>
                       <TableCell className="space-x-1 text-right">
-                        <Button size="sm" variant="outline" onClick={() => validerDocument(d.id)}><Check className="mr-1 h-3.5 w-3.5" />Valider</Button>
-                        <Button size="sm" variant="destructive" onClick={() => rejeterDocument(d.id)}><X className="mr-1 h-3.5 w-3.5" />Rejeter</Button>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => validerDocument(d.id)} iconeGauche={<Check className="h-3.5 w-3.5" />}>Valider</BoutonY2K>
+                        <BoutonY2K size="sm" variant="destructive" onClick={() => rejeterDocument(d.id)} iconeGauche={<X className="h-3.5 w-3.5" />}>Rejeter</BoutonY2K>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -389,12 +389,12 @@ export default function AdminModeration() {
                   </div>
                   <p className="text-[11px] text-muted-foreground">{d.televerse_le ? `Téléversé le ${formatDate(d.televerse_le)}` : 'Date inconnue'}</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button size="sm" variant="outline" className="min-h-[36px]" onClick={() => validerDocument(d.id)}>
-                      <Check className="mr-1 h-3.5 w-3.5" />Valider
-                    </Button>
-                    <Button size="sm" variant="destructive" className="min-h-[36px]" onClick={() => rejeterDocument(d.id)}>
-                      <X className="mr-1 h-3.5 w-3.5" />Rejeter
-                    </Button>
+                    <BoutonY2K size="sm" variant="secondary" className="min-h-[36px]" onClick={() => validerDocument(d.id)} iconeGauche={<Check className="h-3.5 w-3.5" />}>
+                      Valider
+                    </BoutonY2K>
+                    <BoutonY2K size="sm" variant="destructive" className="min-h-[36px]" onClick={() => rejeterDocument(d.id)} iconeGauche={<X className="h-3.5 w-3.5" />}>
+                      Rejeter
+                    </BoutonY2K>
                   </div>
                 </div>
               ))}
@@ -446,9 +446,9 @@ export default function AdminModeration() {
                           {matchRppsCni === null ? '—' : matchRppsCni ? <Check className="h-4 w-4 text-success mx-auto" /> : <X className="h-4 w-4 text-destructive mx-auto" />}
                         </TableCell>
                         <TableCell>
-                          <Button size="sm" variant="outline" onClick={() => navigate(`/admin/utilisateurs/${inc.soignant_id}`)}>
-                            <Eye className="mr-1 h-3.5 w-3.5" />Voir
-                          </Button>
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => navigate(`/admin/utilisateurs/${inc.soignant_id}`)} iconeGauche={<Eye className="h-3.5 w-3.5" />}>
+                            Voir
+                          </BoutonY2K>
                         </TableCell>
                       </TableRow>
                     );
@@ -507,9 +507,9 @@ export default function AdminModeration() {
                         {renderMatch(matchRppsCni)}
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" className="w-full min-h-[36px]" onClick={() => navigate(`/admin/utilisateurs/${inc.soignant_id}`)}>
-                      <Eye className="mr-1 h-3.5 w-3.5" />Voir le détail
-                    </Button>
+                    <BoutonY2K size="sm" variant="secondary" className="w-full min-h-[36px]" onClick={() => navigate(`/admin/utilisateurs/${inc.soignant_id}`)} iconeGauche={<Eye className="h-3.5 w-3.5" />}>
+                      Voir le détail
+                    </BoutonY2K>
                   </div>
                 );
               })}

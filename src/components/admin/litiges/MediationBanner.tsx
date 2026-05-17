@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { AlertTriangle } from 'lucide-react';
 
 type Props = {
@@ -28,14 +28,14 @@ export function MediationBanner({ count, onVoir }: Props) {
         {count} litige{count > 1 ? 's' : ''} en médiation depuis plus de 7
         jours nécessite{count > 1 ? 'nt' : ''} votre attention.
       </p>
-      <Button
+      <BoutonY2K
         size="sm"
-        variant="outline"
+        variant="secondary"
         onClick={onVoir}
         className="border-orange-400 text-orange-900"
       >
         Voir
-      </Button>
+      </BoutonY2K>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Smartphone, CreditCard, ExternalLink, Mail, Loader2 } from 'lucide-react';
+import { Smartphone, CreditCard, ExternalLink, Mail } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
 interface Props {
   open: boolean;
@@ -104,22 +105,16 @@ export function ModalePscPreAuth({
         </div>
 
         <DialogFooter className="px-6 py-4 border-t border-border flex flex-col sm:flex-col gap-2 sm:gap-2">
-          <Button
+          <BoutonY2K
             type="button"
             onClick={onContinue}
             disabled={loading}
+            loading={loading}
             className="w-full"
             style={{ backgroundColor: '#0078D7' }}
           >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Redirection…
-              </>
-            ) : (
-              'Continuer vers Pro Santé Connect'
-            )}
-          </Button>
+            {loading ? 'Redirection…' : 'Continuer vers Pro Santé Connect'}
+          </BoutonY2K>
           <Button
             type="button"
             variant="outline"
@@ -131,7 +126,7 @@ export function ModalePscPreAuth({
               <ExternalLink className="h-4 w-4 ml-2" aria-hidden="true" />
             </a>
           </Button>
-          <Button
+          <BoutonY2K
             type="button"
             variant="ghost"
             onClick={() => {
@@ -141,7 +136,7 @@ export function ModalePscPreAuth({
             className="w-full"
           >
             S'inscrire par email à la place
-          </Button>
+          </BoutonY2K>
           <a
             href="/aide/pro-sante-connect"
             className="text-xs text-center text-muted-foreground hover:text-primary hover:underline pt-1"

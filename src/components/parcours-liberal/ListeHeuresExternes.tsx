@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import type { HeureExterne } from '@/hooks/useParcoursLiberal';
 
 interface Props {
@@ -80,30 +80,32 @@ export function ListeHeuresExternes({ heures, onSupprimer }: Props) {
                   {cfg.label}
                 </span>
                 {h.attestation_url && (
-                  <Button
+                  <BoutonY2K
                     type="button"
                     size="sm"
                     variant="ghost"
                     onClick={() => ouvrirAttestation(h.id, h.attestation_url)}
                     disabled={openingId === h.id}
+                    loading={openingId === h.id}
                     className="h-7 gap-1 text-xs"
+                    iconeGauche={openingId === h.id ? undefined : <FileText className="h-3.5 w-3.5" />}
                   >
-                    {openingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
                     Voir
-                  </Button>
+                  </BoutonY2K>
                 )}
                 {peutSupprimer && (
-                  <Button
+                  <BoutonY2K
                     type="button"
                     size="sm"
                     variant="ghost"
                     onClick={() => supprimer(h.id)}
                     disabled={deletingId === h.id}
+                    loading={deletingId === h.id}
                     className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
                     aria-label="Supprimer"
                   >
-                    {deletingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                  </Button>
+                    {deletingId !== h.id && <Trash2 className="h-3.5 w-3.5" />}
+                  </BoutonY2K>
                 )}
               </div>
             </div>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent, CardY2KHeader, CardY2KTitle } from '@/components/y2k/CardY2K';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -139,26 +139,24 @@ export default function AdminAuditRLS() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
+            <BoutonY2K
+              variant="secondary"
               size="sm"
               onClick={handleRerun}
               disabled={refreshing || isLoading}
+              iconeGauche={<RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />}
             >
-              <RefreshCw
-                className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
-              />
               Rerun audit
-            </Button>
-            <Button
-              variant="outline"
+            </BoutonY2K>
+            <BoutonY2K
+              variant="secondary"
               size="sm"
               onClick={handleExportJSON}
               disabled={!data}
+              iconeGauche={<Download className="h-4 w-4" />}
             >
-              <Download className="h-4 w-4 mr-2" />
               Exporter JSON
-            </Button>
+            </BoutonY2K>
           </div>
         </div>
 

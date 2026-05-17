@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CreditCard, Banknote, FileText, Loader2, Eye, CheckCircle, Edit2, AlertTriangle, Scale, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
@@ -279,20 +279,21 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
         </div>
 
         {p.statut === 'CONTESTE' && (
-          <Button
+          <BoutonY2K
             size="sm"
-            variant="outline"
+            variant="secondary"
             className="gap-1.5 text-xs border-warning/40 text-warning hover:bg-warning/10"
             onClick={() => navigate('/etablissement/litiges')}
+            iconeGauche={<Scale className="h-3 w-3" />}
           >
-            <Scale className="h-3 w-3" /> Voir le litige
-          </Button>
+            Voir le litige
+          </BoutonY2K>
         )}
 
         {canModifyRef && (
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => { setNewRef(p.reference_virement || ''); setShowModifRef(true); }}>
-            <Edit2 className="h-3 w-3" /> Modifier la référence
-          </Button>
+          <BoutonY2K size="sm" variant="secondary" className="gap-1.5 text-xs" onClick={() => { setNewRef(p.reference_virement || ''); setShowModifRef(true); }} iconeGauche={<Edit2 className="h-3 w-3" />}>
+            Modifier la référence
+          </BoutonY2K>
         )}
         <Dialog open={showModifRef} onOpenChange={setShowModifRef}>
           <DialogContent>
@@ -300,10 +301,10 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
             <div className="space-y-3 mt-2">
               <Input value={newRef} onChange={e => setNewRef(e.target.value)} placeholder="Ex: VIR-2026-03-001" />
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setShowModifRef(false)}>Annuler</Button>
-                <Button onClick={modifierReference} disabled={modifLoading || !isRefValid(newRef)}>
+                <BoutonY2K variant="ghost" onClick={() => setShowModifRef(false)}>Annuler</BoutonY2K>
+                <BoutonY2K onClick={modifierReference} disabled={modifLoading || !isRefValid(newRef)} loading={modifLoading}>
                   {modifLoading ? 'Modification…' : 'Enregistrer'}
-                </Button>
+                </BoutonY2K>
               </div>
             </div>
           </DialogContent>
@@ -351,9 +352,9 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           <p>Honoraires soignant : {fmt(info.montant_soignant)}</p>
           <p className="font-semibold text-foreground">Total : {fmt(info.total)}</p>
         </div>
-        <Button size="sm" onClick={onStartConnectPay} className="gap-2">
-          <CreditCard className="h-4 w-4" /> 💳 Payer via Stripe
-        </Button>
+        <BoutonY2K size="sm" onClick={onStartConnectPay} className="gap-2" iconeGauche={<CreditCard className="h-4 w-4" />}>
+          💳 Payer via Stripe
+        </BoutonY2K>
       </div>
     );
   }
@@ -391,10 +392,9 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
                 <p className="text-xs text-muted-foreground">IBAN : {ribData}</p>
               )
             ) : (
-              <Button size="sm" variant="ghost" className="gap-1 text-xs h-7" onClick={consulterRib} disabled={ribLoading}>
-                {ribLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+              <BoutonY2K size="sm" variant="ghost" className="gap-1 text-xs h-7" onClick={consulterRib} disabled={ribLoading} loading={ribLoading} iconeGauche={ribLoading ? undefined : <Eye className="h-3 w-3" />}>
                 📄 Voir le RIB (PDF)
-              </Button>
+              </BoutonY2K>
             )}
           </div>
         )
@@ -416,9 +416,9 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           <p className="text-[10px] text-destructive">La référence doit contenir au moins 1 chiffre</p>
         )}
       </div>
-      <Button size="sm" variant="outline" onClick={declarerPaiement} disabled={declaring || !isRefValid(reference)} className="gap-2">
-        <Banknote className="h-4 w-4" /> {declaring ? 'Déclaration…' : 'Déclarer le paiement effectué'}
-      </Button>
+      <BoutonY2K size="sm" variant="secondary" onClick={declarerPaiement} disabled={declaring || !isRefValid(reference)} loading={declaring} className="gap-2" iconeGauche={declaring ? undefined : <Banknote className="h-4 w-4" />}>
+        {declaring ? 'Déclaration…' : 'Déclarer le paiement effectué'}
+      </BoutonY2K>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { FileText, Upload, Download, AlertTriangle, Loader2, CheckCircle, RefreshCw } from 'lucide-react';
+import { FileText, Upload, Download, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
 
 interface Props {
@@ -189,10 +189,9 @@ export function BlocContratTravailMission({
           Déposé le {new Date(contrat.uploaded_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
           {contrat.taille_octets ? ` · ${(contrat.taille_octets / 1024).toFixed(0)} Ko` : ''}
         </p>
-        <Button size="sm" variant="outline" onClick={download} disabled={downloading} className="gap-2">
-          {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+        <BoutonY2K size="sm" variant="secondary" onClick={download} disabled={downloading} loading={downloading} className="gap-2" iconeGauche={downloading ? undefined : <Download className="h-4 w-4" />}>
           Télécharger
-        </Button>
+        </BoutonY2K>
       </div>
     );
   }
@@ -217,10 +216,9 @@ export function BlocContratTravailMission({
             onChange={e => setFile(e.target.files?.[0] || null)}
             className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
           />
-          <Button onClick={upload} disabled={!file || uploading} className="gap-2 shrink-0">
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          <BoutonY2K onClick={upload} disabled={!file || uploading} loading={uploading} className="gap-2 shrink-0" iconeGauche={uploading ? undefined : <Upload className="h-4 w-4" />}>
             Déposer
-          </Button>
+          </BoutonY2K>
         </div>
         {file && (
           <p className="text-xs text-muted-foreground">
@@ -245,14 +243,12 @@ export function BlocContratTravailMission({
           {contrat.nom_fichier ? ` · ${contrat.nom_fichier}` : ''}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={download} disabled={downloading} className="gap-2">
-            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          <BoutonY2K size="sm" variant="secondary" onClick={download} disabled={downloading} loading={downloading} className="gap-2" iconeGauche={downloading ? undefined : <Download className="h-4 w-4" />}>
             Télécharger
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setShowUpload(s => !s)} className="gap-2">
-            <RefreshCw className="h-4 w-4" />
+          </BoutonY2K>
+          <BoutonY2K size="sm" variant="secondary" onClick={() => setShowUpload(s => !s)} className="gap-2" iconeGauche={<RefreshCw className="h-4 w-4" />}>
             {showUpload ? 'Annuler' : 'Remplacer'}
-          </Button>
+          </BoutonY2K>
         </div>
         {showUpload && (
           <div className="pt-2 border-t border-border space-y-2">
@@ -262,10 +258,9 @@ export function BlocContratTravailMission({
               onChange={e => setFile(e.target.files?.[0] || null)}
               className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
             />
-            <Button onClick={upload} disabled={!file || uploading} size="sm" className="gap-2">
-              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            <BoutonY2K onClick={upload} disabled={!file || uploading} loading={uploading} size="sm" className="gap-2" iconeGauche={uploading ? undefined : <Upload className="h-4 w-4" />}>
               Remplacer
-            </Button>
+            </BoutonY2K>
           </div>
         )}
       </div>

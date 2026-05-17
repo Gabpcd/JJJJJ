@@ -3,7 +3,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { FileStack, RefreshCw, Search, Settings, Wifi } from 'lucide-react';
@@ -110,14 +110,12 @@ export default function AdminChorusPro() {
           <h1 className="text-2xl font-bold text-foreground">Chorus Pro</h1>
         </div>
         <div className="flex gap-2">
-          <Button onClick={testPiste} disabled={testing} variant="outline" size="sm">
-            <Wifi className={`h-4 w-4 mr-1.5 ${testing ? 'animate-pulse' : ''}`} />
+          <BoutonY2K onClick={testPiste} disabled={testing} variant="secondary" size="sm" iconeGauche={<Wifi className={`h-4 w-4 ${testing ? 'animate-pulse' : ''}`} />}>
             {testing ? 'Vérification…' : 'Vérifier connexion'}
-          </Button>
-          <Button onClick={syncNow} disabled={syncing} variant="outline" size="sm">
-            <RefreshCw className={`h-4 w-4 mr-1.5 ${syncing ? 'animate-spin' : ''}`} />
+          </BoutonY2K>
+          <BoutonY2K onClick={syncNow} disabled={syncing} variant="secondary" size="sm" iconeGauche={<RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />}>
             {syncing ? 'Sync…' : 'Sync maintenant'}
-          </Button>
+          </BoutonY2K>
         </div>
       </div>
 
@@ -381,7 +379,7 @@ function SubmissionsChorus() {
                       <td className="py-2 pr-2"><span className={`badge-base text-[10px] ${b.classes}`}>{b.label}</span></td>
                       <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(s.last_checked_at)}</td>
                       <td className="py-2">
-                        <Button variant="ghost" size="sm" onClick={() => setDetail(s)}>Détail</Button>
+                        <BoutonY2K variant="ghost" size="sm" onClick={() => setDetail(s)}>Détail</BoutonY2K>
                       </td>
                     </tr>
                   );
@@ -418,9 +416,9 @@ function SubmissionsChorus() {
                     <span>Créée {fmtDate(s.created_at)}</span>
                     {s.last_checked_at && <span>Sync {fmtDate(s.last_checked_at)}</span>}
                   </div>
-                  <Button variant="outline" size="sm" className="w-full min-h-[36px]" onClick={() => setDetail(s)}>
+                  <BoutonY2K variant="secondary" size="sm" className="w-full min-h-[36px]" onClick={() => setDetail(s)}>
                     Voir le détail
-                  </Button>
+                  </BoutonY2K>
                 </div>
               );
             })}
@@ -513,9 +511,9 @@ function ConfigEtabsChorus() {
                     <Switch checked={!!cfg?.actif} onCheckedChange={v => toggleActif(e, v)} />
                   </td>
                   <td className="py-2">
-                    <Button variant="ghost" size="sm" onClick={() => setEditing({ etab: e })}>
-                      <Settings className="h-3.5 w-3.5 mr-1" /> Éditer
-                    </Button>
+                    <BoutonY2K variant="ghost" size="sm" onClick={() => setEditing({ etab: e })} iconeGauche={<Settings className="h-3.5 w-3.5" />}>
+                      Éditer
+                    </BoutonY2K>
                   </td>
                 </tr>
               );
@@ -550,9 +548,9 @@ function ConfigEtabsChorus() {
                   <span className="text-foreground text-right">{cfg?.code_service ?? '—'}</span>
                 </div>
               </div>
-              <Button variant="outline" size="sm" className="w-full min-h-[36px]" onClick={() => setEditing({ etab: e })}>
-                <Settings className="h-3.5 w-3.5 mr-1" /> Éditer la configuration
-              </Button>
+              <BoutonY2K variant="secondary" size="sm" className="w-full min-h-[36px]" onClick={() => setEditing({ etab: e })} iconeGauche={<Settings className="h-3.5 w-3.5" />}>
+                Éditer la configuration
+              </BoutonY2K>
             </div>
           );
         })}

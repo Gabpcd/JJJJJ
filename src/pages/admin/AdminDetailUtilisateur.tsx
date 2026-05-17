@@ -6,6 +6,7 @@ import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import {
   CardY2K,
@@ -249,9 +250,9 @@ export default function AdminDetailUtilisateur() {
       <LayoutAdmin>
         <div className="text-center py-20">
           <p className="text-muted-foreground">Utilisateur introuvable.</p>
-          <Button variant="outline" className="mt-4" onClick={() => navigate('/admin/utilisateurs')}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Retour
-          </Button>
+          <BoutonY2K variant="secondary" className="mt-4" onClick={() => navigate('/admin/utilisateurs')} iconeGauche={<ArrowLeft className="h-4 w-4" />}>
+            Retour
+          </BoutonY2K>
         </div>
       </LayoutAdmin>
     );
@@ -324,10 +325,9 @@ export default function AdminDetailUtilisateur() {
               </p>
             )}
           </div>
-          <Button size="sm" variant="outline" onClick={envoyerRappelDocuments} disabled={envoiRappel}>
-            <Send className="h-3.5 w-3.5 mr-1" />
+          <BoutonY2K size="sm" variant="secondary" onClick={envoyerRappelDocuments} disabled={envoiRappel} loading={envoiRappel} iconeGauche={envoiRappel ? undefined : <Send className="h-3.5 w-3.5" />}>
             {envoiRappel ? 'Envoi…' : 'Envoyer un rappel'}
-          </Button>
+          </BoutonY2K>
         </div>
       )}
 
@@ -821,9 +821,9 @@ function ActionCard({ icon: Icon, label, description, variant, onClick }: {
         <span className="text-sm font-medium text-foreground">{label}</span>
       </div>
       <p className="text-xs text-muted-foreground">{description}</p>
-      <Button size="sm" variant={variant} onClick={onClick} className="mt-auto self-start">
+      <BoutonY2K size="sm" variant={variant === 'destructive' ? 'destructive' : 'secondary'} onClick={onClick} className="mt-auto self-start">
         {label}
-      </Button>
+      </BoutonY2K>
     </div>
   );
 }

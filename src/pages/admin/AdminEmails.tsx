@@ -3,7 +3,7 @@ import { Mail, Eye, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
@@ -138,30 +138,31 @@ export default function AdminEmails() {
                     return <span className="font-mono text-sm">{t}</span>;
                   case 'preview':
                     return (
-                      <Button
-                        variant={previewType === t ? 'default' : 'outline'}
+                      <BoutonY2K
+                        variant={previewType === t ? 'primary' : 'secondary'}
                         size="sm"
                         onClick={(e) => { e.stopPropagation(); setPreviewType(previewType === t ? null : t); }}
                         className="gap-1.5"
                         aria-label={previewType === t ? `Masquer l'aperçu de ${t}` : `Prévisualiser ${t}`}
+                        iconeGauche={<Eye className="h-4 w-4" />}
                       >
-                        <Eye className="h-4 w-4" />
                         {previewType === t ? 'Masquer' : 'Prévisualiser'}
-                      </Button>
+                      </BoutonY2K>
                     );
                   case 'test':
                     return (
-                      <Button
-                        variant="outline"
+                      <BoutonY2K
+                        variant="secondary"
                         size="sm"
                         onClick={(e) => { e.stopPropagation(); envoyerTest(t); }}
                         disabled={sending !== null}
+                        loading={sending === t}
                         className="gap-1.5"
                         aria-label={`Envoyer un email test pour ${t}`}
+                        iconeGauche={sending === t ? undefined : <Send className="h-4 w-4" />}
                       >
-                        {sending === t ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         Envoyer
-                      </Button>
+                      </BoutonY2K>
                     );
                   default:
                     return null;
@@ -171,24 +172,26 @@ export default function AdminEmails() {
                 <div className="space-y-3">
                   <p className="font-mono text-sm break-all">{t}</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant={previewType === t ? 'default' : 'outline'}
+                    <BoutonY2K
+                      variant={previewType === t ? 'primary' : 'secondary'}
                       size="sm"
                       onClick={(e) => { e.stopPropagation(); setPreviewType(previewType === t ? null : t); }}
                       className="gap-1.5 min-h-[44px]"
+                      iconeGauche={<Eye className="h-4 w-4" />}
                     >
-                      <Eye className="h-4 w-4" /> {previewType === t ? 'Masquer' : 'Aperçu'}
-                    </Button>
-                    <Button
-                      variant="outline"
+                      {previewType === t ? 'Masquer' : 'Aperçu'}
+                    </BoutonY2K>
+                    <BoutonY2K
+                      variant="secondary"
                       size="sm"
                       onClick={(e) => { e.stopPropagation(); envoyerTest(t); }}
                       disabled={sending !== null}
+                      loading={sending === t}
                       className="gap-1.5 min-h-[44px]"
+                      iconeGauche={sending === t ? undefined : <Send className="h-4 w-4" />}
                     >
-                      {sending === t ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                       Test
-                    </Button>
+                    </BoutonY2K>
                   </div>
                 </div>
               )}

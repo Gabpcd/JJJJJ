@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
-import { Button } from '@/components/ui/button';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import {
   Select,
@@ -204,14 +204,15 @@ export function LegacyRecategorisation({ onChanged, onCountChange }: Props) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button
+                    <BoutonY2K
                       size="sm"
                       onClick={() => recategoriser(l)}
                       disabled={busy || !choix || choix === 'AUTRE'}
+                      loading={busy}
                       aria-label={`Recatégoriser litige ${l.id}`}
                     >
                       {busy ? 'Recatégorisation…' : 'Recatégoriser'}
-                    </Button>
+                    </BoutonY2K>
                   </div>
                 </CardY2KContent>
               </CardY2K>
