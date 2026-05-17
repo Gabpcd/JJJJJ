@@ -1,57 +1,52 @@
 /**
- * Flow A — Candidature complète : soignant → étab valide → ASSIGNEE.
+ * Sprint 16 PR 1 — Tests E2E réels candidature soignant → étab.
  *
- * Nécessite seed complexe (mission OUVERTE existante, comptes soignant + étab
- * fixes). Skip si environnement non préparé.
+ * Conversion des stubs Sprint 1 en tests fonctionnels :
+ * - seed mission OUVERTE → assertion DB statut
+ * - login soignant + navigation détail mission → assertion page chargée
+ *
+ * Pattern : seedMission via adminClient (helper Sprint 1) + loginAs (helper
+ * Sprint 14). Cleanup automatique via cleanupSeedData en afterEach.
  */
 
 import { test, expect } from '@playwright/test';
-import { hasTestAccount, seedMission, cleanupSeedData } from '../helpers/seed';
-import { TEST_ACCOUNTS } from '../helpers/auth';
+import { seedMission, cleanupSeedData } from '../helpers/seed';
+import { loginAs } from '../helpers/auth';
 import { adminClient } from '../helpers/db';
 
 test.describe('Flow candidature soignant → étab', () => {
-  test('soignant candidate à mission via détail page', async ({ page }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement — flow testé manuellement');
-
-    // 1. Seed mission OUVERTE
-    const mission = await seedMission({ intitule: '[playwright-test] Candidature E2E' });
-    expect(mission, 'seedMission failed').toBeTruthy();
-
-    try {
-      // 2. Login soignant
-      const creds = TEST_ACCOUNTS.soignant;
-      await page.goto('/connexion');
-      await page.locator('input[type="email"]').fill(creds.email);
-      await page.locator('input[type="password"]').first().fill(creds.password);
-      await page.getByTestId('login-submit').click();
-      await page.waitForURL(/\/soignant/, { timeout: 15000 });
-
-      // 3. Aller au détail mission
-      await page.goto(`/soignant/missions/${mission!.id}`);
-      await page.waitForLoadState('networkidle');
-
-      // 4. Vérifier que le bouton "Postuler" ou "Candidater" est présent
-      const cta = page.getByRole('button', { name: /Postuler|Candidater|Accepter/i }).first();
-      await expect(cta).toBeVisible({ timeout: 10000 }).catch(() => {});
-    } finally {
-      // Cleanup
-      await cleanupSeedData().catch(() => {});
-    }
+  test.afterEach(async () => {
+    await cleanupSeedData().catch(() => {});
   });
 
-  test('mission seedée apparaît bien en DB', async () => {
-    test.skip(true, 'Helper CI à fixer post-lancement — flow testé manuellement');
-    const m = await seedMission();
-    expect(m).toBeTruthy();
+  test('mission seedée apparaît bien en DB avec statut OUVERTE', async () => {
+    const m = await seedMission({ intitule: '[playwright-test] Candidature DB E2E' });
+    expect(m, 'seedMission failed').toBeTruthy();
 
-    const { data } = await adminClient()
+    const { data, error } = await adminClient()
       .from('missions' as any)
-      .select('id, statut')
+      .select('id, statut, intitule, etablissement_id')
       .eq('id', m!.id)
       .single();
-    expect((data as any)?.statut).toBe('OUVERTE');
 
-    await cleanupSeedData();
+    expect(error).toBeFalsy();
+    expect((data as any)?.statut).toBe('OUVERTE');
+    expect((data as any)?.intitule).toContain('[playwright-test]');
+    expect((data as any)?.etablissement_id).toBe(m!.etablissement_id);
+  });
+
+  test('soignant authentifié peut accéder à la page détail mission seedée', async ({ page }) => {
+    const mission = await seedMission({ intitule: '[playwright-test] Candidature UI E2E' });
+    expect(mission, 'seedMission failed').toBeTruthy();
+
+    await loginAs(page, 'soignant');
+
+    await page.goto(`/soignant/missions/${mission!.id}`);
+    await page.waitForLoadState('networkidle');
+
+    // La page charge (heading visible — soft sur structure UI variable selon
+    // matching profession soignant vs mission).
+    const heading = page.locator('h1, h2').first();
+    await expect(heading).toBeVisible({ timeout: 10_000 });
   });
 });
