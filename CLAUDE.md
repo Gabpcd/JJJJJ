@@ -434,3 +434,26 @@ Cf. docs/SPRINT_14_FINAL.md.
 - Flow UI multi-comptes étab-accepte (couvert backend test #5 PREMIER_MATCH)
 
 **Dette E2E historique restante** : 24 stubs pré-Sprint 13 (`candidature/changer-password/export-rgpd/litige/notation/notifications/parrainage/pointage/pool-urgence/recherche-missions/sprint57-*/inscription/regression-bugs`) → Sprint 15 dédié post-launch.
+
+### Sprint 15 — DPAE conforme + nettoyage pré-lancement (5 PRs)
+Cf. docs/SPRINT_15.md.
+
+| Sous-sprint | PR | Chantier | Livré |
+|---|---|---|---|
+| 15-1 | #340 | IBAN/BIC réel Jolene SASU | Coordonnées SWAN SAS réelles (FR76 1732 8844 0018 3164 8362 916 / SWNBFR22) — bloqueur lancement résolu |
+| 15-2 | #341 | Suppression Flow B DPAE | Retrait bouton "J'ai effectué la DPAE" sans preuve + DROP RPC fn_confirmer_dpae + suppression edge confirm-dpae du repo |
+| 15-3 | #342 | Validation regex n° DPAE + email | fn_enregistrer_numero_dpae regex `^[A-Za-z0-9]{8,30}$` + au moins 1 chiffre + template Resend DPAE_DECLAREE_SOIGNANT |
+| 15-4 | #343 | Mention CGU DPAE + warning pointage | PageCGU article 4.5 (étab seul responsable, Jolene ni employeur ni tiers-déclarant) + fn_pointer_arrivee warnings non-bloquant |
+| 15-5 | (this) | Cleanup + doc finale | Suppression mock-data.ts orphelin + SET search_path TO 'public' sur 4 fonctions + docs/SPRINT_15.md |
+| **Total** | **5 PRs** | — | **3 bloquants lancement résolus + 4 fonctions hardenisées** |
+
+**Flow DPAE conforme post-Sprint 15** (Scénario 1 "concierge manuel") :
+- Étab génère payload pré-rempli via fn_generer_donnees_dpae
+- Étab copie sur net-entreprises.fr, soumet, reçoit n° URSSAF
+- Étab saisit n° dans Jolene → fn_enregistrer_numero_dpae (validation + email soignant)
+- Soignant reçoit confirmation email + n° URSSAF en preuve
+- Si pointage sans n° saisi → warning DPAE_NON_REGULARISEE + push étab (non-bloquant)
+
+**Limitations connues (documentées docs/SPRINT_15.md)** :
+- Edge functions deployed-hors-repo (temp-sync-vault-key, invoke-generate-invoice-internal, confirm-dpae) restent ACTIVE en Supabase, à supprimer manuellement Dashboard (aucun outil MCP delete_edge_function). 0 impact fonctionnel.
+- Tiers-déclarant URSSAF EDI reporté post-Série A (3-6 mois agrément).
