@@ -366,12 +366,22 @@ Cf. docs/SPRINT_12_F.md.
 </CardY2K>
 ```
 
-### Sprint 12 FINAL (A → F)
-Cf. docs/SPRINT_12_FINAL.md.
+### Sprint 12-G — Cleanup final adoption Y2K (4 PRs)
+Cf. docs/SPRINT_12_G.md.
 
-- **27 PRs livrées** sur 6 sous-sprints (12-A hotfix + 12-B + 12-C + 12-D + 12-E + 12-F)
-- **~365 migrations Y2K** au total (66 boutons + 6 dashboards + 36 KPIs + 103 badges + 46 Mascotte + 85 Cards + 1 destructive variant + foundations)
-- **Adoption finale 100%** sur composants migrables : BoutonY2K 75, BadgeY2K 103, CarteKPIY2K 40, CardY2K ~88-90, Mascotte 61/66 EmptyState (100% si on compte les 9 illustrations Sprint 8 BIS)
-- **0 PR ouverte** post Sprint 12
-- **0 régression CI**
-- Reportés post Sprint 12 : BadgeRPPS/Niveau/Statut/Palier custom rewrite (composants métier), animations spring élargies (Dialog/FAB/notifs), ~239 Button shadcn restants (composants partagés / icon back nav / variant link / asChild légitime)
+| Sprint | PR | Chantier | Livré |
+|---|---|---|---|
+| 12-G-1 | #312 | Badge custom Y2K interne | BadgeRPPS/Statut/Palier/Niveau réécrits avec BadgeY2K interne (call sites inchangés) |
+| 12-G-2 | #313 | Buttons user-facing restants | 38 boutons sur 19 pages (PageRecherchesSauvegardees, BlogArticle, Parcours3200h, Premium x2, MesDPAE, DetailMission) |
+| 12-G-3 | #314 | Buttons admin + composants | 161 boutons (AdminUtilisateurs 21, AdminGroupes 13, AdminFacturation 10, +24 composants partagés) |
+| 12-G-4 | (this) | Doc Sprint 12-G + Sprint 12 update | — |
+| **Total** | **4 PRs** | — | **199 boutons + 4 badges custom** |
+
+**Skips justifiés (21 total)** : 12 asChild Radix Slot (Dialog/Popover/Dropdown/Anchor) + 2 size="icon" (Sprint 12-G PR 3) + 5 size="icon" back nav (Sprint 12-G PR 2) + 2 asChild LinkedIn/WhatsApp share.
+
+### Sprint 12 FINAL complet (A → G)
+- **31 PRs livrées** sur 7 sous-sprints
+- **~560+ migrations Y2K** au total
+- **Adoption finale** : BoutonY2K ~272 ouvertures, BadgeY2K 103+, CardY2K ~88, CarteKPIY2K 40, Mascotte 61/66 EmptyState, animations.ts 3 composants core
+- Reste uniquement cas légitimes shadcn (~40 buttons : asChild Radix Slot / icon back nav / variant link / Calendar/DataTable primitives)
+- **0 dette Y2K résiduelle**
