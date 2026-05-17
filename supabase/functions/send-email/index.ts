@@ -132,6 +132,8 @@ const ALLOWED_TYPES = new Set([
   'RAPPEL_NOTATION_ETAB','RAPPEL_NOTATION_SOIGNANT',
   // [Sprint 5.7 PR 4 → Sprint 6 PR 1] invitation équipe étab multi-utilisateurs
   'INVITATION_EQUIPE_ETAB',
+  // [Sprint 15 PR 3] DPAE déclarée par l'étab → notif soignant avec n° URSSAF
+  'DPAE_DECLAREE_SOIGNANT',
 ]);
 
 interface TemplateResult { subject: string; html: string; hasAttachment?: boolean }
@@ -1409,6 +1411,30 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
             <em>Anonyme côté étab — il voit "Soignant anonyme" + 4 étoiles.</em>
           `)}
           ${BUTTON('Noter l\'établissement', `${APP_URL}/soignant/missions/${data.mission_id || ''}`)}
+        `),
+      };
+
+    case 'DPAE_DECLAREE_SOIGNANT':
+      return {
+        subject: `Votre DPAE a été déclarée pour ${data.mission_intitule || 'votre mission'}`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Votre DPAE a été déclarée ✅</h2>
+          <p style="color:#334155;">Bonjour ${data.prenom || ''},</p>
+          <p style="color:#334155;">
+            <strong>${data.etablissement_nom || "L'établissement"}</strong> a déclaré votre
+            Déclaration Préalable à l'Embauche (DPAE) auprès de l'URSSAF pour la mission
+            <strong>${data.mission_intitule || 'à venir'}</strong>.
+          </p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;">Numéro DPAE URSSAF</strong><br/>
+            <span style="font-family:monospace;font-size:16px;color:#E04590;">${data.dpae_numero || '—'}</span>
+          `)}
+          <p style="color:#334155;font-size:13px;">
+            Conservez ce numéro : il prouve votre embauche déclarée auprès des organismes sociaux.
+            Vous pouvez vous présenter à votre poste en toute conformité.
+          </p>
+          ${BUTTON('Voir mon contrat', `${APP_URL}/contrat/${data.contrat_id || ''}`)}
+          ${SECURITY_NOTE}
         `),
       };
 
