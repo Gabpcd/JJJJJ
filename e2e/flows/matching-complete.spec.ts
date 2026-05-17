@@ -1,115 +1,165 @@
 /**
- * Sprint 13-D PR 3 — Tests E2E flow complet matching swipe → match → contrat.
+ * Sprint 14 PR 4 — Tests E2E réels flow complet matching swipe.
  *
- * Workflow end-to-end :
- * 1. Login soignant
- * 2. Navigate /soignant/swipe-missions
- * 3. Vérifier card mission visible (seed étab + mission OUVERTE)
- * 4. Click LIKE → swipe enregistré
- * 5. (Backend simulé) étab accepte candidature → ASSIGNEE
- * 6. Trigger trg_award_badges_match award PREMIER_MATCH au soignant
- * 7. Edge function notif-candidature-acceptee → INSERT notification soignant
- * 8. Login étab → vérifier candidature ASSIGNEE
- * 9. Login soignant → vérifier notification "🎉 C'est un match !"
- * 10. CelebrationMatch modal affichée si page active au moment de la notif
- * 11. Navigate /soignant/mes-matches → match présent dans la liste
- * 12. Click "Voir la mission" → détail mission OK
- * 13. Click "Conversation" → messagerie ouverte (Sprint 10-A v3)
- * 14. Signature contrat (Sprint 2 PR 4 OTP)
+ * Remplace les 6 stubs Sprint 13-D PR 3 par 5 tests fonctionnels qui valident
+ * les triggers + workflows end-to-end :
+ * - Trigger trg_award_badges_swipe : PREMIER_SWIPE, PREMIER_SUPER_LIKE, EXPLORATEUR
+ * - Trigger trg_update_streak_on_swipe : streak_count + last_activity_date
+ * - Trigger trg_award_badges_match : PREMIER_MATCH sur UPDATE candidature ASSIGNEE
  *
- * Performance Lighthouse sur SwipeMissions mobile : audit séparé.
+ * Pattern : seed direct via adminClient (bypass RPC pour tester les triggers DB),
+ * vérification du state via getBadges() / getStreakInfo() / SELECT direct.
+ *
+ * Skips honnêtes :
+ * - Streak quotidien J+1/J+2 : nécessite clock mock (pg_set_local) trop intrusif
+ * - Flow complet UI multi-comptes étab-accepte : couvert backend par PREMIER_MATCH test
  */
 
 import { test, expect } from '@playwright/test';
+import { adminClient, userIdByEmail } from '../helpers/db';
 import { TEST_ACCOUNTS } from '../helpers/auth';
+import {
+  seedMissionMatching,
+  seedSwipe,
+  cleanupMatchingForSoignant,
+  cleanupMissionsTest,
+  getBadges,
+  getStreakInfo,
+} from '../helpers/seed-matching';
 
-test.describe('Sprint 13-D — Flow complet matching end-to-end', () => {
-  test('Workflow complet soignant → swipe LIKE → étab accepte → match → conversation', async ({ page, browser }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement — workflow multi-comptes complexe');
+test.describe('Sprint 14 — Flow complet matching (réels)', () => {
+  let soignantId: string | null = null;
 
-    const creds = TEST_ACCOUNTS.soignant;
-    const credsEtab = TEST_ACCOUNTS.etablissement;
-
-    // 1-2. Login soignant + swipe missions
-    await page.goto('/connexion');
-    await page.locator('input[type="email"]').fill(creds.email);
-    await page.locator('input[type="password"]').first().fill(creds.password);
-    await page.getByTestId('login-submit').click();
-    await page.waitForURL(/\/soignant/, { timeout: 15000 });
-
-    await page.goto('/soignant/swipe-missions');
-    await page.waitForLoadState('networkidle');
-
-    // 3. Vérifier au moins une card visible
-    const carteVisible = page.getByRole('button').filter({ hasText: /Match \d+\/100/ }).first();
-    await expect(carteVisible).toBeVisible({ timeout: 10000 });
-
-    // 4. Click LIKE
-    await page.getByRole('button', { name: /J'aime cette mission/i }).click();
-    await page.waitForTimeout(500); // attendre mutation
-
-    // 5-6-7. Backend : étab accepte (via second contexte browser)
-    const ctxEtab = await browser.newContext();
-    const pageEtab = await ctxEtab.newPage();
-    await pageEtab.goto('/connexion');
-    await pageEtab.locator('input[type="email"]').fill(credsEtab.email);
-    await pageEtab.locator('input[type="password"]').first().fill(credsEtab.password);
-    await pageEtab.getByTestId('login-submit').click();
-    await pageEtab.waitForURL(/\/etablissement/, { timeout: 15000 });
-
-    // Navigate liste candidatures → accepter la candidature soignant
-    // (locator dépend du UI ListeCandidatures Sprint 1)
-    // ...
-    await ctxEtab.close();
-
-    // 8-9. Retour côté soignant : vérifier notification
-    await page.goto('/soignant/notifications');
-    const notif = page.getByText(/C'est un match/i).first();
-    await expect(notif).toBeVisible({ timeout: 10000 });
-
-    // 11. Navigate /soignant/mes-matches
-    await page.goto('/soignant/mes-matches');
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByRole('heading', { name: 'Mes matches' })).toBeVisible();
-
-    // Vérifier au moins 1 match listé
-    const match = page.getByText(/Super-like|Voir la mission/i).first();
-    await expect(match).toBeVisible({ timeout: 5000 });
+  test.beforeAll(async () => {
+    soignantId = await userIdByEmail(TEST_ACCOUNTS.soignant.email);
+    test.skip(!soignantId, 'Compte test playwright-soignant introuvable');
   });
 
-  test('SUPER_LIKE déclenche notification étab + match badge PREMIER_SUPER_LIKE', async ({ page }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement');
-    // Login soignant
-    // Swipe SUPER_LIKE sur mission M
-    // Vérifier notification INSERT pour étab type MATCHING_SUPER_LIKE
-    // Vérifier badge PREMIER_SUPER_LIKE awarded au soignant via SELECT badges_soignant
+  test.afterEach(async () => {
+    if (soignantId) {
+      await cleanupMatchingForSoignant(soignantId);
+    }
+    await cleanupMissionsTest();
   });
 
-  test('Streak quotidien incrémente sur 2 jours consécutifs', async ({ page }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement — clock mock complexe');
-    // Mock current_date = J
-    // Swipe sur mission M1 → streak = 1
-    // Mock current_date = J+1
-    // Swipe sur mission M2 → streak = 2
-    // RPC fn_ma_streak() retourne streak_count=2
+  test('Trigger trg_award_badges_swipe : 1er swipe → badge PREMIER_SWIPE', async () => {
+    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    expect(mission).toBeTruthy();
+
+    await seedSwipe(soignantId!, mission!.id, 'LIKE');
+
+    const badges = await getBadges(soignantId!);
+    expect(badges).toContain('PREMIER_SWIPE');
   });
 
-  test('Streak reset si jour manqué (J+2)', async ({ page }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement — clock mock complexe');
-    // Mock J : swipe → streak=1
-    // Mock J+2 (saut J+1) : swipe → streak reset à 1
+  test('Trigger trg_award_badges_swipe : 1er SUPER_LIKE → badge PREMIER_SUPER_LIKE', async () => {
+    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    expect(mission).toBeTruthy();
+
+    await seedSwipe(soignantId!, mission!.id, 'SUPER_LIKE');
+
+    const badges = await getBadges(soignantId!);
+    expect(badges).toContain('PREMIER_SWIPE'); // award conjoint au 1er swipe
+    expect(badges).toContain('PREMIER_SUPER_LIKE');
   });
 
-  test('Badge EXPLORATEUR award à 50 swipes', async ({ page }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement — pré-seed 49 swipes nécessaire');
-    // Pré-INSERT 49 swipes
-    // 50e swipe via fn_enregistrer_swipe
-    // Vérifier badge EXPLORATEUR awarded
+  test('Trigger trg_award_badges_swipe : 50 swipes → badge EXPLORATEUR', async () => {
+    const admin = adminClient();
+    const etabId = await userIdByEmail(TEST_ACCOUNTS.etab.email);
+    expect(etabId).toBeTruthy();
+
+    // Seed 50 missions en batch + INSERT 50 swipes
+    const baseDate = new Date(Date.now() + 7 * 86400000);
+    const missionsPayload = Array.from({ length: 50 }, (_, i) => ({
+      etablissement_id: etabId,
+      intitule: `[playwright-test] explorateur ${i} ${Date.now()}`,
+      description: 'Mission seed EXPLORATEUR',
+      profession_requise: 'INFIRMIER',
+      service: 'Test',
+      debut_le: new Date(baseDate.getTime() + i * 3600000).toISOString(),
+      fin_le: new Date(baseDate.getTime() + (i + 8) * 3600000).toISOString(),
+      duree_heures: 8,
+      taux_horaire_base: 30,
+      est_urgente: false,
+      statut: 'OUVERTE',
+      mode_attribution: 'CANDIDATURE',
+    }));
+
+    const { data: missions, error: insertErr } = await admin
+      .from('missions' as any)
+      .insert(missionsPayload)
+      .select('id');
+    expect(insertErr).toBeFalsy();
+    expect(missions).toHaveLength(50);
+
+    const swipesPayload = (missions as Array<{ id: string }>).map((m) => ({
+      soignant_id: soignantId!,
+      mission_id: m.id,
+      direction: 'LIKE',
+    }));
+    const { error: swipesErr } = await admin.from('swipes' as any).insert(swipesPayload);
+    expect(swipesErr).toBeFalsy();
+
+    const badges = await getBadges(soignantId!);
+    expect(badges).toContain('PREMIER_SWIPE');
+    expect(badges).toContain('EXPLORATEUR');
   });
 
-  test('Performance : page SwipeMissions Lighthouse mobile > 80', async ({ page }) => {
-    test.skip(true, 'Helper CI à fixer post-lancement — Lighthouse CI déjà couvert workflow .github');
-    // Note : la CI Lighthouse audit déjà lancée sur chaque PR via Vercel preview
-    // Cf .github/workflows/lighthouse.yml
+  test('Trigger trg_update_streak_on_swipe : 1er swipe → streak=1 + last_activity_date=today', async () => {
+    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    expect(mission).toBeTruthy();
+
+    await seedSwipe(soignantId!, mission!.id, 'LIKE');
+
+    const streak = await getStreakInfo(soignantId!);
+    expect(streak).not.toBeNull();
+    expect(streak!.streak_count).toBe(1);
+    expect(streak!.max_streak).toBeGreaterThanOrEqual(1);
+
+    // last_activity_date = aujourd'hui
+    const { data: row } = await adminClient()
+      .from('streaks_soignant' as any)
+      .select('last_activity_date')
+      .eq('soignant_id', soignantId!)
+      .maybeSingle();
+    const today = new Date().toISOString().slice(0, 10);
+    expect((row as any).last_activity_date).toBe(today);
+  });
+
+  test('Trigger trg_award_badges_match : candidature ASSIGNEE issue swipe → badge PREMIER_MATCH', async () => {
+    const admin = adminClient();
+    const mission = await seedMissionMatching({ profession: 'INFIRMIER' });
+    expect(mission).toBeTruthy();
+
+    // 1. Le soignant a swipé LIKE
+    await seedSwipe(soignantId!, mission!.id, 'LIKE');
+
+    // 2. INSERT candidature EN_ATTENTE
+    const { data: cand, error: candErr } = await admin
+      .from('candidatures' as any)
+      .insert({
+        soignant_id: soignantId!,
+        mission_id: mission!.id,
+        statut: 'EN_ATTENTE',
+      })
+      .select('id')
+      .single();
+    expect(candErr).toBeFalsy();
+    const candidatureId = (cand as { id: string }).id;
+
+    try {
+      // 3. Étab accepte → UPDATE statut=ASSIGNEE → trigger doit award PREMIER_MATCH
+      const { error: updErr } = await admin
+        .from('candidatures' as any)
+        .update({ statut: 'ASSIGNEE' })
+        .eq('id', candidatureId);
+      expect(updErr).toBeFalsy();
+
+      const badges = await getBadges(soignantId!);
+      expect(badges).toContain('PREMIER_MATCH');
+    } finally {
+      // Cleanup candidature (sinon contraintes FK rejouent)
+      await admin.from('candidatures' as any).delete().eq('id', candidatureId);
+    }
   });
 });
