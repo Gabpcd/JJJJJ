@@ -1,9 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { AlertTriangle, ExternalLink, CheckCircle, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useNotification } from '@/contexts/NotificationContext';
-import { extraireMessageErreur } from '@/lib/erreurs';
-import { capturerErreurSentry } from '@/lib/sentry';
+import { AlertTriangle, ExternalLink, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -14,49 +9,19 @@ interface BandeauRappelDPAEProps {
   typeContrat?: string;
 }
 
-export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, typeContrat }: BandeauRappelDPAEProps) {
-  const { afficherNotification } = useNotification();
-  const [confirming, setConfirming] = useState(false);
-  const [confirmed, setConfirmed] = useState(dpaeEffectuee ?? false);
-  const [confirmedDate, setConfirmedDate] = useState(dpaeEffectueeLe ?? null);
-
-  useEffect(() => {
-    setConfirmed(dpaeEffectuee ?? false);
-    setConfirmedDate(dpaeEffectueeLe ?? null);
-  }, [dpaeEffectuee, dpaeEffectueeLe]);
-
+export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat }: BandeauRappelDPAEProps) {
   // Afficher uniquement pour les contrats CDD (salarié)
   // Compat lecture : on accepte aussi 'CDDU' legacy au cas où des contrats
   // pré-migration PR 1 traînent encore.
   if (typeContrat !== 'CDD' && typeContrat !== 'CDDU') return null;
 
-  const handleConfirmer = async () => {
-    if (!contratId) return;
-    setConfirming(true);
-    try {
-      const { data, error } = await supabase.rpc('fn_confirmer_dpae' as any, {
-        p_contrat_id: contratId,
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      setConfirmed(true);
-      setConfirmedDate((data as any)?.dpae_effectuee_le ?? new Date().toISOString());
-      afficherNotification({ type: 'succes', message: 'DPAE confirmée avec succès !' });
-    } catch (err) {
-      capturerErreurSentry(err, 'BandeauRappelDPAE', 'confirmer_dpae');
-      afficherNotification({ type: 'erreur', message: extraireMessageErreur(err) });
-    } finally {
-      setConfirming(false);
-    }
-  };
-
-  if (confirmed) {
+  if (dpaeEffectuee) {
     return (
       <div className="bg-success/10 border border-success/30 rounded-xl p-4 flex items-start gap-3">
         <CheckCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold text-success">
-            ✅ DPAE effectuée{confirmedDate ? ` le ${format(new Date(confirmedDate), 'd MMMM yyyy', { locale: fr })}` : ''}
+            ✅ DPAE effectuée{dpaeEffectueeLe ? ` le ${format(new Date(dpaeEffectueeLe), 'd MMMM yyyy', { locale: fr })}` : ''}
           </p>
         </div>
       </div>
@@ -73,6 +38,9 @@ export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, t
         <p className="text-xs text-muted-foreground mt-1">
           La DPAE est obligatoire pour les contrats CDD. Pour les remplacements libéraux, elle n'est pas requise.
         </p>
+        <p className="text-xs text-muted-foreground mt-2">
+          Une fois la DPAE soumise, saisissez le numéro URSSAF retourné dans la section <strong>DPAE</strong> ci-dessus pour preuve légale.
+        </p>
         <div className="flex flex-wrap items-center gap-3 mt-2">
           <a
             href="https://www.net-entreprises.fr"
@@ -82,16 +50,6 @@ export function BandeauRappelDPAE({ contratId, dpaeEffectuee, dpaeEffectueeLe, t
           >
             Accéder à net-entreprises.fr <ExternalLink className="h-3 w-3" />
           </a>
-          {contratId && (
-            <button
-              onClick={handleConfirmer}
-              disabled={confirming}
-              className="inline-flex items-center gap-1 text-xs font-medium text-success bg-success/10 hover:bg-success/20 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
-            >
-              {confirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
-              J'ai effectué la DPAE
-            </button>
-          )}
         </div>
       </div>
     </div>

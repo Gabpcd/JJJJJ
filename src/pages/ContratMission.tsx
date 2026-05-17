@@ -448,9 +448,10 @@ export default function ContratMission() {
           )}
         </div>
 
-        {/* DPAE : visible pour étab + admin sur contrats CDD signés */}
+        {/* DPAE : visible pour étab + admin sur contrats CDD signés (au moins par l'étab). */}
+        {/* Permettre saisie du n° dès SIGNE_ETABLISSEMENT pour anticiper la prise de poste. */}
         {(role === 'ADMIN_ETABLISSEMENT' || role === 'ADMIN_PLATEFORME' || role === 'ADMIN_GROUPE') &&
-         contrat.statut === 'SIGNE_COMPLET' &&
+         (contrat.statut === 'SIGNE_ETABLISSEMENT' || contrat.statut === 'SIGNE_COMPLET') &&
          contrat.type_contrat && ['CDD', 'CDDU', 'SALARIE'].includes(contrat.type_contrat) && (
           <div className="mb-4">
             <DPAEStatus
