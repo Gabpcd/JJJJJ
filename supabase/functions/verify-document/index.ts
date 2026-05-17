@@ -187,13 +187,16 @@ Fichier: ${doc.nom_fichier}
 
 Analyse ce document et vérifie sa conformité.`;
 
-    const mimeType = isPdf ? "application/pdf" : (doc.type_mime || "application/octet-stream");
-
     const anthropicContent: any[] = [{ type: "text", text: userMessage }];
-    if (isImage || isPdf) {
+    if (isPdf) {
+      anthropicContent.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: base64 },
+      });
+    } else if (isImage) {
       anthropicContent.push({
         type: "image",
-        source: { type: "base64", media_type: mimeType, data: base64 },
+        source: { type: "base64", media_type: doc.type_mime || "image/jpeg", data: base64 },
       });
     }
 
@@ -201,7 +204,7 @@ Analyse ce document et vérifie sa conformité.`;
       method: "POST",
       headers: {
         "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": "2025-01-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
