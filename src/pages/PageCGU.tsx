@@ -99,6 +99,15 @@ export default function PageCGU() {
           <li><strong>Anti-téléportation</strong> : un algorithme détecte les incohérences de déplacement (distance physiquement impossible entre deux pointages successifs) et déclenche une alerte pour vérification manuelle.</li>
           <li><strong>Données GPS</strong> : les coordonnées de pointage sont conservées pendant la durée de la mission + 3 ans (prescription légale), puis supprimées automatiquement.</li>
         </ul>
+
+        <h3 className="text-lg font-semibold text-foreground mt-6 mb-2">4.5 — Déclaration Préalable à l'Embauche (DPAE)</h3>
+        <p className="mb-3">Pour toute mission salariée (CDD), la Déclaration Préalable à l'Embauche prévue aux articles L.1221-10 et R.1221-2 du Code du travail doit être effectuée auprès de l'URSSAF avant la prise de poste du Soignant.</p>
+        <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-xl my-4">
+          <p className="font-semibold text-foreground mb-2">Clause essentielle DPAE :</p>
+          <p>L'Établissement, en sa qualité d'employeur légal du Soignant, demeure seul responsable de la déclaration de la DPAE auprès de l'URSSAF. Jolene n'est ni employeur, ni tiers-déclarant URSSAF agréé : la Plateforme ne transmet aucune DPAE pour le compte de l'Établissement.</p>
+        </div>
+        <p className="mb-3">À titre d'assistance technique, la Plateforme génère un brouillon de DPAE pré-rempli (identité du Soignant, SIRET de l'Établissement, dates et horaires de la mission) que l'Établissement peut copier sur le portail officiel <a href="https://www.net-entreprises.fr" target="_blank" rel="noopener noreferrer" className="underline text-primary">net-entreprises.fr</a>. L'Établissement reste libre de saisir directement sa DPAE par tout autre moyen autorisé.</p>
+        <p>L'Établissement est invité à saisir, dans la Plateforme, le numéro de récépissé URSSAF retourné par Net-Entreprises afin de bénéficier d'une traçabilité interne. Le Soignant reçoit alors un email de confirmation contenant ce numéro. L'absence de saisie du numéro dans la Plateforme n'a aucun effet sur la validité juridique de la DPAE, qui relève exclusivement de l'Établissement.</p>
       </section>
 
       {/* Article 5 */}
