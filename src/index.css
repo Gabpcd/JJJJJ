@@ -1209,3 +1209,38 @@
     transition: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Sprint 13-B PR 3 — Confetti swipe animation
+ * Trajectoire : pop vers le haut + translation horizontale aléatoire + rotation.
+ * Variables CSS --confetti-tx / --confetti-rot pour randomisation par particule.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes confetti-pop {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(0);
+    opacity: 0;
+  }
+  20% {
+    transform: translate3d(calc(var(--confetti-tx, 0vw) * 0.3), -30vh, 0) rotate(calc(var(--confetti-rot, 180deg) * 0.3)) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--confetti-tx, 0vw), 60vh, 0) rotate(var(--confetti-rot, 180deg)) scale(0.4);
+    opacity: 0;
+  }
+}
+
+.animate-confetti-pop {
+  animation-name: confetti-pop;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.4, 1);
+  animation-fill-mode: forwards;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-confetti-pop {
+    animation: none;
+    opacity: 0;
+  }
+}
