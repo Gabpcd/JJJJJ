@@ -925,8 +925,8 @@ export default function FacturationEtablissement() {
                     <Building2 className="h-4 w-4 text-primary" /> Coordonnées bancaires Jolene
                   </p>
                   <div className="text-xs text-muted-foreground space-y-1 font-mono">
-                    <p>IBAN : {ENTREPRISE.iban || 'FR76 XXXX XXXX XXXX XXXX XXXX XXX'}</p>
-                    <p>BIC : {ENTREPRISE.bic || 'XXXXXXXX'}</p>
+                    <p>IBAN : {ENTREPRISE.iban}</p>
+                    <p>BIC : {ENTREPRISE.bic}</p>
                     <p className="text-[10px] text-muted-foreground/70 font-sans italic">
                       Référence obligatoire : numéro de la facture commission (ex: FACT-2026-04-0001)
                     </p>
