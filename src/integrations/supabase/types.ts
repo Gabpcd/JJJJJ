@@ -6842,7 +6842,6 @@ export type Database = {
         Args: { p_litige_id: string }
         Returns: Json
       }
-      fn_confirmer_dpae: { Args: { p_contrat_id: string }; Returns: Json }
       fn_confirmer_paiement_soignant: {
         Args: { p_paiement_id: string }
         Returns: Json
