@@ -385,3 +385,27 @@ Cf. docs/SPRINT_12_G.md.
 - **Adoption finale** : BoutonY2K ~272 ouvertures, BadgeY2K 103+, CardY2K ~88, CarteKPIY2K 40, Mascotte 61/66 EmptyState, animations.ts 3 composants core
 - Reste uniquement cas légitimes shadcn (~40 buttons : asChild Radix Slot / icon back nav / variant link / Calendar/DataTable primitives)
 - **0 dette Y2K résiduelle**
+
+### Sprint 13 — Swipe matching Hinge-style (A → D, 19 PRs)
+Cf. docs/SPRINT_13_FINAL.md.
+
+| Sous-sprint | PRs | Livré |
+|---|---|---|
+| 13-A | 5 (#316-#320) | Backend matching : 3 tables + 3 RPCs scoring/swipe + cron horaire + edge function notif-match |
+| 13-B | 5 (#321-#325) | UI swipe Y2K : CardMissionSwipe + StackCards Pointer Events + BoutonsActionSwipe + ConfettiSwipe + page SwipeMissions + ModalDetailMissionSwipe |
+| 13-C | 5 (#326-#330) | Engagement : 8 badges (PREMIER_SWIPE/EXPLORATEUR/TOP_SWIPER/PREMIER_SUPER_LIKE/PREMIER_MATCH/MATCH_KING_QUEEN/30/100_DAYS_STREAK) + streaks + CelebrationMatch + notif-candidature-acceptee + page MesMatches |
+| 13-D | 4 (#331-#334) | Toggle Swipe/Liste localStorage + E2E swipe UI 10 specs + E2E flow complet 6 specs + doc finale |
+| **Total** | **19 PRs** | **5 tables + 6 RPCs + 3 triggers + 1 cron + 2 edge functions + 6 composants swipe + 2 pages + 27 spec stubs E2E** |
+
+**Algorithme scoring matching** : filtres durs (profession, distance Haversine <50km) + softs (tarif 25, distance 25, étab 20, urgence 15, fiabilité soignant 15) → score 0-100 + breakdown JSONB.
+
+**Mécaniques engagement Hinge-grade** : badges automatiques (8 types) + streaks quotidien (reset si jour manqué) + quota anti-spam super-likes 5/jour + confettis CSS Y2K (rose/mauve/cyan/butter) + haptic feedback mobile (navigator.vibrate).
+
+**URLs prod** :
+- `/soignant/swipe-missions` — page swipe Hinge-style
+- `/soignant/mes-matches` — liste matches + stats engagement
+- `/soignant/recherche-missions` — vue liste classique (toggle persistant)
+
+**Skip honnête PR 2 13-D** : refonte RechercheMissions déjà acquise Sprint 12 (filtres profession/rayon/tarif/typeContrat/urgentesOnly/horaire/villeRecherche + BoutonY2K toggles). Sprint 13-D PR 1 ajoute juste le toggle Swipe/Liste persistant.
+
+**Règle migrations apply_migration** : chaque MCP `apply_migration` DOIT être suivi d'un INSERT explicit dans `supabase_migrations.schema_migrations` pour éviter le drift workflow `supabase db push` (incident Sprint 13-A + Sprint 13-C). Hotfixes appliqués.
