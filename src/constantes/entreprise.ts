@@ -19,7 +19,7 @@ export const ENTREPRISE = {
   date_debut_activite: '2026-04-02',
   hebergeur: 'Supabase Inc. — Serveurs UE, chiffrement AES-256, TLS 1.3',
   email: 'contact@jolene.app',
-  // À compléter quand tu auras ouvert ton compte Qonto/Shine :
-  iban: 'FR76 XXXX XXXX XXXX XXXX XXXX XXX',
-  bic: 'XXXXXXXX',
+  iban: 'FR76 1732 8844 0018 3164 8362 916',
+  bic: 'SWNBFR22',
+  banque_domiciliation: 'SWAN SAS — 95 Avenue du Président Wilson, 93100 Montreuil, France',
 } as const;
