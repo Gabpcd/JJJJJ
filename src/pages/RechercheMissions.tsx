@@ -297,12 +297,40 @@ export default function RechercheMissions() {
     <LayoutApp role="SOIGNANT">
       {(!soignant || !soignant.profession) && <BandeauProfilIncomplet />}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h1 className="text-xl font-bold text-foreground">Recherche avancée</h1>
-          <BoutonY2K variant="secondary" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-1.5 md:hidden">
-            <SlidersHorizontal className="h-4 w-4" />
-            Filtres
-          </BoutonY2K>
+          <div className="flex items-center gap-2">
+            {/* Sprint 13-D PR 1 : toggle Swipe/Liste */}
+            <div className="inline-flex rounded-2xl bg-jolene-cloud border border-jolene-rose-200 p-1" role="tablist" aria-label="Vue Swipe ou Liste">
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-jolene-bubblegum hover:text-jolene-rose-700 transition-snap"
+                onClick={() => {
+                  try { localStorage.setItem('jolene_missions_view_pref', 'swipe'); } catch { /* ignore */ }
+                  navigate('/soignant/swipe-missions');
+                }}
+              >
+                Swipe
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="true"
+                className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold bg-gradient-hero text-white shadow-md transition-snap"
+                onClick={() => {
+                  try { localStorage.setItem('jolene_missions_view_pref', 'liste'); } catch { /* ignore */ }
+                }}
+              >
+                Liste
+              </button>
+            </div>
+            <BoutonY2K variant="secondary" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-1.5 md:hidden">
+              <SlidersHorizontal className="h-4 w-4" />
+              Filtres
+            </BoutonY2K>
+          </div>
         </div>
 
         <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} />
