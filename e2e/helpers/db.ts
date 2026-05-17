@@ -12,6 +12,11 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.PLAYWRIGHT_SUPABASE_URL || '';
 const SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PLAYWRIGHT_SERVICE_ROLE_KEY || '';
+const PUBLISHABLE_KEY =
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  '';
 
 let _admin: SupabaseClient | null = null;
 
@@ -30,6 +35,28 @@ export function adminClient(): SupabaseClient {
     });
   }
   return _admin;
+}
+
+/**
+ * Crée un client Supabase signé en tant qu'utilisateur test donné.
+ * Utilise la publishable key (anon) + signInWithPassword → RLS appliquée.
+ * Permet de tester les RPCs dépendantes de auth.uid().
+ */
+export async function userClient(email: string, password: string): Promise<SupabaseClient> {
+  if (!SUPABASE_URL || !PUBLISHABLE_KEY) {
+    throw new Error(
+      '[playwright/db] SUPABASE_URL ou SUPABASE_PUBLISHABLE_KEY manquant pour userClient. ' +
+        'Définir SUPABASE_PUBLISHABLE_KEY (= VITE_SUPABASE_PUBLISHABLE_KEY) dans le workflow CI.',
+    );
+  }
+  const client = createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  if (error) {
+    throw new Error(`[playwright/db] userClient signInWithPassword("${email}") failed: ${error.message}`);
+  }
+  return client;
 }
 
 /** Reset un compte test au state initial (purge missions, candidatures, notations, etc.). */
