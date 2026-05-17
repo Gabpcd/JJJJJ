@@ -12,22 +12,41 @@
  */
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LayoutGrid, Sparkles } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CardMissionSwipe, type MissionSwipePayload } from '@/components/swipe/CardMissionSwipe';
 import { StackCards, type SwipeDirection } from '@/components/swipe/StackCards';
 import { BoutonsActionSwipe } from '@/components/swipe/BoutonsActionSwipe';
 import { ConfettiSwipe } from '@/components/swipe/ConfettiSwipe';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 
 type SwipeDirEnum = 'LIKE' | 'DISLIKE' | 'SUPER_LIKE';
 
+const VIEW_PREF_KEY = 'jolene_missions_view_pref'; // 'swipe' | 'liste'
+
 export default function SwipeMissions() {
   usePageTitle('Découvrir');
   const qc = useQueryClient();
+  const navigate = useNavigate();
+
+  // Au mount : si pref localStorage = 'liste', rediriger vers /soignant/recherche-missions
+  useEffect(() => {
+    try {
+      const pref = localStorage.getItem(VIEW_PREF_KEY);
+      if (pref === 'liste') navigate('/soignant/recherche-missions', { replace: true });
+    } catch { /* localStorage indisponible (incognito strict) */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const switchToListe = useCallback(() => {
+    try { localStorage.setItem(VIEW_PREF_KEY, 'liste'); } catch { /* ignore */ }
+    navigate('/soignant/recherche-missions');
+  }, [navigate]);
   const { afficherNotification } = useNotification();
   const [confettiKey, setConfettiKey] = useState<number | null>(null);
 
@@ -125,8 +144,36 @@ export default function SwipeMissions() {
   return (
     <LayoutApp role="SOIGNANT">
       <div className="container mx-auto px-4 pt-4 pb-2 max-w-md">
-        <h1 className="text-2xl font-bold text-jolene-midnight">Découvrir</h1>
-        <p className="text-sm text-jolene-bubblegum">Swipez vers la droite pour postuler, vers la gauche pour passer.</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-jolene-midnight">Découvrir</h1>
+            <p className="text-sm text-jolene-bubblegum">Swipez à droite pour postuler, à gauche pour passer.</p>
+          </div>
+          <div className="inline-flex rounded-2xl bg-jolene-cloud border border-jolene-rose-200 p-1 shrink-0" role="tablist" aria-label="Vue Swipe ou Liste">
+            <button
+              type="button"
+              role="tab"
+              aria-selected="true"
+              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold bg-gradient-hero text-white shadow-md transition-snap"
+              onClick={() => {
+                try { localStorage.setItem(VIEW_PREF_KEY, 'swipe'); } catch { /* ignore */ }
+              }}
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Swipe
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-jolene-bubblegum hover:text-jolene-rose-700 transition-snap"
+              onClick={switchToListe}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+              Liste
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="container mx-auto px-4 max-w-md min-h-[70vh] flex flex-col">
