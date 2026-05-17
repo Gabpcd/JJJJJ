@@ -457,3 +457,23 @@ Cf. docs/SPRINT_15.md.
 **Limitations connues (documentées docs/SPRINT_15.md)** :
 - Edge functions deployed-hors-repo (temp-sync-vault-key, invoke-generate-invoice-internal, confirm-dpae) restent ACTIVE en Supabase, à supprimer manuellement Dashboard (aucun outil MCP delete_edge_function). 0 impact fonctionnel.
 - Tiers-déclarant URSSAF EDI reporté post-Série A (3-6 mois agrément).
+
+### Sprint 16 — Tests E2E historiques réels (5 PRs)
+Cf. docs/SPRINT_16.md.
+
+| Sous-sprint | PR | Chantier | Stubs convertis |
+|---|---|---|---|
+| 16-1 | #345 | candidature + notation + recherche-missions | 4 tests réels |
+| 16-2 | #346 | notifications + pool urgence | 3 tests réels |
+| 16-3 | #347 | parrainage + changer-password | 3 tests réels + 1 skip honnête |
+| 16-4 | #348 | pointage + litige + export RGPD | 5 tests réels |
+| 16-5 | (this) | Doc Sprint 16 + bilan E2E global | — |
+| **Total** | **5 PRs** | — | **15 tests E2E réels + 0 stub non justifié** |
+
+**Bilan dette E2E global post Sprint 16** :
+- 0 stub vide non justifié dans le codebase (`grep test.skip(true` → 8 occurrences, toutes documentées)
+- 254 tests actifs sur 33 spec files
+- 8 hard-coded `test.skip(true)` restants : 1 PR 3 (changer-password password restore = race condition CI), 4 conditional (sprint57 + sprint57-reverse), 2 inscription (Promise.race fallback), 1 regression-bugs (cross-référencé admin-invoke)
+- ~26 conditional `test.skip(!ENV)` (runtime guards légitimes)
+
+**Skips honnêtes documentés (infrastructure manquante précise)** : 8 cas — voir docs/SPRINT_16.md section "Skips honnêtes". Chacun avec infra manquante + couverture alternative explicite.
