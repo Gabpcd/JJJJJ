@@ -409,3 +409,28 @@ Cf. docs/SPRINT_13_FINAL.md.
 **Skip honnête PR 2 13-D** : refonte RechercheMissions déjà acquise Sprint 12 (filtres profession/rayon/tarif/typeContrat/urgentesOnly/horaire/villeRecherche + BoutonY2K toggles). Sprint 13-D PR 1 ajoute juste le toggle Swipe/Liste persistant.
 
 **Règle migrations apply_migration** : chaque MCP `apply_migration` DOIT être suivi d'un INSERT explicit dans `supabase_migrations.schema_migrations` pour éviter le drift workflow `supabase db push` (incident Sprint 13-A + Sprint 13-C). Hotfixes appliqués.
+
+### Sprint 14 — Tests E2E réels matching swipe (5 PRs)
+Cf. docs/SPRINT_14_FINAL.md.
+
+| Sous-sprint | PR | Chantier | Livré |
+|---|---|---|---|
+| 14-1 | #335 | Helpers seed-matching foundation | `e2e/helpers/seed-matching.ts` (8 helpers : seedMissionMatching, seedSwipe, seedMatchingScore, cleanup×2, getStreakInfo, getBadges, getSuperLikesRestant) |
+| 14-2 | #336 | Backend matching — 8 tests réels | Remplace 11 stubs `matching-backend.spec.ts` + helper `userClient(email,password)` + env workflow `SUPABASE_PUBLISHABLE_KEY` |
+| 14-3 | #337 | UI swipe — 6 tests réels | Remplace 10 stubs `swipe-matching-ui.spec.ts` (routes, toggle, MesMatches) |
+| 14-4 | #338 | Flow complet — 5 tests réels | Remplace 6 stubs `matching-complete.spec.ts` (triggers badges/streaks/match) |
+| 14-5 | (this) | Doc Sprint 14 FINAL + audit dette résiduelle | docs/SPRINT_14_FINAL.md |
+| **Total** | **5 PRs** | — | **19 tests E2E réels** (27 stubs Sprint 13 → 0 dette matching) |
+
+**Pattern Sprint 14** :
+- `adminClient()` (service_role) : seed/cleanup, bypass RLS, triggers DB direct
+- `userClient(email, password)` : anon + signInWithPassword pour RPCs `SECURITY DEFINER` dépendantes de `auth.uid()`
+- `test.afterEach` : `cleanupMatchingForSoignant(soignantId)` + `cleanupMissionsTest()`
+
+**Skips honnêtes Sprint 14** :
+- Gesture swipe Pointer Events (cross-browser flaky)
+- Streak J+1/J+2 (clock mock pg_set_local trop intrusif)
+- notif-match edge function (testé manuellement post-déploiement)
+- Flow UI multi-comptes étab-accepte (couvert backend test #5 PREMIER_MATCH)
+
+**Dette E2E historique restante** : 24 stubs pré-Sprint 13 (`candidature/changer-password/export-rgpd/litige/notation/notifications/parrainage/pointage/pool-urgence/recherche-missions/sprint57-*/inscription/regression-bugs`) → Sprint 15 dédié post-launch.
