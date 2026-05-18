@@ -26,6 +26,18 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+let _cachedVaultSecret: string | null = null;
+async function getVaultSecret(sb: any): Promise<string> {
+  if (_cachedVaultSecret) return _cachedVaultSecret;
+  const env = Deno.env.get("SUPABASE_SECRET_KEY") || "";
+  if (env) { _cachedVaultSecret = env; return env; }
+  try {
+    const { data } = await sb.rpc("fn_lire_secret_cron");
+    if (data && typeof data === "string") { _cachedVaultSecret = data; return data; }
+  } catch { /* ignore */ }
+  return "";
+}
+
 async function loadDocumentWithRetry(supabase: any, documentId: string, attempts = 4) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     const { data, error, status, statusText } = await supabase
@@ -58,13 +70,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (applyRateLimit('verify-document', getClientIp(req), { max: 10, windowMs: 60_000 })) {
-      return new Response(JSON.stringify({ error: 'Trop de vérifications. Réessayez dans 1 minute.' }), {
-        status: 429,
-        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
-      });
-    }
-
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Non autorisé" }), {
@@ -76,7 +81,9 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const token = authHeader.replace("Bearer ", "");
-    const isServiceRole = token === serviceKey;
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    const vaultSecret = await getVaultSecret(supabaseAdmin);
+    const isServiceRole = token === serviceKey || (vaultSecret && token === vaultSecret);
 
     if (!isServiceRole) {
       const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
@@ -87,6 +94,12 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         });
       }
+      if (applyRateLimit('verify-document', getClientIp(req), { max: 10, windowMs: 60_000 })) {
+        return new Response(JSON.stringify({ error: 'Trop de vérifications. Réessayez dans 1 minute.' }), {
+          status: 429,
+          headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const { document_id } = await req.json();
@@ -95,7 +108,7 @@ Deno.serve(async (req) => {
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY non configurée — nécessaire pour la vérification IA des documents");
 
-    const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    const supabase = supabaseAdmin;
 
     const doc = await loadDocumentWithRetry(supabase, document_id);
 
@@ -204,7 +217,7 @@ Analyse ce document et vérifie sa conformité.`;
       method: "POST",
       headers: {
         "x-api-key": anthropicKey,
-        "anthropic-version": "2025-01-01",
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -218,6 +231,17 @@ Analyse ce document et vérifie sa conformité.`;
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("Anthropic API failed:", aiResponse.status, errText);
+      // Persiste l'erreur Anthropic dans resultat_ia pour diagnostic
+      // sans avoir à déployer une version debug.
+      await supabase.from("documents_soignants").update({
+        resultat_ia: {
+          erreur_anthropic: {
+            status: aiResponse.status,
+            body_excerpt: errText.slice(0, 1500),
+            at: new Date().toISOString(),
+          },
+        },
+      } as any).eq("id", document_id);
       await supabase.rpc("fn_update_document_verification", {
         p_document_id: document_id, p_statut_verification: "EN_ATTENTE", p_motif_rejet: null,
       });
@@ -238,6 +262,11 @@ Analyse ce document et vérifie sa conformité.`;
     }
 
     if (!analysis) {
+      await supabase.from("documents_soignants").update({
+        resultat_ia: {
+          erreur_parse: { raw_excerpt: rawContent.slice(0, 1500), at: new Date().toISOString() },
+        },
+      } as any).eq("id", document_id);
       await supabase.rpc("fn_update_document_verification", {
         p_document_id: document_id, p_statut_verification: "EN_ATTENTE",
       });
@@ -304,10 +333,10 @@ Analyse ce document et vérifie sa conformité.`;
       JSON.stringify({ success: true, verdict: analysis.verdict, analysis }),
       { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
-  } catch (e) {
+  } catch (e: any) {
     console.error("verify-document error:", e);
     return new Response(
-      JSON.stringify({ error: "Une erreur interne est survenue." }),
+      JSON.stringify({ error: e?.message || "Une erreur interne est survenue." }),
       { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
