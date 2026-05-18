@@ -77,7 +77,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.98.0
 
       - name: Show CLI version
         run: supabase --version
@@ -223,7 +223,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.98.0
 
       - name: Deploy every function from supabase/functions
         run: |
