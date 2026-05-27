@@ -81,6 +81,14 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 }
 ```
 
+## Pièges vérification documents (verify-document)
+
+- **HEIC iPhone** → conversion JPEG côté browser (OffscreenCanvas) avant upload, l'API Anthropic Vision n'accepte pas HEIC.
+- **PDF** → envoyer en `type: "document"` (PAS `type: "image"`) à l'API Anthropic.
+- **REJETE ≠ EXPIRE** : ce sont 2 statuts distincts. Ne JAMAIS écrire `valide_jusqua`/`valide_depuis` quand verdict=REJETE (la date extraite par l'IA appartient au mauvais fichier). Côté UI, tester `estRejete` AVANT `estExpire`.
+- **Crédits Anthropic** : si `documents_soignants.resultat_ia.erreur_anthropic` apparaît → vérifier crédits + bonne organization de `ANTHROPIC_API_KEY`. Cf. docs/VERIFICATION_DOCUMENTS.md.
+- **Documents requis par profession + exercice** : filtrer par `profession` ET `type_exercice` (table `documents_requis_par_profession.type_exercice_requis` = SALARIE_ONLY/LIBERAL_ONLY/TOUS). Cf. docs/SPRINT_HOTFIX_UX_DOCUMENTS.md. AS/AES = CNI+DIPLOME seulement (ni RPPS, ni RCP). Pas de KBIS (sociétés, libéraux en BNC). Pas de casier judiciaire (rôle employeur).
+
 ## Workflows produits
 
 ### Sprint 1 + 2 — Signature électronique, contrats, DPAE, restrictions Mediflash
