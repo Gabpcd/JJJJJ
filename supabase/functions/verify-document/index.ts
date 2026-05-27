@@ -276,13 +276,18 @@ Analyse ce document et vérifie sa conformité.`;
       });
     }
 
+    const verdictFinal = analysis.verdict || "EN_ATTENTE";
+    // Si REJETE : ne PAS écrire valide_depuis/valide_jusqua. Les dates extraites
+    // par l'IA appartiennent au MAUVAIS document (mauvais type ou mauvais nom) et
+    // provoqueraient un faux affichage "Expiré" côté UI.
+    const estRejeteFinal = verdictFinal === "REJETE";
     await supabase.rpc("fn_update_document_verification", {
       p_document_id: document_id,
-      p_statut_verification: analysis.verdict || "EN_ATTENTE",
+      p_statut_verification: verdictFinal,
       p_motif_rejet: analysis.motif_rejet || null,
-      p_valide_depuis: analysis.date_emission || null,
-      p_valide_jusqua: analysis.date_expiration || null,
-      p_verifie_le: analysis.verdict === "VERIFIE" ? new Date().toISOString() : null,
+      p_valide_depuis: estRejeteFinal ? null : (analysis.date_emission || null),
+      p_valide_jusqua: estRejeteFinal ? null : (analysis.date_expiration || null),
+      p_verifie_le: verdictFinal === "VERIFIE" ? new Date().toISOString() : null,
     });
 
     const nomExtraitIa = analysis.nom_extrait || null;

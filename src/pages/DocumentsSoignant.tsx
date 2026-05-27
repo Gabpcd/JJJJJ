@@ -8,6 +8,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { JaugeProgression } from '@/components/JaugeProgression';
 import { ModalTeleversement } from '@/components/ModalTeleversement';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { TYPES_DOCUMENTS, STATUTS_VERIFICATION, TYPES_DOCUMENTS_EXCLUS_UPLOAD } from '@/lib/documents';
@@ -495,8 +496,10 @@ export function DocumentsSoignantContent() {
           const isCritique = requis.est_critique;
           const doc = mesDocuments.find(d => d.type_document === requis.type_document);
           const statut = doc ? STATUTS_VERIFICATION[doc.statut_verification] : null;
-          const estExpire = doc?.valide_jusqua && new Date(doc.valide_jusqua) < new Date();
           const estRejete = doc?.statut_verification === 'REJETE';
+          // REJETE prime sur EXPIRE : un document rejeté reste rejeté même si
+          // l'IA a extrait une date_expiration passée du mauvais fichier.
+          const estExpire = !estRejete && doc?.valide_jusqua && new Date(doc.valide_jusqua) < new Date();
 
           // Divider avant les optionnels
           if (idx > 0 && !isCritique && documentsRequis[idx - 1]?.est_critique) {
@@ -569,18 +572,12 @@ export function DocumentsSoignantContent() {
                       <button onClick={() => setSuppDocId(doc.id)} className="text-xs text-destructive font-medium hover:underline">Supprimer</button>
                     </div>
                   </div>
-                ) : estExpire ? (
-                  <div className="mt-2">
-                    <p className="text-xs text-destructive">⏰ Expiré depuis le {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}</p>
-                    <span className="badge-base bg-destructive/10 text-destructive text-[10px] mt-1">Expiré ⏰</span>
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Téléverser un nouveau document</button>
-                    </div>
-                  </div>
                 ) : estRejete ? (
                   <div className="mt-2">
-                    <p className="text-xs text-destructive">❌ Rejeté {doc.motif_rejet && `— Motif : "${doc.motif_rejet}"`}</p>
-                    <span className="inline-flex items-center gap-1 badge-base bg-destructive/10 text-destructive text-[10px] mt-1">Rejeté ❌</span>
+                    <p className="text-xs text-destructive">
+                      Document non valide{doc.motif_rejet && ` — ${doc.motif_rejet}`}. Veuillez en téléverser un correct.
+                    </p>
+                    <BadgeY2K variant="error" size="sm" className="mt-1">Rejeté</BadgeY2K>
                     <div className="flex gap-2 mt-2">
                       <button
                         onClick={() => reverifier(doc.id)}
@@ -590,6 +587,14 @@ export function DocumentsSoignantContent() {
                         {reverifyingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                         Revérifier
                       </button>
+                      <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Téléverser un nouveau document</button>
+                    </div>
+                  </div>
+                ) : estExpire ? (
+                  <div className="mt-2">
+                    <p className="text-xs text-amber-600">Document expiré depuis le {format(new Date(doc.valide_jusqua), 'd MMM yyyy', { locale: fr })}. Veuillez en téléverser un récent.</p>
+                    <BadgeY2K variant="warning" size="sm" className="mt-1">Expiré</BadgeY2K>
+                    <div className="flex gap-2 mt-2">
                       <button onClick={() => { setTeleversementType(requis.type_document); setTeleversementExpiration(!!requis.a_expiration); }} className="text-xs text-primary font-medium hover:underline">Téléverser un nouveau document</button>
                     </div>
                   </div>
