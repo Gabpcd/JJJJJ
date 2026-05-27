@@ -154,16 +154,24 @@ export function DocumentsSoignantContent() {
     if (!user) return;
     const [{ data: sg }, { data: dr }, { data: md }] = await Promise.all([
       supabase.from('soignants').select('profession, prenom, nom, type_exercice').eq('id', user.id).maybeSingle(),
-      supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique'),
+      supabase.from('documents_requis_par_profession').select('id, profession, type_document, description, a_expiration, duree_validite_mois, est_critique, type_exercice_requis'),
       supabase.from('documents_soignants').select('id, soignant_id, type_document, nom_fichier, statut_verification, valide_depuis, valide_jusqua, televerse_le, motif_rejet, est_critique, s3_cle, s3_bucket, type_mime, taille_octets, libelle').eq('soignant_id', user.id).is('supprime_le', null).order('televerse_le', { ascending: false }),
     ]);
     if (sg) {
       setSoignant(sg);
+      // Filtrage par profession ET type_exercice :
+      // LIBERAL/MIXTE → inclut les documents LIBERAL_ONLY (RCP/RIB/URSSAF)
+      // SALARIE/CDD/autre → exclut LIBERAL_ONLY (n'affiche que TOUS)
+      const estLiberal = (sg as any).type_exercice === 'LIBERAL' || (sg as any).type_exercice === 'MIXTE';
       setDocumentsRequis(
-        (dr || []).filter((d: any) =>
-          d.profession === (sg as any).profession &&
-          !TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)
-        )
+        (dr || []).filter((d: any) => {
+          if (d.profession !== (sg as any).profession) return false;
+          if (TYPES_DOCUMENTS_EXCLUS_UPLOAD.includes(d.type_document)) return false;
+          const exReq = d.type_exercice_requis || 'TOUS';
+          if (exReq === 'LIBERAL_ONLY') return estLiberal;
+          if (exReq === 'SALARIE_ONLY') return !estLiberal;
+          return true; // TOUS
+        })
       );
     }
     setMesDocuments(md || []);
