@@ -7,7 +7,7 @@ const firebaseConfig = {
   appId: "1:54202049729:web:d29deb3c77a916e3b5a040"
 };
 
-const VAPID_KEY = 'BNczykzZR_2hgBTq6PAZUS0dD-v0UQid9jDa6MxL88rF2muXHBv44UXgTagFU-KPDgiVJ7Fs1tkJ44anurzIFAk';
+const VAPID_KEY = 'BAr9zposDcY2jnUEbKvYsck5Scf_iyvO3xth-w2vsRdU3v5SFSfeY0rHgALkc7FZQbbZIT7bboMsY-J6xnniYfQ';
 
 // No Firebase SDK import — use native Web Push API to avoid React dual-instance conflicts
 
