@@ -38,7 +38,7 @@ export default function PageInscriptionSucces() {
   const target = role === 'etab' ? '/etablissement/tableau-de-bord' : '/soignant/tableau-de-bord';
 
   return (
-    <div className="min-h-screen gradient-hero flex flex-col">
+    <div className="min-h-[100dvh] gradient-hero flex flex-col">
       <div className="flex-1 flex items-center justify-center px-4 py-8">
         <div className="card-base max-w-lg w-full space-y-6">
           {/* Header */}

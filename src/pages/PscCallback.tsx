@@ -89,7 +89,7 @@ export default function PscCallback() {
   };
 
   return (
-    <div className="min-h-screen gradient-hero flex flex-col items-center justify-center px-4">
+    <div className="min-h-[100dvh] gradient-hero flex flex-col items-center justify-center px-4">
       <div className="card-base max-w-md w-full text-center space-y-6">
         <div className="flex items-center justify-center gap-2">
           <HeartPulse className="h-8 w-8 text-rose" />
