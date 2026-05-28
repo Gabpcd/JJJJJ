@@ -244,24 +244,25 @@ async function dispatchStripePayout(admin: any, action: ActionRow): Promise<Disp
 // ─── Parrainage soignant ────────────────────────────────────────────
 
 async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Promise<DispatchResult> {
-  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!stripeKey) return { ok: false, erreur: "STRIPE_SECRET_KEY missing" };
-
   const { parrainage_id, parrain_id, filleul_id, montant_parrain, montant_filleul } = action.payload;
   if (!parrainage_id || !parrain_id || !filleul_id) {
     return { ok: false, erreur: "parrainage_id + parrain_id + filleul_id requis" };
   }
 
-  const results: { parrain?: string; filleul?: string; parrain_fallback?: string; filleul_fallback?: string } = {};
+  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+  const results: Record<string, string> = {};
+  let allPaid = true;
 
   for (const [role, userId, montant] of [
     ["parrain", parrain_id, montant_parrain || 50],
     ["filleul", filleul_id, montant_filleul || 50],
   ] as const) {
     const { data: soignant } = await admin.from("soignants")
-      .select("stripe_account_id, prenom, email").eq("id", userId).maybeSingle();
+      .select("stripe_account_id, iban_virement, iban_titulaire, prenom, nom, email")
+      .eq("id", userId).maybeSingle();
 
-    if (soignant?.stripe_account_id) {
+    // Canal 1 : Stripe Connect (libéraux)
+    if (soignant?.stripe_account_id && stripeKey) {
       const res = await fetch("https://api.stripe.com/v1/transfers", {
         method: "POST",
         headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
@@ -281,28 +282,48 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
         }
         return { ok: false, erreur: `Stripe transfer ${role} ${res.status}: ${json.error?.message}` };
       }
-      results[role === "parrain" ? "parrain" : "filleul"] = json.id;
-    } else {
-      // Pas de Stripe Connect → notification pour configurer
-      await admin.from("notifications").insert({
-        destinataire_id: userId,
-        type_destinataire: "SOIGNANT",
-        type: "PARRAINAGE_PRIME_VERSEE",
-        titre: "💰 50€ de prime en attente !",
-        corps: `Votre prime de parrainage de 50€ est prête. Configurez Stripe Connect pour la recevoir.`,
-        lien: "/soignant/stripe-connect",
-      });
-      results[role === "parrain" ? "parrain_fallback" : "filleul_fallback"] = "STRIPE_CONNECT_MANQUANT";
+      results[`${role}_canal`] = "STRIPE_CONNECT";
+      results[`${role}_ref`] = json.id;
+      continue;
     }
+
+    // Canal 2 : SWAN SCT (IBAN renseigné)
+    if (soignant?.iban_virement) {
+      const swanResult = await dispatchVersementSwan(
+        soignant.iban_virement,
+        soignant.iban_titulaire || `${soignant.prenom || ""} ${soignant.nom || ""}`.trim(),
+        montant,
+        `Prime parrainage Jolene (${role}) - ${parrainage_id}`,
+        parrainage_id,
+      );
+      if (!swanResult.ok) {
+        return { ok: false, erreur: `SWAN SCT ${role}: ${swanResult.erreur}` };
+      }
+      results[`${role}_canal`] = "SWAN_SCT";
+      results[`${role}_ref`] = swanResult.resultat?.payment_id || "initiated";
+      continue;
+    }
+
+    // Canal 3 : Aucun moyen de paiement → notification
+    await admin.from("notifications").insert({
+      destinataire_id: userId,
+      type_destinataire: "SOIGNANT",
+      type: "PARRAINAGE_PRIME_VERSEE",
+      titre: "50€ de prime en attente !",
+      corps: "Votre prime de parrainage de 50€ est prête. Renseignez votre IBAN dans Profil > Paiements pour la recevoir.",
+      lien: "/soignant/profil?tab=paiements",
+    });
+    results[`${role}_canal`] = "EN_ATTENTE_IBAN";
+    allPaid = false;
   }
 
-  // Mettre à jour le parrainage → PRIME_VERSEE
-  await admin.from("parrainages").update({
-    statut: "PRIME_VERSEE",
-    prime_versee_le: new Date().toISOString(),
-  }).eq("id", parrainage_id);
+  if (allPaid) {
+    await admin.from("parrainages").update({
+      statut: "PRIME_VERSEE",
+      prime_versee_le: new Date().toISOString(),
+    }).eq("id", parrainage_id);
+  }
 
-  // Audit
   await admin.rpc("fn_ecrire_audit_safe", {
     p_acteur_id: parrain_id,
     p_type_acteur: "SYSTEME",
@@ -313,6 +334,76 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
   });
 
   return { ok: true, resultat: results };
+}
+
+async function dispatchVersementSwan(
+  iban: string,
+  beneficiaryName: string,
+  amountEur: number,
+  reference: string,
+  idempotencyKey: string,
+): Promise<DispatchResult> {
+  try {
+    const { swanGraphQL, swanEnv } = await import("../_shared/swan-client.ts");
+    const env = swanEnv();
+    if (!env.clientId || !env.graphqlUrl) {
+      return { ok: false, erreur: "SWAN non configuré (SWAN_CLIENT_ID ou SWAN_GRAPHQL_URL manquant)" };
+    }
+
+    const mutation = `
+      mutation InitierVersementPrime($input: InitiateCreditTransfersInput!) {
+        initiateCreditTransfers(input: $input) {
+          ... on InitiateCreditTransfersSuccessPayload {
+            payment { id statusInfo { __typename } }
+          }
+          ... on AccountNotFoundRejection { message }
+          ... on ForbiddenRejection { message }
+          ... on InternalErrorRejection { message }
+          ... on ValidationRejection { message }
+        }
+      }
+    `;
+
+    const variables = {
+      input: {
+        accountId: env.accountId,
+        idempotencyKey,
+        consentRedirectUrl: "https://jolene.app/swan-callback",
+        creditTransfers: [{
+          amount: { value: amountEur.toFixed(2), currency: "EUR" },
+          sepaBeneficiary: {
+            iban,
+            name: beneficiaryName,
+            isMyOwnIban: false,
+            save: false,
+          },
+          reference: reference.slice(0, 35),
+          label: `Prime parrainage Jolene ${amountEur}€`,
+        }],
+      },
+    };
+
+    const result = await swanGraphQL(mutation, variables);
+
+    if (!result.ok) {
+      const errMsg = JSON.stringify(result.errors).slice(0, 300);
+      return { ok: false, erreur: `SWAN GraphQL error: ${errMsg}` };
+    }
+
+    const payload = (result.data as any)?.initiateCreditTransfers;
+    if (payload?.payment?.id) {
+      return { ok: true, resultat: { payment_id: payload.payment.id, status: payload.payment.statusInfo?.__typename } };
+    }
+
+    const rejection = payload?.message;
+    if (rejection) {
+      return { ok: false, erreur: `SWAN rejection: ${rejection}` };
+    }
+
+    return { ok: false, erreur: "SWAN: réponse inattendue" };
+  } catch (err) {
+    return { ok: false, erreur: `SWAN exception: ${(err as Error).message?.slice(0, 300)}` };
+  }
 }
 
 // ─── Chorus Pro ──────────────────────────────────────────────────────
