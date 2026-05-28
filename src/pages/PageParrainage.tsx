@@ -137,6 +137,8 @@ export default function PageParrainage() {
               <button
                 onClick={() => copier('code', codeParrainage)}
                 className="h-9 w-9 rounded-lg bg-primary/10 hover:bg-primary/20 flex items-center justify-center transition-colors"
+                title="Copier le code"
+                aria-label="Copier le code parrainage"
               >
                 {copied === 'code' ? <CheckCircle className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4 text-primary" />}
               </button>
