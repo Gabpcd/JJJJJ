@@ -52,7 +52,7 @@ export default function LayoutLegal({ titre, dateMaj, toc, children, seoDescript
   );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-[100dvh] bg-background flex flex-col">
       <SEOHead
         title={`${titre} — Jolene`}
         description={seoDescription || `${titre} de la plateforme Jolene — Staffing médical simplifié.`}

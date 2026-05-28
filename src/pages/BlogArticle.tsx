@@ -58,7 +58,7 @@ export default function BlogArticle() {
 
   if (!article) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
         <div className="text-center">
           <p className="text-4xl mb-4">🔍</p>
           <h1 className="text-2xl font-bold text-foreground mb-2">Article introuvable</h1>
@@ -84,7 +84,7 @@ export default function BlogArticle() {
         description={article.extrait}
         url={url}
       />
-      <div className="min-h-screen bg-background text-foreground">
+      <div className="min-h-[100dvh] bg-background text-foreground">
         {/* Header */}
         <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
           <div className="max-w-6xl mx-auto px-4 h-14 flex items-center">

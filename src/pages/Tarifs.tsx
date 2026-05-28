@@ -34,7 +34,7 @@ export default function Tarifs() {
         description="Découvrez la grille tarifaire Jolene : commission dégressive à partir de 15%, facturation transparente, pas de frais cachés."
         url="https://jolene.app/tarifs"
       />
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card py-4 px-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">

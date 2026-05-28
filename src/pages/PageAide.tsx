@@ -76,7 +76,7 @@ export default function PageAide() {
     aud === 'SOIGNANT' ? 'Soignant' : aud === 'ETABLISSEMENT' ? 'Établissement' : 'Commun';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] bg-background">
       <header className="border-b border-border bg-card">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
           <button onClick={() => user ? navigate(-1) : navigate('/')} className="text-muted-foreground hover:text-foreground" aria-label="Retour">
