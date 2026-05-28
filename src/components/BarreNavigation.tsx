@@ -62,6 +62,7 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
     entries.push({ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' });
   }
 
+  entries.push({ icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' });
   entries.push({ icone: Settings, label: 'Paramètres', route: '/soignant/profil' });
 
   return entries;
