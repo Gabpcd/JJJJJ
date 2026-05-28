@@ -63,7 +63,7 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
   }
 
   entries.push({ icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' });
-  entries.push({ icone: Settings, label: 'Paramètres', route: '/soignant/profil' });
+  entries.push({ icone: User, label: 'Mon profil', route: '/soignant/profil' });
 
   return entries;
 }

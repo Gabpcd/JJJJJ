@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Users, Shield, Zap, Landmark } from 'lucide-react';
+import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Users, Shield, Landmark } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -119,13 +119,6 @@ export default function PageParrainage() {
               <p className="text-xs text-muted-foreground mt-0.5">Versée par virement après la 1ère mission terminée de votre filleul et 100€ de commission encaissée par Jolene. Renseignez votre IBAN dans <strong>Profil → Paiements</strong>.</p>
             </div>
           </div>
-          <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20 mb-2">
-            <Zap className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-foreground">
-              <p className="font-semibold">Bonus +50 heures cumulées</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Dès la 1ère mission terminée de votre filleul, vous gagnez tous les deux <strong>+50h sur votre compteur</strong> (utile pour le seuil 3 200h libéral).</p>
-            </div>
-          </div>
           <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
             <Shield className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
             <div className="text-sm text-foreground">
@@ -207,8 +200,7 @@ export default function PageParrainage() {
           <ol className="text-sm text-muted-foreground leading-relaxed space-y-2 list-decimal list-inside">
             <li>Partagez votre code ou lien avec vos collègues soignants</li>
             <li>Votre filleul applique votre code à l'inscription</li>
-            <li>Quand il termine sa 1ère mission : <strong>+50h cumulées</strong> pour vous deux</li>
-            <li>Quand 100€ de commission sont encaissés par Jolene : <strong>50€ versés</strong> au parrain + <strong>50€ au filleul</strong> (par virement sur votre IBAN)</li>
+            <li>Quand il termine sa 1ère mission et que 100€ de commission sont encaissés par Jolene : <strong>50€ versés</strong> au parrain + <strong>50€ au filleul</strong> (par virement sur votre IBAN)</li>
             <li>Après <strong>3 filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
           </ol>
         </div>
