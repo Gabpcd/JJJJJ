@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, AlertTriangle, ExternalLink, CreditCard, FileSignature, Banknote, Info, Landmark, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, ExternalLink, CreditCard, FileSignature, Info, Landmark, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
@@ -129,7 +129,6 @@ function StripeConnectStatus({ userId }: { userId: string }) {
 export function SectionPaiements({ userId, typeExercice, mandatFacturationSigne, mandatFacturationSigneLe }: Props) {
   const navigate = useNavigate();
   const estLiberalOuMixte = typeExercice === 'LIBERAL' || typeExercice === 'MIXTE';
-  const estSalarie = typeExercice === 'SALARIE';
 
   if (!typeExercice) {
     return (
