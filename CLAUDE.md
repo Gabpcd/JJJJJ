@@ -81,6 +81,14 @@ async function getVaultCronSecret(sb: any): Promise<string> {
 }
 ```
 
+## Pièges Safari iOS mobile
+
+- **`100vh` saute** au focus clavier ou changement barre Safari. Utiliser `min-h-[100dvh]` (dynamic viewport height) sur tout container plein écran. `dvh ≡ vh` sur desktop → 0 risque régression.
+- **Cascade Tailwind** : `@layer utilities` (text-sm, min-h-screen) ÉCRASE `@layer base` d'index.css. Les protections globales (`html, body { min-height: 100dvh }` + `input, textarea, select { font-size: 16px }` à `index.css:285-295`) ne suffisent PAS si une classe utilité Tailwind est appliquée sur l'élément. Forcer la valeur correcte sur chaque composant/page.
+- **Zoom auto sur input < 16px** : Safari iOS zoom sur focus si font-size effective < 16px. Pattern : `text-base md:text-sm` (16px mobile, 14px desktop ≥768px) sur Input + Textarea shadcn. `.input-base` CSS classe a déjà l'override mobile.
+- **Pas de `scrollIntoView({behavior:'smooth'})` au focus input** : Safari iOS scroll nativement vers le champ focusé. Le JS smooth + setTimeout crée un saut. Valable uniquement pour scroll vers section/message (FilDiscussionLitige, DashboardRH, etc.), PAS au focus champ.
+- **Note Capacitor (Sprint 18)** : `@capacitor/keyboard` déjà préparé dans `lib/platform.ts:170-175` (resize mode + listener `keyboardWillShow`). Ajouter `user-scalable=no` dans viewport meta WKWebView pour bloquer le zoom au cas où. Cf. docs/HOTFIX_UX_SAFARI_MOBILE.md.
+
 ## Pièges vérification documents (verify-document)
 
 - **HEIC iPhone** → conversion JPEG côté browser (OffscreenCanvas) avant upload, l'API Anthropic Vision n'accepte pas HEIC.
