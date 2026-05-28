@@ -154,8 +154,10 @@ export default function PageParrainageEtab() {
                 <p className="text-xs text-muted-foreground mb-3">
                   Un autre établissement vous a recommandé Jolene ? Saisissez son code (format <code className="bg-muted px-1 rounded">ETB-XXXXXX</code>) pour qu'il reçoive sa récompense dès votre 1ère mission active.
                 </p>
+                <label htmlFor="code-parrainage-recu" className="sr-only">Code parrainage reçu</label>
                 <div className="flex gap-2">
                   <input
+                    id="code-parrainage-recu"
                     type="text"
                     value={codeRecu}
                     onChange={(e) => setCodeRecu(e.target.value.toUpperCase())}
