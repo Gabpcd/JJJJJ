@@ -13,7 +13,11 @@ export default function MesDocuments() {
   usePageTitle('Documents');
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const currentTab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : 'contrats';
+  // Défaut 'justificatifs' : l'onglet upload documents est le plus utile en
+  // onboarding (la majorité des CTA pointe vers `/soignant/documents` qui
+  // redirige déjà avec `?tab=justificatifs`, on aligne le défaut quand aucun
+  // param n'est passé).
+  const currentTab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : 'justificatifs';
 
   return (
     <LayoutApp role="SOIGNANT">
