@@ -5,7 +5,7 @@ import { HeartPulse, Home } from "lucide-react";
 const NotFound = () => {
   usePageTitle('Page introuvable');
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
       <div className="text-center max-w-md">
         <HeartPulse className="h-14 w-14 text-primary mx-auto mb-6" />
         <h1 className="mb-2 text-6xl font-bold text-foreground tracking-tight">404</h1>

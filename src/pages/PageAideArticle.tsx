@@ -102,7 +102,7 @@ export default function PageAideArticle() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -110,7 +110,7 @@ export default function PageAideArticle() {
 
   if (notFound || !article) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-[100dvh] bg-background">
         <div className="max-w-3xl mx-auto px-4 py-12 text-center">
           <p className="text-lg font-semibold text-foreground">Article introuvable</p>
           <p className="text-sm text-muted-foreground mt-2">Cet article n'existe pas ou a été supprimé.</p>
@@ -124,7 +124,7 @@ export default function PageAideArticle() {
     aud === 'SOIGNANT' ? 'Soignant' : aud === 'ETABLISSEMENT' ? 'Établissement' : 'Commun';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] bg-background">
       <header className="border-b border-border bg-card">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <button onClick={() => navigate('/aide')} className="text-muted-foreground hover:text-foreground">

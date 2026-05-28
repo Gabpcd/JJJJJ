@@ -6,7 +6,7 @@ interface Props {
 
 export function SentryErrorFallback({ resetError }: Props) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-6">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-background p-6">
       <div className="text-center max-w-md space-y-4">
         <HeartPulse className="h-12 w-12 text-primary mx-auto" />
         <h1 className="text-2xl font-bold text-foreground">

@@ -146,7 +146,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-[100dvh] bg-background flex">
       {/* ── Sidebar desktop (grouped) ── */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[240px] bg-sidebar flex-col z-40">
         <div className="p-5 flex items-center justify-between border-b border-sidebar-border">

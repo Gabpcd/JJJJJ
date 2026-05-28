@@ -76,7 +76,7 @@ export function EvaluationPostMission({ missionId, evalueId, typeEvaluateur, nom
     : `Évaluez le soignant « ${nomEvalue} »`;
 
   const modal = (
-    <div className="fixed inset-0 z-[100] flex min-h-screen items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
       <div className="relative w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         <button
           onClick={onTermine}

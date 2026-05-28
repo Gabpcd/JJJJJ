@@ -7,7 +7,7 @@ export default function PageAccessibilite() {
   usePageTitle('Déclaration d\'accessibilité');
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-[100dvh] flex flex-col bg-background">
       <main id="main-content" tabIndex={-1} className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mb-6">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Retour à l'accueil

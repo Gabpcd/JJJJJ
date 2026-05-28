@@ -44,7 +44,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
       const showDetails = import.meta.env.DEV ||
         (typeof window !== 'undefined' && window.location.search.includes('debug=1'));
       return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="min-h-[100dvh] flex items-center justify-center bg-background p-6">
           <div className="text-center max-w-2xl space-y-4">
             <h1 className="text-2xl font-bold text-foreground">
               Une erreur est survenue

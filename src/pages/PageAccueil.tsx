@@ -271,7 +271,7 @@ export default function PageAccueil() {
           "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.8", "ratingCount": "150", "bestRating": "5" }
         }}
       />
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+    <div className="min-h-[100dvh] bg-background text-foreground overflow-x-hidden">
       {/* ═══ Header ═══ */}
       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
