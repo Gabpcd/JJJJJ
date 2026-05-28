@@ -149,6 +149,8 @@ async function dispatch(admin: any, action: ActionRow): Promise<DispatchResult> 
       return dispatchPush(admin, action);
     case "AVOIR_PDF_GENERATION":
       return dispatchAvoirPdf(admin, action);
+    case "RECOMPENSE_PARRAINAGE_SOIGNANT":
+      return dispatchRecompenseParrainage(admin, action);
     default:
       return { ok: false, erreur: `Type d'action non supporté : ${type_action}` };
   }
@@ -237,6 +239,80 @@ async function dispatchStripePayment(admin: any, action: ActionRow): Promise<Dis
 
 async function dispatchStripePayout(admin: any, action: ActionRow): Promise<DispatchResult> {
   return { ok: false, erreur: "STRIPE_PAYOUT pas encore implémenté (Sprint 5+)" };
+}
+
+// ─── Parrainage soignant ────────────────────────────────────────────
+
+async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+  if (!stripeKey) return { ok: false, erreur: "STRIPE_SECRET_KEY missing" };
+
+  const { parrainage_id, parrain_id, filleul_id, montant_parrain, montant_filleul } = action.payload;
+  if (!parrainage_id || !parrain_id || !filleul_id) {
+    return { ok: false, erreur: "parrainage_id + parrain_id + filleul_id requis" };
+  }
+
+  const results: { parrain?: string; filleul?: string; parrain_fallback?: string; filleul_fallback?: string } = {};
+
+  for (const [role, userId, montant] of [
+    ["parrain", parrain_id, montant_parrain || 50],
+    ["filleul", filleul_id, montant_filleul || 50],
+  ] as const) {
+    const { data: soignant } = await admin.from("soignants")
+      .select("stripe_account_id, prenom, email").eq("id", userId).maybeSingle();
+
+    if (soignant?.stripe_account_id) {
+      const res = await fetch("https://api.stripe.com/v1/transfers", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          amount: Math.round(montant * 100).toString(),
+          currency: "eur",
+          destination: soignant.stripe_account_id,
+          description: `Prime parrainage Jolene (${role})`,
+          "metadata[parrainage_id]": parrainage_id,
+          "metadata[role]": role,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        if (json.error?.code === "balance_insufficient") {
+          return { ok: false, erreur: `balance_insufficient transfert ${role} (sera retenté)` };
+        }
+        return { ok: false, erreur: `Stripe transfer ${role} ${res.status}: ${json.error?.message}` };
+      }
+      results[role === "parrain" ? "parrain" : "filleul"] = json.id;
+    } else {
+      // Pas de Stripe Connect → notification pour configurer
+      await admin.from("notifications").insert({
+        destinataire_id: userId,
+        type_destinataire: "SOIGNANT",
+        type: "PARRAINAGE_PRIME_VERSEE",
+        titre: "💰 50€ de prime en attente !",
+        corps: `Votre prime de parrainage de 50€ est prête. Configurez Stripe Connect pour la recevoir.`,
+        lien: "/soignant/stripe-connect",
+      });
+      results[role === "parrain" ? "parrain_fallback" : "filleul_fallback"] = "STRIPE_CONNECT_MANQUANT";
+    }
+  }
+
+  // Mettre à jour le parrainage → PRIME_VERSEE
+  await admin.from("parrainages").update({
+    statut: "PRIME_VERSEE",
+    prime_versee_le: new Date().toISOString(),
+  }).eq("id", parrainage_id);
+
+  // Audit
+  await admin.rpc("fn_ecrire_audit_safe", {
+    p_acteur_id: parrain_id,
+    p_type_acteur: "SYSTEME",
+    p_action: "PARRAINAGE_SOIGNANT_PRIME_VERSEE",
+    p_type_ressource: "parrainage",
+    p_id_ressource: parrainage_id,
+    p_details: results,
+  });
+
+  return { ok: true, resultat: results };
 }
 
 // ─── Chorus Pro ──────────────────────────────────────────────────────
