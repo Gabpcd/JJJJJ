@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Trophy, Users, Shield, Zap } from 'lucide-react';
+import { Copy, CheckCircle, MessageCircle, Mail, Linkedin, Share2, Gift, Users, Shield, Zap, Landmark } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,30 +47,16 @@ export default function PageParrainage() {
       setPrioriteMissionsUrgentes(!!(soignant as any).priorite_missions_urgentes);
     }
 
-    const { data: parrainages } = await supabase
-      .from('parrainages')
-      .select('filleul_id, cree_le, statut')
-      .eq('parrain_id', user.id)
-      .order('cree_le', { ascending: false });
-
-    if (parrainages && parrainages.length > 0) {
-      const filleulIds = parrainages.map(p => p.filleul_id);
-      const { data: soignants } = await supabase
-        .from('soignants')
-        .select('id, prenom, cree_le, premiere_mission_le')
-        .in('id', filleulIds);
-
-      const filleulsList: Filleul[] = parrainages.map(p => {
-        const s = soignants?.find(s => s.id === p.filleul_id);
-        return {
-          id: p.filleul_id,
-          prenom: s?.prenom || 'Soignant',
-          cree_le: p.cree_le || '',
-          premiere_mission_le: s?.premiere_mission_le || null,
-          statut: p.statut || 'INSCRIT',
-        };
-      });
-      setFilleuls(filleulsList);
+    const { data: rpcData } = await supabase.rpc('fn_obtenir_mes_parrainages' as any);
+    const result = rpcData as any;
+    if (result && !result.error && Array.isArray(result.filleuls)) {
+      setFilleuls(result.filleuls.map((f: any) => ({
+        id: f.filleul_id,
+        prenom: f.prenom || 'Soignant',
+        cree_le: f.cree_le || '',
+        premiere_mission_le: f.premiere_mission_le || null,
+        statut: f.statut || 'INSCRIT',
+      })));
     }
 
     setLoading(false);
@@ -127,10 +113,17 @@ export default function PageParrainage() {
           )}
 
           <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20 mb-2">
+            <Landmark className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-foreground">
+              <p className="font-semibold">Prime de 50€ parrain + 50€ filleul</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Versée par virement après la 1ère mission terminée de votre filleul et 100€ de commission encaissée par Jolene. Renseignez votre IBAN dans <strong>Profil → Paiements</strong>.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20 mb-2">
             <Zap className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
             <div className="text-sm text-foreground">
-              <p className="font-semibold">Bonus immédiat : +50 heures cumulées</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Dès que votre filleul applique votre code à l'inscription, vous gagnez tous les deux <strong>+50h sur votre compteur</strong> (utile pour le seuil 3 200h libéral).</p>
+              <p className="font-semibold">Bonus +50 heures cumulées</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Dès la 1ère mission terminée de votre filleul, vous gagnez tous les deux <strong>+50h sur votre compteur</strong> (utile pour le seuil 3 200h libéral).</p>
             </div>
           </div>
           <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
@@ -213,13 +206,11 @@ export default function PageParrainage() {
           </h3>
           <ol className="text-sm text-muted-foreground leading-relaxed space-y-2 list-decimal list-inside">
             <li>Partagez votre code ou lien avec vos collègues soignants</li>
-            <li>Dès qu'ils appliquent votre code à l'inscription : <strong>+50h cumulées</strong> (parrain + filleul)</li>
-            <li>Quand ils terminent leur première mission, ils sont comptés comme « validés »</li>
-            <li>Après <strong>3 filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span> visible sur votre profil côté établissements</li>
+            <li>Votre filleul applique votre code à l'inscription</li>
+            <li>Quand il termine sa 1ère mission : <strong>+50h cumulées</strong> pour vous deux</li>
+            <li>Quand 100€ de commission sont encaissés par Jolene : <strong>50€ versés</strong> au parrain + <strong>50€ au filleul</strong> (par virement sur votre IBAN)</li>
+            <li>Après <strong>3 filleuls validés</strong>, vous obtenez le badge <span className="text-primary font-semibold">Ambassadeur</span></li>
           </ol>
-          <div className="mt-3 p-2 rounded-lg bg-muted text-xs text-muted-foreground">
-            ℹ️ Le parrainage Jolene est un système de recommandation sans rétribution financière, conforme à la réglementation.
-          </div>
         </div>
 
         {/* Tableau filleuls */}
