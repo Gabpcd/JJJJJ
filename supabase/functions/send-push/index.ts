@@ -1,25 +1,25 @@
-// send-push — Dispatcher push multi-plateforme (Sprint 4 PR 1)
+// send-push — Dispatcher push multi-plateforme
 //
 // Routing par tokens_push.plateforme :
-//   WEB    → web-push (RFC 8030 + VAPID) — déjà opérationnel
-//   IOS    → FCM HTTP v1 (qui dispatch APNS via clé p8 uploadée
-//            dans Firebase Console côté Sprint final)
+//   WEB     → web-push (RFC 8030 + VAPID)
+//   IOS     → APNs direct HTTP/2 (clé .p8 Apple, JWT ES256, ZÉRO Google).
+//             Fallback FCM v1 si APNs non configuré mais Firebase l'est.
 //   ANDROID → FCM HTTP v1
 //
-// FCM HTTP v1 nécessite FIREBASE_SERVICE_ACCOUNT_JSON en Vault.
-// Si absent (cas actuel jusqu'au Sprint final création projet Firebase),
-// les tokens IOS/ANDROID sont skip avec log WARNING — Web Push continue
-// à fonctionner sans régression.
+// iOS passe par APNs direct car l'org policy GCP bloque la création de clés
+// service account Firebase (cf. _shared/apns-client.ts). Android reste sur FCM
+// (skip propre tant que FIREBASE_SERVICE_ACCOUNT_JSON absent) ; Web Push n'est
+// jamais impacté.
 //
 // Secrets requis :
-//   VAPID_PUBLIC_KEY                 (déjà OK)
-//   VAPID_PRIVATE_KEY                (déjà OK)
-//   VAPID_SUBJECT                    (déjà OK)
-//   FIREBASE_SERVICE_ACCOUNT_JSON    (Sprint final, OPTIONNEL pour PR 1)
-//   FIREBASE_PROJECT_ID              (Sprint final, OPTIONNEL pour PR 1)
+//   VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT   (Web Push)
+//   APNS_KEY_P8 / APNS_KEY_ID / APNS_TEAM_ID               (iOS direct)
+//   APNS_BUNDLE_ID / APNS_ENVIRONMENT                      (iOS, optionnels)
+//   FIREBASE_SERVICE_ACCOUNT_JSON / FIREBASE_PROJECT_ID    (Android FCM, optionnels)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
+import { apnsConfigured, sendApns } from "../_shared/apns-client.ts";
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -233,9 +233,12 @@ Deno.serve(async (req) => {
 
     let sentWeb = 0;
     let sentFcm = 0;
+    let sentApnsCount = 0;
     let skippedFcm = 0;
+    let skippedApns = 0;
     const totalTokens = tokens?.length || 0;
     const expiredTokenIds: string[] = [];
+    const apnsReady = apnsConfigured();
 
     // ─── Configuration VAPID Web Push ──────────────────────────
     const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
@@ -289,8 +292,19 @@ Deno.serve(async (req) => {
             );
             sentWeb++;
           }
+        } else if (plat === "IOS" && apnsReady && t.token) {
+          // APNs direct HTTP/2 (clé .p8 Apple, zéro Google)
+          const result = await sendApns({
+            deviceToken: t.token,
+            title: titre,
+            body: corps || "",
+            data: fcmData,
+          });
+          if (result.ok) sentApnsCount++;
+          else if (result.expired) expiredTokenIds.push(t.id);
+          else console.warn("[send-push] APNs error:", result.error);
         } else if (plat === "IOS" || plat === "ANDROID") {
-          // FCM HTTP v1 (dispatche APNS pour IOS via clé p8 uploadée)
+          // FCM HTTP v1 — Android, ou iOS en fallback si APNs non configuré
           if (fcmAccessToken && firebaseProjectId && t.token) {
             const result = await sendViaFcm({
               accessToken: fcmAccessToken,
@@ -304,8 +318,11 @@ Deno.serve(async (req) => {
             if (result.ok) sentFcm++;
             else if (result.expired) expiredTokenIds.push(t.id);
             else console.warn("[send-push] FCM error:", result.error);
+          } else if (plat === "IOS") {
+            // Ni APNs ni FCM configurés → skip propre iOS
+            skippedApns++;
           } else {
-            // FIREBASE_SERVICE_ACCOUNT_JSON pas configuré → skip propre
+            // FIREBASE_SERVICE_ACCOUNT_JSON pas configuré → skip propre Android
             skippedFcm++;
           }
         }
@@ -326,10 +343,13 @@ Deno.serve(async (req) => {
     }
 
     if (skippedFcm > 0) {
-      console.warn(`[send-push] FCM not configured, ${skippedFcm} native tokens skipped (waiting for Sprint final Firebase setup)`);
+      console.warn(`[send-push] FCM not configured, ${skippedFcm} Android tokens skipped`);
+    }
+    if (skippedApns > 0) {
+      console.warn(`[send-push] APNs not configured, ${skippedApns} iOS tokens skipped`);
     }
 
-    const sent = sentWeb + sentFcm;
+    const sent = sentWeb + sentFcm + sentApnsCount;
 
     // Fallback email si aucun push livré
     if (sent === 0 && totalTokens > 0) {
@@ -349,8 +369,9 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        sent, sentWeb, sentFcm,
-        total: totalTokens, skippedFcm,
+        sent, sentWeb, sentFcm, sentApns: sentApnsCount,
+        total: totalTokens, skippedFcm, skippedApns,
+        apns_configured: apnsReady,
         fcm_configured: Boolean(fcmAccessToken),
         email_fallback: sent === 0 && totalTokens > 0,
       }),
