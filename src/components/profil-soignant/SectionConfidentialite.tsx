@@ -134,7 +134,7 @@ export function SectionConfidentialite({ userId }: Props) {
 
       <div className="card-base border-destructive/30">
         <h2 className="text-base font-semibold text-destructive mb-2">
-          Zone dangereuse
+          Suppression de compte
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
           La suppression de votre compte est irréversible. Vos données seront anonymisées conformément au RGPD.
