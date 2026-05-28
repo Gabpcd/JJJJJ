@@ -4,7 +4,7 @@ android {
     namespace = "app.jolene.android"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.jolene.android"
+        applicationId "app.jolene"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

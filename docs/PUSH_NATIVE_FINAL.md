@@ -53,7 +53,7 @@ VAPID_SUBJECT = mailto:contact@jolene.app
 
 ### Étape 3 — Configuration Android
 1. Firebase Console → "Add app" → Android
-2. Package name : `app.jolene.android` (cf. `capacitor.config.ts`)
+2. Package name : `app.jolene` (= `applicationId` Gradle, cf. `capacitor.config.ts`)
 3. Télécharger `google-services.json`
 4. Déposer dans `android/app/google-services.json`
 5. Le build Gradle est déjà configuré (cf. `android/app/build.gradle` + `android/build.gradle` Sprint 4)
@@ -65,7 +65,7 @@ VAPID_SUBJECT = mailto:contact@jolene.app
 
 ### Étape 5 — Configuration App ID Apple + Capabilities
 1. https://developer.apple.com/account → Identifiers → "+" → App IDs
-2. Bundle ID : `app.jolene.app` (cf. `capacitor.config.ts`)
+2. Bundle ID : `app.jolene` (cf. `capacitor.config.ts`)
 3. Activer les Capabilities :
    - Push Notifications (P0)
    - Sign In with Apple (P1)
@@ -96,7 +96,7 @@ VAPID_SUBJECT = mailto:contact@jolene.app
 
 ### Étape 9 — Télécharger `GoogleService-Info.plist`
 1. Firebase Console → "Add app" → iOS
-2. Bundle ID : `app.jolene.app`
+2. Bundle ID : `app.jolene`
 3. Télécharger `GoogleService-Info.plist`
 4. Déposer dans `ios/App/App/GoogleService-Info.plist`
 5. Dans Xcode : drag & drop dans le projet (cible App)
@@ -184,6 +184,61 @@ cd android
 - Vérifier les channels créés dans `MainActivity.onCreate` (PR 7 S4)
 - Vérifier `channel_id` dans le payload FCM (cf. `channelForType` helper PR 1 S4)
 - Configurer manuellement dans Paramètres Android → Notifications
+
+## App ID unifié (Sprint Capacitor — finalisation)
+
+L'identifiant **`app.jolene`** est désormais l'App ID **permanent** (non modifiable
+après publication store), aligné sur les 4 sources :
+
+| Source | Champ | Valeur |
+|---|---|---|
+| `capacitor.config.ts` | `appId` | `app.jolene` |
+| `android/app/build.gradle` | `applicationId` | `app.jolene` |
+| `ios/App/App.xcodeproj/project.pbxproj` | `PRODUCT_BUNDLE_IDENTIFIER` (Debug + Release) | `app.jolene` |
+| `public/.well-known/assetlinks.json` | `package_name` | `app.jolene` |
+
+**Note Android namespace** : le `namespace` Gradle (`app.jolene.android`) et le
+package Java de `MainActivity` restent inchangés — c'est **légitime et voulu**
+sous AGP 8 : `applicationId` = identité store (ce que voient Firebase/Play),
+`namespace` = package interne des classes générées (R/BuildConfig, invisible
+des stores). Les déplacer casserait le build sans bénéfice.
+
+**Note `App.entitlements`** : ce fichier N'EST PAS dans le repo. Il est généré
+**automatiquement par Xcode** quand Gabrielle active la capability *Push
+Notifications* (étape 8 ci-dessus). C'est le comportement attendu — ne pas le
+créer à la main.
+
+## ✅ Runbook checklist — actions Gabrielle restantes
+
+> Le code est 100% prêt (App ID unifié, AppDelegate APNs, Info.plist, send-push FCM).
+> Il ne reste QUE des actions console/Xcode ci-dessous.
+
+### A. Firebase Console (projet EXISTANT — `FIREBASE_SERVICE_ACCOUNT_JSON` déjà en place)
+- [ ] **App iOS** : Project Settings → Add app → iOS → Bundle ID **`app.jolene`** → télécharger `GoogleService-Info.plist`
+- [ ] Déposer le fichier dans **`ios/App/App/GoogleService-Info.plist`** (gitignoré — ne pas commit) + drag&drop dans Xcode (cible App)
+- [ ] **App Android** : Add app → Android → Package name **`app.jolene`** → télécharger `google-services.json`
+- [ ] Déposer dans **`android/app/google-services.json`** (gitignoré)
+
+### B. Clé APNs (Apple Developer → Firebase)
+- [ ] Apple Developer → Certificates/Identifiers → **Identifiers** → créer App ID **`app.jolene`** avec capability **Push Notifications**
+- [ ] Apple Developer → **Keys** → "+" → cocher **APNs** → télécharger `AuthKey_XXXXXXXX.p8` (1 seul téléchargement !) + noter **Key ID** et **Team ID**
+- [ ] Firebase Console → Project Settings → Cloud Messaging → **Apple app configuration** → uploader le `.p8` + Key ID + Team ID
+
+### C. Xcode (sur le Mac)
+- [ ] `npx cap sync ios` (copie config + plugins)
+- [ ] Ouvrir `ios/App/App.xcworkspace`
+- [ ] Cible App → Signing & Capabilities → vérifier **Team** (compte Apple Developer) + Bundle ID = `app.jolene`
+- [ ] "+ Capability" → **Push Notifications** (génère `App.entitlements` avec `aps-environment`)
+- [ ] "+ Capability" → **Background Modes** → cocher **Remote notifications** (déjà dans Info.plist via `UIBackgroundModes`, la capability le rend actif)
+
+### D. Build & soumission
+- [ ] **iOS** : Xcode → Product → Archive → Distribute App → App Store Connect → TestFlight
+- [ ] **Android** : `npx cap sync android` puis `cd android && ./gradlew bundleRelease` → upload `.aab` dans Play Console → Internal testing
+
+### E. Vérification fonctionnelle (post-install device réel)
+- [ ] Login sur l'app → permission push demandée → token enregistré dans `tokens_push` (vérifier en MCP : `SELECT plateforme, COUNT(*) FROM tokens_push GROUP BY plateforme`)
+- [ ] Envoyer une mission urgente → push reçu < 30s
+- [ ] Tap notification → ouvre le bon écran (cf. `navigationPathForEvent`)
 
 ## Roadmap post-Sprint final
 

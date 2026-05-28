@@ -48,6 +48,8 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Jolene utilise votre position pour valider votre pointage à l'arrivée et au départ de vos missions.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Jolene enregistre votre position pendant vos missions (option facultative) pour fiabiliser le pointage et faciliter la résolution de litiges. Données conservées 30 jours puis supprimées.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Jolene utilise la caméra pour photographier vos documents professionnels (diplômes, pièce d'identité, RCP).</string>
 	<key>NSPhotoLibraryUsageDescription</key>

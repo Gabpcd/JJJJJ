@@ -42,3 +42,11 @@ tests/load/results/
 # Ne pas wildcard *.pem ici : node_modules / fixtures peuvent légitimement
 # contenir des PEM publics (root CAs, certificats de test). Si un .pem
 # privé doit être exclu, l'ajouter explicitement.
+
+# ─── Firebase / Push natif (clés sensibles) ───
+# Fichiers de config Firebase contenant des clés API. Générés depuis
+# Firebase Console, déposés localement par Gabrielle, jamais committés.
+# Procédure : docs/PUSH_NATIVE_FINAL.md.
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
+**/AuthKey_*.p8
