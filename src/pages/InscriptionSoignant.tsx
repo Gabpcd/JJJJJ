@@ -325,7 +325,7 @@ export default function InscriptionSoignant() {
   };
 
   return (
-    <div className="min-h-screen gradient-hero flex flex-col">
+    <div className="min-h-[100dvh] gradient-hero flex flex-col">
       <div className="flex-1 flex items-center justify-center px-4 py-8">
       <div className="card-base max-w-lg w-full">
         <div className="flex items-center justify-center gap-2 mb-6">
@@ -349,11 +349,9 @@ export default function InscriptionSoignant() {
             <BoutonProSanteConnect
               intention="signup"
               onSwitchToEmail={() => {
-                const input = document.querySelector<HTMLInputElement>('input[type="email"]');
-                if (input) {
-                  input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  setTimeout(() => input.focus(), 400);
-                }
+                // Safari iOS scrolle nativement vers l'input focusé.
+                // Pas de scrollIntoView smooth ici (créait un saut au focus mobile).
+                document.querySelector<HTMLInputElement>('input[type="email"]')?.focus();
               }}
             />
             <p className="text-[10px] text-muted-foreground text-center mt-1.5">

@@ -172,14 +172,14 @@ export default function InscriptionSoignantCompletion() {
 
   if (chargement) {
     return (
-      <div className="min-h-screen gradient-hero flex items-center justify-center">
+      <div className="min-h-[100dvh] gradient-hero flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen gradient-hero flex flex-col">
+    <div className="min-h-[100dvh] gradient-hero flex flex-col">
       <div className="flex-1 flex items-center justify-center px-4 py-8">
         <div className="card-base max-w-lg w-full">
           <div className="flex items-center justify-center gap-2 mb-4">
