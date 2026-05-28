@@ -60,14 +60,23 @@ function mapProfessionCode(code: string | undefined): string {
   return mapping[code || ''] || code || '';
 }
 
-async function queryFhirAnnuaire(rpps: string): Promise<{
+type IdentifierType = 'RPPS' | 'ADELI';
+
+function buildFhirIdentifierQuery(numero: string, type: IdentifierType): string {
+  const IDNPS_SYSTEM = 'urn:oid:1.2.250.1.71.4.2.1';
+  const idnps = type === 'RPPS' ? `8${numero}` : `0${numero}`;
+  return `${IDNPS_SYSTEM}|${idnps}`;
+}
+
+async function queryFhirAnnuaire(numero: string, type: IdentifierType = 'RPPS'): Promise<{
   trouve: boolean; nom?: string; prenom?: string;
   professionCode?: string; professionLabel?: string;
   specialiteCode?: string; specialiteLabel?: string; actif?: boolean;
 }> {
   const apiKey = Deno.env.get('ESANTE_FHIR_API_KEY') || '';
   if (!apiKey) throw new Error('ESANTE_FHIR_API_KEY non configure');
-  const url = `https://gateway.api.esante.gouv.fr/fhir/v2/Practitioner?identifier=${rpps}`;
+  const identifierParam = buildFhirIdentifierQuery(numero, type);
+  const url = `https://gateway.api.esante.gouv.fr/fhir/v2/Practitioner?identifier=${encodeURIComponent(identifierParam)}`;
   const response = await fetchWithTimeout(url, {
     headers: { 'Accept': 'application/fhir+json', 'ESANTE-API-KEY': apiKey },
   }, 8000);
@@ -139,8 +148,12 @@ Deno.serve(async (req) => {
         endpoint: 'https://gateway.api.esante.gouv.fr/fhir/v2/Practitioner',
       }), { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } });
     }
-    const { numero_rpps, rpps, prenom, nom, soignant_id, turnstileToken } = body;
+    const { numero_rpps, rpps, numero_adeli, adeli, prenom, nom, soignant_id, turnstileToken } = body;
     const numeroRpps = String(numero_rpps || rpps || '').trim();
+    const numeroAdeli = String(numero_adeli || adeli || '').trim();
+    const isAdeliRequest = !numeroRpps && !!numeroAdeli;
+    const numero = isAdeliRequest ? numeroAdeli : numeroRpps;
+    const idType: IdentifierType = isAdeliRequest ? 'ADELI' : 'RPPS';
     const captchaRequis = !isServiceRole && (!isAnonKey || !!soignant_id);
     if (captchaRequis) {
       const captcha = await verifyTurnstileToken(turnstileToken, clientIp);
@@ -148,13 +161,19 @@ Deno.serve(async (req) => {
         return errorResponse(cors, 403, 'CAPTCHA_FAILED', captcha.error || 'Vérification anti-bot échouée.');
       }
     }
-    if (!numeroRpps || numeroRpps.length !== 11 || !/^[0-9]+$/.test(numeroRpps)) {
-      return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Numéro RPPS invalide. Vérifiez qu\'il contient bien 11 chiffres.');
+    if (isAdeliRequest) {
+      if (!numeroAdeli || numeroAdeli.length !== 9 || !/^[0-9]+$/.test(numeroAdeli)) {
+        return errorResponse(cors, 400, 'ADELI_FORMAT_INVALID', 'Numéro ADELI invalide. Vérifiez qu\'il contient bien 9 chiffres.');
+      }
+    } else {
+      if (!numeroRpps || numeroRpps.length !== 11 || !/^[0-9]+$/.test(numeroRpps)) {
+        return errorResponse(cors, 400, 'RPPS_FORMAT_INVALID', 'Numéro RPPS invalide. Vérifiez qu\'il contient bien 11 chiffres.');
+      }
     }
     const TEST_PREFIX = '00100';
     const ENVIRONMENT = Deno.env.get('ENVIRONMENT') || 'development';
     const testModeActif = ENVIRONMENT !== 'production';
-    if (numeroRpps.startsWith(TEST_PREFIX) && testModeActif) {
+    if (!isAdeliRequest && numero.startsWith(TEST_PREFIX) && testModeActif) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
@@ -187,7 +206,7 @@ Deno.serve(async (req) => {
         actif: true, source: 'Mode test (rpps_test)',
       }), { headers: { ...cors, 'Content-Type': 'application/json' } });
     }
-    if (numeroRpps === '00000000001') {
+    if (!isAdeliRequest && numero === '00000000001') {
       return new Response(JSON.stringify({
         ok: true, code: 'RPPS_OK',
         trouve: true, correspond: true, rpps: numeroRpps,
@@ -204,10 +223,11 @@ Deno.serve(async (req) => {
       }), { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } });
     }
     try {
-      const result = await queryFhirAnnuaire(numeroRpps);
+      const result = await queryFhirAnnuaire(numero, idType);
       if (!result.trouve) {
         return new Response(JSON.stringify({
-          ok: true, code: 'RPPS_NOT_FOUND',
+          ok: true, code: isAdeliRequest ? 'ADELI_NOT_FOUND' : 'RPPS_NOT_FOUND',
+          type: idType,
           trouve: false, correspond: false, nom_api: null, prenom_api: null, profession_api: null,
           source: 'FHIR Annuaire Sante',
         }), { headers: { ...cors, 'Content-Type': 'application/json' } });
@@ -235,10 +255,16 @@ Deno.serve(async (req) => {
           const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
           const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
           const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-          const updateFields: Record<string, unknown> = {
-            rpps_verifie: true, rpps_verifie_le: new Date().toISOString(),
+          const now = new Date().toISOString();
+          const professionApi = result.professionLabel || mapProfessionCode(result.professionCode);
+          const updateFields: Record<string, unknown> = isAdeliRequest ? {
+            adeli_verifie: true, adeli_verifie_le: now,
+            adeli_nom_api: result.nom, adeli_prenom_api: result.prenom,
+            adeli_profession_api: professionApi,
+          } : {
+            rpps_verifie: true, rpps_verifie_le: now,
             rpps_nom_api: result.nom, rpps_prenom_api: result.prenom,
-            rpps_profession_api: result.professionLabel || mapProfessionCode(result.professionCode),
+            rpps_profession_api: professionApi,
           };
           if (result.specialiteCode) {
             updateFields.specialite_medicale = result.specialiteCode;
@@ -250,9 +276,11 @@ Deno.serve(async (req) => {
           await supabaseAdmin.from('soignants').update(updateFields as any).eq('id', soignant_id);
         } catch (dbErr) { console.error('Erreur sauvegarde RPPS sur soignant:', safeStringifyError(dbErr)); }
       }
+      const codePrefix = isAdeliRequest ? 'ADELI' : 'RPPS';
       return new Response(JSON.stringify({
         ok: true,
-        code: correspond ? 'RPPS_OK' : 'RPPS_TRAITS_MISMATCH',
+        code: correspond ? `${codePrefix}_OK` : `${codePrefix}_TRAITS_MISMATCH`,
+        type: idType,
         trouve: true, correspond,
         nom_api: result.nom, prenom_api: result.prenom,
         profession_api: result.professionLabel || mapProfessionCode(result.professionCode),
