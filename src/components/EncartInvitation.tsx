@@ -10,7 +10,7 @@ export function EncartInvitation({ codeParrainage }: EncartInvitationProps) {
   const [copied, setCopied] = useState(false);
   const lienRef = `https://jolene.app?ref=${codeParrainage}`;
   const messageWhatsApp = encodeURIComponent(
-    `Rejoignez Jolene, la plateforme de staffing médical ! Inscrivez-vous avec mon lien et obtenez +50h bonus : ${lienRef}`
+    `Rejoignez Jolene, la plateforme de staffing médical ! Inscrivez-vous avec mon lien et gagnez 50€ de prime de parrainage : ${lienRef}`
   );
 
   const copierLien = () => {
@@ -25,7 +25,7 @@ export function EncartInvitation({ codeParrainage }: EncartInvitationProps) {
         🎁 Invitez vos collègues
       </h2>
       <p className="text-xs text-muted-foreground mb-4">
-        Partagez votre lien et obtenez +50h bonus chacun !
+        Partagez votre lien et gagnez 50€ de prime chacun !
       </p>
 
       <div className="flex flex-col sm:flex-row gap-4 items-center">
