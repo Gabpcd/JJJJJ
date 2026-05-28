@@ -1,16 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, User, FileText, Sliders, Calendar, Shield, Bell, Search, Mail, Phone, MapPin, Landmark, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, User, FileText, Sliders, Calendar, Shield, Bell, Search, Mail, Phone, MapPin } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChangementMotDePasse } from '@/components/soignant/ChangementMotDePasse';
 import { ConsentementPingGps } from '@/components/soignant/ConsentementPingGps';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { toast } from 'sonner';
 
-type SectionKey = 'compte' | 'banque' | 'identite' | 'preferences' | 'dispos' | 'rgpd' | 'avance';
+type SectionKey = 'compte' | 'identite' | 'preferences' | 'dispos' | 'rgpd' | 'avance';
 
 const SECTIONS: Array<{ key: SectionKey; titre: string; icon: typeof User; description: string; cta?: { label: string; path: string } }> = [
   {
@@ -18,12 +15,6 @@ const SECTIONS: Array<{ key: SectionKey; titre: string; icon: typeof User; descr
     titre: 'Mon compte',
     icon: User,
     description: 'Email, téléphone, changement de mot de passe.',
-  },
-  {
-    key: 'banque',
-    titre: 'Coordonnées bancaires',
-    icon: Landmark,
-    description: 'Votre IBAN pour recevoir vos primes de parrainage par virement.',
   },
   {
     key: 'identite',
@@ -170,7 +161,6 @@ function SectionContent({ section, onNavigate }: { section: SectionKey; onNaviga
       <p className="text-sm text-muted-foreground">{meta.description}</p>
 
       {section === 'compte' && <PlaceholderCompte />}
-      {section === 'banque' && <SectionBanque />}
       {section === 'preferences' && (
         <PlaceholderPreferences onNavigate={() => onNavigate('/soignant/profil?tab=preferences')} />
       )}
@@ -274,149 +264,6 @@ function PlaceholderRgpd({ onNavigate }: { onNavigate: () => void }) {
       <button onClick={onNavigate} className="btn-secondary text-sm">
         Confidentialité (profil)
       </button>
-    </div>
-  );
-}
-
-function validateIbanChecksum(iban: string): boolean {
-  const cleaned = iban.toUpperCase().replace(/\s/g, '');
-  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{10,30}$/.test(cleaned)) return false;
-  const rearranged = cleaned.slice(4) + cleaned.slice(0, 4);
-  let numeric = '';
-  for (const c of rearranged) {
-    numeric += c >= 'A' && c <= 'Z' ? (c.charCodeAt(0) - 55).toString() : c;
-  }
-  let remainder = 0;
-  for (const c of numeric) {
-    remainder = (remainder * 10 + parseInt(c)) % 97;
-  }
-  return remainder === 1;
-}
-
-function formatIbanDisplay(iban: string): string {
-  return iban.replace(/(.{4})/g, '$1 ').trim();
-}
-
-function SectionBanque() {
-  const [iban, setIban] = useState('');
-  const [titulaire, setTitulaire] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [current, setCurrent] = useState<{ iban_renseigne: boolean; iban_last4: string | null; iban_titulaire: string | null } | null>(null);
-
-  useEffect(() => {
-    supabase.rpc('fn_consulter_mon_iban' as any).then(({ data }: any) => {
-      if (data && !data.error) setCurrent(data);
-      setLoading(false);
-    });
-  }, []);
-
-  const ibanClean = iban.toUpperCase().replace(/\s/g, '');
-  const ibanValid = ibanClean.length >= 14 && validateIbanChecksum(ibanClean);
-
-  const submit = async () => {
-    if (!ibanValid || !titulaire.trim()) return;
-    setSaving(true);
-    const { data, error } = await supabase.rpc('fn_enregistrer_mon_iban' as any, {
-      p_iban: ibanClean,
-      p_titulaire: titulaire.trim(),
-    });
-    setSaving(false);
-    const result = data as any;
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    if (result?.error) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success(result?.message || 'IBAN enregistré');
-    setCurrent({ iban_renseigne: true, iban_last4: result.iban_last4, iban_titulaire: result.titulaire });
-    setIban('');
-    setTitulaire('');
-  };
-
-  if (loading) {
-    return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
-  }
-
-  return (
-    <div className="space-y-5">
-      {current?.iban_renseigne && (
-        <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
-          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-foreground">IBAN enregistré</p>
-            <p className="text-sm text-muted-foreground font-mono mt-1">
-              •••• •••• •••• •••• •••• {current.iban_last4}
-            </p>
-            {current.iban_titulaire && (
-              <p className="text-xs text-muted-foreground mt-0.5">Titulaire : {current.iban_titulaire}</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-xl border border-border bg-background p-4 space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground mb-1">
-            {current?.iban_renseigne ? 'Modifier mon IBAN' : 'Ajouter mon IBAN'}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            Votre IBAN est utilisé exclusivement pour le versement de vos primes de parrainage.
-            Il n'est jamais partagé avec l'établissement. Vous seul(e) pouvez le voir et le modifier.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label htmlFor="iban-input" className="text-xs font-medium text-foreground block mb-1">IBAN</label>
-            <input
-              id="iban-input"
-              type="text"
-              value={iban}
-              onChange={(e) => setIban(e.target.value.toUpperCase())}
-              placeholder="FR76 3000 6000 0112 3456 7890 189"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base md:text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-              autoComplete="off"
-              spellCheck={false}
-            />
-            {iban.length > 4 && !ibanValid && (
-              <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" /> IBAN invalide — vérifiez votre saisie
-              </p>
-            )}
-            {ibanValid && (
-              <p className="text-xs text-primary mt-1 flex items-center gap-1">
-                <CheckCircle className="h-3 w-3" /> {formatIbanDisplay(ibanClean)}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="titulaire-input" className="text-xs font-medium text-foreground block mb-1">Nom du titulaire</label>
-            <input
-              id="titulaire-input"
-              type="text"
-              value={titulaire}
-              onChange={(e) => setTitulaire(e.target.value)}
-              placeholder="Prénom Nom"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base md:text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-              autoComplete="name"
-            />
-          </div>
-        </div>
-
-        <BoutonY2K
-          variant="primary"
-          onClick={submit}
-          disabled={!ibanValid || !titulaire.trim() || saving}
-          className="w-full"
-        >
-          {saving ? 'Enregistrement…' : current?.iban_renseigne ? 'Mettre à jour l\'IBAN' : 'Enregistrer l\'IBAN'}
-        </BoutonY2K>
-      </div>
     </div>
   );
 }
