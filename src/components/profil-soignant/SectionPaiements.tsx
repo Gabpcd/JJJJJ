@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, AlertTriangle, ExternalLink, CreditCard, FileSignature, Banknote, Info } from 'lucide-react';
+import { CheckCircle, AlertTriangle, ExternalLink, CreditCard, FileSignature, Banknote, Info, Landmark, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { toast } from 'sonner';
@@ -193,21 +193,137 @@ export function SectionPaiements({ userId, typeExercice, mandatFacturationSigne,
         </>
       )}
 
-      {estSalarie && (
-        <div className="card-base">
-          <h2 className="text-base font-semibold text-foreground mb-2 flex items-center gap-2">
-            <Banknote className="h-4 w-4 text-primary" /> Paiements salariés
-          </h2>
-          <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 flex items-start gap-3">
-            <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-foreground">
-                Vos paiements sont versés directement par l'établissement employeur sur votre compte bancaire (IBAN renseigné dans votre contrat).
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Aucune action requise depuis Jolene. Pour modifier votre IBAN, contactez votre établissement.
-              </p>
+      <SectionIbanPrime />
+    </div>
+  );
+}
+
+function validateIbanChecksum(iban: string): boolean {
+  const cleaned = iban.toUpperCase().replace(/\s/g, '');
+  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{10,30}$/.test(cleaned)) return false;
+  const rearranged = cleaned.slice(4) + cleaned.slice(0, 4);
+  let numeric = '';
+  for (const c of rearranged) {
+    numeric += c >= 'A' && c <= 'Z' ? (c.charCodeAt(0) - 55).toString() : c;
+  }
+  let remainder = 0;
+  for (const c of numeric) {
+    remainder = (remainder * 10 + parseInt(c)) % 97;
+  }
+  return remainder === 1;
+}
+
+function SectionIbanPrime() {
+  const [iban, setIban] = useState('');
+  const [titulaire, setTitulaire] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [current, setCurrent] = useState<{ iban_renseigne: boolean; iban_last4: string | null; iban_titulaire: string | null } | null>(null);
+
+  useEffect(() => {
+    supabase.rpc('fn_consulter_mon_iban' as any).then(({ data }: any) => {
+      if (data && !data.error) setCurrent(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const ibanClean = iban.toUpperCase().replace(/\s/g, '');
+  const ibanValid = ibanClean.length >= 14 && validateIbanChecksum(ibanClean);
+
+  const submit = async () => {
+    if (!ibanValid || !titulaire.trim()) return;
+    setSaving(true);
+    const { data, error } = await supabase.rpc('fn_enregistrer_mon_iban' as any, {
+      p_iban: ibanClean,
+      p_titulaire: titulaire.trim(),
+    });
+    setSaving(false);
+    const result = data as any;
+    if (error) { toast.error(error.message); return; }
+    if (result?.error) { toast.error(result.error); return; }
+    toast.success(result?.message || 'IBAN enregistré');
+    setCurrent({ iban_renseigne: true, iban_last4: result.iban_last4, iban_titulaire: result.titulaire });
+    setIban('');
+    setTitulaire('');
+  };
+
+  return (
+    <div className="card-base">
+      <h2 className="text-base font-semibold text-foreground mb-2 flex items-center gap-2">
+        <Landmark className="h-4 w-4 text-primary" /> Coordonnées bancaires
+      </h2>
+      <p className="text-xs text-muted-foreground mb-4">
+        Votre IBAN est utilisé pour le versement de vos primes de parrainage. Il n'est jamais partagé avec l'établissement.
+      </p>
+
+      {loading ? (
+        <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+      ) : (
+        <div className="space-y-4">
+          {current?.iban_renseigne && (
+            <div className="flex items-start gap-3 rounded-xl border border-success/30 bg-success/5 p-3">
+              <CheckCircle className="h-5 w-5 text-success shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-success">IBAN enregistré</p>
+                <p className="text-sm text-muted-foreground font-mono mt-1">
+                  •••• •••• •••• •••• •••• {current.iban_last4}
+                </p>
+                {current.iban_titulaire && (
+                  <p className="text-xs text-muted-foreground mt-0.5">Titulaire : {current.iban_titulaire}</p>
+                )}
+              </div>
             </div>
+          )}
+
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="iban-input" className="text-xs font-medium text-foreground block mb-1">
+                {current?.iban_renseigne ? 'Modifier l\'IBAN' : 'IBAN'}
+              </label>
+              <input
+                id="iban-input"
+                type="text"
+                value={iban}
+                onChange={(e) => setIban(e.target.value.toUpperCase())}
+                placeholder="FR76 3000 6000 0112 3456 7890 189"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base md:text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {iban.length > 4 && !ibanValid && (
+                <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" /> IBAN invalide
+                </p>
+              )}
+              {ibanValid && (
+                <p className="text-xs text-success mt-1 flex items-center gap-1">
+                  <CheckCircle className="h-3 w-3" /> IBAN valide
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="titulaire-input" className="text-xs font-medium text-foreground block mb-1">Nom du titulaire</label>
+              <input
+                id="titulaire-input"
+                type="text"
+                value={titulaire}
+                onChange={(e) => setTitulaire(e.target.value)}
+                placeholder="Prénom Nom"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base md:text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                autoComplete="name"
+              />
+            </div>
+
+            <BoutonY2K
+              variant="primary"
+              size="sm"
+              onClick={submit}
+              disabled={!ibanValid || !titulaire.trim() || saving}
+              className="w-full"
+            >
+              {saving ? 'Enregistrement…' : current?.iban_renseigne ? 'Mettre à jour' : 'Enregistrer l\'IBAN'}
+            </BoutonY2K>
           </div>
         </div>
       )}
