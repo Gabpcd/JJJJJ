@@ -215,25 +215,16 @@ BEGIN
       )
     );
 
-    -- Créer les 2 actions de versement (50€ parrain + 50€ filleul) via worker async
+    -- Créer action versement via worker async (action atomique 50€+50€)
     INSERT INTO public.externalisation_actions (type_action, payload, source, source_id)
-    VALUES ('STRIPE_PAYMENT',
+    VALUES ('RECOMPENSE_PARRAINAGE_SOIGNANT',
       jsonb_build_object(
-        'beneficiaire_id', v_parrainage.parrain_id,
-        'montant', 50,
-        'motif', 'Prime parrainage soignant (parrain) — filleul ' || v_parrainage.filleul_id::text,
-        'parrainage_id', v_parrainage.id
-      ),
-      'parrainage_soignant', v_parrainage.id::text
-    );
-
-    INSERT INTO public.externalisation_actions (type_action, payload, source, source_id)
-    VALUES ('STRIPE_PAYMENT',
-      jsonb_build_object(
-        'beneficiaire_id', v_parrainage.filleul_id,
-        'montant', 50,
-        'motif', 'Prime parrainage soignant (filleul) — parrain ' || v_parrainage.parrain_id::text,
-        'parrainage_id', v_parrainage.id
+        'parrainage_id', v_parrainage.id,
+        'parrain_id', v_parrainage.parrain_id,
+        'filleul_id', v_parrainage.filleul_id,
+        'montant_parrain', 50,
+        'montant_filleul', 50,
+        'commission_cumulee', v_new_cumul
       ),
       'parrainage_soignant', v_parrainage.id::text
     );
