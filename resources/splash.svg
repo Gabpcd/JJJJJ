@@ -1,22 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" width="2732" height="2732">
-  <defs>
-    <linearGradient id="rose" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#F472B6"/>
-      <stop offset="100%" stop-color="#E04590"/>
-    </linearGradient>
-  </defs>
   <!-- Fond blanc -->
   <rect width="2732" height="2732" fill="#FFFFFF"/>
-  <!-- Coeur + ECG rose, centré (basé sur favicon, échelle splash) -->
-  <g transform="translate(1366 1180) scale(22) translate(-32 -32)">
-    <path d="M32 48 C28 44, 16 36, 16 27 A8 8 0 0 1 32 23 A8 8 0 0 1 48 27 C48 36, 36 44, 32 48Z"
-          fill="none" stroke="url(#rose)" stroke-width="2.5"/>
-    <polyline points="18,32 26,32 29,25 32,38 35,28 38,32 46,32"
-              fill="none" stroke="url(#rose)" stroke-width="2.2"
-              stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Logo header centré : icône lucide HeartPulse + "Jolene" bold, primary hsl(330 85% 45%) -->
+  <!-- Bloc logo largeur ~1150px (icône 396 + gap 60 + texte ~700), centré à x=1366 -->
+  <g transform="translate(791 1216)">
+    <!-- HeartPulse lucide (viewBox 24), scale 16.5 → 396px -->
+    <g transform="scale(16.5)" fill="none" stroke="#D41173" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+      <path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>
+    </g>
+    <!-- "Jolene" bold, baseline alignée au centre vertical de l'icône (~198 + offset) -->
+    <text x="456" y="285" text-anchor="start"
+          font-family="DejaVu Sans, Helvetica, Arial, sans-serif"
+          font-size="300" font-weight="bold" fill="#D41173">Jolene</text>
   </g>
-  <!-- Nom Jolene en rose -->
-  <text x="1366" y="1820" text-anchor="middle"
-        font-family="Georgia, 'Times New Roman', serif" font-style="italic"
-        font-size="300" font-weight="500" fill="url(#rose)">Jolene</text>
 </svg>
