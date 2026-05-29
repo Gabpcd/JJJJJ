@@ -1,7 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { isNative } from '@/lib/platform';
 
 export function FooterLegal() {
+  // Pas de footer légal (liens CGU/CGV web) dans l'app native : ces pages
+  // sont accessibles via le menu/profil. Le footer reste sur le web.
+  if (isNative()) return null;
+
   return (
     <footer className="border-t border-border py-6 text-center no-print">
       <div
