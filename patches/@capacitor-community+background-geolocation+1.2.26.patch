@@ -1,0 +1,13 @@
+diff --git a/node_modules/@capacitor-community/background-geolocation/Package.swift b/node_modules/@capacitor-community/background-geolocation/Package.swift
+index d235202..b235d35 100644
+--- a/node_modules/@capacitor-community/background-geolocation/Package.swift
++++ b/node_modules/@capacitor-community/background-geolocation/Package.swift
+@@ -13,7 +13,7 @@ let package = Package(
+     dependencies: [
+         .package(
+             url: "https://github.com/ionic-team/capacitor-swift-pm.git",
+-            from: "7.0.0"
++            from: "7.0.0" ..< "9.0.0"
+         )
+     ],
+     targets: [
