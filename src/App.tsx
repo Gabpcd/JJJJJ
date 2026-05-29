@@ -14,6 +14,7 @@ import { BandeauCookies } from "@/components/BandeauCookies";
 
 /* ─── Public pages ─── */
 const PageAccueil = lazy(() => import("./pages/PageAccueil"));
+const RacineApp = lazy(() => import("./pages/RacineApp"));
 const PageConnexion = lazy(() => import("./pages/PageConnexion"));
 const PageResetPassword = lazy(() => import("./pages/PageResetPassword"));
 const PscCallback = lazy(() => import("./pages/PscCallback"));
@@ -168,7 +169,7 @@ function AppRoutes() {
       <ScrollToTop />
       <Suspense fallback={<ChargementPage />}>
         <Routes>
-          <Route path="/" element={<PageAccueil />} />
+          <Route path="/" element={<RacineApp />} />
           <Route path="/tarifs" element={<Tarifs />} />
           <Route path="/devenir-soignant" element={<DevenirSoignant />} />
           <Route path="/recruter-soignants" element={<RecruterSoignants />} />
