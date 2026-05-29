@@ -7,6 +7,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { FooterLegal } from '@/components/FooterLegal';
+import { AuthLayout } from '@/components/AuthLayout';
 import { Loader2 } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import { isNative } from '@/lib/platform';
@@ -159,8 +160,7 @@ export default function PageConnexion() {
   };
 
   return (
-    <div className="min-h-[100dvh] gradient-hero flex flex-col">
-      <div className="flex-1 flex items-center justify-center px-4 py-8">
+    <AuthLayout showBack={false}>
         <div className="card-base max-w-md w-full">
           <div className="flex items-center justify-center gap-2 mb-8">
             <HeartPulse className="h-8 w-8 text-rose" />
@@ -324,8 +324,7 @@ export default function PageConnexion() {
             )}
           </div>
         </div>
-      </div>
       <FooterLegal />
-    </div>
+    </AuthLayout>
   );
 }
