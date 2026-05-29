@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { isNative } from '@/lib/platform';
 
 export function BandeauCookies() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // Pas de bandeau cookies dans l'app native (pas de cookies tiers ;
+    // le consentement RGPD est couvert par les CGU acceptées à l'inscription).
+    if (isNative()) return;
     const consent = localStorage.getItem('cookie-consent');
     if (!consent) {
       const timer = setTimeout(() => setVisible(true), 1500);
