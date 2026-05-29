@@ -10,6 +10,7 @@ import { SelectTypeEtablissement } from '@/components/SelectTypeEtablissement';
 import { validerSiret } from '@/lib/luhn';
 import { supabase } from '@/integrations/supabase/client';
 import { FooterLegal } from '@/components/FooterLegal';
+import { AuthLayout } from '@/components/AuthLayout';
 import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 
 function GeoAutoEtab({ onResult }: { onResult: (lat: number, lng: number) => void }) {
@@ -145,8 +146,7 @@ export default function InscriptionEtablissement() {
   };
 
   return (
-    <div className="min-h-[100dvh] gradient-hero flex flex-col">
-      <div className="flex-1 flex items-center justify-center px-4 py-8">
+    <AuthLayout backTo="/connexion">
       <div className="card-base max-w-lg w-full">
         <div className="flex items-center justify-center gap-2 mb-6">
           <HeartPulse className="h-7 w-7 text-rose" />
@@ -285,8 +285,7 @@ export default function InscriptionEtablissement() {
           Déjà un compte ? <a href="/connexion" className="text-primary hover:underline font-medium">Se connecter</a>
         </p>
       </div>
-      </div>
       <FooterLegal />
-    </div>
+    </AuthLayout>
   );
 }

@@ -14,6 +14,7 @@ import { SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 import { SelectProfession } from '@/components/SelectProfession';
 import { FooterLegal } from '@/components/FooterLegal';
+import { AuthLayout } from '@/components/AuthLayout';
 import { CONTRATS, PROFESSIONS_SANS_RPPS, PROFESSIONS_NON_LIBERAL } from '@/lib/constantes';
 import { Checkbox } from '@/components/ui/checkbox';
 import { logger } from '@/lib/logger';
@@ -325,8 +326,7 @@ export default function InscriptionSoignant() {
   };
 
   return (
-    <div className="min-h-[100dvh] gradient-hero flex flex-col">
-      <div className="flex-1 flex items-center justify-center px-4 py-8">
+    <AuthLayout backTo="/connexion">
       <div className="card-base max-w-lg w-full">
         <div className="flex items-center justify-center gap-2 mb-6">
           <HeartPulse className="h-7 w-7 text-rose" />
@@ -535,8 +535,7 @@ export default function InscriptionSoignant() {
           Déjà un compte ? <a href="/connexion" className="text-primary hover:underline font-medium">Se connecter</a>
         </p>
       </div>
-      </div>
       <FooterLegal />
-    </div>
+    </AuthLayout>
   );
 }
