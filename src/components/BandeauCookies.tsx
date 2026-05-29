@@ -28,8 +28,8 @@ export function BandeauCookies() {
 
   return (
     <div
-      className="fixed inset-0 z-[99999] flex items-end justify-center pointer-events-none"
-      style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px) + 1rem)' }}
+      className="fixed inset-x-0 bottom-0 z-[99999] flex items-end justify-center pointer-events-none"
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
     >
       <div className="pointer-events-auto max-w-2xl w-full mx-4 bg-card border-2 border-primary/20 rounded-2xl shadow-2xl p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
