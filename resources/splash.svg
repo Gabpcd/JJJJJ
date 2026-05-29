@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" width="2732" height="2732">
+  <defs>
+    <linearGradient id="rose" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F472B6"/>
+      <stop offset="100%" stop-color="#E04590"/>
+    </linearGradient>
+  </defs>
+  <!-- Fond blanc -->
+  <rect width="2732" height="2732" fill="#FFFFFF"/>
+  <!-- Coeur + ECG rose, centré (basé sur favicon, échelle splash) -->
+  <g transform="translate(1366 1180) scale(22) translate(-32 -32)">
+    <path d="M32 48 C28 44, 16 36, 16 27 A8 8 0 0 1 32 23 A8 8 0 0 1 48 27 C48 36, 36 44, 32 48Z"
+          fill="none" stroke="url(#rose)" stroke-width="2.5"/>
+    <polyline points="18,32 26,32 29,25 32,38 35,28 38,32 46,32"
+              fill="none" stroke="url(#rose)" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- Nom Jolene en rose -->
+  <text x="1366" y="1820" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif" font-style="italic"
+        font-size="300" font-weight="500" fill="url(#rose)">Jolene</text>
+</svg>
