@@ -72,6 +72,7 @@ export default function MandatFacturation() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const [typeExercice, setTypeExercice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
   const [accepted, setAccepted] = useState(false);
@@ -89,10 +90,11 @@ export default function MandatFacturation() {
     (async () => {
       const { data } = await supabase
         .from('soignants')
-        .select('prenom, nom, email, profession, numero_rpps, numero_adeli, siret_liberal, adresse_rue, adresse_code_postal, adresse_ville, mandat_facturation_signe, mandat_facturation_signe_le, mandat_facturation_version')
+        .select('prenom, nom, email, profession, numero_rpps, numero_adeli, siret_liberal, adresse_rue, adresse_code_postal, adresse_ville, mandat_facturation_signe, mandat_facturation_signe_le, mandat_facturation_version, type_exercice')
         .eq('id', user.id)
         .maybeSingle();
       if (data) {
+        setTypeExercice((data as any).type_exercice || null);
         setSoignantInfo({
           prenom: (data as any).prenom,
           nom: (data as any).nom,
@@ -222,6 +224,23 @@ export default function MandatFacturation() {
       <LayoutApp role="SOIGNANT">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </LayoutApp>
+    );
+  }
+
+  // Salarié pur → pas de mandat de facturation (art. 289 I-2 CGI : libéral uniquement)
+  if (!loading && typeExercice && typeExercice !== 'LIBERAL' && typeExercice !== 'MIXTE') {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="max-w-lg mx-auto py-12 text-center space-y-4">
+          <FileText className="h-12 w-12 text-muted-foreground mx-auto" />
+          <h1 className="text-xl font-bold text-foreground">Mandat non applicable</h1>
+          <p className="text-sm text-muted-foreground">
+            Le mandat de facturation concerne uniquement les soignants exerçant en libéral ou mixte.
+            En tant que salarié(e), vos paiements sont gérés par l'établissement employeur.
+          </p>
+          <Button variant="outline" onClick={() => navigate(-1)}>Retour</Button>
         </div>
       </LayoutApp>
     );

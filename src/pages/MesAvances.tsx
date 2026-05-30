@@ -29,11 +29,16 @@ export default function MesAvances() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [avances, setAvances] = useState<any[]>([]);
+  const [typeExercice, setTypeExercice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase.rpc('fn_mes_avances_factor' as any);
+      const [{ data: profil }, { data }] = await Promise.all([
+        supabase.from('soignants').select('type_exercice').eq('id', user.id).maybeSingle(),
+        supabase.rpc('fn_mes_avances_factor' as any),
+      ]);
+      setTypeExercice((profil as any)?.type_exercice || null);
       setAvances(data || []);
       setLoading(false);
     })();
@@ -44,6 +49,23 @@ export default function MesAvances() {
       <LayoutApp role="SOIGNANT">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </LayoutApp>
+    );
+  }
+
+  // Salarié pur → pas d'affacturage (pas de créances libérales à céder)
+  if (!loading && typeExercice && typeExercice !== 'LIBERAL' && typeExercice !== 'MIXTE') {
+    return (
+      <LayoutApp role="SOIGNANT">
+        <div className="max-w-lg mx-auto py-12 text-center space-y-4">
+          <Zap className="h-12 w-12 text-muted-foreground mx-auto" />
+          <h1 className="text-xl font-bold text-foreground">Avances non disponibles</h1>
+          <p className="text-sm text-muted-foreground">
+            Le paiement rapide (affacturage) est réservé aux soignants en libéral ou mixte.
+            En tant que salarié(e), vos paiements sont gérés par l'établissement.
+          </p>
+          <Button variant="outline" onClick={() => navigate(-1)}>Retour</Button>
         </div>
       </LayoutApp>
     );
