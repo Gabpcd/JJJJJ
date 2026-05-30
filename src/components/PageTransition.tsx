@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useLocation, useNavigationType } from 'react-router-dom';
-import { getPlatform, isNative } from '@/lib/platform';
+import { useLocation } from 'react-router-dom';
 
 interface PageTransitionProps {
   children: React.ReactNode;
@@ -14,19 +13,16 @@ interface PageTransitionProps {
  */
 export function PageTransition({ children }: PageTransitionProps) {
   const location = useLocation();
-  const navType = useNavigationType();
-  const platform = getPlatform();
   const [displayChildren, setDisplayChildren] = useState(children);
   const [phase, setPhase] = useState<'enter' | 'exit'>('enter');
   const prevKey = useRef(location.key);
-  const isBack = useRef(false);
 
   useEffect(() => {
     if (location.key !== prevKey.current) {
-      isBack.current = navType === 'POP';
       setPhase('exit');
 
-      const exitDuration = platform === 'ios' ? 250 : platform === 'android' ? 150 : 100;
+      // Fade opacity court partout (plus de slide → plus de "saut" perçu).
+      const exitDuration = 100;
 
       const timer = setTimeout(() => {
         prevKey.current = location.key;
@@ -37,24 +33,20 @@ export function PageTransition({ children }: PageTransitionProps) {
     } else {
       setDisplayChildren(children);
     }
-  }, [children, location.key, navType, platform]);
+  }, [children, location.key]);
 
   // Determine CSS class based on platform and direction
   // CRITICAL: transform-based slide animations are ONLY used in Capacitor native,
   // because transform on a parent creates a containing block that breaks
-  // position:fixed children (mobile header, bottom nav, modals) on Safari web.
-  // Mobile browsers get a simple opacity fade, keeping fixed positioning intact.
-  const useNativeSlides = isNative();
+  // position:fixed children (mobile header, bottom nav, modals).
+  // Les anciennes animations slide iOS/Android laissaient un `transform`
+  // résiduel (animation-fill-mode: both) sur le wrapper .page-transition →
+  // containing block → la bottom nav et le header fixed/sticky scrollaient
+  // avec le contenu, EN NATIF AUSSI. On utilise donc un simple fade opacity
+  // partout (aucun transform sur le wrapper) : le positionnement fixed/sticky
+  // reste intact sur les 3 interfaces, web comme natif.
   const getTransitionClass = () => {
-    if (phase === 'exit') {
-      if (useNativeSlides && platform === 'ios') return isBack.current ? 'ios-exit-back' : 'ios-exit-forward';
-      if (useNativeSlides && platform === 'android') return 'android-exit';
-      return 'page-exit';
-    }
-    // enter
-    if (useNativeSlides && platform === 'ios') return isBack.current ? 'ios-enter-back' : 'ios-enter-forward';
-    if (useNativeSlides && platform === 'android') return 'android-enter';
-    return 'page-enter';
+    return phase === 'exit' ? 'page-exit' : 'page-enter';
   };
 
   return (
