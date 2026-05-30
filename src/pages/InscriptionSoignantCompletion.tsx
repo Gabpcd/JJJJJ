@@ -144,7 +144,7 @@ export default function InscriptionSoignantCompletion() {
         .from('soignants')
         .update({
           telephone: form.telephone.trim(),
-          types_contrat_acceptes: JSON.stringify(form.typesContrat),
+          types_contrat_acceptes: form.typesContrat.join(','),
           rayon_deplacement_km: form.rayonKm,
           ...(form.villeRecherche.trim() ? { ville_recherche: form.villeRecherche.trim() } : {}),
         })

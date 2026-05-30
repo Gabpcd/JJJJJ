@@ -54,7 +54,17 @@ function getSoignantSidebar(isLiberal: boolean, showLiberalPath: boolean): Sideb
         { icone: Scale, label: 'Litiges & contestations', route: '/soignant/litiges' },
       ],
     },
-    { icone: Banknote, label: 'Factures & paiements', route: '/soignant/mes-gains' },
+    isLiberal
+      ? {
+          icone: Banknote, label: 'Paiements', items: [
+            { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
+            { icone: FileText, label: 'Factures honoraires', route: '/soignant/mes-factures-honoraires' },
+            { icone: CreditCard, label: 'Stripe Connect', route: '/soignant/stripe-connect' },
+            { icone: FileText, label: 'Mandat facturation', route: '/soignant/mandat-facturation' },
+            { icone: Banknote, label: 'Avances (paiement rapide)', route: '/soignant/mes-avances' },
+          ],
+        }
+      : { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
     { icone: MessageCircle, label: 'Messagerie', route: '/soignant/messagerie' },
   ];
 
@@ -220,11 +230,11 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   useEffect(() => {
     if (!user) return;
     if (role === 'SOIGNANT') {
-      supabase.from('soignants').select('profession, heures_cumulees, statut_liberal, prenom, nom, avatar_url').eq('id', user.id).maybeSingle()
+      supabase.from('soignants').select('profession, heures_cumulees, statut_liberal, type_exercice, prenom, nom, avatar_url').eq('id', user.id).maybeSingle()
         .then(({ data }) => {
           if (!data) return;
           setUserInfo({ prenom: data.prenom, nom: data.nom, avatarUrl: (data as any).avatar_url });
-          if (data.statut_liberal === 'ACTIF') setIsLiberal(true);
+          if (data.statut_liberal === 'ACTIF' || (data as any).type_exercice === 'LIBERAL' || (data as any).type_exercice === 'MIXTE') setIsLiberal(true);
           if (estEligibleLiberal(data.profession) && data.statut_liberal !== 'ACTIF') {
             setShowLiberalPath(true);
           }

@@ -324,11 +324,11 @@ export function extraireMessageErreur(error: any): string {
   }
 
   // Trigger messages in French: surface them directly to the user
-  const TRIGGER_PREFIXES = ['Impossible', 'Ce soignant', 'Le taux', 'Pointage trop', 'Le départ', 'Le délai', 'Vous avez', 'En tant que', 'Une pharmacie'];
+  const TRIGGER_PREFIXES = ['Impossible', 'Ce soignant', 'Le taux', 'Pointage trop', 'Le départ', 'Le délai', 'Vous avez', 'En tant que', 'Une pharmacie', 'La profession', 'Le type d'];
   for (const prefix of TRIGGER_PREFIXES) {
     if (msg.includes(prefix)) {
-      // Extract the meaningful part after any Postgres wrapper
-      const clean = msg.replace(/^.*?(?=Impossible|Ce soignant|Le taux|Pointage trop|Le départ|Le délai|Vous avez|En tant que|Une pharmacie)/, '').trim();
+      const escapedPrefixes = TRIGGER_PREFIXES.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+      const clean = msg.replace(new RegExp(`^.*?(?=${escapedPrefixes})`, 's'), '').trim();
       return clean;
     }
   }
