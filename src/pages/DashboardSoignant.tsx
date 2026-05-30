@@ -34,7 +34,6 @@ import { ProgressionCirculaire3200h } from '@/components/ProgressionCirculaire32
 import { ProchainBadgeWidget } from '@/components/ProchainBadgeWidget';
 import { CalendrierMiniSemaine } from '@/components/CalendrierMiniSemaine';
 import { CalendrierTogglable } from '@/components/dashboard/CalendrierTogglable';
-import { NotificationsRecentes } from '@/components/dashboard/NotificationsRecentes';
 import { BannerEncourageNotation } from '@/components/BannerEncourageNotation';
 import { SuggestionsMissions } from '@/components/dashboard/SuggestionsMissions';
 import { TopEtablissements } from '@/components/dashboard/TopEtablissements';
@@ -179,7 +178,7 @@ export default function DashboardSoignant() {
           />
         </div>
       )}
-      <BandeauCompletionProfil soignant={soignant as any} variant="detaille" />
+      <BandeauCompletionProfil soignant={soignant as any} variant="compact" className="mb-4" />
       <BandeauEvaluationsEnAttente role="SOIGNANT" />
       <OnboardingGuide role="SOIGNANT" userId={user!.id} />
 
@@ -354,51 +353,6 @@ export default function DashboardSoignant() {
         <TabsContent value="accueil">
           <SectionErrorBoundary section="accueil">
           <BannerEncourageNotation role="SOIGNANT" />
-          <NotificationsRecentes />
-
-          {/* KPI */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <FadeInView delay={0}>
-              <CarteKPIY2K
-                icone={<CheckCircle className="h-4 w-4" />}
-                valeur={missionsTerminees}
-                label="Missions terminées"
-                variant="holographic"
-                onClick={() => navigate('/soignant/historique-missions')}
-              />
-            </FadeInView>
-            <FadeInView delay={100}>
-              {hasEvaluations ? (
-                <JaugeSpeedometer score={score ?? 50} onClick={() => navigate('/soignant/fiabilite')} />
-              ) : (
-                <div className="card-kpi flex flex-col items-center justify-center text-center cursor-pointer" onClick={() => navigate('/soignant/fiabilite')}>
-                  <Star className="h-6 w-6 text-muted-foreground/40 mb-1" />
-                  <p className="text-xs font-semibold text-muted-foreground">Pas encore d'évaluation</p>
-                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Complétez votre 1ère mission</p>
-                </div>
-              )}
-            </FadeInView>
-            <FadeInView delay={200}>
-              <CarteKPIY2K
-                icone={<Clock className="h-4 w-4" />}
-                valeur={`${heures}h`}
-                label="Heures cumulées"
-                contexte={seuilHeures ? `sur ${seuilHeures.toLocaleString('fr-FR')}h objectif` : undefined}
-                variant="default"
-                onClick={() => navigate(seuilHeures ? '/soignant/passer-en-liberal' : '/soignant/planning?tab=historique')}
-              />
-            </FadeInView>
-            <FadeInView delay={300}>
-              <CarteKPIY2K
-                icone={<CalendarDays className="h-4 w-4" />}
-                valeur={mesMissions.length}
-                label="Planning"
-                contexte="missions à venir"
-                variant="default"
-                onClick={() => navigate('/soignant/planning')}
-              />
-            </FadeInView>
-          </div>
 
           {/* Quick actions */}
           <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
@@ -466,6 +420,52 @@ export default function DashboardSoignant() {
               </div>
             </div>
           )}
+
+          {/* Chiffres clés — secondaires, placés sous les missions/planning */}
+          <h2 className="text-base font-bold text-foreground mb-3">Mes chiffres</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <FadeInView delay={0}>
+              <CarteKPIY2K
+                icone={<CheckCircle className="h-4 w-4" />}
+                valeur={missionsTerminees}
+                label="Missions terminées"
+                variant="holographic"
+                onClick={() => navigate('/soignant/historique-missions')}
+              />
+            </FadeInView>
+            <FadeInView delay={100}>
+              {hasEvaluations ? (
+                <JaugeSpeedometer score={score ?? 50} onClick={() => navigate('/soignant/fiabilite')} />
+              ) : (
+                <div className="card-kpi flex flex-col items-center justify-center text-center cursor-pointer" onClick={() => navigate('/soignant/fiabilite')}>
+                  <Star className="h-6 w-6 text-muted-foreground/40 mb-1" />
+                  <p className="text-xs font-semibold text-muted-foreground">Pas encore d'évaluation</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Complétez votre 1ère mission</p>
+                </div>
+              )}
+            </FadeInView>
+            <FadeInView delay={200}>
+              <CarteKPIY2K
+                icone={<Clock className="h-4 w-4" />}
+                valeur={`${heures}h`}
+                label="Heures cumulées"
+                contexte={seuilHeures ? `sur ${seuilHeures.toLocaleString('fr-FR')}h objectif` : undefined}
+                variant="default"
+                onClick={() => navigate(seuilHeures ? '/soignant/passer-en-liberal' : '/soignant/planning?tab=historique')}
+              />
+            </FadeInView>
+            <FadeInView delay={300}>
+              <CarteKPIY2K
+                icone={<CalendarDays className="h-4 w-4" />}
+                valeur={mesMissions.length}
+                label="Planning"
+                contexte="missions à venir"
+                variant="default"
+                onClick={() => navigate('/soignant/planning')}
+              />
+            </FadeInView>
+          </div>
+
           </SectionErrorBoundary>
         </TabsContent>
 
