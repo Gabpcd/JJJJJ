@@ -121,6 +121,21 @@ export default function SwipeMissions() {
     },
   });
 
+  // "Recharger" : force un vrai refetch (bypass staleTime via invalidate) +
+  // feedback. fn_obtenir_missions_swipe exclut les missions déjà swipées
+  // côté serveur ; on re-fetch pour récupérer celles publiées entre-temps.
+  const handleRecharger = useCallback(async () => {
+    await qc.invalidateQueries({ queryKey: ['swipe-missions'] });
+    const res = await refetch();
+    const nb = res.data?.length ?? 0;
+    afficherNotification({
+      type: nb > 0 ? 'succes' : 'info',
+      message: nb > 0
+        ? `${nb} mission${nb > 1 ? 's' : ''} à découvrir !`
+        : "Aucune nouvelle mission pour l'instant. Revenez plus tard ou élargissez vos critères.",
+    });
+  }, [qc, refetch, afficherNotification]);
+
   const handleSwipe = useCallback((dir: SwipeDirEnum, missionId: string) => {
     setLocalStack((prev) => prev.filter((m) => m.mission_id !== missionId));
     swipeMut.mutate({ missionId, direction: dir });
@@ -191,9 +206,11 @@ export default function SwipeMissions() {
               description="Revenez plus tard ou élargissez vos critères pour découvrir plus de missions."
               cta={{
                 label: 'Recharger',
-                onClick: () => {
-                  void refetch();
-                },
+                onClick: handleRecharger,
+              }}
+              ctaSecondaire={{
+                label: 'Voir en liste',
+                onClick: switchToListe,
               }}
             />
           ) : (
