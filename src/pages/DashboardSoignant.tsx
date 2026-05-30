@@ -165,6 +165,8 @@ export default function DashboardSoignant() {
   const heures = soignantWithCounts.heures_cumulees ?? 0;
   const regleInstallation = soignantWithCounts.profession ? getRegleInstallation(soignantWithCounts.profession) : null;
   const seuilHeures = regleInstallation?.heures_requises ?? null;
+  // Onglet "Parcours" (vers le libéral) : seulement pour les professions éligibles.
+  const afficheParcours = !!(soignantWithCounts.profession && estEligibleLiberal(soignantWithCounts.profession));
 
   const aDocuments = !!(soignantWithCounts as any).tous_documents_valides;
 
@@ -342,11 +344,13 @@ export default function DashboardSoignant() {
 
       {/* Tabs */}
       <Tabs defaultValue="accueil" className="mb-6">
-        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 mb-4">
+        <TabsList className={`w-full grid ${afficheParcours ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} mb-4`}>
           <TabsTrigger value="accueil" className="text-xs gap-1"><Home className="h-3.5 w-3.5 hidden sm:block" />Accueil</TabsTrigger>
           <TabsTrigger value="activite" className="text-xs gap-1"><Activity className="h-3.5 w-3.5 hidden sm:block" />Activité</TabsTrigger>
           <TabsTrigger value="gains" className="text-xs gap-1"><TrendingUp className="h-3.5 w-3.5 hidden sm:block" />Gains</TabsTrigger>
-          <TabsTrigger value="parcours" className="text-xs gap-1"><GraduationCap className="h-3.5 w-3.5 hidden sm:block" />Parcours</TabsTrigger>
+          {afficheParcours && (
+            <TabsTrigger value="parcours" className="text-xs gap-1"><GraduationCap className="h-3.5 w-3.5 hidden sm:block" />Parcours</TabsTrigger>
+          )}
         </TabsList>
 
         {/* ─── ONGLET ACCUEIL ─── */}
@@ -574,7 +578,8 @@ export default function DashboardSoignant() {
           </SectionErrorBoundary>
         </TabsContent>
 
-        {/* ─── ONGLET PARCOURS ─── */}
+        {/* ─── ONGLET PARCOURS ─── (professions éligibles libéral uniquement) */}
+        {afficheParcours && (
         <TabsContent value="parcours">
           <SectionErrorBoundary section="parcours">
           {soignantWithCounts.type_exercice === 'LIBERAL' ? (
@@ -651,6 +656,7 @@ export default function DashboardSoignant() {
           )}
           </SectionErrorBoundary>
         </TabsContent>
+        )}
       </Tabs>
     </LayoutApp>
   );

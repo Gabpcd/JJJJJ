@@ -22,7 +22,7 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
   { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
   { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
-  { icone: User, label: 'Mon compte', route: '/soignant/mon-compte' },
+  { icone: Menu, label: 'Menu', route: '/soignant/mon-compte' },
 ];
 
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
@@ -30,7 +30,7 @@ const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
   { icone: ClipboardList, label: 'Missions', route: '/etablissement/missions' },
   { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
   { icone: MessageCircle, label: 'Messages', route: '/etablissement/messagerie' },
-  { icone: User, label: 'Mon compte', route: '/etablissement/mon-compte' },
+  { icone: Menu, label: 'Menu', route: '/etablissement/mon-compte' },
 ];
 
 /* ── Desktop sidebars (grouped) ── */
