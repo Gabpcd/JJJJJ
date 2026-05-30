@@ -115,6 +115,25 @@ export function ListeHeuresExternes({ heures, onSupprimer }: Props) {
                 <strong>Motif du rejet :</strong> {h.commentaire_validation}
               </div>
             )}
+
+            {h.statut_validation !== 'REJETE' && h.verifie_ia_le && (
+              <div className="mt-2 pt-2 border-t border-border text-xs text-muted-foreground space-y-0.5">
+                <p className="flex items-center gap-1">
+                  <span aria-hidden>🤖</span>
+                  <span>
+                    Lecture IA :{' '}
+                    {h.heures_extraites_ia != null
+                      ? <strong className="text-foreground">{h.heures_extraites_ia.toLocaleString('fr-FR')}h lues</strong>
+                      : 'heures non extraites'}
+                    {h.coherence_ia === true && <span className="text-success"> · cohérent ✓</span>}
+                    {h.coherence_ia === false && <span className="text-warning"> · écart à vérifier</span>}
+                  </span>
+                </p>
+                {h.statut_validation === 'EN_ATTENTE' && h.commentaire_validation && (
+                  <p>{h.commentaire_validation}</p>
+                )}
+              </div>
+            )}
           </div>
         );
       })}

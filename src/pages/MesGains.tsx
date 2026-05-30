@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { telechargerOuPartager } from '@/lib/telechargement';
 
 function fmt(v: number | null | undefined) {
   if (v == null) return '—';
@@ -128,11 +129,8 @@ export default function MesGains() {
       const brut = Number(m.total_brut) || 0;
       return `${dateStr},"${(m.intitule || '').replace(/"/g, '""')}","${(m.service || '').replace(/"/g, '""')}","${(m.etablissements?.nom || '').replace(/"/g, '""')}",${Number(m.duree_heures) || 0},${Number(m.taux_horaire_base) || 0},${brut.toFixed(2)},${net.toFixed(2)}`;
     }).join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `gains-jolene-${moisFiltre === 'CE_MOIS' ? new Date().toISOString().slice(0, 7) : moisFiltre}-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    const nom = `gains-jolene-${moisFiltre === 'CE_MOIS' ? new Date().toISOString().slice(0, 7) : moisFiltre}-${new Date().toISOString().slice(0, 10)}.csv`;
+    void telechargerOuPartager(header + rows, nom, 'text/csv');
   };
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;

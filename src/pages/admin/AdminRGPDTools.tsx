@@ -22,6 +22,7 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { telechargerOuPartager } from '@/lib/telechargement';
 
 // Confirmation exacte requise (audit légal RGPD Art. 17)
 const CONFIRMATION_PHRASE = 'SUPPRIMER DÉFINITIVEMENT';
@@ -66,7 +67,7 @@ export default function AdminRGPDTools() {
     chargerDemandes();
   }, []);
 
-  const handleExportJSON = () => {
+  const handleExportJSON = async () => {
     setExporting(true);
     try {
       const payload = {
@@ -84,17 +85,7 @@ export default function AdminRGPDTools() {
           details: d.details,
         })),
       };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {
-        type: 'application/json',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `demandes-rgpd-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await telechargerOuPartager(JSON.stringify(payload, null, 2), `demandes-rgpd-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.json`, 'application/json');
       toast.success(`Export JSON de ${demandes.length} demandes téléchargé`);
     } catch (e: any) {
       toast.error(`Erreur lors de l'export : ${e?.message || 'inconnue'}`);

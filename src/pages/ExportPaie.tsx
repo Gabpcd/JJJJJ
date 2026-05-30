@@ -13,15 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { telechargerOuPartager } from '@/lib/telechargement';
 
 type FormatExport = 'Standard' | 'Silae' | 'Sage';
 
 function downloadCSV(content: string, filename: string) {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+  void telechargerOuPartager(content, filename, 'text/csv');
 }
 
 const BOM = '﻿';

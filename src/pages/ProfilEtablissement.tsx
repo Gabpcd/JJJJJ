@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { telechargerOuPartager } from '@/lib/telechargement';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { handleErrorSilent } from '@/lib/handleError';
@@ -656,13 +657,7 @@ export function ProfilEtablissementContent() {
             try {
               const { data, error } = await supabase.rpc('fn_exporter_rgpd_etablissement' as any);
               if (error) throw error;
-              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
+              await telechargerOuPartager(JSON.stringify(data, null, 2), `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
               // C3: Audit RGPD export for establishments
               await supabase.rpc('fn_ecrire_audit_safe', {
                 p_acteur_id: user!.id, p_type_acteur: 'ADMIN_ETABLISSEMENT',

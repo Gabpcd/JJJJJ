@@ -73,13 +73,7 @@ export function SyncCalendrier() {
     try {
       const res = await fetch(baseUrl);
       const text = await res.text();
-      const blob = new Blob([text], { type: 'text/calendar' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'missions-jolene.ics';
-      a.click();
-      URL.revokeObjectURL(url);
+      await telechargerOuPartager(text, 'missions-jolene.ics', 'text/calendar');
     } catch {
       // silent
     }

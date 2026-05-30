@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { telechargerOuPartager } from '@/lib/telechargement';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -185,10 +186,7 @@ export default function AdminFinances() {
       escapeCSV(f.statut || ''),
     ]);
     const csv = '\uFEFF' + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.join(';'))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `recap_comptable_${new Date().toISOString().slice(0, 7)}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    void telechargerOuPartager(csv, `recap_comptable_${new Date().toISOString().slice(0, 7)}.csv`, 'text/csv');
     toast.success('Export CSV téléchargé');
   };
 

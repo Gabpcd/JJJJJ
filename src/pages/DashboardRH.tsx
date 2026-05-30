@@ -1,4 +1,5 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { telechargerOuPartagerPdf } from '@/lib/telechargement';
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart3, Users, TrendingUp, Download, Loader2, Target, Coins, Calendar, Briefcase, CheckCircle, Activity } from 'lucide-react';
@@ -109,7 +110,7 @@ export default function DashboardRH() {
       doc.setFontSize(8);
       doc.setTextColor(150);
       doc.text('Jolene — Rapport généré automatiquement.', 14, pageHeight - 10);
-      doc.save(`rapport_rh_${format(now, 'yyyy-MM')}.pdf`);
+      await telechargerOuPartagerPdf(doc, `rapport_rh_${format(now, 'yyyy-MM')}.pdf`);
       afficherNotification({ type: 'succes', message: '✅ Rapport PDF téléchargé' });
     } catch {
       afficherNotification({ type: 'erreur', message: 'Erreur lors de la génération du PDF' });

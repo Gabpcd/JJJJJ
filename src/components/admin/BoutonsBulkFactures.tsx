@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { telechargerOuPartager } from '@/lib/telechargement';
 import { Loader2, CheckCircle2, XCircle, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -61,7 +62,7 @@ export function BoutonsBulkFactures({ selection, onActionTerminee, className }: 
     }
   };
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
     if (aucuneSelection) return;
     setEnCours('CSV');
     try {
@@ -76,15 +77,7 @@ export function BoutonsBulkFactures({ selection, onActionTerminee, className }: 
         ].join(';'),
       );
       const csv = [entetes.join(';'), ...lignes].join('\n');
-      const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `factures-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await telechargerOuPartager(`﻿${csv}`, `factures-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
       afficherNotification({
         type: 'succes',
         message: `Export effectué : ${selection.length} ligne(s) exportée(s).`,

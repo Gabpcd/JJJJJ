@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { telechargerOuPartager } from '@/lib/telechargement';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CardY2K, CardY2KContent, CardY2KHeader, CardY2KTitle } from '@/components/y2k/CardY2K';
@@ -101,23 +102,13 @@ export default function AdminAuditRLS() {
     }
   };
 
-  const handleExportJSON = () => {
+  const handleExportJSON = async () => {
     if (!data) {
       toast.error('Aucune donnée à exporter');
       return;
     }
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    a.download = `audit-rls-strict-${ts}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    await telechargerOuPartager(JSON.stringify(data, null, 2), `audit-rls-strict-${ts}.json`, 'application/json');
     toast.success('Export JSON téléchargé');
   };
 

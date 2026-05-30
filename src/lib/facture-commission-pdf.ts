@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { telechargerOuPartagerPdf } from './telechargement';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -432,7 +433,7 @@ export async function telechargerFactureCommissionPDF(factureId: string) {
       extraLine: `Facture générée le ${format(new Date(), 'dd/MM/yyyy à HH:mm', { locale: fr })}`,
     });
 
-    doc.save(`${(f as any).numero_facture}.pdf`);
+    await telechargerOuPartagerPdf(doc, `${(f as any).numero_facture}.pdf`);
     toast.success('Facture téléchargée');
   } catch (err: any) {
     console.error('Erreur génération PDF facture commission:', err);

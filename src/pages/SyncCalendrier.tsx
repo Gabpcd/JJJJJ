@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { telechargerOuPartager } from '@/lib/telechargement';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { useAuth } from '@/contexts/AuthContext';
@@ -165,13 +166,7 @@ export default function SyncCalendrier() {
     try {
       const res = await fetch(icalUrl);
       const text = await res.text();
-      const blob = new Blob([text], { type: 'text/calendar' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'missions-jolene.ics';
-      a.click();
-      URL.revokeObjectURL(url);
+      await telechargerOuPartager(text, 'missions-jolene.ics', 'text/calendar');
     } catch {
       toast.error('Erreur lors du téléchargement');
     }

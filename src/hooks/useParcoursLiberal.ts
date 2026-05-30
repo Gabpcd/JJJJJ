@@ -33,7 +33,16 @@ export interface HeureExterne {
   attestation_nom_fichier: string | null;
   statut_validation: 'EN_ATTENTE' | 'VALIDE' | 'REJETE';
   commentaire_validation: string | null;
+  heures_extraites_ia: number | null;
+  coherence_ia: boolean | null;
+  verifie_ia_le: string | null;
   cree_le: string;
+}
+
+export interface ResultatVerifHeures {
+  verdict: 'EN_ATTENTE' | 'VALIDE' | 'REJETE';
+  heures_extraites?: number | null;
+  coherence?: boolean | null;
 }
 
 export function useParcoursLiberal() {
@@ -149,8 +158,31 @@ export function useParcoursLiberal() {
         .single();
 
       if (err) throw err;
+      const ligne = data as unknown as HeureExterne;
+
+      // Vérification IA de l'attestation (lecture du document, extraction des
+      // heures, cohérence vs déclaré). Best-effort : si l'IA échoue, la ligne
+      // reste EN_ATTENTE pour revue manuelle — on ne bloque pas la déclaration.
+      let verification: ResultatVerifHeures | null = null;
+      if (attestation_url) {
+        try {
+          const { data: vData } = await supabase.functions.invoke('verify-heures-externes', {
+            body: { heure_externe_id: ligne.id },
+          });
+          if (vData?.verdict) {
+            verification = {
+              verdict: vData.verdict,
+              heures_extraites: vData.heures_extraites ?? null,
+              coherence: vData.coherence ?? null,
+            };
+          }
+        } catch {
+          /* best-effort : la ligne reste EN_ATTENTE */
+        }
+      }
+
       await loadParcours();
-      return data as unknown as HeureExterne;
+      return verification;
     },
     [user, loadParcours],
   );
