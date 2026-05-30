@@ -77,9 +77,9 @@ export default function PageAide() {
 
   return (
     <div className="min-h-[100dvh] bg-background">
-      <header className="border-b border-border bg-card">
+      <header className="border-b border-border bg-card sticky top-0 z-30" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button onClick={() => user ? navigate(-1) : navigate('/')} className="text-muted-foreground hover:text-foreground" aria-label="Retour">
+          <button onClick={() => user ? navigate(-1) : navigate('/')} className="flex items-center gap-1 text-muted-foreground hover:text-foreground -ml-1 p-1" aria-label="Retour">
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
           <div className="flex items-center gap-2">
