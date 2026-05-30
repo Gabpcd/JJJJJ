@@ -357,7 +357,7 @@ export default function DashboardSoignant() {
           <NotificationsRecentes />
 
           {/* KPI */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <FadeInView delay={0}>
               <CarteKPIY2K
                 icone={<CheckCircle className="h-4 w-4" />}
