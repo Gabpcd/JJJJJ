@@ -9,6 +9,7 @@ interface Props {
   soignant: Soignant | null;
   variant?: 'compact' | 'detaille';
   masquerSiComplet?: boolean;
+  className?: string;
 }
 
 function getCouleurs(pourcentage: number, peutCandidater: boolean): { bg: string; border: string; text: string; barre: string; icone: string } {
@@ -21,7 +22,7 @@ function getCouleurs(pourcentage: number, peutCandidater: boolean): { bg: string
   return { bg: 'bg-destructive/5', border: 'border-destructive/30', text: 'text-destructive', barre: 'bg-destructive', icone: 'text-destructive' };
 }
 
-export function BandeauCompletionProfil({ soignant, variant = 'detaille', masquerSiComplet = true }: Props) {
+export function BandeauCompletionProfil({ soignant, variant = 'detaille', masquerSiComplet = true, className = '' }: Props) {
   const navigate = useNavigate();
 
   if (!soignant) {
@@ -53,7 +54,7 @@ export function BandeauCompletionProfil({ soignant, variant = 'detaille', masque
 
   if (variant === 'compact') {
     return (
-      <div className={`rounded-xl ${couleurs.bg} border ${couleurs.border} p-3 mb-4 flex items-center justify-between gap-3`}>
+      <div className={`rounded-xl ${couleurs.bg} border ${couleurs.border} p-3 flex items-center justify-between gap-3 ${className}`}>
         <div className="flex items-center gap-2 min-w-0">
           <AlertCircle className={`h-4 w-4 ${couleurs.icone} shrink-0`} />
           <p className={`text-sm font-medium ${couleurs.text} truncate`}>
