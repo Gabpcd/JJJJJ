@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { telechargerOuPartagerPdf } from '@/lib/telechargement';
 import { useParams, useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
@@ -150,7 +151,7 @@ export default function CertificatSignaturePage() {
       ];
       footerLines.forEach(l => { doc.text(l, margin, y); y += 10; });
 
-      doc.save(`certificat-signature-${contrat.numero_contrat || contrat.id}.pdf`);
+      await telechargerOuPartagerPdf(doc, `certificat-signature-${contrat.numero_contrat || contrat.id}.pdf`);
       afficherNotification({ type: 'succes', message: 'Certificat PDF téléchargé.' });
     } catch (err: any) {
       afficherNotification({ type: 'erreur', message: err?.message || 'Erreur export PDF' });

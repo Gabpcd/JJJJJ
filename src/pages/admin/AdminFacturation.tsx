@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { telechargerOuPartagerPdf, telechargerOuPartager } from '@/lib/telechargement';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { BreadcrumbAdmin } from '@/components/BreadcrumbAdmin';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -272,7 +273,7 @@ function genererFacturePDF(facture: any) {
   doc.setTextColor(120, 120, 120);
   doc.text('Jolene SAS — Document généré automatiquement', 14, 285);
 
-  doc.save(`facture_${facture.numero_facture || facture.id}.pdf`);
+  void telechargerOuPartagerPdf(doc, `facture_${facture.numero_facture || facture.id}.pdf`);
   toast.success(`Facture ${facture.numero_facture} téléchargée`);
 }
 export default function AdminFacturation() {
@@ -349,10 +350,7 @@ export default function AdminFacturation() {
     if (lignes.length === 0) { toast.info('Aucune donnée FEC pour ' + annee); return; }
     const cols = Object.keys(lignes[0]);
     const csv = [cols.join('\t'), ...lignes.map((l: any) => cols.map(c => l[c] ?? '').join('\t'))].join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `FEC_${annee}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    await telechargerOuPartager('﻿' + csv, `FEC_${annee}.csv`, 'text/csv');
     toast.success(`FEC ${annee} exporté`);
   };
 
@@ -385,7 +383,7 @@ export default function AdminFacturation() {
       doc.text(f.statut || '—', 180, y);
       y += 5;
     });
-    doc.save(`rapport_mensuel_${new Date().toISOString().slice(0, 7)}.pdf`);
+    await telechargerOuPartagerPdf(doc, `rapport_mensuel_${new Date().toISOString().slice(0, 7)}.pdf`);
     toast.success('Rapport PDF généré');
   };
 

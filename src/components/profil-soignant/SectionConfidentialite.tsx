@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { telechargerOuPartager } from '@/lib/telechargement';
 import { useNavigate } from 'react-router-dom';
 import { Download, Trash2, Shield, UserX } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,7 +34,8 @@ export function SectionConfidentialite({ userId }: Props) {
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
-      let blob: Blob;
+      let contenu: string;
+      let mime: string;
       let filename: string;
       if (fmt === 'csv') {
         const rows: string[][] = [];
@@ -46,19 +48,15 @@ export function SectionConfidentialite({ userId }: Props) {
           }
         };
         flatten(data);
-        const csv = 'Champ,Valeur\n' + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-        blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        contenu = 'Champ,Valeur\n' + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        mime = 'text/csv';
         filename = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.csv`;
       } else {
-        blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        contenu = JSON.stringify(data, null, 2);
+        mime = 'application/json';
         filename = `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`;
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      await telechargerOuPartager(contenu, filename, mime);
       afficherNotification({ type: 'succes', message: `Données exportées en ${fmt.toUpperCase()}.` });
     } catch (err: any) {
       capturerErreurSentry(err, 'SectionConfidentialite', 'export_rgpd');

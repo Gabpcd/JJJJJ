@@ -1,4 +1,5 @@
 import { Printer, Send, FileDown } from 'lucide-react';
+import { telechargerOuPartagerPdf } from '@/lib/telechargement';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type jsPDF from 'jspdf';
@@ -141,7 +142,7 @@ async function genererPDFNote(m: any, soignant: any, etab: any) {
   doc.setTextColor(150);
   doc.text('Document généré via Jolene · SASU · SIRET 103 305 744 00015 · 103 rue de Vaugirard, 75006 Paris', 105, pageH - 10, { align: 'center' });
 
-  doc.save(`note_honoraires_${m.numero_note_honoraires || m.id}.pdf`);
+  void telechargerOuPartagerPdf(doc, `note_honoraires_${m.numero_note_honoraires || m.id}.pdf`);
 }
 
 export function NoteHonoraires({ mission, soignant, etablissement, onAudit }: NoteHonorairesProps) {

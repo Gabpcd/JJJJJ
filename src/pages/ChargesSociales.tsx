@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { enrichirEtablissements } from '@/lib/etablissements';
 import { ouvrirLienExterne } from '@/lib/platform';
 import { format, differenceInDays } from 'date-fns';
+import { telechargerOuPartager } from '@/lib/telechargement';
 import { fr } from 'date-fns/locale';
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -133,11 +134,7 @@ export default function ChargesSociales() {
       `CA cumulé,${caCumule.toFixed(2)},`,
       `Revenu net estimé,${revenuNet.toFixed(2)},`,
     ].join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `charges-jolene-${new Date().getFullYear()}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    void telechargerOuPartager(header + rows, `charges-jolene-${new Date().getFullYear()}.csv`, 'text/csv');
   };
 
   if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;

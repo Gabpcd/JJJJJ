@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { telechargerOuPartagerPdf } from './telechargement';
 import { JOLENE_COLORS, PAGE, sanitizeForPdf, createHeader, createFooter } from './pdf-design-system';
 import { buildMandatFacturationTexte, MANDAT_FACTURATION_VERSION, type SoignantMandatInfo } from '@/constantes/mandatFacturation';
 
@@ -126,7 +127,7 @@ export function telechargerMandatFacturationPdf(
   const doc = genererMandatFacturationPdf(soignant, meta);
   const date = new Date(meta.signed_at).toISOString().slice(0, 10);
   const nomFichier = `mandat-facturation-jolene-${date}-v${meta.version}.pdf`;
-  doc.save(nomFichier);
+  void telechargerOuPartagerPdf(doc, nomFichier);
 }
 
 // ─────────────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@
  */
 
 import type { LitigeEnrichi } from './types';
+import { telechargerOuPartager } from '@/lib/telechargement';
 
 const COLONNES = [
   'id',
@@ -86,15 +87,5 @@ export function nomFichierCsv(d: Date = new Date()): string {
 export function telechargerCsv(litiges: LitigeEnrichi[]): void {
   const csv = toCsv(litiges);
   // BOM UTF-8 pour Excel FR.
-  const blob = new Blob([`\uFEFF${csv}`], {
-    type: 'text/csv;charset=utf-8;',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nomFichierCsv();
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  void telechargerOuPartager(`\uFEFF${csv}`, nomFichierCsv(), 'text/csv');
 }
