@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack } from 'lucide-react';
+import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -23,6 +23,8 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
       { icone: Shield, label: 'Modération', route: '/admin/moderation' },
       { icone: FileCheck, label: 'Heures externes (3200h)', route: '/admin/heures-externes' },
       { icone: MessageCircle, label: 'Réclamations', route: '/admin/reclamations' },
+      { icone: Star, label: 'Réclamations score', route: '/admin/reclamations-score' },
+      { icone: ShieldCheck, label: 'Triage des scores', route: '/admin/scores' },
       { icone: Building2, label: 'Groupes santé', route: '/admin/groupes' },
     ],
   },
@@ -31,6 +33,14 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
       { icone: ClipboardList, label: 'Toutes les missions', route: '/admin/missions' },
       { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
       { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
+      { icone: AlertTriangle, label: 'Alertes pointage', route: '/admin/alertes-pointage' },
+    ],
+  },
+  {
+    icone: Scale, label: 'Litiges & contrats', items: [
+      { icone: Scale, label: 'Litiges', route: '/admin/litiges' },
+      { icone: FileSignature, label: 'Contrats', route: '/admin/contrats' },
+      { icone: FileStack, label: 'Templates contrats', route: '/admin/templates-contrats' },
     ],
   },
   {
@@ -50,10 +60,15 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
     icone: ShieldCheck, label: 'Conformité & Technique', items: [
       { icone: ShieldCheck, label: 'Conformité', route: '/admin/conformite' },
       { icone: Shield, label: 'Audit Logs', route: '/admin/audit' },
+      { icone: Shield, label: 'Audit RLS', route: '/admin/audit-rls' },
       { icone: FileCheck, label: 'DPIA', route: '/admin/dpia' },
+      { icone: Shield, label: 'Outils RGPD', route: '/admin/rgpd-tools' },
+      { icone: Zap, label: 'Externalisations', route: '/admin/externalisations-actions' },
+      { icone: Activity, label: 'Statut système', route: '/admin/status' },
       { icone: Mail, label: 'Emails', route: '/admin/emails' },
       { icone: Code2, label: 'API', route: '/admin/api' },
       { icone: HeartPulse, label: 'Healthcheck', route: '/admin/healthcheck' },
+      { icone: Code2, label: 'Démo', route: '/admin/demo' },
     ],
   },
 ];
