@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck } from 'lucide-react';
+import { LucideIcon, Home, Search, FileText, CalendarDays, User, PlusCircle, List, ClipboardCheck, Settings, HeartPulse, LogOut, MapPin, Banknote, Clock, CreditCard, FileSpreadsheet, Rocket, Bell, MapPinned, BarChart3, Flame, MessageCircle, ClipboardList, Building2, Users, Scale, ChevronDown, Activity, Shield, Menu, X, Star, Gift, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/lib/types';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
@@ -28,9 +28,9 @@ const NAV_SOIGNANT_MOBILE: NavItem[] = [
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/etablissement/tableau-de-bord' },
   { icone: ClipboardList, label: 'Missions', route: '/etablissement/missions' },
-  { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
-  { icone: Users, label: 'Mon équipe', route: '/etablissement/rh' },
+  { icone: ClipboardCheck, label: 'Présences', route: '/etablissement/presences' },
   { icone: MessageCircle, label: 'Messages', route: '/etablissement/messagerie' },
+  { icone: User, label: 'Mon compte', route: '/etablissement/mon-compte' },
 ];
 
 /* ── Desktop sidebars (grouped) ── */
@@ -188,6 +188,15 @@ export function BarreNavigation({ role }: { role: UserRole }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { deconnexion, user } = useAuth();
+
+  // Routes "racine" (onglets de la bottom nav) : pas de bouton retour.
+  // Toute autre route est une sous-page → on affiche un chevron retour.
+  const bottomNavRoutes = getMobileNavItems(role).map((n) => n.route);
+  const estRacine = bottomNavRoutes.includes(location.pathname);
+  const afficherRetour = !estRacine;
+  // Interfaces dotées d'un onglet "Mon compte" (bottom nav) → plus de hamburger
+  // ni de bouton déconnexion dans le header (tout est dans Mon compte).
+  const aMonCompte = role === 'SOIGNANT' || role === 'ADMIN_ETABLISSEMENT';
   const [isLiberal, setIsLiberal] = useState(false);
   const [showLiberalPath, setShowLiberalPath] = useState(false);
   const [userInfo, setUserInfo] = useState<{ prenom?: string; nom?: string; avatarUrl?: string } | null>(null);
@@ -267,16 +276,29 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       {/* ── Mobile top header (logo + notifs + logout) ── */}
       <header className="sticky top-0 left-0 right-0 flex md:hidden z-40 bg-card/95 backdrop-blur-sm border-b border-border px-4 items-center justify-between no-print" style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }} role="banner">
         <div className="flex items-center gap-2">
-          {/* Hamburger : conservé pour étab/admin ; masqué pour SOIGNANT
-              (remplacé par l'onglet "Mon compte" de la bottom nav). */}
-          {role !== 'SOIGNANT' && (
+          {afficherRetour ? (
+            /* Sous-page → bouton retour (remplace logo/hamburger) */
             <button
-              onClick={() => setMobileMenuOpen(true)}
-              aria-label="Ouvrir le menu"
-              className="p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
+              onClick={() => { if (window.history.length > 1) navigate(-1); else navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord'); }}
+              aria-label="Retour"
+              className="flex items-center gap-1 p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
             >
-              <Menu className="h-6 w-6" />
+              <ArrowLeft className="h-6 w-6" />
             </button>
+          ) : (
+            <>
+              {/* Hamburger : conservé pour étab/admin ; masqué pour SOIGNANT
+                  (remplacé par l'onglet "Mon compte" de la bottom nav). */}
+              {!aMonCompte && (
+                <button
+                  onClick={() => setMobileMenuOpen(true)}
+                  aria-label="Ouvrir le menu"
+                  className="p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
+                >
+                  <Menu className="h-6 w-6" />
+                </button>
+              )}
+            </>
           )}
           <button onClick={() => navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord')} className="flex items-center gap-2" aria-label="Accueil">
             <HeartPulse className="h-6 w-6 text-primary" />
@@ -287,7 +309,7 @@ export function BarreNavigation({ role }: { role: UserRole }) {
           <BadgeNotification />
           <ThemeToggle className="text-foreground hover:bg-muted" />
           {/* Déconnexion : masquée pour SOIGNANT (dans "Mon compte"). */}
-          {role !== 'SOIGNANT' && (
+          {!aMonCompte && (
             <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
               <LogOut className="h-5 w-5" />
             </button>

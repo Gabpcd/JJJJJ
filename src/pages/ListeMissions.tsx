@@ -14,7 +14,6 @@ import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ModaleAnnulationMissionEtab } from '@/components/etablissement/ModaleAnnulationMissionEtab';
 import { EmptyState, IllustrationMegaphone } from '@/components/ui/EmptyState';
 import { ChargementPage } from '@/components/ChargementPage';
-import { FABCreerMission } from '@/components/FABCreerMission';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -275,7 +274,6 @@ export default function ListeMissions() {
         />
       )}
 
-      <FABCreerMission />
 
       <ModalConfirmation ouvert={!!modalDupliquer} onFermer={() => setModalDupliquer(null)}
         onConfirmer={() => navigate(`/etablissement/missions/creer?dupliquer=${modalDupliquer.id}`)}
