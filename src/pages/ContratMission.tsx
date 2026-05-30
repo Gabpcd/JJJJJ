@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { capturerErreurSentry } from '@/lib/sentry';
+import { telechargerOuPartager } from '@/lib/telechargement';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { CheckAnimation } from '@/components/CheckAnimation';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -235,7 +236,7 @@ export default function ContratMission() {
     // Reset mode_signature in DB if needed (admin-only update, so just change UI)
   };
 
-  const handleDownloadContract = () => {
+  const handleDownloadContract = async () => {
     const contractHtml = contrat?.contenu_html || fallbackHtml;
     if (!contractHtml) {
       afficherNotification({ type: 'erreur', message: 'Aucun contrat téléchargeable pour le moment.' });
@@ -257,15 +258,7 @@ export default function ContratMission() {
         <body>${contractHtml}</body>
       </html>`;
 
-    const blob = new Blob([documentHtml], { type: 'text/html;charset=utf-8' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${contrat?.numero_contrat ?? 'contrat'}.html`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+    await telechargerOuPartager(documentHtml, `${contrat?.numero_contrat ?? 'contrat'}.html`, 'text/html');
   };
 
   const handleSigner = async () => {

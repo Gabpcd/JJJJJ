@@ -11,6 +11,7 @@
 import jsPDF from 'jspdf';
 import { JOLENE_COLORS, PAGE, sanitizeForPdf, createHeader, createFooter, fmtEur } from './pdf-design-system';
 import { supabase } from '@/integrations/supabase/client';
+import { telechargerOuPartagerPdf } from './telechargement';
 import {
   TAUX_CSG_BASE, TAUX_CSG_DEDUCTIBLE, TAUX_CSG_NON_DEDUCTIBLE, TAUX_CRDS,
   TAUX_SS_VIEILLESSE_PLAFONNEE, TAUX_SS_VIEILLESSE_DEPLAFONNEE,
@@ -130,7 +131,7 @@ export async function telechargerBulletinPaiePdf(bulletinId: string): Promise<vo
     mission as unknown as MissionSnapshot,
     (cumul as any) || null,
   );
-  doc.save(`bulletin-${b.numero_bulletin}.pdf`);
+  await telechargerOuPartagerPdf(doc, `bulletin-${b.numero_bulletin}.pdf`);
 }
 
 interface CumulAnnuel {

@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { telechargerOuPartagerPdf } from './telechargement';
 import { MANDAT_FACTURATION_VERSION } from '@/constantes/mandatFacturation';
 import { ENTREPRISE } from '@/constantes/entreprise';
 import {
@@ -407,8 +408,8 @@ export async function telechargerFactureHonorairesPDF(factureId: string) {
       extraLine: `Facture émise par ${ENTREPRISE.nom} en qualité de mandataire (art. 289 I-2 CGI). Le professionnel ci-dessus demeure le vendeur légal.`,
     });
 
-    doc.save(`${(f as any).numero_facture}.pdf`);
-    toast.success('Facture téléchargée');
+    await telechargerOuPartagerPdf(doc, `${(f as any).numero_facture}.pdf`);
+    toast.success('Facture prête');
   } catch (err: any) {
     console.error('Erreur génération PDF facture honoraires:', err);
     toast.error(err?.message || 'Erreur génération PDF');
