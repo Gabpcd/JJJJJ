@@ -213,20 +213,42 @@ Analyse ce document et vérifie sa conformité.`;
       });
     }
 
-    const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages: [{ role: "user", content: anthropicContent }],
-      }),
-    });
+    // Timeout 20s sur l'appel Anthropic : évite de laisser l'UI bloquée en
+    // "vérification en cours" indéfiniment si l'API met trop longtemps.
+    const aiController = new AbortController();
+    const aiTimeout = setTimeout(() => aiController.abort(), 20_000);
+    let aiResponse: Response;
+    try {
+      aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: [{ role: "user", content: anthropicContent }],
+        }),
+        signal: aiController.signal,
+      });
+    } catch (e) {
+      clearTimeout(aiTimeout);
+      const estTimeout = (e as any)?.name === "AbortError";
+      console.error("Anthropic call failed:", estTimeout ? "timeout 20s" : e);
+      await supabase.from("documents_soignants").update({
+        resultat_ia: { erreur_anthropic: { status: estTimeout ? "timeout" : "network", at: new Date().toISOString() } },
+      } as any).eq("id", document_id);
+      await supabase.rpc("fn_update_document_verification", {
+        p_document_id: document_id, p_statut_verification: "EN_ATTENTE", p_motif_rejet: null,
+      });
+      return new Response(JSON.stringify({ success: true, verdict: "EN_ATTENTE", reason: estTimeout ? "AI timeout" : "AI network error" }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    clearTimeout(aiTimeout);
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
