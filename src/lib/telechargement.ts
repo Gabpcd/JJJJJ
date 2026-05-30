@@ -54,3 +54,32 @@ export async function telechargerOuPartager(
     }
   }
 }
+
+/**
+ * Télécharge (web) ou partage (natif) un PDF généré par jsPDF.
+ * Web : doc.save() classique. Natif : écrit le PDF (base64) dans le cache
+ * et ouvre la feuille de partage ("Enregistrer dans Fichiers", AirDrop…).
+ *
+ * @param doc  instance jsPDF
+ * @param nomFichier  nom avec extension .pdf
+ */
+export async function telechargerOuPartagerPdf(
+  doc: { save: (n: string) => void; output: (type: string) => string },
+  nomFichier: string,
+): Promise<void> {
+  if (!isNative()) {
+    doc.save(nomFichier);
+    return;
+  }
+  try {
+    const base64 = doc.output('datauristring').split(',')[1]; // PDF en base64
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const { Share } = await import('@capacitor/share');
+    await Filesystem.writeFile({ path: nomFichier, data: base64, directory: Directory.Cache });
+    const { uri } = await Filesystem.getUri({ path: nomFichier, directory: Directory.Cache });
+    await Share.share({ url: uri, title: nomFichier });
+  } catch {
+    // Fallback : ouvrir le data URL (le WebView affiche le PDF)
+    try { window.open(doc.output('dataurlnewwindow') as any, '_blank'); } catch { doc.save(nomFichier); }
+  }
+}
