@@ -657,6 +657,10 @@ export function ProfilEtablissementContent() {
             try {
               const { data, error } = await supabase.rpc('fn_exporter_rgpd_etablissement' as any);
               if (error) throw error;
+              if (data && typeof data === 'object' && (data as any).error) {
+                afficherNotification({ type: 'erreur', message: (data as any).error });
+                return;
+              }
               await telechargerOuPartager(JSON.stringify(data, null, 2), `mes-donnees-jolene-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
               // C3: Audit RGPD export for establishments
               await supabase.rpc('fn_ecrire_audit_safe', {

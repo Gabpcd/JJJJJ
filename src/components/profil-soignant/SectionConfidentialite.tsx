@@ -26,6 +26,13 @@ export function SectionConfidentialite({ userId }: Props) {
     try {
       const { data, error } = await supabase.rpc('fn_rgpd_exporter_rate_limited' as any);
       if (error) throw error;
+      // La RPC renvoie {error} en cas de rate-limit (2 exports/24h) ou d'échec :
+      // afficher le message au lieu d'exporter un fichier contenant l'erreur.
+      if (data && typeof data === 'object' && (data as any).error) {
+        afficherNotification({ type: 'erreur', message: (data as any).error });
+        setExportLoading(false);
+        return;
+      }
       await supabase.rpc('fn_ecrire_audit_safe', {
         p_acteur_id: userId, p_type_acteur: role || 'SOIGNANT',
         p_action: 'RGPD_EXPORT_DONNEES',
