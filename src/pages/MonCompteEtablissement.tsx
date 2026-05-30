@@ -8,10 +8,11 @@ import { Building2 } from 'lucide-react';
 import {
   CreditCard, FileStack, FileText, FileSpreadsheet, BarChart3, Clock, Scale,
   Flame, Users, Gift, Settings, LogOut, HeartHandshake, ClipboardCheck,
+  User, TrendingUp, Star, Ban, Landmark, ShieldCheck, MessageSquare, Code2,
 } from 'lucide-react';
 
 export default function MonCompteEtablissement() {
-  usePageTitle('Mon compte');
+  usePageTitle('Menu');
   const { user, deconnexion } = useAuth();
   const [etab, setEtab] = useState<{ nom: string; logo_url: string | null; type: string | null } | null>(null);
 
@@ -27,33 +28,50 @@ export default function MonCompteEtablissement() {
     {
       titre: 'Gestion',
       lignes: [
+        { icone: User, label: 'Profil de l\'établissement', route: '/etablissement/profil' },
         { icone: ClipboardCheck, label: 'Présences à valider', route: '/etablissement/presences' },
         { icone: FileText, label: 'Contrats', route: '/etablissement/contrats' },
-        { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
         { icone: Clock, label: 'Shifts', route: '/etablissement/shifts' },
-        { icone: BarChart3, label: 'Tableau RH & analytics', route: '/etablissement/rh' },
+        { icone: Star, label: 'Évaluations à faire', route: '/etablissement/evaluations-a-faire' },
+        { icone: Scale, label: 'Litiges & contestations', route: '/etablissement/litiges' },
+        { icone: MessageSquare, label: 'Mes réclamations', route: '/etablissement/mes-reclamations' },
         { icone: Flame, label: 'Pool urgence', route: '/etablissement/pool-urgence' },
+      ],
+    },
+    {
+      titre: 'Analyse',
+      lignes: [
+        { icone: BarChart3, label: 'Tableau RH', route: '/etablissement/rh' },
+        { icone: TrendingUp, label: 'Analytics', route: '/etablissement/analytics' },
+        { icone: ShieldCheck, label: 'Score établissement', route: '/etablissement/score' },
       ],
     },
     {
       titre: 'Finances',
       lignes: [
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
+        { icone: Landmark, label: 'Obligations financières', route: '/etablissement/obligations' },
         { icone: FileSpreadsheet, label: 'Export paie', route: '/etablissement/export-paie' },
         { icone: FileStack, label: 'Chorus Pro', route: '/etablissement/chorus-config' },
+        { icone: ShieldCheck, label: 'Assurance', route: '/etablissement/assurance' },
       ],
     },
     {
-      titre: 'Soignants',
+      titre: 'Soignants & groupe',
       lignes: [
         { icone: Users, label: 'Annuaire des soignants', route: '/etablissement/soignants' },
+        { icone: Ban, label: 'Soignants exclus', route: '/etablissement/exclusions' },
+        { icone: Users, label: 'Mon équipe', route: '/etablissement/equipe' },
+        { icone: Building2, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
         { icone: Gift, label: 'Parrainage', route: '/etablissement/parrainage' },
         { icone: HeartHandshake, label: 'Premium', route: '/etablissement/premium' },
       ],
     },
     {
+      titre: 'Paramètres',
       lignes: [
         { icone: Settings, label: 'Paramètres', route: '/etablissement/parametres' },
+        { icone: Code2, label: 'API', route: '/etablissement/api' },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
       ],
     },
