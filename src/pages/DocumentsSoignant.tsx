@@ -162,8 +162,10 @@ export function DocumentsSoignantContent() {
       setSoignant(sg);
       // Filtrage par profession ET type_exercice :
       // LIBERAL/MIXTE → inclut les documents LIBERAL_ONLY (RCP/RIB/URSSAF)
-      // SALARIE/CDD/autre → exclut LIBERAL_ONLY (n'affiche que TOUS)
+      // SALARIE/MIXTE/CDD/autre → inclut les documents SALARIE_ONLY
+      // → un MIXTE cumule LES DEUX (obligations salariées + libérales).
       const estLiberal = (sg as any).type_exercice === 'LIBERAL' || (sg as any).type_exercice === 'MIXTE';
+      const estSalarie = (sg as any).type_exercice !== 'LIBERAL'; // SALARIE + MIXTE + null/CDD
       const rppsVerifie = !!(sg as any).rpps_verifie;
       const adeliVerifie = !!(sg as any).adeli_verifie;
       const identiteVerifiee = rppsVerifie || adeliVerifie;
@@ -175,7 +177,7 @@ export function DocumentsSoignantContent() {
           if (identiteVerifiee && d.type_document === 'RPPS_ADELI') return false;
           const exReq = d.type_exercice_requis || 'TOUS';
           if (exReq === 'LIBERAL_ONLY') return estLiberal;
-          if (exReq === 'SALARIE_ONLY') return !estLiberal;
+          if (exReq === 'SALARIE_ONLY') return estSalarie;
           return true; // TOUS
         })
       );
