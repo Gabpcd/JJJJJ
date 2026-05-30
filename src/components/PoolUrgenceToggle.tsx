@@ -42,7 +42,10 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
   const [modeZone, setModeZone] = useState<'position' | 'ville'>(villeUrgence ? 'ville' : 'position');
   const [localVille, setLocalVille] = useState(villeUrgence || '');
 
-  const save = async (newActif: boolean, newRayon: number) => {
+  // revertActif : valeur à rétablir sur le switch si le save échoue (sinon le
+  // toggle resterait visuellement activé alors que l'activation a été refusée,
+  // ex. garde documents/RCP côté serveur).
+  const save = async (newActif: boolean, newRayon: number, revertActif?: boolean) => {
     setLoading(true);
     const { data, error } = await supabase.rpc('fn_toggle_pool_urgence' as any, {
       p_actif: newActif,
@@ -51,8 +54,10 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
     });
     const result = data as unknown as RpcSuccessOrError | null;
     if (error) {
+      if (revertActif !== undefined) setLocalActif(revertActif);
       (onError ?? ((m: string) => toast.error(m)))(extraireMessageErreur(error));
     } else if (result?.error) {
+      if (revertActif !== undefined) setLocalActif(revertActif);
       (onError ?? ((m: string) => toast.error(m)))(result.error);
     } else {
       onUpdate?.(newActif, newRayon, modeZone === 'ville' ? localVille : undefined);
@@ -96,7 +101,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
           disabled={loading}
           onCheckedChange={(checked) => {
             setLocalActif(checked);
-            save(checked, localRayon);
+            save(checked, localRayon, !checked);
           }}
         />
       </div>
