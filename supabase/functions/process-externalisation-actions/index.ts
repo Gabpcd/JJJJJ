@@ -151,6 +151,8 @@ async function dispatch(admin: any, action: ActionRow): Promise<DispatchResult> 
       return dispatchAvoirPdf(admin, action);
     case "RECOMPENSE_PARRAINAGE_SOIGNANT":
       return dispatchRecompenseParrainage(admin, action);
+    case "REMBOURSEMENT_AVOIR_SWAN":
+      return dispatchRemboursementAvoirSwan(admin, action);
     default:
       return { ok: false, erreur: `Type d'action non supporté : ${type_action}` };
   }
@@ -384,6 +386,64 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
   });
 
   return { ok: true, resultat: results };
+}
+
+// Remboursement d'un avoir par virement SEPA SWAN (auto, fallback manuel admin).
+async function dispatchRemboursementAvoirSwan(admin: any, action: ActionRow): Promise<DispatchResult> {
+  const { avoir_id, montant } = action.payload;
+  if (!avoir_id) return { ok: false, erreur: "avoir_id requis" };
+
+  const { data: avoir } = await admin.from("factures_honoraires")
+    .select("id, numero_facture, soignant_id, mode_remboursement, date_remboursement, montant_ttc, montant_ht, type_document")
+    .eq("id", avoir_id).maybeSingle();
+  if (!avoir) return { ok: false, erreur: "Avoir introuvable" };
+  if (avoir.type_document !== "AVOIR") return { ok: false, erreur: "Document non-avoir" };
+  if (avoir.date_remboursement) return { ok: true, resultat: { skip: "déjà remboursé" } }; // idempotent
+
+  const { data: sg } = await admin.from("soignants")
+    .select("iban_virement, iban_titulaire, prenom, nom, email")
+    .eq("id", avoir.soignant_id).maybeSingle();
+  if (!sg?.iban_virement) {
+    return { ok: false, erreur: "IBAN manquant — bascule virement manuel admin" };
+  }
+
+  const m = Number(montant) || Number(avoir.montant_ttc) || Number(avoir.montant_ht) || 0;
+  if (m <= 0) return { ok: false, erreur: "Montant avoir invalide" };
+
+  const swan = await dispatchVersementSwan(
+    sg.iban_virement,
+    sg.iban_titulaire || `${sg.prenom || ""} ${sg.nom || ""}`.trim(),
+    m,
+    `Remboursement avoir Jolene ${avoir.numero_facture || avoir_id}`,
+    `rembavoir_${avoir_id}`,
+  );
+  if (!swan.ok) {
+    return { ok: false, erreur: `SWAN remboursement: ${swan.erreur}` }; // retry → sinon fallback manuel
+  }
+
+  const ref = `SWAN:${swan.resultat?.payment_id || "initiated"}`;
+  await admin.from("factures_honoraires").update({
+    statut: "REMBOURSE",
+    date_remboursement: new Date().toISOString(),
+    reference_remboursement: ref,
+  }).eq("id", avoir_id);
+
+  await admin.from("notifications").insert({
+    destinataire_id: avoir.soignant_id,
+    type_destinataire: "SOIGNANT",
+    type: "REMBOURSEMENT_CONFIRME",
+    titre: "💸 Remboursement envoyé",
+    corps: `Votre remboursement de ${m}€ (avoir ${avoir.numero_facture || ""}) part en virement SEPA — réception sous 1 à 2 jours ouvrés.`,
+    lien: "/soignant/mes-factures-honoraires",
+  });
+  await admin.from("email_queue").insert({
+    type: "REMBOURSEMENT_CONFIRME",
+    destinataire_id: avoir.soignant_id,
+    destinataire_email: sg.email ?? null,
+    data: { prenom: sg.prenom ?? null, montant: m, numero: avoir.numero_facture ?? null, reference: ref },
+  });
+
+  return { ok: true, resultat: { payment_id: swan.resultat?.payment_id, reference: ref } };
 }
 
 async function dispatchVersementSwan(
