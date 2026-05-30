@@ -90,7 +90,10 @@ export function PanneauNotifications({ open, onClose }: PanneauNotificationsProp
     <>
       <div className="fixed inset-0 bg-foreground/30 z-[70]" onClick={onClose} />
       <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-card shadow-2xl z-[70] flex flex-col animate-slide-in">
-        <div className="flex items-center justify-between p-4 border-b border-border">
+        <div
+          className="flex items-center justify-between p-4 border-b border-border"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
+        >
           <h2 className="text-lg font-bold text-foreground">Notifications</h2>
           <div className="flex items-center gap-2">
             <button onClick={marquerToutLu} className="text-xs text-primary font-medium hover:underline">Tout marquer comme lu</button>

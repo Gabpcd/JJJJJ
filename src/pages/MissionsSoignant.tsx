@@ -332,7 +332,7 @@ export default function MissionsSoignant() {
                 })}
               </div>
             ) : (
-              <EmptyState icone={<Briefcase />} mascotte="thinking" titre="Vous n'avez pas encore de mission en cours" description="Consultez les missions disponibles et postulez !" cta={{ label: 'Voir les missions disponibles', onClick: () => navigate('/soignant/missions') }} />
+              <EmptyState icone={<Briefcase />} mascotte="thinking" titre="Vous n'avez pas encore de mission en cours" description="Consultez les missions disponibles et postulez !" cta={{ label: 'Voir les missions disponibles', onClick: () => setOnglet('disponibles') }} />
             )
           )}
 

@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ClipboardList, MessageCircle, AlertTriangle, Download, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { telechargerOuPartager } from '@/lib/telechargement';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
@@ -84,17 +85,14 @@ export function HistoriqueMissionsContent() {
     return missions.filter(m => m.debut_le.startsWith(moisFiltre));
   }, [missions, moisFiltre]);
 
-  const exporterCSV = () => {
+  const exporterCSV = async () => {
+    if (filtered.length === 0) { toast('Aucune mission à exporter pour cette période.', { icon: 'ℹ️' }); return; }
     const header = 'Date,Mission,Établissement,Heures,Montant net\n';
     const rows = filtered.map(m => {
       const net = m.net_estime || (m.net_a_payer ? m.net_a_payer * 0.78 : 0);
       return `${format(new Date(m.debut_le), 'dd/MM/yyyy')},${m.intitule},${m.etablissements?.nom || ''},${m.duree_heures || 0},${net.toFixed(2)}`;
     }).join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `historique-missions-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    await telechargerOuPartager(header + rows, `historique-missions-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
   };
 
   const ouvrirConversation = async (etablissementId: string) => {

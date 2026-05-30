@@ -5,6 +5,7 @@ import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
+import { telechargerOuPartager } from '@/lib/telechargement';
 
 /** Generate a single-event .ics file for adding to any calendar app */
 export function generateMissionIcs(mission: { intitule: string; debut_le: string; fin_le: string; etablissements?: { nom?: string; adresse_ville?: string; adresse_rue?: string } | null }): string {
@@ -30,23 +31,18 @@ export function generateMissionIcs(mission: { intitule: string; debut_le: string
   ].filter(Boolean).join('\r\n');
 }
 
-/** Download a single mission as .ics */
-export function downloadMissionIcs(mission: Parameters<typeof generateMissionIcs>[0]) {
+/** Ajoute une mission au calendrier (.ics). Web → download ; natif → ouvre
+ *  la feuille de partage iOS/Android ("Ajouter à Calendrier"), façon Doctolib. */
+export async function downloadMissionIcs(mission: Parameters<typeof generateMissionIcs>[0]) {
   const ics = generateMissionIcs(mission);
-  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `mission-jolene-${format(new Date(mission.debut_le), 'yyyy-MM-dd')}.ics`;
-  a.click();
-  URL.revokeObjectURL(url);
+  await telechargerOuPartager(ics, `mission-jolene-${format(new Date(mission.debut_le), 'yyyy-MM-dd')}.ics`, 'text/calendar');
 }
 
 /** Small button to add a single mission to calendar */
 export function BoutonAjouterCalendrier({ mission }: { mission: Parameters<typeof generateMissionIcs>[0] }) {
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); downloadMissionIcs(mission); }}
+      onClick={(e) => { e.stopPropagation(); void downloadMissionIcs(mission); }}
       className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
       title="Ajouter au calendrier"
     >
