@@ -58,6 +58,7 @@ const Telecharger = lazy(() => import("./pages/Telecharger"));
 const MesDocuments = lazy(() => import("./pages/MesDocuments"));
 const LitigesContestationsSoignant = lazy(() => import("./pages/LitigesContestationsSoignant"));
 const DashboardSoignant = lazy(() => import("./pages/DashboardSoignant"));
+const MonCompteSoignant = lazy(() => import("./pages/MonCompteSoignant"));
 const ProfilSoignant = lazy(() => import("./pages/ProfilSoignant"));
 const ProfilSoignantEtablissement = lazy(() => import("./pages/ProfilSoignantEtablissement"));
 const RechercheSoignantsEtab = lazy(() => import("./pages/RechercheSoignantsEtab"));
@@ -205,6 +206,7 @@ function AppRoutes() {
           {/* Soignant */}
           <Route path="/soignant/tableau-de-bord" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><DashboardSoignant /></RouteProtegee>} />
           <Route path="/soignant/profil" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ProfilSoignant /></RouteProtegee>} />
+          <Route path="/soignant/mon-compte" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MonCompteSoignant /></RouteProtegee>} />
           <Route path="/soignant/missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><MissionsSoignant /></RouteProtegee>} />
           <Route path="/soignant/recherche-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><RechercheMissions /></RouteProtegee>} />
           <Route path="/soignant/swipe-missions" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><SwipeMissions /></RouteProtegee>} />

@@ -20,9 +20,9 @@ function isGroup(e: SidebarEntry): e is NavGroup { return 'items' in e; }
 const NAV_SOIGNANT_MOBILE: NavItem[] = [
   { icone: Home, label: 'Accueil', route: '/soignant/tableau-de-bord' },
   { icone: Search, label: 'Missions', route: '/soignant/missions' },
-  { icone: Banknote, label: 'Factures', route: '/soignant/mes-gains' },
-  { icone: MapPin, label: 'Présences', route: '/soignant/presences' },
+  { icone: CalendarDays, label: 'Planning', route: '/soignant/planning' },
   { icone: MessageCircle, label: 'Messages', route: '/soignant/messagerie' },
+  { icone: User, label: 'Mon compte', route: '/soignant/mon-compte' },
 ];
 
 const NAV_ETABLISSEMENT_MOBILE: NavItem[] = [
@@ -267,13 +267,17 @@ export function BarreNavigation({ role }: { role: UserRole }) {
       {/* ── Mobile top header (logo + notifs + logout) ── */}
       <header className="sticky top-0 left-0 right-0 flex md:hidden z-40 bg-card/95 backdrop-blur-sm border-b border-border px-4 items-center justify-between no-print" style={{ height: 'calc(3.5rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }} role="banner">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            aria-label="Ouvrir le menu"
-            className="p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
+          {/* Hamburger : conservé pour étab/admin ; masqué pour SOIGNANT
+              (remplacé par l'onglet "Mon compte" de la bottom nav). */}
+          {role !== 'SOIGNANT' && (
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Ouvrir le menu"
+              className="p-2 -ml-2 rounded-lg text-foreground hover:bg-muted transition"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+          )}
           <button onClick={() => navigate(role === 'SOIGNANT' ? '/soignant/tableau-de-bord' : role === 'ADMIN_ETABLISSEMENT' ? '/etablissement/tableau-de-bord' : '/groupe/tableau-de-bord')} className="flex items-center gap-2" aria-label="Accueil">
             <HeartPulse className="h-6 w-6 text-primary" />
             <span className="text-lg font-bold text-primary">Jolene</span>
@@ -282,9 +286,12 @@ export function BarreNavigation({ role }: { role: UserRole }) {
         <div className="flex items-center gap-1">
           <BadgeNotification />
           <ThemeToggle className="text-foreground hover:bg-muted" />
-          <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
-            <LogOut className="h-5 w-5" />
-          </button>
+          {/* Déconnexion : masquée pour SOIGNANT (dans "Mon compte"). */}
+          {role !== 'SOIGNANT' && (
+            <button onClick={handleDeconnexion} aria-label="Se déconnecter" className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition">
+              <LogOut className="h-5 w-5" />
+            </button>
+          )}
         </div>
       </header>
 
