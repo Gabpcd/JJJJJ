@@ -92,7 +92,7 @@ export function peutExercerLiberal(profession: string, typeEtablissement: string
 
 /** Mirror de la RPC peut_exercer côté DB (étend peut_exercer_liberal en couvrant aussi le mode salarié). */
 export function peutExercer(profession: string, typeExercice: string, typeEtablissement: string): boolean {
-  if (['SALARIE', 'CDD', 'CDDU', 'VACATION'].includes(typeExercice)) return true;
+  if (['SALARIE', 'CDD', 'VACATION'].includes(typeExercice)) return true;
   if (['LIBERAL', 'MIXTE'].includes(typeExercice)) {
     return peutExercerLiberal(profession, typeEtablissement);
   }
@@ -171,10 +171,8 @@ export function getTypeContratRechercheBadge(type: string): { label: string; cla
 export function missionCompatibleContrat(pref: ContratPreference | string, typesContratSoignant: string[]): boolean {
   if (!pref || pref === 'TOUS') return true;
   if (pref === 'LIBERAL') return typesContratSoignant.includes('LIBERAL');
-  // 'CDDU' / 'CDDU_USAGE' conservés en compat lecture pour les profils legacy
-  // pas encore migrés (defense en profondeur). Les nouvelles écritures
-  // n'utilisent plus que 'CDD'. Refactor PR 1 Sprint 1.
-  if (pref === 'SALARIE') return typesContratSoignant.some(t => ['CDD', 'CDDU', 'CDDU_USAGE', 'VACATION', 'SALARIE'].includes(t));
+  // Contrat salarié = CDD uniquement.
+  if (pref === 'SALARIE') return typesContratSoignant.some(t => ['CDD', 'VACATION', 'SALARIE'].includes(t));
   return true;
 }
 

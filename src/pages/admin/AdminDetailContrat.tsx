@@ -234,7 +234,7 @@ export default function AdminDetailContrat() {
       </section>
 
       {/* DPAE */}
-      {(contrat.type_contrat === 'CDD' || contrat.type_contrat === 'CDDU' || contrat.type_contrat === 'SALARIE') && (
+      {(contrat.type_contrat === 'CDD' || contrat.type_contrat === 'SALARIE') && (
         <section className="card-base mb-6">
           <h2 className="text-sm font-bold text-foreground mb-2">DPAE</h2>
           {contrat.dpae_effectuee && contrat.dpae_numero ? (

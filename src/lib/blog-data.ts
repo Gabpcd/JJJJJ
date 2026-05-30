@@ -171,21 +171,21 @@ Notre plateforme a été conçue pour répondre aux besoins spécifiques des pha
 Le remplacement en pharmacie ne devrait pas être une source de stress. Avec Jolene, trouvez un remplaçant qualifié en quelques heures, en toute conformité légale. Inscrivez-vous gratuitement et publiez votre première mission dès aujourd'hui.`,
   },
   {
-    slug: 'cddu-contrat-usage-sante',
-    titre: 'Le CDDU dans la santé : tout comprendre en 5 minutes',
+    slug: 'cdd-contrat-usage-sante',
+    titre: 'Le CDD dans la santé : tout comprendre en 5 minutes',
     extrait: 'CDD d\'usage, IFM, ICP : tout ce qu\'il faut savoir sur le contrat de travail temporaire dans le secteur de la santé.',
     date: '2025-12-15',
     tempsLecture: 5,
     tag: 'Réglementation',
-    contenu: `## Qu'est-ce qu'un CDDU ?
+    contenu: `## Qu'est-ce qu'un CDD ?
 
-Le **Contrat à Durée Déterminée d'Usage** (CDDU ou CDD d'usage) est un type particulier de CDD prévu par l'article L.1242-2-3° du Code du Travail. Il est autorisé dans certains secteurs d'activité où il est d'usage constant de ne pas recourir au CDI, en raison de la nature de l'activité exercée et du caractère temporaire de l'emploi.
+Le **Contrat à Durée Déterminée d'Usage** (CDD ou CDD d'usage) est un type particulier de CDD prévu par l'article L.1242-2-3° du Code du Travail. Il est autorisé dans certains secteurs d'activité où il est d'usage constant de ne pas recourir au CDI, en raison de la nature de l'activité exercée et du caractère temporaire de l'emploi.
 
 Le secteur de la santé fait partie des secteurs autorisés, ce qui permet aux établissements de recruter des soignants pour des missions ponctuelles sans les contraintes du CDD classique.
 
-## Différences entre CDD classique et CDDU
+## Différences entre CDD classique et CDD
 
-| | CDD classique | CDDU |
+| | CDD classique | CDD |
 |---|---|---|
 | Motif | Remplacement, surcroît d'activité | Usage constant du secteur |
 | Durée max | 18 mois (renouvellement inclus) | Pas de durée maximale légale |
@@ -195,11 +195,11 @@ Le secteur de la santé fait partie des secteurs autorisés, ce qui permet aux �
 
 ## Les indemnités : IFM et ICP
 
-**L'Indemnité de Fin de Mission (IFM)** : dans le cadre d'un CDD classique, elle est de 10% de la rémunération brute totale. Pour le CDDU, elle n'est pas obligatoire sauf si la convention collective du secteur le prévoit. Dans la pratique, Jolene inclut systématiquement l'IFM pour garantir l'attractivité des missions.
+**L'Indemnité de Fin de Mission (IFM)** : dans le cadre d'un CDD classique, elle est de 10% de la rémunération brute totale. Pour le CDD, elle n'est pas obligatoire sauf si la convention collective du secteur le prévoit. Dans la pratique, Jolene inclut systématiquement l'IFM pour garantir l'attractivité des missions.
 
-**L'Indemnité Compensatrice de Congés Payés (ICP)** : elle est de 10% de la rémunération brute (IFM incluse). Elle compense le fait que le salarié en CDD n'a pas pu prendre ses congés payés pendant la durée du contrat. L'ICP est **toujours obligatoire**, y compris pour les CDDU.
+**L'Indemnité Compensatrice de Congés Payés (ICP)** : elle est de 10% de la rémunération brute (IFM incluse). Elle compense le fait que le salarié en CDD n'a pas pu prendre ses congés payés pendant la durée du contrat. L'ICP est **toujours obligatoire**, y compris pour les CDD.
 
-## Avantages du CDDU pour les établissements
+## Avantages du CDD pour les établissements
 
 - **Souplesse** : pas de délai de carence entre deux contrats, ce qui permet de renouveler les missions sans interruption.
 - **Adaptabilité** : durée ajustable en fonction des besoins réels de l'établissement.
@@ -207,23 +207,23 @@ Le secteur de la santé fait partie des secteurs autorisés, ce qui permet aux �
 
 ## Obligations de l'employeur
 
-Même dans le cadre d'un CDDU, l'établissement reste soumis à des obligations :
+Même dans le cadre d'un CDD, l'établissement reste soumis à des obligations :
 
 - **Contrat écrit** obligatoire, remis au salarié dans les 48 heures suivant l'embauche.
 - **Déclaration Préalable à l'Embauche (DPAE)** auprès de l'URSSAF avant la prise de poste.
 - **Respect des durées maximales de travail** : 10h/jour, 48h/semaine, repos de 11h entre deux journées.
 - **Rémunération au moins égale** à celle d'un salarié en CDI occupant le même poste.
 
-## Comment Jolene gère les CDDU
+## Comment Jolene gère les CDD
 
 Notre plateforme automatise l'intégralité du processus :
-- Génération automatique du contrat CDDU conforme
+- Génération automatique du contrat CDD conforme
 - Calcul transparent de la rémunération (brut + IFM + ICP + majorations)
 - Rappel DPAE à l'établissement
 - Vérification des durées légales de travail et des repos obligatoires
 - Signature électronique sécurisée
 
-Le CDDU est l'outil contractuel idéal pour le staffing médical. Jolene le rend accessible et conforme, sans paperasse.`,
+Le CDD est l'outil contractuel idéal pour le staffing médical. Jolene le rend accessible et conforme, sans paperasse.`,
   },
   {
     slug: 'free-transition-liberal',
@@ -299,7 +299,7 @@ La rémunération d'un(e) AS intérimaire varie en fonction de plusieurs facteur
 
 **Majorations légales :** nuit (+25%), dimanche (+40%), jour férié (+100%). Ces majorations s'appliquent sur le taux horaire de base et peuvent significativement augmenter la rémunération.
 
-**Indemnités :** en CDDU, l'aide-soignant(e) perçoit une Indemnité de Fin de Mission (IFM) de 10% et une Indemnité Compensatrice de Congés Payés (ICP) de 10%, ce qui porte la rémunération totale à environ **120% du taux de base**.
+**Indemnités :** en CDD, l'aide-soignant(e) perçoit une Indemnité de Fin de Mission (IFM) de 10% et une Indemnité Compensatrice de Congés Payés (ICP) de 10%, ce qui porte la rémunération totale à environ **120% du taux de base**.
 
 ## Quels établissements recrutent des AS en intérim ?
 
@@ -360,7 +360,7 @@ Au taux horaire de base s'ajoutent plusieurs éléments de rémunération :
 - **Majoration de nuit** : +25% entre 21h et 6h (soit environ +6 à 8\u20AC/h)
 - **Majoration dimanche** : +40% (soit environ +10 à 14\u20AC/h)
 - **Majoration jour férié** : +100% (doublement du taux horaire)
-- **IFM** (Indemnité de Fin de Mission) : +10% sur le brut total en CDDU
+- **IFM** (Indemnité de Fin de Mission) : +10% sur le brut total en CDD
 - **ICP** (Indemnité Compensatrice de Congés Payés) : +10% sur le brut total (IFM incluse)
 
 **Exemple concret :** un IDE en mission de nuit un dimanche, avec un taux de base de 28\u20AC/h, perçoit : 28 + 7 (nuit) + 11,20 (dimanche) = **46,20\u20AC/h brut**, auxquels s'ajoutent IFM et ICP.
@@ -453,7 +453,7 @@ Jolene a été conçu pour répondre aux besoins spécifiques des EHPAD :
 
 **Pool de soignants fidélisés** : les soignants qui ont déjà travaillé dans votre EHPAD peuvent être ajoutés à votre pool. Ils seront notifiés en priorité de vos nouvelles missions.
 
-**Gestion administrative simplifiée** : contrats CDDU générés automatiquement, pointage digital, facturation consolidée. Vous gagnez du temps sur l'administratif pour vous concentrer sur le soin.
+**Gestion administrative simplifiée** : contrats CDD générés automatiquement, pointage digital, facturation consolidée. Vous gagnez du temps sur l'administratif pour vous concentrer sur le soin.
 
 **Tarification adaptée** : Jolene propose des tarifs préférentiels aux EHPAD, avec une commission transparente et sans frais cachés.
 
@@ -481,7 +481,7 @@ const articleGradients: Record<string, string> = {
   'comment-devenir-idel': 'from-teal-400 via-cyan-400 to-emerald-400',
   'loi-rist-2025-expliquee': 'from-indigo-500 via-purple-500 to-pink-400',
   'remplacement-pharmacie-guide': 'from-emerald-400 via-teal-400 to-cyan-300',
-  'cddu-contrat-usage-sante': 'from-violet-500 via-fuchsia-500 to-pink-400',
+  'cdd-contrat-usage-sante': 'from-violet-500 via-fuchsia-500 to-pink-400',
   'free-transition-liberal': 'from-amber-400 via-orange-400 to-rose-400',
   'aide-soignante-interim-guide': 'from-cyan-400 via-sky-400 to-blue-400',
   'taux-horaire-infirmier-2026': 'from-teal-500 via-emerald-400 to-green-400',
@@ -492,7 +492,7 @@ const articleIcons: Record<string, string> = {
   'comment-devenir-idel': 'Stethoscope',
   'loi-rist-2025-expliquee': 'Scale',
   'remplacement-pharmacie-guide': 'Pill',
-  'cddu-contrat-usage-sante': 'FileText',
+  'cdd-contrat-usage-sante': 'FileText',
   'free-transition-liberal': 'Rocket',
   'aide-soignante-interim-guide': 'HeartHandshake',
   'taux-horaire-infirmier-2026': 'Euro',
