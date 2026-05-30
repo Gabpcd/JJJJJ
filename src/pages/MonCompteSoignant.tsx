@@ -10,7 +10,8 @@ import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import {
   User, FileText, Banknote, CreditCard, FileSignature, Zap, ShieldCheck,
   Scale, Gift, Rocket, Settings, LogOut, GraduationCap, Receipt, HeartHandshake,
-  Landmark, FileCheck2,
+  Landmark, FileCheck2, ScrollText, ClipboardCheck, Star, Sparkles, BadgeCheck,
+  MessageSquare, Ban,
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
@@ -59,8 +60,19 @@ export default function MonCompteSoignant() {
       lignes: [
         { icone: User, label: 'Mon profil', route: '/soignant/profil' },
         { icone: FileText, label: 'Mes documents', route: '/soignant/mes-documents' },
+        { icone: ScrollText, label: 'Mes contrats', route: '/soignant/contrats' },
+        { icone: ClipboardCheck, label: 'Mes DPAE', route: '/soignant/dpae' },
+        { icone: Sparkles, label: 'Mes matchs', route: '/soignant/mes-matches' },
+      ],
+    },
+    {
+      titre: 'Suivi & qualité',
+      lignes: [
         { icone: ShieldCheck, label: 'Mon score de fiabilité', route: '/soignant/score' },
+        { icone: Star, label: 'Mes évaluations', route: '/soignant/evaluations' },
+        { icone: BadgeCheck, label: 'Conformité', route: '/soignant/conformite' },
         { icone: Scale, label: 'Litiges & contestations', route: '/soignant/litiges' },
+        { icone: MessageSquare, label: 'Mes réclamations', route: '/soignant/reclamations' },
       ],
     },
     {
@@ -82,8 +94,10 @@ export default function MonCompteSoignant() {
       ],
     },
     {
+      titre: 'Paramètres',
       lignes: [
         { icone: Settings, label: 'Paramètres', route: '/soignant/parametres' },
+        { icone: Ban, label: 'Établissements exclus', route: '/soignant/exclusions' },
         { icone: LogOut, label: 'Se déconnecter', onClick: () => deconnexion(), variante: 'danger' as const, sansChevron: true },
       ],
     },
