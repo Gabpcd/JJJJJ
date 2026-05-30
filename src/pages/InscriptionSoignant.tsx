@@ -10,7 +10,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { mapperErreurInscription, type ErreurInscriptionMappee } from '@/lib/erreurs';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { ErreurInscription } from '@/components/inscription/ErreurInscription';
-import { SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { CaptchaTurnstile, TURNSTILE_REQUIRED } from '@/components/CaptchaTurnstile';
 import { SelectProfession } from '@/components/SelectProfession';
 import { FooterLegal } from '@/components/FooterLegal';
@@ -204,7 +204,7 @@ export default function InscriptionSoignant() {
       try {
         const rppsValue = form.rpps;
         const response = await fetch(
-          'https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/verify-rpps',
+          `${SUPABASE_URL}/functions/v1/verify-rpps`,
           {
             method: 'POST',
             headers: {
