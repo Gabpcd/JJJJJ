@@ -160,19 +160,14 @@ export async function configurerClavier(): Promise<void> {
     const { Keyboard } = await import('@capacitor/keyboard');
     const platform = Capacitor.getPlatform();
 
-    if (platform === 'ios') {
-      await Keyboard.setResizeMode({ mode: 'body' as any });
-    } else if (platform === 'android') {
-      await Keyboard.setResizeMode({ mode: 'native' as any });
-    }
+    // 'native' sur les 2 plateformes : la WebView redimensionne son viewport
+    // au lieu de rétrécir le body (mode 'body' créait un grand vide en haut
+    // au focus d'un champ sur iOS — le header sticky restait, le contenu
+    // remontait). 'native' garde le layout stable.
+    await Keyboard.setResizeMode({ mode: 'native' as any });
 
-    // Scroll active element into view when keyboard shows
-    Keyboard.addListener('keyboardWillShow', () => {
-      setTimeout(() => {
-        const el = document.activeElement as HTMLElement | null;
-        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
-    });
+    // Pas de scrollIntoView au focus : Safari/WKWebView scrolle nativement
+    // vers le champ focusé. Le JS smooth + center provoquait un saut + vide.
   } catch {
     // Keyboard plugin not available
   }
