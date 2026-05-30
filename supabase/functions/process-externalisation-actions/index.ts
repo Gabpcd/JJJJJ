@@ -337,7 +337,7 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
       continue;
     }
 
-    // Canal 3 : Aucun moyen de paiement → notification
+    // Canal 3 : Aucun moyen de paiement → notification soignant + alerte admins (fallback)
     await admin.from("notifications").insert({
       destinataire_id: userId,
       type_destinataire: "SOIGNANT",
@@ -346,6 +346,23 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
       corps: "Votre prime de parrainage de 50€ est prête. Renseignez votre IBAN dans Profil > Paiements pour la recevoir.",
       lien: "/soignant/profil?tab=paiements",
     });
+    // Admin awareness : prime bloquée faute d'IBAN/Stripe → l'admin peut relancer.
+    try {
+      const { data: adminIds } = await admin.rpc("fn_list_admin_user_ids");
+      const noms = `${soignant?.prenom || ""} ${soignant?.nom || ""}`.trim();
+      for (const a of (adminIds || []) as any[]) {
+        const adminId = typeof a === "string" ? a : a?.fn_list_admin_user_ids ?? a?.id;
+        if (!adminId) continue;
+        await admin.from("notifications").insert({
+          destinataire_id: adminId,
+          type_destinataire: "ADMIN_PLATEFORME",
+          type: "PARRAINAGE_PRIME_BLOQUEE",
+          titre: "⚠️ Prime de parrainage bloquée (pas d'IBAN)",
+          corps: `Prime de ${montant}€ (${role}) en attente pour ${noms || "un soignant"} : ni Stripe ni IBAN. Relancer le soignant pour qu'il renseigne son RIB.`,
+          lien: "/admin/utilisateurs",
+        });
+      }
+    } catch (_e) { /* best-effort */ }
     results[`${role}_canal`] = "EN_ATTENTE_IBAN";
     allPaid = false;
   }
