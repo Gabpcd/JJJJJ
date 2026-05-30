@@ -243,6 +243,37 @@ async function dispatchStripePayout(admin: any, action: ActionRow): Promise<Disp
 
 // ─── Parrainage soignant ────────────────────────────────────────────
 
+// Prévient le soignant que sa prime a bien été versée : notif in-app (+ push via
+// le flag push_envoyee traité en aval) ET email (via email_queue → email-cron).
+async function notifierPrimeVersee(
+  admin: any,
+  userId: string,
+  soignant: { prenom?: string | null; email?: string | null } | null,
+  montant: number,
+  canal: string,
+): Promise<void> {
+  try {
+    await admin.from("notifications").insert({
+      destinataire_id: userId,
+      type_destinataire: "SOIGNANT",
+      type: "PARRAINAGE_PRIME_VERSEE",
+      titre: `🎉 Prime de parrainage versée (${montant}€)`,
+      corps: canal === "STRIPE_CONNECT"
+        ? `Votre prime de ${montant}€ a été versée sur votre compte Stripe.`
+        : `Votre prime de ${montant}€ part en virement SEPA sur votre compte (réception sous 1 à 2 jours ouvrés).`,
+      lien: "/soignant/parrainage",
+    });
+  } catch (_e) { /* notif best-effort */ }
+  try {
+    await admin.from("email_queue").insert({
+      type: "PARRAINAGE_PRIME_VERSEE",
+      destinataire_id: userId,
+      destinataire_email: soignant?.email ?? null,
+      data: { prenom: soignant?.prenom ?? null, montant, canal },
+    });
+  } catch (_e) { /* email best-effort */ }
+}
+
 async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Promise<DispatchResult> {
   const { parrainage_id, parrain_id, filleul_id, montant_parrain, montant_filleul } = action.payload;
   if (!parrainage_id || !parrain_id || !filleul_id) {
@@ -284,6 +315,7 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
       }
       results[`${role}_canal`] = "STRIPE_CONNECT";
       results[`${role}_ref`] = json.id;
+      await notifierPrimeVersee(admin, userId, soignant, montant, "STRIPE_CONNECT");
       continue;
     }
 
@@ -301,6 +333,7 @@ async function dispatchRecompenseParrainage(admin: any, action: ActionRow): Prom
       }
       results[`${role}_canal`] = "SWAN_SCT";
       results[`${role}_ref`] = swanResult.resultat?.payment_id || "initiated";
+      await notifierPrimeVersee(admin, userId, soignant, montant, "SWAN_SCT");
       continue;
     }
 

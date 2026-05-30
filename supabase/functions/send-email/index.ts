@@ -480,6 +480,21 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         `),
       };
 
+    case 'PARRAINAGE_PRIME_VERSEE':
+      return {
+        subject: `🎉 Votre prime de parrainage de ${data.montant || 50}€ a été versée`,
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">🎉 Prime de parrainage versée${data.prenom ? `, ${escapeHtml(String(data.prenom))}` : ''} !</h2>
+          <p style="color:#334155;">Votre prime de parrainage vient d'être virée sur votre compte bancaire.</p>
+          ${CARD_BOX(`
+            <strong style="color:#0F172A;font-size:24px;">${data.montant || 50} €</strong><br/>
+            <span style="color:#334155;">${data.canal === 'STRIPE_CONNECT' ? 'Versée via Stripe' : 'Virement SEPA en cours (réception sous 1 à 2 jours ouvrés)'}</span>
+          `)}
+          <p style="color:#334155;">Merci de faire grandir la communauté Jolene 💜</p>
+          ${BUTTON('Voir mon parrainage →', `${APP_URL}/soignant/parrainage`)}
+        `),
+      };
+
     case 'ADMIN_BROADCAST':
       return {
         subject: data.subject || 'Message de Jolene',
