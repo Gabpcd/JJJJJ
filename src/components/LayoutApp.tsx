@@ -7,6 +7,7 @@ import { SyncHorsLigne } from '@/components/SyncHorsLigne';
 import { BandeauInstallerPWA } from '@/components/BandeauInstallerPWA';
 import { BandeauOnboardingEtab } from '@/components/BandeauOnboardingEtab';
 import { BoutonAideGlobal } from '@/components/BoutonAideGlobal';
+import { FABCreerMission } from '@/components/FABCreerMission';
 import { UserRole } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -66,6 +67,8 @@ export function LayoutApp({ role, children }: LayoutAppProps) {
       <DemandePermissionPush />
       <BandeauInstallerPWA />
       <BoutonAideGlobal />
+      {/* FAB "Publier une mission" : action n°1 étab, toujours visible mobile */}
+      {role === 'ADMIN_ETABLISSEMENT' && <FABCreerMission />}
     </div>
   );
 }

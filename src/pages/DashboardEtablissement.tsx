@@ -18,7 +18,6 @@ const ModaleAnnulationMissionEtab = lazy(() =>
   })),
 );
 import { EmptyState } from '@/components/ui/EmptyState';
-import { FABCreerMission } from '@/components/FABCreerMission';
 import { BandeauEvaluationsEnAttente } from '@/components/BandeauEvaluationsEnAttente';
 import { BandeauBlocageAuto } from '@/components/BandeauBlocageAuto';
 
@@ -575,7 +574,6 @@ export default function DashboardEtablissement() {
         )}
       </div>
 
-      <FABCreerMission />
 
       <ModalConfirmation ouvert={!!modalDupliquer} onFermer={() => setModalDupliquer(null)}
         onConfirmer={() => navigate(`/etablissement/missions/creer?dupliquer=${modalDupliquer.id}`)}
