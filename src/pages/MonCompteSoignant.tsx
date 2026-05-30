@@ -6,9 +6,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { Mascotte } from '@/components/mascotte/Mascotte';
+import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import {
   User, FileText, Banknote, CreditCard, FileSignature, Zap, ShieldCheck,
   Scale, Gift, Rocket, Settings, LogOut, GraduationCap, Receipt, HeartHandshake,
+  Landmark, FileCheck2,
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
@@ -33,6 +35,9 @@ export default function MonCompteSoignant() {
     profil?.type_exercice === 'MIXTE' ||
     profil?.statut_liberal === 'ACTIF';
 
+  // Profession éligible au libéral (pour Passer en libéral + Attestation 3200h)
+  const eligibleLiberal = !!(profil?.profession && estEligibleLiberal(profil.profession));
+
   // Section Paiements : adaptée au statut (libéral = outils complets, salarié = gains seuls)
   const lignesPaiements = estLiberal
     ? [
@@ -41,6 +46,7 @@ export default function MonCompteSoignant() {
         { icone: CreditCard, label: 'Stripe Connect', route: '/soignant/stripe-connect' },
         { icone: FileSignature, label: 'Mandat de facturation', route: '/soignant/mandat-facturation' },
         { icone: Zap, label: 'Avances (paiement rapide)', route: '/soignant/mes-avances' },
+        { icone: Landmark, label: 'Charges sociales (URSSAF)', route: '/soignant/charges' },
       ]
     : [
         { icone: Banknote, label: 'Mes gains', route: '/soignant/mes-gains' },
@@ -64,8 +70,11 @@ export default function MonCompteSoignant() {
     {
       titre: 'Développement',
       lignes: [
-        ...(!estLiberal
+        ...(eligibleLiberal && !estLiberal
           ? [{ icone: Rocket, label: 'Passer en libéral', route: '/soignant/passer-en-liberal' }]
+          : []),
+        ...(eligibleLiberal
+          ? [{ icone: FileCheck2, label: 'Attestation d\'heures (3200h)', route: '/soignant/attestation-heures' }]
           : []),
         { icone: GraduationCap, label: 'Prévoyance', route: '/soignant/prevoyance' },
         { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
