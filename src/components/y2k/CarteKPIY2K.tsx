@@ -91,7 +91,7 @@ export function CarteKPIY2K({
       className={cn(
         // Sprint 12-D : transition-bouncy (cubic-bezier overshoot doux) pour KPIs cliquables.
         // prefers-reduced-motion géré dans .transition-bouncy (src/index.css).
-        'rounded-3xl p-5 text-left transition-bouncy',
+        'rounded-2xl md:rounded-3xl p-4 md:p-5 text-left transition-bouncy',
         onClick && 'hover:-translate-y-1 hover:shadow-holographic motion-reduce:hover:translate-y-0 cursor-pointer',
         onClick && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-jolene-rose focus-visible:ring-offset-2',
         VARIANTS[variant],
@@ -123,7 +123,7 @@ export function CarteKPIY2K({
 
       <p
         className={cn(
-          'text-3xl font-bold tabular-nums leading-tight',
+          'text-2xl md:text-3xl font-bold tabular-nums leading-tight',
           variant === 'holographic' ? 'text-white' : 'text-jolene-midnight',
         )}
       >

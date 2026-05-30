@@ -496,7 +496,7 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-primary hover:bg-primary-dark active:scale-[0.97] text-primary-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150;
+    @apply bg-primary hover:bg-primary-dark active:scale-[0.97] text-primary-foreground rounded-xl px-4 py-2.5 md:px-6 md:py-3 font-semibold transition-all duration-150;
     min-height: 44px;
     box-shadow: 0 2px 8px hsl(var(--primary) / 0.3), 0 1px 3px hsl(var(--primary) / 0.15);
   }
@@ -505,7 +505,7 @@
   }
 
   .btn-secondary {
-    @apply bg-card border-2 border-primary/60 text-primary hover:bg-primary/5 active:scale-[0.97] rounded-xl px-6 py-3 font-semibold transition-all duration-150;
+    @apply bg-card border-2 border-primary/60 text-primary hover:bg-primary/5 active:scale-[0.97] rounded-xl px-4 py-2.5 md:px-6 md:py-3 font-semibold transition-all duration-150;
     min-height: 44px;
   }
   .btn-secondary:hover {
@@ -514,7 +514,7 @@
   }
 
   .btn-danger {
-    @apply bg-destructive hover:bg-destructive/90 active:scale-[0.97] text-destructive-foreground rounded-xl px-6 py-3 font-semibold transition-all duration-150;
+    @apply bg-destructive hover:bg-destructive/90 active:scale-[0.97] text-destructive-foreground rounded-xl px-4 py-2.5 md:px-6 md:py-3 font-semibold transition-all duration-150;
     min-height: 44px;
     box-shadow: 0 2px 8px hsl(var(--destructive) / 0.3);
   }
