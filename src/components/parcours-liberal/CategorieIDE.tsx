@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { ExternalLink, Info, Plus, MapPin } from 'lucide-react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import type { RegleInstallation } from '@/lib/regles-installation-liberal';
-import type { ParcoursLiberal, CompteurHeures, HeureExterne } from '@/hooks/useParcoursLiberal';
+import type { ParcoursLiberal, CompteurHeures, HeureExterne, ResultatVerifHeures } from '@/hooks/useParcoursLiberal';
 import { ProgressBarParcours } from './ProgressBarParcours';
 import { JaugeHeures } from './JaugeHeures';
 import { ChecklistEtapes, type Etape } from './ChecklistEtapes';
@@ -87,8 +87,9 @@ export function CategorieIDE({
   };
 
   const handleAjouter = async (payload: Parameters<Props['ajouterHeuresExternes']>[0]) => {
-    await ajouterHeuresExternes(payload);
+    const res = await ajouterHeuresExternes(payload);
     setShowFormHeures(false);
+    return res as ResultatVerifHeures | null;
   };
 
   const handleSupprimer = async (id: string) => {

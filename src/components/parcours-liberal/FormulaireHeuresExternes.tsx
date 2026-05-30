@@ -3,6 +3,12 @@ import { Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 
+interface ResultatVerif {
+  verdict: 'EN_ATTENTE' | 'VALIDE' | 'REJETE';
+  heures_extraites?: number | null;
+  coherence?: boolean | null;
+}
+
 interface Props {
   onSubmit: (payload: {
     etablissement_nom: string;
@@ -11,7 +17,7 @@ interface Props {
     date_fin: string;
     heures_declarees: number;
     attestation_file?: File;
-  }) => Promise<void>;
+  }) => Promise<ResultatVerif | null | void>;
   onCancel: () => void;
   isLoading?: boolean;
 }
@@ -73,7 +79,7 @@ export function FormulaireHeuresExternes({ onSubmit, onCancel, isLoading }: Prop
 
     setSubmitting(true);
     try {
-      await onSubmit({
+      const res = await onSubmit({
         etablissement_nom: etabNom.trim(),
         etablissement_type: etabType || undefined,
         date_debut: dateDebut,
@@ -81,7 +87,14 @@ export function FormulaireHeuresExternes({ onSubmit, onCancel, isLoading }: Prop
         heures_declarees: Number(heures),
         attestation_file: file!,
       });
-      toast.success('Heures ajoutées, en attente de validation.');
+      // Toast selon le verdict de la vérification IA de l'attestation.
+      if (res && res.verdict === 'VALIDE') {
+        toast.success(`✅ Attestation validée automatiquement (${res.heures_extraites ?? '—'}h lues). Ces heures sont comptées.`);
+      } else if (res && res.verdict === 'REJETE') {
+        toast.error('❌ Le document fourni ne semble pas être une attestation d\'heures. Vérifiez le fichier.');
+      } else {
+        toast.success('Heures ajoutées. Attestation en cours de vérification (revue sous 48h si besoin).');
+      }
       setEtabNom(''); setEtabType(''); setDateDebut(''); setDateFin(''); setHeures(''); setFile(null);
       if (fileRef.current) fileRef.current.value = '';
     } catch (err: unknown) {
