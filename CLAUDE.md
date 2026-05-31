@@ -493,3 +493,41 @@ Cf. docs/SPRINT_16.md.
 - ~26 conditional `test.skip(!ENV)` (runtime guards légitimes)
 
 **Skips honnêtes documentés (infrastructure manquante précise)** : 8 cas — voir docs/SPRINT_16.md section "Skips honnêtes". Chacun avec infra manquante + couverture alternative explicite.
+
+### Sprint 17 — Vérifs e2e approfondies prélancement + professions (PR #417 + doc)
+
+Vérifications e2e de bout en bout (impersonation RPC + transactions annulées, zéro
+persistance) des flux **facturation, litige, paie**, étendues aux 15 professions et
+aux 2 types d'exercice. **18 bugs latents** corrigés, tous masqués en prod car les
+chemins concernés (libéral honoraires → litige → avoir → remboursement, missions de
+professions salariées-only) n'avaient jamais été exécutés de bout en bout.
+
+**Cause racine commune** : contraintes `CHECK` désynchronisées du code applicatif +
+antipattern Postgres `RECORD IS NOT NULL` (toujours faux sur un record à colonnes
+nullables) + trigger trop strict.
+
+Correctifs DB (migrations `20260530284000` → `296000`, appliquées prod + enregistrées) :
+- `fn_generer_facture_honoraires_mission` + `fn_admin_resoudre_litige` : ajout
+  `periode_debut/periode_fin` (NOT NULL) aux INSERT.
+- `journaux_audit_action_check` (+16 actions) / `_type_acteur_check` (+ADMIN/ETABLISSEMENT/
+  SYSTEM/DEPRECATED_CALLER) / `notifications_type_check` (+10 types) / `_type_destinataire`
+  (fix ADMIN) / `factures_honoraires_statut_check` (+REMBOURSE) : alignées sur le code.
+- `fn_admin_resoudre_litige` : antipattern record-NULL → `.id IS NOT NULL` (les branches
+  RECALCUL/ANNULER_REEMETTRE/AVOIR + notifications étaient toutes silencieusement ignorées).
+- `dec_valider_type_contrat_mission` : auto-restriction `TOUS→SALARIE` pour professions
+  salariées-only (AS/AES/PREPARATEUR_PHARMA) — **bug bloquant** : création de mission
+  impossible pour l'aide-soignant.
+- `fn_confirmer_remboursement_avoir` : notifie le soignant (REMBOURSEMENT_CONFIRME) sur
+  confirmation manuelle.
+
+**Intégration professions (conforme législation)** :
+- **CHIRURGIEN-DENTISTE** (`DENTISTE`, art. L4141-1 CSP) : enum + libéral (CABINET_DENTAIRE,
+  CNOC R.4127-274) + docs (CNI/diplôme/RPPS ; RCP/RIB/URSSAF libéral) + CARCDSF.
+- **AUXILIAIRE_PUERICULTURE** (DEAP) : enum + salarié uniquement + docs (CNI/diplôme) + sans RPPS.
+- Le frontend (`constantes.ts`) listait déjà ces 2 professions → l'enum DB ne les avait
+  pas → inscription cassée. Synchronisé. **Seules ces 2 manquaient** (frontend 17 vs DB 15).
+
+**RAPPEL CRITIQUE migrations** (incident évité Sprint 17) : tout `apply_migration` via MCP
+DOIT être suivi d'un `INSERT INTO supabase_migrations.schema_migrations`. 4 migrations
+(`260000-272000`) appliquées mais non enregistrées auraient fait virer `deploy-supabase` au
+rouge (out-of-order `db push`). Toujours vérifier `schema_migrations` vs fichiers repo avant merge.
