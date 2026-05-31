@@ -175,3 +175,7 @@ jobs:
           echo "- Edge functions redéployées depuis le repo" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Projet : \`${{ secrets.SUPABASE_PROJECT_REF }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+# Re-trigger #269: migration 20260531123000 appliquee mais non enregistree
+# dans schema_migrations (conversation interrompue) -> db push out-of-order.
+# Enregistree ; ce commit relance le workflow pour confirmation verte.
