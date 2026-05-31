@@ -4,6 +4,11 @@ name: Deploy Supabase (migrations + edge functions)
 # à chaque push sur main qui touche supabase/**. Vercel s'occupe déjà
 # du frontend de son côté.
 #
+# Re-trigger Sprint 17 : le run #265 (merge #417) a échoué sur `db push`
+# out-of-order car 4 migrations (260000-272000) étaient appliquées en prod
+# mais pas enregistrées dans schema_migrations. Corrigé (toutes enregistrées) ;
+# ce commit relance le workflow pour confirmation verte.
+#
 # Prérequis (secrets GitHub repo) :
 # - SUPABASE_ACCESS_TOKEN  : dashboard Supabase → Account → Access Tokens
 # - SUPABASE_PROJECT_REF   : flripxtsyegjshnhzjkz
