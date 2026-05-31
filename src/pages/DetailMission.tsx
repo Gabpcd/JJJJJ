@@ -195,7 +195,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const [modalTerminer, setModalTerminer] = useState(false);
   const [terminating, setTerminating] = useState(false);
   const [showEvaluation, setShowEvaluation] = useState(true);
-  const [alerteCDDU, setAlerteCDDU] = useState<any>(null);
+  const [alerteRequalif, setAlerteRequalif] = useState<any>(null);
 
   // IA Matching
   const [recommandations, setRecommandations] = useState<any[]>([]);
@@ -272,7 +272,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           p_soignant_id: m.soignant_assigne_id,
           p_etablissement_id: m.etablissement_id,
         });
-        if (alerteData) setAlerteCDDU(alerteData);
+        if (alerteData) setAlerteRequalif(alerteData);
       } else {
         setMission(m ? { ...m, soignants: null } : null);
       }
@@ -390,11 +390,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
         {backLabel}
       </button>
 
-      {alerteCDDU?.alerte && (
+      {alerteRequalif?.alerte && (
         <div className="bg-warning/5 border border-warning/30 rounded-xl p-4 mb-4 flex items-start gap-3">
           <span className="text-lg">⚠️</span>
           <p className="text-sm font-medium text-warning">
-            Ce soignant a travaillé {alerteCDDU.jours_travailles || '?'} jours chez vous sur 12 mois. Risque de requalification en CDI au-delà de 150 jours.
+            Ce soignant a travaillé {alerteRequalif.jours_travailles || '?'} jours chez vous sur 12 mois. Risque de requalification en CDI au-delà de 150 jours.
           </p>
         </div>
       )}

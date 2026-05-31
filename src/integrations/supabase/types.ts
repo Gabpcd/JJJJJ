@@ -8336,7 +8336,7 @@ export type Database = {
         | "REVUE_MANUELLE_REQUISE"
         | "API_INDISPONIBLE"
       strategie_facturation: "FINALE_UNIQUE" | "HEBDO_ET_FINALE"
-      type_contrat: "CDD" | "CDDU_USAGE" | "VACATION" | "LIBERAL" | "SALARIE"
+      type_contrat: "CDD" | "VACATION" | "LIBERAL" | "SALARIE"
       type_contrat_applique_enum: "LIBERAL" | "SALARIE"
       type_document:
         | "CARTE_IDENTITE"
@@ -8428,6 +8428,8 @@ export type Database = {
         | "ERGOTHERAPEUTE"
         | "PSYCHOMOTRICIEN"
         | "ORTHOPHONISTE"
+        | "DENTISTE"
+        | "AUXILIAIRE_PUERICULTURE"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -8609,7 +8611,7 @@ export const Constants = {
         "API_INDISPONIBLE",
       ],
       strategie_facturation: ["FINALE_UNIQUE", "HEBDO_ET_FINALE"],
-      type_contrat: ["CDD", "CDDU_USAGE", "VACATION", "LIBERAL", "SALARIE"],
+      type_contrat: ["CDD", "VACATION", "LIBERAL", "SALARIE"],
       type_contrat_applique_enum: ["LIBERAL", "SALARIE"],
       type_document: [
         "CARTE_IDENTITE",
@@ -8705,6 +8707,8 @@ export const Constants = {
         "ERGOTHERAPEUTE",
         "PSYCHOMOTRICIEN",
         "ORTHOPHONISTE",
+        "DENTISTE",
+        "AUXILIAIRE_PUERICULTURE",
       ],
     },
   },

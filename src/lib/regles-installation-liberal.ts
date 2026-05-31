@@ -101,6 +101,19 @@ export const REGLES_INSTALLATION_LIBERAL: Record<string, RegleInstallation> = {
     lien_caisse_retraite: 'https://www.carmf.fr',
   },
 
+  // Chirurgien-dentiste : installation directe après diplôme (pas d'heures
+  // préalables). Caisse de retraite CARCDSF, conventionné CPAM. Art. L4141-1 CSP.
+  DENTISTE: {
+    categorie: 'SANS_HEURES_CPAM',
+    caisse_retraite: 'CARCDSF',
+    conventionne_cpam: true,
+    secteur_choix: true,
+    label_ordre: 'Ordre National des Chirurgiens-Dentistes',
+    lien_ordre: 'https://www.ordre-chirurgiens-dentistes.fr',
+    lien_cpam: 'https://www.ameli.fr/chirurgien-dentiste',
+    lien_caisse_retraite: 'https://www.carcdsf.fr',
+  },
+
   ORTHOPHONISTE: {
     categorie: 'SANS_HEURES_CPAM',
     caisse_retraite: 'CARPIMKO',
@@ -157,6 +170,7 @@ export const REGLES_INSTALLATION_LIBERAL: Record<string, RegleInstallation> = {
   // Non éligibles libéral Jolene
   AS: { categorie: 'NON_ELIGIBLE' },
   AES: { categorie: 'NON_ELIGIBLE' },
+  AUXILIAIRE_PUERICULTURE: { categorie: 'NON_ELIGIBLE' },
   MANIPULATEUR_RADIO: { categorie: 'NON_ELIGIBLE' },
   PHARMACIEN: { categorie: 'NON_ELIGIBLE' },
   PREPARATEUR_PHARMA: { categorie: 'NON_ELIGIBLE' },

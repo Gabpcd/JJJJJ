@@ -11,9 +11,7 @@ interface BandeauRappelDPAEProps {
 
 export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat }: BandeauRappelDPAEProps) {
   // Afficher uniquement pour les contrats CDD (salarié)
-  // Compat lecture : on accepte aussi 'CDDU' legacy au cas où des contrats
-  // pré-migration PR 1 traînent encore.
-  if (typeContrat !== 'CDD' && typeContrat !== 'CDDU') return null;
+  if (typeContrat !== 'CDD') return null;
 
   if (dpaeEffectuee) {
     return (

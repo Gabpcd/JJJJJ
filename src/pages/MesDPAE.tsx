@@ -36,7 +36,7 @@ type FiltreStatut = 'TOUS' | 'EN_ATTENTE' | 'VALIDEE';
  * Fix P0-12 audit Sprint 5 : aucune page dédiée pour que le soignant voit
  * les DPAE générées par l'établissement pour ses missions CDD.
  *
- * Liste les contrats CDD/CDDU/SALARIE signés avec leur statut DPAE :
+ * Liste les contrats CDD/SALARIE signés avec leur statut DPAE :
  *  - VALIDEE_URSSAF : numéro URSSAF saisi par l'étab
  *  - EN_ATTENTE_ETAB : étab pas encore déclaré
  *
@@ -210,7 +210,7 @@ export default function MesDPAE() {
       <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground mt-6">
         <p className="font-semibold text-foreground mb-1">À propos des DPAE</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>La DPAE (Déclaration Préalable à l'Embauche) est obligatoire pour tout contrat CDD/CDDU/SALARIE. L'établissement la transmet à l'URSSAF dans les 8 jours avant le début de mission.</li>
+          <li>La DPAE (Déclaration Préalable à l'Embauche) est obligatoire pour tout contrat CDD/SALARIE. L'établissement la transmet à l'URSSAF dans les 8 jours avant le début de mission.</li>
           <li>Vous devez avoir complété votre <strong>profil DPAE</strong> (sexe, lieu de naissance, nationalité, NIR) pour que l'établissement puisse générer la déclaration.</li>
           <li>Une fois transmise, l'établissement saisit le numéro URSSAF retour. Vous le retrouvez ici.</li>
         </ul>

@@ -144,7 +144,7 @@ export default function AdminContrats() {
         const dpaeBadge = (c: ContratLigne) =>
           c.dpae_effectuee && c.dpae_numero ? (
             <span className="text-success text-xs">✅ {c.dpae_numero.slice(0, 8)}…</span>
-          ) : c.type_contrat?.startsWith('CDD') || c.type_contrat === 'CDDU' || c.type_contrat === 'SALARIE' ? (
+          ) : c.type_contrat?.startsWith('CDD') || c.type_contrat === 'SALARIE' ? (
             <span className="text-warning text-xs">⏳</span>
           ) : <span className="text-muted-foreground text-xs">N/A</span>;
 

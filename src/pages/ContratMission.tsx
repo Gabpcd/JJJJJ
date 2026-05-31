@@ -445,7 +445,7 @@ export default function ContratMission() {
         {/* Permettre saisie du n° dès SIGNE_ETABLISSEMENT pour anticiper la prise de poste. */}
         {(role === 'ADMIN_ETABLISSEMENT' || role === 'ADMIN_PLATEFORME' || role === 'ADMIN_GROUPE') &&
          (contrat.statut === 'SIGNE_ETABLISSEMENT' || contrat.statut === 'SIGNE_COMPLET') &&
-         contrat.type_contrat && ['CDD', 'CDDU', 'SALARIE'].includes(contrat.type_contrat) && (
+         contrat.type_contrat && ['CDD', 'SALARIE'].includes(contrat.type_contrat) && (
           <div className="mb-4">
             <DPAEStatus
               contratId={contrat.id}
