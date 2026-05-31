@@ -107,7 +107,8 @@ export function typesEtablissementCompatiblesLiberal(profession: string): string
 
 // Professions sans numéro d'identification professionnelle (RPPS).
 // Vérification par diplôme + CNI uniquement (ADELI obsolète depuis 2024).
-export const PROFESSIONS_SANS_RPPS = ['AS', 'AES'];
+// AUXILIAIRE_PUERICULTURE : DEAP, exercice sous supervision, non inscrite au RPPS.
+export const PROFESSIONS_SANS_RPPS = ['AS', 'AES', 'AUXILIAIRE_PUERICULTURE'];
 
 // Professions limitées pour pharmacies
 export const PROFESSIONS_PHARMACIE = ['PHARMACIEN', 'PREPARATEUR_PHARMA'];

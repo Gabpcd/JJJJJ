@@ -8428,6 +8428,8 @@ export type Database = {
         | "ERGOTHERAPEUTE"
         | "PSYCHOMOTRICIEN"
         | "ORTHOPHONISTE"
+        | "DENTISTE"
+        | "AUXILIAIRE_PUERICULTURE"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -8705,6 +8707,8 @@ export const Constants = {
         "ERGOTHERAPEUTE",
         "PSYCHOMOTRICIEN",
         "ORTHOPHONISTE",
+        "DENTISTE",
+        "AUXILIAIRE_PUERICULTURE",
       ],
     },
   },

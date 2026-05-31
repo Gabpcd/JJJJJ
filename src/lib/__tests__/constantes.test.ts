@@ -81,8 +81,8 @@ describe('constantes', () => {
   });
 
   describe('PROFESSIONS_SANS_RPPS', () => {
-    it('should only contain AS and AES', () => {
-      expect(PROFESSIONS_SANS_RPPS).toEqual(['AS', 'AES']);
+    it('should contain AS, AES and AUXILIAIRE_PUERICULTURE (professions sans RPPS)', () => {
+      expect(PROFESSIONS_SANS_RPPS).toEqual(['AS', 'AES', 'AUXILIAIRE_PUERICULTURE']);
     });
 
     it('should be a subset of PROFESSIONS', () => {
