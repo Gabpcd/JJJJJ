@@ -93,7 +93,7 @@ export default function DetailMissionSoignant() {
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           numero_note_honoraires,
-          yousign_statut, mode_attribution
+          mode_attribution
         `).eq('id', id).single(),
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
       ]);

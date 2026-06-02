@@ -28,7 +28,6 @@ const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day:
 const CHARGES_FIXES = [
   { label: 'Supabase', montant: 25 },   // Pro plan (database + auth + storage)
   { label: 'Resend', montant: 20 },      // Transactional email service
-  { label: 'Yousign', montant: 50 },     // E-signature platform for contracts
   { label: 'Lovable', montant: 20 },     // AI dev tool subscription
   { label: 'Apple Developer', montant: 8 }, // ~99 USD/year ÷ 12 months
 ];
