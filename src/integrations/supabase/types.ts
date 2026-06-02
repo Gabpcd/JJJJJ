@@ -949,8 +949,6 @@ export type Database = {
           storage_path: string | null
           template_slug: string | null
           type_contrat: string
-          yousign_document_id: string | null
-          yousign_procedure_id: string | null
         }
         Insert: {
           contenu_html?: string | null
@@ -984,8 +982,6 @@ export type Database = {
           storage_path?: string | null
           template_slug?: string | null
           type_contrat: string
-          yousign_document_id?: string | null
-          yousign_procedure_id?: string | null
         }
         Update: {
           contenu_html?: string | null
@@ -1019,8 +1015,6 @@ export type Database = {
           storage_path?: string | null
           template_slug?: string | null
           type_contrat?: string
-          yousign_document_id?: string | null
-          yousign_procedure_id?: string | null
         }
         Relationships: [
           {
@@ -3593,8 +3587,6 @@ export type Database = {
             | null
           type_contrat_recherche: string
           type_paiement_soignant: string | null
-          yousign_id_procedure: string | null
-          yousign_statut: string | null
         }
         Insert: {
           absence_sans_prevenir?: boolean
@@ -3676,8 +3668,6 @@ export type Database = {
             | null
           type_contrat_recherche?: string
           type_paiement_soignant?: string | null
-          yousign_id_procedure?: string | null
-          yousign_statut?: string | null
         }
         Update: {
           absence_sans_prevenir?: boolean
@@ -3759,8 +3749,6 @@ export type Database = {
             | null
           type_contrat_recherche?: string
           type_paiement_soignant?: string | null
-          yousign_id_procedure?: string | null
-          yousign_statut?: string | null
         }
         Relationships: [
           {
@@ -5460,50 +5448,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "signatures_contrats_contrat_id_fkey"
-            columns: ["contrat_id"]
-            isOneToOne: false
-            referencedRelation: "contrats_mission"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      signatures_yousign: {
-        Row: {
-          contrat_id: string
-          cree_le: string | null
-          id: string
-          signataire_etablissement_id: string | null
-          signataire_soignant_id: string | null
-          signe_le: string | null
-          statut: string | null
-          yousign_document_id: string | null
-          yousign_signature_request_id: string | null
-        }
-        Insert: {
-          contrat_id: string
-          cree_le?: string | null
-          id?: string
-          signataire_etablissement_id?: string | null
-          signataire_soignant_id?: string | null
-          signe_le?: string | null
-          statut?: string | null
-          yousign_document_id?: string | null
-          yousign_signature_request_id?: string | null
-        }
-        Update: {
-          contrat_id?: string
-          cree_le?: string | null
-          id?: string
-          signataire_etablissement_id?: string | null
-          signataire_soignant_id?: string | null
-          signe_le?: string | null
-          statut?: string | null
-          yousign_document_id?: string | null
-          yousign_signature_request_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "signatures_yousign_contrat_id_fkey"
             columns: ["contrat_id"]
             isOneToOne: false
             referencedRelation: "contrats_mission"
