@@ -21,6 +21,12 @@ export interface ResumeCompletion {
   items: ItemCompletion[];
   est_complet: boolean;
   peut_candidater: boolean;
+  /** Progression des items REQUIS pour candidater (distincte du % global). */
+  pourcentage_obligatoire: number;
+  obligatoires_total: number;
+  obligatoires_remplis: number;
+  /** Items RECOMMANDÉS (non bloquants) non remplis. */
+  items_recommandes_manquants: ItemCompletion[];
 }
 
 export function calculerCompletionProfil(
@@ -39,6 +45,10 @@ export function calculerCompletionProfil(
       items: [],
       est_complet: false,
       peut_candidater: false,
+      pourcentage_obligatoire: 0,
+      obligatoires_total: 0,
+      obligatoires_remplis: 0,
+      items_recommandes_manquants: [],
     };
   }
 
@@ -132,7 +142,18 @@ export function calculerCompletionProfil(
   const items_obligatoires_manquants = items.filter(
     (i) => i.obligatoire && !i.rempli,
   );
+  const items_recommandes_manquants = items.filter(
+    (i) => !i.obligatoire && !i.rempli,
+  );
   const pourcentage = Math.round((items_remplis / total_items) * 100);
+
+  const obligatoires = items.filter((i) => i.obligatoire);
+  const obligatoires_total = obligatoires.length;
+  const obligatoires_remplis = obligatoires.filter((i) => i.rempli).length;
+  const pourcentage_obligatoire =
+    obligatoires_total === 0
+      ? 100
+      : Math.round((obligatoires_remplis / obligatoires_total) * 100);
 
   return {
     pourcentage,
@@ -142,6 +163,10 @@ export function calculerCompletionProfil(
     items: items.sort((a, b) => a.ordre - b.ordre),
     est_complet: pourcentage === 100,
     peut_candidater: items_obligatoires_manquants.length === 0,
+    pourcentage_obligatoire,
+    obligatoires_total,
+    obligatoires_remplis,
+    items_recommandes_manquants,
   };
 }
 
