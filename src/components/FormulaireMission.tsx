@@ -230,7 +230,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
       p_taux_horaire_base: parseFloat(tauxHoraire),
       p_est_urgente: estUrgente,
       p_niveau_urgence: estUrgente ? niveauUrgence : 0,
-      p_missions: JSON.stringify(missionsPayload),
+      // p_missions est un paramètre jsonb : passer le tableau directement (comme
+      // p_pings/p_filtres/p_creneaux ailleurs). JSON.stringify l'envoyait en
+      // scalaire chaîne → fn_creer_serie échouait ("cannot get array length of a scalar").
+      p_missions: missionsPayload as any,
     });
 
     setProgression(100);
