@@ -37,7 +37,7 @@ export function BandeauRappelDPAE({ dpaeEffectuee, dpaeEffectueeLe, typeContrat 
           La DPAE est obligatoire pour les contrats CDD. Pour les remplacements libéraux, elle n'est pas requise.
         </p>
         <p className="text-xs text-muted-foreground mt-2">
-          Une fois la DPAE soumise, saisissez le numéro URSSAF retourné dans la section <strong>DPAE</strong> ci-dessus pour preuve légale.
+          Une fois la DPAE soumise, saisissez le numéro URSSAF retourné dans la section <strong>DPAE</strong> de la page du contrat signé, pour valeur de preuve légale.
         </p>
         <div className="flex flex-wrap items-center gap-3 mt-2">
           <a
