@@ -150,10 +150,18 @@ export function getMotifProfilIncomplet(
 ): string | null {
   if (resume.est_complet) return null;
   if (resume.items_obligatoires_manquants.length > 0) {
-    return `${resume.items_obligatoires_manquants.length} information(s) obligatoire(s) manquante(s).`;
+    // On NOMME explicitement les champs manquants (au lieu d'un simple comptage)
+    // pour que le soignant sache exactement quoi compléter.
+    const noms = resume.items_obligatoires_manquants.map((i) => i.label).join(', ');
+    return `À compléter : ${noms}.`;
   }
   if (!resume.peut_candidater) {
     return 'Vous pouvez voir les missions mais pas encore candidater.';
   }
   return 'Profil partiellement complété.';
+}
+
+/** Liste courte des labels des champs obligatoires manquants (pour affichage en rouge). */
+export function getChampsObligatoiresManquants(resume: ResumeCompletion): string[] {
+  return resume.items_obligatoires_manquants.map((i) => i.label);
 }
