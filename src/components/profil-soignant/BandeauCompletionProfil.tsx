@@ -61,7 +61,7 @@ export function BandeauCompletionProfil({ soignant, variant = 'detaille', masque
             Profil {resume.pourcentage}%
             {resume.items_obligatoires_manquants.length > 0 && (
               <span className="text-muted-foreground font-normal">
-                {' '}· {resume.items_obligatoires_manquants.length} info(s) manquante(s)
+                {' '}· À compléter : {resume.items_obligatoires_manquants.map((i) => i.label).join(', ')}
               </span>
             )}
           </p>
@@ -95,7 +95,17 @@ export function BandeauCompletionProfil({ soignant, variant = 'detaille', masque
           style={{ width: `${resume.pourcentage}%` }}
         />
       </div>
-      {motif && <p className="text-xs text-muted-foreground mb-3">{motif}</p>}
+      {motif && (
+        <p
+          className={`text-xs mb-3 ${
+            resume.items_obligatoires_manquants.length > 0
+              ? `${couleurs.text} font-medium`
+              : 'text-muted-foreground'
+          }`}
+        >
+          {motif}
+        </p>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-3">
         {resume.items.map((item: ItemCompletion) => (
           <div key={item.cle} className="flex items-center gap-1.5 text-xs">

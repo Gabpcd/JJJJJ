@@ -166,7 +166,7 @@ export function PoolUrgenceToggle({ actif, rayonKm, villeUrgence, smsOptIn, onUp
                   <MessageSquare className="h-4 w-4 text-orange-600" /> Recevoir les alertes par SMS
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Notification immédiate par SMS en plus des push + email. Recommandé si urgence vraiment urgente.
+                  Notification immédiate par SMS, en plus des push et e-mails, pour ne manquer aucune mission de dernière minute.
                 </p>
               </div>
               <Switch
