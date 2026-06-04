@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, Circle, Sparkles, ArrowRight } from 'lucide-react';
-import { calculerCompletionProfil, getMotifProfilIncomplet, type ItemCompletion } from '@/lib/profil-soignant';
+import { calculerCompletionProfil, type ItemCompletion } from '@/lib/profil-soignant';
 import type { Database } from '@/integrations/supabase/types';
 
 type Soignant = Database['public']['Tables']['soignants']['Row'];
@@ -50,7 +50,6 @@ export function BandeauCompletionProfil({ soignant, variant = 'detaille', masque
   if (resume.est_complet && masquerSiComplet) return null;
 
   const couleurs = getCouleurs(resume.pourcentage, resume.peut_candidater);
-  const motif = getMotifProfilIncomplet(resume);
 
   if (variant === 'compact') {
     return (
@@ -95,15 +94,20 @@ export function BandeauCompletionProfil({ soignant, variant = 'detaille', masque
           style={{ width: `${resume.pourcentage}%` }}
         />
       </div>
-      {motif && (
-        <p
-          className={`text-xs mb-3 ${
-            resume.items_obligatoires_manquants.length > 0
-              ? `${couleurs.text} font-medium`
-              : 'text-muted-foreground'
-          }`}
-        >
-          {motif}
+      {/* Requis pour candidater (bloquant) — nommé explicitement */}
+      {resume.items_obligatoires_manquants.length > 0 ? (
+        <p className={`text-xs mb-2 ${couleurs.text} font-medium`}>
+          Requis pour candidater : {resume.items_obligatoires_manquants.map((i) => i.label).join(', ')}.
+        </p>
+      ) : (
+        <p className="text-xs mb-2 text-success font-medium">
+          ✅ Informations requises complétées — vous pouvez candidater.
+        </p>
+      )}
+      {/* Recommandé (non bloquant) — améliore la visibilité / accès */}
+      {resume.items_recommandes_manquants.length > 0 && (
+        <p className="text-xs mb-3 text-muted-foreground">
+          Recommandé (améliore votre visibilité) : {resume.items_recommandes_manquants.map((i) => i.label).join(', ')}.
         </p>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-3">
