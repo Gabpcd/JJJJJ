@@ -72,9 +72,6 @@ verify_jwt = false
 [functions.email-cron]
 verify_jwt = false
 
-[functions.confirm-dpae]
-verify_jwt = false
-
 [functions.psc-authorize]
 verify_jwt = false
 
