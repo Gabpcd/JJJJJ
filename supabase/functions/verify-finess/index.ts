@@ -131,14 +131,43 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, trouve: false, message: 'FINESS introuvable dans l\'Annuaire Santé.' });
     }
 
-    // Écriture finess_verifie : uniquement appel service-role + etablissement_id fourni.
+    // Écriture finess_verifie : autorisée si l'appelant est
+    //   (a) la service-role key (inscription, crons), OU
+    //   (b) un membre PROPRIETAIRE/ADMIN_GROUPE de l'établissement (UI de vérification).
+    // L'écriture s'appuie TOUJOURS sur le résultat FHIR vérifié server-side (result.actif),
+    // jamais sur une affirmation du client.
     const authHeader = req.headers.get('Authorization') || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const etablissementId = body?.etablissement_id ? String(body.etablissement_id) : '';
     let ecrit = false;
-    if (token && serviceRoleKey && token === serviceRoleKey && etablissementId && result.actif) {
-      const admin = createClient(Deno.env.get('SUPABASE_URL')!, serviceRoleKey);
+
+    let autorise = false;
+    if (token && serviceRoleKey && token === serviceRoleKey) {
+      autorise = true; // service-role
+    } else if (token && etablissementId) {
+      // Vérifier l'appartenance via la service-role (le client n'a pas accès direct)
+      try {
+        const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user } } = await userClient.auth.getUser();
+        if (user) {
+          const adminCheck = createClient(supabaseUrl, serviceRoleKey);
+          const { data: membre } = await adminCheck.from('membres_etablissement')
+            .select('role').eq('etablissement_id', etablissementId).eq('user_id', user.id)
+            .eq('actif', true).maybeSingle();
+          // Repli : un ADMIN_ETABLISSEMENT dont l'id == etablissement_id (compte legacy
+          // sans ligne membres) est propriétaire de fait.
+          autorise = (!!membre && ['PROPRIETAIRE', 'ADMIN_GROUPE'].includes((membre as Record<string, string>).role))
+            || user.id === etablissementId;
+        }
+      } catch { /* non autorisé */ }
+    }
+
+    if (autorise && etablissementId && result.actif) {
+      const admin = createClient(supabaseUrl, serviceRoleKey);
       const { error } = await admin.from('etablissements').update({
         finess: finess,
         finess_verifie: true,
@@ -149,6 +178,11 @@ Deno.serve(async (req) => {
         finess_est_public: result.est_public ?? null,
       } as Record<string, unknown>).eq('id', etablissementId);
       ecrit = !error;
+
+      // Réévaluer le rattachement adaptatif après mise à jour FINESS
+      if (!error) {
+        try { await admin.rpc('fn_evaluer_rattachement_etablissement', { p_etablissement_id: etablissementId }); } catch { /* non bloquant */ }
+      }
     }
 
     return json(200, {

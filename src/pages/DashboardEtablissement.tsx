@@ -419,9 +419,12 @@ export default function DashboardEtablissement() {
       ) : etab && !etab.peut_publier_missions ? (
         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4 mb-4 flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-medium text-amber-800 dark:text-amber-300">⏳ Votre compte est en cours de vérification</p>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vous pourrez publier des missions une fois votre établissement vérifié par l'équipe Jolene (24-48h).</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Vérifiez votre établissement (FINESS + rattachement du représentant) pour pouvoir publier des missions. À défaut, l'équipe Jolene valide votre dossier sous 24-48h.</p>
+            <BoutonY2K size="sm" variant="secondary" className="mt-3" onClick={() => navigate('/etablissement/verification')}>
+              Vérifier mon établissement
+            </BoutonY2K>
           </div>
         </div>
       ) : null}
