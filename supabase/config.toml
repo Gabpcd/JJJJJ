@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.verify-rpps]
 verify_jwt = false
 
+[functions.verify-finess]
+verify_jwt = false
+
 [functions.send-email]
 verify_jwt = false
 
