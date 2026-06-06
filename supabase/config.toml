@@ -146,5 +146,8 @@ verify_jwt = false
 [functions.notif-candidature-acceptee]
 verify_jwt = false
 
+[functions.confirm-email-etab]
+verify_jwt = false
+
 [functions.swan-webhook]
 verify_jwt = false

@@ -1453,6 +1453,20 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
         `),
       };
 
+    case 'CONFIRMATION_EMAIL_PRO_ETAB': {
+      const confirmUrl = `${APP_URL}/api/confirm-email-etab?token=${encodeURIComponent(String(data.token || ''))}`;
+      return {
+        subject: 'Confirmez votre adresse e-mail professionnelle — Jolene',
+        html: WRAPPER(`
+          <h2 style="color:#0F172A;margin:0 0 12px;">Confirmez votre e-mail professionnel</h2>
+          <p style="color:#334155;">Vous avez demandé à rattacher l'établissement <strong>${escapeHtml(data.etablissement_nom)}</strong> à cette adresse e-mail.</p>
+          <p style="color:#334155;">Pour valider votre identité professionnelle et activer la publication de missions, cliquez sur le bouton ci-dessous :</p>
+          ${BUTTON('Confirmer mon adresse e-mail', confirmUrl)}
+          <p style="color:#64748B;font-size:13px;margin-top:16px;">Ce lien est valable 24 heures. Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>
+        `),
+      };
+    }
+
     default:
       return null;
   }
