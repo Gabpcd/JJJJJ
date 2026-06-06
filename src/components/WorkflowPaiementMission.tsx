@@ -3,6 +3,7 @@ import { CreditCard, Banknote, FileText, Loader2, Eye, CheckCircle, Edit2, Alert
 import { supabase } from '@/integrations/supabase/client';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -39,6 +40,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   const [loading, setLoading] = useState(true);
   const [declaring, setDeclaring] = useState(false);
   const [reference, setReference] = useState('');
+  const [attestation, setAttestation] = useState(false);
   const [ribLoading, setRibLoading] = useState(false);
   const [ribData, setRibData] = useState<string | null>(null);
   const [paiementExistant, setPaiementExistant] = useState<any>(null);
@@ -105,12 +107,17 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
       toast.error('La référence doit contenir au moins 5 caractères dont 1 chiffre');
       return;
     }
+    if (!attestation) {
+      toast.error('Veuillez cocher l\'attestation sur l\'honneur pour déclarer le paiement');
+      return;
+    }
     setDeclaring(true);
     try {
       const { data, error } = await supabase.rpc('fn_declarer_paiement_soignant' as any, {
         p_mission_id: missionId,
         p_montant: info?.montant_soignant || 0,
         p_reference: reference.trim(),
+        p_attestation_sur_l_honneur: attestation,
       });
       if (error) throw error;
       const result = data as any;
@@ -416,7 +423,13 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           <p className="text-[10px] text-destructive">La référence doit contenir au moins 1 chiffre</p>
         )}
       </div>
-      <BoutonY2K size="sm" variant="secondary" onClick={declarerPaiement} disabled={declaring || !isRefValid(reference)} loading={declaring} className="gap-2" iconeGauche={declaring ? undefined : <Banknote className="h-4 w-4" />}>
+      <label className="flex items-start gap-2 cursor-pointer">
+        <Checkbox checked={attestation} onCheckedChange={v => setAttestation(!!v)} className="mt-0.5" />
+        <span className="text-[11px] text-muted-foreground">
+          J'atteste sur l'honneur avoir effectué ce virement au soignant. Toute fausse déclaration engage ma responsabilité.
+        </span>
+      </label>
+      <BoutonY2K size="sm" variant="secondary" onClick={declarerPaiement} disabled={declaring || !isRefValid(reference) || !attestation} loading={declaring} className="gap-2" iconeGauche={declaring ? undefined : <Banknote className="h-4 w-4" />}>
         {declaring ? 'Déclaration…' : 'Déclarer le paiement effectué'}
       </BoutonY2K>
     </div>
