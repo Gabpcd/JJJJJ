@@ -20,6 +20,8 @@ const PageResetPassword = lazy(() => import("./pages/PageResetPassword"));
 const PscCallback = lazy(() => import("./pages/PscCallback"));
 const MandatFacturation = lazy(() => import("./pages/MandatFacturation"));
 const FinaliserInscriptionEtab = lazy(() => import("./pages/FinaliserInscriptionEtab"));
+const VerificationEtablissement = lazy(() => import("./pages/VerificationEtablissement"));
+const VerificationEmailEtab = lazy(() => import("./pages/VerificationEmailEtab"));
 const MesFacturesHonoraires = lazy(() => import("./pages/MesFacturesHonoraires"));
 const MesAvances = lazy(() => import("./pages/MesAvances"));
 const BulletinsPaie = lazy(() => import("./pages/BulletinsPaie"));
@@ -190,6 +192,7 @@ function AppRoutes() {
           <Route path="/inscription/soignant/completion" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><InscriptionSoignantCompletion /></RouteProtegee>} />
           <Route path="/inscription/etablissement" element={<InscriptionEtablissement />} />
           <Route path="/inscription/succes" element={<PageInscriptionSucces />} />
+          <Route path="/verification-email-etab" element={<VerificationEmailEtab />} />
 
           {/* Pages légales — publiques */}
           <Route path="/cgu" element={<PageCGU />} />
@@ -254,6 +257,7 @@ function AppRoutes() {
           <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/mon-compte" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><MonCompteEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/finaliser-inscription" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><FinaliserInscriptionEtab /></RouteProtegee>} />
+          <Route path="/etablissement/verification" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><VerificationEtablissement /></RouteProtegee>} />
           <Route path="/soignant/parametres" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresSoignant /></RouteProtegee>} />
           <Route path="/soignant/parametres/notifications" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageParametresNotifications /></RouteProtegee>} />
           <Route path="/etablissement/parametres/notifications" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParametresNotifications /></RouteProtegee>} />
