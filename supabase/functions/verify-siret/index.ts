@@ -54,6 +54,8 @@ interface VerificationResult {
   libelle_naf: string | null;
   categorie_juridique: string | null;
   message: string;
+  // Dirigeants INSEE (match auto identité↔titulaire, Phase 3).
+  dirigeants?: unknown[] | null;
 }
 
 function findMatchingEtablissement(results: any[], siret: string): { matching: any; matchingEtab: any } {
@@ -82,6 +84,7 @@ function buildResult(matching: any, matchingEtab: any): VerificationResult {
   const codeNaf = matchingEtab?.activite_principale || matching.activite_principale || null;
   const libelleNaf = matchingEtab?.libelle_activite_principale || matching.libelle_activite_principale || null;
   const catJuridique = matching.nature_juridique || null;
+  const dirigeants = Array.isArray(matching.dirigeants) ? matching.dirigeants : null;
   const estActif = matchingEtab?.etat_administratif === 'A';
   const sante = estNafSante(codeNaf);
   const secteurPublic = estSecteurPublic(catJuridique);
@@ -90,7 +93,7 @@ function buildResult(matching: any, matchingEtab: any): VerificationResult {
     return {
       statut: 'INTROUVABLE', raison_sociale: raisonSociale, est_actif: false,
       est_sante: sante, est_public: secteurPublic, code_naf: codeNaf,
-      libelle_naf: libelleNaf, categorie_juridique: catJuridique,
+      libelle_naf: libelleNaf, categorie_juridique: catJuridique, dirigeants,
       message: 'Établissement fermé ou radié',
     };
   }
@@ -99,7 +102,7 @@ function buildResult(matching: any, matchingEtab: any): VerificationResult {
     return {
       statut: 'VERIFIE', raison_sociale: raisonSociale, est_actif: true,
       est_sante: true, est_public: secteurPublic, code_naf: codeNaf,
-      libelle_naf: libelleNaf, categorie_juridique: catJuridique,
+      libelle_naf: libelleNaf, categorie_juridique: catJuridique, dirigeants,
       message: `SIRET vérifié — ${raisonSociale} — Établissement de santé actif`,
     };
   }
@@ -197,6 +200,7 @@ Deno.serve(async (req) => {
           siret_code_naf: result.code_naf,
           siret_raison_sociale: result.raison_sociale,
           siret_categorie_juridique: result.categorie_juridique,
+          dirigeants: result.dirigeants ?? null,
           est_secteur_public: result.est_public,
           statut_verification: 'VERIFIE',
         }).eq('id', etablissement_id).eq('siret', siret);
