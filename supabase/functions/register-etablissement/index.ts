@@ -140,6 +140,9 @@ Deno.serve(async (req) => {
             est_public: estPublic,
             code_naf: codeNaf,
             categorie_juridique: catJuridique,
+            // Dirigeants (personnes physiques/morales) renvoyés par l'API INSEE —
+            // sert au match auto identité↔titulaire pour les petites structures (Phase 3).
+            dirigeants: Array.isArray((matching as any).dirigeants) ? (matching as any).dirigeants : null,
           };
         }
       }
@@ -172,6 +175,7 @@ Deno.serve(async (req) => {
       siret_code_naf: siretVerification?.code_naf ?? null,
       siret_raison_sociale: siretVerification?.raison_sociale ?? null,
       siret_categorie_juridique: siretVerification?.categorie_juridique ?? null,
+      dirigeants: siretVerification?.dirigeants ?? null,
       est_secteur_public: siretVerification?.est_public ?? false,
       statut_verification: statutVerification,
       peut_publier_missions: autoVerifie || false,
