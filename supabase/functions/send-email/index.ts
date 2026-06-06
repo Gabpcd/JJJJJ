@@ -24,6 +24,9 @@ function corsHeaders(req: Request) {
 }
 
 const APP_URL = Deno.env.get('APP_URL') || 'https://jolene.app';
+// URL publique des edge functions (pour les liens cliquables qui doivent atteindre
+// une fonction directement, ex. confirmation e-mail pro de l'établissement).
+const FUNCTIONS_URL = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/, '') + '/functions/v1';
 
 // ─── XSS prevention ─────────────────────────────────────
 
@@ -1454,7 +1457,7 @@ function renderTemplate(type: string, rawData: Record<string, unknown>): Templat
       };
 
     case 'CONFIRMATION_EMAIL_PRO_ETAB': {
-      const confirmUrl = `${APP_URL}/api/confirm-email-etab?token=${encodeURIComponent(String(data.token || ''))}`;
+      const confirmUrl = `${FUNCTIONS_URL}/confirm-email-etab?token=${encodeURIComponent(String(data.token || ''))}`;
       return {
         subject: 'Confirmez votre adresse e-mail professionnelle — Jolene',
         html: WRAPPER(`

@@ -1,6 +1,8 @@
 // confirm-email-etab — Endpoint public de validation du lien e-mail professionnel.
-// L'utilisateur clique sur le lien dans son e-mail pro (https://jolene.app/confirm-email-etab?token=xxx),
-// le front redirige vers cette edge function. En succès, redirige vers /etablissement/verification-email-ok.
+// Le lien dans l'e-mail pro pointe DIRECTEMENT sur cette edge function (verify_jwt=false) :
+//   https://<project>.supabase.co/functions/v1/confirm-email-etab?token=xxx
+// La fonction valide le token et redirige (302) vers une page PUBLIQUE du SPA
+// (l'utilisateur peut cliquer depuis son e-mail sans être connecté).
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -19,9 +21,11 @@ Deno.serve(async (req) => {
     });
   }
 
+  const PAGE = `${APP_URL}/verification-email-etab`;
+
   const token = url.searchParams.get('token');
   if (!token || token.length < 32) {
-    return redirect(`${APP_URL}/etablissement/verification-email-erreur?reason=token_invalide`);
+    return redirect(`${PAGE}?statut=invalide`);
   }
 
   try {
@@ -32,19 +36,19 @@ Deno.serve(async (req) => {
     const { data, error } = await admin.rpc('fn_confirmer_email_etab', { p_token: token });
 
     if (error) {
-      return redirect(`${APP_URL}/etablissement/verification-email-erreur?reason=erreur_serveur`);
+      return redirect(`${PAGE}?statut=erreur`);
     }
 
     const result = data as { success: boolean; error?: string; etablissement_id?: string };
 
     if (!result?.success) {
-      const reason = result?.error?.includes('expiré') ? 'token_expire' : 'token_invalide';
-      return redirect(`${APP_URL}/etablissement/verification-email-erreur?reason=${reason}`);
+      const statut = result?.error?.includes('expiré') ? 'expire' : 'invalide';
+      return redirect(`${PAGE}?statut=${statut}`);
     }
 
-    return redirect(`${APP_URL}/etablissement/verification-email-ok`);
+    return redirect(`${PAGE}?statut=ok`);
   } catch {
-    return redirect(`${APP_URL}/etablissement/verification-email-erreur?reason=erreur_serveur`);
+    return redirect(`${PAGE}?statut=erreur`);
   }
 });
 
