@@ -66,47 +66,30 @@ export default function AdminScoreTriage() {
     const charger = async () => {
       setLoading(true);
       try {
-        const { data: soignants, error: errS } = await (supabase as any)
-          .from('scores_soignants')
-          .select('soignant_id, score_global, derniere_maj, profils(nom, prenom, email)')
-          .order('score_global', { ascending: true })
-          .limit(500);
-        if (errS) throw errS;
+        // Source de vérité : RPC admin unifiée (soignants.score_fiabilite +
+        // etablissements.score_qualite). Cf. fn_admin_triage_scores.
+        const { data, error } = await supabase.rpc('fn_admin_triage_scores' as any);
+        if (error) throw error;
+        if ((data as any)?.error) throw new Error((data as any).error);
 
-        const { data: etabs, error: errE } = await (supabase as any)
-          .from('scores_etablissements')
-          .select('etablissement_id, score_global, derniere_maj, etablissements(raison_sociale, email)')
-          .order('score_global', { ascending: true })
-          .limit(500);
-        if (errE) throw errE;
+        const lignesRpc = ((data as any)?.lignes ?? []) as Array<{
+          user_id: string; type: 'SOIGNANT' | 'ETAB'; nom: string | null; email: string; score: number;
+        }>;
 
-        const mapS: LigneScore[] = (soignants ?? []).map((s: any) => {
-          const score = Number(s.score_global ?? 0);
+        const mapped: LigneScore[] = lignesRpc.map((l) => {
+          const score = Number(l.score ?? 0);
           return {
-            user_id: s.soignant_id,
-            type: 'SOIGNANT' as const,
-            nom: `${s.profils?.prenom ?? ''} ${s.profils?.nom ?? ''}`.trim() || '(sans nom)',
-            email: s.profils?.email ?? '',
+            user_id: l.user_id,
+            type: l.type,
+            nom: l.nom || '(sans nom)',
+            email: l.email ?? '',
             score,
             niveau: niveauDepuisScore(score),
-            derniere_maj: s.derniere_maj,
+            derniere_maj: null,
           };
         });
 
-        const mapE: LigneScore[] = (etabs ?? []).map((e: any) => {
-          const score = Number(e.score_global ?? 0);
-          return {
-            user_id: e.etablissement_id,
-            type: 'ETAB' as const,
-            nom: e.etablissements?.raison_sociale ?? '(sans nom)',
-            email: e.etablissements?.email ?? '',
-            score,
-            niveau: niveauDepuisScore(score),
-            derniere_maj: e.derniere_maj,
-          };
-        });
-
-        setLignes([...mapS, ...mapE].sort((a, b) => a.score - b.score));
+        setLignes(mapped.sort((a, b) => a.score - b.score));
       } catch (err: any) {
         afficherNotification({
           type: 'erreur',
