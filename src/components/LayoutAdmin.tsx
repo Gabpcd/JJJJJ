@@ -21,6 +21,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
     icone: Users, label: 'Utilisateurs', items: [
       { icone: Users, label: 'Tous les utilisateurs', route: '/admin/utilisateurs' },
       { icone: Shield, label: 'Modération', route: '/admin/moderation' },
+      { icone: ShieldCheck, label: 'Vérif. établissements', route: '/admin/verification-etablissements' },
       { icone: FileCheck, label: 'Heures externes (3200h)', route: '/admin/heures-externes' },
       { icone: MessageCircle, label: 'Réclamations', route: '/admin/reclamations' },
       { icone: Star, label: 'Réclamations score', route: '/admin/reclamations-score' },
