@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Loader2, Maximize2, Printer, RefreshCw, Copy, Check } from 'lucide-react';
+import { Loader2, Maximize2, Printer, RefreshCw, Copy, Check, KeyRound } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { format } from 'date-fns';
@@ -44,6 +44,25 @@ export function QRPointageEtab({ missionId, missionIntitule, etablissementNom }:
   const [fullscreen, setFullscreen] = useState(false);
   const [showConfirmRegen, setShowConfirmRegen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [secoursCode, setSecoursCode] = useState<string | null>(null);
+  const [secoursExpire, setSecoursExpire] = useState<string | null>(null);
+  const [generatingSecours, setGeneratingSecours] = useState(false);
+
+  async function genererCodeSecours() {
+    setGeneratingSecours(true);
+    const { data, error } = await supabase.rpc('fn_generer_code_secours_mission' as any, {
+      p_mission_id: missionId,
+      p_type: 'UNIVERSEL',
+    });
+    setGeneratingSecours(false);
+    const res = data as { success?: boolean; code?: string; expire_le?: string; error_code?: string } | null;
+    if (error || !res?.success || !res?.code) {
+      afficherNotification({ type: 'erreur', message: res?.error_code || error?.message || 'Erreur génération du code de secours' });
+      return;
+    }
+    setSecoursCode(res.code);
+    setSecoursExpire(res.expire_le || null);
+  }
 
   async function charger() {
     setLoading(true);
@@ -196,6 +215,40 @@ expire le ${format(new Date(qr.expire_le), "d MMM yyyy 'à' HH:mm", { locale: fr
           >
             <RefreshCw className="h-3 w-3" /> Régénérer
           </button>
+        </div>
+
+        {/* Code de secours : fallback si le scan QR / GPS échoue côté soignant.
+            Généré à la demande par l'établissement, affiché EN CLAIR une seule fois,
+            communiqué oralement au soignant qui le saisit dans l'app. */}
+        <div className="border-t border-border pt-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                <KeyRound className="h-4 w-4 text-muted-foreground" /> Code de secours
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Si le scan du QR ou le GPS échoue, générez un code à communiquer au soignant.
+              </p>
+            </div>
+            <button
+              onClick={genererCodeSecours}
+              disabled={generatingSecours}
+              className="btn-secondary text-xs inline-flex items-center gap-1 shrink-0 disabled:opacity-50"
+            >
+              {generatingSecours ? <Loader2 className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />}
+              {secoursCode ? 'Nouveau code' : 'Générer'}
+            </button>
+          </div>
+
+          {secoursCode && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-center">
+              <p className="text-3xl font-mono font-bold tracking-[0.3em] text-foreground">{secoursCode}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Communiquez ce code au soignant — il ne sera <strong>plus jamais réaffiché</strong>.
+                {secoursExpire && <> Expire le {format(new Date(secoursExpire), "d MMM 'à' HH:mm", { locale: fr })}.</>}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
