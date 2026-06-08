@@ -286,7 +286,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
         p_type: 'CANDIDATURE_PROPOSEE',
         p_titre: `📩 Mission proposée : ${mission.intitule}`,
         p_corps: `${mission.intitule} — le ${format(new Date(mission.debut_le), 'dd/MM/yyyy à HH:mm', { locale: fr })}. Acceptez ou refusez dans les 2h.`,
-        p_lien: '/soignant/dashboard',
+        p_lien: '/soignant/tableau-de-bord',
         p_type_ressource: 'MISSION',
         p_id_ressource: mission.id,
       });

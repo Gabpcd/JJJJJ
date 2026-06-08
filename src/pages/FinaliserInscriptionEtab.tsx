@@ -181,7 +181,7 @@ export default function FinaliserInscriptionEtab() {
 
       setTimeout(() => {
         toast.success('Inscription finalisée ! Bienvenue sur Jolene.');
-        navigate('/etablissement');
+        navigate('/etablissement/tableau-de-bord');
       }, 1200);
     } catch (err: any) {
       toast.error(err?.message || 'Erreur lors de l\'upload');
@@ -240,7 +240,7 @@ export default function FinaliserInscriptionEtab() {
                 Votre contrat de service est signé et votre RIB est enregistré. Vous pouvez publier des missions.
               </p>
               <div className="flex gap-2 mt-3">
-                <BoutonY2K size="sm" variant="secondary" onClick={() => navigate('/etablissement')}>
+                <BoutonY2K size="sm" variant="secondary" onClick={() => navigate('/etablissement/tableau-de-bord')}>
                   Aller au dashboard
                 </BoutonY2K>
               </div>
