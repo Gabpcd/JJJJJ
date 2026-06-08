@@ -367,7 +367,8 @@ export default function AdminImpayees() {
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                               Missions ({f.missions.length})
                             </p>
-                            <div className="overflow-x-auto">
+                            {/* Desktop table */}
+                            <div className="hidden md:block overflow-x-auto">
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr className="border-b border-border text-muted-foreground">
@@ -401,6 +402,42 @@ export default function AdminImpayees() {
                                   ))}
                                 </tbody>
                               </table>
+                            </div>
+                            {/* Mobile cards */}
+                            <div className="md:hidden space-y-2">
+                              {f.missions.map(m => (
+                                <div key={m.id} className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2">
+                                  <div>
+                                    <button onClick={() => navigate(`/admin/missions`)} className="text-primary hover:underline text-left text-xs font-medium">
+                                      {m.intitule}
+                                    </button>
+                                    {m.profession_requise && <p className="text-[10px] text-muted-foreground">{m.profession_requise}</p>}
+                                  </div>
+                                  <p className="text-xs text-foreground">{m.soignant_nom}</p>
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                    <div>
+                                      <p className="text-muted-foreground">Début</p>
+                                      <p className="text-foreground">{m.debut_le ? fmtDate(m.debut_le) : '—'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Heures</p>
+                                      <p className="font-medium text-foreground">{m.duree_heures ?? '—'}h</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Taux/h</p>
+                                      <p className="text-foreground">{m.taux_horaire_base ? `${m.taux_horaire_base}€` : '—'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Brut</p>
+                                      <p className="font-medium text-foreground">{m.total_brut ? fmt(m.total_brut) : '—'}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <p className="text-muted-foreground">Com. TTC</p>
+                                      <p className="font-bold text-foreground">{m.montant_commission_ttc ? fmt(m.montant_commission_ttc) : '—'}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}

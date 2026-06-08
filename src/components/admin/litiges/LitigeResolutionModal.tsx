@@ -28,6 +28,7 @@ import { Info, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
+import { LitigesSimilairesPanel } from './LitigesSimilairesPanel';
 import {
   ACTIONS_FINANCIERES,
   EN_FAVEUR_DE,
@@ -200,6 +201,7 @@ export function LitigeResolutionModal({
 
         <TooltipProvider delayDuration={200}>
           <div className="space-y-4">
+            <LitigesSimilairesPanel litigeId={litige.id} />
             <div>
               <Label className="mb-1.5 block">Résolution *</Label>
               <Textarea

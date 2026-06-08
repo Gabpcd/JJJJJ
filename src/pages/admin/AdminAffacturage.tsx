@@ -123,74 +123,132 @@ export default function AdminAffacturage() {
         {/* Tableau */}
         <CardY2K noPadding>
           <CardY2KContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="p-3 font-medium">Facture</th>
-                    <th className="p-3 font-medium">Soignant</th>
-                    <th className="p-3 font-medium">Établissement</th>
-                    <th className="p-3 font-medium text-right">Montant</th>
-                    <th className="p-3 font-medium text-right">Frais factor</th>
-                    <th className="p-3 font-medium text-right">Marge Jolene</th>
-                    <th className="p-3 font-medium text-right">Net soignant</th>
-                    <th className="p-3 font-medium">Statut</th>
-                    <th className="p-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="p-8 text-center text-muted-foreground">
-                        Aucune demande d'affacturage
-                      </td>
-                    </tr>
-                  ) : (
-                    filtered.map((a) => {
-                      const fh = a.factures_honoraires as any;
-                      const sg = a.soignants as any;
-                      const etab = a.etablissements as any;
-                      const mission = a.missions as any;
-                      return (
-                        <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30">
-                          <td className="p-3 font-mono text-xs">{fh?.numero_facture || '—'}</td>
-                          <td className="p-3">
-                            <button
-                              onClick={() => navigate(`/admin/utilisateurs/${a.soignant_id}`)}
-                              className="text-primary hover:underline"
-                            >
+            {filtered.length === 0 ? (
+              <p className="p-8 text-center text-muted-foreground">Aucune demande d'affacturage</p>
+            ) : (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                        <th className="p-3 font-medium">Facture</th>
+                        <th className="p-3 font-medium">Soignant</th>
+                        <th className="p-3 font-medium">Établissement</th>
+                        <th className="p-3 font-medium text-right">Montant</th>
+                        <th className="p-3 font-medium text-right">Frais factor</th>
+                        <th className="p-3 font-medium text-right">Marge Jolene</th>
+                        <th className="p-3 font-medium text-right">Net soignant</th>
+                        <th className="p-3 font-medium">Statut</th>
+                        <th className="p-3 font-medium">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((a) => {
+                        const fh = a.factures_honoraires as any;
+                        const sg = a.soignants as any;
+                        const etab = a.etablissements as any;
+                        const mission = a.missions as any;
+                        return (
+                          <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30">
+                            <td className="p-3 font-mono text-xs">{fh?.numero_facture || '—'}</td>
+                            <td className="p-3">
+                              <button
+                                onClick={() => navigate(`/admin/utilisateurs/${a.soignant_id}`)}
+                                className="text-primary hover:underline"
+                              >
+                                {sg ? `${sg.prenom} ${sg.nom}` : '—'}
+                              </button>
+                            </td>
+                            <td className="p-3">
+                              <button
+                                onClick={() => navigate(`/admin/utilisateurs/${a.etablissement_id}`)}
+                                className="text-primary hover:underline"
+                              >
+                                {etab?.nom || '—'}
+                              </button>
+                              {mission?.intitule && <p className="text-[10px] text-muted-foreground">{mission.intitule}</p>}
+                            </td>
+                            <td className="p-3 text-right font-medium">{fmt(a.montant_facture_ttc)}</td>
+                            <td className="p-3 text-right text-xs text-muted-foreground">{a.frais_factor ? fmt(a.frais_factor) : '—'}</td>
+                            <td className="p-3 text-right text-xs text-rose font-medium">{a.frais_jolene ? fmt(a.frais_jolene) : '—'}</td>
+                            <td className="p-3 text-right font-bold text-success">{a.montant_net_soignant ? fmt(a.montant_net_soignant) : '—'}</td>
+                            <td className="p-3">
+                              <Badge className={`text-[10px] ${STATUT_BADGE[a.statut] || 'bg-muted'}`}>
+                                {a.statut.replace('_', ' ')}
+                              </Badge>
+                              {a.motif_rejet && <p className="text-[10px] text-destructive mt-0.5">{a.motif_rejet}</p>}
+                            </td>
+                            <td className="p-3 text-xs text-muted-foreground">
+                              {a.cree_le ? format(new Date(a.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-3 p-3">
+                  {filtered.map((a) => {
+                    const fh = a.factures_honoraires as any;
+                    const sg = a.soignants as any;
+                    const etab = a.etablissements as any;
+                    const mission = a.missions as any;
+                    return (
+                      <div key={a.id} className="card-base space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-mono text-xs font-semibold text-foreground">{fh?.numero_facture || '—'}</p>
+                            {mission?.intitule && <p className="text-[10px] text-muted-foreground truncate">{mission.intitule}</p>}
+                          </div>
+                          <Badge className={`text-[10px] shrink-0 ${STATUT_BADGE[a.statut] || 'bg-muted'}`}>
+                            {a.statut.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          <p>
+                            👤{' '}
+                            <button onClick={() => navigate(`/admin/utilisateurs/${a.soignant_id}`)} className="text-primary hover:underline">
                               {sg ? `${sg.prenom} ${sg.nom}` : '—'}
                             </button>
-                          </td>
-                          <td className="p-3">
-                            <button
-                              onClick={() => navigate(`/admin/utilisateurs/${a.etablissement_id}`)}
-                              className="text-primary hover:underline"
-                            >
+                          </p>
+                          <p>
+                            🏥{' '}
+                            <button onClick={() => navigate(`/admin/utilisateurs/${a.etablissement_id}`)} className="text-primary hover:underline">
                               {etab?.nom || '—'}
                             </button>
-                            {mission?.intitule && <p className="text-[10px] text-muted-foreground">{mission.intitule}</p>}
-                          </td>
-                          <td className="p-3 text-right font-medium">{fmt(a.montant_facture_ttc)}</td>
-                          <td className="p-3 text-right text-xs text-muted-foreground">{a.frais_factor ? fmt(a.frais_factor) : '—'}</td>
-                          <td className="p-3 text-right text-xs text-rose font-medium">{a.frais_jolene ? fmt(a.frais_jolene) : '—'}</td>
-                          <td className="p-3 text-right font-bold text-success">{a.montant_net_soignant ? fmt(a.montant_net_soignant) : '—'}</td>
-                          <td className="p-3">
-                            <Badge className={`text-[10px] ${STATUT_BADGE[a.statut] || 'bg-muted'}`}>
-                              {a.statut.replace('_', ' ')}
-                            </Badge>
-                            {a.motif_rejet && <p className="text-[10px] text-destructive mt-0.5">{a.motif_rejet}</p>}
-                          </td>
-                          <td className="p-3 text-xs text-muted-foreground">
-                            {a.cree_le ? format(new Date(a.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs pt-1 border-t border-border/50">
+                          <div>
+                            <p className="text-muted-foreground">Montant TTC</p>
+                            <p className="font-semibold text-foreground">{fmt(a.montant_facture_ttc)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Net soignant</p>
+                            <p className="font-bold text-success">{a.montant_net_soignant ? fmt(a.montant_net_soignant) : '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Frais factor</p>
+                            <p className="text-foreground">{a.frais_factor ? fmt(a.frais_factor) : '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Marge Jolene</p>
+                            <p className="text-rose font-medium">{a.frais_jolene ? fmt(a.frais_jolene) : '—'}</p>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          {a.cree_le ? format(new Date(a.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                          {a.motif_rejet && <span className="text-destructive ml-2">{a.motif_rejet}</span>}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </CardY2KContent>
         </CardY2K>
       </div>

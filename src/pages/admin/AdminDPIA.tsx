@@ -47,28 +47,61 @@ export default function AdminDPIA() {
         {/* 3. Risques identifiés */}
         <section className="card-base">
           <h2 className="text-base font-semibold text-foreground mb-3">3. Risques identifiés et mesures</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-border"><th className="py-2 px-3 text-left font-medium text-muted-foreground">Risque</th><th className="py-2 px-3 text-left font-medium text-muted-foreground">Gravité</th><th className="py-2 px-3 text-left font-medium text-muted-foreground">Mesure d'atténuation</th><th className="py-2 px-3 text-left font-medium text-muted-foreground">Statut</th></tr></thead>
-              <tbody className="divide-y divide-border/50">
-                {[
-                  { risque: 'Faux positif : document valide rejeté par l\'IA', gravite: 'Moyenne', mesure: 'Recours humain systématique. Le soignant peut demander une revue manuelle.', ok: true },
-                  { risque: 'Faux négatif : document frauduleux accepté', gravite: 'Haute', mesure: 'Score de confiance affiché. Documents FAIBLE confiance → revue manuelle obligatoire.', ok: true },
-                  { risque: 'Fuite de documents via le prestataire IA', gravite: 'Haute', mesure: 'TLS 1.3. Documents non stockés par Anthropic (API policy). SCC en place.', ok: true },
-                  { risque: 'Biais discriminatoire dans l\'analyse', gravite: 'Moyenne', mesure: 'L\'IA vérifie uniquement type/authenticité, pas d\'évaluation subjective.', ok: true },
-                  { risque: 'Décision automatisée sans recours (Art. 22)', gravite: 'Haute', mesure: 'Verdict EN_ATTENTE pour tout doute. Aucun rejet définitif sans possibilité de recours.', ok: true },
-                  { risque: 'Indisponibilité du prestataire IA', gravite: 'Faible', mesure: 'Fallback Anthropic → Gemini. Si les deux échouent, verdict EN_ATTENTE (revue manuelle).', ok: true },
-                ].map((row, i) => (
-                  <tr key={i}>
-                    <td className="py-2.5 px-3 text-foreground">{row.risque}</td>
-                    <td className="py-2.5 px-3"><span className={`text-xs font-semibold ${row.gravite === 'Haute' ? 'text-destructive' : row.gravite === 'Moyenne' ? 'text-warning' : 'text-muted-foreground'}`}>{row.gravite}</span></td>
-                    <td className="py-2.5 px-3 text-muted-foreground">{row.mesure}</td>
-                    <td className="py-2.5 px-3"><CheckCircle className="h-4 w-4 text-success" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {(() => {
+            const risques = [
+              { risque: 'Faux positif : document valide rejeté par l\'IA', gravite: 'Moyenne', mesure: 'Recours humain systématique. Le soignant peut demander une revue manuelle.', ok: true },
+              { risque: 'Faux négatif : document frauduleux accepté', gravite: 'Haute', mesure: 'Score de confiance affiché. Documents FAIBLE confiance → revue manuelle obligatoire.', ok: true },
+              { risque: 'Fuite de documents via le prestataire IA', gravite: 'Haute', mesure: 'TLS 1.3. Documents non stockés par Anthropic (API policy). SCC en place.', ok: true },
+              { risque: 'Biais discriminatoire dans l\'analyse', gravite: 'Moyenne', mesure: 'L\'IA vérifie uniquement type/authenticité, pas d\'évaluation subjective.', ok: true },
+              { risque: 'Décision automatisée sans recours (Art. 22)', gravite: 'Haute', mesure: 'Verdict EN_ATTENTE pour tout doute. Aucun rejet définitif sans possibilité de recours.', ok: true },
+              { risque: 'Indisponibilité du prestataire IA', gravite: 'Faible', mesure: 'Fallback Anthropic → Gemini. Si les deux échouent, verdict EN_ATTENTE (revue manuelle).', ok: true },
+            ];
+            const graviteClass = (g: string) => g === 'Haute' ? 'text-destructive' : g === 'Moyenne' ? 'text-warning' : 'text-muted-foreground';
+            return (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="py-2 px-3 text-left font-medium text-muted-foreground">Risque</th>
+                        <th className="py-2 px-3 text-left font-medium text-muted-foreground">Gravité</th>
+                        <th className="py-2 px-3 text-left font-medium text-muted-foreground">Mesure d'atténuation</th>
+                        <th className="py-2 px-3 text-left font-medium text-muted-foreground">Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {risques.map((row, i) => (
+                        <tr key={i}>
+                          <td className="py-2.5 px-3 text-foreground">{row.risque}</td>
+                          <td className="py-2.5 px-3"><span className={`text-xs font-semibold ${graviteClass(row.gravite)}`}>{row.gravite}</span></td>
+                          <td className="py-2.5 px-3 text-muted-foreground">{row.mesure}</td>
+                          <td className="py-2.5 px-3"><CheckCircle className="h-4 w-4 text-success" /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-3">
+                  {risques.map((row, i) => (
+                    <div key={i} className="card-base space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium text-foreground flex-1">{row.risque}</p>
+                        <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Gravité :</span>
+                        <span className={`font-semibold ${graviteClass(row.gravite)}`}>{row.gravite}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{row.mesure}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
         </section>
 
         {/* 4. Droits des personnes */}
