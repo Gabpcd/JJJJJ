@@ -112,7 +112,7 @@ export default function FinaliserInscriptionEtab() {
           const bytes = new Uint8Array(binary.length);
           for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
           const blob = new Blob([bytes], { type: `image/${matches[1]}` });
-          const path = `etablissements/${user.id}/signatures/contrat-service-${Date.now()}.${ext}`;
+          const path = `${user.id}/signatures/contrat-service-${Date.now()}.${ext}`;
           const { error: upErr } = await supabase.storage
             .from('jolene-documents')
             .upload(path, blob, { upsert: false, contentType: `image/${matches[1]}` });
@@ -164,7 +164,7 @@ export default function FinaliserInscriptionEtab() {
 
     setUploading(true);
     try {
-      const path = `etablissements/${user.id}/rib.${ext}`;
+      const path = `${user.id}/rib.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
         .upload(path, ribFile, { upsert: true });
