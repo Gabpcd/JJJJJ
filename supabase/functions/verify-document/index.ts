@@ -189,7 +189,7 @@ Règles:
 - verdict = "VERIFIE" si type correspond, document lisible et complet, confiance HAUTE
 - verdict = "EN_ATTENTE" si doute sur le type, nom, ou confiance MOYENNE
 - verdict = "REJETE" si clairement pas le bon type, document illisible/tronqué, ou confiance FAIBLE
-- Pour un RIB: pas de date d'expiration, vérifie juste que c'est bien un RIB
+- Pour un RIB: pas de date d'expiration. Extrais le nom du TITULAIRE du compte dans "nom_extrait"/"prenom_extrait" et vérifie qu'il correspond au nom du soignant (nom_correspond=false si le titulaire est une autre personne)
 - Pour une CNI/Passeport: extrais la date d'expiration si visible
 - Pour une assurance RCP: extrais la date de fin de validité
 - IMPORTANT: Si le document déclaré est un "Diplôme d'État" mais que le fichier est clairement une carte d'identité, passeport ou tout autre document non-diplôme, verdict = "REJETE" avec motif "Le document fourni n'est pas un diplôme"`;
@@ -298,20 +298,7 @@ Analyse ce document et vérifie sa conformité.`;
       });
     }
 
-    const verdictFinal = analysis.verdict || "EN_ATTENTE";
-    // Si REJETE : ne PAS écrire valide_depuis/valide_jusqua. Les dates extraites
-    // par l'IA appartiennent au MAUVAIS document (mauvais type ou mauvais nom) et
-    // provoqueraient un faux affichage "Expiré" côté UI.
-    const estRejeteFinal = verdictFinal === "REJETE";
-    await supabase.rpc("fn_update_document_verification", {
-      p_document_id: document_id,
-      p_statut_verification: verdictFinal,
-      p_motif_rejet: analysis.motif_rejet || null,
-      p_valide_depuis: estRejeteFinal ? null : (analysis.date_emission || null),
-      p_valide_jusqua: estRejeteFinal ? null : (analysis.date_expiration || null),
-      p_verifie_le: verdictFinal === "VERIFIE" ? new Date().toISOString() : null,
-    });
-
+    // Extraction nom + cohérence — calculée AVANT le verdict pour pouvoir BLOQUER.
     const nomExtraitIa = analysis.nom_extrait || null;
     const prenomExtraitIa = analysis.prenom_extrait || null;
     const scoreConfianceIa = typeof analysis.score_confiance === "number" ? analysis.score_confiance : null;
@@ -330,6 +317,30 @@ Analyse ce document et vérifie sa conformité.`;
       : null;
     const coherenceNom = nomMatch !== null ? (nomMatch && (prenomMatch === null || prenomMatch)) : null;
 
+    // GATE DUR de concordance : si l'IA verdict=VERIFIE mais que le nom extrait NE
+    // correspond PAS au profil (coherence_nom === false), on rétrograde en EN_ATTENTE.
+    // Un doc EN_ATTENTE ne compte pas comme valide → blocage mission, et passe en
+    // revue manuelle admin. On ne fait jamais confiance aveuglément à l'IA sur le nom.
+    // Vaut pour TOUS les types (CNI/diplôme/RIB) → couvre les re-uploads après
+    // expiration et les changements de RIB (le nom du titulaire doit concorder).
+    let verdictFinal = analysis.verdict || "EN_ATTENTE";
+    let motifRejet = analysis.motif_rejet || null;
+    if (verdictFinal === "VERIFIE" && coherenceNom === false) {
+      verdictFinal = "EN_ATTENTE";
+      motifRejet = "Le nom du document ne correspond pas à celui du profil — vérification manuelle requise.";
+    }
+
+    // Si REJETE : ne PAS écrire valide_depuis/valide_jusqua (dates du mauvais document).
+    const estRejeteFinal = verdictFinal === "REJETE";
+    await supabase.rpc("fn_update_document_verification", {
+      p_document_id: document_id,
+      p_statut_verification: verdictFinal,
+      p_motif_rejet: motifRejet,
+      p_valide_depuis: estRejeteFinal ? null : (analysis.date_emission || null),
+      p_valide_jusqua: estRejeteFinal ? null : (analysis.date_expiration || null),
+      p_verifie_le: verdictFinal === "VERIFIE" ? new Date().toISOString() : null,
+    });
+
     await supabase.from("documents_soignants").update({
       resultat_ia: analysis,
       nom_extrait_ia: nomExtraitIa,
@@ -346,10 +357,12 @@ Analyse ce document et vérifie sa conformité.`;
       p_id_ressource: document_id,
       p_cle_s3: doc.s3_cle,
       p_details: {
-        verdict: analysis.verdict,
+        verdict: verdictFinal,
+        verdict_ia_brut: analysis.verdict,
         type_detecte: analysis.type_detecte,
         confiance: analysis.confiance,
         nom_correspond: analysis.nom_correspond,
+        coherence_nom: coherenceNom,
         type_correspond: analysis.type_correspond,
       },
       p_ip: null,
@@ -357,7 +370,7 @@ Analyse ce document et vérifie sa conformité.`;
     });
 
     return new Response(
-      JSON.stringify({ success: true, verdict: analysis.verdict, analysis }),
+      JSON.stringify({ success: true, verdict: verdictFinal, analysis }),
       { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (e: any) {
