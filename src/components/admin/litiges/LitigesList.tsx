@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { Badge } from '@/components/ui/badge';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
-import { AlertTriangle, Euro, Eye, Gavel } from 'lucide-react';
+import { AlertTriangle, Euro, Eye, Gavel, GitBranch } from 'lucide-react';
 import {
   alerteTresorerie,
   CLASSES_BADGE_COULEUR,
@@ -87,6 +87,8 @@ type Props = {
   onOpenPreuves: (litige: LitigeEnrichi) => void;
   onOpenResolution: (litige: LitigeEnrichi) => void;
   actionEnCoursId?: string | null;
+  /** Task 8 — optional: called with the litige when admin wants to edit gel scope */
+  onGelScope?: (litige: LitigeEnrichi) => void;
 };
 
 export function LitigesList({
@@ -95,6 +97,7 @@ export function LitigesList({
   onOpenPreuves,
   onOpenResolution,
   actionEnCoursId,
+  onGelScope,
 }: Props) {
   const visible = useMemo(
     () => filtrerEtTrier(litiges, filtres),
@@ -239,6 +242,17 @@ export function LitigesList({
                         iconeGauche={actionEnCoursId === l.id ? undefined : <Gavel className="h-3.5 w-3.5" />}
                       >
                         {actionEnCoursId === l.id ? 'Résolution…' : 'Résoudre'}
+                      </BoutonY2K>
+                    )}
+                    {onGelScope && (
+                      <BoutonY2K
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => onGelScope(l)}
+                        aria-label={`Modifier gel scope litige ${l.id}`}
+                        iconeGauche={<GitBranch className="h-3.5 w-3.5" />}
+                      >
+                        Gel scope
                       </BoutonY2K>
                     )}
                   </div>

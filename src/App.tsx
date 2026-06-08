@@ -166,6 +166,8 @@ const AdminCohortEconomics = lazy(() => import("./pages/admin/AdminCohortEconomi
 const AdminAuditRLS = lazy(() => import("./pages/admin/AdminAuditRLS"));
 const AdminRGPDTools = lazy(() => import("./pages/admin/AdminRGPDTools"));
 const AdminHeuresExternes = lazy(() => import("./pages/admin/AdminHeuresExternes"));
+const AdminPlanningGlobal = lazy(() => import("./pages/admin/AdminPlanningGlobal"));
+const ClassementSoignants = lazy(() => import("./pages/ClassementSoignants"));
 
 const queryClient = new QueryClient();
 
@@ -253,6 +255,7 @@ function AppRoutes() {
           <Route path="/soignant/messagerie" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageMessagerie role="SOIGNANT" /></RouteProtegee>} />
           <Route path="/soignant/litiges" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><LitigesContestationsSoignant /></RouteProtegee>} />
           <Route path="/soignant/stripe-connect" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><PageStripeConnect /></RouteProtegee>} />
+          <Route path="/soignant/classement" element={<RouteProtegee rolesAutorises={['SOIGNANT']}><ClassementSoignants /></RouteProtegee>} />
 
           {/* Établissement */}
           <Route path="/etablissement/tableau-de-bord" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
@@ -353,6 +356,7 @@ function AppRoutes() {
           <Route path="/admin/cohort" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCohortEconomics /></RouteProtegee>} />
           <Route path="/admin/audit-rls" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAuditRLS /></RouteProtegee>} />
           <Route path="/admin/rgpd-tools" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminRGPDTools /></RouteProtegee>} />
+          <Route path="/admin/planning-global" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminPlanningGlobal /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />

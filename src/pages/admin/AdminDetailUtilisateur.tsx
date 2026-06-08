@@ -22,6 +22,7 @@ import { logger } from '@/lib/logger';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TYPES_DOCUMENTS, STATUTS_VERIFICATION } from '@/lib/documents';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
+import { Textarea } from '@/components/ui/textarea';
 import { AdminMissionChatPanel } from '@/components/admin/AdminMissionChatPanel';
 
 export default function AdminDetailUtilisateur() {
@@ -35,6 +36,10 @@ export default function AdminDetailUtilisateur() {
   const [loading, setLoading] = useState(true);
   const [modalSuspendre, setModalSuspendre] = useState(false);
   const [modalSupprimer, setModalSupprimer] = useState(false);
+  const [modalLeverSuspension, setModalLeverSuspension] = useState(false);
+  const [raisonLeverSuspension, setRaisonLeverSuspension] = useState('');
+  const [modalForceRib, setModalForceRib] = useState(false);
+  const [raisonForceRib, setRaisonForceRib] = useState('');
   const [documentsMissing, setDocumentsMissing] = useState<string[]>([]);
   const [documentsExpires, setDocumentsExpires] = useState<string[]>([]);
   const [dernierRappel, setDernierRappel] = useState<string | null>(null);
@@ -241,6 +246,31 @@ export default function AdminDetailUtilisateur() {
 
   const promouvoirAdmin = async () => {
     toast.info('Fonctionnalité de promotion admin — utilisez la fonction set-user-claims via le dashboard Supabase.');
+  };
+
+  const leverSuspension = async () => {
+    if (!raisonLeverSuspension.trim()) { toast.error('Raison obligatoire.'); return; }
+    const { data, error } = await supabase.rpc('fn_admin_lever_suspension' as any, {
+      p_soignant_id: id!,
+      p_raison: raisonLeverSuspension.trim(),
+    });
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || error?.message || 'Erreur.'); return; }
+    toast.success('Suspension levée');
+    setModalLeverSuspension(false);
+    setRaisonLeverSuspension('');
+    charger();
+  };
+
+  const forcerReuploadRib = async () => {
+    if (!raisonForceRib.trim()) { toast.error('Raison obligatoire.'); return; }
+    const { data, error } = await supabase.rpc('fn_admin_forcer_reupload_rib' as any, {
+      p_etablissement_id: id!,
+      p_raison: raisonForceRib.trim(),
+    });
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || error?.message || 'Erreur.'); return; }
+    toast.success('Re-upload RIB forcé — l\'établissement sera notifié');
+    setModalForceRib(false);
+    setRaisonForceRib('');
   };
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
@@ -721,6 +751,24 @@ export default function AdminDetailUtilisateur() {
                     description="Donne les droits d'administration plateforme."
                     variant="outline"
                     onClick={promouvoirAdmin}
+                  />
+                )}
+                {type === 'soignant' && isSuspended && (
+                  <ActionCard
+                    icon={RefreshCw}
+                    label="Lever la suspension"
+                    description="Lève la suspension du soignant avec motif audit."
+                    variant="outline"
+                    onClick={() => { setRaisonLeverSuspension(''); setModalLeverSuspension(true); }}
+                  />
+                )}
+                {type === 'etablissement' && (
+                  <ActionCard
+                    icon={RefreshCw}
+                    label="Forcer re-upload RIB"
+                    description="Invalide le RIB actuel et demande un nouveau téléversement."
+                    variant="outline"
+                    onClick={() => { setRaisonForceRib(''); setModalForceRib(true); }}
                   />
                 )}
                 <ActionCard

@@ -16,9 +16,18 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { TrendingUp, TrendingDown, Download, AlertTriangle, ExternalLink, Building2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, AlertTriangle, ExternalLink, Building2, CheckCircle2, Stethoscope } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+
+// Task 12 — diagnostic result type
+interface DiagResult {
+  success: boolean;
+  genere_le: string;
+  missions_incoherentes: { count: number; echantillon: Array<{ id: string; intitule: string; total_brut: number; attendu: number; ecart: number }> };
+  factures_ecart_mission: { count: number; echantillon: Array<{ facture_id: string; numero_facture: string; mission_id: string; montant_ht: number; mission_net: number; ecart: number }> };
+  stripe_transfers_orphelins: { count: number; echantillon: Array<{ transfer_id: string; mission_id: string; montant_total: number }> };
+}
 
 const formatEur = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v);
 const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -34,6 +43,10 @@ export default function AdminFinances() {
   const [missions, setMissions] = useState<any[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>('commissions_ht');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  // Task 12
+  const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -195,6 +208,20 @@ export default function AdminFinances() {
     ttc: { label: 'TTC', color: 'hsl(195 70% 65%)' },
   };
 
+  const lancerDiagnostic = async () => {
+    setDiagLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_diagnostic_coherence_financiere' as any);
+      if (error) throw error;
+      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Diagnostic échoué.');
+      setDiagResult(data as DiagResult);
+      toast.success('Diagnostic terminé');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erreur lors du diagnostic.');
+    }
+    setDiagLoading(false);
+  };
+
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   const nbSoignantsTotal = new Set(missions.map((m: any) => m.soignant_assigne_id).filter(Boolean)).size;
@@ -297,6 +324,93 @@ export default function AdminFinances() {
                 <Bar dataKey="ttc" fill="var(--color-ttc)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartContainer>
+          </CardY2KContent>
+        </CardY2K>
+
+        {/* Task 12 — Diagnostic de cohérence financière */}
+        <CardY2K noPadding>
+          <CardY2KHeader>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardY2KTitle className="text-base inline-flex items-center gap-2">
+                <Stethoscope className="h-5 w-5 text-primary" />
+                Diagnostic de cohérence financière
+              </CardY2KTitle>
+              <BoutonY2K size="sm" variant="secondary" onClick={lancerDiagnostic} disabled={diagLoading} loading={diagLoading}>
+                {diagLoading ? 'Analyse en cours…' : 'Lancer le diagnostic'}
+              </BoutonY2K>
+            </div>
+          </CardY2KHeader>
+          <CardY2KContent>
+            {!diagResult && !diagLoading && (
+              <p className="text-sm text-muted-foreground">Lance l'analyse de cohérence entre missions, factures et transferts Stripe.</p>
+            )}
+            {diagResult && (
+              <div className="space-y-4">
+                <p className="text-xs text-muted-foreground">Généré le {new Date(diagResult.genere_le).toLocaleString('fr-FR')}</p>
+                {/* 3 counts */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { label: 'Missions incohérentes', count: diagResult.missions_incoherentes.count },
+                    { label: 'Factures avec écart mission', count: diagResult.factures_ecart_mission.count },
+                    { label: 'Transferts Stripe orphelins', count: diagResult.stripe_transfers_orphelins.count },
+                  ].map((item) => (
+                    <div key={item.label} className={`rounded-xl border p-3 flex items-center gap-3 ${item.count > 0 ? 'border-destructive/40 bg-destructive/5' : 'border-success/30 bg-success/5'}`}>
+                      {item.count > 0
+                        ? <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+                        : <CheckCircle2 className="h-5 w-5 text-success shrink-0" />}
+                      <div>
+                        <p className={`text-xl font-bold ${item.count > 0 ? 'text-destructive' : 'text-success'}`}>{item.count}</p>
+                        <p className="text-xs text-muted-foreground">{item.label}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Echantillons */}
+                {diagResult.missions_incoherentes.count > 0 && diagResult.missions_incoherentes.echantillon.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-foreground">Missions incohérentes (échantillon)</p>
+                    {diagResult.missions_incoherentes.echantillon.map((m) => (
+                      <div key={m.id} className="text-xs flex flex-wrap items-center gap-2 p-2 rounded-lg bg-muted/40">
+                        <span className="font-medium text-foreground truncate max-w-[200px]">{m.intitule}</span>
+                        <span className="text-muted-foreground">Brut {formatEur(m.total_brut)}</span>
+                        <span className="text-muted-foreground">Attendu {formatEur(m.attendu)}</span>
+                        <span className="text-destructive font-bold">Écart {formatEur(m.ecart)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {diagResult.factures_ecart_mission.count > 0 && diagResult.factures_ecart_mission.echantillon.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-foreground">Factures avec écart (échantillon)</p>
+                    {diagResult.factures_ecart_mission.echantillon.map((f) => (
+                      <div key={f.facture_id} className="text-xs flex flex-wrap items-center gap-2 p-2 rounded-lg bg-muted/40">
+                        <span className="font-mono text-foreground">{f.numero_facture}</span>
+                        <span className="text-muted-foreground">HT {formatEur(f.montant_ht)}</span>
+                        <span className="text-muted-foreground">Mission net {formatEur(f.mission_net)}</span>
+                        <span className="text-destructive font-bold">Écart {formatEur(f.ecart)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {diagResult.stripe_transfers_orphelins.count > 0 && diagResult.stripe_transfers_orphelins.echantillon.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-foreground">Transferts Stripe orphelins (échantillon)</p>
+                    {diagResult.stripe_transfers_orphelins.echantillon.map((t) => (
+                      <div key={t.transfer_id} className="text-xs flex flex-wrap items-center gap-2 p-2 rounded-lg bg-muted/40">
+                        <span className="font-mono text-foreground">{t.transfer_id}</span>
+                        <span className="text-muted-foreground">Mission {t.mission_id?.slice(0, 8)}…</span>
+                        <span className="text-destructive font-bold">{formatEur(t.montant_total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {diagResult.missions_incoherentes.count === 0 && diagResult.factures_ecart_mission.count === 0 && diagResult.stripe_transfers_orphelins.count === 0 && (
+                  <p className="text-sm text-success inline-flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" /> Tout cohérent — aucune anomalie détectée.
+                  </p>
+                )}
+              </div>
+            )}
           </CardY2KContent>
         </CardY2K>
 

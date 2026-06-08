@@ -6,9 +6,12 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
-import { ExternalLink, Clock, CheckCircle, PlayCircle, Send, ClipboardList } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
+import { ExternalLink, Clock, CheckCircle, PlayCircle, Send, ClipboardList, UserX } from 'lucide-react';
 
 type FiltreStatut = 'TOUTES' | 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE';
 
@@ -46,6 +49,11 @@ export default function AdminMissions() {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [groupeNom, setGroupeNom] = useState<string | null>(null);
+
+  // Task 6 — marquer absence sans prévenir
+  const [absenceMissionId, setAbsenceMissionId] = useState<string | null>(null);
+  const [absenceMotif, setAbsenceMotif] = useState('');
+  const [absenceLoading, setAbsenceLoading] = useState(false);
 
   useEffect(() => {
     async function charger() {
@@ -102,6 +110,23 @@ export default function AdminMissions() {
     setSearchParams(params);
   }
 
+  const marquerAbsence = async () => {
+    if (!absenceMissionId) return;
+    if (!absenceMotif.trim()) { toast.error('Motif obligatoire (RGPD audit).'); return; }
+    setAbsenceLoading(true);
+    const { data, error } = await supabase.rpc('fn_admin_marquer_absence_sans_prevenir' as any, {
+      p_mission_id: absenceMissionId,
+      p_motif: absenceMotif.trim(),
+    });
+    setAbsenceLoading(false);
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || error?.message || 'Erreur.'); return; }
+    toast.success('Absence sans prévenir enregistrée');
+    setAbsenceMissionId(null);
+    setAbsenceMotif('');
+    // reload missions
+    setLoading(true);
+  };
+
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   return (
@@ -139,6 +164,7 @@ export default function AdminMissions() {
             { cle: 'debut', titre: 'Début' },
             { cle: 'duree', titre: 'Durée' },
             { cle: 'taux', titre: 'Taux horaire' },
+            { cle: 'actions', titre: '', align: 'right' as const },
           ];
 
           return (
@@ -188,6 +214,14 @@ export default function AdminMissions() {
                     return <span className="text-muted-foreground">{m.duree_heures ? `${m.duree_heures}h` : '—'}</span>;
                   case 'taux':
                     return <span className="text-muted-foreground">{formatEur(m.taux_horaire_base)}</span>;
+                  case 'actions':
+                    return m.soignant_assigne_id ? (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => { setAbsenceMissionId(m.id); setAbsenceMotif(''); }} iconeGauche={<UserX className="h-3.5 w-3.5" />}>
+                          Absence
+                        </BoutonY2K>
+                      </div>
+                    ) : null;
                   default:
                     return null;
                 }
@@ -211,6 +245,13 @@ export default function AdminMissions() {
                         📅 {formatDate(m.debut_le)} {formatHeure(m.debut_le)} · {m.duree_heures ? `${m.duree_heures}h` : '—'} · {formatEur(m.taux_horaire_base)}
                       </p>
                     </div>
+                    {m.soignant_assigne_id && (
+                      <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => { setAbsenceMissionId(m.id); setAbsenceMotif(''); }} iconeGauche={<UserX className="h-3.5 w-3.5" />}>
+                          Absence
+                        </BoutonY2K>
+                      </div>
+                    )}
                   </div>
                 );
               }}
@@ -218,6 +259,26 @@ export default function AdminMissions() {
           );
         })()}
       </div>
+
+      {/* Task 6 — Modal marquer absence sans prévenir */}
+      {absenceMissionId && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setAbsenceMissionId(null)}>
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-foreground inline-flex items-center gap-2">
+              <UserX className="h-5 w-5 text-warning" />Absence sans prévenir
+            </h2>
+            <p className="text-xs text-muted-foreground">Enregistre une absence non justifiée du soignant. Motif tracé RGPD.</p>
+            <label className="block">
+              <span className="text-xs font-medium text-foreground mb-1 block">Motif * (RGPD audit)</span>
+              <Textarea value={absenceMotif} onChange={(e) => setAbsenceMotif(e.target.value)} rows={3} placeholder="Décrivez les circonstances de l'absence…" disabled={absenceLoading} />
+            </label>
+            <div className="flex gap-2">
+              <BoutonY2K variant="secondary" onClick={() => setAbsenceMissionId(null)} disabled={absenceLoading}>Annuler</BoutonY2K>
+              <BoutonY2K variant="destructive" onClick={marquerAbsence} disabled={absenceLoading || !absenceMotif.trim()} loading={absenceLoading}>Confirmer absence</BoutonY2K>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutAdmin>
   );
 }
