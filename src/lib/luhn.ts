@@ -30,7 +30,7 @@ export function validerSiret(siret: string): { valide: boolean; message: string 
   }
 
   if (sum % 10 !== 0) {
-    return { valide: false, message: 'SIRET invalide (checksum incorrecte)' };
+    return { valide: false, message: 'Ce numéro SIRET est invalide. Vérifiez les 14 chiffres sur votre avis de situation INSEE.' };
   }
 
   return { valide: true, message: 'SIRET valide' };

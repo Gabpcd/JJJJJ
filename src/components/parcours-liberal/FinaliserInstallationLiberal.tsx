@@ -74,7 +74,22 @@ export function FinaliserInstallationLiberal() {
       toast.error(res?.error || error?.message || "Erreur lors de l'enregistrement du SIRET");
       return;
     }
-    toast.success('SIRET enregistré');
+    toast.success('SIRET enregistré — vérification INSEE en cours…');
+    try {
+      const { data: verifData } = await supabase.functions.invoke('verify-siret', {
+        body: { siret: siret.replace(/\s/g, '') },
+      });
+      const v2 = verifData as { ok?: boolean; statut?: string; raison_sociale?: string; est_actif?: boolean; message?: string } | null;
+      if (v2?.statut === 'INTROUVABLE') {
+        toast.error(v2.message || 'SIRET introuvable dans le registre INSEE. Vérifiez votre numéro.');
+      } else if (v2?.statut === 'ALERTE') {
+        toast.warning(v2.message || 'SIRET valide mais activité non-santé — vérification manuelle requise.');
+      } else if (v2?.statut === 'VERIFIE') {
+        toast.success(`SIRET vérifié : ${v2.raison_sociale}`);
+      }
+    } catch {
+      // Vérif INSEE en best-effort — ne bloque pas l'enregistrement.
+    }
     await charger();
   };
 

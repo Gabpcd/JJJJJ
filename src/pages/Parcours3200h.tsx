@@ -66,7 +66,7 @@ export default function Parcours3200h() {
       setUploading(false);
       return;
     }
-    const { error: docErr } = await supabase.from('documents_soignants').insert({
+    const { data: docInserted, error: docErr } = await supabase.from('documents_soignants').insert({
       soignant_id: user.id,
       type_document: 'ATTESTATION_EMPLOYEUR' as any,
       nom_fichier: file.name,
@@ -75,11 +75,16 @@ export default function Parcours3200h() {
       type_mime: file.type,
       taille_octets: file.size,
       libelle: 'Attestation 3200h — heures externes',
-    });
+    }).select('id').single();
     if (docErr) {
       afficherNotification({ type: 'erreur', message: 'Erreur lors de l\'enregistrement.' });
     } else {
-      afficherNotification({ type: 'succes', message: '📄 Attestation téléversée ! Elle sera vérifiée par un administrateur.' });
+      afficherNotification({ type: 'succes', message: '📄 Attestation téléversée ! Vérification IA en cours…' });
+      if (docInserted?.id) {
+        supabase.functions.invoke('verify-document', {
+          body: { document_id: docInserted.id },
+        }).catch(() => {});
+      }
     }
     setUploading(false);
   };
