@@ -55,6 +55,9 @@ function renderMarkdown(texte: string) {
     }
   };
   const renderInline = (s: string) => s
+    // Échapper d'abord le HTML brut (contenu issu de la DB articles_aide) pour éviter
+    // l'injection (stored XSS). Les balises sûres sont insérées APRÈS par le markdown.
+    .replace(/[<>]/g, m => m === '<' ? '&lt;' : '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, url) => safeLink(url, txt))
     .replace(/`([^`]+)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-sm">$1</code>');
