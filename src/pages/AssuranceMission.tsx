@@ -76,7 +76,7 @@ export function AssuranceMissionContent() {
         setPriseEnCharge((data as any).prise_en_charge ?? 'ETABLISSEMENT');
         setPartSoignantPourcent((data as any).part_soignant_pourcent ?? 25);
         setTypeCouverture((data as any).type_couverture ?? 'RC_MISSION');
-        setMontantCouverture((data as any).montant_couverture ?? 1000000);
+        setMontantCouverture((data as any).montant_couverture_eur ?? 1000000);
       }
       setLoading(false);
     })();
@@ -106,7 +106,7 @@ export function AssuranceMissionContent() {
         prise_en_charge: priseEnCharge,
         part_soignant_pourcent: priseEnCharge === 'PARTAGE' ? partSoignantPourcent : null,
         type_couverture: typeCouverture,
-        montant_couverture: montantCouverture,
+        montant_couverture_eur: montantCouverture,
       } as any;
 
       if (configId) {
@@ -345,7 +345,7 @@ export function AssuranceMissionContent() {
                               {statut.label}
                             </span>
                           </td>
-                          <td className="py-2.5">{p.montant_couverture != null ? fmt(p.montant_couverture) : '—'}</td>
+                          <td className="py-2.5">{p.montant_couverture_eur != null ? fmt(p.montant_couverture_eur) : '—'}</td>
                         </tr>
                       );
                     })}

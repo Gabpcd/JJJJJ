@@ -149,7 +149,7 @@ export default function VerificationEtablissement() {
     setPieceLoading(true);
     try {
       const mime = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-      const path = `etablissements/${user.id}/representant-piece-${Date.now()}.${ext}`;
+      const path = `${user.id}/representant-piece-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('jolene-documents')
         .upload(path, pieceFile, { upsert: true, contentType: mime });
