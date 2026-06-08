@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Eye, Ban, RefreshCw, Mail, Phone, ShieldCheck, ShieldX, Clock, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useDebounce } from '@/hooks/useDebounce';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { logger } from '@/lib/logger';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -26,6 +27,14 @@ export default function AdminUtilisateurs() {
   const [etabs, setEtabs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [recherche, setRecherche] = useState('');
+
+  // Task 13 — server-side search
+  const [serverQuery, setServerQuery] = useState('');
+  const serverQueryDeb = useDebounce(serverQuery, 350);
+  const [serverResults, setServerResults] = useState<any[]>([]);
+  const [serverLoading, setServerLoading] = useState(false);
+  const [showServerDropdown, setShowServerDropdown] = useState(false);
+  const serverInputRef = useRef<HTMLInputElement>(null);
 
   const charger = async () => {
     setLoading(true);
@@ -50,6 +59,19 @@ export default function AdminUtilisateurs() {
   useEffect(() => {
     charger();
   }, []);
+
+  // Task 13 — server-side search effect
+  useEffect(() => {
+    if (serverQueryDeb.length < 2) { setServerResults([]); setShowServerDropdown(false); return; }
+    setServerLoading(true);
+    setShowServerDropdown(true);
+    supabase.rpc('fn_rechercher_utilisateurs' as any, { p_query: serverQueryDeb })
+      .then(({ data, error }) => {
+        if (!error && data) setServerResults(data as any[]);
+        else setServerResults([]);
+        setServerLoading(false);
+      });
+  }, [serverQueryDeb]);
 
   const filteredSoignants = useMemo(() => {
     const q = recherche.toLowerCase();
@@ -224,9 +246,49 @@ export default function AdminUtilisateurs() {
           </div>
         )}
 
+        {/* Task 13 — Server-side search avec dropdown */}
+        <div className="relative max-w-md mb-2">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            ref={serverInputRef}
+            placeholder="Recherche serveur (≥2 car.)…"
+            value={serverQuery}
+            onChange={(e) => setServerQuery(e.target.value)}
+            onFocus={() => { if (serverResults.length > 0) setShowServerDropdown(true); }}
+            onBlur={() => setTimeout(() => setShowServerDropdown(false), 200)}
+            className="pl-10"
+            aria-label="Rechercher un utilisateur (serveur)"
+          />
+          {showServerDropdown && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-y-auto max-h-72">
+              {serverLoading && <p className="text-xs text-muted-foreground p-3">Recherche en cours…</p>}
+              {!serverLoading && serverResults.length === 0 && serverQueryDeb.length >= 2 && (
+                <p className="text-xs text-muted-foreground p-3">Aucun résultat.</p>
+              )}
+              {serverResults.map((r: any) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onMouseDown={() => { navigate(`/admin/utilisateurs/${r.id}`); setServerQuery(''); setShowServerDropdown(false); }}
+                  className="w-full text-left px-3 py-2.5 hover:bg-muted transition-colors flex items-center gap-2"
+                >
+                  {r.avatar_url && (
+                    <img src={r.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{r.prenom} {r.nom}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{r.email}{r.profession ? ` · ${r.profession}` : ''} · {r.type}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Filtre local existant */}
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Rechercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10" />
+          <Input placeholder="Filtrer liste locale…" value={recherche} onChange={(e) => setRecherche(e.target.value)} className="pl-10" />
         </div>
 
         <Tabs defaultValue="soignants">

@@ -8,8 +8,10 @@ import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { FileCheck, MessageSquare, Check, X, Eye, ShieldAlert } from 'lucide-react';
+import { FileCheck, MessageSquare, Check, X, Eye, ShieldAlert, EyeOff, GitBranch, Plus } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useNavigate } from 'react-router-dom';
 import { LitigesFilters } from '@/components/admin/litiges/LitigesFilters';
@@ -57,6 +59,25 @@ export default function AdminModeration() {
   const [resolutionOpen, setResolutionOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<string>('litiges');
+
+  // Task 5 — masquer notation
+  const [masquerNotationId, setMasquerNotationId] = useState<string | null>(null);
+  const [masquerRaison, setMasquerRaison] = useState('');
+  const [masquerLoading, setMasquerLoading] = useState(false);
+
+  // Task 7 — créer litige (bypass)
+  const [showCreerLitige, setShowCreerLitige] = useState(false);
+  const [creerLitigeMissionId, setCreerLitigeMissionId] = useState('');
+  const [creerLitigeType, setCreerLitigeType] = useState('PAIEMENT');
+  const [creerLitigeMotif, setCreerLitigeMotif] = useState('');
+  const [creerLitigeRaison, setCreerLitigeRaison] = useState('');
+  const [creerLitigeLoading, setCreerLitigeLoading] = useState(false);
+
+  // Task 8 — modifier gel scope
+  const [gelScopeLitigeId, setGelScopeLitigeId] = useState<string | null>(null);
+  const [gelScopeNouveauScope, setGelScopeNouveauScope] = useState('');
+  const [gelScopeRaison, setGelScopeRaison] = useState('');
+  const [gelScopeLoading, setGelScopeLoading] = useState(false);
 
   const charger = async () => {
     setLoading(true);
@@ -200,6 +221,65 @@ export default function AdminModeration() {
     charger();
   };
 
+  // Task 5 — masquer notation
+  const masquerNotation = async () => {
+    if (!masquerNotationId) return;
+    if (!masquerRaison.trim()) { toast.error('Raison obligatoire (RGPD audit).'); return; }
+    setMasquerLoading(true);
+    const { data, error } = await supabase.rpc('fn_admin_masquer_notation' as any, {
+      p_notation_id: masquerNotationId,
+      p_raison: masquerRaison.trim(),
+    });
+    setMasquerLoading(false);
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || error?.message || 'Erreur.'); return; }
+    toast.success('Notation masquée');
+    setMasquerNotationId(null);
+    setMasquerRaison('');
+    charger();
+  };
+
+  // Task 7 — créer litige force
+  const creerLitigeForce = async () => {
+    if (!creerLitigeMissionId.trim()) { toast.error('ID de mission requis.'); return; }
+    if (!creerLitigeMotif.trim()) { toast.error('Motif obligatoire.'); return; }
+    if (!creerLitigeRaison.trim()) { toast.error('Raison bypass obligatoire (RGPD audit).'); return; }
+    setCreerLitigeLoading(true);
+    const { data, error } = await supabase.rpc('fn_admin_creer_litige_force' as any, {
+      p_mission_id: creerLitigeMissionId.trim(),
+      p_type_litige: creerLitigeType,
+      p_motif: creerLitigeMotif.trim(),
+      p_raison_bypass: creerLitigeRaison.trim(),
+    });
+    setCreerLitigeLoading(false);
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || error?.message || 'Erreur.'); return; }
+    toast.success('Litige créé');
+    setShowCreerLitige(false);
+    setCreerLitigeMissionId('');
+    setCreerLitigeMotif('');
+    setCreerLitigeRaison('');
+    charger();
+  };
+
+  // Task 8 — modifier gel scope litige
+  const modifierGelScope = async () => {
+    if (!gelScopeLitigeId) return;
+    if (!gelScopeNouveauScope.trim()) { toast.error('Nouveau scope requis.'); return; }
+    if (!gelScopeRaison.trim()) { toast.error('Raison obligatoire (RGPD audit).'); return; }
+    setGelScopeLoading(true);
+    const { data, error } = await supabase.rpc('fn_admin_modifier_gel_scope_litige' as any, {
+      p_litige_id: gelScopeLitigeId,
+      p_nouveau_scope: gelScopeNouveauScope.trim(),
+      p_raison: gelScopeRaison.trim(),
+    });
+    setGelScopeLoading(false);
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || error?.message || 'Erreur.'); return; }
+    toast.success('Gel scope mis à jour');
+    setGelScopeLitigeId(null);
+    setGelScopeNouveauScope('');
+    setGelScopeRaison('');
+    charger();
+  };
+
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
 
   return (
@@ -242,7 +322,16 @@ export default function AdminModeration() {
               <LitigesFilters filtres={filtres} onChange={setFiltres} />
             </div>
 
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-end gap-2 flex-wrap">
+              <BoutonY2K
+                size="sm"
+                variant="secondary"
+                onClick={() => { setShowCreerLitige(true); setCreerLitigeMissionId(''); setCreerLitigeMotif(''); setCreerLitigeRaison(''); }}
+                aria-label="Créer un litige en bypass admin"
+                iconeGauche={<Plus className="h-3.5 w-3.5" />}
+              >
+                Créer litige (bypass)
+              </BoutonY2K>
               <BoutonY2K
                 size="sm"
                 variant="secondary"
@@ -266,6 +355,11 @@ export default function AdminModeration() {
               onOpenResolution={(l) => {
                 setResolutionLitige(l);
                 setResolutionOpen(true);
+              }}
+              onGelScope={(l) => {
+                setGelScopeLitigeId(l.id);
+                setGelScopeNouveauScope('');
+                setGelScopeRaison('');
               }}
             />
 
@@ -328,9 +422,10 @@ export default function AdminModeration() {
                           </p>
                           <p className="text-xs text-muted-foreground">Mission : {e.mission_intitule}</p>
                         </div>
-                        <div className="flex gap-1.5 shrink-0">
+                        <div className="flex gap-1.5 shrink-0 flex-wrap">
                           <BoutonY2K size="sm" variant="secondary" onClick={() => publierEvaluation(e.id)} iconeGauche={<Check className="h-3.5 w-3.5" />}>Publier</BoutonY2K>
                           <BoutonY2K size="sm" variant="destructive" onClick={() => supprimerEvaluation(e.id)} iconeGauche={<X className="h-3.5 w-3.5" />}>Supprimer</BoutonY2K>
+                          <BoutonY2K size="sm" variant="secondary" onClick={() => { setMasquerNotationId(e.id); setMasquerRaison(''); }} iconeGauche={<EyeOff className="h-3.5 w-3.5" />}>Masquer</BoutonY2K>
                         </div>
                       </div>
                       {e.commentaire && (
@@ -401,7 +496,7 @@ export default function AdminModeration() {
             </div>
           </TabsContent>
 
-          <TabsContent value="incoherences">
+          <TabsContent value="incoherences" className="space-y-4">
             {/* Desktop : table 8 cols */}
             <div className="hidden md:block overflow-x-auto rounded-lg border">
               <Table>
@@ -517,6 +612,82 @@ export default function AdminModeration() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Task 5 — Modal masquer notation */}
+      {masquerNotationId && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setMasquerNotationId(null)}>
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-foreground">Masquer la notation</h2>
+            <p className="text-xs text-muted-foreground">Masquer cette évaluation des vues publiques. La raison est tracée à des fins RGPD.</p>
+            <label className="block">
+              <span className="text-xs font-medium text-foreground mb-1 block">Raison * (RGPD audit)</span>
+              <Textarea value={masquerRaison} onChange={(e) => setMasquerRaison(e.target.value)} rows={3} placeholder="Raison du masquage…" disabled={masquerLoading} />
+            </label>
+            <div className="flex gap-2">
+              <BoutonY2K variant="secondary" onClick={() => setMasquerNotationId(null)} disabled={masquerLoading}>Annuler</BoutonY2K>
+              <BoutonY2K variant="destructive" onClick={masquerNotation} disabled={masquerLoading || !masquerRaison.trim()} loading={masquerLoading}>Masquer</BoutonY2K>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Task 7 — Modal créer litige (bypass) */}
+      {showCreerLitige && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowCreerLitige(false)}>
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-foreground">Créer un litige (bypass admin)</h2>
+            <p className="text-xs text-muted-foreground">Crée un litige sans validation normale. Raison de bypass tracée RGPD.</p>
+            <label className="block">
+              <span className="text-xs font-medium text-foreground mb-1 block">ID de mission *</span>
+              <Input value={creerLitigeMissionId} onChange={(e) => setCreerLitigeMissionId(e.target.value)} placeholder="UUID de la mission" disabled={creerLitigeLoading} />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-foreground mb-1 block">Type de litige *</span>
+              <select value={creerLitigeType} onChange={(e) => setCreerLitigeType(e.target.value)} className="input-base" disabled={creerLitigeLoading}>
+                <option value="PAIEMENT">PAIEMENT</option>
+                <option value="ABSENCE">ABSENCE</option>
+                <option value="QUALITE">QUALITE</option>
+                <option value="CONTRAT">CONTRAT</option>
+                <option value="AUTRE">AUTRE</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-foreground mb-1 block">Motif *</span>
+              <Textarea value={creerLitigeMotif} onChange={(e) => setCreerLitigeMotif(e.target.value)} rows={2} placeholder="Motif du litige…" disabled={creerLitigeLoading} />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-foreground mb-1 block">Raison bypass * (RGPD audit)</span>
+              <Textarea value={creerLitigeRaison} onChange={(e) => setCreerLitigeRaison(e.target.value)} rows={2} placeholder="Pourquoi ce bypass est nécessaire…" disabled={creerLitigeLoading} />
+            </label>
+            <div className="flex gap-2">
+              <BoutonY2K variant="secondary" onClick={() => setShowCreerLitige(false)} disabled={creerLitigeLoading}>Annuler</BoutonY2K>
+              <BoutonY2K onClick={creerLitigeForce} disabled={creerLitigeLoading || !creerLitigeMissionId.trim() || !creerLitigeMotif.trim() || !creerLitigeRaison.trim()} loading={creerLitigeLoading}>Créer le litige</BoutonY2K>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Task 8 — Modal modifier gel scope litige */}
+      {gelScopeLitigeId && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setGelScopeLitigeId(null)}>
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-foreground inline-flex items-center gap-2"><GitBranch className="h-5 w-5" />Modifier le gel scope</h2>
+            <p className="text-xs text-muted-foreground">Modifie le périmètre de gel du litige. Action tracée RGPD.</p>
+            <label className="block">
+              <span className="text-xs font-medium text-foreground mb-1 block">Nouveau scope *</span>
+              <Input value={gelScopeNouveauScope} onChange={(e) => setGelScopeNouveauScope(e.target.value)} placeholder="ex: MONTANT_PARTIEL, TOTAL, AUCUN…" disabled={gelScopeLoading} />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-foreground mb-1 block">Raison * (RGPD audit)</span>
+              <Textarea value={gelScopeRaison} onChange={(e) => setGelScopeRaison(e.target.value)} rows={2} placeholder="Raison de la modification…" disabled={gelScopeLoading} />
+            </label>
+            <div className="flex gap-2">
+              <BoutonY2K variant="secondary" onClick={() => setGelScopeLitigeId(null)} disabled={gelScopeLoading}>Annuler</BoutonY2K>
+              <BoutonY2K onClick={modifierGelScope} disabled={gelScopeLoading || !gelScopeNouveauScope.trim() || !gelScopeRaison.trim()} loading={gelScopeLoading}>Mettre à jour</BoutonY2K>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutAdmin>
   );
 }

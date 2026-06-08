@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Star, Calendar, Building2, TrendingUp, Flag, X } from 'lucide-react';
+import { Star, Calendar, Building2, TrendingUp, Flag, X, Pencil } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
@@ -8,6 +8,7 @@ import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCarte
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -77,6 +78,7 @@ function EvaluationsContent() {
   const [page, setPage] = useState(0);
 
   const [notationSignaler, setNotationSignaler] = useState<Notation | null>(null);
+  const [notationEditer, setNotationEditer] = useState<Notation | null>(null);
 
   async function charger() {
     setLoading(true);
@@ -248,16 +250,27 @@ function EvaluationsContent() {
                   return <span className="text-xs text-muted-foreground whitespace-nowrap">{format(new Date(n.cree_le), 'd MMM yyyy', { locale: fr })}</span>;
                 case 'actions':
                   return (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 text-xs gap-1"
-                      disabled={n.signale}
-                      onClick={(e) => { e.stopPropagation(); setNotationSignaler(n); }}
-                    >
-                      <Flag className="h-3 w-3" />
-                      {n.signale ? 'Signalée' : 'Signaler'}
-                    </Button>
+                    <div className="flex items-center gap-1 justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs gap-1"
+                        onClick={(e) => { e.stopPropagation(); setNotationEditer(n); }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Éditer
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs gap-1"
+                        disabled={n.signale}
+                        onClick={(e) => { e.stopPropagation(); setNotationSignaler(n); }}
+                      >
+                        <Flag className="h-3 w-3" />
+                        {n.signale ? 'Signalée' : 'Signaler'}
+                      </Button>
+                    </div>
                   );
                 default:
                   return null;
@@ -283,7 +296,16 @@ function EvaluationsContent() {
                     )}
                   </div>
                 </div>
-                <div className="pt-2 border-t border-border flex justify-end">
+                <div className="pt-2 border-t border-border flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs min-h-[44px] gap-1.5 text-muted-foreground"
+                    onClick={(e) => { e.stopPropagation(); setNotationEditer(n); }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Éditer
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -318,7 +340,108 @@ function EvaluationsContent() {
           onSignale={() => { setNotationSignaler(null); charger(); }}
         />
       )}
+
+      {notationEditer && (
+        <ModaleEditer
+          notation={notationEditer}
+          onFermer={() => setNotationEditer(null)}
+          onSauvegarde={() => { setNotationEditer(null); charger(); }}
+        />
+      )}
     </>
+  );
+}
+
+function StarPicker({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-foreground">{label}</span>
+      <div className="inline-flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onChange(i)}
+            className="p-0.5 focus:outline-none"
+            aria-label={`${i} étoile${i > 1 ? 's' : ''}`}
+          >
+            <Star className={`h-6 w-6 transition-colors ${i <= value ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30'}`} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ModaleEditer({ notation, onFermer, onSauvegarde }: { notation: Notation; onFermer: () => void; onSauvegarde: () => void }) {
+  const [critere1, setCritere1] = useState(notation.critere_1);
+  const [critere2, setCritere2] = useState(notation.critere_2);
+  const [critere3, setCritere3] = useState(notation.critere_3);
+  const [critere4, setCritere4] = useState(notation.critere_4);
+  const [commentaire, setCommentaire] = useState(notation.commentaire || '');
+  const [loading, setLoading] = useState(false);
+
+  async function sauvegarder() {
+    setLoading(true);
+    const { data, error } = await supabase.rpc('fn_modifier_notation_mission' as any, {
+      p_notation_id: notation.id,
+      p_critere_1: critere1,
+      p_critere_2: critere2,
+      p_critere_3: critere3,
+      p_critere_4: critere4,
+      p_commentaire: commentaire.trim() || null,
+    });
+    setLoading(false);
+    if (error || (data && (data as any).success === false)) {
+      toast.error(error?.message || (data as any)?.error || 'Erreur lors de la mise à jour.');
+      return;
+    }
+    toast.success('Évaluation mise à jour.');
+    onSauvegarde();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onFermer}>
+      <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-foreground">Modifier l'évaluation</h2>
+          <button onClick={onFermer} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="rounded-lg bg-muted/40 p-3 text-xs">
+          <p className="font-semibold text-foreground">{notation.mission_intitule}</p>
+          <p className="text-muted-foreground">{notation.etablissement_nom}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <StarPicker value={critere1} onChange={setCritere1} label="Critère 1" />
+          <StarPicker value={critere2} onChange={setCritere2} label="Critère 2" />
+          <StarPicker value={critere3} onChange={setCritere3} label="Critère 3" />
+          <StarPicker value={critere4} onChange={setCritere4} label="Critère 4" />
+        </div>
+        <label className="block">
+          <span className="text-xs font-medium text-foreground mb-1 block">Commentaire (optionnel)</span>
+          <textarea
+            value={commentaire}
+            onChange={(e) => setCommentaire(e.target.value)}
+            className="input-base"
+            rows={3}
+            placeholder="Ajoutez un commentaire…"
+            disabled={loading}
+          />
+        </label>
+        <div className="flex gap-2">
+          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
+          <button
+            onClick={sauvegarder}
+            disabled={loading}
+            className="bg-primary text-primary-foreground rounded-xl px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex-1"
+          >
+            {loading ? 'Enregistrement…' : 'Sauvegarder'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

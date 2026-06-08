@@ -5,7 +5,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { supabase } from '@/integrations/supabase/client';
 import { capturerErreurSentry } from '@/lib/sentry';
-import { FileText, Upload, CheckCircle, Clock, Download, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
+import { FileText, Upload, CheckCircle, Clock, Download, ExternalLink, Loader2, RefreshCw, AlertTriangle, X } from 'lucide-react';
 import {
   CardY2K,
   CardY2KHeader,
@@ -14,6 +14,7 @@ import {
 } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -42,6 +43,11 @@ export function ContratPlateformeContent() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Task 11 — résiliation
+  const [showResilierModal, setShowResilierModal] = useState(false);
+  const [resilierMotif, setResilierMotif] = useState('');
+  const [resilierLoading, setResilierLoading] = useState(false);
 
   const charger = async () => {
     if (!user || !etablissementId) return;
@@ -112,6 +118,24 @@ export function ContratPlateformeContent() {
     } catch {
       toast.error('Impossible de télécharger le contrat.');
     }
+  };
+
+  const resilierContrat = async () => {
+    if (!resilierMotif.trim()) { toast.error('Motif de résiliation obligatoire.'); return; }
+    setResilierLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_revoquer_contrat_service' as any, {
+        p_motif: resilierMotif.trim(),
+      });
+      if (error || (data as any)?.error) throw new Error((data as any)?.error || error?.message || 'Erreur résiliation.');
+      toast.success('Demande de résiliation enregistrée. Effective sous 48h.');
+      setShowResilierModal(false);
+      setResilierMotif('');
+      await charger();
+    } catch (err: any) {
+      toast.error(err?.message || 'Erreur lors de la résiliation.');
+    }
+    setResilierLoading(false);
   };
 
   if (loading) return <ChargementPage />;
@@ -254,7 +278,7 @@ export function ContratPlateformeContent() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <BoutonY2K variant="secondary" onClick={telechargerContrat} className="gap-2">
               <Download className="h-4 w-4" /> Télécharger le contrat
             </BoutonY2K>
@@ -270,9 +294,48 @@ export function ContratPlateformeContent() {
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {uploading ? 'Envoi…' : 'Remplacer le contrat'}
             </BoutonY2K>
+            <BoutonY2K variant="destructive" onClick={() => { setResilierMotif(''); setShowResilierModal(true); }} className="gap-2">
+              <AlertTriangle className="h-4 w-4" /> Résilier mon contrat
+            </BoutonY2K>
           </div>
         </CardY2KContent>
       </CardY2K>
+
+      {/* Task 11 — Modal résiliation contrat */}
+      {showResilierModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowResilierModal(false)}>
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-foreground inline-flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" /> Résilier le contrat
+              </h2>
+              <button onClick={() => setShowResilierModal(false)} className="p-1 hover:bg-muted rounded-lg" aria-label="Fermer">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-4 text-sm text-foreground space-y-1">
+              <p className="font-semibold">Attention — action irréversible</p>
+              <p className="text-muted-foreground text-xs">La résiliation prend effet sous <strong>48 heures</strong>. Les missions en cours restent valides jusqu'à leur terme.</p>
+            </div>
+            <label className="block">
+              <span className="text-xs font-medium text-foreground mb-1 block">Motif de résiliation * (obligatoire)</span>
+              <Textarea
+                value={resilierMotif}
+                onChange={(e) => setResilierMotif(e.target.value)}
+                rows={3}
+                placeholder="Indiquez la raison de votre résiliation…"
+                disabled={resilierLoading}
+              />
+            </label>
+            <div className="flex gap-2">
+              <BoutonY2K variant="secondary" onClick={() => setShowResilierModal(false)} disabled={resilierLoading}>Annuler</BoutonY2K>
+              <BoutonY2K variant="destructive" onClick={resilierContrat} disabled={resilierLoading || !resilierMotif.trim()} loading={resilierLoading}>
+                Confirmer la résiliation
+              </BoutonY2K>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
