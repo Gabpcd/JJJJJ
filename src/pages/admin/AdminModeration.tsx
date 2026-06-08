@@ -616,7 +616,7 @@ export default function AdminModeration() {
       {/* Task 5 — Modal masquer notation */}
       {masquerNotationId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setMasquerNotationId(null)}>
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-foreground">Masquer la notation</h2>
             <p className="text-xs text-muted-foreground">Masquer cette évaluation des vues publiques. La raison est tracée à des fins RGPD.</p>
             <label className="block">
@@ -634,7 +634,7 @@ export default function AdminModeration() {
       {/* Task 7 — Modal créer litige (bypass) */}
       {showCreerLitige && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowCreerLitige(false)}>
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-foreground">Créer un litige (bypass admin)</h2>
             <p className="text-xs text-muted-foreground">Crée un litige sans validation normale. Raison de bypass tracée RGPD.</p>
             <label className="block">
@@ -670,7 +670,7 @@ export default function AdminModeration() {
       {/* Task 8 — Modal modifier gel scope litige */}
       {gelScopeLitigeId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setGelScopeLitigeId(null)}>
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-foreground inline-flex items-center gap-2"><GitBranch className="h-5 w-5" />Modifier le gel scope</h2>
             <p className="text-xs text-muted-foreground">Modifie le périmètre de gel du litige. Action tracée RGPD.</p>
             <label className="block">
