@@ -185,6 +185,8 @@ Deno.serve(async (req) => {
   "document_complet": true/false,
   "confiance": "HAUTE"/"MOYENNE"/"FAIBLE",
   "indices_falsification": ["liste des indices de falsification/retouche détectés"] ou [],
+  "diplome_etranger": true/false/null,
+  "pays_diplome": "string (pays de délivrance du diplôme)" ou null,
   "motif_rejet": null ou "string expliquant le problème",
   "verdict": "VERIFIE"/"EN_ATTENTE"/"REJETE"
 }
@@ -202,7 +204,8 @@ Règles:
 - Pour un RIB: pas de date d'expiration. Extrais le nom du TITULAIRE du compte dans "nom_extrait"/"prenom_extrait" et vérifie qu'il correspond au nom du soignant (nom_correspond=false si le titulaire est une autre personne)
 - Pour une CNI/Passeport: extrais la date d'expiration si visible, ainsi que la date de naissance (date_naissance_extraite), le sexe (sexe_extrait: "M" ou "F"), et la commune de naissance (lieu_naissance_extrait) si lisibles sur le document. Ces informations servent à pré-remplir le profil DPAE du soignant
 - Pour une assurance RCP: extrais la date de fin de validité
-- IMPORTANT: Si le document déclaré est un "Diplôme d'État" mais que le fichier est clairement une carte d'identité, passeport ou tout autre document non-diplôme, verdict = "REJETE" avec motif "Le document fourni n'est pas un diplôme"`;
+- IMPORTANT: Si le document déclaré est un "Diplôme d'État" mais que le fichier est clairement une carte d'identité, passeport ou tout autre document non-diplôme, verdict = "REJETE" avec motif "Le document fourni n'est pas un diplôme"
+- DIPLÔME ÉTRANGER : pour un diplôme, indique "diplome_etranger" = true si le diplôme est délivré par un établissement HORS France (pays/langue/intitulé étranger) et renseigne "pays_diplome". Un diplôme étranger N'EST PAS rejeté automatiquement : il nécessite une autorisation d'exercice (procédure PAE) et une revue par l'administration → verdict = "EN_ATTENTE" avec motif "Diplôme étranger — vérification de l'autorisation d'exercice par l'administration".`;
 
     const userMessage = `Document déclaré comme: "${typeLabel}"
 Nom du soignant: "${nomComplet}"
@@ -344,6 +347,12 @@ Analyse ce document et vérifie sa conformité.`;
     if (verdictFinal === "VERIFIE" && indicesFalsif.length > 0) {
       verdictFinal = "EN_ATTENTE";
       motifRejet = "Indices de falsification détectés — vérification manuelle requise.";
+    }
+    // GATE DIPLÔME ÉTRANGER : un diplôme délivré hors France nécessite l'autorisation
+    // d'exercice (PAE) → jamais VERIFIE auto, transmis à l'administration.
+    if (doc.type_document === "DIPLOME" && analysis.diplome_etranger === true) {
+      verdictFinal = "EN_ATTENTE";
+      motifRejet = `Diplôme étranger${analysis.pays_diplome ? ` (${analysis.pays_diplome})` : ""} — transmis à l'administration pour vérification de l'autorisation d'exercice (procédure PAE). Téléversez votre autorisation d'exercice si vous en disposez.`;
     }
 
     // Si REJETE : ne PAS écrire valide_depuis/valide_jusqua (dates du mauvais document).
