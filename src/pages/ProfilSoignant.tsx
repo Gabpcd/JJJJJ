@@ -451,7 +451,7 @@ export default function ProfilSoignant() {
               <input
                 value={codeRecu}
                 onChange={(e) => setCodeRecu(e.target.value.toUpperCase())}
-                placeholder="Ex: SOIN-ABCD"
+                placeholder="Ex: JO-5B4945"
                 className="input-base flex-1"
                 disabled={parrainageSucces}
               />
