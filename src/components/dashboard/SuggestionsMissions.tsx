@@ -40,7 +40,7 @@ export function SuggestionsMissions() {
 
   const candidater = async (s: Suggestion) => {
     setCandidating(s.id);
-    const { data, error } = await supabase.rpc('fn_postuler_mission' as any, {
+    const { data, error } = await supabase.rpc('fn_postuler_mission_rate_limited' as any, {
       p_mission_id: s.id,
       p_message: 'Candidature rapide depuis suggestions dashboard',
       p_choix_contrat: null,
