@@ -59,7 +59,7 @@ export default function PageParrainageEtab() {
   const [appliying, setAppliying] = useState(false);
   const [parrainApplique, setParrainApplique] = useState<string | null>(null);
 
-  const lienRef = `https://jolene.app?ref=${code}`;
+  const lienRef = `https://jolene.app/inscription/etablissement?ref=${code}`;
   const filleulsValides = filleuls.filter(f => f.statut === 'VALIDATED').length;
   const superAmbassadeur = filleulsValides >= SEUIL_SUPER_AMBASSADEUR;
   const capAtteint = filleulsValides >= CAP_PARRAINAGES;

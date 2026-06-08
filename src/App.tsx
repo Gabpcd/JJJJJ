@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -171,9 +171,31 @@ const ClassementSoignants = lazy(() => import("./pages/ClassementSoignants"));
 
 const queryClient = new QueryClient();
 
+// Capture GLOBALE du code parrainage ?ref=CODE dès l'arrivée sur N'IMPORTE quelle
+// page (y compris la page d'accueil, cible des liens/QR partagés jolene.app?ref=…).
+// Stocke en sessionStorage selon le préfixe : JO-* → soignant, ETB-* → établissement.
+// Le code est ensuite auto-rempli à l'inscription (ProfilSoignant / page parrainage étab).
+function CaptureParrainage() {
+  useEffect(() => {
+    try {
+      const ref = new URLSearchParams(window.location.search).get('ref');
+      if (!ref) return;
+      const code = ref.trim().toUpperCase();
+      if (code.startsWith('ETB')) {
+        sessionStorage.setItem('jolene.parrainage_etab_code', code);
+      } else {
+        // JO-* et défaut → soignant (cas le plus courant)
+        sessionStorage.setItem('jolene.parrainage_code', code);
+      }
+    } catch { /* sessionStorage indisponible : non bloquant */ }
+  }, []);
+  return null;
+}
+
 function AppRoutes() {
   return (
     <PageTransition>
+      <CaptureParrainage />
       <ScrollToTop />
       <Suspense fallback={<ChargementPage />}>
         <Routes>
