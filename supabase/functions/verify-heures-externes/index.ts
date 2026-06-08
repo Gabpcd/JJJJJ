@@ -130,6 +130,16 @@ Deno.serve(async (req) => {
     const supabase = supabaseAdmin;
     const ligne = await loadHeureWithRetry(supabase, heure_externe_id);
 
+    // Charger nom/prénom du soignant pour gate concordance identité.
+    const { data: soignantData } = await supabase
+      .from("soignants")
+      .select("nom, prenom")
+      .eq("id", ligne.soignant_id)
+      .maybeSingle();
+    const soignantNom = (soignantData as any)?.nom || "";
+    const soignantPrenom = (soignantData as any)?.prenom || "";
+    const nomCompletSoignant = `${soignantPrenom} ${soignantNom}`.trim();
+
     // Sécurité : un soignant ne peut vérifier que SES propres déclarations.
     if (!isServiceRole && authUserId && ligne.soignant_id !== authUserId) {
       return new Response(JSON.stringify({ error: "Accès refusé" }), {
@@ -177,9 +187,13 @@ Deno.serve(async (req) => {
   "etablissement_detecte": "string" ou null,
   "date_debut_detectee": "YYYY-MM-DD" ou null,
   "date_fin_detectee": "YYYY-MM-DD" ou null,
+  "nom_extrait": "le nom de famille lu sur le document" ou null,
+  "prenom_extrait": "le prénom lu sur le document" ou null,
+  "nom_correspond": true/false/null,
   "document_lisible": true/false,
   "score_confiance": 0-100,
   "confiance": "HAUTE"/"MOYENNE"/"FAIBLE",
+  "indices_falsification": ["liste des indices de retouche/montage détectés"] ou [],
   "motif_rejet": null ou "string expliquant le problème",
   "verdict": "VERIFIE"/"EN_ATTENTE"/"REJETE"
 }
@@ -187,17 +201,20 @@ Deno.serve(async (req) => {
 Règles:
 - Une attestation d'heures peut être : attestation d'employeur, certificat de travail, contrat + relevés, bulletins de paie cumulés, attestation Pôle emploi/France Travail.
 - "heures_total" = nombre TOTAL d'heures travaillées sur la période. Si le document donne un nombre de mois/années sans heures précises, estime à null (ne devine pas).
-- verdict = "VERIFIE" si c'est bien une attestation d'heures lisible, mentionnant un volume d'heures, confiance HAUTE.
-- verdict = "EN_ATTENTE" si document lisible mais volume d'heures absent/ambigu, ou confiance MOYENNE.
+- nom_correspond : compare le nom/prénom lu sur le document au nom du soignant fourni (tolère casse/accents/ordre). null si aucun nom lisible.
+- DÉTECTION DE FALSIFICATION : examine les signes de retouche/montage (polices incohérentes, bords de texte flous/pixellisés, zones recouvertes, arrière-plan altéré). Liste tout signe dans "indices_falsification". Au moindre indice sérieux, verdict = "EN_ATTENTE" et motif_rejet = "Indices de falsification détectés".
+- verdict = "VERIFIE" si c'est bien une attestation d'heures lisible, mentionnant un volume d'heures, confiance HAUTE, ET nom_correspond = true.
+- verdict = "EN_ATTENTE" si document lisible mais volume d'heures absent/ambigu, ou confiance MOYENNE, ou nom_correspond = false/null.
 - verdict = "REJETE" si ce n'est clairement PAS une attestation d'heures/de travail, ou document illisible/tronqué, ou confiance FAIBLE.`;
 
     const userMessage = `Attestation déclarée pour:
+- Soignant déclaré: "${nomCompletSoignant}"
 - Établissement déclaré: "${ligne.etablissement_nom}"${ligne.etablissement_type ? ` (${ligne.etablissement_type})` : ""}
 - Période déclarée: du ${ligne.date_debut} au ${ligne.date_fin}
 - Heures déclarées: ${ligne.heures_declarees} h
 Fichier: ${ligne.attestation_nom_fichier || "attestation"}
 
-Lis le document et extrais le nombre réel d'heures travaillées, l'établissement et la période.`;
+Lis le document, extrais le nombre réel d'heures travaillées, l'établissement, la période, et vérifie la concordance du nom avec le soignant déclaré.`;
 
     const anthropicContent: any[] = [{ type: "text", text: userMessage }];
     if (isPdf) {
@@ -277,6 +294,10 @@ Lis le document et extrais le nombre réel d'heures travaillées, l'établisseme
       });
     }
 
+    // Gates côté code (concordance identité + falsification, comme verify-document).
+    const indicesFalsif = Array.isArray(analysis.indices_falsification) ? analysis.indices_falsification : [];
+    const nomCorrespond = analysis.nom_correspond === true;
+
     // Cohérence heures extraites vs déclarées : tolérance = max(5% du déclaré, 40h).
     const heuresExtraites = typeof analysis.heures_total === "number" && Number.isFinite(analysis.heures_total)
       ? Math.round(analysis.heures_total)
@@ -288,17 +309,20 @@ Lis le document et extrais le nombre réel d'heures travaillées, l'établisseme
       coherence = Math.abs(heuresExtraites - declare) <= tolerance;
     }
 
-    // Verdict final : VALIDE seulement si l'IA confirme une attestation d'heures
-    // ET que le volume extrait est cohérent avec le déclaré. Toute incohérence
-    // ou absence d'heures → EN_ATTENTE (revue admin). REJETE = non conforme.
     let statut: "EN_ATTENTE" | "VALIDE" | "REJETE";
     let commentaire: string | null = null;
     if (analysis.verdict === "REJETE") {
       statut = "REJETE";
       commentaire = analysis.motif_rejet || "Document non conforme (pas une attestation d'heures).";
-    } else if (analysis.verdict === "VERIFIE" && heuresExtraites !== null && coherence === true) {
+    } else if (indicesFalsif.length > 0) {
+      statut = "EN_ATTENTE";
+      commentaire = `Indices de falsification détectés : ${indicesFalsif.join(", ")}. Revue manuelle requise.`;
+    } else if (!nomCorrespond && analysis.nom_correspond !== null) {
+      statut = "EN_ATTENTE";
+      commentaire = `Le nom sur le document (${analysis.nom_extrait || "?"} ${analysis.prenom_extrait || "?"}) ne correspond pas au soignant déclaré (${nomCompletSoignant}). Revue manuelle requise.`;
+    } else if (analysis.verdict === "VERIFIE" && heuresExtraites !== null && coherence === true && nomCorrespond) {
       statut = "VALIDE";
-      commentaire = `Validé automatiquement par IA : ${heuresExtraites} h lues, cohérent avec ${declare} h déclarées.`;
+      commentaire = `Validé automatiquement par IA : ${heuresExtraites} h lues, cohérent avec ${declare} h déclarées, identité concordante.`;
     } else if (heuresExtraites !== null && coherence === false) {
       statut = "EN_ATTENTE";
       commentaire = `Écart détecté : ${heuresExtraites} h lues sur l'attestation vs ${declare} h déclarées. Revue manuelle requise.`;
