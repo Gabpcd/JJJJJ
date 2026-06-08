@@ -42,7 +42,7 @@ export function TopEtablissements() {
           <button
             key={e.etablissement_id}
             type="button"
-            onClick={() => navigate(`/soignant/etablissements/${e.etablissement_id}`)}
+            onClick={() => navigate('/soignant/recherche-missions')}
             className="w-full text-left rounded-xl p-2.5 transition-colors hover:bg-muted/50 flex items-center gap-3"
           >
             <span className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-slate-100 text-slate-700' : 'bg-orange-100 text-orange-800'}`}>

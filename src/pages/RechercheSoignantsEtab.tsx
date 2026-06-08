@@ -171,11 +171,20 @@ export default function RechercheSoignantsEtab() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Annuaire soignants</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {countTotal > 0 ? `${countTotal} soignant${countTotal > 1 ? 's' : ''} disponible${countTotal > 1 ? 's' : ''}` : 'Recherchez des soignants pour vos missions'}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Annuaire soignants</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {countTotal > 0 ? `${countTotal} soignant${countTotal > 1 ? 's' : ''} disponible${countTotal > 1 ? 's' : ''}` : 'Recherchez des soignants pour vos missions'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/etablissement/parametres/recherches-sauvegardees')}
+          className="btn-secondary text-xs inline-flex items-center gap-1.5 shrink-0"
+        >
+          <Star className="h-3.5 w-3.5" /> Recherches sauvegardées
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
