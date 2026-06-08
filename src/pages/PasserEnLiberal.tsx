@@ -13,6 +13,7 @@ import { CategorieKine } from '@/components/parcours-liberal/CategorieKine';
 import { CategorieIPA } from '@/components/parcours-liberal/CategorieIPA';
 import { CategorieSansHeuresCPAM } from '@/components/parcours-liberal/CategorieSansHeuresCPAM';
 import { CategorieSansHeuresCIPAV } from '@/components/parcours-liberal/CategorieSansHeuresCIPAV';
+import { FinaliserInstallationLiberal } from '@/components/parcours-liberal/FinaliserInstallationLiberal';
 
 export default function PasserEnLiberal() {
   usePageTitle('Passer en libéral');
@@ -127,6 +128,10 @@ export default function PasserEnLiberal() {
           soignantProfession={profession}
         />
       )}
+
+      <div className="mt-4">
+        <FinaliserInstallationLiberal />
+      </div>
     </LayoutApp>
   );
 }
