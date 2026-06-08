@@ -3,6 +3,9 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { CardY2K } from '@/components/y2k/CardY2K';
 import { Key, Copy, Plus, Eye, EyeOff, Code2, CheckCircle, Ban, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -128,7 +131,7 @@ export default function AdminAPI() {
       </div>
 
       {/* Documentation */}
-      <div className="card-base mb-6">
+      <CardY2K hoverLift={false} className="mb-6">
         <h2 className="font-bold text-foreground mb-4">📖 Endpoints disponibles</h2>
         <p className="text-xs text-muted-foreground mb-4">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">https://api.jolene.app/v1</code></p>
         <div className="space-y-4">
@@ -146,17 +149,17 @@ export default function AdminAPI() {
             </div>
           ))}
         </div>
-      </div>
+      </CardY2K>
 
       {/* API Keys */}
-      <div className="card-base">
+      <CardY2K hoverLift={false}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-foreground flex items-center gap-2">
             <Key className="h-5 w-5 text-primary" /> Clés API
           </h2>
-          <button onClick={() => { setShowModal(true); setGeneratedKey(null); }} className="btn-primary text-xs flex items-center gap-1">
-            <Plus className="h-3.5 w-3.5" /> Générer une clé
-          </button>
+          <BoutonY2K variant="primary" size="sm" onClick={() => { setShowModal(true); setGeneratedKey(null); }} iconeGauche={<Plus className="h-3.5 w-3.5" />}>
+            Générer une clé
+          </BoutonY2K>
         </div>
 
         {keys.length > 0 ? (
@@ -200,9 +203,9 @@ export default function AdminAPI() {
                         {k.derniere_utilisation ? format(new Date(k.derniere_utilisation), 'dd/MM/yyyy HH:mm', { locale: fr }) : 'Jamais'}
                       </td>
                       <td className="py-3">
-                        <span className={`badge-base text-[10px] ${k.actif ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}>
+                        <BadgeY2K variant={k.actif ? 'success' : 'error'} size="sm">
                           {k.actif ? 'Active' : 'Désactivée'}
-                        </span>
+                        </BadgeY2K>
                       </td>
                       <td className="py-3">
                         <div className="flex items-center gap-1">
@@ -235,12 +238,12 @@ export default function AdminAPI() {
             {/* Mobile cards */}
             <div className="md:hidden space-y-3">
               {keys.map(k => (
-                <div key={k.id} className="card-base space-y-3">
+                <CardY2K key={k.id} hoverLift={false} className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-semibold text-foreground">{k.nom}</p>
-                    <span className={`badge-base text-[10px] shrink-0 ${k.actif ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}>
+                    <BadgeY2K variant={k.actif ? 'success' : 'error'} size="sm">
                       {k.actif ? 'Active' : 'Désactivée'}
-                    </span>
+                    </BadgeY2K>
                   </div>
                   <div className="space-y-1.5 text-xs">
                     <div>
@@ -269,30 +272,22 @@ export default function AdminAPI() {
                   </div>
                   <div className="flex items-center gap-2 pt-1 border-t border-border/50">
                     {k.actif && (
-                      <button
-                        onClick={() => revoquer(k.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-warning hover:bg-warning/10 border border-warning/30"
-                        aria-label="Révoquer la clé"
-                      >
-                        <Ban className="h-3.5 w-3.5" /> Révoquer
-                      </button>
+                      <BoutonY2K variant="ghost" size="sm" onClick={() => revoquer(k.id)} aria-label="Révoquer la clé" iconeGauche={<Ban className="h-3.5 w-3.5" />}>
+                        Révoquer
+                      </BoutonY2K>
                     )}
-                    <button
-                      onClick={() => supprimer(k.id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-destructive hover:bg-destructive/10 border border-destructive/30"
-                      aria-label="Supprimer la clé"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" /> Supprimer
-                    </button>
+                    <BoutonY2K variant="destructive" size="sm" onClick={() => supprimer(k.id)} aria-label="Supprimer la clé" iconeGauche={<Trash2 className="h-3.5 w-3.5" />}>
+                      Supprimer
+                    </BoutonY2K>
                   </div>
-                </div>
+                </CardY2K>
               ))}
             </div>
           </>
         ) : (
           <p className="text-sm text-muted-foreground text-center py-6">Aucune clé API générée.</p>
         )}
-      </div>
+      </CardY2K>
 
       {/* Modal */}
       {showModal && (
@@ -323,7 +318,7 @@ export default function AdminAPI() {
                     </div>
                   </>
                 )}
-                <button onClick={() => { setShowModal(false); setGeneratedSecret(null); }} className="btn-primary w-full text-sm">Fermer</button>
+                <BoutonY2K variant="primary" size="md" onClick={() => { setShowModal(false); setGeneratedSecret(null); }} className="w-full">Fermer</BoutonY2K>
               </>
             ) : (
               <>
@@ -348,8 +343,8 @@ export default function AdminAPI() {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={genererCle} disabled={!newName.trim() || generating} className="btn-primary flex-1 text-sm disabled:opacity-50">{generating ? 'Génération…' : 'Générer'}</button>
-                  <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 text-sm">Annuler</button>
+                  <BoutonY2K variant="primary" size="md" onClick={genererCle} disabled={!newName.trim() || generating} loading={generating} className="flex-1">{generating ? 'Génération…' : 'Générer'}</BoutonY2K>
+                  <BoutonY2K variant="secondary" size="md" onClick={() => setShowModal(false)} className="flex-1">Annuler</BoutonY2K>
                 </div>
               </>
             )}

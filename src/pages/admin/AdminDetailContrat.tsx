@@ -6,6 +6,8 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { CardY2K } from '@/components/y2k/CardY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -135,7 +137,7 @@ export default function AdminDetailContrat() {
 
       {/* Parties */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-        <div className="card-base">
+        <CardY2K hoverLift={false}>
           <h2 className="text-sm font-bold text-foreground mb-2">Soignant</h2>
           <p className="text-sm">{contrat.soignant_nom}</p>
           <p className="text-xs text-muted-foreground">{contrat.soignant_email}</p>
@@ -143,16 +145,16 @@ export default function AdminDetailContrat() {
           <button onClick={() => navigate(`/admin/utilisateurs/${contrat.soignant_id}`)} className="text-xs text-primary hover:underline mt-2 inline-flex items-center gap-1">
             Profil <ExternalLink className="h-3 w-3" />
           </button>
-        </div>
-        <div className="card-base">
+        </CardY2K>
+        <CardY2K hoverLift={false}>
           <h2 className="text-sm font-bold text-foreground mb-2">Établissement</h2>
           <p className="text-sm">{contrat.etablissement_nom}</p>
           {contrat.etablissement_siret && <p className="text-xs text-muted-foreground font-mono">SIRET : {contrat.etablissement_siret}</p>}
-        </div>
+        </CardY2K>
       </section>
 
       {/* Hash + statut + DPAE */}
-      <section className="card-base mb-6 space-y-3">
+      <CardY2K hoverLift={false} className="mb-6 space-y-3">
         <div className="flex items-center gap-2 mb-2">
           <Shield className="h-5 w-5 text-primary" />
           <h2 className="text-sm font-bold text-foreground">Intégrité document</h2>
@@ -180,16 +182,16 @@ export default function AdminDetailContrat() {
             <p className="text-[11px] text-muted-foreground mb-1">Hash SHA-256 du document</p>
             <div className="flex items-center gap-2">
               <code className="text-xs font-mono break-all text-foreground flex-1">{contrat.hash_document}</code>
-              <button onClick={copierHash} className="btn-secondary text-xs py-1 px-2 shrink-0 inline-flex items-center gap-1">
-                <Copy className="h-3 w-3" /> Copier
-              </button>
+              <BoutonY2K variant="secondary" size="sm" onClick={copierHash} iconeGauche={<Copy className="h-3 w-3" />} className="shrink-0">
+                Copier
+              </BoutonY2K>
             </div>
           </div>
         )}
-      </section>
+      </CardY2K>
 
       {/* Signatures détaillées */}
-      <section className="card-base mb-6">
+      <CardY2K hoverLift={false} className="mb-6">
         <h2 className="text-sm font-bold text-foreground mb-3">Signatures</h2>
         <div className="space-y-2">
           <div className="rounded-lg border border-border p-3 text-xs">
@@ -231,11 +233,11 @@ export default function AdminDetailContrat() {
             </ul>
           </details>
         )}
-      </section>
+      </CardY2K>
 
       {/* DPAE */}
       {(contrat.type_contrat === 'CDD' || contrat.type_contrat === 'SALARIE') && (
-        <section className="card-base mb-6">
+        <CardY2K hoverLift={false} className="mb-6">
           <h2 className="text-sm font-bold text-foreground mb-2">DPAE</h2>
           {contrat.dpae_effectuee && contrat.dpae_numero ? (
             <div className="text-xs space-y-1">
@@ -245,19 +247,19 @@ export default function AdminDetailContrat() {
           ) : (
             <p className="text-xs text-warning">⏳ DPAE non encore transmise / numéro non saisi.</p>
           )}
-        </section>
+        </CardY2K>
       )}
 
       {/* PDF embarqué */}
       {pdfUrl && (
-        <section className="card-base mb-6">
+        <CardY2K hoverLift={false} className="mb-6">
           <h2 className="text-sm font-bold text-foreground mb-3">PDF contrat</h2>
           <iframe src={pdfUrl} className="w-full h-[600px] border border-border rounded-lg" title="Contrat PDF" />
-        </section>
+        </CardY2K>
       )}
 
       {/* Audit trail */}
-      <section className="card-base">
+      <CardY2K hoverLift={false}>
         <div className="flex items-center gap-2 mb-3">
           <Clock className="h-5 w-5 text-primary" />
           <h2 className="text-sm font-bold text-foreground">Audit trail ({auditTrail.length})</h2>
@@ -282,15 +284,17 @@ export default function AdminDetailContrat() {
             ))}
           </ul>
         )}
-      </section>
+      </CardY2K>
 
       <div className="mt-4 flex justify-end">
-        <button
+        <BoutonY2K
+          variant="secondary"
+          size="sm"
           onClick={() => navigate(`/contrat/${contrat.id}/certificat`)}
-          className="btn-secondary text-sm inline-flex items-center gap-2"
+          iconeGauche={<ExternalLink className="h-4 w-4" />}
         >
-          <ExternalLink className="h-4 w-4" /> Voir certificat signature
-        </button>
+          Voir certificat signature
+        </BoutonY2K>
       </div>
     </LayoutAdmin>
   );

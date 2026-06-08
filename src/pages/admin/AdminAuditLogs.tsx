@@ -5,6 +5,8 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Search, RefreshCw, ChevronLeft, ChevronRight, Shield, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -81,9 +83,9 @@ export default function AdminAuditLogs() {
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><Shield className="h-5 w-5 text-primary" /> Journaux d'audit</h1>
           <p className="text-sm text-muted-foreground">Traçabilité RGPD — conservation 5 ans</p>
         </div>
-        <button onClick={() => { setPage(0); charger(); }} className="p-2 rounded-lg bg-muted hover:bg-muted/80">
-          <RefreshCw className="h-4 w-4 text-muted-foreground" />
-        </button>
+        <BoutonY2K variant="ghost" size="sm" onClick={() => { setPage(0); charger(); }} aria-label="Rafraîchir">
+          <RefreshCw className="h-4 w-4" />
+        </BoutonY2K>
       </div>
 
       {/* Filters */}
@@ -124,10 +126,17 @@ export default function AdminAuditLogs() {
               { cle: 'ressource', titre: 'Ressource' },
               { cle: 'details', titre: 'Détails' },
             ];
+            const actionBadgeVariant = (action: string): 'success' | 'warning' | 'error' | 'info' => {
+              const cls = ACTIONS_COLORS[action] || '';
+              if (cls.includes('destructive') || cls.includes('red')) return 'error';
+              if (cls.includes('success')) return 'success';
+              if (cls.includes('warning')) return 'warning';
+              return 'info';
+            };
             const actionBadge = (log: any) => (
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${ACTIONS_COLORS[log.action] || 'bg-muted text-muted-foreground'}`}>
+              <BadgeY2K variant={actionBadgeVariant(log.action)} size="sm">
                 {log.action}
-              </span>
+              </BadgeY2K>
             );
             const dateFormatted = (log: any) => log.cree_le ? format(new Date(log.cree_le), 'dd/MM/yy HH:mm', { locale: fr }) : '—';
             const detailsContent = (log: any) =>
@@ -201,12 +210,12 @@ export default function AdminAuditLogs() {
           <div className="flex items-center justify-between mt-4">
             <p className="text-xs text-muted-foreground">{logs.length} résultats — page {page + 1}</p>
             <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="p-2 rounded-lg bg-muted hover:bg-muted/80 disabled:opacity-30">
+              <BoutonY2K variant="ghost" size="sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} aria-label="Page précédente">
                 <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button onClick={() => setPage(p => p + 1)} disabled={!hasMore} className="p-2 rounded-lg bg-muted hover:bg-muted/80 disabled:opacity-30">
+              </BoutonY2K>
+              <BoutonY2K variant="ghost" size="sm" onClick={() => setPage(p => p + 1)} disabled={!hasMore} aria-label="Page suivante">
                 <ChevronRight className="h-4 w-4" />
-              </button>
+              </BoutonY2K>
             </div>
           </div>
         </>

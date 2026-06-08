@@ -6,6 +6,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { CardY2K } from '@/components/y2k/CardY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -158,17 +161,13 @@ export default function AdminAlertesPointage() {
       {/* Liste */}
       <ul className="space-y-2">
         {alertes.map((a) => (
-          <li key={a.id} className={`card-base ${a.resolu_le ? 'opacity-60' : ''}`}>
+          <li key={a.id}><CardY2K hoverLift={false} className={a.resolu_le ? 'opacity-60' : ''}>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                    a.severite === 'CRITICAL' ? 'bg-destructive/20 text-destructive' :
-                    a.severite === 'WARNING' ? 'bg-warning/20 text-warning' :
-                    'bg-info/20 text-info'
-                  }`}>
+                  <BadgeY2K variant={a.severite === 'CRITICAL' ? 'error' : a.severite === 'WARNING' ? 'warning' : 'info'} size="sm">
                     {a.severite}
-                  </span>
+                  </BadgeY2K>
                   <span className="text-xs font-mono text-muted-foreground">{a.type_alerte}</span>
                   {a.resolu_le && <span className="text-[11px] text-success">✓ Résolue</span>}
                 </div>
@@ -188,15 +187,12 @@ export default function AdminAlertesPointage() {
                 )}
               </div>
               {!a.resolu_le && (
-                <button
-                  onClick={() => setAlerteATraiter(a)}
-                  className="btn-primary text-xs py-1.5 px-3 shrink-0"
-                >
+                <BoutonY2K variant="primary" size="sm" onClick={() => setAlerteATraiter(a)} className="shrink-0">
                   Traiter
-                </button>
+                </BoutonY2K>
               )}
             </div>
-          </li>
+          </CardY2K></li>
         ))}
         {alertes.length === 0 && !loading && (
           <li className="list-none">
@@ -216,8 +212,8 @@ export default function AdminAlertesPointage() {
         <div className="flex items-center justify-between mt-4">
           <p className="text-xs text-muted-foreground">Page {page + 1} / {totalPages}</p>
           <div className="flex gap-2">
-            <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="btn-secondary text-xs disabled:opacity-50">Précédent</button>
-            <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="btn-secondary text-xs disabled:opacity-50">Suivant</button>
+            <BoutonY2K variant="secondary" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>Précédent</BoutonY2K>
+            <BoutonY2K variant="secondary" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Suivant</BoutonY2K>
           </div>
         </div>
       )}
@@ -314,11 +310,10 @@ function ModaleTraiterAlerte({ alerte, onFermer, onTraitee }: { alerte: Alerte; 
         </label>
 
         <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
-          <button onClick={traiter} disabled={loading || !decision || motif.trim().length < 10} className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2">
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          <BoutonY2K variant="secondary" size="md" onClick={onFermer} disabled={loading} className="flex-1">Annuler</BoutonY2K>
+          <BoutonY2K variant="primary" size="md" onClick={traiter} disabled={loading || !decision || motif.trim().length < 10} loading={loading} className="flex-1">
             Confirmer la décision
-          </button>
+          </BoutonY2K>
         </div>
       </div>
     </div>

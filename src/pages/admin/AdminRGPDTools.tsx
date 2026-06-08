@@ -19,6 +19,9 @@ import {
   RefreshCw,
   FileJson,
 } from 'lucide-react';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { CardY2K } from '@/components/y2k/CardY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -151,7 +154,7 @@ export default function AdminRGPDTools() {
 
       <div className="space-y-6 max-w-5xl">
         {/* ── Section 1 : Export demandes RGPD ── */}
-        <section className="card-base">
+        <CardY2K hoverLift={false}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
             <div>
               <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
@@ -162,22 +165,25 @@ export default function AdminRGPDTools() {
               </p>
             </div>
             <div className="flex gap-2">
-              <button
+              <BoutonY2K
+                variant="ghost"
+                size="sm"
                 onClick={chargerDemandes}
                 disabled={loadingDemandes}
-                className="p-2 rounded-lg bg-muted hover:bg-muted/80 disabled:opacity-50"
                 aria-label="Recharger"
+                iconeGauche={<RefreshCw className={`h-4 w-4 ${loadingDemandes ? 'animate-spin' : ''}`} />}
               >
-                <RefreshCw className={`h-4 w-4 text-muted-foreground ${loadingDemandes ? 'animate-spin' : ''}`} />
-              </button>
-              <button
+              </BoutonY2K>
+              <BoutonY2K
+                variant="primary"
+                size="sm"
                 onClick={handleExportJSON}
                 disabled={exporting || loadingDemandes || demandes.length === 0}
-                className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
+                loading={exporting}
+                iconeGauche={!exporting ? <Download className="h-4 w-4" /> : undefined}
               >
-                <Download className="h-4 w-4" />
                 {exporting ? 'Export…' : `Télécharger JSON (${demandes.length})`}
-              </button>
+              </BoutonY2K>
             </div>
           </div>
 
@@ -211,15 +217,12 @@ export default function AdminRGPDTools() {
                             : '—'}
                         </td>
                         <td className="py-2 px-3">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                              d.action === 'RGPD_SUPPRESSION_COMPTE'
-                                ? 'bg-destructive/10 text-destructive'
-                                : 'bg-info/10 text-info'
-                            }`}
+                          <BadgeY2K
+                            variant={d.action === 'RGPD_SUPPRESSION_COMPTE' ? 'error' : 'info'}
+                            size="sm"
                           >
                             {d.action}
-                          </span>
+                          </BadgeY2K>
                         </td>
                         <td className="py-2 px-3 text-xs text-muted-foreground">
                           <span className="font-mono">{d.type_acteur}</span>
@@ -244,17 +247,15 @@ export default function AdminRGPDTools() {
               {/* Mobile cards */}
               <div className="md:hidden space-y-3 mt-2">
                 {demandes.slice(0, 50).map((d) => (
-                  <div key={d.id} className="card-base space-y-2">
+                  <CardY2K key={d.id} hoverLift={false} className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0 ${
-                          d.action === 'RGPD_SUPPRESSION_COMPTE'
-                            ? 'bg-destructive/10 text-destructive'
-                            : 'bg-info/10 text-info'
-                        }`}
+                      <BadgeY2K
+                        variant={d.action === 'RGPD_SUPPRESSION_COMPTE' ? 'error' : 'info'}
+                        size="sm"
+                        className="shrink-0"
                       >
                         {d.action}
-                      </span>
+                      </BadgeY2K>
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                         {d.cree_le ? format(new Date(d.cree_le), 'dd/MM/yy HH:mm', { locale: fr }) : '—'}
                       </span>
@@ -273,7 +274,7 @@ export default function AdminRGPDTools() {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </CardY2K>
                 ))}
               </div>
 
@@ -284,10 +285,10 @@ export default function AdminRGPDTools() {
               )}
             </>
           )}
-        </section>
+        </CardY2K>
 
         {/* ── Section 2 : Forcer suppression compte ── */}
-        <section className="card-base border-destructive/30 bg-destructive/5">
+        <CardY2K hoverLift={false} className="border-destructive/30 bg-destructive/5">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
               <Trash2 className="h-4 w-4 text-destructive" /> Forcer suppression d'un compte
@@ -371,21 +372,23 @@ export default function AdminRGPDTools() {
               )}
             </div>
 
-            <button
+            <BoutonY2K
+              variant="destructive"
+              size="md"
               onClick={handleForcerSuppression}
               disabled={!peutSupprimer}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={suppressionEnCours}
+              iconeGauche={!suppressionEnCours ? <Trash2 className="h-4 w-4" /> : undefined}
             >
-              <Trash2 className="h-4 w-4" />
               {suppressionEnCours ? 'Suppression en cours…' : 'Forcer la suppression définitive'}
-            </button>
+            </BoutonY2K>
 
             <p className="text-[11px] text-muted-foreground">
               Note : la RPC <code>fn_admin_force_supprimer_compte</code> sera créée Sprint 8 si nécessaire. En attendant,
               cette action renvoie une erreur explicite.
             </p>
           </div>
-        </section>
+        </CardY2K>
       </div>
     </LayoutAdmin>
   );

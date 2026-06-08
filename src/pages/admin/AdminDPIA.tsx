@@ -1,6 +1,7 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
-import { Shield, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
+import { CardY2K } from '@/components/y2k/CardY2K';
+import { CheckCircle, FileText } from 'lucide-react';
 
 export default function AdminDPIA() {
   usePageTitle('DPIA — Analyse d\'impact');
@@ -14,7 +15,7 @@ export default function AdminDPIA() {
 
       <div className="space-y-6 max-w-4xl">
         {/* 1. Description du traitement */}
-        <section className="card-base">
+        <CardY2K hoverLift={false}>
           <h2 className="text-base font-semibold text-foreground mb-3">1. Description du traitement</h2>
           <div className="space-y-2 text-sm text-muted-foreground">
             <p><strong className="text-foreground">Finalité :</strong> Vérification automatisée de l'authenticité et de la conformité des documents professionnels des soignants (pièce d'identité, diplômes, attestation RCP, KBIS).</p>
@@ -23,10 +24,10 @@ export default function AdminDPIA() {
             <p><strong className="text-foreground">Sous-traitant IA :</strong> Anthropic PBC (Claude) — fallback : Google (Gemini via passerelle). Documents transmis via TLS 1.3, non conservés par le prestataire.</p>
             <p><strong className="text-foreground">Volume estimé :</strong> 5-50 documents/jour en phase de lancement, jusqu'à 500/jour à maturité.</p>
           </div>
-        </section>
+        </CardY2K>
 
         {/* 2. Nécessité et proportionnalité */}
-        <section className="card-base">
+        <CardY2K hoverLift={false}>
           <h2 className="text-base font-semibold text-foreground mb-3">2. Nécessité et proportionnalité</h2>
           <div className="space-y-3">
             {[
@@ -42,10 +43,10 @@ export default function AdminDPIA() {
               </div>
             ))}
           </div>
-        </section>
+        </CardY2K>
 
         {/* 3. Risques identifiés */}
-        <section className="card-base">
+        <CardY2K hoverLift={false}>
           <h2 className="text-base font-semibold text-foreground mb-3">3. Risques identifiés et mesures</h2>
           {(() => {
             const risques = [
@@ -86,7 +87,7 @@ export default function AdminDPIA() {
                 {/* Mobile cards */}
                 <div className="md:hidden space-y-3">
                   {risques.map((row, i) => (
-                    <div key={i} className="card-base space-y-2">
+                    <div key={i} className="rounded-2xl border-2 border-jolene-rose-200 bg-jolene-cloud p-4 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-medium text-foreground flex-1">{row.risque}</p>
                         <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
@@ -102,10 +103,10 @@ export default function AdminDPIA() {
               </>
             );
           })()}
-        </section>
+        </CardY2K>
 
         {/* 4. Droits des personnes */}
-        <section className="card-base">
+        <CardY2K hoverLift={false}>
           <h2 className="text-base font-semibold text-foreground mb-3">4. Droits des personnes concernées</h2>
           <div className="space-y-2 text-sm">
             {[
@@ -121,10 +122,10 @@ export default function AdminDPIA() {
               </div>
             ))}
           </div>
-        </section>
+        </CardY2K>
 
         {/* 5. Conclusion */}
-        <section className="card-base bg-success/5 border-success/20">
+        <CardY2K hoverLift={false} className="bg-success/5 border-success/20">
           <h2 className="text-base font-semibold text-foreground mb-3">5. Conclusion</h2>
           <p className="text-sm text-foreground">
             Le traitement est proportionné à la finalité poursuivie. Les mesures d'atténuation couvrent l'ensemble des risques identifiés.
@@ -133,7 +134,7 @@ export default function AdminDPIA() {
           <p className="text-xs text-muted-foreground mt-3">
             DPIA réalisée le 09/04/2026 — Prochaine révision : 09/04/2027 ou en cas de modification significative du traitement.
           </p>
-        </section>
+        </CardY2K>
       </div>
     </LayoutAdmin>
   );

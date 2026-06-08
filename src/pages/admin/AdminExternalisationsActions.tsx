@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Loader2, RefreshCw, XCircle, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -98,9 +100,9 @@ export default function AdminExternalisationsActions() {
       <div className="max-w-7xl mx-auto p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-foreground">Worker externalisations</h1>
-          <button onClick={charger} className="btn-secondary inline-flex items-center gap-2">
-            <RefreshCw className="h-4 w-4" /> Rafraîchir
-          </button>
+          <BoutonY2K variant="secondary" size="sm" onClick={charger} iconeGauche={<RefreshCw className="h-4 w-4" />}>
+            Rafraîchir
+          </BoutonY2K>
         </div>
 
         {/* Stats */}
@@ -171,16 +173,16 @@ export default function AdminExternalisationsActions() {
                     </p>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    <button onClick={() => setDetails(a)} className="btn-secondary text-xs">Détail</button>
+                    <BoutonY2K variant="secondary" size="sm" onClick={() => setDetails(a)}>Détail</BoutonY2K>
                     {(a.statut === 'ERROR' || a.statut === 'PENDING_AIFE') && (
-                      <button onClick={() => retry(a.id)} className="btn-primary text-xs inline-flex items-center gap-1">
-                        <RefreshCw className="h-3 w-3" /> Retry
-                      </button>
+                      <BoutonY2K variant="primary" size="sm" onClick={() => retry(a.id)} iconeGauche={<RefreshCw className="h-3 w-3" />}>
+                        Retry
+                      </BoutonY2K>
                     )}
                     {(a.statut === 'PENDING' || a.statut === 'PENDING_AIFE' || a.statut === 'ERROR') && (
-                      <button onClick={() => cancel(a.id)} className="btn-secondary text-xs inline-flex items-center gap-1 text-destructive">
-                        <XCircle className="h-3 w-3" /> Annuler
-                      </button>
+                      <BoutonY2K variant="destructive" size="sm" onClick={() => cancel(a.id)} iconeGauche={<XCircle className="h-3 w-3" />}>
+                        Annuler
+                      </BoutonY2K>
                     )}
                   </div>
                 </div>
@@ -210,7 +212,7 @@ export default function AdminExternalisationsActions() {
                   <pre className="text-[10px] font-mono whitespace-pre-wrap break-all">{details.derniere_erreur}</pre>
                 </div>
               )}
-              <button onClick={() => setDetails(null)} className="btn-secondary w-full">Fermer</button>
+              <BoutonY2K variant="secondary" size="md" onClick={() => setDetails(null)} className="w-full">Fermer</BoutonY2K>
             </div>
           </div>
         )}
@@ -220,19 +222,25 @@ export default function AdminExternalisationsActions() {
 }
 
 function StatutBadge({ statut }: { statut: Action['statut'] }) {
-  const config = {
-    PENDING: { icon: Clock, color: 'bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100' },
-    PROCESSING: { icon: Loader2, color: 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100' },
-    DONE: { icon: CheckCircle, color: 'bg-emerald-100 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100' },
-    ERROR: { icon: AlertTriangle, color: 'bg-destructive/10 text-destructive' },
-    PENDING_AIFE: { icon: Clock, color: 'bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100' },
-    CANCELLED: { icon: XCircle, color: 'bg-muted text-muted-foreground' },
-  }[statut];
-  const Icon = config.icon;
+  const variantMap: Record<Action['statut'], 'warning' | 'info' | 'success' | 'error'> = {
+    PENDING: 'warning',
+    PROCESSING: 'info',
+    DONE: 'success',
+    ERROR: 'error',
+    PENDING_AIFE: 'warning',
+    CANCELLED: 'info',
+  };
+  const iconMap: Record<Action['statut'], React.ReactNode> = {
+    PENDING: <Clock className="h-3 w-3" />,
+    PROCESSING: <Loader2 className="h-3 w-3 animate-spin" />,
+    DONE: <CheckCircle className="h-3 w-3" />,
+    ERROR: <AlertTriangle className="h-3 w-3" />,
+    PENDING_AIFE: <Clock className="h-3 w-3" />,
+    CANCELLED: <XCircle className="h-3 w-3" />,
+  };
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${config.color}`}>
-      <Icon className={`h-3 w-3 ${statut === 'PROCESSING' ? 'animate-spin' : ''}`} />
+    <BadgeY2K variant={variantMap[statut]} size="sm" icone={iconMap[statut]}>
       {statut}
-    </span>
+    </BadgeY2K>
   );
 }
