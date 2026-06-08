@@ -119,6 +119,7 @@ Deno.serve(async (req) => {
   "prenom_extrait": "le prénom lu sur le document" ou null,
   "document_lisible": true/false,
   "confiance": "HAUTE"/"MOYENNE"/"FAIBLE",
+  "indices_falsification": ["liste des indices de falsification/retouche détectés"] ou [],
   "motif_rejet": null ou "string",
   "verdict": "VERIFIE"/"EN_ATTENTE"/"REJETE"
 }
@@ -126,7 +127,11 @@ Règles:
 - verdict = "VERIFIE" si c'est bien une pièce d'identité officielle (CNI, passeport, titre de séjour), lisible, confiance HAUTE.
 - verdict = "EN_ATTENTE" si doute ou confiance MOYENNE.
 - verdict = "REJETE" si ce n'est pas une pièce d'identité, illisible/tronquée, ou confiance FAIBLE.
-- nom_correspond : compare le nom/prénom du document au nom du représentant fourni (tolère casse/accents/ordre).`;
+- nom_correspond : compare le nom/prénom du document au nom du représentant fourni (tolère casse/accents/ordre).
+- DÉTECTION DE FALSIFICATION : examine les signes de retouche/montage (polices incohérentes,
+  bords de texte flous/pixellisés autour des nom/dates/numéros, photo recollée, zones recouvertes,
+  arrière-plan altéré). Liste tout signe dans "indices_falsification". Au moindre indice sérieux,
+  verdict = "EN_ATTENTE" et motif_rejet = "Indices de falsification détectés".`;
 
     const userMessage = `Document déclaré comme: "${typeLabel}"
 Nom du représentant déclaré: "${nomComplet}"
@@ -169,7 +174,9 @@ Analyse ce document et vérifie sa conformité + la concordance du nom.`;
     const aiJson = await aiResponse.json();
     const text = (aiJson?.content || []).map((c: any) => c?.text || '').join('\n');
     const result = parseJsonFromText(text) || {};
-    const verdict = result.verdict || 'EN_ATTENTE';
+    // GATE FALSIFICATION : tout indice de retouche → revue humaine (jamais VERIFIE auto).
+    const indicesFalsif = Array.isArray(result.indices_falsification) ? result.indices_falsification : [];
+    const verdict = (result.verdict === 'VERIFIE' && indicesFalsif.length > 0) ? 'EN_ATTENTE' : (result.verdict || 'EN_ATTENTE');
     const nomCorrespond = result.nom_correspond === true;
     const identiteVerifiee = verdict === 'VERIFIE' && nomCorrespond;
 

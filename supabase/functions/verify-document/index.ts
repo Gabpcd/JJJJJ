@@ -181,6 +181,7 @@ Deno.serve(async (req) => {
   "document_lisible": true/false,
   "document_complet": true/false,
   "confiance": "HAUTE"/"MOYENNE"/"FAIBLE",
+  "indices_falsification": ["liste des indices de falsification/retouche détectés"] ou [],
   "motif_rejet": null ou "string expliquant le problème",
   "verdict": "VERIFIE"/"EN_ATTENTE"/"REJETE"
 }
@@ -189,6 +190,12 @@ Règles:
 - verdict = "VERIFIE" si type correspond, document lisible et complet, confiance HAUTE
 - verdict = "EN_ATTENTE" si doute sur le type, nom, ou confiance MOYENNE
 - verdict = "REJETE" si clairement pas le bon type, document illisible/tronqué, ou confiance FAIBLE
+- DÉTECTION DE FALSIFICATION (important) : examine les signes de retouche/montage — polices
+  incohérentes, alignements/espacements anormaux, bords de texte flous ou pixellisés autour
+  des nom/prénom/dates/numéros, zones recouvertes, photo recollée, arrière-plan altéré,
+  numéros au format invalide. Liste TOUT signe suspect dans "indices_falsification". S'il y a
+  le moindre indice sérieux de falsification, verdict = "EN_ATTENTE" (revue humaine) et
+  motif_rejet = "Indices de falsification détectés — vérification manuelle requise"
 - Pour un RIB: pas de date d'expiration. Extrais le nom du TITULAIRE du compte dans "nom_extrait"/"prenom_extrait" et vérifie qu'il correspond au nom du soignant (nom_correspond=false si le titulaire est une autre personne)
 - Pour une CNI/Passeport: extrais la date d'expiration si visible
 - Pour une assurance RCP: extrais la date de fin de validité
@@ -325,9 +332,15 @@ Analyse ce document et vérifie sa conformité.`;
     // expiration et les changements de RIB (le nom du titulaire doit concorder).
     let verdictFinal = analysis.verdict || "EN_ATTENTE";
     let motifRejet = analysis.motif_rejet || null;
+    const indicesFalsif = Array.isArray(analysis.indices_falsification) ? analysis.indices_falsification : [];
     if (verdictFinal === "VERIFIE" && coherenceNom === false) {
       verdictFinal = "EN_ATTENTE";
       motifRejet = "Le nom du document ne correspond pas à celui du profil — vérification manuelle requise.";
+    }
+    // GATE FALSIFICATION : tout indice de retouche/montage → revue humaine (jamais VERIFIE auto).
+    if (verdictFinal === "VERIFIE" && indicesFalsif.length > 0) {
+      verdictFinal = "EN_ATTENTE";
+      motifRejet = "Indices de falsification détectés — vérification manuelle requise.";
     }
 
     // Si REJETE : ne PAS écrire valide_depuis/valide_jusqua (dates du mauvais document).
