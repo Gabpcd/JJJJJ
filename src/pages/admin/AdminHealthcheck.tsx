@@ -5,6 +5,8 @@ import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { CheckCircle, XCircle, Clock, RefreshCw, Server, Database, Mail, CreditCard, Shield, Smartphone, Globe, KeyRound, Loader2, MessageSquare, Send, ShieldCheck, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { CardY2K } from '@/components/y2k/CardY2K';
 
 interface ServiceStatus {
   name: string;
@@ -273,26 +275,25 @@ export default function AdminHealthcheck() {
             {lastCheck && ` — dernière vérification ${lastCheck.toLocaleTimeString('fr-FR')}`}
           </p>
         </div>
-        <button onClick={checkAll} disabled={checking} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
+        <BoutonY2K variant="primary" size="sm" onClick={checkAll} disabled={checking} loading={checking} iconeGauche={!checking ? <RefreshCw className="h-4 w-4" /> : undefined}>
           {checking ? 'Vérification...' : 'Revérifier'}
-        </button>
+        </BoutonY2K>
       </div>
 
       {/* Overall status */}
       {totalCount > 0 && (
-        <div className={`card-base mb-6 p-4 border-l-4 ${okCount === totalCount ? 'border-success bg-success/5' : okCount > totalCount / 2 ? 'border-warning bg-warning/5' : 'border-destructive bg-destructive/5'}`}>
+        <CardY2K hoverLift={false} className={`mb-6 p-4 border-l-4 ${okCount === totalCount ? 'border-success bg-success/5' : okCount > totalCount / 2 ? 'border-warning bg-warning/5' : 'border-destructive bg-destructive/5'}`}>
           <p className="text-lg font-bold text-foreground">
             {okCount === totalCount ? 'Tous les services sont opérationnels' : `${totalCount - okCount} service(s) en alerte`}
           </p>
-        </div>
+        </CardY2K>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {services.map((svc, i) => {
           const StatusIcon = statusIcon(svc.status);
           return (
-            <div key={i} className="card-base p-4">
+            <CardY2K key={i} className="p-4" hoverLift={false}>
               <div className="flex items-center gap-3 mb-2">
                 <svc.icon className={`h-5 w-5 ${statusColor(svc.status)}`} />
                 <span className="text-sm font-semibold text-foreground">{svc.name}</span>
@@ -305,13 +306,13 @@ export default function AdminHealthcheck() {
                 {svc.latency != null && <span className="text-[10px] text-muted-foreground ml-auto">{svc.latency}ms</span>}
               </div>
               {svc.detail && <p className="text-[10px] text-muted-foreground mt-1 truncate">{svc.detail}</p>}
-            </div>
+            </CardY2K>
           );
         })}
       </div>
 
       {/* ── Pro Santé Connect : diagnostic isolé (bascule prod) ── */}
-      <div className="card-base mt-6 p-5">
+      <CardY2K hoverLift={false} className="mt-6 p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <h2 className="text-base font-bold text-foreground flex items-center gap-2">
@@ -322,14 +323,17 @@ export default function AdminHealthcheck() {
               Vérifie la configuration PSC : secrets présents, OIDC discovery joignable, endpoints alignés. Outil critique le jour de la bascule prod.
             </p>
           </div>
-          <button
+          <BoutonY2K
+            variant="primary"
+            size="sm"
             onClick={verifierPSC}
             disabled={pscChecking}
-            className="btn-primary flex items-center gap-2 disabled:opacity-50 shrink-0"
+            loading={pscChecking}
+            iconeGauche={!pscChecking ? <RefreshCw className="h-4 w-4" /> : undefined}
+            className="shrink-0"
           >
-            {pscChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {pscChecking ? 'Vérification…' : 'Vérifier connexion PSC'}
-          </button>
+          </BoutonY2K>
         </div>
 
         {pscResult && (
@@ -370,10 +374,10 @@ export default function AdminHealthcheck() {
             )}
           </div>
         )}
-      </div>
+      </CardY2K>
 
       {/* ── SMS Twilio : test rapide ── */}
-      <div className="card-base mt-6 p-5">
+      <CardY2K hoverLift={false} className="mt-6 p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <h2 className="text-base font-bold text-foreground flex items-center gap-2">
@@ -394,21 +398,23 @@ export default function AdminHealthcheck() {
             placeholder="+33 6 XX XX XX XX"
             className="input-base flex-1"
           />
-          <button
+          <BoutonY2K
+            variant="primary"
+            size="md"
             onClick={testerSMS}
             disabled={smsTesting || !smsPhone.trim()}
-            className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50"
+            loading={smsTesting}
+            iconeGauche={!smsTesting ? <Send className="h-4 w-4" /> : undefined}
           >
-            {smsTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             {smsTesting ? 'Envoi…' : 'Tester SMS'}
-          </button>
+          </BoutonY2K>
         </div>
         {smsResult && (
           <div className={`mt-3 p-3 rounded-lg border text-xs ${smsResult.ok ? 'border-success/30 bg-success/5 text-success' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}>
             <span className="font-mono">{smsResult.detail}</span>
           </div>
         )}
-      </div>
+      </CardY2K>
 
       {!import.meta.env.VITE_SENTRY_DSN && (
         <p className="text-[11px] text-muted-foreground/60 italic mt-6 text-center">

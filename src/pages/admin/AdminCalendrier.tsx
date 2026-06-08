@@ -5,7 +5,7 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, addDays, isSameMonth, isSameDay, isToday
@@ -136,39 +136,41 @@ export default function AdminCalendrier() {
 
         {/* Stats bar */}
         <div className="flex flex-wrap gap-3">
-          <Badge
-            variant="destructive"
-            className={`text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'NON_POURVUE' ? 'opacity-40' : ''}`}
+          <BadgeY2K
+            variant="error"
+            className={`cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'NON_POURVUE' ? 'opacity-40' : ''}`}
             onClick={() => setFiltreStatut(f => f === 'NON_POURVUE' ? null : 'NON_POURVUE')}
           >
             {nonPourvues} non pourvue{nonPourvues > 1 ? 's' : ''}
-          </Badge>
-          <Badge
-            className={`bg-info text-info-foreground text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'ASSIGNEE' ? 'opacity-40' : ''}`}
+          </BadgeY2K>
+          <BadgeY2K
+            variant="info"
+            className={`cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'ASSIGNEE' ? 'opacity-40' : ''}`}
             onClick={() => setFiltreStatut(f => f === 'ASSIGNEE' ? null : 'ASSIGNEE')}
           >
             {assignees} assignée{assignees > 1 ? 's' : ''}
-          </Badge>
-          <Badge
-            className={`bg-success text-success-foreground text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'EN_COURS' ? 'opacity-40' : ''}`}
+          </BadgeY2K>
+          <BadgeY2K
+            variant="success"
+            className={`cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'EN_COURS' ? 'opacity-40' : ''}`}
             onClick={() => setFiltreStatut(f => f === 'EN_COURS' ? null : 'EN_COURS')}
           >
             {enCours} en cours
-          </Badge>
-          <Badge
-            variant="secondary"
-            className={`text-xs cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'TERMINEE' ? 'opacity-40' : ''}`}
+          </BadgeY2K>
+          <BadgeY2K
+            variant="info"
+            className={`cursor-pointer transition-opacity ${filtreStatut && filtreStatut !== 'TERMINEE' ? 'opacity-40' : ''}`}
             onClick={() => setFiltreStatut(f => f === 'TERMINEE' ? null : 'TERMINEE')}
           >
             {terminees} terminée{terminees > 1 ? 's' : ''}
-          </Badge>
-          <Badge
-            variant="outline"
-            className={`text-xs cursor-pointer ${filtreStatut ? 'opacity-60' : ''}`}
+          </BadgeY2K>
+          <BadgeY2K
+            variant="info"
+            className={`cursor-pointer ${filtreStatut ? 'opacity-60' : ''}`}
             onClick={() => setFiltreStatut(null)}
           >
             {missions.length} total
-          </Badge>
+          </BadgeY2K>
         </div>
 
         {/* Navigation */}

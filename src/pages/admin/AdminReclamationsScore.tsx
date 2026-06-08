@@ -5,6 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -63,10 +65,9 @@ export default function AdminReclamationsScore() {
 
         <div className="flex gap-2">
           {(['PENDING', 'TREATED', 'TOUS'] as const).map(f => (
-            <button key={f} onClick={() => setFiltre(f)}
-              className={`px-3 py-1.5 rounded-lg text-sm ${filtre === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-accent'}`}>
+            <BoutonY2K key={f} size="sm" variant={filtre === f ? 'primary' : 'secondary'} onClick={() => setFiltre(f)}>
               {f === 'PENDING' ? 'En attente' : f === 'TREATED' ? 'Traitées' : 'Toutes'}
-            </button>
+            </BoutonY2K>
           ))}
         </div>
 
@@ -96,19 +97,17 @@ export default function AdminReclamationsScore() {
                       <span className="font-semibold text-foreground">{r.event_type_evenement}</span>
                       <span className="font-mono text-destructive">{r.event_points} pts</span>
                       {r.statut === 'PENDING' && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${r.jours_attente > 7
-                          ? 'bg-destructive text-destructive-foreground'
-                          : 'bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100'}`}>
+                        <BadgeY2K variant={r.jours_attente > 7 ? 'error' : 'warning'} size="sm">
                           {Math.round(r.jours_attente)}j d'attente
-                        </span>
+                        </BadgeY2K>
                       )}
                       {r.statut === 'TREATED' && r.decision_admin && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          r.decision_admin === 'ANNULER' ? 'bg-emerald-200 text-emerald-900' :
-                          r.decision_admin === 'REDUIRE' ? 'bg-blue-200 text-blue-900' :
-                          'bg-muted text-foreground'}`}>
+                        <BadgeY2K
+                          variant={r.decision_admin === 'ANNULER' ? 'success' : r.decision_admin === 'REDUIRE' ? 'info' : 'info'}
+                          size="sm"
+                        >
                           {r.decision_admin}
-                        </span>
+                        </BadgeY2K>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
@@ -135,7 +134,7 @@ export default function AdminReclamationsScore() {
                     </p>
                   </div>
                   {r.statut === 'PENDING' && (
-                    <button onClick={() => setSelectionnee(r)} className="btn-primary text-xs">Traiter</button>
+                    <BoutonY2K variant="primary" size="sm" onClick={() => setSelectionnee(r)}>Traiter</BoutonY2K>
                   )}
                 </div>
               </div>
@@ -245,11 +244,10 @@ function ModaleDecision({ reclamation, onFermer, onTraitee }: {
         </div>
 
         <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
-          <button onClick={soumettre} disabled={loading} className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2">
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          <BoutonY2K variant="secondary" size="md" onClick={onFermer} disabled={loading} className="flex-1">Annuler</BoutonY2K>
+          <BoutonY2K variant="primary" size="md" onClick={soumettre} disabled={loading} loading={loading} className="flex-1">
             Appliquer la décision
-          </button>
+          </BoutonY2K>
         </div>
       </div>
     </div>

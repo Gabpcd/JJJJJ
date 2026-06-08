@@ -6,6 +6,8 @@ import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { CardY2K } from '@/components/y2k/CardY2K';
 
 interface Template {
   id: string;
@@ -114,14 +116,16 @@ export default function AdminEditerTemplateContrat() {
             Type <code>{template.type_contrat}</code> · Version actuelle <strong>v{template.version}</strong>
           </p>
         </div>
-        <button
+        <BoutonY2K
+          variant="primary"
+          size="md"
           onClick={sauvegarder}
           disabled={saving || contenuHtml === template.contenu_html}
-          className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
+          loading={saving}
+          iconeGauche={!saving ? <Save className="h-4 w-4" /> : undefined}
         >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Enregistrer (v{template.version + 1})
-        </button>
+        </BoutonY2K>
       </div>
 
       <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2 mb-4">
@@ -170,7 +174,7 @@ export default function AdminEditerTemplateContrat() {
         </div>
 
         <aside className="space-y-3">
-          <div className="card-base">
+          <CardY2K hoverLift={false}>
             <h3 className="text-sm font-bold text-foreground mb-2">Variables disponibles</h3>
             <p className="text-[11px] text-muted-foreground mb-2">Cliquez pour insérer à la fin du contenu.</p>
             <ul className="space-y-1">
@@ -186,15 +190,15 @@ export default function AdminEditerTemplateContrat() {
                 </li>
               ))}
             </ul>
-          </div>
+          </CardY2K>
 
           {template.variables && Object.keys(template.variables).length > 0 && (
-            <div className="card-base">
+            <CardY2K hoverLift={false}>
               <h3 className="text-sm font-bold text-foreground mb-2">Variables originales</h3>
               <pre className="text-[10px] font-mono text-muted-foreground overflow-x-auto">
                 {JSON.stringify(template.variables, null, 2)}
               </pre>
-            </div>
+            </CardY2K>
           )}
         </aside>
       </div>

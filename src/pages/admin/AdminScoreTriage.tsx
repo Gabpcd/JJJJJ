@@ -7,6 +7,8 @@ import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCarte
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 
 /**
  * Page admin /admin/scores (Sprint 7 PR 6 - P2 §14).
@@ -38,17 +40,13 @@ function niveauDepuisScore(score: number): LigneScore['niveau'] {
   return 'BRONZE';
 }
 
-function badgeNiveauClasses(niveau: LigneScore['niveau']): string {
+function badgeNiveauVariant(niveau: LigneScore['niveau']): 'premium' | 'warning' | 'info' | 'success' {
   switch (niveau) {
-    case 'PLATINE':
-      return 'bg-indigo-100 text-indigo-700 border-indigo-200';
-    case 'OR':
-      return 'bg-amber-100 text-amber-700 border-amber-200';
-    case 'ARGENT':
-      return 'bg-slate-100 text-slate-700 border-slate-200';
+    case 'PLATINE': return 'premium';
+    case 'OR': return 'warning';
+    case 'ARGENT': return 'info';
     case 'BRONZE':
-    default:
-      return 'bg-orange-100 text-orange-700 border-orange-200';
+    default: return 'success';
   }
 }
 
@@ -188,14 +186,14 @@ export default function AdminScoreTriage() {
           ];
 
           const typeBadge = (l: LigneScore) => (
-            <span className="px-2 py-0.5 text-xs rounded bg-slate-100">
+            <BadgeY2K variant="info" size="sm">
               {l.type === 'SOIGNANT' ? 'Soignant' : 'Étab'}
-            </span>
+            </BadgeY2K>
           );
           const niveauBadge = (l: LigneScore) => (
-            <span className={`px-2 py-0.5 text-xs rounded border ${badgeNiveauClasses(l.niveau)}`}>
+            <BadgeY2K variant={badgeNiveauVariant(l.niveau)} size="sm">
               {l.niveau}
-            </span>
+            </BadgeY2K>
           );
 
           return (
@@ -220,22 +218,24 @@ export default function AdminScoreTriage() {
                   case 'actions':
                     return (
                       <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
+                        <BoutonY2K
+                          variant="secondary"
+                          size="sm"
                           onClick={() => ouvrirProfil(l)}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded hover:bg-slate-100"
                           aria-label={`Voir le profil de ${l.nom}`}
+                          iconeGauche={<Eye className="w-3.5 h-3.5" />}
                         >
-                          <Eye className="w-3.5 h-3.5" /> Voir
-                        </button>
-                        <button
-                          type="button"
+                          Voir
+                        </BoutonY2K>
+                        <BoutonY2K
+                          variant="ghost"
+                          size="sm"
                           onClick={ouvrirMessagerie}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded hover:bg-slate-100"
                           aria-label={`Messagerie ${l.nom}`}
+                          iconeGauche={<MessageSquare className="w-3.5 h-3.5" />}
                         >
-                          <MessageSquare className="w-3.5 h-3.5" /> Message
-                        </button>
+                          Message
+                        </BoutonY2K>
                       </div>
                     );
                   default:
@@ -256,20 +256,24 @@ export default function AdminScoreTriage() {
                     <p className="font-mono text-lg font-bold tabular-nums shrink-0">{l.score.toFixed(1)}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
+                    <BoutonY2K
+                      variant="secondary"
+                      size="sm"
                       onClick={() => ouvrirProfil(l)}
-                      className="inline-flex items-center justify-center gap-1 px-2 py-2 text-xs border rounded hover:bg-slate-100 min-h-[44px]"
+                      iconeGauche={<Eye className="w-3.5 h-3.5" />}
+                      className="w-full"
                     >
-                      <Eye className="w-3.5 h-3.5" /> Voir le profil
-                    </button>
-                    <button
-                      type="button"
+                      Voir le profil
+                    </BoutonY2K>
+                    <BoutonY2K
+                      variant="ghost"
+                      size="sm"
                       onClick={ouvrirMessagerie}
-                      className="inline-flex items-center justify-center gap-1 px-2 py-2 text-xs border rounded hover:bg-slate-100 min-h-[44px]"
+                      iconeGauche={<MessageSquare className="w-3.5 h-3.5" />}
+                      className="w-full"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" /> Message
-                    </button>
+                      Message
+                    </BoutonY2K>
                   </div>
                 </div>
               )}

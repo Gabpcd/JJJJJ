@@ -6,6 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { TrendingUp, Users, Building2, DollarSign, RefreshCw, Percent, Clock, Zap } from 'lucide-react';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { CardY2K } from '@/components/y2k/CardY2K';
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 function fmt(v: number | null | undefined): string {
@@ -46,11 +48,12 @@ export default function AdminCohortEconomics() {
         </div>
         <div className="flex gap-2">
           {[6, 12, 24].map(m => (
-            <button key={m} onClick={() => setPeriode(m)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${periode === m ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+            <BoutonY2K key={m} size="sm" variant={periode === m ? 'primary' : 'secondary'} onClick={() => setPeriode(m)}>
               {m}m
-            </button>
+            </BoutonY2K>
           ))}
-          <button onClick={charger} className="p-1.5 rounded-lg bg-muted hover:bg-muted/80"><RefreshCw className="h-4 w-4 text-muted-foreground" /></button>
+          <BoutonY2K variant="ghost" size="sm" onClick={charger} aria-label="Rafraîchir" iconeGauche={<RefreshCw className="h-4 w-4" />}>
+          </BoutonY2K>
         </div>
       </div>
 
@@ -63,16 +66,16 @@ export default function AdminCohortEconomics() {
           { label: 'GMV totale', value: fmt(totals.gmv_total), icon: TrendingUp, color: 'text-primary', raw: true },
           { label: 'Revenue (commissions)', value: fmt(totals.revenue_total), icon: DollarSign, color: 'text-success', raw: true },
         ].map((kpi, i) => (
-          <div key={i} className="card-base text-center p-4">
+          <CardY2K key={i} className="text-center p-4" hoverLift={false}>
             <kpi.icon className={`h-5 w-5 ${kpi.color} mx-auto mb-1`} />
             <p className="text-xl font-bold text-foreground">{kpi.raw ? kpi.value : kpi.value?.toLocaleString('fr-FR')}</p>
             <p className="text-[11px] text-muted-foreground">{kpi.label}</p>
-          </div>
+          </CardY2K>
         ))}
       </div>
 
       {/* Unit Economics cards */}
-      <div className="card-base mb-6">
+      <CardY2K className="mb-6" hoverLift={false}>
         <h2 className="text-base font-semibold text-foreground mb-4">Unit Economics</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
@@ -91,11 +94,11 @@ export default function AdminCohortEconomics() {
             </div>
           ))}
         </div>
-      </div>
+      </CardY2K>
 
       {/* GMV + Commissions over time */}
       {cohortes.length > 0 && (
-        <div className="card-base mb-6">
+        <CardY2K className="mb-6" hoverLift={false}>
           <h2 className="text-base font-semibold text-foreground mb-4">GMV & Commissions mensuelles</h2>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={cohortes}>
@@ -107,13 +110,13 @@ export default function AdminCohortEconomics() {
               <Area type="monotone" dataKey="commission_ttc" name="Commission TTC (€)" fill="#10B981" fillOpacity={0.15} stroke="#10B981" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </CardY2K>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Cohort: signups */}
         {cohortes.length > 0 && (
-          <div className="card-base">
+          <CardY2K hoverLift={false}>
             <h2 className="text-base font-semibold text-foreground mb-4">Inscriptions par cohorte</h2>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={cohortes}>
@@ -125,12 +128,12 @@ export default function AdminCohortEconomics() {
                 <Bar dataKey="nouveaux_etabs" name="Établissements" fill="#E04590" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </CardY2K>
         )}
 
         {/* Retention */}
         {retention.length > 0 && (
-          <div className="card-base">
+          <CardY2K hoverLift={false}>
             <h2 className="text-base font-semibold text-foreground mb-4">Rétention soignants (M → M+1)</h2>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={retention}>
@@ -142,13 +145,13 @@ export default function AdminCohortEconomics() {
                 <Line type="monotone" dataKey="taux_retention" name="Rétention (%)" stroke="#E04590" strokeWidth={2} dot={{ r: 4, fill: '#E04590' }} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </CardY2K>
         )}
       </div>
 
       {/* Active users over time */}
       {cohortes.length > 0 && (
-        <div className="card-base">
+        <CardY2K hoverLift={false}>
           <h2 className="text-base font-semibold text-foreground mb-4">Utilisateurs actifs par mois</h2>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={cohortes}>
@@ -160,7 +163,7 @@ export default function AdminCohortEconomics() {
               <Bar dataKey="etabs_actifs" name="Étab. actifs" fill="#E04590" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </CardY2K>
       )}
     </LayoutAdmin>
   );

@@ -5,6 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -94,10 +96,9 @@ export default function AdminHeuresExternes() {
 
         <div className="flex gap-2 flex-wrap">
           {(['EN_ATTENTE', 'VALIDE', 'REJETE', 'TOUS'] as const).map(f => (
-            <button key={f} onClick={() => setFiltre(f)}
-              className={`px-3 py-1.5 rounded-lg text-sm ${filtre === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-accent'}`}>
+            <BoutonY2K key={f} size="sm" variant={filtre === f ? 'primary' : 'secondary'} onClick={() => setFiltre(f)}>
               {f === 'EN_ATTENTE' ? 'En attente' : f === 'VALIDE' ? 'Validées' : f === 'REJETE' ? 'Rejetées' : 'Toutes'}
-            </button>
+            </BoutonY2K>
           ))}
         </div>
 
@@ -126,13 +127,13 @@ export default function AdminHeuresExternes() {
                         <span className="font-semibold text-foreground">{h.soignant_prenom} {h.soignant_nom}</span>
                         {h.profession && <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{h.profession}</span>}
                         {h.type_exercice && <span className="text-[11px] text-muted-foreground">{h.type_exercice}</span>}
-                        <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
-                          h.statut_validation === 'VALIDE' ? 'bg-emerald-200 text-emerald-900' :
-                          h.statut_validation === 'REJETE' ? 'bg-destructive/15 text-destructive' :
-                          'bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100'}`}>
-                          {h.statut_validation === 'VALIDE' ? <CheckCircle className="h-3 w-3" /> : h.statut_validation === 'REJETE' ? <XCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                        <BadgeY2K
+                          variant={h.statut_validation === 'VALIDE' ? 'success' : h.statut_validation === 'REJETE' ? 'error' : 'warning'}
+                          size="sm"
+                          icone={h.statut_validation === 'VALIDE' ? <CheckCircle className="h-3 w-3" /> : h.statut_validation === 'REJETE' ? <XCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                        >
                           {h.statut_validation === 'EN_ATTENTE' ? 'En attente' : h.statut_validation === 'VALIDE' ? 'Validée' : 'Rejetée'}
-                        </span>
+                        </BadgeY2K>
                       </div>
 
                       <p className="text-sm text-foreground mt-2">
@@ -166,16 +167,19 @@ export default function AdminHeuresExternes() {
 
                     <div className="flex items-center gap-2 shrink-0">
                       {h.attestation_url && (
-                        <button
+                        <BoutonY2K
+                          variant="secondary"
+                          size="sm"
                           onClick={() => ouvrirAttestation(h.id, h.attestation_url)}
                           disabled={openingId === h.id}
-                          className="btn-secondary text-xs inline-flex items-center gap-1 disabled:opacity-50">
-                          {openingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                          loading={openingId === h.id}
+                          iconeGauche={openingId !== h.id ? <FileText className="h-3.5 w-3.5" /> : undefined}
+                        >
                           Attestation
-                        </button>
+                        </BoutonY2K>
                       )}
                       {enAttente && (
-                        <button onClick={() => setSelectionnee(h)} className="btn-primary text-xs">Traiter</button>
+                        <BoutonY2K variant="primary" size="sm" onClick={() => setSelectionnee(h)}>Traiter</BoutonY2K>
                       )}
                     </div>
                   </div>
@@ -268,11 +272,10 @@ function ModaleDecisionHeures({ heure, onFermer, onTraitee }: {
         </label>
 
         <div className="flex gap-2">
-          <button onClick={onFermer} disabled={loading} className="btn-secondary flex-1 disabled:opacity-50">Annuler</button>
-          <button onClick={soumettre} disabled={loading} className="btn-primary flex-1 disabled:opacity-50 inline-flex items-center justify-center gap-2">
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          <BoutonY2K variant="secondary" size="md" onClick={onFermer} disabled={loading} className="flex-1">Annuler</BoutonY2K>
+          <BoutonY2K variant="primary" size="md" onClick={soumettre} disabled={loading} loading={loading} className="flex-1">
             Appliquer
-          </button>
+          </BoutonY2K>
         </div>
       </div>
     </div>
