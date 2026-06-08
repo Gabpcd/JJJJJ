@@ -203,7 +203,8 @@ export default function AdminStatus() {
       <CardY2K noPadding className="mb-4">
         <CardY2KHeader className="pb-2"><CardY2KTitle className="text-base">Crons (17 actifs)</CardY2KTitle></CardY2KHeader>
         <CardY2KContent>
-          <div className="overflow-x-auto">
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="border-b border-border">
                 <tr className="text-left text-muted-foreground">
@@ -230,6 +231,24 @@ export default function AdminStatus() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-2">
+            {data.crons.crons.map(c => (
+              <div key={c.jobid} className="card-base space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-medium text-foreground flex-1 min-w-0">{c.jobname}</p>
+                  {c.echec ? <BadgeY2K variant="error" size="sm" icone={<AlertCircle className="h-3 w-3" />}>Échec</BadgeY2K>
+                    : c.retard ? <BadgeY2K variant="warning" size="sm" icone={<AlertTriangle className="h-3 w-3" />}>Retard</BadgeY2K>
+                    : <BadgeY2K variant="success" size="sm" icone={<CheckCircle className="h-3 w-3" />}>OK</BadgeY2K>}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                  <span><code>{c.schedule}</code></span>
+                  <span>Dernier run : {c.dernier_run ? format(new Date(c.dernier_run), 'd MMM HH:mm', { locale: fr }) : '—'}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </CardY2KContent>
       </CardY2K>

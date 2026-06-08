@@ -132,66 +132,114 @@ export default function AdminMandatsFacturation() {
         {/* Tableau */}
         <CardY2K noPadding>
           <CardY2KContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="p-3 font-medium">Soignant</th>
-                    <th className="p-3 font-medium">Profession</th>
-                    <th className="p-3 font-medium">Mandat</th>
-                    <th className="p-3 font-medium">Signé le</th>
-                    <th className="p-3 font-medium">Version</th>
-                    <th className="p-3 font-medium">Inscrit le</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSoignants.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="p-6 text-center text-muted-foreground">
-                        Aucun soignant trouvé
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredSoignants.map((s) => (
-                      <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30">
-                        <td className="p-3">
+            {filteredSoignants.length === 0 ? (
+              <p className="p-6 text-center text-muted-foreground">Aucun soignant trouvé</p>
+            ) : (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                        <th className="p-3 font-medium">Soignant</th>
+                        <th className="p-3 font-medium">Profession</th>
+                        <th className="p-3 font-medium">Mandat</th>
+                        <th className="p-3 font-medium">Signé le</th>
+                        <th className="p-3 font-medium">Version</th>
+                        <th className="p-3 font-medium">Inscrit le</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSoignants.map((s) => (
+                        <tr key={s.id} className="border-b border-border/50 hover:bg-muted/30">
+                          <td className="p-3">
+                            <button
+                              onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}
+                              className="text-primary hover:underline font-medium text-left"
+                            >
+                              {s.prenom} {s.nom}
+                            </button>
+                            <p className="text-xs text-muted-foreground">{s.email}</p>
+                          </td>
+                          <td className="p-3">
+                            <BadgeY2K variant="info" size="sm">{s.profession}</BadgeY2K>
+                          </td>
+                          <td className="p-3">
+                            {s.mandat_facturation_signe ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                                <CheckCircle className="h-3.5 w-3.5" /> Signé
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
+                                <AlertCircle className="h-3.5 w-3.5" /> Non signé
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-xs text-muted-foreground">
+                            {s.mandat_facturation_signe_le ? format(new Date(s.mandat_facturation_signe_le), 'dd/MM/yyyy HH:mm', { locale: fr }) : '—'}
+                          </td>
+                          <td className="p-3 text-xs text-muted-foreground">
+                            {s.mandat_facturation_version || '—'}
+                          </td>
+                          <td className="p-3 text-xs text-muted-foreground">
+                            {s.cree_le ? format(new Date(s.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-3 p-3">
+                  {filteredSoignants.map((s) => (
+                    <div key={s.id} className="card-base space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
                           <button
                             onClick={() => navigate(`/admin/utilisateurs/${s.id}`)}
-                            className="text-primary hover:underline font-medium text-left"
+                            className="text-primary hover:underline font-semibold text-sm text-left"
                           >
                             {s.prenom} {s.nom}
                           </button>
-                          <p className="text-xs text-muted-foreground">{s.email}</p>
-                        </td>
-                        <td className="p-3">
-                          <BadgeY2K variant="info" size="sm">{s.profession}</BadgeY2K>
-                        </td>
-                        <td className="p-3">
-                          {s.mandat_facturation_signe ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                              <CheckCircle className="h-3.5 w-3.5" /> Signé
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
-                              <AlertCircle className="h-3.5 w-3.5" /> Non signé
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3 text-xs text-muted-foreground">
-                          {s.mandat_facturation_signe_le ? format(new Date(s.mandat_facturation_signe_le), 'dd/MM/yyyy HH:mm', { locale: fr }) : '—'}
-                        </td>
-                        <td className="p-3 text-xs text-muted-foreground">
-                          {s.mandat_facturation_version || '—'}
-                        </td>
-                        <td className="p-3 text-xs text-muted-foreground">
-                          {s.cree_le ? format(new Date(s.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                          <p className="text-xs text-muted-foreground truncate">{s.email}</p>
+                        </div>
+                        {s.mandat_facturation_signe ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-success shrink-0">
+                            <CheckCircle className="h-3.5 w-3.5" /> Signé
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-warning shrink-0">
+                            <AlertCircle className="h-3.5 w-3.5" /> Non signé
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <BadgeY2K variant="info" size="sm">{s.profession}</BadgeY2K>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs pt-1 border-t border-border/50">
+                        <div>
+                          <p className="text-muted-foreground">Signé le</p>
+                          <p className="text-foreground">
+                            {s.mandat_facturation_signe_le ? format(new Date(s.mandat_facturation_signe_le), 'dd/MM/yyyy HH:mm', { locale: fr }) : '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Version</p>
+                          <p className="text-foreground">{s.mandat_facturation_version || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Inscrit le</p>
+                          <p className="text-foreground">
+                            {s.cree_le ? format(new Date(s.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </CardY2KContent>
         </CardY2K>
       </div>

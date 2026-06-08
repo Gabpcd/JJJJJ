@@ -160,75 +160,135 @@ export default function AdminAPI() {
         </div>
 
         {keys.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="pb-2 font-medium">Nom</th>
-                  <th className="pb-2 font-medium">Clé API</th>
-                  <th className="pb-2 font-medium">Permissions</th>
-                  <th className="pb-2 font-medium">Dernière utilisation</th>
-                  <th className="pb-2 font-medium">Statut</th>
-                  <th className="pb-2 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {keys.map(k => (
-                  <tr key={k.id} className="border-b border-border/50">
-                    <td className="py-3 font-medium text-foreground">{k.nom}</td>
-                    <td className="py-3">
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="pb-2 font-medium">Nom</th>
+                    <th className="pb-2 font-medium">Clé API</th>
+                    <th className="pb-2 font-medium">Permissions</th>
+                    <th className="pb-2 font-medium">Dernière utilisation</th>
+                    <th className="pb-2 font-medium">Statut</th>
+                    <th className="pb-2 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {keys.map(k => (
+                    <tr key={k.id} className="border-b border-border/50">
+                      <td className="py-3 font-medium text-foreground">{k.nom}</td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-1">
+                          <code className="text-xs bg-muted px-2 py-0.5 rounded">{masquer(k.cle_api, revealedKeys.has(k.id))}</code>
+                          <button onClick={() => toggleReveal(k.id)} className="p-1 hover:bg-muted rounded min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label={revealedKeys.has(k.id) ? 'Masquer la clé API' : 'Afficher la clé API'}>
+                            {revealedKeys.has(k.id) ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
+                          </button>
+                          <button onClick={() => copier(k.cle_api)} className="p-1 hover:bg-muted rounded min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Copier la clé API">
+                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {(k.permissions ?? []).map((p: string) => (
+                            <span key={p} className="badge-base bg-muted text-muted-foreground text-[10px]">{p}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 text-xs text-muted-foreground">
+                        {k.derniere_utilisation ? format(new Date(k.derniere_utilisation), 'dd/MM/yyyy HH:mm', { locale: fr }) : 'Jamais'}
+                      </td>
+                      <td className="py-3">
+                        <span className={`badge-base text-[10px] ${k.actif ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}>
+                          {k.actif ? 'Active' : 'Désactivée'}
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-1">
+                          {k.actif && (
+                            <button
+                              onClick={() => revoquer(k.id)}
+                              className="p-1.5 hover:bg-warning/10 rounded text-warning min-w-[32px] min-h-[32px] flex items-center justify-center"
+                              aria-label="Révoquer la clé"
+                              title="Révoquer (désactiver)"
+                            >
+                              <Ban className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => supprimer(k.id)}
+                            className="p-1.5 hover:bg-destructive/10 rounded text-destructive min-w-[32px] min-h-[32px] flex items-center justify-center"
+                            aria-label="Supprimer la clé"
+                            title="Supprimer définitivement"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3">
+              {keys.map(k => (
+                <div key={k.id} className="card-base space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold text-foreground">{k.nom}</p>
+                    <span className={`badge-base text-[10px] shrink-0 ${k.actif ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}>
+                      {k.actif ? 'Active' : 'Désactivée'}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    <div>
+                      <p className="text-muted-foreground mb-1">Clé API</p>
                       <div className="flex items-center gap-1">
-                        <code className="text-xs bg-muted px-2 py-0.5 rounded">{masquer(k.cle_api, revealedKeys.has(k.id))}</code>
-                        <button onClick={() => toggleReveal(k.id)} className="p-1 hover:bg-muted rounded min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label={revealedKeys.has(k.id) ? 'Masquer la clé API' : 'Afficher la clé API'}>
+                        <code className="text-xs bg-muted px-2 py-0.5 rounded flex-1 truncate">{masquer(k.cle_api, revealedKeys.has(k.id))}</code>
+                        <button onClick={() => toggleReveal(k.id)} className="p-1 hover:bg-muted rounded min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label={revealedKeys.has(k.id) ? 'Masquer la clé API' : 'Afficher la clé API'}>
                           {revealedKeys.has(k.id) ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
                         </button>
-                        <button onClick={() => copier(k.cle_api)} className="p-1 hover:bg-muted rounded min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Copier la clé API">
+                        <button onClick={() => copier(k.cle_api)} className="p-1 hover:bg-muted rounded min-w-[36px] min-h-[36px] flex items-center justify-center" aria-label="Copier la clé API">
                           <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
                       </div>
-                    </td>
-                    <td className="py-3">
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-1">Permissions</p>
                       <div className="flex flex-wrap gap-1">
                         {(k.permissions ?? []).map((p: string) => (
                           <span key={p} className="badge-base bg-muted text-muted-foreground text-[10px]">{p}</span>
                         ))}
                       </div>
-                    </td>
-                    <td className="py-3 text-xs text-muted-foreground">
-                      {k.derniere_utilisation ? format(new Date(k.derniere_utilisation), 'dd/MM/yyyy HH:mm', { locale: fr }) : 'Jamais'}
-                    </td>
-                    <td className="py-3">
-                      <span className={`badge-base text-[10px] ${k.actif ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-destructive/10 text-destructive'}`}>
-                        {k.actif ? 'Active' : 'Désactivée'}
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      <div className="flex items-center gap-1">
-                        {k.actif && (
-                          <button
-                            onClick={() => revoquer(k.id)}
-                            className="p-1.5 hover:bg-warning/10 rounded text-warning min-w-[32px] min-h-[32px] flex items-center justify-center"
-                            aria-label="Révoquer la clé"
-                            title="Révoquer (désactiver)"
-                          >
-                            <Ban className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => supprimer(k.id)}
-                          className="p-1.5 hover:bg-destructive/10 rounded text-destructive min-w-[32px] min-h-[32px] flex items-center justify-center"
-                          aria-label="Supprimer la clé"
-                          title="Supprimer définitivement"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                    <p className="text-muted-foreground">
+                      Dernière utilisation : {k.derniere_utilisation ? format(new Date(k.derniere_utilisation), 'dd/MM/yyyy HH:mm', { locale: fr }) : 'Jamais'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+                    {k.actif && (
+                      <button
+                        onClick={() => revoquer(k.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-warning hover:bg-warning/10 border border-warning/30"
+                        aria-label="Révoquer la clé"
+                      >
+                        <Ban className="h-3.5 w-3.5" /> Révoquer
+                      </button>
+                    )}
+                    <button
+                      onClick={() => supprimer(k.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-destructive hover:bg-destructive/10 border border-destructive/30"
+                      aria-label="Supprimer la clé"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <p className="text-sm text-muted-foreground text-center py-6">Aucune clé API générée.</p>
         )}

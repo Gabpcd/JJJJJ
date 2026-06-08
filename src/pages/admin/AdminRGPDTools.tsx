@@ -190,59 +190,99 @@ export default function AdminRGPDTools() {
               Aucune demande RGPD enregistrée.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <th className="py-2 px-3 font-medium text-muted-foreground">Date</th>
-                    <th className="py-2 px-3 font-medium text-muted-foreground">Action</th>
-                    <th className="py-2 px-3 font-medium text-muted-foreground">Acteur</th>
-                    <th className="py-2 px-3 font-medium text-muted-foreground">Ressource</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {demandes.slice(0, 50).map((d) => (
-                    <tr key={d.id} className="hover:bg-muted/30 transition">
-                      <td className="py-2 px-3 text-muted-foreground whitespace-nowrap text-xs">
-                        {d.cree_le
-                          ? format(new Date(d.cree_le), 'dd/MM/yy HH:mm', { locale: fr })
-                          : '—'}
-                      </td>
-                      <td className="py-2 px-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                            d.action === 'RGPD_SUPPRESSION_COMPTE'
-                              ? 'bg-destructive/10 text-destructive'
-                              : 'bg-info/10 text-info'
-                          }`}
-                        >
-                          {d.action}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-xs text-muted-foreground">
-                        <span className="font-mono">{d.type_acteur}</span>
-                        <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[140px]">
-                          {d.acteur_id?.slice(0, 8)}…
-                        </p>
-                      </td>
-                      <td className="py-2 px-3 text-xs text-muted-foreground">
-                        <span>{d.type_ressource}</span>
-                        {d.id_ressource && (
-                          <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[140px]">
-                            {d.id_ressource?.slice(0, 8)}…
-                          </p>
-                        )}
-                      </td>
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <th className="py-2 px-3 font-medium text-muted-foreground">Date</th>
+                      <th className="py-2 px-3 font-medium text-muted-foreground">Action</th>
+                      <th className="py-2 px-3 font-medium text-muted-foreground">Acteur</th>
+                      <th className="py-2 px-3 font-medium text-muted-foreground">Ressource</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {demandes.slice(0, 50).map((d) => (
+                      <tr key={d.id} className="hover:bg-muted/30 transition">
+                        <td className="py-2 px-3 text-muted-foreground whitespace-nowrap text-xs">
+                          {d.cree_le
+                            ? format(new Date(d.cree_le), 'dd/MM/yy HH:mm', { locale: fr })
+                            : '—'}
+                        </td>
+                        <td className="py-2 px-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              d.action === 'RGPD_SUPPRESSION_COMPTE'
+                                ? 'bg-destructive/10 text-destructive'
+                                : 'bg-info/10 text-info'
+                            }`}
+                          >
+                            {d.action}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-xs text-muted-foreground">
+                          <span className="font-mono">{d.type_acteur}</span>
+                          <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[140px]">
+                            {d.acteur_id?.slice(0, 8)}…
+                          </p>
+                        </td>
+                        <td className="py-2 px-3 text-xs text-muted-foreground">
+                          <span>{d.type_ressource}</span>
+                          {d.id_ressource && (
+                            <p className="text-[10px] text-muted-foreground/60 font-mono truncate max-w-[140px]">
+                              {d.id_ressource?.slice(0, 8)}…
+                            </p>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-3 mt-2">
+                {demandes.slice(0, 50).map((d) => (
+                  <div key={d.id} className="card-base space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0 ${
+                          d.action === 'RGPD_SUPPRESSION_COMPTE'
+                            ? 'bg-destructive/10 text-destructive'
+                            : 'bg-info/10 text-info'
+                        }`}
+                      >
+                        {d.action}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        {d.cree_le ? format(new Date(d.cree_le), 'dd/MM/yy HH:mm', { locale: fr }) : '—'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <div>
+                        <p className="text-muted-foreground">Acteur</p>
+                        <p className="font-mono text-foreground">{d.type_acteur}</p>
+                        <p className="text-[10px] text-muted-foreground/60 font-mono">{d.acteur_id?.slice(0, 8)}…</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Ressource</p>
+                        <p className="text-foreground">{d.type_ressource}</p>
+                        {d.id_ressource && (
+                          <p className="text-[10px] text-muted-foreground/60 font-mono">{d.id_ressource?.slice(0, 8)}…</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {demandes.length > 50 && (
                 <p className="text-xs text-muted-foreground text-center mt-3">
                   Affichage des 50 premières. L'export JSON contient les {demandes.length} demandes.
                 </p>
               )}
-            </div>
+            </>
           )}
         </section>
 
