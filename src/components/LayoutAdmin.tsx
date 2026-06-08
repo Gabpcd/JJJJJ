@@ -34,6 +34,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
       { icone: ClipboardList, label: 'Toutes les missions', route: '/admin/missions' },
       { icone: Flame, label: 'Pool urgence', route: '/admin/pool-urgence' },
       { icone: CalendarDays, label: 'Calendrier', route: '/admin/calendrier' },
+      { icone: CalendarDays, label: 'Planning global', route: '/admin/planning-global' },
       { icone: AlertTriangle, label: 'Alertes pointage', route: '/admin/alertes-pointage' },
     ],
   },
