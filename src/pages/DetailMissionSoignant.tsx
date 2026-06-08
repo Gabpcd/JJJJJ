@@ -192,7 +192,7 @@ export default function DetailMissionSoignant() {
     try {
       const params: any = { p_mission_id: id!, p_message: messageCandidature || null };
       if (choixContrat) params.p_choix_contrat = choixContrat;
-      const { data, error } = await supabase.rpc('fn_postuler_mission' as any, params);
+      const { data, error } = await supabase.rpc('fn_postuler_mission_rate_limited' as any, params);
       if (error) { toast.error(extraireMessageErreur(error)); return; }
       if (data?.choix_requis) {
         setChoixContratDialog({ open: true, options: data.options || [], action: 'postuler' });
