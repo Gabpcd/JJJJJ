@@ -263,7 +263,7 @@ export default function AdminMissions() {
       {/* Task 6 — Modal marquer absence sans prévenir */}
       {absenceMissionId && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setAbsenceMissionId(null)}>
-          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-foreground inline-flex items-center gap-2">
               <UserX className="h-5 w-5 text-warning" />Absence sans prévenir
             </h2>
