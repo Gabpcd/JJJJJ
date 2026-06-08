@@ -81,7 +81,12 @@ export default function ImportHeuresExternes({ onDone }: ImportHeuresExternesPro
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
-      afficherNotification({ type: 'succes', message: 'Heures déclarées ! Elles seront vérifiées par notre équipe.' });
+      if (doc?.id) {
+        supabase.functions.invoke('verify-document', {
+          body: { document_id: doc.id },
+        }).catch(() => {});
+      }
+      afficherNotification({ type: 'succes', message: 'Heures déclarées ! Vérification IA en cours…' });
       setOpen(false);
       setForm({ employeur: '', typeEmployeur: 'Hôpital public', dateDebut: '', dateFin: '', heures: '', typePreuve: 'BULLETIN_PAIE' });
       setFichier(null);
