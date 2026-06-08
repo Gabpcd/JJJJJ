@@ -383,7 +383,7 @@ export default function PageStripeConnect() {
                     Recommencer l'onboarding
                   </BoutonY2K>
                   <BoutonY2K
-                    onClick={() => navigate('/soignant/support')}
+                    onClick={() => navigate('/aide')}
                     variant="secondary"
                     className="gap-2"
                   >

@@ -133,21 +133,21 @@ export default function DashboardGroupe() {
           valeur={kpi.ouvertes}
           label="Missions ouvertes"
           variant="holographic"
-          onClick={() => navigate('/groupe/missions?statut=OUVERTE')}
+          onClick={() => navigate('/groupe/etablissements')}
         />
         <CarteKPIY2K
           icone={<PlayCircle className="h-4 w-4" />}
           valeur={kpi.enCours}
           label="En cours"
           variant="default"
-          onClick={() => navigate('/groupe/missions?statut=EN_COURS')}
+          onClick={() => navigate('/groupe/etablissements')}
         />
         <CarteKPIY2K
           icone={<CheckCircle className="h-4 w-4" />}
           valeur={kpi.terminees}
           label="Terminées ce mois"
           variant="default"
-          onClick={() => navigate('/groupe/missions?statut=TERMINEE')}
+          onClick={() => navigate('/groupe/etablissements')}
         />
         <CarteKPIY2K
           icone={<Building2 className="h-4 w-4" />}

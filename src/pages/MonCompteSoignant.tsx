@@ -11,7 +11,7 @@ import {
   User, FileText, Banknote, CreditCard, FileSignature, Zap, ShieldCheck,
   Scale, Gift, Rocket, Settings, LogOut, GraduationCap, Receipt, HeartHandshake,
   Landmark, FileCheck2, ScrollText, ClipboardCheck, Star, Sparkles, BadgeCheck,
-  MessageSquare, Ban,
+  MessageSquare, Ban, Trophy,
 } from 'lucide-react';
 
 export default function MonCompteSoignant() {
@@ -70,6 +70,7 @@ export default function MonCompteSoignant() {
       lignes: [
         { icone: ShieldCheck, label: 'Mon score de fiabilité', route: '/soignant/score' },
         { icone: Star, label: 'Mes évaluations', route: '/soignant/evaluations' },
+        { icone: Trophy, label: 'Classement des soignants', route: '/soignant/classement' },
         { icone: BadgeCheck, label: 'Conformité', route: '/soignant/conformite' },
         { icone: Scale, label: 'Litiges & contestations', route: '/soignant/litiges' },
         { icone: MessageSquare, label: 'Mes réclamations', route: '/soignant/reclamations' },
