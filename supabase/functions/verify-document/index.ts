@@ -177,6 +177,9 @@ Deno.serve(async (req) => {
   "nom_detecte": "string" ou null,
   "nom_extrait": "le nom de famille lu sur le document" ou null,
   "prenom_extrait": "le prénom lu sur le document" ou null,
+  "date_naissance_extraite": "YYYY-MM-DD" ou null,
+  "sexe_extrait": "M" ou "F" ou null,
+  "lieu_naissance_extrait": "commune de naissance lue" ou null,
   "score_confiance": 0-100,
   "document_lisible": true/false,
   "document_complet": true/false,
@@ -197,7 +200,7 @@ Règles:
   le moindre indice sérieux de falsification, verdict = "EN_ATTENTE" (revue humaine) et
   motif_rejet = "Indices de falsification détectés — vérification manuelle requise"
 - Pour un RIB: pas de date d'expiration. Extrais le nom du TITULAIRE du compte dans "nom_extrait"/"prenom_extrait" et vérifie qu'il correspond au nom du soignant (nom_correspond=false si le titulaire est une autre personne)
-- Pour une CNI/Passeport: extrais la date d'expiration si visible
+- Pour une CNI/Passeport: extrais la date d'expiration si visible, ainsi que la date de naissance (date_naissance_extraite), le sexe (sexe_extrait: "M" ou "F"), et la commune de naissance (lieu_naissance_extrait) si lisibles sur le document. Ces informations servent à pré-remplir le profil DPAE du soignant
 - Pour une assurance RCP: extrais la date de fin de validité
 - IMPORTANT: Si le document déclaré est un "Diplôme d'État" mais que le fichier est clairement une carte d'identité, passeport ou tout autre document non-diplôme, verdict = "REJETE" avec motif "Le document fourni n'est pas un diplôme"`;
 
@@ -361,6 +364,31 @@ Analyse ce document et vérifie sa conformité.`;
       score_confiance_ia: scoreConfianceIa,
       coherence_nom: coherenceNom,
     } as any).eq("id", document_id);
+
+    // Auto-remplissage DPAE : si CNI/passeport/titre de séjour VERIFIE, propager
+    // date_naissance + sexe + lieu_naissance vers le profil soignant (uniquement
+    // si les champs sont vides — pas d'écrasement des données existantes).
+    const estIdentite = ["CARTE_IDENTITE", "PASSEPORT", "TITRE_SEJOUR"].includes(doc.type_document);
+    if (estIdentite && verdictFinal === "VERIFIE" && doc.soignant_id) {
+      const updates: Record<string, unknown> = {};
+      if (analysis.date_naissance_extraite) updates.date_naissance = analysis.date_naissance_extraite;
+      if (analysis.sexe_extrait && ["M", "F"].includes(analysis.sexe_extrait)) updates.sexe = analysis.sexe_extrait;
+      if (analysis.lieu_naissance_extrait) updates.lieu_naissance_commune = analysis.lieu_naissance_extrait;
+      if (Object.keys(updates).length > 0) {
+        // Ne PAS écraser si déjà renseigné — merge conditionnel.
+        const { data: currentSoignant } = await supabase.from("soignants")
+          .select("date_naissance, sexe, lieu_naissance_commune")
+          .eq("id", doc.soignant_id).maybeSingle();
+        const cs = currentSoignant as Record<string, unknown> | null;
+        const finalUpdates: Record<string, unknown> = {};
+        if (updates.date_naissance && !cs?.date_naissance) finalUpdates.date_naissance = updates.date_naissance;
+        if (updates.sexe && !cs?.sexe) finalUpdates.sexe = updates.sexe;
+        if (updates.lieu_naissance_commune && !cs?.lieu_naissance_commune) finalUpdates.lieu_naissance_commune = updates.lieu_naissance_commune;
+        if (Object.keys(finalUpdates).length > 0) {
+          await supabase.from("soignants").update({ ...finalUpdates, modifie_le: new Date().toISOString() } as any).eq("id", doc.soignant_id);
+        }
+      }
+    }
 
     await supabase.rpc("fn_ecrire_audit_safe" as any, {
       p_acteur_id: doc.soignant_id,
