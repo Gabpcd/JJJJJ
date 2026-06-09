@@ -9,6 +9,7 @@ import { getLabelTypeEtablissement } from '@/lib/constantes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
+import { reverseGeocode } from '@/lib/geocodage';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { Info, MapPin, Loader2, Download, Trash2, Palette, Building2, Upload, FileCheck, Clock, AlertTriangle, LogOut } from 'lucide-react';
@@ -258,11 +259,18 @@ export function ProfilEtablissementContent() {
     }
     setGeoLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLat(position.coords.latitude.toString());
-        setLng(position.coords.longitude.toString());
+      async (position) => {
+        const la = position.coords.latitude, lo = position.coords.longitude;
+        setLat(la.toString());
+        setLng(lo.toString());
+        const adr = await reverseGeocode(la, lo);
+        if (adr) {
+          setForm((prev: any) => ({ ...prev, rue: adr.rue || prev.rue, ville: adr.ville || prev.ville, codePostal: adr.codePostal || prev.codePostal }));
+          afficherNotification({ type: 'succes', message: `📍 ${adr.label}` });
+        } else {
+          afficherNotification({ type: 'succes', message: 'Position récupérée.' });
+        }
         setGeoLoading(false);
-        afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
       },
       () => {
         setGeoLoading(false);
@@ -457,10 +465,11 @@ export function ProfilEtablissementContent() {
               {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
               {geoLoading ? 'Récupération en cours…' : '📍 Localiser mon établissement'}
             </button>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Latitude</label><input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className="input-base" /></div>
-              <div><label className="text-sm font-medium text-foreground mb-1.5 block">Longitude</label><input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className="input-base" /></div>
-            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {lat && lng
+                ? <>📍 Position enregistrée — l'adresse est renseignée automatiquement dans les champs ci-dessus. <span className="opacity-60">(coordonnées techniques : {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)})</span></>
+                : "Cliquez sur « Localiser » pour positionner votre établissement (l'adresse sera remplie automatiquement)."}
+            </p>
           </div>
         </div>
         <div className="card-base">
