@@ -93,6 +93,12 @@ export function BlocContratTravailMission({
       if (rpcErr) throw rpcErr;
       if ((rpcData as any)?.error) throw new Error((rpcData as any).error);
 
+      // Vérification IA du contrat de travail (type + parties), à l'upload ET au
+      // remplacement. Fire-and-forget : résultat écrit côté contrats_travail_missions.
+      supabase.functions.invoke('verify-contrat-travail', {
+        body: { mission_id: missionId },
+      }).catch(() => { /* best-effort */ });
+
       if (wasReplace) {
         toast.success('Contrat de travail remplacé');
       } else {
