@@ -4,6 +4,7 @@ import { ArrowLeft, Briefcase, Phone, ShieldAlert, ShieldCheck, Star } from 'luc
 import { EtoilesNote } from '@/components/EtoilesNote';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
+import { SignalerUtilisateur } from '@/components/SignalerUtilisateur';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { getLabelProfession } from '@/lib/constantes';
@@ -99,7 +100,10 @@ export default function ProfilSoignantEtablissement() {
                 )}
 
                 <div className="space-y-2">
-                  <h1 className="text-2xl font-bold text-foreground">{soignant.prenom} {soignant.nom}</h1>
+                  <div className="flex items-start justify-between gap-3">
+                    <h1 className="text-2xl font-bold text-foreground">{soignant.prenom} {soignant.nom}</h1>
+                    <SignalerUtilisateur cibleId={soignant.id} cibleType="SOIGNANT" variant="bouton" />
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Briefcase className="h-4 w-4 text-primary" /> {getLabelProfession(soignant.profession)}</span>
                     {soignant.type_exercice && (
