@@ -9,6 +9,8 @@ export function BandeauOnboardingEtab() {
   const navigate = useNavigate();
   const location = useLocation();
   const [show, setShow] = useState(false);
+  const [manqueContrat, setManqueContrat] = useState(false);
+  const [manqueRib, setManqueRib] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -22,18 +24,28 @@ export function BandeauOnboardingEtab() {
       if (!data) return;
       const contratOk = !!(data as any).contrat_service_signe;
       const ribOk = !!((data as any).rib_s3_key && (data as any).rib_s3_key !== 'legacy/auto-backfill');
+      setManqueContrat(!contratOk);
+      setManqueRib(!ribOk);
       setShow(!contratOk || !ribOk);
     })();
   }, [user, location.pathname]);
 
   if (!show) return null;
 
+  // Texte ciblé : n'évoquer que ce qui manque réellement (évite « signez le contrat »
+  // alors qu'il est déjà signé et que seul le RIB manque).
+  const detail = manqueContrat && manqueRib
+    ? 'Signez le contrat de service et fournissez un RIB pour publier des missions.'
+    : manqueContrat
+      ? 'Signez le contrat de service pour publier des missions.'
+      : 'Fournissez un RIB pour publier des missions.';
+
   return (
     <div className="bg-warning/10 border-b border-warning/30 px-4 py-3 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 text-sm text-warning-foreground">
         <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
         <span className="font-medium">Votre inscription n'est pas finalisée.</span>
-        <span className="text-muted-foreground hidden sm:inline">Signez le contrat de service et fournissez un RIB pour publier des missions.</span>
+        <span className="text-muted-foreground hidden sm:inline">{detail}</span>
       </div>
       <button
         onClick={() => navigate('/etablissement/finaliser-inscription')}
