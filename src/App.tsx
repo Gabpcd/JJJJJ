@@ -9,6 +9,7 @@ import { RouteProtegee } from "@/components/RouteProtegee";
 import { PageTransition } from "@/components/PageTransition";
 import { ChargementPage } from "@/components/ChargementPage";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { captureAttribution } from "@/lib/attribution";
 import { Toaster } from "sonner";
 import { BandeauCookies } from "@/components/BandeauCookies";
 
@@ -171,27 +172,19 @@ const AdminPlanningGlobal = lazy(() => import("./pages/admin/AdminPlanningGlobal
 const AdminCockpitFondateur = lazy(() => import("./pages/admin/AdminCockpitFondateur"));
 const AdminEquipe = lazy(() => import("./pages/admin/AdminEquipe"));
 const AdminLevee = lazy(() => import("./pages/admin/AdminLevee"));
+const AdminAcquisition = lazy(() => import("./pages/admin/AdminAcquisition"));
 const ClassementSoignants = lazy(() => import("./pages/ClassementSoignants"));
 
 const queryClient = new QueryClient();
 
-// Capture GLOBALE du code parrainage ?ref=CODE dès l'arrivée sur N'IMPORTE quelle
-// page (y compris la page d'accueil, cible des liens/QR partagés jolene.app?ref=…).
-// Stocke en sessionStorage selon le préfixe : JO-* → soignant, ETB-* → établissement.
-// Le code est ensuite auto-rempli à l'inscription (ProfilSoignant / page parrainage étab).
-function CaptureParrainage() {
+// Capture GLOBALE de l'attribution d'acquisition (UTM + referrer + code parrainage
+// ?ref=CODE) dès l'arrivée sur N'IMPORTE quelle page (y compris la page d'accueil,
+// cible des liens/QR partagés jolene.app?ref=… ou des campagnes ?utm_source=…).
+// Le code parrainage est mirroré en sessionStorage (JO-* → soignant, ETB-* → étab)
+// puis auto-rempli à l'inscription ; l'attribution complète est jointe à l'inscription.
+function CaptureAttribution() {
   useEffect(() => {
-    try {
-      const ref = new URLSearchParams(window.location.search).get('ref');
-      if (!ref) return;
-      const code = ref.trim().toUpperCase();
-      if (code.startsWith('ETB')) {
-        sessionStorage.setItem('jolene.parrainage_etab_code', code);
-      } else {
-        // JO-* et défaut → soignant (cas le plus courant)
-        sessionStorage.setItem('jolene.parrainage_code', code);
-      }
-    } catch { /* sessionStorage indisponible : non bloquant */ }
+    captureAttribution();
   }, []);
   return null;
 }
@@ -199,7 +192,7 @@ function CaptureParrainage() {
 function AppRoutes() {
   return (
     <PageTransition>
-      <CaptureParrainage />
+      <CaptureAttribution />
       <ScrollToTop />
       <Suspense fallback={<ChargementPage />}>
         <Routes>
@@ -387,6 +380,7 @@ function AppRoutes() {
           <Route path="/admin/fondateur" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCockpitFondateur /></RouteProtegee>} />
           <Route path="/admin/fondateur/equipe" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEquipe /></RouteProtegee>} />
           <Route path="/admin/fondateur/levee" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminLevee /></RouteProtegee>} />
+          <Route path="/admin/fondateur/acquisition" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAcquisition /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />

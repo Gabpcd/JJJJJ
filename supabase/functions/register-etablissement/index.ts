@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { verifyTurnstileToken } from '../_shared/verify-turnstile.ts';
 import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
+import { colonnesAttribution } from '../_shared/attribution.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -179,6 +180,7 @@ Deno.serve(async (req) => {
       est_secteur_public: siretVerification?.est_public ?? false,
       statut_verification: statutVerification,
       peut_publier_missions: autoVerifie || false,
+      ...colonnesAttribution(body.attribution, req),
     };
 
     const { error: insertError } = await supabaseAdmin

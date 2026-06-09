@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus } from 'lucide-react';
+import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -63,6 +63,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
   {
     icone: Rocket, label: 'Fondateur', items: [
       { icone: BarChart3, label: 'Cockpit', route: '/admin/fondateur' },
+      { icone: Megaphone, label: 'Acquisition', route: '/admin/fondateur/acquisition' },
       { icone: UserPlus, label: 'Équipe', route: '/admin/fondateur/equipe' },
       { icone: Rocket, label: 'Levée & Documents', route: '/admin/fondateur/levee' },
       { icone: TrendingUp, label: 'Cohort & Economics', route: '/admin/cohort' },
