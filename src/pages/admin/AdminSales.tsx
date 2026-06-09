@@ -20,8 +20,11 @@ import {
 const PLATEFORMES = [
   { v: 'WHATSAPP', label: 'WhatsApp' },
   { v: 'FACEBOOK', label: 'Facebook' },
+  { v: 'INSTAGRAM', label: 'Instagram' },
+  { v: 'TIKTOK', label: 'TikTok' },
   { v: 'LINKEDIN', label: 'LinkedIn' },
   { v: 'TELEGRAM', label: 'Telegram' },
+  { v: 'SNAPCHAT', label: 'Snapchat' },
   { v: 'JOBBOARD', label: 'Job board' },
   { v: 'AUTRE', label: 'Autre' },
 ];
