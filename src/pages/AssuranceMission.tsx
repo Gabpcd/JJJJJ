@@ -310,7 +310,7 @@ export function AssuranceMissionContent() {
                 icone={<Shield />}
                 mascotte="empty"
                 titre="Aucune police d'assurance"
-                description="Les polices seront creees automatiquement lors de la confirmation de vos missions."
+                description="La souscription des polices via notre partenaire assureur n'est pas encore activée. En attendant, vous pouvez configurer votre couverture ci-dessus ; notre équipe vous accompagne pour toute mission nécessitant une assurance dédiée."
               />
             ) : (
               <div className="overflow-x-auto">
