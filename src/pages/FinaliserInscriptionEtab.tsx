@@ -176,6 +176,11 @@ export default function FinaliserInscriptionEtab() {
         .eq('id', user.id);
       if (updErr) throw updErr;
 
+      // Vérification IA du RIB (est-ce un RIB ? titulaire = établissement ?).
+      supabase.functions.invoke('verify-rib-etablissement', {
+        body: { etablissement_id: user.id },
+      }).catch(() => { /* best-effort */ });
+
       toast.success('RIB uploadé avec succès !');
       setRibUploaded(true);
 
