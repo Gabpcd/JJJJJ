@@ -58,7 +58,7 @@ function lienWhatsApp(tel: string): string {
 export default function AdminSales() {
   usePageTitle('Sales / Sourcing');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'templates'>('groupes');
+  const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'etab_jolene' | 'templates'>('groupes');
 
   const [groupes, setGroupes] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
@@ -176,7 +176,9 @@ export default function AdminSales() {
         <div className="flex gap-2 flex-wrap">
           <BoutonY2K variant={tab === 'groupes' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('groupes')} iconeGauche={<Megaphone className="h-4 w-4" />}>Groupes ({groupes.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('soignants')} iconeGauche={<Users className="h-4 w-4" />}>Soignants ({soignants.length})</BoutonY2K>
-          <BoutonY2K variant={tab === 'etablissements' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etablissements')} iconeGauche={<Building2 className="h-4 w-4" />}>Établissements ({etablissements.length})</BoutonY2K>
+          <BoutonY2K variant={tab === 'etablissements' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etablissements')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. sourcés ({etablissements.length})</BoutonY2K>
+          <BoutonY2K variant={tab === 'prospection' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection')} iconeGauche={<Search className="h-4 w-4" />}>Prospection</BoutonY2K>
+          <BoutonY2K variant={tab === 'etab_jolene' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etab_jolene')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. Jolene</BoutonY2K>
           <BoutonY2K variant={tab === 'templates' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('templates')} iconeGauche={<FileText className="h-4 w-4" />}>Templates ({templates.length})</BoutonY2K>
         </div>
 
@@ -270,6 +272,12 @@ export default function AdminSales() {
             onDelete={supprimerContact}
           />
         )}
+
+        {/* ── PROSPECTION (base nationale) ── */}
+        {tab === 'prospection' && <ProspectionEtab onAjouter={charger} />}
+
+        {/* ── ÉTABLISSEMENTS JOLENE (inscrits) ── */}
+        {tab === 'etab_jolene' && <EtablissementsJolene />}
 
         {/* ── TEMPLATES ── */}
         {tab === 'templates' && (
@@ -454,4 +462,164 @@ function FormPanel({ titre, children, onClose, onSave }: { titre: string; childr
 
 function Champ({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><Label className="text-xs">{label}</Label>{children}</div>;
+}
+
+/* ── Établissements déjà inscrits sur Jolene ── */
+function EtablissementsJolene() {
+  const [etabs, setEtabs] = useState<any[]>([]);
+  const [recherche, setRecherche] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const charger = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc('fn_admin_lister_etablissements' as any, { p_recherche: recherche || null });
+    setEtabs((data as any[]) || []);
+    setLoading(false);
+  }, [recherche]);
+
+  useEffect(() => { const t = setTimeout(charger, 300); return () => clearTimeout(t); }, [charger]);
+
+  return (
+    <div className="space-y-3">
+      <div className="relative max-w-sm">
+        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Nom ou ville…" className="pl-8 h-9" />
+      </div>
+      {loading ? (
+        <p className="text-sm text-muted-foreground py-4">Chargement…</p>
+      ) : etabs.length === 0 ? (
+        <CardY2K hoverLift={false}><CardY2KContent><p className="text-sm text-muted-foreground text-center py-6">Aucun établissement inscrit pour l'instant.</p></CardY2KContent></CardY2K>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {etabs.map(e => (
+            <CardY2K key={e.id} hoverLift={false}>
+              <CardY2KContent>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="font-semibold text-foreground">{e.nom}</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {e.type}{e.ville ? ` · ${e.ville}` : ''}{e.code_postal ? ` (${e.code_postal})` : ''}
+                    </p>
+                  </div>
+                  <BadgeY2K variant={e.peut_publier ? 'success' : 'warning'}>{e.statut_verification || (e.peut_publier ? 'Vérifié' : 'En attente')}</BadgeY2K>
+                </div>
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  {e.telephone && (
+                    <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${e.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>Appeler</BoutonY2K>
+                  )}
+                  {e.email && (
+                    <BoutonY2K size="sm" variant="secondary" onClick={() => { window.location.href = `mailto:${e.email}`; }} iconeGauche={<Mail className="h-4 w-4" />}>Email</BoutonY2K>
+                  )}
+                  {!e.telephone && !e.email && <BadgeY2K variant="warning">Coordonnées non renseignées</BadgeY2K>}
+                </div>
+              </CardY2KContent>
+            </CardY2K>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Prospection nationale (base entreprises open data) ── */
+const CATEGORIES_PROSPECTION = [
+  { v: 'EHPAD', label: 'EHPAD / maisons de retraite' },
+  { v: 'HOPITAL', label: 'Hôpitaux / cliniques' },
+  { v: 'HANDICAP', label: 'Étab. handicap / médico-social' },
+  { v: 'PHARMACIE', label: 'Pharmacies' },
+  { v: 'CABINET_MEDICAL', label: 'Cabinets médicaux' },
+  { v: 'CABINET_DENTAIRE', label: 'Cabinets dentaires' },
+  { v: 'LABO', label: "Laboratoires d'analyses" },
+  { v: 'AUTRE_SANTE', label: 'Autres activités de santé' },
+];
+
+function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
+  const [departement, setDepartement] = useState('');
+  const [categorie, setCategorie] = useState('EHPAD');
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const rechercher = async (p = 1) => {
+    if (!departement.trim()) { toast.error('Indiquez un département (ex. 75, 2A, 971).'); return; }
+    setLoading(true);
+    const { data: res, error } = await supabase.functions.invoke('prospects-etablissements', {
+      body: { departement: departement.trim(), categorie, page: p },
+    });
+    setLoading(false);
+    if (error || (res as any)?.error) { toast.error((res as any)?.error || 'Recherche impossible.'); return; }
+    setData(res);
+    setPage(p);
+  };
+
+  const ajouterAuPipeline = async (e: any) => {
+    const { error } = await supabase.from('sales_contacts' as any).insert({
+      type: 'ETABLISSEMENT', nom: e.nom, ville: e.ville || null, statut: 'PROSPECT',
+      notes: `Prospection${e.siret ? ` · SIRET ${e.siret}` : ''}${e.adresse ? ` · ${e.adresse}` : ''}`,
+    } as any);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Ajouté aux établissements sourcés.');
+    onAjouter();
+  };
+
+  const pj = (e: any) => `https://www.pagesjaunes.fr/annuaire/chercherlespros?quoiqui=${encodeURIComponent(e.nom)}&ou=${encodeURIComponent(e.ville || '')}`;
+  const google = (e: any) => `https://www.google.com/search?q=${encodeURIComponent(`${e.nom} ${e.ville || ''} téléphone email`)}`;
+
+  return (
+    <div className="space-y-4">
+      <CardY2K hoverLift={false}>
+        <CardY2KContent>
+          <p className="text-[11px] text-muted-foreground mb-2">
+            Base nationale (open data entreprises). Le téléphone/email n'est pas fourni par cette base publique :
+            les boutons <strong>Pages Jaunes</strong> et <strong>Google</strong> ouvrent une recherche pré-remplie pour récupérer les coordonnées en 1 clic.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+            <div>
+              <Label className="text-xs">Département</Label>
+              <Input value={departement} onChange={e => setDepartement(e.target.value)} placeholder="75, 2A, 971…" className="h-9 w-28" />
+            </div>
+            <div className="flex-1">
+              <Label className="text-xs">Type d'établissement</Label>
+              <select value={categorie} onChange={e => setCategorie(e.target.value)} className="input-base h-9 w-full">
+                {CATEGORIES_PROSPECTION.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
+              </select>
+            </div>
+            <BoutonY2K size="sm" onClick={() => rechercher(1)} disabled={loading} iconeGauche={<Search className="h-4 w-4" />}>
+              {loading ? 'Recherche…' : 'Rechercher'}
+            </BoutonY2K>
+          </div>
+        </CardY2KContent>
+      </CardY2K>
+
+      {data && (
+        <>
+          <p className="text-xs text-muted-foreground">{data.total} établissement(s) — page {data.page}/{data.total_pages}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(data.resultats || []).map((e: any, i: number) => (
+              <CardY2K key={i} hoverLift={false}>
+                <CardY2KContent>
+                  <span className="font-semibold text-foreground">{e.nom}</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {[e.adresse, e.code_postal, e.ville].filter(Boolean).join(' · ')}
+                    {e.siret ? <span className="block text-[10px]">SIRET {e.siret}</span> : null}
+                  </p>
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    <BoutonY2K size="sm" onClick={() => window.open(pj(e), '_blank', 'noopener')} iconeGauche={<Phone className="h-4 w-4" />}>Pages Jaunes</BoutonY2K>
+                    <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(google(e), '_blank', 'noopener')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Google</BoutonY2K>
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(e)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
+                  </div>
+                </CardY2KContent>
+              </CardY2K>
+            ))}
+          </div>
+          {data.total_pages > 1 && (
+            <div className="flex justify-center gap-2 pt-2">
+              <BoutonY2K size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => rechercher(page - 1)}>← Précédent</BoutonY2K>
+              <BoutonY2K size="sm" variant="secondary" disabled={page >= data.total_pages || loading} onClick={() => rechercher(page + 1)}>Suivant →</BoutonY2K>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
