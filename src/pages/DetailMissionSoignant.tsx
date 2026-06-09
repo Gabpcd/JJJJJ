@@ -22,6 +22,7 @@ import { ChatConversation } from '@/components/ChatConversation';
 import { BlocConformite } from '@/components/BlocConformite';
 import { BandeauGraceDocuments } from '@/components/BandeauGraceDocuments';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
+import { SignalerUtilisateur } from '@/components/SignalerUtilisateur';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
 import { ModalConfirmation } from '@/components/ModalConfirmation';
 import { ModalCodeTravail } from '@/components/ModalCodeTravail';
@@ -460,8 +461,9 @@ export default function DetailMissionSoignant() {
                 </p>
                 {/* E2: Blacklist côté soignant */}
                 {mission.etablissement_id && (
-                  <div className="mt-2 pt-2 border-t border-border">
+                  <div className="mt-2 pt-2 border-t border-border flex items-center gap-3">
                     <BoutonExclusion excluId={mission.etablissement_id} typeExcluPar="SOIGNANT" />
+                    <SignalerUtilisateur cibleId={mission.etablissement_id} cibleType="ETABLISSEMENT" missionId={mission.id} />
                   </div>
                 )}
               </div>
