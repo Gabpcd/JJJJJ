@@ -1,0 +1,260 @@
+import { useState, useEffect, useMemo } from 'react';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { ChargementPage } from '@/components/ChargementPage';
+import { supabase } from '@/integrations/supabase/client';
+import { CardY2K, CardY2KHeader, CardY2KTitle, CardY2KContent } from '@/components/y2k/CardY2K';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { UserPlus, Trash2, Save, Calculator, Users, X } from 'lucide-react';
+import { toast } from 'sonner';
+
+const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
+
+const GROUPES_NAV = [
+  'Dashboard', 'Utilisateurs', 'Missions', 'Litiges & contrats',
+  'Finances', 'Messagerie', 'Conformité & Technique', 'Fondateur',
+];
+
+const COEFF_CHARGES_PATRONALES = 1.45;
+
+interface Membre {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string;
+  poste: string;
+  salaire_brut_mensuel: number;
+  date_embauche: string | null;
+  acces_groupes: string[];
+  actif: boolean;
+  user_id: string | null;
+}
+
+function emptyMembre(): Partial<Membre> {
+  return { nom: '', prenom: '', email: '', poste: '', salaire_brut_mensuel: 0, date_embauche: null, acces_groupes: ['Dashboard'], actif: true };
+}
+
+export default function AdminEquipe() {
+  usePageTitle('Équipe');
+  const [loading, setLoading] = useState(true);
+  const [membres, setMembres] = useState<Membre[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editMembre, setEditMembre] = useState<Partial<Membre> | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const charger = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('equipe_admin' as any).select('*').order('date_embauche', { ascending: true });
+    setMembres((data as any[]) || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { charger(); }, []);
+
+  const coutTotal = useMemo(() => {
+    const brut = membres.filter(m => m.actif).reduce((s, m) => s + (Number(m.salaire_brut_mensuel) || 0), 0);
+    return { brut, charges: brut * COEFF_CHARGES_PATRONALES, annuel: brut * COEFF_CHARGES_PATRONALES * 12 };
+  }, [membres]);
+
+  const ouvrirFormulaire = (m?: Membre) => {
+    setEditMembre(m ? { ...m } : emptyMembre());
+    setShowForm(true);
+  };
+
+  const sauvegarder = async () => {
+    if (!editMembre) return;
+    if (!editMembre.nom?.trim() || !editMembre.prenom?.trim() || !editMembre.email?.trim()) {
+      toast.error('Nom, prénom et email sont obligatoires.');
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      nom: editMembre.nom!.trim(),
+      prenom: editMembre.prenom!.trim(),
+      email: editMembre.email!.trim(),
+      poste: editMembre.poste || 'Opérations',
+      salaire_brut_mensuel: Number(editMembre.salaire_brut_mensuel) || 0,
+      date_embauche: editMembre.date_embauche || null,
+      acces_groupes: editMembre.acces_groupes || ['Dashboard'],
+      actif: editMembre.actif ?? true,
+      maj_le: new Date().toISOString(),
+    };
+
+    let err;
+    if (editMembre.id) {
+      ({ error: err } = await supabase.from('equipe_admin' as any).update(payload as any).eq('id', editMembre.id));
+    } else {
+      ({ error: err } = await supabase.from('equipe_admin' as any).insert(payload as any));
+    }
+    setSaving(false);
+    if (err) { toast.error(`Erreur : ${err.message}`); return; }
+    toast.success(editMembre.id ? 'Membre mis à jour.' : 'Membre ajouté.');
+    setShowForm(false);
+    setEditMembre(null);
+    charger();
+  };
+
+  const desactiver = async (id: string) => {
+    const { error } = await supabase.from('equipe_admin' as any).update({ actif: false, maj_le: new Date().toISOString() } as any).eq('id', id);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Membre désactivé.');
+    charger();
+  };
+
+  const toggleAcces = (groupe: string) => {
+    if (!editMembre) return;
+    const current = editMembre.acces_groupes || [];
+    const next = current.includes(groupe) ? current.filter(g => g !== groupe) : [...current, groupe];
+    setEditMembre({ ...editMembre, acces_groupes: next });
+  };
+
+  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+
+  return (
+    <LayoutAdmin>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Gestion de l'équipe</h1>
+            <p className="text-sm text-muted-foreground">{membres.filter(m => m.actif).length} membre{membres.filter(m => m.actif).length > 1 ? 's' : ''} actif{membres.filter(m => m.actif).length > 1 ? 's' : ''}</p>
+          </div>
+          <BoutonY2K onClick={() => ouvrirFormulaire()} iconeGauche={<UserPlus className="h-4 w-4" />}>
+            Ajouter un membre
+          </BoutonY2K>
+        </div>
+
+        {/* Simulateur coût équipe */}
+        <CardY2K hoverLift={false}>
+          <CardY2KHeader>
+            <CardY2KTitle className="text-sm flex items-center gap-2">
+              <Calculator className="h-4 w-4" /> Coût total de l'équipe
+            </CardY2KTitle>
+          </CardY2KHeader>
+          <CardY2KContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Salaires bruts /mois</p>
+                <p className="text-lg font-bold text-foreground">{fmt(coutTotal.brut)}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Coût total /mois</p>
+                <p className="text-lg font-bold text-foreground">{fmt(coutTotal.charges)}</p>
+                <p className="text-[10px] text-muted-foreground">×{COEFF_CHARGES_PATRONALES} charges patronales</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Coût annuel</p>
+                <p className="text-lg font-bold text-foreground">{fmt(coutTotal.annuel)}</p>
+              </div>
+            </div>
+          </CardY2KContent>
+        </CardY2K>
+
+        {/* Liste des membres */}
+        <div className="space-y-3">
+          {membres.map(m => (
+            <CardY2K key={m.id} hoverLift={false} className={!m.actif ? 'opacity-50' : ''}>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-foreground">{m.prenom} {m.nom}</p>
+                    <BadgeY2K variant={m.actif ? 'success' : 'error'}>{m.actif ? 'Actif' : 'Désactivé'}</BadgeY2K>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{m.poste} · {m.email}</p>
+                  {m.salaire_brut_mensuel > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {fmt(m.salaire_brut_mensuel)} brut/mois → {fmt(m.salaire_brut_mensuel * COEFF_CHARGES_PATRONALES)} coût total
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(m.acces_groupes || []).map(g => (
+                      <BadgeY2K key={g} variant="info" className="text-[10px]">{g}</BadgeY2K>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <BoutonY2K variant="secondary" size="sm" onClick={() => ouvrirFormulaire(m)}>Modifier</BoutonY2K>
+                  {m.actif && !m.user_id?.startsWith('09e82688') && (
+                    <BoutonY2K variant="destructive" size="sm" onClick={() => desactiver(m.id)} iconeGauche={<Trash2 className="h-3 w-3" />}>
+                      Désactiver
+                    </BoutonY2K>
+                  )}
+                </div>
+              </div>
+            </CardY2K>
+          ))}
+        </div>
+
+        {/* Formulaire modal inline */}
+        {showForm && editMembre && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40">
+            <CardY2K className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <CardY2KHeader>
+                <div className="flex items-center justify-between w-full">
+                  <CardY2KTitle className="text-sm">{editMembre.id ? 'Modifier' : 'Ajouter'} un membre</CardY2KTitle>
+                  <button onClick={() => { setShowForm(false); setEditMembre(null); }} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </CardY2KHeader>
+              <CardY2KContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Prénom</Label>
+                    <Input value={editMembre.prenom || ''} onChange={e => setEditMembre({ ...editMembre, prenom: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Nom</Label>
+                    <Input value={editMembre.nom || ''} onChange={e => setEditMembre({ ...editMembre, nom: e.target.value })} />
+                  </div>
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input type="email" value={editMembre.email || ''} onChange={e => setEditMembre({ ...editMembre, email: e.target.value })} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Poste</Label>
+                    <Input value={editMembre.poste || ''} onChange={e => setEditMembre({ ...editMembre, poste: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Salaire brut /mois (€)</Label>
+                    <Input type="number" value={editMembre.salaire_brut_mensuel || ''} onChange={e => setEditMembre({ ...editMembre, salaire_brut_mensuel: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div>
+                  <Label>Date d'embauche</Label>
+                  <Input type="date" value={editMembre.date_embauche || ''} onChange={e => setEditMembre({ ...editMembre, date_embauche: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Accès (cocher les sections admin visibles)</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {GROUPES_NAV.map(g => (
+                      <label key={g} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(editMembre.acces_groupes || []).includes(g)}
+                          onChange={() => toggleAcces(g)}
+                          className="rounded border-border"
+                        />
+                        {g}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <BoutonY2K variant="secondary" onClick={() => { setShowForm(false); setEditMembre(null); }}>Annuler</BoutonY2K>
+                  <BoutonY2K onClick={sauvegarder} disabled={saving} iconeGauche={<Save className="h-4 w-4" />}>
+                    {saving ? 'Enregistrement…' : 'Enregistrer'}
+                  </BoutonY2K>
+                </div>
+              </CardY2KContent>
+            </CardY2K>
+          </div>
+        )}
+      </div>
+    </LayoutAdmin>
+  );
+}
