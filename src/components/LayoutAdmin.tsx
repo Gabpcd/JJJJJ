@@ -64,6 +64,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
     icone: Rocket, label: 'Fondateur', items: [
       { icone: BarChart3, label: 'Cockpit', route: '/admin/fondateur' },
       { icone: Megaphone, label: 'Acquisition', route: '/admin/fondateur/acquisition' },
+      { icone: MessageCircle, label: 'Sales / Sourcing', route: '/admin/fondateur/sales' },
       { icone: UserPlus, label: 'Équipe', route: '/admin/fondateur/equipe' },
       { icone: Rocket, label: 'Levée & Documents', route: '/admin/fondateur/levee' },
       { icone: TrendingUp, label: 'Cohort & Economics', route: '/admin/cohort' },
