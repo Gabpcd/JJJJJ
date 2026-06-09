@@ -1,6 +1,7 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import React, { useState, useEffect } from 'react';
-import { Building2, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, MessageCircle } from 'lucide-react';
 import { LayoutApp } from '@/components/LayoutApp';
 import { ChargementPage } from '@/components/ChargementPage';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
@@ -20,6 +21,7 @@ export default function MonGroupe() {
 
 export function MonGroupeContent() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [etab, setEtab] = useState<any>(null);
   const [groupe, setGroupe] = useState<any>(null);
   const [etablissements, setEtablissements] = useState<any[]>([]);
@@ -66,7 +68,14 @@ export function MonGroupeContent() {
           Votre établissement n'appartient à aucun groupe de santé.
           Contactez-nous pour rattacher votre établissement à un groupe existant.
         </p>
-        <BoutonY2K onClick={() => window.location.href = 'mailto:contact@jolene.app?subject=Rejoindre un groupe de santé'} iconeGauche={<Mail className="h-4 w-4" />}>
+        <BoutonY2K
+          onClick={async () => {
+            const { data, error } = await supabase.rpc('fn_contacter_support' as any);
+            if (error || !data) { toast.error("Impossible d'ouvrir la messagerie pour le moment."); return; }
+            navigate(`/etablissement/messagerie?conv=${data}`);
+          }}
+          iconeGauche={<MessageCircle className="h-4 w-4" />}
+        >
           Contacter Jolene
         </BoutonY2K>
       </div>
