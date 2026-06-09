@@ -11,10 +11,10 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 
 const ENDPOINTS = [
-  { method: 'GET', path: '/api-v1/missions', desc: 'Lister vos missions', example: '{ "data": [{ "id": "uuid", "intitule": "IDE Nuit", "statut": "OUVERTE" }] }' },
-  { method: 'POST', path: '/api-v1/missions', desc: 'Créer une mission', example: '{ "data": { "id": "uuid", "intitule": "IDE Jour" } }' },
-  { method: 'GET', path: '/api-v1/presences', desc: 'Lister les pointages', example: '{ "data": [{ "id": "uuid", "validee": true }] }' },
-  { method: 'GET', path: '/api-v1/factures', desc: 'Lister les factures', example: '{ "data": [{ "numero_facture": "SD-2026-001", "montant_ttc": 150.00 }] }' },
+  { method: 'GET', path: '/api-v1/missions', desc: 'Lister vos missions', example: '{ "missions": [{ "id": "uuid", "intitule": "IDE Nuit", "statut": "OUVERTE" }], "count": 1 }' },
+  { method: 'POST', path: '/api-v1/missions', desc: 'Créer une mission (permission missions:write)', example: '{ "mission": { "id": "uuid", "intitule": "IDE Jour" } }' },
+  { method: 'GET', path: '/api-v1/presences', desc: 'Lister les pointages', example: '{ "presences": [{ "id": "uuid", "validee": true }], "count": 1 }' },
+  { method: 'GET', path: '/api-v1/factures', desc: 'Lister les factures', example: '{ "factures": [{ "numero_facture": "SD-2026-001", "montant_ttc": 150.00 }], "count": 1 }' },
 ];
 
 const PERMISSIONS = [
@@ -118,7 +118,8 @@ export function APIContent() {
       {/* Doc */}
       <div className="card-base mb-6">
         <h2 className="font-bold text-foreground mb-3">📖 Endpoints</h2>
-        <p className="text-xs text-muted-foreground mb-3">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">https://api.jolene.app/v1</code></p>
+        <p className="text-xs text-muted-foreground mb-1">Base URL : <code className="bg-muted px-2 py-0.5 rounded text-foreground">https://flripxtsyegjshnhzjkz.supabase.co/functions/v1</code></p>
+        <p className="text-xs text-muted-foreground mb-3">Authentification : header <code className="bg-muted px-2 py-0.5 rounded text-foreground">x-api-key: sd_live_…</code> (votre clé ci-dessous).</p>
         <div className="space-y-3">
           {ENDPOINTS.map((ep, i) => (
             <div key={i} className="border border-border rounded-lg p-3">
