@@ -43,10 +43,17 @@ Deno.serve(async (req) => {
     const emailConnexion = u?.user?.email || "";
     const lastSignIn = u?.user?.last_sign_in_at ? new Date(u.user.last_sign_in_at) : null;
 
-    // Destination du code : boîte email RÉELLE paramétrée (admin_securite),
-    // sinon repli sur l'email de connexion. (admin@jolene.app n'est pas une vraie boîte.)
-    const { data: secu } = await admin.from("admin_securite").select("email_2fa").eq("admin_id", user.id).maybeSingle();
-    const email = ((secu as any)?.email_2fa || emailConnexion).trim();
+    // Destination du code : boîte email RÉELLE paramétrée (admin_securite).
+    // Fallback SQL direct car le client service_role + RLS peut ne pas bypass
+    // correctement selon la version supabase-js.
+    let emailDest = emailConnexion;
+    try {
+      const { data: rows } = await admin.rpc("fn_lire_email_2fa", { p_admin_id: user.id });
+      if (rows) emailDest = String(rows);
+    } catch {
+      // RPC absente ou erreur → fallback emailConnexion
+    }
+    const email = emailDest.trim();
 
     const { action, code } = await req.json().catch(() => ({}));
 
