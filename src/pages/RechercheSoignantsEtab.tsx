@@ -7,6 +7,8 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { PROFESSIONS, getLabelProfession } from '@/lib/constantes';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { BoutonFavori } from '@/components/BoutonFavori';
 
 interface SoignantResultat {
   id: string;
@@ -62,6 +64,7 @@ const PAGE_SIZE = 20;
 
 export default function RechercheSoignantsEtab() {
   usePageTitle('Recherche soignants');
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -352,7 +355,7 @@ export default function RechercheSoignantsEtab() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {soignants.map((s) => (
-                  <CarteSoignant key={s.id} soignant={s} onClick={() => navigate(`/etablissement/soignants/${s.id}`)} />
+                  <CarteSoignant key={s.id} soignant={s} etablissementId={user?.id} onClick={() => navigate(`/etablissement/soignants/${s.id}`)} />
                 ))}
               </div>
 
@@ -377,14 +380,21 @@ export default function RechercheSoignantsEtab() {
   );
 }
 
-function CarteSoignant({ soignant: s, onClick }: { soignant: SoignantResultat; onClick: () => void }) {
+function CarteSoignant({ soignant: s, onClick, etablissementId }: { soignant: SoignantResultat; onClick: () => void; etablissementId?: string }) {
   const initiales = `${s.prenom?.[0] ?? ''}${s.nom_initiale?.[0] ?? ''}`.toUpperCase() || 'SD';
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="card-base text-left transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/40"
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      className="card-base relative text-left cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/40"
     >
+      {etablissementId && (
+        <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+          <BoutonFavori soignantId={s.id} etablissementId={etablissementId} />
+        </div>
+      )}
       <div className="flex items-start gap-3">
         {s.avatar_url ? (
           <img src={s.avatar_url} alt="" className="h-14 w-14 rounded-2xl object-cover border border-border" />
@@ -460,6 +470,6 @@ function CarteSoignant({ soignant: s, onClick }: { soignant: SoignantResultat; o
           )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
