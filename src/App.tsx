@@ -168,6 +168,9 @@ const AdminAuditRLS = lazy(() => import("./pages/admin/AdminAuditRLS"));
 const AdminRGPDTools = lazy(() => import("./pages/admin/AdminRGPDTools"));
 const AdminHeuresExternes = lazy(() => import("./pages/admin/AdminHeuresExternes"));
 const AdminPlanningGlobal = lazy(() => import("./pages/admin/AdminPlanningGlobal"));
+const AdminCockpitFondateur = lazy(() => import("./pages/admin/AdminCockpitFondateur"));
+const AdminEquipe = lazy(() => import("./pages/admin/AdminEquipe"));
+const AdminLevee = lazy(() => import("./pages/admin/AdminLevee"));
 const ClassementSoignants = lazy(() => import("./pages/ClassementSoignants"));
 
 const queryClient = new QueryClient();
@@ -381,6 +384,9 @@ function AppRoutes() {
           <Route path="/admin/audit-rls" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminAuditRLS /></RouteProtegee>} />
           <Route path="/admin/rgpd-tools" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminRGPDTools /></RouteProtegee>} />
           <Route path="/admin/planning-global" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminPlanningGlobal /></RouteProtegee>} />
+          <Route path="/admin/fondateur" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminCockpitFondateur /></RouteProtegee>} />
+          <Route path="/admin/fondateur/equipe" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminEquipe /></RouteProtegee>} />
+          <Route path="/admin/fondateur/levee" element={<RouteProtegee rolesAutorises={['ADMIN_PLATEFORME']}><AdminLevee /></RouteProtegee>} />
 
           {/* Widget public */}
           <Route path="/widget-recrutement" element={<WidgetRecrutement />} />
