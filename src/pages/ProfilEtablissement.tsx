@@ -606,7 +606,11 @@ export function ProfilEtablissementContent() {
                   setContratUrl(fileName);
                   setContratUploadeLe(new Date().toISOString());
                   setContratValide(false);
-                  afficherNotification({ type: 'succes', message: 'Contrat téléversé. En attente de validation par Jolene.' });
+                  // Re-vérification IA à chaque re-upload (type + SIRET + identité signataire).
+                  supabase.functions.invoke('verify-contrat-etablissement', {
+                    body: { etablissement_id: user.id },
+                  }).catch(() => { /* best-effort */ });
+                  afficherNotification({ type: 'succes', message: 'Contrat téléversé. Vérification IA en cours, puis validation par Jolene.' });
                 }
                 setUploadingContrat(false);
               }}

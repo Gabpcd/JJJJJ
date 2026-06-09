@@ -91,19 +91,18 @@ export function ContratPlateformeContent() {
       if (rpcError) throw rpcError;
       if ((rpcData as any)?.error) throw new Error((rpcData as any).error);
 
-      try {
-        await supabase.functions.invoke('verify-document', {
-          body: { document_id: `contrat-plateforme-${etablissementId}`, path, type: 'CONTRAT_PLATEFORME' },
-        });
-      } catch {
-        // AI verification is optional — admin validates manually
-      }
+      // Vérification IA réelle du contrat (type + SIRET + identité signataire),
+      // fire-and-forget : le résultat est écrit côté établissement + revue admin.
+      supabase.functions.invoke('verify-contrat-etablissement', {
+        body: { etablissement_id: etablissementId },
+      }).catch(() => { /* best-effort, l'admin valide aussi manuellement */ });
 
       toast.success('Contrat téléversé — en cours de vérification par notre équipe.');
       await charger();
     } catch (err) {
       capturerErreurSentry(err, 'ContratPlateforme', 'upload');
-      toast.error('Une erreur est survenue lors du téléversement.');
+      const msg = (err as any)?.message || (err as any)?.error_description || '';
+      toast.error(msg ? `Échec du téléversement : ${msg}` : 'Une erreur est survenue lors du téléversement.');
     }
     setUploading(false);
     if (fileRef.current) fileRef.current.value = '';
