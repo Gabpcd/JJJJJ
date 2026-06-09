@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/react';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { getAttribution } from '@/lib/attribution';
 import { gererErreurSupabase } from '@/lib/supabaseErrorHandler';
 import { viderCacheHorsLigne } from '@/lib/cacheHorsLigne';
 
@@ -221,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       lng: data.lng || null,
       navigateur: navigator.userAgent,
       turnstileToken: data.turnstileToken || null,
+      attribution: getAttribution(),
     };
 
     try {
@@ -301,6 +303,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         numero_licence: data.numeroLicence || null,
         navigateur: navigator.userAgent,
         turnstileToken: data.turnstileToken || null,
+        attribution: getAttribution(),
       },
     });
 

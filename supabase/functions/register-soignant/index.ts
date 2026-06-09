@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { verifyTurnstileToken } from '../_shared/verify-turnstile.ts';
 import { errorResponse, safeStringifyError } from '../_shared/errors.ts';
+import { colonnesAttribution } from '../_shared/attribution.ts';
 
 function getCorsOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
@@ -167,6 +168,7 @@ Deno.serve(async (req) => {
       rayon_deplacement_km: rayonKm,
       adresse_lat: typeof lat === 'number' ? lat : null,
       adresse_lng: typeof lng === 'number' ? lng : null,
+      ...colonnesAttribution(body.attribution, req),
     };
     const { error: insertError } = await supabaseAdmin.from('soignants').insert(insertPayload);
     if (insertError) {
