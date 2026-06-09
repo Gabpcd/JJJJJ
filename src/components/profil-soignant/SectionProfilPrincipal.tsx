@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { SelectSpecialiteMedicale } from '@/components/SelectSpecialiteMedicale';
 import { SelectProfession } from '@/components/SelectProfession';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
+import { reverseGeocode } from '@/lib/geocodage';
 import { CaptchaTurnstile } from '@/components/CaptchaTurnstile';
 import { getLabelProfession, PROFESSIONS_SANS_RPPS } from '@/lib/constantes';
 import { useTypesExerciceAutorises } from '@/hooks/useTypesExerciceAutorises';
@@ -605,11 +606,18 @@ export function SectionProfilPrincipal(props: Props) {
     }
     setGeoLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLat(position.coords.latitude.toString());
-        setLng(position.coords.longitude.toString());
+      async (position) => {
+        const la = position.coords.latitude, lo = position.coords.longitude;
+        setLat(la.toString());
+        setLng(lo.toString());
+        const adr = await reverseGeocode(la, lo);
+        if (adr) {
+          if (adr.ville) setVilleRecherche(adr.ville);
+          afficherNotification({ type: 'succes', message: `📍 ${adr.label}` });
+        } else {
+          afficherNotification({ type: 'succes', message: 'Position récupérée.' });
+        }
         setGeoLoading(false);
-        afficherNotification({ type: 'succes', message: 'Position récupérée avec succès !' });
       },
       () => {
         setGeoLoading(false);
@@ -824,28 +832,11 @@ export function SectionProfilPrincipal(props: Props) {
             {geoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
             {geoLoading ? 'Récupération en cours…' : 'Utiliser ma position actuelle'}
           </button>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Latitude</label>
-              <input
-                type="number"
-                step="any"
-                value={lat}
-                onChange={(e) => setLat(e.target.value)}
-                className="input-base"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Longitude</label>
-              <input
-                type="number"
-                step="any"
-                value={lng}
-                onChange={(e) => setLng(e.target.value)}
-                className="input-base"
-              />
-            </div>
-          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            {lat && lng
+              ? <>📍 Position enregistrée — votre ville est renseignée ci-dessous. <span className="opacity-60">(coordonnées techniques : {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)})</span></>
+              : "Utilisez votre position pour renseigner automatiquement votre ville."}
+          </p>
           <div className="pt-2 border-t border-border">
             <label className="text-sm font-medium text-foreground mb-1.5 block">🏙️ Ville de recherche</label>
             <p className="text-xs text-muted-foreground mb-2">
