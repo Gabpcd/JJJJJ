@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity } from 'lucide-react';
+import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -21,6 +21,7 @@ const NAV_ADMIN_GROUPED: SidebarEntry[] = [
     icone: Users, label: 'Utilisateurs', items: [
       { icone: Users, label: 'Tous les utilisateurs', route: '/admin/utilisateurs' },
       { icone: Shield, label: 'Modération', route: '/admin/moderation' },
+      { icone: Flag, label: 'Signalements', route: '/admin/signalements' },
       { icone: ShieldCheck, label: 'Vérif. établissements', route: '/admin/verification-etablissements' },
       { icone: FileCheck, label: 'Heures externes (3200h)', route: '/admin/heures-externes' },
       { icone: MessageCircle, label: 'Réclamations', route: '/admin/reclamations' },
