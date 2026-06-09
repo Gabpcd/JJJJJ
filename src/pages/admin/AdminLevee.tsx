@@ -8,8 +8,9 @@ import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Rocket, Plus, Save, X, FileText, ExternalLink, Trash2 } from 'lucide-react';
+import { Rocket, Plus, Save, X, FileText, ExternalLink, Trash2, Calculator } from 'lucide-react';
 import { toast } from 'sonner';
+import { SimulateurLevee } from '@/components/admin/SimulateurLevee';
 
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
 
@@ -69,7 +70,7 @@ export default function AdminLevee() {
   const [showDocForm, setShowDocForm] = useState(false);
   const [editDoc, setEditDoc] = useState<Partial<Document> | null>(null);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<'pipeline' | 'documents'>('pipeline');
+  const [tab, setTab] = useState<'simulateur' | 'pipeline' | 'documents'>('simulateur');
 
   const charger = async () => {
     setLoading(true);
@@ -164,12 +165,15 @@ export default function AdminLevee() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-foreground">Levée de fonds & Documents</h1>
-            <p className="text-sm text-muted-foreground">Pipeline investisseurs · Business plans · Decks</p>
+            <p className="text-sm text-muted-foreground">Simulateur temps réel · Pipeline investisseurs · Documents</p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <BoutonY2K variant={tab === 'simulateur' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('simulateur')} iconeGauche={<Calculator className="h-4 w-4" />}>
+            Simulateur
+          </BoutonY2K>
           <BoutonY2K variant={tab === 'pipeline' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('pipeline')}>
             Pipeline ({stats.total})
           </BoutonY2K>
@@ -177,6 +181,8 @@ export default function AdminLevee() {
             Documents ({documents.length})
           </BoutonY2K>
         </div>
+
+        {tab === 'simulateur' && <SimulateurLevee />}
 
         {tab === 'pipeline' && (
           <>
