@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,6 +6,7 @@ import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
 import { GardeMfaAdmin } from '@/components/admin/GardeMfaAdmin';
+import { useAccesAdmin } from '@/hooks/useAccesAdmin';
 import { cn } from '@/lib/utils';
 
 /* ── Types ── */
@@ -156,8 +157,8 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { deconnexion } = useAuth();
   const [menuOuvert, setMenuOuvert] = useState(false);
-  // Sprint 8.5-A PR 1 — Header mobile se cache au scroll down, réapparaît au scroll up
   const scrollDirection = useScrollDirection();
+  const { accesTotal, aAcces } = useAccesAdmin();
 
   const handleDeconnexion = async () => {
     await deconnexion();
@@ -167,7 +168,18 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const isActive = (route: string) =>
     route === '/admin' ? location.pathname === '/admin' : location.pathname.startsWith(route);
 
-  const allFlatItems = flattenEntries(NAV_ADMIN_GROUPED);
+  // RBAC : filtre la nav selon les groupes autorisés (backend-driven)
+  const navFiltered = useMemo(() => {
+    if (accesTotal) return NAV_ADMIN_GROUPED;
+    return NAV_ADMIN_GROUPED.filter(entry => {
+      if (isGroup(entry)) return aAcces(entry.label);
+      if (entry.route === '/admin') return aAcces('Dashboard');
+      if (entry.route === '/admin/messagerie') return aAcces('Messagerie');
+      return true;
+    });
+  }, [accesTotal, aAcces]);
+
+  const allFlatItems = flattenEntries(navFiltered);
   const mobileExtraItems = allFlatItems.filter(
     item => !NAV_ADMIN_MOBILE_MAIN.some(m => m.route === item.route)
   );
@@ -185,7 +197,7 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
           <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAV_ADMIN_GROUPED.map((entry, i) =>
+          {navFiltered.map((entry, i) =>
             isGroup(entry) ? (
               <SidebarGroup key={i} group={entry} isActive={isActive} navigate={navigate} />
             ) : (

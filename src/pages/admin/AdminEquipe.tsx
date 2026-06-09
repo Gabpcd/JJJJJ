@@ -33,8 +33,12 @@ interface Membre {
   user_id: string | null;
 }
 
-function emptyMembre(): Partial<Membre> {
-  return { nom: '', prenom: '', email: '', poste: '', salaire_brut_mensuel: 0, date_embauche: null, acces_groupes: ['Dashboard'], actif: true };
+interface FormMembre extends Partial<Membre> {
+  password?: string;
+}
+
+function emptyMembre(): FormMembre {
+  return { nom: '', prenom: '', email: '', poste: '', salaire_brut_mensuel: 0, date_embauche: null, acces_groupes: ['Dashboard'], actif: true, password: '' };
 }
 
 export default function AdminEquipe() {
@@ -42,7 +46,7 @@ export default function AdminEquipe() {
   const [loading, setLoading] = useState(true);
   const [membres, setMembres] = useState<Membre[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [editMembre, setEditMembre] = useState<Partial<Membre> | null>(null);
+  const [editMembre, setEditMembre] = useState<FormMembre | null>(null);
   const [saving, setSaving] = useState(false);
 
   const charger = async () => {
@@ -60,7 +64,7 @@ export default function AdminEquipe() {
   }, [membres]);
 
   const ouvrirFormulaire = (m?: Membre) => {
-    setEditMembre(m ? { ...m } : emptyMembre());
+    setEditMembre(m ? { ...m, password: '' } : emptyMembre());
     setShowForm(true);
   };
 
@@ -71,27 +75,43 @@ export default function AdminEquipe() {
       return;
     }
     setSaving(true);
-    const payload = {
-      nom: editMembre.nom!.trim(),
-      prenom: editMembre.prenom!.trim(),
-      email: editMembre.email!.trim(),
-      poste: editMembre.poste || 'Opérations',
-      salaire_brut_mensuel: Number(editMembre.salaire_brut_mensuel) || 0,
-      date_embauche: editMembre.date_embauche || null,
-      acces_groupes: editMembre.acces_groupes || ['Dashboard'],
-      actif: editMembre.actif ?? true,
-      maj_le: new Date().toISOString(),
-    };
 
     let err;
     if (editMembre.id) {
+      // Mise à jour d'un membre existant
+      const payload = {
+        nom: editMembre.nom!.trim(),
+        prenom: editMembre.prenom!.trim(),
+        email: editMembre.email!.trim(),
+        poste: editMembre.poste || 'Opérations',
+        salaire_brut_mensuel: Number(editMembre.salaire_brut_mensuel) || 0,
+        date_embauche: editMembre.date_embauche || null,
+        acces_groupes: editMembre.acces_groupes || ['Dashboard'],
+        actif: editMembre.actif ?? true,
+        maj_le: new Date().toISOString(),
+      };
       ({ error: err } = await supabase.from('equipe_admin' as any).update(payload as any).eq('id', editMembre.id));
     } else {
-      ({ error: err } = await supabase.from('equipe_admin' as any).insert(payload as any));
+      // Création : compte auth + equipe_admin via RPC serveur (transaction atomique)
+      if (!editMembre.password || editMembre.password.length < 8) {
+        toast.error('Mot de passe requis (8 caractères minimum).');
+        setSaving(false);
+        return;
+      }
+      const { error: rpcErr } = await supabase.rpc('fn_admin_creer_compte_employe' as any, {
+        p_email: editMembre.email!.trim(),
+        p_password: editMembre.password,
+        p_prenom: editMembre.prenom!.trim(),
+        p_nom: editMembre.nom!.trim(),
+        p_poste: editMembre.poste || 'Opérations',
+        p_salaire_brut: Number(editMembre.salaire_brut_mensuel) || 0,
+        p_acces_groupes: editMembre.acces_groupes || ['Dashboard'],
+      });
+      err = rpcErr;
     }
     setSaving(false);
     if (err) { toast.error(`Erreur : ${err.message}`); return; }
-    toast.success(editMembre.id ? 'Membre mis à jour.' : 'Membre ajouté.');
+    toast.success(editMembre.id ? 'Membre mis à jour.' : 'Compte employé créé (auth + accès).');
     setShowForm(false);
     setEditMembre(null);
     charger();
@@ -214,6 +234,13 @@ export default function AdminEquipe() {
                   <Label>Email</Label>
                   <Input type="email" value={editMembre.email || ''} onChange={e => setEditMembre({ ...editMembre, email: e.target.value })} />
                 </div>
+                {!editMembre.id && (
+                  <div>
+                    <Label>Mot de passe (8 caractères min.)</Label>
+                    <Input type="password" value={editMembre.password || ''} onChange={e => setEditMembre({ ...editMembre, password: e.target.value })} placeholder="••••••••" autoComplete="new-password" />
+                    <p className="text-[10px] text-muted-foreground mt-1">Crée un compte admin avec ce mot de passe. L'employé pourra le changer ensuite.</p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Poste</Label>
