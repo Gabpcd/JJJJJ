@@ -40,8 +40,13 @@ Deno.serve(async (req) => {
     const { data: u } = await admin.auth.admin.getUserById(user.id);
     const role = (u?.user?.app_metadata as any)?.role;
     if (role !== "ADMIN_PLATEFORME") return new Response(JSON.stringify({ error: "Accès admin requis" }), { status: 403, headers: corsHeaders(req) });
-    const email = u?.user?.email || "";
+    const emailConnexion = u?.user?.email || "";
     const lastSignIn = u?.user?.last_sign_in_at ? new Date(u.user.last_sign_in_at) : null;
+
+    // Destination du code : boîte email RÉELLE paramétrée (admin_securite),
+    // sinon repli sur l'email de connexion. (admin@jolene.app n'est pas une vraie boîte.)
+    const { data: secu } = await admin.from("admin_securite").select("email_2fa").eq("admin_id", user.id).maybeSingle();
+    const email = ((secu as any)?.email_2fa || emailConnexion).trim();
 
     const { action, code } = await req.json().catch(() => ({}));
 
@@ -73,8 +78,9 @@ Deno.serve(async (req) => {
             method: "POST",
             headers: { "Authorization": `Bearer ${RESEND}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              from: "Jolene <bonjour@jolene.app>",
+              from: "Jolene Sécurité <bonjour@jolene.app>",
               to: [email],
+              reply_to: "support@jolene.app",
               subject: `Jolene — code de connexion admin : ${c}`,
               html: `<div style="font-family:sans-serif;max-width:480px;margin:auto">
                 <h2 style="color:#E91E8C">Connexion administration Jolene</h2>
