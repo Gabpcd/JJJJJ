@@ -45,6 +45,9 @@ verify_jwt = false
 [functions.verify-contrat-travail]
 verify_jwt = false
 
+[functions.verify-rib-etablissement]
+verify_jwt = false
+
 [functions.create-mission-payment]
 verify_jwt = false
 
