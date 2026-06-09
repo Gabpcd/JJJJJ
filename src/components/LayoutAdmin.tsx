@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
-import { GardeMfaAdmin } from '@/components/admin/GardeMfaAdmin';
+
 import { useAccesAdmin } from '@/hooks/useAccesAdmin';
 import { cn } from '@/lib/utils';
 
@@ -187,7 +187,6 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
   );
 
   return (
-   <GardeMfaAdmin>
     <div className="min-h-[100dvh] bg-background flex">
       {/* ── Sidebar desktop (grouped) ── */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[240px] bg-sidebar flex-col z-40">
@@ -313,6 +312,5 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
         <FooterLegal />
       </main>
     </div>
-   </GardeMfaAdmin>
   );
 }
