@@ -39,6 +39,9 @@ verify_jwt = false
 [functions.verify-heures-externes]
 verify_jwt = false
 
+[functions.verify-contrat-etablissement]
+verify_jwt = false
+
 [functions.create-mission-payment]
 verify_jwt = false
 
