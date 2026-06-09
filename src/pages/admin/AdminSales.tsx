@@ -203,7 +203,7 @@ export default function AdminSales() {
                   {PROFESSIONS.map(p => <option key={p.valeur} value={p.valeur}>{p.label}</option>)}
                 </select>
               </div>
-              <BoutonY2K size="sm" onClick={() => setEditGroupe({ plateforme: 'WHATSAPP', profession: 'TOUTES', audience: 'MIXTE', statut: 'A_VERIFIER' })} iconeGauche={<Plus className="h-4 w-4" />}>Ajouter</BoutonY2K>
+              <BoutonY2K size="sm" onClick={() => setEditGroupe({ plateforme: 'FACEBOOK', profession: 'TOUTES', audience: 'MIXTE', statut: 'A_VERIFIER' })} iconeGauche={<Plus className="h-4 w-4" />}>Ajouter</BoutonY2K>
             </div>
 
             {groupesFiltres.length === 0 ? (
@@ -216,13 +216,26 @@ export default function AdminSales() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-foreground truncate">{g.nom}</span>
+                            {g.url ? (
+                              <a href={g.url} target="_blank" rel="noopener noreferrer"
+                                className="font-semibold text-primary hover:underline truncate inline-flex items-center gap-1">
+                                {g.nom}<ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                              </a>
+                            ) : (
+                              <span className="font-semibold text-foreground truncate">{g.nom}</span>
+                            )}
                             <BadgeY2K variant={badgeStatutGroupe(g.statut)}>{g.statut === 'A_VERIFIER' ? 'À vérifier' : g.statut === 'ACTIF' ? 'Actif' : 'Inactif'}</BadgeY2K>
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {PLATEFORMES.find(p => p.v === g.plateforme)?.label} · {g.profession === 'TOUTES' ? 'Toutes prof.' : getLabelProfession(g.profession)}
                             {g.region ? ` · ${g.region}` : ''}{g.membres ? ` · ${g.membres} membres` : ''}
                           </p>
+                          {g.url && (
+                            <a href={g.url} target="_blank" rel="noopener noreferrer"
+                              className="text-[11px] text-primary/80 hover:underline break-all line-clamp-1 mt-0.5 block">
+                              {g.url.replace(/^https?:\/\//, '')}
+                            </a>
+                          )}
                           {g.notes && <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{g.notes}</p>}
                         </div>
                       </div>
