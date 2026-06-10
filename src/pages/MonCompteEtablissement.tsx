@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Building2 } from 'lucide-react';
 import {
   CreditCard, FileStack, FileText, FileSpreadsheet, BarChart3, Clock, Scale,
-  Flame, Users, Gift, Settings, LogOut, HeartHandshake, ClipboardCheck,
+  Flame, Users, Gift, Settings, LogOut, ClipboardCheck,
   User, TrendingUp, Star, Ban, Landmark, ShieldCheck, MessageSquare, Code2,
 } from 'lucide-react';
 
@@ -64,7 +64,6 @@ export default function MonCompteEtablissement() {
         { icone: Users, label: 'Mon équipe', route: '/etablissement/equipe' },
         { icone: Building2, label: 'Mon groupe', route: '/etablissement/mon-groupe' },
         { icone: Gift, label: 'Parrainage', route: '/etablissement/parrainage' },
-        { icone: HeartHandshake, label: 'Premium', route: '/etablissement/premium' },
       ],
     },
     {

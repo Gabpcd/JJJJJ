@@ -1,34 +1,17 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { Crown, Zap, BarChart3, Award, Bell, FileText, Calculator, Receipt, ClipboardList, HelpCircle, CheckCircle2 } from 'lucide-react';
-import {
-  CardY2K,
-  CardY2KHeader,
-  CardY2KTitle,
-  CardY2KContent,
-} from '@/components/y2k/CardY2K';
+import { Crown } from 'lucide-react';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-const PREMIUM_FEATURES = [
-  { icone: Zap, label: 'Accès prioritaire aux missions' },
-  { icone: BarChart3, label: 'Statistiques avancées de vos gains' },
-  { icone: Award, label: 'Badge doré visible par les établissements' },
-  { icone: Bell, label: 'Alertes missions personnalisées' },
-];
-
-const LIBERAL_FEATURES = [
-  { icone: Zap, label: 'Tout Premium inclus' },
-  { icone: FileText, label: 'Génération automatique des notes d\'honoraires' },
-  { icone: Receipt, label: 'Export comptable compatible Indy' },
-  { icone: Calculator, label: 'Tableau de bord charges sociales (URSSAF, CARPIMKO)' },
-  { icone: ClipboardList, label: 'Rappels déclarations fiscales' },
-  { icone: HelpCircle, label: 'Assistant TVA' },
-];
-
+/**
+ * Page dépubliée pré-lancement (Lot 1) : plus de liste de fonctionnalités non
+ * livrées ni de prix — seule la capture d'intérêt est conservée. La page n'est
+ * plus liée depuis les menus ; elle reste accessible en URL directe.
+ */
 export default function PremiumSoignant() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -50,91 +33,30 @@ export default function PremiumSoignant() {
 
   return (
     <LayoutApp role="SOIGNANT">
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* Hero */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-warning/10 mx-auto">
-            <Crown className="h-8 w-8 text-warning" />
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Jolene Premium</h1>
-          <p className="text-muted-foreground text-sm max-w-lg mx-auto">
-            Boostez votre carrière avec des outils exclusifs pour décrocher plus de missions et gérer votre activité.
-          </p>
+      <div className="max-w-xl mx-auto space-y-6 text-center py-8">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-warning/10 mx-auto">
+          <Crown className="h-8 w-8 text-warning" />
         </div>
-
-        {/* Two cards side by side */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Premium */}
-          <CardY2K variant="holographic" noPadding className="relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-primary" />
-            <CardY2KHeader className="pb-2">
-              <BadgeY2K variant="premium" className="w-fit mb-2">Premium</BadgeY2K>
-              <CardY2KTitle className="text-lg">Premium</CardY2KTitle>
-              <div className="mt-1">
-                <span className="text-3xl font-bold text-foreground">9,99 €</span>
-                <span className="text-muted-foreground text-sm"> / mois</span>
-              </div>
-            </CardY2KHeader>
-            <CardY2KContent className="space-y-4">
-              <ul className="space-y-2.5">
-                {PREMIUM_FEATURES.map((f) => (
-                  <li key={f.label} className="flex items-start gap-2.5 text-sm">
-                    <CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                    <span className="text-foreground">{f.label}</span>
-                  </li>
-                ))}
-              </ul>
-              <BoutonY2K disabled className="w-full opacity-60 cursor-not-allowed">
-                🚀 Bientôt disponible
-              </BoutonY2K>
-            </CardY2KContent>
-          </CardY2K>
-
-          {/* Pack Libéral */}
-          <CardY2K variant="holographic" noPadding className="border-warning/30 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-warning" />
-            <CardY2KHeader className="pb-2">
-              <BadgeY2K variant="warning" className="w-fit mb-2">Recommandé</BadgeY2K>
-              <CardY2KTitle className="text-lg">Pack Libéral</CardY2KTitle>
-              <div className="mt-1">
-                <span className="text-3xl font-bold text-foreground">19,99 €</span>
-                <span className="text-muted-foreground text-sm"> / mois</span>
-              </div>
-            </CardY2KHeader>
-            <CardY2KContent className="space-y-4">
-              <ul className="space-y-2.5">
-                {LIBERAL_FEATURES.map((f) => (
-                  <li key={f.label} className="flex items-start gap-2.5 text-sm">
-                    <CheckCircle2 className="h-4 w-4 text-warning shrink-0 mt-0.5" />
-                    <span className="text-foreground">{f.label}</span>
-                  </li>
-                ))}
-              </ul>
-              <BoutonY2K disabled className="w-full opacity-60 cursor-not-allowed">
-                🚀 Bientôt disponible
-              </BoutonY2K>
-            </CardY2KContent>
-          </CardY2K>
-        </div>
-
-        {/* Waitlist */}
-        <CardY2K noPadding>
-          <CardY2KContent className="pt-6 text-center space-y-4">
-            <p className="font-semibold text-foreground">📬 Inscrivez-vous à la liste d'attente</p>
-            <p className="text-xs text-muted-foreground">Soyez parmi les premiers informés du lancement.</p>
-            <div className="flex gap-2 max-w-md mx-auto">
+        <h1 className="text-2xl font-bold text-foreground">Jolene est 100% gratuit pour les soignants</h1>
+        <p className="text-muted-foreground text-sm">
+          Missions, contrats, paiements, parcours libéral : tout est inclus, sans frais ni commission
+          pour vous. Une offre Premium (outils comptables libéral, statistiques avancées) arrivera
+          plus tard — laissez votre email pour être prévenu(e) en premier.
+        </p>
+        <CardY2K hoverLift={false}>
+          <CardY2KContent>
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 type="email"
-                placeholder="votre@email.com"
+                placeholder="votre@email.fr"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && inscrire()}
+                onChange={e => setEmail(e.target.value)}
+                className="flex-1"
               />
-              <BoutonY2K onClick={inscrire} disabled={submitting} loading={submitting} className="shrink-0">
-                S'inscrire
+              <BoutonY2K onClick={inscrire} disabled={submitting} loading={submitting}>
+                Me prévenir
               </BoutonY2K>
             </div>
-            <p className="text-[11px] text-muted-foreground">Sans engagement. Annulation à tout moment.</p>
           </CardY2KContent>
         </CardY2K>
       </div>

@@ -1,11 +1,27 @@
 // Digest hebdomadaire soignants : nombre de missions ouvertes pour leur
 // profession + meilleur taux, CTA tracé. Déclenché par pg_cron (jeudi 9h UTC) :
-// POST { secret }.
+// Authorization Bearer service_role/vault.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const SECRET = "jolene-digest-2026";
 const MAX_PAR_RUN = 500;
+
+// Auth cron : Bearer = service_role (env) ou secret vault sb_secret_* envoyé par
+// pg_cron (cf. CLAUDE.md "Auth crons pg_cron"). Plus de secret en dur dans le repo.
+let _vaultSecret: string | null = null;
+async function bearerAutorise(req: Request): Promise<boolean> {
+  const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!bearer) return false;
+  const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  if (svc && bearer === svc) return true;
+  if (_vaultSecret) return bearer === _vaultSecret;
+  try {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, svc, { auth: { persistSession: false } });
+    const { data } = await admin.rpc("fn_lire_secret_cron");
+    if (data && typeof data === "string") { _vaultSecret = data; return bearer === data; }
+  } catch { /* ignore */ }
+  return false;
+}
 
 const LIBELLES: Record<string, string> = {
   IDE: "infirmier(ère)", AS: "aide-soignant(e)", AES: "AES",
@@ -15,8 +31,7 @@ const LIBELLES: Record<string, string> = {
 
 Deno.serve(async (req) => {
   try {
-    const { secret } = await req.json().catch(() => ({}));
-    if (secret !== SECRET) return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
+    if (!(await bearerAutorise(req))) return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,

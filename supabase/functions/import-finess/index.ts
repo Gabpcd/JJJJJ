@@ -1,14 +1,30 @@
 // Import de la base FINESS (établissements de santé, ~270k lignes, AVEC téléphone)
 // dans prospects_etablissements. Le fichier officiel data.gouv (~90 Mo) est lu par
 // tranches HTTP Range ; la fonction s'auto-relance jusqu'à la fin du fichier.
-// Déclenchement : POST { secret: IMPORT_SECRET, offset?: number }.
+// Déclenchement : POST { offset?: number } + Authorization Bearer service_role/vault.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const FICHIER = "https://www.data.gouv.fr/fr/datasets/r/2ce43ade-8d2c-4d1d-81da-ca06c82abc68";
 const TRANCHE = 4 * 1024 * 1024;       // 4 Mo par requête Range
 const BUDGET_MS = 150_000;             // ~150 s puis auto-relance
-const SECRET = "jolene-import-finess-2026";
+
+// Auth cron : Bearer = service_role (env) ou secret vault sb_secret_* envoyé par
+// pg_cron (cf. CLAUDE.md "Auth crons pg_cron"). Plus de secret en dur dans le repo.
+let _vaultSecret: string | null = null;
+async function bearerAutorise(req: Request): Promise<boolean> {
+  const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!bearer) return false;
+  const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  if (svc && bearer === svc) return true;
+  if (_vaultSecret) return bearer === _vaultSecret;
+  try {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, svc, { auth: { persistSession: false } });
+    const { data } = await admin.rpc("fn_lire_secret_cron");
+    if (data && typeof data === "string") { _vaultSecret = data; return bearer === data; }
+  } catch { /* ignore */ }
+  return false;
+}
 
 // libcategetab / libcategagretab → type Jolene (null = ignoré)
 function mapType(libCateg: string, libAgr: string): string | null {
@@ -28,8 +44,8 @@ function mapType(libCateg: string, libAgr: string): string | null {
 
 Deno.serve(async (req) => {
   try {
-    const { secret, offset = 0 } = await req.json().catch(() => ({}));
-    if (secret !== SECRET) return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
+    if (!(await bearerAutorise(req))) return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
+    const { offset = 0 } = await req.json().catch(() => ({}));
 
     const url = Deno.env.get("SUPABASE_URL")!;
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
@@ -104,7 +120,7 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         },
-        body: JSON.stringify({ secret: SECRET, offset: pos }),
+        body: JSON.stringify({ offset: pos }),
       }).catch(() => {});
       (globalThis as any).EdgeRuntime?.waitUntil?.(relance);
     }

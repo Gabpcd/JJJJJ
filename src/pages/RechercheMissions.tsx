@@ -75,6 +75,7 @@ export default function RechercheMissions() {
   const [loading, setLoading] = useState(true);
   const [nbAffiche, setNbAffiche] = useState(20);
   const [rcpExpiree, setRcpExpiree] = useState(false);
+  const [rcpExpireLe, setRcpExpireLe] = useState<string | null>(null);
   // Filtres
   const [profession, setProfession] = useState<string>('');
   const [rayonKm, setRayonKm] = useState(50);
@@ -141,7 +142,13 @@ export default function RechercheMissions() {
             } else {
               const doc = data[0];
               const expire = doc.valide_jusqua ? new Date(doc.valide_jusqua) < new Date() : false;
-              setRcpExpiree(doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire);
+              const invalide = doc.statut_verification === 'REJETE' || doc.statut_verification === 'EXPIRE' || expire;
+              setRcpExpiree(invalide);
+              // Alerte préventive J-30 : RCP encore valide mais expirant sous 30 jours
+              if (!invalide && doc.valide_jusqua) {
+                const joursRestants = (new Date(doc.valide_jusqua).getTime() - Date.now()) / 86400000;
+                setRcpExpireLe(joursRestants <= 30 ? doc.valide_jusqua : null);
+              }
             }
           });
       });
@@ -333,7 +340,7 @@ export default function RechercheMissions() {
           </div>
         </div>
 
-        <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} />
+        <BandeauDocumentsManquants tousDocumentsValides={!!soignant?.tous_documents_valides} rcpExpiree={rcpExpiree} rcpExpireLe={rcpExpireLe} />
 
         {/* Mes recherches sauvegardées (J2.3.C) */}
         <FiltresSauvegardes

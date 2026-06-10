@@ -1,27 +1,19 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { LayoutApp } from '@/components/LayoutApp';
-import { Building2, FileSpreadsheet, BarChart3, Globe, Plug, Headphones, FileText, CheckCircle2, Crown } from 'lucide-react';
-import {
-  CardY2K,
-  CardY2KHeader,
-  CardY2KTitle,
-  CardY2KContent,
-} from '@/components/y2k/CardY2K';
+import { Building2 } from 'lucide-react';
+import { CardY2K, CardY2KContent } from '@/components/y2k/CardY2K';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-const PRO_FEATURES = [
-  { icone: FileSpreadsheet, label: 'Export paie automatique (Silae, Sage, ADP)' },
-  { icone: BarChart3, label: 'Tableau de bord RH (turnover, coût moyen, prévisions)' },
-  { icone: Globe, label: 'Gestion multi-sites' },
-  { icone: Plug, label: 'API SIRH' },
-  { icone: Headphones, label: 'Support dédié' },
-  { icone: FileText, label: 'Rapport PDF mensuel automatique' },
-];
-
+/**
+ * Page dépubliée pré-lancement (Lot 1) : plus de liste de fonctionnalités non
+ * livrées ni de prix — seule la capture d'intérêt est conservée. La page n'est
+ * plus liée depuis les menus ; elle reste accessible en URL directe.
+ * Les outils déjà livrés (Tableau RH, export paie, API) sont accessibles
+ * gratuitement depuis le menu — ils deviendront l'offre Pro après le lancement.
+ */
 export default function PremiumEtablissement() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -43,63 +35,30 @@ export default function PremiumEtablissement() {
 
   return (
     <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <div className="max-w-2xl mx-auto space-y-8">
-        {/* Hero */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mx-auto">
-            <Building2 className="h-8 w-8 text-primary" />
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Jolene Pro</h1>
-          <p className="text-muted-foreground text-sm max-w-lg mx-auto">
-            Des outils avancés pour piloter vos recrutements et simplifier votre gestion administrative.
-          </p>
+      <div className="max-w-xl mx-auto space-y-6 text-center py-8">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mx-auto">
+          <Building2 className="h-8 w-8 text-primary" />
         </div>
-
-        {/* Card */}
-        <CardY2K variant="holographic" noPadding className="relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-primary" />
-          <CardY2KHeader className="pb-2">
-            <Badge variant="secondary" className="w-fit text-xs mb-2">Pack Établissement</Badge>
-            <CardY2KTitle className="text-lg">Pack Établissement Pro</CardY2KTitle>
-            <div className="mt-1">
-              <span className="text-3xl font-bold text-foreground">49,99 €</span>
-              <span className="text-muted-foreground text-sm"> / mois</span>
-            </div>
-          </CardY2KHeader>
-          <CardY2KContent className="space-y-4">
-            <ul className="space-y-2.5">
-              {PRO_FEATURES.map((f) => (
-                <li key={f.label} className="flex items-start gap-2.5 text-sm">
-                  <CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span className="text-foreground">{f.label}</span>
-                </li>
-              ))}
-            </ul>
-            <BoutonY2K disabled className="w-full opacity-60" aria-label="Offre Pro non disponible pour le moment">
-              🚀 Bientôt disponible
-            </BoutonY2K>
-            <p className="text-xs text-muted-foreground text-center">Disponible prochainement — inscrivez-vous ci-dessous pour être informé(e)</p>
-          </CardY2KContent>
-        </CardY2K>
-
-        {/* Waitlist */}
-        <CardY2K noPadding>
-          <CardY2KContent className="pt-6 text-center space-y-4">
-            <p className="font-semibold text-foreground">📬 Inscrivez-vous à la liste d'attente</p>
-            <p className="text-xs text-muted-foreground">Soyez parmi les premiers informés du lancement.</p>
-            <div className="flex gap-2 max-w-md mx-auto">
+        <h1 className="text-2xl font-bold text-foreground">Tout Jolene est inclus dans votre commission</h1>
+        <p className="text-muted-foreground text-sm">
+          Tableau RH, export paie, équipe multi-utilisateurs, Chorus Pro, pool d'urgence : tout est
+          disponible sans abonnement. Une offre Pro dédiée aux groupes arrivera plus tard — laissez
+          votre email pour être prévenu(e) en premier.
+        </p>
+        <CardY2K hoverLift={false}>
+          <CardY2KContent>
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 type="email"
-                placeholder="votre@email.com"
+                placeholder="votre@email.fr"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && inscrire()}
+                onChange={e => setEmail(e.target.value)}
+                className="flex-1"
               />
-              <BoutonY2K onClick={inscrire} disabled={submitting} loading={submitting} className="shrink-0">
-                S'inscrire
+              <BoutonY2K onClick={inscrire} disabled={submitting} loading={submitting}>
+                Me prévenir
               </BoutonY2K>
             </div>
-            <p className="text-[11px] text-muted-foreground">Sans engagement. Annulation à tout moment.</p>
           </CardY2KContent>
         </CardY2K>
       </div>
