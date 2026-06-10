@@ -181,3 +181,6 @@ verify_jwt = false
 
 [functions.avis-parrainage]
 verify_jwt = false
+
+[functions.import-annuaire-cnam]
+verify_jwt = false

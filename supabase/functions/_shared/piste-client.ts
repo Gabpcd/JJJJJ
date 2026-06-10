@@ -46,8 +46,10 @@ const PISTE_URLS = {
 const CHORUS_API_PREFIX = '/cpro/factures/v1';
 
 export function getPisteConfig(): PisteConfig | null {
-  const clientId = Deno.env.get('PISTE_CLIENT_ID') ?? Deno.env.get('CHORUS_PRO_CLIENT_ID');
-  const clientSecret = Deno.env.get('PISTE_CLIENT_SECRET') ?? Deno.env.get('CHORUS_PRO_CLIENT_SECRET');
+  // trim() défensif : un espace/retour à la ligne collé dans un secret Supabase
+  // produit un 401 silencieux côté PISTE/Chorus (header cpro-account corrompu).
+  const clientId = (Deno.env.get('PISTE_CLIENT_ID') ?? Deno.env.get('CHORUS_PRO_CLIENT_ID'))?.trim();
+  const clientSecret = (Deno.env.get('PISTE_CLIENT_SECRET') ?? Deno.env.get('CHORUS_PRO_CLIENT_SECRET'))?.trim();
   if (!clientId || !clientSecret) return null;
 
   const envRaw = Deno.env.get('PISTE_ENV');
@@ -60,9 +62,9 @@ export function getPisteConfig(): PisteConfig | null {
   return {
     clientId,
     clientSecret,
-    apiKey: Deno.env.get('PISTE_API_KEY') ?? undefined,
-    techLogin: Deno.env.get('CHORUS_TECH_USER_LOGIN') ?? undefined,
-    techPassword: Deno.env.get('CHORUS_TECH_USER_PASSWORD') ?? undefined,
+    apiKey: Deno.env.get('PISTE_API_KEY')?.trim() ?? undefined,
+    techLogin: Deno.env.get('CHORUS_TECH_USER_LOGIN')?.trim() ?? undefined,
+    techPassword: Deno.env.get('CHORUS_TECH_USER_PASSWORD')?.trim() ?? undefined,
     env,
     isSandbox,
     oauthUrl: urls.oauth,

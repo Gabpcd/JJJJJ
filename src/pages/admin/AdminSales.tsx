@@ -105,7 +105,7 @@ function useTemplateProspection(): TemplateProspection {
 export default function AdminSales() {
   usePageTitle('Sales / Sourcing');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'etab_jolene' | 'templates' | 'posts'>('groupes');
+  const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'prospection_soignants' | 'etab_jolene' | 'templates' | 'posts'>('groupes');
 
   const [groupes, setGroupes] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
@@ -304,7 +304,8 @@ export default function AdminSales() {
           <BoutonY2K variant={tab === 'groupes' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('groupes')} iconeGauche={<Megaphone className="h-4 w-4" />}>Groupes ({groupes.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('soignants')} iconeGauche={<Users className="h-4 w-4" />}>Soignants ({soignants.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'etablissements' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etablissements')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. sourcés ({etablissements.length})</BoutonY2K>
-          <BoutonY2K variant={tab === 'prospection' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection')} iconeGauche={<Search className="h-4 w-4" />}>Prospection</BoutonY2K>
+          <BoutonY2K variant={tab === 'prospection' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection')} iconeGauche={<Search className="h-4 w-4" />}>Prospection étab.</BoutonY2K>
+          <BoutonY2K variant={tab === 'prospection_soignants' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection_soignants')} iconeGauche={<Users className="h-4 w-4" />}>Prospection soignants</BoutonY2K>
           <BoutonY2K variant={tab === 'etab_jolene' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etab_jolene')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. Jolene</BoutonY2K>
           <BoutonY2K variant={tab === 'templates' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('templates')} iconeGauche={<FileText className="h-4 w-4" />}>Templates ({templates.length})</BoutonY2K>
           <BoutonY2K variant={tab === 'posts' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('posts')} iconeGauche={<Send className="h-4 w-4" />}>Posts de la semaine</BoutonY2K>
@@ -413,6 +414,9 @@ export default function AdminSales() {
 
         {/* ── PROSPECTION (base nationale) ── */}
         {tab === 'prospection' && <ProspectionEtab onAjouter={charger} />}
+
+        {/* ── PROSPECTION SOIGNANTS (Annuaire Santé CNAM, libéraux + tél cabinet) ── */}
+        {tab === 'prospection_soignants' && <ProspectionSoignants onAjouter={charger} />}
 
         {/* ── ÉTABLISSEMENTS JOLENE (inscrits) ── */}
         {tab === 'etab_jolene' && <EtablissementsJolene />}
@@ -1086,6 +1090,197 @@ function PostsGenerateur() {
             </CardY2K>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Prospection soignants (base Annuaire Santé CNAM : libéraux conventionnés
+   avec téléphone de cabinet — IDE, dentistes, kinés, médecins généralistes,
+   pharmaciens titulaires, sages-femmes, orthophonistes, podologues) ── */
+const PROFESSIONS_PROSPECTION_SOIGNANTS = [
+  { v: '', label: 'Toutes les professions' },
+  { v: 'IDE', label: 'Infirmiers (IDEL)' },
+  { v: 'DENTISTE', label: 'Chirurgiens-dentistes' },
+  { v: 'KINE', label: 'Kinésithérapeutes' },
+  { v: 'MEDECIN', label: 'Médecins généralistes' },
+  { v: 'PHARMACIEN', label: 'Pharmaciens (officines)' },
+  { v: 'SAGE_FEMME', label: 'Sages-femmes' },
+  { v: 'ORTHOPHONISTE', label: 'Orthophonistes' },
+  { v: 'PEDICURE_PODOLOGUE', label: 'Pédicures-podologues' },
+];
+const SUJET_PROSPECTION_SOIGNANT = 'Des missions près de chez vous — inscription gratuite';
+const CORPS_PROSPECTION_SOIGNANT = `Bonjour,
+
+Je suis Gabrielle, fondatrice de Jolene (jolene.app). Des établissements de santé près de chez vous cherchent des renforts ponctuels — vous choisissez vos missions, vos dates et votre taux.
+
+• Inscription gratuite en 2 minutes, zéro commission pour les soignants
+• Contrats et démarches gérés automatiquement
+• Paiement garanti et rapide
+
+Découvrez les missions ouvertes : https://jolene.app/inscription/soignant?utm_source=prospection&utm_medium=email
+
+Bien cordialement,
+Gabrielle — Fondatrice de Jolene`;
+
+function ProspectionSoignants({ onAjouter }: { onAjouter: () => void }) {
+  const [profession, setProfessionP] = useState('');
+  const [departement, setDepartement] = useState('');
+  const [q, setQ] = useState('');
+  const [favoris, setFavoris] = useState(false);
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [emailEdit, setEmailEdit] = useState<{ cle: string; valeur: string; prospect?: any } | null>(null);
+
+  const rechercher = useCallback(async (p = 1) => {
+    setLoading(true);
+    const { data: res, error } = await supabase.rpc('fn_admin_chercher_prospects_soignants' as any, {
+      p_profession: profession || null,
+      p_departement: departement.trim() || null,
+      p_q: q.trim() || null,
+      p_favoris: favoris,
+      p_page: p,
+    });
+    setLoading(false);
+    if (error) { toast.error(error.message); return; }
+    setData(res);
+    setPage(p);
+  }, [profession, departement, q, favoris]);
+
+  useEffect(() => { rechercher(1); }, [profession, departement, favoris]); // q via Enter/bouton
+
+  const toggleFavori = async (pr: any) => {
+    const { error } = await supabase.from('prospects_soignants' as any)
+      .update({ favori: !pr.favori } as any).eq('cle', pr.cle);
+    if (error) { toast.error(error.message); return; }
+    rechercher(page);
+  };
+
+  const sauverEmail = async () => {
+    if (!emailEdit) return;
+    const valeur = emailEdit.valeur.trim();
+    const { error } = await supabase.from('prospects_soignants' as any)
+      .update({ email: valeur || null } as any).eq('cle', emailEdit.cle);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Email enregistré.');
+    setEmailEdit(null);
+    rechercher(page);
+  };
+
+  const ajouterAuPipeline = async (pr: any) => {
+    const { error } = await supabase.from('sales_contacts' as any).insert({
+      type: 'SOIGNANT', nom: `${pr.prenom || ''} ${pr.nom}`.trim(), ville: pr.ville || null,
+      telephone: pr.telephone || null, email: pr.email || null, profession: pr.profession,
+      statut: 'PROSPECT', notes: `Prospection Annuaire Santé CNAM${pr.enseigne ? ` · ${pr.enseigne}` : ''}`,
+    } as any);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Ajouté aux soignants sourcés.');
+    onAjouter();
+  };
+
+  const mailtoSoignant = (pr: any) => {
+    const sujet = encodeURIComponent(SUJET_PROSPECTION_SOIGNANT);
+    const corps = encodeURIComponent(CORPS_PROSPECTION_SOIGNANT);
+    window.location.href = `mailto:${pr.email}?subject=${sujet}&body=${corps}`;
+  };
+
+  const total = data?.total ?? 0;
+
+  return (
+    <div className="space-y-4">
+      <CardY2K hoverLift={false}>
+        <CardY2KContent>
+          <p className="text-[11px] text-muted-foreground mb-2">
+            Base officielle Annuaire Santé (CNAM) : professionnels <strong>libéraux</strong> conventionnés
+            avec téléphone de cabinet. Recherche <strong>nationale</strong> — département optionnel.
+            (Les salariés n'apparaissent dans aucune base publique : pour eux, groupes + SEO + parrainage.)
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-wrap">
+            <div className="flex-1 min-w-[170px]">
+              <Label className="text-xs">Profession</Label>
+              <select value={profession} onChange={e => setProfessionP(e.target.value)} className="input-base h-9 w-full">
+                {PROFESSIONS_PROSPECTION_SOIGNANTS.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs">Département (optionnel)</Label>
+              <Input value={departement} onChange={e => setDepartement(e.target.value)} placeholder="National" className="h-9 w-28" />
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <Label className="text-xs">Nom, ville ou cabinet</Label>
+              <Input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Dupont, Lorient…" className="h-9" />
+            </div>
+            <BoutonY2K size="sm" variant={favoris ? 'primary' : 'secondary'} onClick={() => setFavoris(!favoris)} iconeGauche={<Star className="h-4 w-4" />}>Favoris</BoutonY2K>
+            <BoutonY2K size="sm" onClick={() => rechercher(1)} disabled={loading} iconeGauche={<Search className="h-4 w-4" />}>
+              {loading ? 'Recherche…' : 'Rechercher'}
+            </BoutonY2K>
+          </div>
+        </CardY2KContent>
+      </CardY2K>
+
+      {data && (
+        <>
+          <p className="text-xs text-muted-foreground">
+            {total.toLocaleString('fr-FR')} soignant(s) — page {data.page}/{Math.max(data.total_pages, 1)}
+            {total === 0 && " · Si la base semble vide, l'import Annuaire Santé est peut-être encore en cours (10-15 min)."}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(data.resultats || []).map((pr: any) => (
+              <CardY2K key={pr.cle} hoverLift={false}>
+                <CardY2KContent>
+                  <div className="flex items-start gap-1.5">
+                    <button onClick={() => toggleFavori(pr)} title="Favori" className="mt-0.5 shrink-0">
+                      <Star className={`h-4 w-4 ${pr.favori ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                    </button>
+                    <div className="min-w-0">
+                      <span className="font-semibold text-foreground">{pr.prenom} {pr.nom}</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {PROFESSIONS_PROSPECTION_SOIGNANTS.find(c => c.v === pr.profession)?.label || pr.profession}
+                        {pr.ville ? ` · ${pr.ville}` : ''}{pr.code_postal ? ` (${pr.code_postal})` : ''}
+                        {pr.enseigne ? ` · ${pr.enseigne}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {pr.telephone ? (
+                      <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${pr.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>
+                        Appeler
+                      </BoutonY2K>
+                    ) : (
+                      <BadgeY2K variant="warning">Tél. non renseigné</BadgeY2K>
+                    )}
+                    {pr.email ? (
+                      <BoutonY2K size="sm" variant="secondary" onClick={() => mailtoSoignant(pr)} iconeGauche={<Mail className="h-4 w-4" />}>Email</BoutonY2K>
+                    ) : (
+                      <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ cle: pr.cle, valeur: '', prospect: pr })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
+                    )}
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
+                  </div>
+                  {pr.telephone && <p className="text-[11px] text-muted-foreground mt-1.5">{pr.telephone}{pr.email ? ` · ${pr.email}` : ''}</p>}
+                </CardY2KContent>
+              </CardY2K>
+            ))}
+          </div>
+          {data.total_pages > 1 && (
+            <div className="flex justify-center gap-2 pt-2">
+              <BoutonY2K size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => rechercher(page - 1)}>← Précédent</BoutonY2K>
+              <span className="text-xs text-muted-foreground self-center">{page}/{data.total_pages}</span>
+              <BoutonY2K size="sm" variant="secondary" disabled={page >= data.total_pages || loading} onClick={() => rechercher(page + 1)}>Suivant →</BoutonY2K>
+            </div>
+          )}
+        </>
+      )}
+
+      {emailEdit && (
+        <FormPanel titre="Email du soignant" onClose={() => setEmailEdit(null)} onSave={sauverEmail}>
+          <p className="text-xs text-muted-foreground mb-2">
+            La base CNAM ne fournit pas les emails — demandez-le à l'appel, puis tout devient 1-clic.
+          </p>
+          <Champ label="Adresse email">
+            <Input type="email" value={emailEdit.valeur} onChange={e => setEmailEdit({ ...emailEdit, valeur: e.target.value })} placeholder="ex : prenom.nom@gmail.com" />
+          </Champ>
+        </FormPanel>
       )}
     </div>
   );
