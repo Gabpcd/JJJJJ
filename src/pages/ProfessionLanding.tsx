@@ -4,6 +4,7 @@ import { SEOHead } from '@/components/SEOHead';
 import { SEOPageLayout } from '@/components/SEOPageLayout';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { getProfessionBySlug, PROFESSIONS_SEO } from '@/lib/seo-data';
+import { MissionsPubliquesSEO } from '@/components/MissionsPubliquesSEO';
 import { Euro, Clock, ShieldCheck, TrendingUp, Stethoscope, ArrowRight } from 'lucide-react';
 
 const avantages = [
@@ -152,6 +153,7 @@ export default function ProfessionLanding() {
             </div>
           </div>
         </section>
+        <MissionsPubliquesSEO profession={profession?.valeur} campagne={`seo-metier-${professionSlug || ''}`} />
       </SEOPageLayout>
     </>
   );

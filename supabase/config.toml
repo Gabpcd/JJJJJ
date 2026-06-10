@@ -57,6 +57,9 @@ verify_jwt = false
 [functions.sales-outreach]
 verify_jwt = false
 
+[functions.relance-inactifs]
+verify_jwt = false
+
 [functions.verify-rib-etablissement]
 verify_jwt = false
 

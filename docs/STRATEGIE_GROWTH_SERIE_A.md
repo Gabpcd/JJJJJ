@@ -28,20 +28,28 @@
 (ex. 75/92) — 30 étabs actifs + 300 soignants — avant d'élargir. Un marché
 dense convertit mieux et crée le bouche-à-oreille.
 
-## 3. Leviers à construire ensuite (ordre de ROI)
+## 3. Leviers — état d'avancement
 
-1. **SEO programmatique** : pages publiques `/missions/[profession]/[ville]`
-   générées depuis les missions réelles. C'est LE canal d'acquisition gratuit
-   scalable (recherches « mission infirmier Lyon » etc.). ~2-3 j de dev.
-2. **Boucle de réactivation** : cron emails aux soignants inscrits sans
-   candidature à J+3/J+7 (nouvelles missions près de chez eux). Infra Resend prête.
-3. **Import CSV prospects/contacts** : charger des listes externes en masse.
-4. **Double referral viral renforcé** : afficher la prime parrainage au moment
-   du paiement (moment de satisfaction max) + leaderboard parrains.
-5. **Intégrations établissements** : export planning/paie (gain de temps étab
-   = rétention B2B), API publique déjà en place.
-6. **Partenariats écoles** (IFSI/IFAS) : flux annuel de jeunes diplômés —
-   playbook manuel d'abord (10 écoles cibles), outillage ensuite.
+1. **SEO programmatique** ✅ livré : `/emploi-soignant/[ville]` (9 villes) et
+   `/metier/[profession]` (8 métiers) routées + section « missions réelles en
+   direct » (RPC publique) + CTA UTM `seo-ville-*` / `seo-metier-*`. Le sitemap
+   les référençait déjà → Google va indexer.
+2. **Boucle de réactivation** ✅ livré : cron hebdo (lundi 10h) → edge
+   `relance-inactifs` → email Resend aux inscrits >3j sans candidature
+   (max 1 relance/14j, journal `relances_soignants`, UTM `reactivation`).
+3. **Import CSV en masse** ✅ livré : bouton « Importer CSV » sur Groupes
+   (`nom;url;profession;region`) et Contacts (`nom;tel;email;ville;profession`).
+4. **Referral au moment du paiement** ✅ livré : bannière parrainage sur
+   Mes Gains → /soignant/parrainage (prime cash existante).
+5. **Intégrations établissements** (export planning/paie) : à construire.
+6. **Partenariats écoles IFSI/IFAS** : playbook manuel ci-dessous.
+
+### Playbook IFSI/IFAS (manuel, 0 dev)
+- Cible : 10 IFSI/IFAS du département de densification (annuaire ARS public).
+- Pitch direction : « plateforme gratuite pour vos diplômés, missions vérifiées,
+  paiement rapide » + affiche A4 avec QR `jolene.app?utm_source=ifsi&utm_campaign=[ecole]`.
+- Moment clé : remise des diplômes (juin/juillet) et rentrées (septembre).
+- Mesure : dashboard Acquisition (canal CAMPAGNE, campagne par école).
 
 ## 4. Monétisation (rappel des fondamentaux en place)
 
