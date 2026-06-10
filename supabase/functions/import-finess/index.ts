@@ -12,16 +12,17 @@ const SECRET = "jolene-import-finess-2026";
 
 // libcategetab / libcategagretab → type Jolene (null = ignoré)
 function mapType(libCateg: string, libAgr: string): string | null {
-  const c = (libCateg || "").toLowerCase();
-  const a = (libAgr || "").toLowerCase();
-  if (c.includes("ehpad") || a.includes("personnes agées") || a.includes("personnes âgées")) return "EHPAD";
-  if (a.includes("hospitalier") || c.includes("centre hospitalier") || c.includes("hôpital") || c.includes("hopital")) return "HOPITAL";
-  if (c.includes("officine")) return "PHARMACIE";
-  if (c.includes("laboratoire")) return "LABO";
-  if (c.includes("domicile") || c.includes("ssiad")) return "DOMICILE";
-  if (a.includes("handicap") || c.includes("handicap") || a.includes("enfance inadaptée")) return "HANDICAP";
-  if (c.includes("dialyse")) return "DIALYSE";
-  if (c.includes("centre de santé") || c.includes("centre de sante") || c.includes("maison de santé")) return "CENTRE_SANTE";
+  // On teste les DEUX libellés (catégorie fine + agrégat) — les libellés FINESS
+  // n'utilisent pas l'acronyme EHPAD mais « personnes âgées ».
+  const s = `${libCateg || ""} ${libAgr || ""}`.toLowerCase();
+  if (s.includes("ehpad") || s.includes("personnes âgées") || s.includes("personnes agées") || s.includes("personnes agees")) return "EHPAD";
+  if (s.includes("hospitalier") || s.includes("hôpital") || s.includes("hopital") || s.includes("soins de suite") || s.includes("réadaptation")) return "HOPITAL";
+  if (s.includes("officine")) return "PHARMACIE";
+  if (s.includes("laboratoire")) return "LABO";
+  if (s.includes("domicile") || s.includes("ssiad")) return "DOMICILE";
+  if (s.includes("handicap") || s.includes("enfance inadaptée") || s.includes("enfance inadaptee")) return "HANDICAP";
+  if (s.includes("dialyse")) return "DIALYSE";
+  if (s.includes("centre de santé") || s.includes("centre de sante") || s.includes("maison de santé") || s.includes("maison de sante")) return "CENTRE_SANTE";
   return null;
 }
 
@@ -45,16 +46,16 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: `fetch ${r.status}`, offset: pos }), { status: 502 });
       }
       const buf = new Uint8Array(await r.arrayBuffer());
-      // Le fichier FINESS est encodé en ISO-8859-1 (accents)
-      const texte = new TextDecoder("iso-8859-1").decode(buf);
+      // Le fichier FINESS est encodé en UTF-8 (vérifié sur les libellés accentués)
+      const texte = new TextDecoder("utf-8").decode(buf);
       const finFichier = r.status === 200 || buf.byteLength < TRANCHE;
 
       // On ne traite que les lignes complètes ; la dernière (partielle) est reportée
       const dernierNL = texte.lastIndexOf("\n");
       if (dernierNL < 0) { pos += buf.byteLength; if (finFichier) done = true; continue; }
       const bloc = texte.slice(0, dernierNL);
-      // Avancer du nombre d'OCTETS consommés (ISO-8859-1 : 1 char = 1 octet)
-      pos += dernierNL + 1;
+      // Avancer du nombre d'OCTETS réellement consommés (UTF-8 multi-octets)
+      pos += new TextEncoder().encode(texte.slice(0, dernierNL + 1)).length;
 
       const lignes = bloc.split("\n");
       const rows: Record<string, unknown>[] = [];
