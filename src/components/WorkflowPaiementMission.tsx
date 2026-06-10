@@ -104,7 +104,7 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
 
   const declarerPaiement = async () => {
     if (!isRefValid(reference)) {
-      toast.error('La référence doit contenir au moins 5 caractères dont 1 chiffre');
+      toast.error('La référence doit contenir au moins 6 caractères, dont 2 chiffres et 1 lettre (ex : VIR-2026-001)');
       return;
     }
     if (!attestation) {
@@ -371,8 +371,10 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
   const icone = info.mode_recommande === 'VIREMENT_NOTE_HONORAIRES' ? FileText : Banknote;
   const Icone = icone;
   const trimmedRef = reference.trim();
-  const refTooShort = trimmedRef.length > 0 && trimmedRef.length < 5;
-  const refNoDigit = trimmedRef.length >= 5 && !/\d/.test(trimmedRef);
+  // Feedback aligné sur isRefValid : ≥6 caractères, ≥2 chiffres, ≥1 lettre.
+  const refTooShort = trimmedRef.length > 0 && trimmedRef.length < 6;
+  const refNoDigit = trimmedRef.length >= 6 && !/\d{2,}/.test(trimmedRef);
+  const refNoLetter = trimmedRef.length >= 6 && /\d{2,}/.test(trimmedRef) && !/[A-Za-z]/.test(trimmedRef);
 
   return (
     <div className="card-base border-primary/20 space-y-3">
@@ -415,12 +417,18 @@ export function WorkflowPaiementMission({ missionId, soignantAssigneId, etabliss
           onChange={e => setReference(e.target.value)}
           className="text-sm"
         />
-        <p className="text-[10px] text-muted-foreground">Numéro de virement bancaire, référence de chèque ou numéro de facture</p>
+        <p className="text-[10px] text-muted-foreground">
+          Numéro de virement bancaire, référence de chèque ou numéro de facture —
+          au moins 6 caractères avec lettres et chiffres (ex : VIR-2026-001).
+        </p>
         {refTooShort && (
-          <p className="text-[10px] text-destructive">Minimum 5 caractères</p>
+          <p className="text-[10px] text-destructive">Minimum 6 caractères</p>
         )}
         {refNoDigit && (
-          <p className="text-[10px] text-destructive">La référence doit contenir au moins 1 chiffre</p>
+          <p className="text-[10px] text-destructive">Au moins 2 chiffres requis (ex : le numéro de votre virement)</p>
+        )}
+        {refNoLetter && (
+          <p className="text-[10px] text-destructive">Au moins une lettre requise (ex : VIR-2026-001)</p>
         )}
       </div>
       <label className="flex items-start gap-2 cursor-pointer">

@@ -9,7 +9,7 @@ import { Mascotte } from '@/components/mascotte/Mascotte';
 import { estEligibleLiberal } from '@/lib/regles-installation-liberal';
 import {
   User, FileText, Banknote, CreditCard, FileSignature, Zap, ShieldCheck,
-  Scale, Gift, Rocket, Settings, LogOut, GraduationCap, Receipt, HeartHandshake,
+  Scale, Gift, Rocket, Settings, LogOut, GraduationCap, Receipt,
   Landmark, FileCheck2, ScrollText, ClipboardCheck, Star, Sparkles, BadgeCheck,
   MessageSquare, Ban, Trophy,
 } from 'lucide-react';
@@ -91,7 +91,6 @@ export default function MonCompteSoignant() {
           : []),
         { icone: GraduationCap, label: 'Prévoyance', route: '/soignant/prevoyance' },
         { icone: Gift, label: 'Parrainage', route: '/soignant/parrainage' },
-        { icone: HeartHandshake, label: 'Premium', route: '/soignant/premium' },
       ],
     },
     {
