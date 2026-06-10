@@ -55,6 +55,53 @@ function lienWhatsApp(tel: string): string {
   return `https://wa.me/${intl}`;
 }
 
+/* ── Template de prospection email (éditable dans l'onglet Templates) ──
+   Utilisé partout : mailto pré-rempli (sujet + corps) ET envoi direct Resend. */
+const TEMPLATE_PROSPECTION_NOM = 'Email prospection établissement';
+const SUJET_PROSPECTION_DEFAUT = 'Renfort soignant sous 48h pour {{nom}} — sans engagement';
+const CORPS_PROSPECTION_DEFAUT = `Bonjour,
+
+Je suis Gabrielle, fondatrice de Jolene (jolene.app), la plateforme qui met en relation les établissements de santé avec des soignants vérifiés — diplômes, RPPS et assurances contrôlés.
+
+Concrètement pour {{nom}} :
+• Publiez un besoin en 2 minutes, recevez des candidatures de soignants notés et vérifiés
+• Contrats et déclarations générés automatiquement
+• 15 % de commission tout compris — et pour nos premiers partenaires : 0 % sur vos 5 premières missions
+
+Auriez-vous 10 minutes cette semaine pour en parler ? Vous pouvez répondre directement à cet email.
+
+Bien cordialement,
+Gabrielle — Fondatrice de Jolene
+jolene.app`;
+
+interface TemplateProspection { sujet: string; contenu: string }
+
+function remplirTemplate(txt: string, p: { nom?: string | null; ville?: string | null }): string {
+  return (txt || '')
+    .split('{{nom}}').join(p.nom || 'votre établissement')
+    .split('{{ville}}').join(p.ville || '');
+}
+
+/** Ouvre le client mail avec destinataire + sujet + corps pré-remplis (1 clic, zéro copier-coller). */
+function ouvrirMailto(email: string, tpl: TemplateProspection, p: { nom?: string | null; ville?: string | null }) {
+  const sujet = encodeURIComponent(remplirTemplate(tpl.sujet, p));
+  const corps = encodeURIComponent(remplirTemplate(tpl.contenu, p));
+  window.location.href = `mailto:${email}?subject=${sujet}&body=${corps}`;
+}
+
+/** Charge le template de prospection depuis sales_templates (fallback : constantes). */
+function useTemplateProspection(): TemplateProspection {
+  const [tpl, setTpl] = useState<TemplateProspection>({ sujet: SUJET_PROSPECTION_DEFAUT, contenu: CORPS_PROSPECTION_DEFAUT });
+  useEffect(() => {
+    supabase.from('sales_templates' as any).select('sujet, contenu').eq('nom', TEMPLATE_PROSPECTION_NOM).maybeSingle()
+      .then(({ data }) => {
+        const d = data as any;
+        if (d?.contenu) setTpl({ sujet: d.sujet || SUJET_PROSPECTION_DEFAUT, contenu: d.contenu });
+      });
+  }, []);
+  return tpl;
+}
+
 export default function AdminSales() {
   usePageTitle('Sales / Sourcing');
   const [loading, setLoading] = useState(true);
@@ -72,6 +119,7 @@ export default function AdminSales() {
   // formulaires
   const [editGroupe, setEditGroupe] = useState<any | null>(null);
   const [editContact, setEditContact] = useState<any | null>(null);
+  const [editTemplate, setEditTemplate] = useState<any | null>(null);
 
   const [fFavorisGroupes, setFFavorisGroupes] = useState(false);
   const [voirArchives, setVoirArchives] = useState(false);
@@ -213,6 +261,16 @@ export default function AdminSales() {
     if (error) { toast.error(error.message); return; }
     toast.success('Contact enregistré.');
     setEditContact(null); charger();
+  };
+
+  const sauverTemplate = async () => {
+    if (!editTemplate?.contenu?.trim()) { toast.error('Le message est requis.'); return; }
+    const { error } = await supabase.from('sales_templates' as any)
+      .update({ sujet: editTemplate.sujet?.trim() || null, contenu: editTemplate.contenu } as any)
+      .eq('id', editTemplate.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Template enregistré — utilisé par tous les boutons email.');
+    setEditTemplate(null); charger();
   };
 
   const majStatutContact = async (id: string, statut: string) => {
@@ -372,8 +430,14 @@ export default function AdminSales() {
                     <span className="font-semibold text-foreground">{t.nom}</span>
                     <BadgeY2K variant="info">{t.cible === 'GROUPE' ? 'Post groupe' : t.cible === 'SOIGNANT' ? 'DM soignant' : 'DM établissement'}</BadgeY2K>
                   </div>
+                  {t.sujet && (
+                    <p className="text-xs text-foreground mb-1.5"><span className="text-muted-foreground">Sujet :</span> <strong>{t.sujet}</strong></p>
+                  )}
                   <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans bg-muted/40 rounded-lg p-3">{t.contenu}</pre>
-                  <BoutonY2K size="sm" className="mt-2" onClick={() => copier(t.contenu)} iconeGauche={<Copy className="h-4 w-4" />}>Copier le message</BoutonY2K>
+                  <div className="flex gap-2 mt-2">
+                    <BoutonY2K size="sm" onClick={() => copier(t.contenu)} iconeGauche={<Copy className="h-4 w-4" />}>Copier le message</BoutonY2K>
+                    <BoutonY2K size="sm" variant="secondary" onClick={() => setEditTemplate({ ...t })} iconeGauche={<Pencil className="h-4 w-4" />}>Modifier</BoutonY2K>
+                  </div>
                 </CardY2KContent>
               </CardY2K>
             ))}
@@ -466,6 +530,22 @@ export default function AdminSales() {
           <Champ label="Notes"><Textarea value={editContact.notes || ''} onChange={e => setEditContact({ ...editContact, notes: e.target.value })} rows={2} /></Champ>
         </FormPanel>
       )}
+
+      {/* ── Formulaire template ── */}
+      {editTemplate && (
+        <FormPanel titre={`Modifier « ${editTemplate.nom} »`} onClose={() => setEditTemplate(null)} onSave={sauverTemplate}>
+          <p className="text-xs text-muted-foreground mb-2">
+            Placeholders disponibles : <code>{'{{nom}}'}</code> (nom de l'établissement) et <code>{'{{ville}}'}</code> —
+            remplacés automatiquement à l'envoi et dans le mailto.
+          </p>
+          <Champ label="Sujet de l'email">
+            <Input value={editTemplate.sujet || ''} onChange={e => setEditTemplate({ ...editTemplate, sujet: e.target.value })} />
+          </Champ>
+          <Champ label="Message">
+            <Textarea value={editTemplate.contenu || ''} onChange={e => setEditTemplate({ ...editTemplate, contenu: e.target.value })} rows={12} />
+          </Champ>
+        </FormPanel>
+      )}
     </LayoutAdmin>
   );
 }
@@ -482,6 +562,7 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
   onFavori: (c: any) => void;
   onArchive: (c: any, archive: boolean) => void;
 }) {
+  const tpl = useTemplateProspection();
   return (
     <div className="space-y-3">
       <div className="flex justify-end gap-2">
@@ -527,7 +608,9 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
                     </>
                   )}
                   {c.email && (
-                    <BoutonY2K size="sm" variant="secondary" onClick={() => { window.location.href = `mailto:${c.email}`; }} iconeGauche={<Mail className="h-4 w-4" />}>Email</BoutonY2K>
+                    <BoutonY2K size="sm" variant="secondary"
+                      onClick={() => type === 'ETABLISSEMENT' ? ouvrirMailto(c.email, tpl, c) : (window.location.href = `mailto:${c.email}`)}
+                      iconeGauche={<Mail className="h-4 w-4" />}>Email</BoutonY2K>
                   )}
                 </div>
                 {/* Pipeline + édition */}
@@ -653,8 +736,9 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [emailEdit, setEmailEdit] = useState<{ finess: string; valeur: string } | null>(null);
+  const [emailEdit, setEmailEdit] = useState<{ finess: string; valeur: string; prospect?: any } | null>(null);
   const [outreach, setOutreach] = useState<any | null>(null);
+  const tpl = useTemplateProspection();
 
   const rechercher = useCallback(async (p = 1) => {
     setLoading(true);
@@ -682,12 +766,20 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
 
   const sauverEmail = async () => {
     if (!emailEdit) return;
+    const valeur = emailEdit.valeur.trim();
     const { error } = await supabase.from('prospects_etablissements' as any)
-      .update({ email: emailEdit.valeur || null } as any).eq('finess', emailEdit.finess);
+      .update({ email: valeur || null } as any).eq('finess', emailEdit.finess);
     if (error) { toast.error(error.message); return; }
-    toast.success('Email enregistré.');
+    const prospect = emailEdit.prospect;
     setEmailEdit(null);
     rechercher(page);
+    // Enchaîne directement sur l'envoi : email saisi → modal d'envoi pré-remplie.
+    if (valeur && prospect) {
+      toast.success('Email enregistré — envoi prêt.');
+      setOutreach({ ...prospect, email: valeur });
+    } else {
+      toast.success('Email enregistré.');
+    }
   };
 
   const ajouterAuPipeline = async (pr: any) => {
@@ -769,11 +861,11 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
                     )}
                     {pr.email ? (
                       <>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => { window.location.href = `mailto:${pr.email}`; }} iconeGauche={<Mail className="h-4 w-4" />}>Email</BoutonY2K>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Via Jolene</BoutonY2K>
+                        <BoutonY2K size="sm" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Envoyer l'email</BoutonY2K>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => ouvrirMailto(pr.email, tpl, pr)} iconeGauche={<Mail className="h-4 w-4" />}>Ma boîte mail</BoutonY2K>
                       </>
                     ) : (
-                      <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ finess: pr.finess, valeur: '' })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
+                      <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ finess: pr.finess, valeur: '', prospect: pr })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
                     )}
                     <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
                   </div>
@@ -792,27 +884,31 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
         </>
       )}
 
-      {/* Saisie email d'un prospect */}
+      {/* Saisie email d'un prospect (la base FINESS officielle ne contient pas
+          les emails — on le récupère à l'appel puis tout devient 1-clic) */}
       {emailEdit && (
         <FormPanel titre="Email de l'établissement" onClose={() => setEmailEdit(null)} onSave={sauverEmail}>
+          <p className="text-xs text-muted-foreground mb-2">
+            La base officielle FINESS ne fournit pas les emails. Demandez-le pendant l'appel —
+            une fois saisi, l'envoi de l'email de prospection se fait en 1 clic.
+          </p>
           <Champ label="Adresse email">
-            <Input type="email" value={emailEdit.valeur} onChange={e => setEmailEdit({ ...emailEdit, valeur: e.target.value })} placeholder="contact@etablissement.fr" />
+            <Input type="email" value={emailEdit.valeur} onChange={e => setEmailEdit({ ...emailEdit, valeur: e.target.value })} placeholder="ex : direction@nom-etablissement.fr" />
           </Champ>
         </FormPanel>
       )}
 
       {/* Envoi email via Jolene */}
-      {outreach && <OutreachModal prospect={outreach} onClose={() => { setOutreach(null); rechercher(page); onAjouter(); }} />}
+      {outreach && <OutreachModal prospect={outreach} template={tpl} onClose={() => { setOutreach(null); rechercher(page); onAjouter(); }} />}
     </div>
   );
 }
 
-/* ── Modal d'envoi email 1-clic via Jolene (Resend) ── */
-function OutreachModal({ prospect, onClose }: { prospect: any; onClose: () => void }) {
-  const [sujet, setSujet] = useState(`Renfort soignant pour ${prospect.nom}`);
-  const [corps, setCorps] = useState(
-    `Bonjour,\n\nJe suis Gabrielle, fondatrice de Jolene (jolene.app). Nous mettons en relation les établissements de santé avec des soignants vérifiés, disponibles rapidement — contrats et DPAE gérés par la plateforme.\n\nSeriez-vous disponible pour un échange de 10 minutes cette semaine ?\n\nBien cordialement,\nGabrielle — Jolene`
-  );
+/* ── Modal d'envoi email 1-clic via Jolene (Resend) ──
+   Pré-remplie avec le template officiel (onglet Templates) — modifiable avant envoi. */
+function OutreachModal({ prospect, template, onClose }: { prospect: any; template: TemplateProspection; onClose: () => void }) {
+  const [sujet, setSujet] = useState(remplirTemplate(template.sujet, prospect));
+  const [corps, setCorps] = useState(remplirTemplate(template.contenu, prospect));
   const [envoi, setEnvoi] = useState(false);
 
   const envoyer = async () => {
