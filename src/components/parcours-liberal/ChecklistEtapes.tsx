@@ -18,6 +18,22 @@ export interface Etape {
 
 /* Documents à préparer par étape (toutes catégories de professions) — évite au
    soignant de les chercher dans 4 interfaces administratives différentes. */
+/* Documents que Jolene détient déjà (Mes documents, vérifiés IA) ou génère
+   automatiquement — le soignant clique au lieu de chercher. */
+const DOCS_FOURNIS_PAR_JOLENE: Record<string, { route: string; action: string }> = {
+  "Pièce d'identité": { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
+  "Diplôme d'État (original ou copie certifiée)": { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
+  "Diplôme d'État IPA": { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
+  'Copie du diplôme': { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
+  'Diplôme + qualification': { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
+  'Diplôme': { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
+  'RIB': { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
+  'RIB professionnel': { route: '/soignant/mes-documents', action: 'déjà dans Mes documents' },
+  'N° RPPS + carte CPS': { route: '/soignant/profil', action: 'RPPS vérifié sur votre profil' },
+  'N° RPPS': { route: '/soignant/profil', action: 'RPPS vérifié sur votre profil' },
+  "Justificatifs des heures (attestations employeurs — vos attestations Jolene comptent)": { route: '/soignant/attestation-heures', action: 'Jolene génère votre attestation d\'heures' },
+};
+
 const DOCS_PAR_ETAPE: Record<string, string[]> = {
   inscription_ordre: ["Pièce d'identité", "Diplôme d'État (original ou copie certifiée)", 'Attestation sur l\'honneur de non-condamnation', 'Justificatif de domicile < 3 mois'],
   inscription_ordre_ipa: ["Pièce d'identité", 'Diplôme d\'État IPA', 'Justificatif de domicile < 3 mois'],
@@ -132,9 +148,18 @@ export function ChecklistEtapes({ etapes, etapesValidees, onToggle, disabled }: 
                   <div className="mt-2">
                     <p className="text-[11px] font-medium text-foreground mb-1">📂 Documents à préparer :</p>
                     <div className="flex flex-wrap gap-1">
-                      {docs.map(d => (
-                        <span key={d} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{d}</span>
-                      ))}
+                      {docs.map(d => {
+                        const fourni = DOCS_FOURNIS_PAR_JOLENE[d];
+                        return fourni ? (
+                          <a key={d} href={fourni.route}
+                            title={fourni.action}
+                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/10 text-success hover:bg-success/20 transition-colors">
+                            ✓ {d} <span className="opacity-70">({fourni.action})</span>
+                          </a>
+                        ) : (
+                          <span key={d} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{d}</span>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

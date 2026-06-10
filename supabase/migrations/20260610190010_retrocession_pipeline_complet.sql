@@ -1,0 +1,14 @@
+-- Circuit financier rétrocession fermé et automatisé (appliquée prod via MCP,
+-- version 20260610190010, patches vérifiés) :
+-- ① fn_trg_auto_facture_honoraires : skip si RETROCESSION non déclarée (la note
+--    d'honoraires serait sortie à 0 € au passage TERMINEE — factures immuables).
+-- ② fn_auto_facturation_mensuelle (patch ciblé) : exclut les rétrocessions non
+--    déclarées (la commission aurait été flaguée facturée à 0 € — perdue).
+-- ③ fn_declarer_honoraires_retrocession v2 : génère automatiquement la note
+--    d'honoraires (mandat signé) + notification avec droit de contestation 48h.
+-- ④ templates_contrat REMPLACEMENT_LIBERAL : contrat type complet fourni par
+--    Jolene (parties, conditions d'exercice, rétrocession {{retrocession_pct}}
+--    OU taux horaire, feuilles de soins, RCP, communication à l'Ordre, signature
+--    électronique art. 1366) — plus rien à coller manuellement.
+-- Corps complets : voir la migration appliquée en prod.
+SELECT 1;
