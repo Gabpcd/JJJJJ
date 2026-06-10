@@ -1246,3 +1246,42 @@
     opacity: 0;
   }
 }
+
+/* ── Finitions app native (Capacitor iOS/Android) ──
+   Le socle safe-areas existe déjà (viewport-fit=cover + env() sur header/nav).
+   Ici : suppression des artefacts « site web » pour une sensation 100 % native. */
+@layer base {
+  html {
+    /* Pas de zoom texte auto à la rotation (iOS) */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    /* Tue le pull-to-refresh navigateur et le rebond de page global —
+       le scroll interne des conteneurs reste naturel */
+    overscroll-behavior-y: none;
+    /* Halo gris au tap (Android/iOS WebView) : supprimé partout */
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* L'UI ne se sélectionne pas comme du texte de page web ;
+     les contenus utiles (descriptions, messages) restent copiables */
+  button, a, nav, label, [role="button"], [role="tab"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  /* Pas de menu contextuel « enregistrer l'image » sur les éléments d'UI */
+  img, svg {
+    -webkit-touch-callout: none;
+  }
+  /* Transition d'entrée des pages : perception de navigation native */
+  main {
+    animation: page-enter 180ms ease-out;
+  }
+  @keyframes page-enter {
+    from { opacity: 0.55; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    main { animation: none; }
+  }
+}

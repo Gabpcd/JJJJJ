@@ -12,7 +12,32 @@ export interface Etape {
   lienExterne?: string;
   lienLabel?: string;
   informatif?: boolean;
+  /** Documents à préparer — surcharge le défaut DOCS_PAR_ETAPE. */
+  documents?: string[];
 }
+
+/* Documents à préparer par étape (toutes catégories de professions) — évite au
+   soignant de les chercher dans 4 interfaces administratives différentes. */
+const DOCS_PAR_ETAPE: Record<string, string[]> = {
+  inscription_ordre: ["Pièce d'identité", "Diplôme d'État (original ou copie certifiée)", 'Attestation sur l\'honneur de non-condamnation', 'Justificatif de domicile < 3 mois'],
+  inscription_ordre_ipa: ["Pièce d'identité", 'Diplôme d\'État IPA', 'Justificatif de domicile < 3 mois'],
+  inscription_ordre_medecins: ["Pièce d'identité", 'Diplôme + qualification', 'CV', 'Casier judiciaire B2 (demandé par l\'Ordre)'],
+  inscription_ordre_sages_femmes: ["Pièce d'identité", 'Diplôme d\'État', 'Justificatif de domicile'],
+  inscription_onpp: ["Pièce d'identité", 'Diplôme d\'État', 'Justificatif de domicile'],
+  inscription_cpam: ['N° RPPS + carte CPS', 'RIB professionnel', 'Attestation d\'inscription à l\'Ordre', 'Justificatifs des heures (attestations employeurs — vos attestations Jolene comptent)'],
+  inscription_cpam_ipa: ['N° RPPS + carte CPS', 'RIB professionnel', 'Diplôme IPA'],
+  inscription_ars: ["Pièce d'identité", 'Diplôme', 'N° RPPS'],
+  inscription_ars_ortho: ["Pièce d'identité", 'Diplôme', 'N° RPPS'],
+  immatriculation_urssaf: ["Pièce d'identité", 'Justificatif du local pro (ou domicile)', 'N° RPPS', 'Date de début d\'activité choisie'],
+  affiliation_carpimko: ['N° SIRET (obtenu via INPI)', 'Attestation URSSAF', 'Copie du diplôme', 'RIB'],
+  affiliation_carmf: ['N° SIRET', 'Attestation URSSAF', 'Copie du diplôme', 'RIB'],
+  affiliation_carcdsf: ['N° SIRET', 'Attestation URSSAF', 'Copie du diplôme', 'RIB'],
+  affiliation_cipav: ['N° SIRET', 'Attestation URSSAF', 'RIB'],
+  souscription_rcp: ['N° RPPS', 'Attestation de conventionnement CPAM', 'Descriptif de votre activité'],
+  local_professionnel: ['Bail professionnel ou attestation de domiciliation', 'Registre public d\'accessibilité (PMR)'],
+  local_fixe_obligatoire: ['Bail professionnel', 'Registre public d\'accessibilité (PMR)'],
+  prevoyance_complementaire: ['RIB', 'Relevé CARPIMKO/caisse de retraite'],
+};
 
 interface Props {
   etapes: Etape[];
@@ -58,16 +83,21 @@ export function ChecklistEtapes({ etapes, etapesValidees, onToggle, disabled }: 
     }
   };
 
+  // Ordre logique : la première étape non cochée est mise en avant comme « à faire ».
+  const prochaineCle = etapes.find(e => !e.informatif && !isChecked(e.cle))?.cle;
+
   return (
     <div className="space-y-2">
-      {etapes.map(etape => {
+      {etapes.map((etape, index) => {
         const checked = isChecked(etape.cle);
         const dateVal = checked ? getDateValidation(etape.cle) : null;
+        const estProchaine = etape.cle === prochaineCle;
+        const docs = etape.documents ?? DOCS_PAR_ETAPE[etape.cle];
 
         return (
           <div
             key={etape.cle}
-            className={`rounded-xl border p-3 transition-colors duration-200 ${checked ? 'border-success/30 bg-success/5' : 'border-border bg-card hover:bg-muted/30'}`}
+            className={`rounded-xl border p-3 transition-colors duration-200 ${checked ? 'border-success/30 bg-success/5' : estProchaine ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-muted/30'}`}
           >
             <div className="flex items-start gap-3">
               {etape.informatif ? (
@@ -86,7 +116,8 @@ export function ChecklistEtapes({ etapes, etapesValidees, onToggle, disabled }: 
                   htmlFor={`etape-${etape.cle}`}
                   className={`text-sm font-semibold block ${etape.informatif ? '' : 'cursor-pointer'} ${checked ? 'text-success' : 'text-foreground'}`}
                 >
-                  {etape.label}
+                  <span className="text-muted-foreground font-normal">{index + 1}.</span> {etape.label}
+                  {estProchaine && <span className="ml-2 text-[10px] font-bold text-primary uppercase">→ Prochaine étape</span>}
                 </label>
                 {etape.description && (
                   <p className="text-xs text-muted-foreground mt-1">{etape.description}</p>
@@ -96,6 +127,16 @@ export function ChecklistEtapes({ etapes, etapesValidees, onToggle, disabled }: 
                     <CheckCircle2 className="h-3 w-3" />
                     Validé le {format(new Date(dateVal), 'd MMM yyyy', { locale: fr })}
                   </p>
+                )}
+                {docs && docs.length > 0 && !checked && (
+                  <div className="mt-2">
+                    <p className="text-[11px] font-medium text-foreground mb-1">📂 Documents à préparer :</p>
+                    <div className="flex flex-wrap gap-1">
+                      {docs.map(d => (
+                        <span key={d} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{d}</span>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 {etape.lienExterne && (
                   <a

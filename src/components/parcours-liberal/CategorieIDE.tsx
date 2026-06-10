@@ -113,6 +113,7 @@ export function CategorieIDE({
       />
 
       <JaugeHeures
+        demarreLe={parcours.demarre_le}
         heuresJolene={compteurHeures?.heures_jolene ?? 0}
         heuresExternesValidees={compteurHeures?.heures_externes_validees ?? 0}
         heuresExternesEnAttente={compteurHeures?.heures_externes_en_attente ?? 0}
