@@ -4367,6 +4367,7 @@ export type Database = {
           accepte_non_specialises: boolean | null
           annulee_le: string | null
           annulee_par: string | null
+          arret_maladie_declare_le: string | null
           boostee_le: string | null
           choix_contrat_soignant: string | null
           code_arrivee: string | null
@@ -4382,6 +4383,7 @@ export type Database = {
           description: string | null
           duree_heures: number | null
           duree_heures_effective: number | null
+          est_arret_maladie: boolean
           est_asap: boolean
           est_urgente: boolean | null
           etablissement_id: string
@@ -4456,6 +4458,7 @@ export type Database = {
           accepte_non_specialises?: boolean | null
           annulee_le?: string | null
           annulee_par?: string | null
+          arret_maladie_declare_le?: string | null
           boostee_le?: string | null
           choix_contrat_soignant?: string | null
           code_arrivee?: string | null
@@ -4471,6 +4474,7 @@ export type Database = {
           description?: string | null
           duree_heures?: number | null
           duree_heures_effective?: number | null
+          est_arret_maladie?: boolean
           est_asap?: boolean
           est_urgente?: boolean | null
           etablissement_id: string
@@ -4545,6 +4549,7 @@ export type Database = {
           accepte_non_specialises?: boolean | null
           annulee_le?: string | null
           annulee_par?: string | null
+          arret_maladie_declare_le?: string | null
           boostee_le?: string | null
           choix_contrat_soignant?: string | null
           code_arrivee?: string | null
@@ -4560,6 +4565,7 @@ export type Database = {
           description?: string | null
           duree_heures?: number | null
           duree_heures_effective?: number | null
+          est_arret_maladie?: boolean
           est_asap?: boolean
           est_urgente?: boolean | null
           etablissement_id?: string
@@ -8799,6 +8805,10 @@ export type Database = {
         Returns: boolean
       }
       fn_dashboard_soignant_complet: { Args: never; Returns: Json }
+      fn_declarer_arret_maladie: {
+        Args: { p_message?: string; p_mission_id: string }
+        Returns: Json
+      }
       fn_declarer_fin_retroactive: {
         Args: { p_heure_fin: string; p_mission_id: string; p_raison?: string }
         Returns: Json
@@ -8840,6 +8850,10 @@ export type Database = {
       }
       fn_detecter_teleportations: { Args: never; Returns: Json }
       fn_diagnostic_coherence_financiere: { Args: never; Returns: Json }
+      fn_diffuser_pool_urgence: {
+        Args: { p_mission_id: string }
+        Returns: number
+      }
       fn_digest_hebdo_cibles: {
         Args: { p_limit?: number }
         Returns: {
@@ -9747,6 +9761,15 @@ export type Database = {
       fn_purger_pings_gps_anciens: { Args: never; Returns: undefined }
       fn_rappel_dpae_quotidien: { Args: never; Returns: Json }
       fn_rappel_pointage_arrivee: { Args: never; Returns: Json }
+      fn_rebooker_soignant: {
+        Args: {
+          p_debut: string
+          p_fin: string
+          p_mission_modele_id: string
+          p_soignant_id: string
+        }
+        Returns: Json
+      }
       fn_recalculer_commissions_post_litige: { Args: never; Returns: Json }
       fn_recalculer_palier_commission: {
         Args: { p_etablissement_id: string }

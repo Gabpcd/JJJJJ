@@ -1,0 +1,18 @@
+-- Lot fiabilité + rétention étab (appliquée prod via MCP, version 20260610162447) :
+-- ① Score P0 : absence sans prévenir → événement de score NO_SHOW (-30, contestable)
+--    automatique (trigger trg_absence_event_score sur missions.absence_sans_prevenir).
+-- ② Arrêt maladie : fn_declarer_arret_maladie (soignant, sans pénalité, justificatif
+--    demandé sous 48h, étab notifié, remplacement auto si garantie : mission repart
+--    au pool en PREMIER_ARRIVE urgent, durée restante).
+-- ③ Désistement tardif sur mission garantie (ASSIGNEE→OUVERTE <48h du début) :
+--    trigger trg_desistement_garanti → fn_diffuser_pool_urgence (max 50 soignants
+--    docs validés dans le rayon, dédup 12h) + notification étab.
+-- ④ Re-booking 1 clic : fn_rebooker_soignant(p_soignant_id, p_mission_modele_id,
+--    p_debut, p_fin) — copie la mission modèle, crée une mission OUVERTE CANDIDATURE
+--    et notifie le soignant en CANDIDATURE_PROPOSEE (« vous êtes leur premier choix »).
+-- Helper partagé : fn_diffuser_pool_urgence(p_mission_id) RETURNS int.
+-- Colonnes ajoutées : missions.est_arret_maladie, missions.arret_maladie_declare_le.
+-- GRANTs : fn_declarer_arret_maladie + fn_rebooker_soignant → authenticated.
+-- Corps complets des fonctions : voir la migration appliquée en prod (identique),
+-- enregistrée dans supabase_migrations.schema_migrations — ce fichier sert la
+-- traçabilité repo ; db push la saute (version déjà enregistrée).

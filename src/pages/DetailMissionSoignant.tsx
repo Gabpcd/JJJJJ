@@ -93,7 +93,7 @@ export default function DetailMissionSoignant() {
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           numero_note_honoraires,
-          mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement
+          mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie
         `).eq('id', id).single(),
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
       ]);
@@ -644,6 +644,28 @@ export default function DetailMissionSoignant() {
                 {mission.statut === 'ASSIGNEE' && (mission as any).presence_confirmee_le && (
                   <div className="bg-success/5 border border-success/20 rounded-xl p-2.5 mb-4 text-center">
                     <p className="text-xs text-success">✓ Présence confirmée — l'établissement est prévenu</p>
+                  </div>
+                )}
+
+                {/* Arrêt maladie : sans pénalité de score (justificatif sous 48h),
+                    étab prévenu, remplacement automatique si mission garantie. */}
+                {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS') && !(mission as any).est_arret_maladie && (
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Déclarer un arrêt maladie sur cette mission ? L\'établissement sera prévenu immédiatement et vous devrez fournir un certificat médical sous 48h. Aucune pénalité de score avec justificatif.')) return;
+                      const { data, error } = await supabase.rpc('fn_declarer_arret_maladie' as any, { p_mission_id: mission.id });
+                      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Déclaration impossible.'); return; }
+                      toast.success('Arrêt maladie déclaré — pensez au certificat médical sous 48h. Bon rétablissement.');
+                      setMission((prev: any) => ({ ...prev, est_arret_maladie: true }));
+                    }}
+                    className="w-full text-xs text-muted-foreground hover:text-foreground underline mb-4"
+                  >
+                    🏥 Je dois me désister pour raison médicale (arrêt maladie)
+                  </button>
+                )}
+                {(mission as any).est_arret_maladie && (
+                  <div className="bg-warning/5 border border-warning/20 rounded-xl p-2.5 mb-4 text-center">
+                    <p className="text-xs text-warning">🏥 Arrêt maladie déclaré — certificat médical à fournir sous 48h</p>
                   </div>
                 )}
 
