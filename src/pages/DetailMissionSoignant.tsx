@@ -93,7 +93,7 @@ export default function DetailMissionSoignant() {
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           numero_note_honoraires,
-          mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie
+          mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie, mode_remuneration, retrocession_pct
         `).eq('id', id).single(),
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
       ]);
@@ -501,12 +501,25 @@ export default function DetailMissionSoignant() {
                 });
               }}
             />
+          ) : (mission as any).mode_remuneration === 'RETROCESSION' ? (
+            <div className="card-base border-primary/20">
+              <p className="text-sm font-semibold text-foreground mb-1">🤝 Remplacement de cabinet — rétrocession d'honoraires</p>
+              <p className="text-3xl font-extrabold text-primary mb-2">{(mission as any).retrocession_pct ?? '—'}%</p>
+              <p className="text-xs text-muted-foreground">
+                Vous exercez sous les feuilles de soins du titulaire : il encaisse les honoraires
+                puis vous rétrocède {(mission as any).retrocession_pct ?? '—'}% des actes réalisés
+                (contrat de remplacement conforme au modèle de l'Ordre, généré à l'acceptation).
+                RCP obligatoire.
+              </p>
+            </div>
           ) : (
             <DecompositionFinanciere mission={mission} role="SOIGNANT" />
           )}
+          {(mission as any).mode_remuneration !== 'RETROCESSION' && (
           <p className="text-xs text-muted-foreground/60 italic text-center">
             Simulation à titre indicatif. Seuls les montants calculés par le moteur de paie font foi.
           </p>
+          )}
 
           {/* Facture honoraires — visible dès que mission TERMINEE (facture générée) */}
           {estTerminee && (

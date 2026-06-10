@@ -202,6 +202,11 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                         {getLabelProfession(c.soignant.profession)}
                       </span>
                     )}
+                    {c.soignant?.est_etudiant && (
+                      <span className="badge-base text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-300" title={c.soignant?.etudiant_details || 'Étudiant(e) en santé'}>
+                        🎓 Étudiant{c.soignant?.etudiant_details ? ` · ${c.soignant.etudiant_details}` : ''}
+                      </span>
+                    )}
                     {c.soignant?.type_exercice && (
                       <span className={`badge-base text-[10px] ${c.soignant.type_exercice === 'LIBERAL' ? 'bg-info/10 text-info' : c.soignant.type_exercice === 'MIXTE' ? 'bg-rose/10 text-rose' : 'bg-muted text-muted-foreground'}`}>
                         {c.soignant.type_exercice === 'MIXTE' ? 'Salarié + Libéral' : c.soignant.type_exercice === 'LIBERAL' ? 'Libéral' : 'Salarié'}

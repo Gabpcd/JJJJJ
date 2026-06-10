@@ -163,7 +163,7 @@ export default function RechercheMissions() {
         specialite_medicale_requise, accepte_non_specialises,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
-        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche, boostee_le
+        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche, boostee_le, mode_remuneration, retrocession_pct
       `)
         .eq('statut', 'OUVERTE')
         .gte('debut_le', new Date().toISOString())

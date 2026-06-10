@@ -4401,6 +4401,7 @@ export type Database = {
           intitule: string
           mode_attribution: string | null
           mode_paiement_soignant: string | null
+          mode_remuneration: string
           modifie_le: string | null
           montant_boost_ht: number | null
           montant_commission_ht: number | null
@@ -4426,6 +4427,7 @@ export type Database = {
           relance_paiement_2_le: string | null
           relances_sans_candidat: number
           remplacement_de_mission_id: string | null
+          retrocession_pct: number | null
           rist_plafond_applique: boolean | null
           serie_id: string | null
           service: string | null
@@ -4492,6 +4494,7 @@ export type Database = {
           intitule: string
           mode_attribution?: string | null
           mode_paiement_soignant?: string | null
+          mode_remuneration?: string
           modifie_le?: string | null
           montant_boost_ht?: number | null
           montant_commission_ht?: number | null
@@ -4517,6 +4520,7 @@ export type Database = {
           relance_paiement_2_le?: string | null
           relances_sans_candidat?: number
           remplacement_de_mission_id?: string | null
+          retrocession_pct?: number | null
           rist_plafond_applique?: boolean | null
           serie_id?: string | null
           service?: string | null
@@ -4583,6 +4587,7 @@ export type Database = {
           intitule?: string
           mode_attribution?: string | null
           mode_paiement_soignant?: string | null
+          mode_remuneration?: string
           modifie_le?: string | null
           montant_boost_ht?: number | null
           montant_commission_ht?: number | null
@@ -4608,6 +4613,7 @@ export type Database = {
           relance_paiement_2_le?: string | null
           relances_sans_candidat?: number
           remplacement_de_mission_id?: string | null
+          retrocession_pct?: number | null
           rist_plafond_applique?: boolean | null
           serie_id?: string | null
           service?: string | null
@@ -5856,6 +5862,54 @@ export type Database = {
         }
         Relationships: []
       }
+      prospects_soignants: {
+        Row: {
+          adresse: string | null
+          cle: string
+          code_postal: string | null
+          departement: string | null
+          email: string | null
+          enseigne: string | null
+          favori: boolean
+          maj_le: string
+          nom: string
+          prenom: string | null
+          profession: string
+          telephone: string | null
+          ville: string | null
+        }
+        Insert: {
+          adresse?: string | null
+          cle: string
+          code_postal?: string | null
+          departement?: string | null
+          email?: string | null
+          enseigne?: string | null
+          favori?: boolean
+          maj_le?: string
+          nom: string
+          prenom?: string | null
+          profession: string
+          telephone?: string | null
+          ville?: string | null
+        }
+        Update: {
+          adresse?: string | null
+          cle?: string
+          code_postal?: string | null
+          departement?: string | null
+          email?: string | null
+          enseigne?: string | null
+          favori?: boolean
+          maj_le?: string
+          nom?: string
+          prenom?: string | null
+          profession?: string
+          telephone?: string | null
+          ville?: string | null
+        }
+        Relationships: []
+      }
       psc_auth_sessions: {
         Row: {
           code_verifier: string
@@ -6997,7 +7051,9 @@ export type Database = {
           email: string
           en_periode_probatoire: boolean
           est_cumul_activite: boolean | null
+          est_etudiant: boolean
           est_salarie_etablissement: boolean | null
+          etudiant_details: string | null
           heures_cumulees: number | null
           heures_plateforme: number | null
           http_referrer: string | null
@@ -7141,7 +7197,9 @@ export type Database = {
           email: string
           en_periode_probatoire?: boolean
           est_cumul_activite?: boolean | null
+          est_etudiant?: boolean
           est_salarie_etablissement?: boolean | null
+          etudiant_details?: string | null
           heures_cumulees?: number | null
           heures_plateforme?: number | null
           http_referrer?: string | null
@@ -7285,7 +7343,9 @@ export type Database = {
           email?: string
           en_periode_probatoire?: boolean
           est_cumul_activite?: boolean | null
+          est_etudiant?: boolean
           est_salarie_etablissement?: boolean | null
+          etudiant_details?: string | null
           heures_cumulees?: number | null
           heures_plateforme?: number | null
           http_referrer?: string | null
@@ -8105,6 +8165,16 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_admin_chercher_prospects_soignants: {
+        Args: {
+          p_departement?: string
+          p_favoris?: boolean
+          p_page?: number
+          p_profession?: string
+          p_q?: string
+        }
+        Returns: Json
+      }
       fn_admin_chorus_config_toggle: {
         Args: {
           p_actif: boolean
@@ -8826,6 +8896,10 @@ export type Database = {
       }
       fn_declarer_virement: {
         Args: { p_facture_id: string; p_reference: string }
+        Returns: Json
+      }
+      fn_definir_retrocession_mission: {
+        Args: { p_mission_id: string; p_pct: number }
         Returns: Json
       }
       fn_demander_confirmation_email_etab: {

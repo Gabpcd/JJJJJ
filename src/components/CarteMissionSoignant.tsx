@@ -107,7 +107,9 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
       </div>
 
       <div className="mt-2 flex items-center justify-between">
-        {(() => {
+        {(m as any).mode_remuneration === 'RETROCESSION' ? (
+          <span className="text-primary font-bold text-sm">🤝 Rétrocession {(m as any).retrocession_pct ?? '—'}% des honoraires</span>
+        ) : (() => {
           const majos = m.debut_le && m.fin_le ? detecterMajorations(m.debut_le, m.fin_le) : [];
           const tauxBase = m.taux_horaire_base ?? 0;
           const tauxFinal = majos.length > 0 ? calculerTauxAvecMajorations(tauxBase, majos) : tauxBase;
@@ -130,7 +132,9 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
             </span>
           );
         })()}
-        {(m.net_estime ?? m.net_a_payer ?? 0) > 0 ? (
+        {(m as any).mode_remuneration === 'RETROCESSION' ? (
+          <span className="text-xs text-muted-foreground">Remplacement de cabinet</span>
+        ) : (m.net_estime ?? m.net_a_payer ?? 0) > 0 ? (
           <span className="text-xs text-muted-foreground">Net estimé* : ~{fmt(m.net_estime ?? (m.net_a_payer != null ? m.net_a_payer * 0.78 : null))}</span>
         ) : (
           <span className="text-xs text-muted-foreground/50">Calculé après assignation</span>

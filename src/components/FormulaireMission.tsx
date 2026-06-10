@@ -50,6 +50,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const [niveauUrgence, setNiveauUrgence] = useState(1);
   const [modeAttribution, setModeAttribution] = useState<'PREMIER_ARRIVE' | 'CANDIDATURE'>('PREMIER_ARRIVE');
   const [contratPreference, setContratPreference] = useState<'TOUS' | 'SALARIE' | 'LIBERAL'>('TOUS');
+  // Remplacement libéral en cabinet (dentistes/médecins) : le titulaire encaisse
+  // les honoraires puis rétrocède — la mission porte un % au lieu d'un taux horaire.
+  const [modeRemuneration, setModeRemuneration] = useState<'TAUX_HORAIRE' | 'RETROCESSION'>('TAUX_HORAIRE');
+  const [retrocessionPct, setRetrocessionPct] = useState('50');
   const [loading, setLoading] = useState(false);
   const [erreurCodeTravail, setErreurCodeTravail] = useState<any>(null);
   const [dupliquerInfo, setDupliquerInfo] = useState<string | null>(null);
@@ -363,6 +367,12 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
         const missionId = (rpcResult as any)?.mission_id;
 
         // type_contrat_recherche : passe par RPC dédiée (audit log)
+        if (missionId && contratPreference === 'LIBERAL' && modeRemuneration === 'RETROCESSION') {
+          await supabase.rpc('fn_definir_retrocession_mission' as any, {
+            p_mission_id: missionId,
+            p_pct: Math.min(100, Math.max(1, parseFloat(retrocessionPct) || 50)),
+          });
+        }
         if (missionId && contratPreference !== 'TOUS') {
           await supabase.rpc('fn_modifier_type_contrat_mission' as any, {
             p_mission_id: missionId,
@@ -629,7 +639,45 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
           <FormulaireRecurrence onChange={handleRecurrenceChange} />
         )}
 
+        {/* Mode de rémunération — rétrocession réservée au libéral pur (remplacement
+            de cabinet : dentistes, médecins), création de mission ponctuelle uniquement */}
+        {contratPreference === 'LIBERAL' && !modeEdition && !modeRecurrent && (
+          <div className="border border-primary/20 rounded-xl p-4 bg-primary/5 space-y-2">
+            <p className="text-sm font-semibold text-foreground">💶 Mode de rémunération</p>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="radio" name="modeRemuneration" checked={modeRemuneration === 'TAUX_HORAIRE'}
+                onChange={() => setModeRemuneration('TAUX_HORAIRE')} className="mt-0.5 accent-primary" />
+              <div>
+                <span className="text-sm font-medium text-foreground">Taux horaire</span>
+                <p className="text-xs text-muted-foreground">Le soignant facture ses heures en honoraires.</p>
+              </div>
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="radio" name="modeRemuneration" checked={modeRemuneration === 'RETROCESSION'}
+                onChange={() => { setModeRemuneration('RETROCESSION'); setTauxHoraire('0'); }} className="mt-0.5 accent-primary" />
+              <div>
+                <span className="text-sm font-medium text-foreground">Rétrocession d'honoraires — remplacement de cabinet</span>
+                <p className="text-xs text-muted-foreground">
+                  Le remplaçant exerce sous vos feuilles de soins : vous encaissez les honoraires
+                  puis rétrocédez le pourcentage convenu (contrat type conforme à l'Ordre, usage 40-60 %).
+                </p>
+              </div>
+            </label>
+            {modeRemuneration === 'RETROCESSION' && (
+              <div className="pt-1">
+                <label htmlFor="mission-retrocession" className="text-sm font-medium text-foreground mb-1 block">Rétrocession au remplaçant * (%)</label>
+                <div className="relative max-w-[160px]">
+                  <input id="mission-retrocession" type="number" step="1" min="1" max="100" value={retrocessionPct}
+                    onChange={(e) => setRetrocessionPct(e.target.value)} placeholder="50" className="input-base pr-9" />
+                  <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Taux horaire */}
+        {!(contratPreference === 'LIBERAL' && modeRemuneration === 'RETROCESSION' && !modeEdition && !modeRecurrent) && (
         <div>
           <label htmlFor="mission-taux-horaire" className="text-sm font-medium text-foreground mb-1 block">Taux horaire brut * (€/h)</label>
           <div className="relative">
@@ -643,6 +691,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
             <p className="text-[10px] text-muted-foreground mt-1">🔒 Ces champs ne sont plus modifiables après acceptation.</p>
           )}
         </div>
+        )}
 
         {/* Warning Rist */}
         {profession && taux > 0 && <WarningRist profession={profession} tauxSaisi={taux} ristPlafondActif={ristPlafondActif} estSecteurPublic={estSecteurPublic} />}

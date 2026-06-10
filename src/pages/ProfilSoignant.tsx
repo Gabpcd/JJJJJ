@@ -9,6 +9,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { extraireMessageErreur } from '@/lib/erreurs';
 import { handleErrorSilent } from '@/lib/handleError';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { Copy, Gift, CheckCircle, LogOut } from 'lucide-react';
 import { BadgeRPPS } from '@/components/BadgeRPPS';
 import { EncartInvitation } from '@/components/EncartInvitation';
@@ -393,6 +394,7 @@ export default function ProfilSoignant() {
               smsToggling={smsToggling}
               setSmsToggling={setSmsToggling}
             />
+            <BlocStatutEtudiant userId={user!.id} />
             <div className="mt-4 flex justify-end">
               <button
                 type="button"
@@ -507,5 +509,65 @@ export default function ProfilSoignant() {
         </button>
       </div>
     </LayoutApp>
+  );
+}
+
+
+/* ── Statut étudiant en santé (IFSI 2e année = apte AS, pharma 3e année, interne…)
+   Affiché aux établissements (badge 🎓 sur les candidatures) — autodéclaré,
+   le certificat de scolarité se téléverse dans Mes documents. ── */
+function BlocStatutEtudiant({ userId }: { userId: string }) {
+  const [estEtudiant, setEstEtudiant] = useState(false);
+  const [details, setDetails] = useState('');
+  const [charge, setCharge] = useState(false);
+
+  useEffect(() => {
+    supabase.from('soignants').select('est_etudiant, etudiant_details').eq('id', userId).maybeSingle()
+      .then(({ data }) => {
+        const d = data as any;
+        if (d) { setEstEtudiant(!!d.est_etudiant); setDetails(d.etudiant_details || ''); }
+        setCharge(true);
+      });
+  }, [userId]);
+
+  const sauver = async (actif: boolean, det: string) => {
+    const { error } = await supabase.from('soignants')
+      .update({ est_etudiant: actif, etudiant_details: det.trim() || null } as any)
+      .eq('id', userId);
+    if (error) toast.error(error.message);
+  };
+
+  if (!charge) return null;
+  return (
+    <div className="card-base mt-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">🎓 Je suis étudiant(e) en santé</p>
+          <p className="text-xs text-muted-foreground">
+            Visible par les établissements. Ex : IFSI 2e année (apte aide-soignant, arrêté du 03/02/2022),
+            pharmacie 3e année, interne avec licence de remplacement.
+          </p>
+        </div>
+        <button type="button"
+          onClick={() => { const v = !estEtudiant; setEstEtudiant(v); sauver(v, details); }}
+          className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${estEtudiant ? 'bg-primary' : 'bg-muted'}`}>
+          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${estEtudiant ? 'translate-x-6' : 'translate-x-0.5'}`} />
+        </button>
+      </div>
+      {estEtudiant && (
+        <input
+          value={details}
+          onChange={(e) => setDetails(e.target.value.slice(0, 80))}
+          onBlur={() => sauver(true, details)}
+          placeholder="Ex : IFSI 2e année — UE AS validées"
+          className="input-base text-sm"
+        />
+      )}
+      {estEtudiant && (
+        <p className="text-[11px] text-muted-foreground">
+          Téléversez votre certificat de scolarité dans <strong>Mes documents</strong> pour accélérer les acceptations.
+        </p>
+      )}
+    </div>
   );
 }
