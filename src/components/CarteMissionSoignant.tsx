@@ -77,6 +77,9 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
               </span>
             );
           })()}
+          {(m as any).boostee_le && (
+            <span className="badge-base text-[10px] bg-primary/10 text-primary">🚀 Mise en avant</span>
+          )}
         </div>
         <span className={`text-[10px] ${temps.couleur}`}>{temps.texte}</span>
       </div>

@@ -163,10 +163,11 @@ export default function RechercheMissions() {
         specialite_medicale_requise, accepte_non_specialises,
         debut_le, fin_le, duree_heures, taux_horaire_base, taux_rist_plafonne, rist_plafond_applique,
         total_brut, net_a_payer, est_urgente, niveau_urgence, statut,
-        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche
+        soignant_assigne_id, cree_le, etablissement_id, type_contrat_recherche, boostee_le
       `)
         .eq('statut', 'OUVERTE')
         .gte('debut_le', new Date().toISOString())
+        .order('boostee_le', { ascending: false, nullsFirst: false })
         .order('est_urgente', { ascending: false })
         .order('debut_le', { ascending: true })
         .limit(500);
