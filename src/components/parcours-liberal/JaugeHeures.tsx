@@ -9,6 +9,8 @@ interface Props {
   titre?: string;
   legendeJolene?: string;
   legendeExternes?: string;
+  /** Date de démarrage du parcours — active la projection « libéral vers {mois} ». */
+  demarreLe?: string | null;
 }
 
 const HACHURES_BG = 'repeating-linear-gradient(45deg, #fb923c, #fb923c 5px, #fed7aa 5px, #fed7aa 10px)';
@@ -22,6 +24,7 @@ export function JaugeHeures({
   titre,
   legendeJolene = 'Heures via Jolene',
   legendeExternes = 'Heures externes validées',
+  demarreLe,
 }: Props) {
   const total = heuresJolene + heuresExternesValidees;
   const totalAvecAttente = total + heuresExternesEnAttente;
@@ -33,6 +36,21 @@ export function JaugeHeures({
   const atteint = total >= seuilRequis;
   const atteintViaExternes = atteint && !eligibleFreeTransition;
   const restant = Math.max(0, seuilRequis - totalAvecAttente);
+
+  // Projection motivationnelle : au rythme moyen constaté depuis le début du
+  // parcours, date estimée d'atteinte du seuil. Affichée seulement si le rythme
+  // est mesurable (≥ 2 semaines de recul et ≥ 20h cumulées).
+  let projection: string | null = null;
+  if (!atteint && demarreLe && total >= 20) {
+    const moisEcoules = (Date.now() - new Date(demarreLe).getTime()) / (30.44 * 86400000);
+    if (moisEcoules >= 0.5) {
+      const rythme = total / moisEcoules;
+      if (rythme >= 5) {
+        const dateCible = new Date(Date.now() + ((seuilRequis - total) / rythme) * 30.44 * 86400000);
+        projection = `📅 À ce rythme (~${Math.round(rythme)}h/mois), objectif atteint vers ${dateCible.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}. Ajoutez vos heures externes pour avancer la date.`;
+      }
+    }
+  }
 
   return (
     <div className="card-base">
@@ -46,6 +64,10 @@ export function JaugeHeures({
           {Math.round(pctCapped)}%
         </span>
       </div>
+
+      {projection && (
+        <p className="text-xs text-primary font-medium mb-2">{projection}</p>
+      )}
 
       <div className="h-3 w-full rounded-full bg-muted overflow-hidden flex">
         <div className="h-full bg-primary transition-all duration-500" style={{ width: `${pctJolene}%` }} aria-label={legendeJolene} />
