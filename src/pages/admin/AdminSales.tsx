@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
   Megaphone, Plus, ExternalLink, Phone, Mail, MessageCircle, Copy, Save, X, Trash2,
-  Users, Building2, FileText, Search,
+  Users, Building2, FileText, Search, Star, Archive, RotateCcw, Send, Pencil,
 } from 'lucide-react';
 
 /* ── Constantes UI ── */
@@ -73,11 +73,14 @@ export default function AdminSales() {
   const [editGroupe, setEditGroupe] = useState<any | null>(null);
   const [editContact, setEditContact] = useState<any | null>(null);
 
+  const [fFavorisGroupes, setFFavorisGroupes] = useState(false);
+  const [voirArchives, setVoirArchives] = useState(false);
+
   const charger = useCallback(async () => {
     setLoading(true);
     const [g, c, t] = await Promise.all([
-      supabase.from('sales_groupes' as any).select('*').order('plateforme').order('profession'),
-      supabase.from('sales_contacts' as any).select('*').order('cree_le', { ascending: false }),
+      supabase.from('sales_groupes' as any).select('*').order('favori', { ascending: false }).order('plateforme').order('profession'),
+      supabase.from('sales_contacts' as any).select('*').order('favori', { ascending: false }).order('cree_le', { ascending: false }),
       supabase.from('sales_templates' as any).select('*').order('cible'),
     ]);
     setGroupes((g.data as any[]) || []);
@@ -93,12 +96,38 @@ export default function AdminSales() {
     return groupes.filter(g =>
       (!fPlateforme || g.plateforme === fPlateforme) &&
       (!fProfession || g.profession === fProfession) &&
+      (!fFavorisGroupes || g.favori) &&
       (!recherche || `${g.nom} ${g.region || ''} ${g.notes || ''}`.toLowerCase().includes(recherche.toLowerCase())),
     );
-  }, [groupes, fPlateforme, fProfession, recherche]);
+  }, [groupes, fPlateforme, fProfession, fFavorisGroupes, recherche]);
 
-  const soignants = useMemo(() => contacts.filter(c => c.type === 'SOIGNANT'), [contacts]);
-  const etablissements = useMemo(() => contacts.filter(c => c.type === 'ETABLISSEMENT'), [contacts]);
+  const soignants = useMemo(
+    () => contacts.filter(c => c.type === 'SOIGNANT' && (voirArchives || !c.archive)),
+    [contacts, voirArchives],
+  );
+  const etablissements = useMemo(
+    () => contacts.filter(c => c.type === 'ETABLISSEMENT' && (voirArchives || !c.archive)),
+    [contacts, voirArchives],
+  );
+
+  const toggleFavoriGroupe = async (g: any) => {
+    const { error } = await supabase.from('sales_groupes' as any).update({ favori: !g.favori } as any).eq('id', g.id);
+    if (error) { toast.error(error.message); return; }
+    charger();
+  };
+
+  const toggleFavoriContact = async (c: any) => {
+    const { error } = await supabase.from('sales_contacts' as any).update({ favori: !c.favori } as any).eq('id', c.id);
+    if (error) { toast.error(error.message); return; }
+    charger();
+  };
+
+  const archiverContact = async (c: any, archive: boolean) => {
+    const { error } = await supabase.from('sales_contacts' as any).update({ archive, maj_le: new Date().toISOString() } as any).eq('id', c.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(archive ? 'Retiré (archivé — restaurable).' : 'Restauré.');
+    charger();
+  };
 
   /* ── Actions ── */
   const copier = async (texte: string) => {
@@ -208,6 +237,7 @@ export default function AdminSales() {
                   {PROFESSIONS.map(p => <option key={p.valeur} value={p.valeur}>{p.label}</option>)}
                 </select>
               </div>
+              <BoutonY2K size="sm" variant={fFavorisGroupes ? 'primary' : 'secondary'} onClick={() => setFFavorisGroupes(!fFavorisGroupes)} iconeGauche={<Star className="h-4 w-4" />}>Favoris</BoutonY2K>
               <BoutonY2K size="sm" onClick={() => setEditGroupe({ plateforme: 'FACEBOOK', profession: 'TOUTES', audience: 'MIXTE', statut: 'A_VERIFIER' })} iconeGauche={<Plus className="h-4 w-4" />}>Ajouter</BoutonY2K>
             </div>
 
@@ -244,7 +274,11 @@ export default function AdminSales() {
                           {g.notes && <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{g.notes}</p>}
                         </div>
                       </div>
-                      <div className="flex gap-2 mt-3 flex-wrap">
+                      <div className="flex gap-2 mt-3 flex-wrap items-center">
+                        <button onClick={() => toggleFavoriGroupe(g)} title={g.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                          className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                          <Star className={`h-5 w-5 ${g.favori ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                        </button>
                         {g.url ? (
                           <BoutonY2K size="sm" onClick={() => window.open(g.url, '_blank', 'noopener')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Ouvrir</BoutonY2K>
                         ) : (
@@ -266,10 +300,13 @@ export default function AdminSales() {
           <ListeContacts
             type={tab === 'soignants' ? 'SOIGNANT' : 'ETABLISSEMENT'}
             contacts={tab === 'soignants' ? soignants : etablissements}
+            voirArchives={voirArchives}
+            onToggleArchives={() => setVoirArchives(!voirArchives)}
             onAdd={() => setEditContact({ type: tab === 'soignants' ? 'SOIGNANT' : 'ETABLISSEMENT', statut: 'PROSPECT' })}
             onEdit={c => setEditContact({ ...c })}
             onStatut={majStatutContact}
-            onDelete={supprimerContact}
+            onFavori={toggleFavoriContact}
+            onArchive={archiverContact}
           />
         )}
 
@@ -377,19 +414,24 @@ export default function AdminSales() {
     </LayoutAdmin>
   );
 }
-
 /* ── Sous-composant liste contacts ── */
-function ListeContacts({ type, contacts, onAdd, onEdit, onStatut, onDelete }: {
+function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, onEdit, onStatut, onFavori, onArchive }: {
   type: 'SOIGNANT' | 'ETABLISSEMENT';
   contacts: any[];
+  voirArchives: boolean;
+  onToggleArchives: () => void;
   onAdd: () => void;
   onEdit: (c: any) => void;
   onStatut: (id: string, s: string) => void;
-  onDelete: (id: string) => void;
+  onFavori: (c: any) => void;
+  onArchive: (c: any, archive: boolean) => void;
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <BoutonY2K size="sm" variant={voirArchives ? 'primary' : 'secondary'} onClick={onToggleArchives} iconeGauche={<Archive className="h-4 w-4" />}>
+          {voirArchives ? 'Masquer les archivés' : 'Voir les archivés'}
+        </BoutonY2K>
         <BoutonY2K size="sm" onClick={onAdd} iconeGauche={<Plus className="h-4 w-4" />}>
           Ajouter {type === 'SOIGNANT' ? 'un soignant' : 'un établissement'}
         </BoutonY2K>
@@ -399,24 +441,32 @@ function ListeContacts({ type, contacts, onAdd, onEdit, onStatut, onDelete }: {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {contacts.map(c => (
-            <CardY2K key={c.id} hoverLift={false}>
+            <CardY2K key={c.id} hoverLift={false} className={c.archive ? 'opacity-60' : ''}>
               <CardY2KContent>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <span className="font-semibold text-foreground">{c.nom}</span>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {c.profession ? getLabelProfession(c.profession) : type === 'ETABLISSEMENT' ? 'Établissement' : ''}
-                      {c.ville ? ` · ${c.ville}` : ''}
-                    </p>
+                  <div className="min-w-0 flex items-start gap-1.5">
+                    <button onClick={() => onFavori(c)} title="Favori" className="mt-0.5 shrink-0">
+                      <Star className={`h-4 w-4 ${c.favori ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                    </button>
+                    <div className="min-w-0">
+                      <span className="font-semibold text-foreground">{c.nom}</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {c.profession ? getLabelProfession(c.profession) : type === 'ETABLISSEMENT' ? 'Établissement' : ''}
+                        {c.ville ? ` · ${c.ville}` : ''}
+                      </p>
+                    </div>
                   </div>
-                  <BadgeY2K variant={badgeStatutContact(c.statut)}>{c.statut}</BadgeY2K>
+                  <div className="flex items-center gap-1.5">
+                    {c.archive && <BadgeY2K variant="warning">Archivé</BadgeY2K>}
+                    <BadgeY2K variant={badgeStatutContact(c.statut)}>{c.statut}</BadgeY2K>
+                  </div>
                 </div>
                 {/* Contacter */}
                 <div className="flex gap-2 mt-3 flex-wrap">
                   {c.telephone && (
                     <>
-                      <BoutonY2K size="sm" onClick={() => window.open(lienWhatsApp(c.telephone), '_blank', 'noopener')} iconeGauche={<MessageCircle className="h-4 w-4" />}>WhatsApp</BoutonY2K>
-                      <BoutonY2K size="sm" variant="secondary" onClick={() => { window.location.href = `tel:${c.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>Appeler</BoutonY2K>
+                      <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${c.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>Appeler</BoutonY2K>
+                      <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(lienWhatsApp(c.telephone), '_blank', 'noopener')} iconeGauche={<MessageCircle className="h-4 w-4" />}>WhatsApp</BoutonY2K>
                     </>
                   )}
                   {c.email && (
@@ -424,12 +474,16 @@ function ListeContacts({ type, contacts, onAdd, onEdit, onStatut, onDelete }: {
                   )}
                 </div>
                 {/* Pipeline + édition */}
-                <div className="flex gap-2 mt-2 items-center">
+                <div className="flex gap-2 mt-2 items-center flex-wrap">
                   <select value={c.statut} onChange={e => onStatut(c.id, e.target.value)} className="input-base h-8 text-xs">
                     {STATUTS_CONTACT.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                   <BoutonY2K size="sm" variant="ghost" onClick={() => onEdit(c)}>Éditer</BoutonY2K>
-                  <BoutonY2K size="sm" variant="ghost" onClick={() => onDelete(c.id)} iconeGauche={<Trash2 className="h-4 w-4" />} />
+                  {c.archive ? (
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => onArchive(c, false)} iconeGauche={<RotateCcw className="h-4 w-4" />}>Restaurer</BoutonY2K>
+                  ) : (
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => onArchive(c, true)} iconeGauche={<Archive className="h-4 w-4" />}>Retirer</BoutonY2K>
+                  )}
                 </div>
                 {c.notes && <p className="text-[11px] text-muted-foreground mt-2">{c.notes}</p>}
               </CardY2KContent>
@@ -521,69 +575,101 @@ function EtablissementsJolene() {
   );
 }
 
-/* ── Prospection nationale (base entreprises open data) ── */
-const CATEGORIES_PROSPECTION = [
-  { v: 'EHPAD', label: 'EHPAD / maisons de retraite' },
+/* ── Prospection nationale (base FINESS interne, ~270k établissements avec téléphone) ── */
+const TYPES_PROSPECTION = [
+  { v: '', label: 'Tous les types' },
+  { v: 'EHPAD', label: 'EHPAD / personnes âgées' },
   { v: 'HOPITAL', label: 'Hôpitaux / cliniques' },
-  { v: 'HANDICAP', label: 'Étab. handicap / médico-social' },
-  { v: 'PHARMACIE', label: 'Pharmacies' },
-  { v: 'CABINET_MEDICAL', label: 'Cabinets médicaux' },
-  { v: 'CABINET_DENTAIRE', label: 'Cabinets dentaires' },
+  { v: 'PHARMACIE', label: "Pharmacies d'officine" },
+  { v: 'DOMICILE', label: 'SSIAD / soins à domicile' },
+  { v: 'HANDICAP', label: 'Handicap / médico-social' },
+  { v: 'CENTRE_SANTE', label: 'Centres / maisons de santé' },
   { v: 'LABO', label: "Laboratoires d'analyses" },
-  { v: 'AUTRE_SANTE', label: 'Autres activités de santé' },
+  { v: 'DIALYSE', label: 'Centres de dialyse' },
 ];
 
 function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
+  const [type, setType] = useState('');
   const [departement, setDepartement] = useState('');
-  const [categorie, setCategorie] = useState('EHPAD');
+  const [q, setQ] = useState('');
+  const [favoris, setFavoris] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [emailEdit, setEmailEdit] = useState<{ finess: string; valeur: string } | null>(null);
+  const [outreach, setOutreach] = useState<any | null>(null);
 
-  const rechercher = async (p = 1) => {
-    if (!departement.trim()) { toast.error('Indiquez un département (ex. 75, 2A, 971).'); return; }
+  const rechercher = useCallback(async (p = 1) => {
     setLoading(true);
-    const { data: res, error } = await supabase.functions.invoke('prospects-etablissements', {
-      body: { departement: departement.trim(), categorie, page: p },
+    const { data: res, error } = await supabase.rpc('fn_admin_chercher_prospects' as any, {
+      p_type: type || null,
+      p_departement: departement.trim() || null,
+      p_q: q.trim() || null,
+      p_favoris: favoris,
+      p_page: p,
     });
     setLoading(false);
-    if (error || (res as any)?.error) { toast.error((res as any)?.error || 'Recherche impossible.'); return; }
+    if (error) { toast.error(error.message); return; }
     setData(res);
     setPage(p);
+  }, [type, departement, q, favoris]);
+
+  useEffect(() => { rechercher(1); }, [type, departement, favoris]); // recherche live (q via bouton/Enter)
+
+  const toggleFavori = async (pr: any) => {
+    const { error } = await supabase.from('prospects_etablissements' as any)
+      .update({ favori: !pr.favori } as any).eq('finess', pr.finess);
+    if (error) { toast.error(error.message); return; }
+    rechercher(page);
   };
 
-  const ajouterAuPipeline = async (e: any) => {
-    const { error } = await supabase.from('sales_contacts' as any).insert({
-      type: 'ETABLISSEMENT', nom: e.nom, ville: e.ville || null, statut: 'PROSPECT',
-      notes: `Prospection${e.siret ? ` · SIRET ${e.siret}` : ''}${e.adresse ? ` · ${e.adresse}` : ''}`,
-    } as any);
+  const sauverEmail = async () => {
+    if (!emailEdit) return;
+    const { error } = await supabase.from('prospects_etablissements' as any)
+      .update({ email: emailEdit.valeur || null } as any).eq('finess', emailEdit.finess);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Email enregistré.');
+    setEmailEdit(null);
+    rechercher(page);
+  };
+
+  const ajouterAuPipeline = async (pr: any) => {
+    const { error } = await supabase.from('sales_contacts' as any).upsert({
+      type: 'ETABLISSEMENT', nom: pr.nom, ville: pr.ville || null,
+      telephone: pr.telephone || null, email: pr.email || null, finess: pr.finess,
+      statut: 'PROSPECT', notes: `Prospection FINESS ${pr.finess}${pr.siret ? ` · SIRET ${pr.siret}` : ''}`,
+    } as any, { onConflict: 'finess' });
     if (error) { toast.error(error.message); return; }
     toast.success('Ajouté aux établissements sourcés.');
     onAjouter();
   };
 
-  const pj = (e: any) => `https://www.pagesjaunes.fr/annuaire/chercherlespros?quoiqui=${encodeURIComponent(e.nom)}&ou=${encodeURIComponent(e.ville || '')}`;
-  const google = (e: any) => `https://www.google.com/search?q=${encodeURIComponent(`${e.nom} ${e.ville || ''} téléphone email`)}`;
+  const total = data?.total ?? 0;
 
   return (
     <div className="space-y-4">
       <CardY2K hoverLift={false}>
         <CardY2KContent>
           <p className="text-[11px] text-muted-foreground mb-2">
-            Base nationale (open data entreprises). Le téléphone/email n'est pas fourni par cette base publique :
-            les boutons <strong>Pages Jaunes</strong> et <strong>Google</strong> ouvrent une recherche pré-remplie pour récupérer les coordonnées en 1 clic.
+            Base officielle FINESS importée (tous les établissements de santé de France, téléphone inclus).
+            Recherche <strong>nationale</strong> — le département est optionnel.
           </p>
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-            <div>
-              <Label className="text-xs">Département</Label>
-              <Input value={departement} onChange={e => setDepartement(e.target.value)} placeholder="75, 2A, 971…" className="h-9 w-28" />
-            </div>
-            <div className="flex-1">
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-wrap">
+            <div className="flex-1 min-w-[160px]">
               <Label className="text-xs">Type d'établissement</Label>
-              <select value={categorie} onChange={e => setCategorie(e.target.value)} className="input-base h-9 w-full">
-                {CATEGORIES_PROSPECTION.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
+              <select value={type} onChange={e => setType(e.target.value)} className="input-base h-9 w-full">
+                {TYPES_PROSPECTION.map(c => <option key={c.v} value={c.v}>{c.label}</option>)}
               </select>
             </div>
+            <div>
+              <Label className="text-xs">Département (optionnel)</Label>
+              <Input value={departement} onChange={e => setDepartement(e.target.value)} placeholder="National" className="h-9 w-28" />
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <Label className="text-xs">Nom ou ville</Label>
+              <Input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rechercher(1); }} placeholder="Korian, Marseille…" className="h-9" />
+            </div>
+            <BoutonY2K size="sm" variant={favoris ? 'primary' : 'secondary'} onClick={() => setFavoris(!favoris)} iconeGauche={<Star className="h-4 w-4" />}>Favoris</BoutonY2K>
             <BoutonY2K size="sm" onClick={() => rechercher(1)} disabled={loading} iconeGauche={<Search className="h-4 w-4" />}>
               {loading ? 'Recherche…' : 'Rechercher'}
             </BoutonY2K>
@@ -593,21 +679,48 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
 
       {data && (
         <>
-          <p className="text-xs text-muted-foreground">{data.total} établissement(s) — page {data.page}/{data.total_pages}</p>
+          <p className="text-xs text-muted-foreground">
+            {total.toLocaleString('fr-FR')} établissement(s) — page {data.page}/{Math.max(data.total_pages, 1)}
+            {total === 0 && ' · Si la base semble vide, l\'import FINESS est peut-être encore en cours (quelques minutes).'}
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {(data.resultats || []).map((e: any, i: number) => (
-              <CardY2K key={i} hoverLift={false}>
+            {(data.resultats || []).map((pr: any) => (
+              <CardY2K key={pr.finess} hoverLift={false}>
                 <CardY2KContent>
-                  <span className="font-semibold text-foreground">{e.nom}</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {[e.adresse, e.code_postal, e.ville].filter(Boolean).join(' · ')}
-                    {e.siret ? <span className="block text-[10px]">SIRET {e.siret}</span> : null}
-                  </p>
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    <BoutonY2K size="sm" onClick={() => window.open(pj(e), '_blank', 'noopener')} iconeGauche={<Phone className="h-4 w-4" />}>Pages Jaunes</BoutonY2K>
-                    <BoutonY2K size="sm" variant="secondary" onClick={() => window.open(google(e), '_blank', 'noopener')} iconeGauche={<ExternalLink className="h-4 w-4" />}>Google</BoutonY2K>
-                    <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(e)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex items-start gap-1.5">
+                      <button onClick={() => toggleFavori(pr)} title="Favori" className="mt-0.5 shrink-0">
+                        <Star className={`h-4 w-4 ${pr.favori ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                      </button>
+                      <div className="min-w-0">
+                        <span className="font-semibold text-foreground">{pr.nom}</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {pr.categorie_lib || pr.type_jolene}
+                          {pr.ville ? ` · ${pr.ville}` : ''}{pr.code_postal ? ` (${pr.code_postal})` : ''}
+                        </p>
+                      </div>
+                    </div>
                   </div>
+
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {pr.telephone ? (
+                      <BoutonY2K size="sm" onClick={() => { window.location.href = `tel:${pr.telephone}`; }} iconeGauche={<Phone className="h-4 w-4" />}>
+                        Appeler
+                      </BoutonY2K>
+                    ) : (
+                      <BadgeY2K variant="warning">Tél. non renseigné</BadgeY2K>
+                    )}
+                    {pr.email ? (
+                      <>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => { window.location.href = `mailto:${pr.email}`; }} iconeGauche={<Mail className="h-4 w-4" />}>Email</BoutonY2K>
+                        <BoutonY2K size="sm" variant="secondary" onClick={() => setOutreach(pr)} iconeGauche={<Send className="h-4 w-4" />}>Via Jolene</BoutonY2K>
+                      </>
+                    ) : (
+                      <BoutonY2K size="sm" variant="ghost" onClick={() => setEmailEdit({ finess: pr.finess, valeur: '' })} iconeGauche={<Pencil className="h-4 w-4" />}>+ Email</BoutonY2K>
+                    )}
+                    <BoutonY2K size="sm" variant="ghost" onClick={() => ajouterAuPipeline(pr)} iconeGauche={<Plus className="h-4 w-4" />}>Pipeline</BoutonY2K>
+                  </div>
+                  {pr.telephone && <p className="text-[11px] text-muted-foreground mt-1.5">{pr.telephone}{pr.email ? ` · ${pr.email}` : ''}</p>}
                 </CardY2KContent>
               </CardY2K>
             ))}
@@ -615,11 +728,64 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
           {data.total_pages > 1 && (
             <div className="flex justify-center gap-2 pt-2">
               <BoutonY2K size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => rechercher(page - 1)}>← Précédent</BoutonY2K>
+              <span className="text-xs text-muted-foreground self-center">{page}/{data.total_pages}</span>
               <BoutonY2K size="sm" variant="secondary" disabled={page >= data.total_pages || loading} onClick={() => rechercher(page + 1)}>Suivant →</BoutonY2K>
             </div>
           )}
         </>
       )}
+
+      {/* Saisie email d'un prospect */}
+      {emailEdit && (
+        <FormPanel titre="Email de l'établissement" onClose={() => setEmailEdit(null)} onSave={sauverEmail}>
+          <Champ label="Adresse email">
+            <Input type="email" value={emailEdit.valeur} onChange={e => setEmailEdit({ ...emailEdit, valeur: e.target.value })} placeholder="contact@etablissement.fr" />
+          </Champ>
+        </FormPanel>
+      )}
+
+      {/* Envoi email via Jolene */}
+      {outreach && <OutreachModal prospect={outreach} onClose={() => { setOutreach(null); rechercher(page); onAjouter(); }} />}
+    </div>
+  );
+}
+
+/* ── Modal d'envoi email 1-clic via Jolene (Resend) ── */
+function OutreachModal({ prospect, onClose }: { prospect: any; onClose: () => void }) {
+  const [sujet, setSujet] = useState(`Renfort soignant pour ${prospect.nom}`);
+  const [corps, setCorps] = useState(
+    `Bonjour,\n\nJe suis Gabrielle, fondatrice de Jolene (jolene.app). Nous mettons en relation les établissements de santé avec des soignants vérifiés, disponibles rapidement — contrats et DPAE gérés par la plateforme.\n\nSeriez-vous disponible pour un échange de 10 minutes cette semaine ?\n\nBien cordialement,\nGabrielle — Jolene`
+  );
+  const [envoi, setEnvoi] = useState(false);
+
+  const envoyer = async () => {
+    setEnvoi(true);
+    const { data, error } = await supabase.functions.invoke('sales-outreach', {
+      body: { email: prospect.email, sujet, corps, finess: prospect.finess },
+    });
+    setEnvoi(false);
+    if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Envoi impossible.'); return; }
+    toast.success(`Email envoyé à ${prospect.email} — prospect passé en CONTACTÉ.`);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-foreground">Email à {prospect.nom}</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        <p className="text-xs text-muted-foreground">À : {prospect.email} · De : Gabrielle de Jolene (réponses → ta boîte perso)</p>
+        <Champ label="Sujet"><Input value={sujet} onChange={e => setSujet(e.target.value)} /></Champ>
+        <Champ label="Message"><Textarea value={corps} onChange={e => setCorps(e.target.value)} rows={9} /></Champ>
+        <div className="flex gap-2 pt-1">
+          <BoutonY2K onClick={envoyer} disabled={envoi} iconeGauche={<Send className="h-4 w-4" />} className="flex-1">
+            {envoi ? 'Envoi…' : 'Envoyer'}
+          </BoutonY2K>
+          <BoutonY2K variant="secondary" onClick={onClose}>Annuler</BoutonY2K>
+        </div>
+      </div>
     </div>
   );
 }

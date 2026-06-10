@@ -51,6 +51,12 @@ verify_jwt = false
 [functions.prospects-etablissements]
 verify_jwt = false
 
+[functions.import-finess]
+verify_jwt = false
+
+[functions.sales-outreach]
+verify_jwt = false
+
 [functions.verify-rib-etablissement]
 verify_jwt = false
 
