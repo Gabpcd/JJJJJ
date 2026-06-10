@@ -188,7 +188,7 @@ export default function DashboardEtablissement() {
         // --- Minimal secondary queries (top soignants + prochaines missions) ---
         try {
           const [resCout, resProchaines] = await Promise.all([
-            supabase.from('missions').select('total_brut, duree_heures, soignant_assigne_id')
+            supabase.from('missions').select('id, total_brut, duree_heures, soignant_assigne_id, fin_le')
               .eq('etablissement_id', etablissementId).eq('statut', 'TERMINEE').gte('fin_le', debutMois),
             supabase.from('missions')
               .select('id, intitule, debut_le, fin_le, statut, duree_heures, profession_requise, soignant_assigne_id')
@@ -201,8 +201,15 @@ export default function DashboardEtablissement() {
 
           if (resCout.data) {
             const counts: Record<string, number> = {};
-            for (const m of resCout.data) {
-              if (m.soignant_assigne_id) counts[m.soignant_assigne_id] = (counts[m.soignant_assigne_id] || 0) + 1;
+            const derniereMission: Record<string, { id: string; fin: string }> = {};
+            for (const m of resCout.data as any[]) {
+              if (m.soignant_assigne_id) {
+                counts[m.soignant_assigne_id] = (counts[m.soignant_assigne_id] || 0) + 1;
+                const cur = derniereMission[m.soignant_assigne_id];
+                if (!cur || (m.fin_le && m.fin_le > cur.fin)) {
+                  derniereMission[m.soignant_assigne_id] = { id: m.id, fin: m.fin_le || '' };
+                }
+              }
             }
             const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
             const missingIds = sorted.map(([id]) => id).filter(id => !sgMap[id]);
@@ -212,7 +219,7 @@ export default function DashboardEtablissement() {
             }
             topSoignantsResult = sorted.map(([id, count]) => {
               const sg = sgMap[id];
-              return { id, prenom: sg?.prenom || 'Soignant', nom: sg?.nom || '', score_fiabilite: sg?.score_fiabilite ?? 0, count };
+              return { id, prenom: sg?.prenom || 'Soignant', nom: sg?.nom || '', score_fiabilite: sg?.score_fiabilite ?? 0, count, derniere_mission_id: derniereMission[id]?.id || null };
             });
           }
 

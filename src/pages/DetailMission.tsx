@@ -179,6 +179,90 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
   );
 }
 
+/* ── Boost + Garantie remplacement (leviers de remplissage de la mission) ── */
+function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any) => void }) {
+  const [boosting, setBoosting] = useState(false);
+  const [togglingGarantie, setTogglingGarantie] = useState(false);
+
+  const booster = async () => {
+    setBoosting(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_booster_mission' as any, { p_mission_id: mission.id });
+      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Boost impossible.'); return; }
+      const nb = (data as any)?.soignants_notifies ?? 0;
+      toast.success(`🚀 Mission boostée — ${nb} soignant${nb > 1 ? 's' : ''} compatible${nb > 1 ? 's' : ''} notifié${nb > 1 ? 's' : ''}, priorité dans le feed.`);
+      onMaj({ boostee_le: new Date().toISOString() });
+    } finally {
+      setBoosting(false);
+    }
+  };
+
+  const toggleGarantie = async () => {
+    setTogglingGarantie(true);
+    try {
+      const actif = !mission.garantie_remplacement;
+      const { data, error } = await supabase.rpc('fn_activer_garantie_mission' as any, { p_mission_id: mission.id, p_actif: actif });
+      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Modification impossible.'); return; }
+      toast.success(actif ? 'Garantie remplacement activée ✓' : 'Garantie remplacement désactivée.');
+      onMaj({ garantie_remplacement: actif });
+    } finally {
+      setTogglingGarantie(false);
+    }
+  };
+
+  return (
+    <div className="card-base space-y-3">
+      {/* Boost */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">🚀 Booster cette mission</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Notifie immédiatement les soignants compatibles dans le rayon et remonte la mission
+            en tête de leur feed pendant 7 jours. <span className="text-success font-medium">Inclus — offre de lancement.</span>
+          </p>
+        </div>
+        {mission.boostee_le ? (
+          <span className="badge-base bg-primary/10 text-primary text-xs shrink-0">Boostée ✓</span>
+        ) : mission.statut === 'OUVERTE' ? (
+          <BoutonY2K size="sm" onClick={booster} disabled={boosting} loading={boosting}>
+            Booster
+          </BoutonY2K>
+        ) : null}
+      </div>
+
+      {/* Garantie remplacement */}
+      {(mission.statut === 'OUVERTE' || mission.statut === 'ASSIGNEE') && (
+        <div className="flex items-center justify-between gap-3 pt-3 border-t border-border">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">🛡️ Garantie remplacement</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Sans pointage 30 min après le début, une mission de remplacement urgente est diffusée
+              automatiquement au pool de soignants disponibles (premier arrivé, premier servi).
+              Le soignant assigné doit aussi confirmer sa présence la veille.
+            </p>
+          </div>
+          <BoutonY2K
+            size="sm"
+            variant={mission.garantie_remplacement ? 'primary' : 'secondary'}
+            onClick={toggleGarantie}
+            disabled={togglingGarantie}
+            loading={togglingGarantie}
+          >
+            {mission.garantie_remplacement ? 'Activée ✓' : 'Activer'}
+          </BoutonY2K>
+        </div>
+      )}
+
+      {/* Présence confirmée */}
+      {mission.statut === 'ASSIGNEE' && mission.presence_confirmee_le && (
+        <p className="text-xs text-success pt-2 border-t border-border">
+          ✓ Présence confirmée par le soignant le {format(new Date(mission.presence_confirmee_le), 'dd/MM à HH:mm', { locale: fr })}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?: 'ADMIN_ETABLISSEMENT' | 'ADMIN_PLATEFORME' }) {
   usePageTitle('Détail mission');
   const { id } = useParams<{ id: string }>();
@@ -254,7 +338,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           heures_nuit, heures_dimanche, heures_ferie,
           montant_commission_ttc, commission_facturee,
           statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
-          mode_attribution,
+          mode_attribution, boostee_le, garantie_remplacement, presence_confirmee_le,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           cree_le, modifie_le,
           etablissements(nom, adresse_ville, adresse_departement,
@@ -504,6 +588,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {/* Alert pool urgence button */}
               {m.statut === 'OUVERTE' && m.est_urgente && (
                 <AlerterPoolUrgence missionId={m.id} mission={m} user={user} afficherNotification={afficherNotification} />
+              )}
+
+              {/* Boost + garantie remplacement */}
+              {(m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
+                <BoostEtGarantie mission={m} onMaj={(patch) => setMission((prev: any) => ({ ...prev, ...patch }))} />
               )}
 
 

@@ -93,7 +93,7 @@ export default function DetailMissionSoignant() {
           soignant_assigne_id, etablissement_id, cree_le, modifie_le,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           numero_note_honoraires,
-          mode_attribution
+          mode_attribution, boostee_le, presence_confirmee_le, garantie_remplacement, est_arret_maladie
         `).eq('id', id).single(),
         supabase.rpc('fn_mon_profil_soignant_complet' as any),
       ]);
@@ -616,6 +616,58 @@ export default function DetailMissionSoignant() {
                 <div className="bg-success/5 border border-success/20 rounded-xl p-3 mb-4 text-center">
                   <p className="text-sm font-semibold text-success">✅ Vous êtes assigné(e) à cette mission</p>
                 </div>
+
+                {/* Confirmation de présence (J-2 → début) : rassure l'établissement,
+                    alimente la garantie remplacement côté étab. */}
+                {mission.statut === 'ASSIGNEE'
+                  && new Date(mission.debut_le).getTime() - Date.now() < 48 * 3600000
+                  && new Date(mission.debut_le).getTime() > Date.now()
+                  && !(mission as any).presence_confirmee_le && (
+                  <div className="bg-warning/5 border border-warning/30 rounded-xl p-3 mb-4">
+                    <p className="text-sm font-semibold text-foreground">Confirmez votre présence</p>
+                    <p className="text-xs text-muted-foreground mt-1 mb-2">
+                      La mission démarre bientôt — confirmez en 1 clic pour rassurer l'établissement.
+                    </p>
+                    <button
+                      onClick={async () => {
+                        const { data, error } = await supabase.rpc('fn_confirmer_presence_mission' as any, { p_mission_id: mission.id });
+                        if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Confirmation impossible.'); return; }
+                        toast.success('Présence confirmée — l\'établissement est prévenu. ✓');
+                        setMission((prev: any) => ({ ...prev, presence_confirmee_le: new Date().toISOString() }));
+                      }}
+                      className="btn-primary w-full text-sm py-2.5"
+                    >
+                      ✓ Je confirme ma présence
+                    </button>
+                  </div>
+                )}
+                {mission.statut === 'ASSIGNEE' && (mission as any).presence_confirmee_le && (
+                  <div className="bg-success/5 border border-success/20 rounded-xl p-2.5 mb-4 text-center">
+                    <p className="text-xs text-success">✓ Présence confirmée — l'établissement est prévenu</p>
+                  </div>
+                )}
+
+                {/* Arrêt maladie : sans pénalité de score (justificatif sous 48h),
+                    étab prévenu, remplacement automatique si mission garantie. */}
+                {(mission.statut === 'ASSIGNEE' || mission.statut === 'EN_COURS') && !(mission as any).est_arret_maladie && (
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Déclarer un arrêt maladie sur cette mission ? L\'établissement sera prévenu immédiatement et vous devrez fournir un certificat médical sous 48h. Aucune pénalité de score avec justificatif.')) return;
+                      const { data, error } = await supabase.rpc('fn_declarer_arret_maladie' as any, { p_mission_id: mission.id });
+                      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Déclaration impossible.'); return; }
+                      toast.success('Arrêt maladie déclaré — pensez au certificat médical sous 48h. Bon rétablissement.');
+                      setMission((prev: any) => ({ ...prev, est_arret_maladie: true }));
+                    }}
+                    className="w-full text-xs text-muted-foreground hover:text-foreground underline mb-4"
+                  >
+                    🏥 Je dois me désister pour raison médicale (arrêt maladie)
+                  </button>
+                )}
+                {(mission as any).est_arret_maladie && (
+                  <div className="bg-warning/5 border border-warning/20 rounded-xl p-2.5 mb-4 text-center">
+                    <p className="text-xs text-warning">🏥 Arrêt maladie déclaré — certificat médical à fournir sous 48h</p>
+                  </div>
+                )}
 
                 {/* Sprint 5.5 PR 1 : statut rétractation Sprint 3.5 */}
                 {candidatureRec?.acceptee_a && (
