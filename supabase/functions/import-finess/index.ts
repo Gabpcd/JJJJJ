@@ -41,7 +41,10 @@ function mapType(libCateg: string, libAgr: string): string | null {
   if (s.includes("centre de santé") || s.includes("centre de sante") || s.includes("maison de santé") || s.includes("maison de sante")) return "CENTRE_SANTE";
   // Écoles de formation sanitaire (IFSI, IFAS, instituts paramédicaux) — cible
   // prospection étudiants : BDE, directions, affichage, partenariats stages.
-  if (s.includes("institut de formation") || s.includes("ifsi") || s.includes("ecole de formation") || s.includes("école de formation") || s.includes("formation en soins") || s.includes("formation d'aides-soignants") || s.includes("formation aides-soignants")) return "ECOLE_SANTE";
+  // Libellés FINESS réels (sondés) : « Ecoles Formant aux Professions Sanitaires »
+  // (agrégat « Etablissements de Formation des Personnels Sanitaires ») + polyvalentes.
+  // Les écoles purement sociales sont exclues.
+  if (s.includes("formant aux professions sanitaires") || s.includes("formation des personnels sanitaires") || s.includes("formation polyvalente")) return "ECOLE_SANTE";
   return null;
 }
 

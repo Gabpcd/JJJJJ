@@ -179,6 +179,62 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
   );
 }
 
+/* ── Rétrocession : le titulaire déclare les honoraires bruts encaissés pendant
+   le remplacement → rétrocession (%) et commission calculées automatiquement. ── */
+function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (patch: any) => void }) {
+  const [montant, setMontant] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+
+  if (mission.montant_honoraires_bruts != null) {
+    const retro = Math.round(mission.montant_honoraires_bruts * (mission.retrocession_pct ?? 50)) / 100 * 100 / 100;
+    return (
+      <div className="card-base border-success/30 bg-success/5">
+        <p className="text-sm font-semibold text-success">💶 Honoraires déclarés : {Number(mission.montant_honoraires_bruts).toLocaleString('fr-FR')} €</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Rétrocession au remplaçant ({mission.retrocession_pct}%) : <strong>{Number(mission.net_a_payer ?? retro).toLocaleString('fr-FR')} €</strong> —
+          réglez-le par virement puis déclarez le paiement ci-dessous.
+        </p>
+      </div>
+    );
+  }
+
+  const declarer = async () => {
+    const v = parseFloat(montant);
+    if (!v || v <= 0) { toast.error('Saisissez le montant des honoraires encaissés.'); return; }
+    setEnvoi(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_declarer_honoraires_retrocession' as any, {
+        p_mission_id: mission.id, p_montant_honoraires: v,
+      });
+      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Déclaration impossible.'); return; }
+      toast.success(`Rétrocession calculée : ${(data as any).montant_retrocede} € à verser au remplaçant. Le soignant est notifié.`);
+      onMaj({ montant_honoraires_bruts: v, net_a_payer: (data as any).montant_retrocede, total_brut: (data as any).montant_retrocede });
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  return (
+    <div className="card-base border-primary/30 bg-primary/5 space-y-2">
+      <p className="text-sm font-semibold text-foreground">💶 Déclarez les honoraires du remplacement</p>
+      <p className="text-xs text-muted-foreground">
+        Montant brut des actes encaissés pendant le remplacement (vos feuilles de soins).
+        La rétrocession ({mission.retrocession_pct ?? 50}%) et la commission Jolene seront calculées automatiquement.
+      </p>
+      <div className="flex gap-2">
+        <div className="relative flex-1 max-w-[220px]">
+          <input type="number" step="0.01" min="1" value={montant} onChange={(e) => setMontant(e.target.value)}
+            placeholder="Ex : 4 250" className="input-base pr-8" />
+          <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
+        </div>
+        <BoutonY2K size="sm" onClick={declarer} disabled={envoi || !montant} loading={envoi}>
+          Déclarer
+        </BoutonY2K>
+      </div>
+    </div>
+  );
+}
+
 /* ── Boost + Garantie remplacement (leviers de remplissage de la mission) ── */
 function BoostEtGarantie({ mission, onMaj }: { mission: any; onMaj: (patch: any) => void }) {
   const [boosting, setBoosting] = useState(false);
@@ -339,6 +395,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           montant_commission_ttc, commission_facturee,
           statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
           mode_attribution, boostee_le, garantie_remplacement, presence_confirmee_le,
+          mode_remuneration, retrocession_pct, montant_honoraires_bruts,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           cree_le, modifie_le,
           etablissements(nom, adresse_ville, adresse_departement,
@@ -593,6 +650,11 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
               {/* Boost + garantie remplacement */}
               {(m.statut === 'OUVERTE' || m.statut === 'ASSIGNEE') && (
                 <BoostEtGarantie mission={m} onMaj={(patch) => setMission((prev: any) => ({ ...prev, ...patch }))} />
+              )}
+
+              {/* Rétrocession : déclaration des honoraires encaissés en fin de mission */}
+              {m.statut === 'TERMINEE' && (m as any).mode_remuneration === 'RETROCESSION' && (
+                <DeclarationRetrocession mission={m} onMaj={(patch) => setMission((prev: any) => ({ ...prev, ...patch }))} />
               )}
 
 

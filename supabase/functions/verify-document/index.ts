@@ -162,6 +162,7 @@ Deno.serve(async (req) => {
       ATTESTATION_URSSAF: "Attestation URSSAF",
       AUTORISATION_EXERCICE: "Autorisation d'exercice",
       FORMATION_OBLIGATOIRE: "Certificat de formation obligatoire",
+      ARRET_MALADIE: "Avis d'arrêt de travail (certificat médical d'arrêt maladie, formulaire Cerfa Assurance Maladie)",
     };
 
     const typeLabel = typeLabels[doc.type_document] || doc.type_document;

@@ -677,8 +677,44 @@ export default function DetailMissionSoignant() {
                   </button>
                 )}
                 {(mission as any).est_arret_maladie && (
-                  <div className="bg-warning/5 border border-warning/20 rounded-xl p-2.5 mb-4 text-center">
-                    <p className="text-xs text-warning">🏥 Arrêt maladie déclaré — certificat médical à fournir sous 48h</p>
+                  <div className="bg-warning/5 border border-warning/20 rounded-xl p-3 mb-4 space-y-2">
+                    <p className="text-xs text-warning text-center">🏥 Arrêt maladie déclaré — certificat médical à fournir sous 48h</p>
+                    <label className="btn-primary w-full text-sm py-2.5 text-center cursor-pointer block">
+                      📎 Téléverser mon certificat (vérifié automatiquement)
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const fichier = e.target.files?.[0];
+                          if (!fichier || !user) return;
+                          const nomSanitise = fichier.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '-');
+                          const chemin = `${user.id}/documents/ARRET_MALADIE/${Date.now()}-${nomSanitise}`;
+                          const { error: upErr } = await supabase.storage.from('jolene-documents')
+                            .upload(chemin, fichier, { contentType: fichier.type || undefined, upsert: false });
+                          if (upErr) { toast.error('Téléversement impossible.'); return; }
+                          const { data: doc, error: insErr } = await supabase.from('documents_soignants').insert({
+                            soignant_id: user.id,
+                            type_document: 'ARRET_MALADIE' as any,
+                            libelle: `Arrêt maladie — mission ${mission.intitule}`.slice(0, 120),
+                            s3_bucket: 'jolene-documents', s3_cle: chemin,
+                            nom_fichier: fichier.name, type_mime: fichier.type, taille_octets: fichier.size,
+                            statut_verification: 'EN_ATTENTE',
+                          } as any).select().single();
+                          if (insErr || !doc) {
+                            await supabase.storage.from('jolene-documents').remove([chemin]);
+                            toast.error('Enregistrement impossible.');
+                            return;
+                          }
+                          toast.success('Certificat reçu — vérification automatique en cours.');
+                          supabase.functions.invoke('verify-document', { body: { document_id: (doc as any).id } })
+                            .then(({ data: v }) => {
+                              if ((v as any)?.verdict === 'VERIFIE') toast.success('✅ Certificat vérifié — arrêt justifié, aucun impact score.');
+                              else if ((v as any)?.verdict === 'REJETE') toast.error('❌ Certificat rejeté : ' + ((v as any)?.analysis?.motif_rejet || 'non conforme') + '. Re-téléversez un document lisible.');
+                            });
+                        }}
+                      />
+                    </label>
                   </div>
                 )}
 

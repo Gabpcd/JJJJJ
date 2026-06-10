@@ -4407,6 +4407,7 @@ export type Database = {
           montant_commission_ht: number | null
           montant_commission_ttc: number | null
           montant_commission_tva: number | null
+          montant_honoraires_bruts: number | null
           montant_icp: number | null
           montant_ifm: number | null
           montant_majoration_dimanche: number | null
@@ -4500,6 +4501,7 @@ export type Database = {
           montant_commission_ht?: number | null
           montant_commission_ttc?: number | null
           montant_commission_tva?: number | null
+          montant_honoraires_bruts?: number | null
           montant_icp?: number | null
           montant_ifm?: number | null
           montant_majoration_dimanche?: number | null
@@ -4593,6 +4595,7 @@ export type Database = {
           montant_commission_ht?: number | null
           montant_commission_ttc?: number | null
           montant_commission_tva?: number | null
+          montant_honoraires_bruts?: number | null
           montant_icp?: number | null
           montant_ifm?: number | null
           montant_majoration_dimanche?: number | null
@@ -8883,6 +8886,10 @@ export type Database = {
         Args: { p_heure_fin: string; p_mission_id: string; p_raison?: string }
         Returns: Json
       }
+      fn_declarer_honoraires_retrocession: {
+        Args: { p_mission_id: string; p_montant_honoraires: number }
+        Returns: Json
+      }
       fn_declarer_paiement_soignant: {
         Args: {
           p_attestation_sur_l_honneur?: boolean
@@ -10382,6 +10389,7 @@ export type Database = {
         | "ATTESTATION_CPAM"
         | "NOTE_HONORAIRES"
         | "ATTESTATION_3200H"
+        | "ARRET_MALADIE"
       type_document_facture: "FACTURE" | "AVOIR"
       type_etablissement:
         | "HOPITAL_PUBLIC"
@@ -10659,6 +10667,7 @@ export const Constants = {
         "ATTESTATION_CPAM",
         "NOTE_HONORAIRES",
         "ATTESTATION_3200H",
+        "ARRET_MALADIE",
       ],
       type_document_facture: ["FACTURE", "AVOIR"],
       type_etablissement: [
