@@ -1,7 +1,10 @@
-import { Ban, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Ban, AlertCircle, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Raisons {
   paiements_retard_nb?: number;
@@ -18,6 +21,23 @@ interface Props {
 
 export function BandeauBlocageAuto({ raisons, bloque_le }: Props) {
   const navigate = useNavigate();
+  const [verification, setVerification] = useState(false);
+
+  const reverifier = async () => {
+    setVerification(true);
+    try {
+      const { data, error } = await supabase.rpc('fn_reverifier_blocage_etab' as any);
+      if (error) { toast.error(error.message); return; }
+      if ((data as any)?.debloque) {
+        toast.success('Compte réactivé ! Vous pouvez à nouveau publier des missions.');
+        window.location.reload();
+      } else {
+        toast.info((data as any)?.message || 'Des obligations restent en retard.');
+      }
+    } finally {
+      setVerification(false);
+    }
+  };
 
   const paiementsNb = raisons?.paiements_retard_nb ?? 0;
   const paiementsMontant = raisons?.paiements_retard_montant ?? 0;
@@ -71,7 +91,8 @@ export function BandeauBlocageAuto({ raisons, bloque_le }: Props) {
           </div>
 
           <p className="text-xs text-muted-foreground mt-3">
-            Votre compte sera réactivé automatiquement dès régularisation de toutes vos obligations.
+            Une fois vos obligations régularisées, cliquez sur « J'ai régularisé » pour réactiver
+            votre compte immédiatement (sinon réactivation automatique sous 1 h).
           </p>
 
           <div className="flex flex-col sm:flex-row gap-2 mt-4">
@@ -91,6 +112,14 @@ export function BandeauBlocageAuto({ raisons, bloque_le }: Props) {
                 Payer factures commission
               </button>
             )}
+            <button
+              onClick={reverifier}
+              disabled={verification}
+              className="btn-secondary text-sm flex-1 inline-flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${verification ? 'animate-spin' : ''}`} />
+              {verification ? 'Vérification…' : 'J\'ai régularisé — réactiver'}
+            </button>
           </div>
         </div>
       </div>
