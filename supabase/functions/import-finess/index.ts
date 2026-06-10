@@ -39,6 +39,9 @@ function mapType(libCateg: string, libAgr: string): string | null {
   if (s.includes("handicap") || s.includes("enfance inadaptée") || s.includes("enfance inadaptee")) return "HANDICAP";
   if (s.includes("dialyse")) return "DIALYSE";
   if (s.includes("centre de santé") || s.includes("centre de sante") || s.includes("maison de santé") || s.includes("maison de sante")) return "CENTRE_SANTE";
+  // Écoles de formation sanitaire (IFSI, IFAS, instituts paramédicaux) — cible
+  // prospection étudiants : BDE, directions, affichage, partenariats stages.
+  if (s.includes("institut de formation") || s.includes("ifsi") || s.includes("ecole de formation") || s.includes("école de formation") || s.includes("formation en soins") || s.includes("formation d'aides-soignants") || s.includes("formation aides-soignants")) return "ECOLE_SANTE";
   return null;
 }
 

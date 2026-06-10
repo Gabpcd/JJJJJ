@@ -125,9 +125,10 @@ export function buildChorusHeaders(config: PisteConfig, token: string): Record<s
     Accept: 'application/json',
   };
   if (config.apiKey) headers['KeyId'] = config.apiKey;
-  if (config.techLogin && config.techPassword) {
-    headers['cpro-account'] = btoa(`${config.techLogin}:${config.techPassword}`);
-  }
+  // PAS de header cpro-account : en raccordement API de type
+  // UTILISATEUR_APPLICATION_INTERNE, l'application PISTE est liée à la structure
+  // et Chorus rejette (401) toute requête portant ce header. Diagnostic 10/06/2026 :
+  // Bearer seul → 400 fonctionnel (auth OK) ; avec cpro-account → 401.
   return headers;
 }
 

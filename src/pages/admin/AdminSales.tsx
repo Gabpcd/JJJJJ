@@ -730,6 +730,7 @@ const TYPES_PROSPECTION = [
   { v: 'CENTRE_SANTE', label: 'Centres / maisons de santé' },
   { v: 'LABO', label: "Laboratoires d'analyses" },
   { v: 'DIALYSE', label: 'Centres de dialyse' },
+  { v: 'ECOLE_SANTE', label: 'Écoles de santé (IFSI, IFAS…) — prospection étudiants' },
 ];
 
 function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
