@@ -144,6 +144,17 @@ export default function MesGains() {
 
       <BandeauPaiementDeclare />
 
+      {/* Parrainage au moment de la satisfaction (gains affichés) — levier viral */}
+      <button
+        onClick={() => { window.location.href = '/soignant/parrainage'; }}
+        className="w-full mb-6 rounded-2xl border border-jolene-rose-200/60 bg-gradient-soft p-4 text-left hover:shadow-md transition-shadow"
+      >
+        <p className="font-semibold text-foreground">🎁 Vous aimez Jolene ? Parrainez un collègue</p>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Une prime pour vous, une prime pour lui dès sa première mission terminée. Votre lien est prêt — partagez-le en 1 clic.
+        </p>
+      </button>
+
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <CarteKPIY2K

@@ -75,6 +75,46 @@ export default function AdminSales() {
 
   const [fFavorisGroupes, setFFavorisGroupes] = useState(false);
   const [voirArchives, setVoirArchives] = useState(false);
+  const [importCible, setImportCible] = useState<'GROUPES' | 'CONTACTS' | null>(null);
+
+  const importerCsv = async (texte: string) => {
+    const lignes = texte.split('\n').map(l => l.trim()).filter(Boolean);
+    let inseres = 0, ignores = 0;
+    if (importCible === 'GROUPES') {
+      const urlsExistantes = new Set(groupes.map(g => (g.url || '').replace(/\/$/, '')));
+      const rows = [];
+      for (const l of lignes) {
+        const [nom, url, profession, region] = l.split(';').map(x => (x || '').trim());
+        if (!nom) { ignores++; continue; }
+        if (url && urlsExistantes.has(url.replace(/\/$/, ''))) { ignores++; continue; }
+        rows.push({ nom, url: url || null, profession: profession || 'TOUTES', region: region || null,
+          plateforme: url?.includes('facebook') ? 'FACEBOOK' : url?.includes('instagram') ? 'INSTAGRAM' : url?.includes('tiktok') ? 'TIKTOK' : url?.includes('linkedin') ? 'LINKEDIN' : 'AUTRE',
+          audience: 'MIXTE', statut: 'A_VERIFIER' });
+      }
+      if (rows.length) {
+        const { error } = await supabase.from('sales_groupes' as any).insert(rows as any);
+        if (error) { toast.error(error.message); return; }
+        inseres = rows.length;
+      }
+    } else {
+      const rows = [];
+      for (const l of lignes) {
+        const [nom, telephone, email, ville, profession] = l.split(';').map(x => (x || '').trim());
+        if (!nom) { ignores++; continue; }
+        rows.push({ type: tab === 'soignants' ? 'SOIGNANT' : 'ETABLISSEMENT', nom,
+          telephone: telephone || null, email: email || null, ville: ville || null,
+          profession: profession || null, statut: 'PROSPECT' });
+      }
+      if (rows.length) {
+        const { error } = await supabase.from('sales_contacts' as any).insert(rows as any);
+        if (error) { toast.error(error.message); return; }
+        inseres = rows.length;
+      }
+    }
+    toast.success(`${inseres} ligne(s) importée(s)${ignores ? `, ${ignores} ignorée(s)` : ''}.`);
+    setImportCible(null);
+    charger();
+  };
 
   const charger = useCallback(async () => {
     setLoading(true);
@@ -239,6 +279,7 @@ export default function AdminSales() {
               </div>
               <BoutonY2K size="sm" variant={fFavorisGroupes ? 'primary' : 'secondary'} onClick={() => setFFavorisGroupes(!fFavorisGroupes)} iconeGauche={<Star className="h-4 w-4" />}>Favoris</BoutonY2K>
               <BoutonY2K size="sm" onClick={() => setEditGroupe({ plateforme: 'FACEBOOK', profession: 'TOUTES', audience: 'MIXTE', statut: 'A_VERIFIER' })} iconeGauche={<Plus className="h-4 w-4" />}>Ajouter</BoutonY2K>
+              <BoutonY2K size="sm" variant="ghost" onClick={() => setImportCible('GROUPES')} iconeGauche={<FileText className="h-4 w-4" />}>Importer CSV</BoutonY2K>
             </div>
 
             {groupesFiltres.length === 0 ? (
@@ -303,6 +344,7 @@ export default function AdminSales() {
             voirArchives={voirArchives}
             onToggleArchives={() => setVoirArchives(!voirArchives)}
             onAdd={() => setEditContact({ type: tab === 'soignants' ? 'SOIGNANT' : 'ETABLISSEMENT', statut: 'PROSPECT' })}
+            onImport={() => setImportCible('CONTACTS')}
             onEdit={c => setEditContact({ ...c })}
             onStatut={majStatutContact}
             onFavori={toggleFavoriContact}
@@ -337,6 +379,15 @@ export default function AdminSales() {
           </div>
         )}
       </div>
+
+      {/* ── Import CSV ── */}
+      {importCible && (
+        <ImportCsvModal
+          cible={importCible}
+          onClose={() => setImportCible(null)}
+          onImport={importerCsv}
+        />
+      )}
 
       {/* ── Formulaire groupe ── */}
       {editGroupe && (
@@ -415,12 +466,13 @@ export default function AdminSales() {
   );
 }
 /* ── Sous-composant liste contacts ── */
-function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, onEdit, onStatut, onFavori, onArchive }: {
+function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, onImport, onEdit, onStatut, onFavori, onArchive }: {
   type: 'SOIGNANT' | 'ETABLISSEMENT';
   contacts: any[];
   voirArchives: boolean;
   onToggleArchives: () => void;
   onAdd: () => void;
+  onImport: () => void;
   onEdit: (c: any) => void;
   onStatut: (id: string, s: string) => void;
   onFavori: (c: any) => void;
@@ -432,6 +484,7 @@ function ListeContacts({ type, contacts, voirArchives, onToggleArchives, onAdd, 
         <BoutonY2K size="sm" variant={voirArchives ? 'primary' : 'secondary'} onClick={onToggleArchives} iconeGauche={<Archive className="h-4 w-4" />}>
           {voirArchives ? 'Masquer les archivés' : 'Voir les archivés'}
         </BoutonY2K>
+        <BoutonY2K size="sm" variant="ghost" onClick={onImport} iconeGauche={<FileText className="h-4 w-4" />}>Importer CSV</BoutonY2K>
         <BoutonY2K size="sm" onClick={onAdd} iconeGauche={<Plus className="h-4 w-4" />}>
           Ajouter {type === 'SOIGNANT' ? 'un soignant' : 'un établissement'}
         </BoutonY2K>
@@ -782,6 +835,45 @@ function OutreachModal({ prospect, onClose }: { prospect: any; onClose: () => vo
         <div className="flex gap-2 pt-1">
           <BoutonY2K onClick={envoyer} disabled={envoi} iconeGauche={<Send className="h-4 w-4" />} className="flex-1">
             {envoi ? 'Envoi…' : 'Envoyer'}
+          </BoutonY2K>
+          <BoutonY2K variant="secondary" onClick={onClose}>Annuler</BoutonY2K>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Modal d'import CSV en masse (groupes ou contacts) ── */
+function ImportCsvModal({ cible, onClose, onImport }: {
+  cible: 'GROUPES' | 'CONTACTS';
+  onClose: () => void;
+  onImport: (texte: string) => Promise<void>;
+}) {
+  const [texte, setTexte] = useState('');
+  const [encours, setEncours] = useState(false);
+  const format = cible === 'GROUPES'
+    ? 'nom;url;profession;region'
+    : 'nom;telephone;email;ville;profession';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-card w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-foreground">Importer en masse ({cible === 'GROUPES' ? 'groupes' : 'contacts'})</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Une ligne par entrée, colonnes séparées par <code>;</code> — format : <code>{format}</code>.
+          Collez directement depuis Excel/Numbers (export CSV point-virgule).
+        </p>
+        <Textarea value={texte} onChange={e => setTexte(e.target.value)} rows={10}
+          placeholder={cible === 'GROUPES'
+            ? "IDEL Bretagne;https://facebook.com/groups/xxx;IDE;Bretagne"
+            : "EHPAD Les Lilas;0145678900;contact@leslilas.fr;Paris;"} />
+        <div className="flex gap-2">
+          <BoutonY2K disabled={encours || !texte.trim()} className="flex-1"
+            onClick={async () => { setEncours(true); await onImport(texte); setEncours(false); }}>
+            {encours ? 'Import…' : 'Importer'}
           </BoutonY2K>
           <BoutonY2K variant="secondary" onClick={onClose}>Annuler</BoutonY2K>
         </div>
