@@ -225,6 +225,15 @@ export function ListeCandidatures({ missionId, missionProfession, missionSpecial
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.soignant.bio}</p>
                   )}
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    {c.soignant?.tous_documents_valides ? (
+                      <span className="badge-base text-[10px] bg-success/10 text-success" title="CNI, diplôme et justificatifs vérifiés">
+                        ✅ Documents validés
+                      </span>
+                    ) : (
+                      <span className="badge-base text-[10px] bg-warning/10 text-warning" title="Le soignant a été notifié — la vérification automatique prend quelques minutes après téléversement. L'acceptation sera possible dès validation si la mission démarre sous 7 jours.">
+                        📄 Documents en vérification
+                      </span>
+                    )}
                     {c.soignant?.score_fiabilite != null && c.soignant?.total_missions_terminees >= 3 ? (
                       <span className={`badge-base text-[10px] ${scoreBadge(c.soignant.score_fiabilite)} inline-flex items-center gap-1`}>
                         ⭐ {c.soignant.score_fiabilite}/100

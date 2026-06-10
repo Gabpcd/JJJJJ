@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { FileText, Banknote } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Option {
   value: string;
@@ -14,10 +15,27 @@ interface Props {
   onChoose: (value: string) => void;
   onClose: () => void;
   loading?: boolean;
+  /** Affiche "Se souvenir de mon choix" — enregistre soignants.preference_contrat_mixte
+   *  (le backend l'applique ensuite automatiquement : plus de dialog). */
+  proposerMemorisation?: boolean;
 }
 
-export function ChoixContratDialog({ open, options, onChoose, onClose, loading }: Props) {
+export function ChoixContratDialog({ open, options, onChoose, onClose, loading, proposerMemorisation }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [memoriser, setMemoriser] = useState(true);
+
+  const confirmer = async () => {
+    if (!selected) return;
+    if (proposerMemorisation && memoriser) {
+      const { data: auth } = await supabase.auth.getUser();
+      if (auth.user) {
+        await supabase.from('soignants')
+          .update({ preference_contrat_mixte: selected } as any)
+          .eq('id', auth.user.id);
+      }
+    }
+    onChoose(selected);
+  };
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -50,9 +68,20 @@ export function ChoixContratDialog({ open, options, onChoose, onClose, loading }
             </button>
           ))}
         </div>
+        {proposerMemorisation && (
+          <label className="flex items-center gap-2 mt-3 text-sm text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={memoriser}
+              onChange={e => setMemoriser(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            Se souvenir de mon choix (modifiable dans mon profil)
+          </label>
+        )}
         <div className="flex justify-end gap-2 mt-4">
           <BoutonY2K variant="secondary" onClick={onClose} disabled={loading}>Annuler</BoutonY2K>
-          <BoutonY2K onClick={() => selected && onChoose(selected)} disabled={!selected || loading} loading={loading}>
+          <BoutonY2K onClick={confirmer} disabled={!selected || loading} loading={loading}>
             {loading ? 'Envoi…' : 'Confirmer'}
           </BoutonY2K>
         </div>

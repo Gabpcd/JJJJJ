@@ -10,28 +10,25 @@ interface BlocagePostulationProps {
 
 const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
 
-export function BlocagePostulation({ completionProfil, documentsValides, premiereMissionLe, missionDebutLe }: BlocagePostulationProps) {
+/**
+ * Soft-gating documents (Lot 1 launch blockers) : la candidature est toujours
+ * possible — seule l'ACCEPTATION par l'établissement exige les documents validés
+ * pour les missions démarrant sous 7 jours. Ce composant informe, il ne bloque plus.
+ */
+export function BlocagePostulation({ completionProfil, documentsValides, missionDebutLe }: BlocagePostulationProps) {
   const navigate = useNavigate();
 
-  const enPeriodeGrace = !premiereMissionLe || (new Date(premiereMissionLe).getTime() + SEPT_JOURS_MS > Date.now());
-  const missionLaisseLeTempsDeCompleter = !!missionDebutLe && (new Date(missionDebutLe).getTime() - Date.now() > SEPT_JOURS_MS);
-  const docsOk = documentsValides || enPeriodeGrace || missionLaisseLeTempsDeCompleter;
+  const missionSous7Jours = !!missionDebutLe && (new Date(missionDebutLe).getTime() - Date.now() < SEPT_JOURS_MS);
 
-  if (completionProfil >= 100 && docsOk) {
+  if (completionProfil >= 100 && documentsValides) {
     return (
       <div className="space-y-2 mb-4">
         <div className="flex items-center gap-2 text-sm text-success">
           <CheckCircle className="h-4 w-4" /> Votre profil est complet
         </div>
-        {documentsValides ? (
-          <div className="flex items-center gap-2 text-sm text-success">
-            <CheckCircle className="h-4 w-4" /> Vos documents sont à jour
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-sm text-warning">
-            <Clock className="h-4 w-4" /> Documents à compléter avant le début de mission
-          </div>
-        )}
+        <div className="flex items-center gap-2 text-sm text-success">
+          <CheckCircle className="h-4 w-4" /> Vos documents sont à jour
+        </div>
       </div>
     );
   }
@@ -45,7 +42,7 @@ export function BlocagePostulation({ completionProfil, documentsValides, premier
             <div>
               <p className="text-sm font-semibold text-foreground">Profil incomplet ({completionProfil}%)</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Vous devez compléter vos informations essentielles avant de pouvoir postuler à une mission.
+                Complétez vos informations essentielles (identité, téléphone, adresse) pour pouvoir postuler.
               </p>
               <button onClick={() => navigate('/soignant/profil')} className="text-xs text-primary font-medium mt-2 hover:underline">
                 Compléter mon profil →
@@ -54,20 +51,29 @@ export function BlocagePostulation({ completionProfil, documentsValides, premier
           </div>
         </div>
       )}
-      {!docsOk && (
-        <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-4">
+      {!documentsValides && (
+        <div className="bg-warning/5 border border-warning/20 rounded-xl p-4">
           <div className="flex items-start gap-3">
-            <FileText className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <FileText className="h-5 w-5 text-warning shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-foreground">Documents manquants ou expirés</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Vos documents doivent être à jour, sauf pendant les 7 jours de grâce ou si la mission débute dans plus de 7 jours.
+              <p className="text-sm font-semibold text-foreground">
+                Documents en cours — vous pouvez postuler dès maintenant
               </p>
-              <button onClick={() => navigate('/soignant/documents')} className="text-xs text-primary font-medium mt-2 hover:underline">
-                Gérer mes documents →
+              <p className="text-xs text-muted-foreground mt-1">
+                {missionSous7Jours
+                  ? 'Cette mission démarre bientôt : l\'établissement ne pourra vous accepter qu\'une fois vos documents validés (vérification automatique en quelques minutes). Prenez 2 minutes maintenant.'
+                  : 'Votre candidature partira normalement. Validez vos documents pour pouvoir être accepté (vérification automatique en quelques minutes).'}
+              </p>
+              <button onClick={() => navigate('/soignant/mes-documents')} className="text-xs text-primary font-medium mt-2 hover:underline">
+                Valider mes documents →
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {!documentsValides && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Clock className="h-3.5 w-3.5" /> Les profils complets sont acceptés en priorité par les établissements.
         </div>
       )}
     </div>

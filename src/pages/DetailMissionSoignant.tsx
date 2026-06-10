@@ -20,7 +20,6 @@ import { BlocagePostulation } from '@/components/BlocagePostulation';
 import { ChatMission } from '@/components/ChatMission';
 import { ChatConversation } from '@/components/ChatConversation';
 import { BlocConformite } from '@/components/BlocConformite';
-import { BandeauGraceDocuments } from '@/components/BandeauGraceDocuments';
 import { BoutonExclusion } from '@/components/BoutonExclusion';
 import { SignalerUtilisateur } from '@/components/SignalerUtilisateur';
 import { CompteurHebdomadaire } from '@/components/CompteurHebdomadaire';
@@ -172,13 +171,9 @@ export default function DetailMissionSoignant() {
   const resumeCompletion = calculerCompletionProfil(soignant as any);
   const completionProfil = resumeCompletion.pourcentage;
   const premiereMissionLe = (soignant as any).premiere_mission_le;
-  const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
-  const enPeriodeGrace = !premiereMissionLe ||
-    (new Date(premiereMissionLe).getTime() + SEPT_JOURS_MS > Date.now());
-  const missionLaisseLeTemps = mission.debut_le &&
-    (new Date(mission.debut_le).getTime() - Date.now() > SEPT_JOURS_MS);
-  const docsOk = soignant.tous_documents_valides || enPeriodeGrace || missionLaisseLeTemps;
-  const peutPostuler = resumeCompletion.peut_candidater && docsOk;
+  // Soft-gating documents : la candidature est toujours possible — le contrôle
+  // documents n'intervient qu'à l'acceptation (missions < 7 jours, côté backend).
+  const peutPostuler = resumeCompletion.peut_candidater;
   const estAssigne = mission.soignant_assigne_id === user!.id;
   const estOuverte = mission.statut === 'OUVERTE';
   const estTerminee = mission.statut === 'TERMINEE';
@@ -201,7 +196,14 @@ export default function DetailMissionSoignant() {
       }
       if (data?.error) { toast.error(data.error); return; }
       setCandidatureEnvoyee(true);
-      toast.success('Candidature envoyée ! L\'établissement examinera votre profil.');
+      if (data?.docs_a_completer) {
+        toast.success('Candidature envoyée ! Validez vos documents pour pouvoir être accepté.', {
+          action: { label: 'Mes documents', onClick: () => navigate('/soignant/mes-documents') },
+          duration: 8000,
+        });
+      } else {
+        toast.success('Candidature envoyée ! L\'établissement examinera votre profil.');
+      }
     } catch (err: any) {
       capturerErreurSentry(err, 'DetailMissionSoignant', 'candidature');
       toast.error(extraireMessageErreur(err));
@@ -341,14 +343,6 @@ export default function DetailMissionSoignant() {
       <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary mb-4 hover:underline">
         <ArrowLeft className="h-4 w-4" /> Retour
       </button>
-
-      {/* Bandeau grâce documents */}
-      {enPeriodeGrace && (
-        <BandeauGraceDocuments
-          premiereMissionLe={premiereMissionLe}
-          tousDocumentsValides={soignant.tous_documents_valides}
-        />
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Col 1 — Infos */}
@@ -786,6 +780,7 @@ export default function DetailMissionSoignant() {
           else accepterMission(val);
         }}
         loading={postulationEnCours || acceptationEnCours}
+        proposerMemorisation
       />
 
     </LayoutApp>
