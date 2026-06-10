@@ -146,7 +146,7 @@ export const CarteMissionSoignant = React.memo(function CarteMissionSoignant({ m
         {profilComplet ? (
           <span className="badge-base bg-success/10 text-success text-[10px]">✅ Compatible</span>
         ) : soignant && !soignant.tous_documents_valides ? (
-          <span className="badge-base bg-destructive/10 text-destructive text-[10px]">📄 Documents manquants</span>
+          <span className="badge-base bg-warning/10 text-warning text-[10px]">📄 Documents à valider</span>
         ) : (
           <span className="badge-base bg-warning/10 text-warning text-[10px]">⚠️ Profil incomplet</span>
         )}
