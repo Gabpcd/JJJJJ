@@ -58,7 +58,7 @@ function lienWhatsApp(tel: string): string {
 export default function AdminSales() {
   usePageTitle('Sales / Sourcing');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'etab_jolene' | 'templates'>('groupes');
+  const [tab, setTab] = useState<'groupes' | 'soignants' | 'etablissements' | 'prospection' | 'etab_jolene' | 'templates' | 'posts'>('groupes');
 
   const [groupes, setGroupes] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
@@ -249,6 +249,7 @@ export default function AdminSales() {
           <BoutonY2K variant={tab === 'prospection' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('prospection')} iconeGauche={<Search className="h-4 w-4" />}>Prospection</BoutonY2K>
           <BoutonY2K variant={tab === 'etab_jolene' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('etab_jolene')} iconeGauche={<Building2 className="h-4 w-4" />}>Étab. Jolene</BoutonY2K>
           <BoutonY2K variant={tab === 'templates' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('templates')} iconeGauche={<FileText className="h-4 w-4" />}>Templates ({templates.length})</BoutonY2K>
+          <BoutonY2K variant={tab === 'posts' ? 'primary' : 'secondary'} size="sm" onClick={() => setTab('posts')} iconeGauche={<Send className="h-4 w-4" />}>Posts de la semaine</BoutonY2K>
         </div>
 
         {/* ── GROUPES ── */}
@@ -378,6 +379,9 @@ export default function AdminSales() {
             ))}
           </div>
         )}
+
+        {/* ── POSTS DE LA SEMAINE (générés depuis les missions réelles) ── */}
+        {tab === 'posts' && <PostsGenerateur />}
       </div>
 
       {/* ── Import CSV ── */}
@@ -878,6 +882,115 @@ function ImportCsvModal({ cible, onClose, onImport }: {
           <BoutonY2K variant="secondary" onClick={onClose}>Annuler</BoutonY2K>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Posts de la semaine : textes prêts-à-coller générés depuis les missions réelles ── */
+function PostsGenerateur() {
+  const [stats, setStats] = useState<any[]>([]);
+  const [chargement, setChargement] = useState(true);
+  const [lienAvis, setLienAvis] = useState('');
+  const [lienAvisSauve, setLienAvisSauve] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [r, cfg] = await Promise.all([
+        supabase.rpc('fn_admin_generer_posts' as any),
+        supabase.from('growth_config' as any).select('valeur').eq('cle', 'lien_avis_google').maybeSingle(),
+      ]);
+      if (r.error) toast.error(r.error.message);
+      setStats((r.data as any[]) || []);
+      setLienAvis(((cfg.data as any)?.valeur || '') as string);
+      setChargement(false);
+    })();
+  }, []);
+
+  const copier = (txt: string) => {
+    navigator.clipboard.writeText(txt);
+    toast.success('Post copié — collez-le dans le groupe.');
+  };
+
+  const sauverLienAvis = async () => {
+    const { error } = await supabase.from('growth_config' as any)
+      .update({ valeur: lienAvis.trim(), maj_le: new Date().toISOString() } as any)
+      .eq('cle', 'lien_avis_google');
+    if (error) { toast.error(error.message); return; }
+    setLienAvisSauve(true);
+    toast.success('Lien avis Google enregistré — il sera inclus dans les emails post-mission.');
+    setTimeout(() => setLienAvisSauve(false), 2000);
+  };
+
+  const utm = 'utm_source=social&utm_medium=organic&utm_campaign=post-hebdo';
+  const buildPost = (s: any) => {
+    const label = getLabelProfession(s.profession) || s.profession;
+    const taux = s.taux_max ? ` jusqu'à ${Number(s.taux_max).toFixed(0)} €/h` : '';
+    const villes = s.villes ? ` (${s.villes})` : '';
+    return `🩺 ${s.nb} mission${s.nb > 1 ? 's' : ''} ${label} disponible${s.nb > 1 ? 's' : ''} cette semaine${villes}${taux}.\n\nÉtablissements vérifiés, paiement garanti, inscription gratuite.\n👉 https://jolene.app/soignant/recherche-missions?${utm}\n\n#emploi #soignant #${(s.profession || '').toLowerCase()}`;
+  };
+  const totalMissions = stats.reduce((acc, s) => acc + Number(s.nb || 0), 0);
+  const postGlobal = `🩺 ${totalMissions} mission${totalMissions > 1 ? 's' : ''} médicales et paramédicales ouvertes cette semaine sur Jolene.\n\nInfirmiers, aides-soignants, kinés, pharmaciens… des établissements vérifiés recrutent près de chez vous. Paiement garanti, 0 frais pour les soignants.\n👉 https://jolene.app?${utm}\n\n#emploi #santé #soignants`;
+
+  if (chargement) return <ChargementPage />;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Textes générés depuis les missions réellement ouvertes — copiez-les dans vos groupes Facebook/WhatsApp/LinkedIn
+        (onglet Groupes). Les liens sont tracés (utm_campaign=post-hebdo) : l'impact est visible dans Acquisition.
+      </p>
+
+      {/* Config lien avis Google (utilisé par l'email post-mission automatique) */}
+      <CardY2K hoverLift={false}>
+        <CardY2KContent>
+          <p className="font-semibold text-foreground text-sm mb-1">Lien avis Google</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            Collez ici le lien "Demander des avis" de votre fiche Google Business. Tant qu'il est vide, l'email
+            automatique post-mission n'envoie que le nudge parrainage.
+          </p>
+          <div className="flex gap-2">
+            <Input value={lienAvis} onChange={e => setLienAvis(e.target.value)} placeholder="https://g.page/r/…/review" className="h-9" />
+            <BoutonY2K size="sm" onClick={sauverLienAvis} iconeGauche={<Save className="h-4 w-4" />}>
+              {lienAvisSauve ? 'Enregistré ✓' : 'Enregistrer'}
+            </BoutonY2K>
+          </div>
+        </CardY2KContent>
+      </CardY2K>
+
+      {totalMissions === 0 ? (
+        <CardY2K hoverLift={false}>
+          <CardY2KContent>
+            <p className="text-sm text-muted-foreground text-center py-6">
+              Aucune mission ouverte en ce moment — les posts se généreront automatiquement dès qu'un établissement publie.
+            </p>
+          </CardY2KContent>
+        </CardY2K>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <CardY2K hoverLift={false}>
+            <CardY2KContent>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="font-semibold text-foreground">Post global (toutes professions)</span>
+                <BadgeY2K variant="premium">{totalMissions} missions</BadgeY2K>
+              </div>
+              <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans bg-muted/40 rounded-lg p-3">{postGlobal}</pre>
+              <BoutonY2K size="sm" className="mt-2" onClick={() => copier(postGlobal)} iconeGauche={<Copy className="h-4 w-4" />}>Copier</BoutonY2K>
+            </CardY2KContent>
+          </CardY2K>
+          {stats.map(s => (
+            <CardY2K key={s.profession} hoverLift={false}>
+              <CardY2KContent>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="font-semibold text-foreground">{getLabelProfession(s.profession) || s.profession}</span>
+                  <BadgeY2K variant="info">{s.nb} mission{Number(s.nb) > 1 ? 's' : ''}</BadgeY2K>
+                </div>
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans bg-muted/40 rounded-lg p-3">{buildPost(s)}</pre>
+                <BoutonY2K size="sm" className="mt-2" onClick={() => copier(buildPost(s))} iconeGauche={<Copy className="h-4 w-4" />}>Copier</BoutonY2K>
+              </CardY2KContent>
+            </CardY2K>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

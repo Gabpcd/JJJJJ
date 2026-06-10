@@ -30,10 +30,10 @@ dense convertit mieux et crée le bouche-à-oreille.
 
 ## 3. Leviers — état d'avancement
 
-1. **SEO programmatique** ✅ livré : `/emploi-soignant/[ville]` (9 villes) et
-   `/metier/[profession]` (8 métiers) routées + section « missions réelles en
-   direct » (RPC publique) + CTA UTM `seo-ville-*` / `seo-metier-*`. Le sitemap
-   les référençait déjà → Google va indexer.
+1. **SEO programmatique** ✅ livré : `/emploi-soignant/[ville]` (**100 villes**) et
+   `/metier/[profession]` (**15 métiers**) routées + section « missions réelles en
+   direct » (RPC publique) + CTA UTM `seo-ville-*` / `seo-metier-*`. Sitemap
+   régénéré (138 URLs, slugs `ibode`/`iade` corrigés).
 2. **Boucle de réactivation** ✅ livré : cron hebdo (lundi 10h) → edge
    `relance-inactifs` → email Resend aux inscrits >3j sans candidature
    (max 1 relance/14j, journal `relances_soignants`, UTM `reactivation`).
@@ -43,6 +43,26 @@ dense convertit mieux et crée le bouche-à-oreille.
    Mes Gains → /soignant/parrainage (prime cash existante).
 5. **Intégrations établissements** (export planning/paie) : à construire.
 6. **Partenariats écoles IFSI/IFAS** : playbook manuel ci-dessous.
+7. **Google for Jobs** ✅ livré : page publique `/mission/:id` (JSON-LD
+   `JobPosting` : titre, lieu, salaire horaire EUR, dates, employeur) via RPC anon
+   `fn_mission_publique` + sitemap dynamique edge `sitemap-missions`
+   (missions OUVERTES, max 2000) référencé dans `robots.txt`. Chaque mission
+   publiée devient une annonce indexable gratuitement par Google — CTA inscription
+   UTM `google-jobs`.
+8. **Générateur de posts hebdo** ✅ livré : onglet « Posts de la semaine » dans
+   Admin → Sales (RPC `fn_admin_generer_posts`) — textes prêts-à-coller par
+   profession (nb missions réelles, taux max, villes) + post global, UTM
+   `post-hebdo`, bouton copier. À coller dans les groupes de l'onglet Groupes.
+9. **Digest hebdo soignants** ✅ livré : cron jeudi 9h UTC → edge `digest-hebdo`
+   → email Resend à chaque soignant dont la profession a ≥1 mission ouverte
+   (nb + meilleur taux, UTM `digest-hebdo`, max 500/run). Crée l'habitude de
+   revenir = rétention.
+10. **Avis Google + parrainage post-mission** ✅ livré : cron quotidien 11h UTC
+    → edge `avis-parrainage` → après chaque mission TERMINEE, email de merci au
+    soignant avec lien avis Google (configurable dans l'onglet Posts —
+    `growth_config.lien_avis_google`, bloc omis tant que vide) + son code
+    parrainage (UTM `parrainage-post-mission`). Dédupliqué par mission
+    (`emails_post_mission`).
 
 ### Playbook IFSI/IFAS (manuel, 0 dev)
 - Cible : 10 IFSI/IFAS du département de densification (annuaire ARS public).

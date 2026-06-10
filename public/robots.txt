@@ -24,4 +24,5 @@ Disallow: /groupe/
 Disallow: /auth/
 
 Sitemap: https://jolene.app/sitemap.xml
+Sitemap: https://flripxtsyegjshnhzjkz.supabase.co/functions/v1/sitemap-missions
 Host: https://jolene.app

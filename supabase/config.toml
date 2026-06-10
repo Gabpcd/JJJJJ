@@ -172,3 +172,12 @@ verify_jwt = false
 
 [functions.swan-webhook]
 verify_jwt = false
+
+[functions.sitemap-missions]
+verify_jwt = false
+
+[functions.digest-hebdo]
+verify_jwt = false
+
+[functions.avis-parrainage]
+verify_jwt = false
