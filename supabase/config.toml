@@ -187,3 +187,6 @@ verify_jwt = false
 
 [functions.sales-outreach-batch]
 verify_jwt = false
+
+[functions.enrich-prospects-annuaire]
+verify_jwt = false
