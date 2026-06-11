@@ -15,7 +15,8 @@ const TabsList = React.forwardRef<
       // min-h-10 (not h-10) so TabsList with wrapping grid layouts
       // (e.g. grid grid-cols-2 sm:grid-cols-4 on mobile) can grow to 2 rows
       // instead of overflowing into the content below.
-      "inline-flex min-h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      // Session B : habillage Y2K (fond lavande, coins arrondis 2xl, liseré rose)
+      "inline-flex min-h-10 items-center justify-center rounded-2xl bg-jolene-cloud dark:bg-muted border border-jolene-rose-200/60 dark:border-border p-1 text-muted-foreground",
       className,
     )}
     {...props}
@@ -30,7 +31,10 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+      // Onglet actif : gradient rose→mauve Y2K + texte blanc (au lieu du blanc/gris
+      // shadcn). Valeur arbitraire : .bg-gradient-hero (index.css hors @layer) ne
+      // génère pas de variante data-[state=active].
+      "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-medium ring-offset-background transition-all data-[state=active]:bg-[linear-gradient(135deg,hsl(var(--jolene-rose-500)),hsl(var(--jolene-mauve-500)))] data-[state=active]:text-white data-[state=active]:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
       className,
     )}
     {...props}
