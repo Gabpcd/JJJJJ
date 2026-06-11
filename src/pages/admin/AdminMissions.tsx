@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { ExternalLink, Clock, CheckCircle, PlayCircle, Send, ClipboardList, UserX } from 'lucide-react';
+import { ExternalLink, Clock, CheckCircle, CheckCircle2, ChevronDown, History, PlayCircle, Send, ClipboardList, UserX } from 'lucide-react';
 
 type FiltreStatut = 'TOUTES' | 'OUVERTE' | 'ASSIGNEE' | 'EN_COURS' | 'TERMINEE';
 
@@ -22,6 +22,16 @@ const FILTRES: { cle: FiltreStatut; label: string; icone: React.ElementType; cou
   { cle: 'EN_COURS', label: 'En cours', icone: PlayCircle, couleur: 'bg-primary/10 text-primary' },
   { cle: 'TERMINEE', label: 'Terminées', icone: CheckCircle, couleur: 'bg-success/10 text-success' },
 ];
+
+const STATUT_LABEL: Record<string, string> = {
+  OUVERTE: 'Ouverte',
+  ASSIGNEE: 'Assignée',
+  EN_COURS: 'En cours',
+  TERMINEE: 'Terminée',
+  ANNULEE: 'Annulée',
+};
+
+const SELECT_MISSIONS = 'id, intitule, statut, debut_le, fin_le, duree_heures, profession_requise, taux_horaire_base, net_estime, est_asap, est_urgente, soignant_assigne_id, etablissement_id, etablissements(nom), soignants(prenom, nom)';
 
 const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const formatHeure = (d: string) => d ? new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -35,8 +45,34 @@ function statutBadge(statut: string) {
     TERMINEE: 'success',
     ANNULEE: 'error',
   };
-  return <BadgeY2K variant={map[statut] ?? 'info'} size="sm">{statut}</BadgeY2K>;
+  return <BadgeY2K variant={map[statut] ?? 'info'} size="sm">{STATUT_LABEL[statut] ?? statut}</BadgeY2K>;
 }
+
+function urgenceBadge(m: any) {
+  if (m.est_asap) return <BadgeY2K variant="error" size="sm">ASAP</BadgeY2K>;
+  if (m.est_urgente) return <BadgeY2K variant="warning" size="sm">Urgente</BadgeY2K>;
+  return null;
+}
+
+const COLONNES_HISTORIQUE: ColonneTableau<any>[] = [
+  { cle: 'mission', titre: 'Mission' },
+  { cle: 'etab', titre: 'Établissement' },
+  { cle: 'soignant', titre: 'Soignant' },
+  { cle: 'statut', titre: 'Statut' },
+  { cle: 'debut', titre: 'Début' },
+  { cle: 'duree', titre: 'Durée' },
+  { cle: 'taux', titre: 'Taux horaire' },
+  { cle: 'actions', titre: '', align: 'right' as const },
+];
+
+// Pas de colonnes Soignant/Statut/Actions : toutes ces missions sont ouvertes et non assignées.
+const COLONNES_A_TRAITER: ColonneTableau<any>[] = [
+  { cle: 'mission', titre: 'Mission' },
+  { cle: 'etab', titre: 'Établissement' },
+  { cle: 'debut', titre: 'Début' },
+  { cle: 'duree', titre: 'Durée' },
+  { cle: 'taux', titre: 'Taux horaire' },
+];
 
 export default function AdminMissions() {
   usePageTitle('Missions');
@@ -47,8 +83,15 @@ export default function AdminMissions() {
   const groupeParam = searchParams.get('groupe') || null;
   const [filtre, setFiltre] = useState<FiltreStatut>(FILTRES.some(f => f.cle === filtreParam) ? filtreParam : 'TOUTES');
   const [missions, setMissions] = useState<any[]>([]);
+  const [aTraiter, setATraiter] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rechargement, setRechargement] = useState(0);
   const [groupeNom, setGroupeNom] = useState<string | null>(null);
+  // Historique replié par défaut (file de travail Session D), mais déplié d'emblée
+  // si la page est ouverte via un lien profond (?filtre=/?statut= ou ?groupe=).
+  const [historiqueOuvert, setHistoriqueOuvert] = useState<boolean>(
+    () => (FILTRES.some(f => f.cle === filtreParam) && filtreParam !== 'TOUTES') || !!groupeParam
+  );
 
   // Task 6 — marquer absence sans prévenir
   const [absenceMissionId, setAbsenceMissionId] = useState<string | null>(null);
@@ -74,33 +117,56 @@ export default function AdminMissions() {
           .select('id')
           .eq('groupe_sante_id', groupeParam);
         etabIds = (etabs || []).map((e: any) => e.id);
+
+        if (!etabIds || etabIds.length === 0) {
+          // Groupe sans établissements → aucune mission
+          setATraiter([]);
+          setMissions([]);
+          setLoading(false);
+          return;
+        }
       }
 
-      let query = supabase
+      // File « À traiter » : missions ouvertes sans soignant assigné,
+      // indépendante du filtre de l'historique.
+      let queryATraiter = supabase
         .from('missions')
-        .select('id, intitule, statut, debut_le, fin_le, duree_heures, profession_requise, taux_horaire_base, net_estime, soignant_assigne_id, etablissement_id, etablissements(nom), soignants(prenom, nom)')
+        .select(SELECT_MISSIONS)
+        .eq('statut', 'OUVERTE')
+        .is('soignant_assigne_id', null)
+        .order('debut_le', { ascending: true })
+        .limit(200);
+
+      let queryListe = supabase
+        .from('missions')
+        .select(SELECT_MISSIONS)
         .order('debut_le', { ascending: false })
         .limit(200);
 
       if (filtre !== 'TOUTES') {
-        query = query.eq('statut', filtre);
+        queryListe = queryListe.eq('statut', filtre);
       }
 
       if (etabIds && etabIds.length > 0) {
-        query = query.in('etablissement_id', etabIds);
-      } else if (groupeParam && (!etabIds || etabIds.length === 0)) {
-        // Groupe sans établissements → aucune mission
-        setMissions([]);
-        setLoading(false);
-        return;
+        queryATraiter = queryATraiter.in('etablissement_id', etabIds);
+        queryListe = queryListe.in('etablissement_id', etabIds);
       }
 
-      const { data } = await query;
-      setMissions(data ?? []);
+      const [{ data: dataATraiter }, { data: dataListe }] = await Promise.all([queryATraiter, queryListe]);
+
+      // Urgentes/ASAP d'abord, puis début le plus proche en premier.
+      const triees = (dataATraiter ?? []).slice().sort((a: any, b: any) => {
+        const urgA = (a.est_asap || a.est_urgente) ? 0 : 1;
+        const urgB = (b.est_asap || b.est_urgente) ? 0 : 1;
+        if (urgA !== urgB) return urgA - urgB;
+        return (a.debut_le || '').localeCompare(b.debut_le || '');
+      });
+      setATraiter(triees);
+      setMissions(dataListe ?? []);
       setLoading(false);
     }
     charger();
-  }, [filtre, groupeParam]);
+  }, [filtre, groupeParam, rechargement]);
 
   function changerFiltre(f: FiltreStatut) {
     setFiltre(f);
@@ -124,10 +190,103 @@ export default function AdminMissions() {
     setAbsenceMissionId(null);
     setAbsenceMotif('');
     // reload missions
-    setLoading(true);
+    setRechargement(v => v + 1);
+  };
+
+  const renduCellule = (m: any, col: ColonneTableau<any>) => {
+    const soignantNom = m.soignants ? `${m.soignants.prenom ?? ''} ${m.soignants.nom ?? ''}`.trim() : null;
+    const etabNom = (m.etablissements as any)?.nom ?? null;
+    switch (col.cle) {
+      case 'mission':
+        return (
+          <span className="inline-flex items-center gap-2 flex-wrap">
+            <Link
+              to={`/admin/missions/${m.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="font-medium text-primary hover:underline inline-flex items-center gap-1 group"
+            >
+              {m.intitule}
+              <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </Link>
+            {urgenceBadge(m)}
+          </span>
+        );
+      case 'etab':
+        return m.etablissement_id ? (
+          <Link to={`/admin/utilisateurs/${m.etablissement_id}`} onClick={(e) => e.stopPropagation()} className="text-primary hover:underline text-sm">
+            {etabNom ?? 'Établissement'}
+          </Link>
+        ) : '—';
+      case 'soignant':
+        return m.soignant_assigne_id ? (
+          <Link to={`/admin/utilisateurs/${m.soignant_assigne_id}`} onClick={(e) => e.stopPropagation()} className="text-primary hover:underline text-sm">
+            {soignantNom || 'Soignant'}
+          </Link>
+        ) : <span className="text-muted-foreground">Non assigné</span>;
+      case 'statut':
+        return statutBadge(m.statut);
+      case 'debut':
+        return (
+          <span className="text-muted-foreground whitespace-nowrap">
+            {formatDate(m.debut_le)}
+            <span className="text-[10px] ml-1">{formatHeure(m.debut_le)}</span>
+          </span>
+        );
+      case 'duree':
+        return <span className="text-muted-foreground">{m.duree_heures ? `${m.duree_heures}h` : '—'}</span>;
+      case 'taux':
+        return <span className="text-muted-foreground">{formatEur(m.taux_horaire_base)}</span>;
+      case 'actions':
+        return m.soignant_assigne_id ? (
+          <div onClick={(e) => e.stopPropagation()}>
+            <BoutonY2K size="sm" variant="secondary" onClick={() => { setAbsenceMissionId(m.id); setAbsenceMotif(''); }} iconeGauche={<UserX className="h-3.5 w-3.5" />}>
+              Absence
+            </BoutonY2K>
+          </div>
+        ) : null;
+      default:
+        return null;
+    }
+  };
+
+  const renduCarte = (m: any) => {
+    const soignantNom = m.soignants ? `${m.soignants.prenom ?? ''} ${m.soignants.nom ?? ''}`.trim() : null;
+    const etabNom = (m.etablissements as any)?.nom ?? null;
+    return (
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-semibold text-foreground inline-flex items-center gap-1 min-w-0">
+            <span className="truncate">{m.intitule}</span>
+            <ExternalLink className="h-3.5 w-3.5 text-primary shrink-0" />
+          </p>
+          <span className="inline-flex items-center gap-1.5 shrink-0">
+            {urgenceBadge(m)}
+            {statutBadge(m.statut)}
+          </span>
+        </div>
+        <div className="text-xs text-muted-foreground space-y-0.5">
+          <p>🏥 {etabNom ?? '—'}</p>
+          <p>👤 {soignantNom || 'Non assigné'}</p>
+          <p className="whitespace-nowrap">
+            📅 {formatDate(m.debut_le)} {formatHeure(m.debut_le)} · {m.duree_heures ? `${m.duree_heures}h` : '—'} · {formatEur(m.taux_horaire_base)}
+          </p>
+        </div>
+        {m.soignant_assigne_id && (
+          <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+            <BoutonY2K size="sm" variant="secondary" onClick={() => { setAbsenceMissionId(m.id); setAbsenceMotif(''); }} iconeGauche={<UserX className="h-3.5 w-3.5" />}>
+              Absence
+            </BoutonY2K>
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
+
+  // L'historique exclut les missions déjà affichées dans « À traiter » (pas de doublon).
+  const idsATraiter = new Set(aTraiter.map((m: any) => m.id));
+  const historique = missions.filter((m: any) => !idsATraiter.has(m.id));
 
   return (
     <LayoutAdmin>
@@ -137,127 +296,96 @@ export default function AdminMissions() {
           Missions{groupeNom ? <span className="text-primary"> — {groupeNom}</span> : ''}
         </h1>
 
-        {/* Filtres */}
-        <div className="flex flex-wrap gap-2">
-          {FILTRES.map((f) => (
-            <button
-              key={f.cle}
-              onClick={() => changerFiltre(f.cle)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                filtre === f.cle
-                  ? `${f.couleur} border-current ring-1 ring-current/20`
-                  : 'bg-muted/50 text-muted-foreground border-transparent hover:bg-muted'
-              }`}
-            >
-              <f.icone className="h-3.5 w-3.5" />
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {(() => {
-          const colonnes: ColonneTableau<any>[] = [
-            { cle: 'mission', titre: 'Mission' },
-            { cle: 'etab', titre: 'Établissement' },
-            { cle: 'soignant', titre: 'Soignant' },
-            { cle: 'statut', titre: 'Statut' },
-            { cle: 'debut', titre: 'Début' },
-            { cle: 'duree', titre: 'Durée' },
-            { cle: 'taux', titre: 'Taux horaire' },
-            { cle: 'actions', titre: '', align: 'right' as const },
-          ];
-
-          return (
+        {/* ── File de travail : missions ouvertes sans soignant assigné ── */}
+        <section aria-label="Missions à traiter">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-foreground mb-3">
+            {aTraiter.length > 0 ? (
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
+                {aTraiter.length}
+              </span>
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            )}
+            À traiter — missions ouvertes sans soignant
+          </h2>
+          {aTraiter.length === 0 ? (
+            <EmptyState
+              icone={<ClipboardList />}
+              titre="Aucune mission en attente"
+              description="Toutes les missions ouvertes ont un soignant assigné."
+              variant="success"
+            />
+          ) : (
             <TableOuCartes
-              colonnes={colonnes}
-              donnees={missions}
+              colonnes={COLONNES_A_TRAITER}
+              donnees={aTraiter}
               getId={(m: any) => m.id}
               onClickLigne={(m: any) => navigate(`/admin/missions/${m.id}`)}
-              etatVide={<EmptyState titre="Aucune mission" description={`Aucune mission avec le statut "${filtre}".`} />}
-              renduCellule={(m: any, col) => {
-                const soignantNom = m.soignants ? `${m.soignants.prenom ?? ''} ${m.soignants.nom ?? ''}`.trim() : null;
-                const etabNom = (m.etablissements as any)?.nom ?? null;
-                switch (col.cle) {
-                  case 'mission':
-                    return (
-                      <Link
-                        to={`/admin/missions/${m.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="font-medium text-primary hover:underline inline-flex items-center gap-1 group"
-                      >
-                        {m.intitule}
-                        <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </Link>
-                    );
-                  case 'etab':
-                    return m.etablissement_id ? (
-                      <Link to={`/admin/utilisateurs/${m.etablissement_id}`} onClick={(e) => e.stopPropagation()} className="text-primary hover:underline text-sm">
-                        {etabNom ?? 'Établissement'}
-                      </Link>
-                    ) : '—';
-                  case 'soignant':
-                    return m.soignant_assigne_id ? (
-                      <Link to={`/admin/utilisateurs/${m.soignant_assigne_id}`} onClick={(e) => e.stopPropagation()} className="text-primary hover:underline text-sm">
-                        {soignantNom || 'Soignant'}
-                      </Link>
-                    ) : <span className="text-muted-foreground">Non assigné</span>;
-                  case 'statut':
-                    return statutBadge(m.statut);
-                  case 'debut':
-                    return (
-                      <span className="text-muted-foreground whitespace-nowrap">
-                        {formatDate(m.debut_le)}
-                        <span className="text-[10px] ml-1">{formatHeure(m.debut_le)}</span>
-                      </span>
-                    );
-                  case 'duree':
-                    return <span className="text-muted-foreground">{m.duree_heures ? `${m.duree_heures}h` : '—'}</span>;
-                  case 'taux':
-                    return <span className="text-muted-foreground">{formatEur(m.taux_horaire_base)}</span>;
-                  case 'actions':
-                    return m.soignant_assigne_id ? (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => { setAbsenceMissionId(m.id); setAbsenceMotif(''); }} iconeGauche={<UserX className="h-3.5 w-3.5" />}>
-                          Absence
-                        </BoutonY2K>
-                      </div>
-                    ) : null;
-                  default:
-                    return null;
-                }
-              }}
-              renduCarte={(m: any) => {
-                const soignantNom = m.soignants ? `${m.soignants.prenom ?? ''} ${m.soignants.nom ?? ''}`.trim() : null;
-                const etabNom = (m.etablissements as any)?.nom ?? null;
-                return (
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-foreground inline-flex items-center gap-1 min-w-0">
-                        <span className="truncate">{m.intitule}</span>
-                        <ExternalLink className="h-3.5 w-3.5 text-primary shrink-0" />
-                      </p>
-                      {statutBadge(m.statut)}
-                    </div>
-                    <div className="text-xs text-muted-foreground space-y-0.5">
-                      <p>🏥 {etabNom ?? '—'}</p>
-                      <p>👤 {soignantNom || 'Non assigné'}</p>
-                      <p className="whitespace-nowrap">
-                        📅 {formatDate(m.debut_le)} {formatHeure(m.debut_le)} · {m.duree_heures ? `${m.duree_heures}h` : '—'} · {formatEur(m.taux_horaire_base)}
-                      </p>
-                    </div>
-                    {m.soignant_assigne_id && (
-                      <div className="pt-1" onClick={(e) => e.stopPropagation()}>
-                        <BoutonY2K size="sm" variant="secondary" onClick={() => { setAbsenceMissionId(m.id); setAbsenceMotif(''); }} iconeGauche={<UserX className="h-3.5 w-3.5" />}>
-                          Absence
-                        </BoutonY2K>
-                      </div>
-                    )}
-                  </div>
-                );
-              }}
+              renduCellule={renduCellule}
+              renduCarte={renduCarte}
             />
-          );
-        })()}
+          )}
+        </section>
+
+        {/* ── Historique : liste complète avec filtres, repliée par défaut ── */}
+        <section aria-label="Historique des missions">
+          <button
+            type="button"
+            onClick={() => setHistoriqueOuvert(o => !o)}
+            aria-expanded={historiqueOuvert}
+            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors mb-3"
+          >
+            <History className="h-4 w-4" />
+            Historique — toutes les missions
+            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold">
+              {historique.length}
+            </span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${historiqueOuvert ? 'rotate-180' : ''}`} />
+          </button>
+
+          {historiqueOuvert && (
+            <div className="space-y-4">
+              {/* Filtres */}
+              <div className="flex flex-wrap gap-2">
+                {FILTRES.map((f) => (
+                  <button
+                    key={f.cle}
+                    onClick={() => changerFiltre(f.cle)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                      filtre === f.cle
+                        ? `${f.couleur} border-current ring-1 ring-current/20`
+                        : 'bg-muted/50 text-muted-foreground border-transparent hover:bg-muted'
+                    }`}
+                  >
+                    <f.icone className="h-3.5 w-3.5" />
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <TableOuCartes
+                colonnes={COLONNES_HISTORIQUE}
+                donnees={historique}
+                getId={(m: any) => m.id}
+                onClickLigne={(m: any) => navigate(`/admin/missions/${m.id}`)}
+                etatVide={
+                  <EmptyState
+                    titre="Aucune mission"
+                    description={
+                      filtre === 'OUVERTE'
+                        ? 'Les missions ouvertes sans soignant assigné figurent dans la section « À traiter » ci-dessus.'
+                        : filtre === 'TOUTES'
+                          ? "Aucune mission dans l'historique."
+                          : `Aucune mission avec le statut « ${STATUT_LABEL[filtre] ?? filtre} ».`
+                    }
+                  />
+                }
+                renduCellule={renduCellule}
+                renduCarte={renduCarte}
+              />
+            </div>
+          )}
+        </section>
       </div>
 
       {/* Task 6 — Modal marquer absence sans prévenir */}
