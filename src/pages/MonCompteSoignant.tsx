@@ -61,7 +61,7 @@ export default function MonCompteSoignant() {
         { icone: User, label: 'Mon profil', route: '/soignant/profil' },
         { icone: FileText, label: 'Mes documents', route: '/soignant/mes-documents' },
         { icone: ScrollText, label: 'Mes contrats', route: '/soignant/contrats' },
-        { icone: ClipboardCheck, label: 'Mes DPAE', route: '/soignant/dpae' },
+        { icone: ClipboardCheck, label: 'Mes DPAE', route: '/soignant/mes-documents?tab=dpae' },
         { icone: Sparkles, label: 'Mes matchs', route: '/soignant/mes-matches' },
       ],
     },

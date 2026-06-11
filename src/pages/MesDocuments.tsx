@@ -2,11 +2,14 @@ import { useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutApp } from '@/components/LayoutApp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, FolderOpen } from 'lucide-react';
+import { FileText, FolderOpen, FileCheck2 } from 'lucide-react';
 import { ListeContratsContent } from './ListeContrats';
 import { DocumentsSoignantContent } from './DocumentsSoignant';
+import { MesDPAEContent } from './MesDPAE';
 
-const TABS = ['contrats', 'justificatifs'] as const;
+/* Session B : centre documents unique — justificatifs, contrats signés et DPAE
+   au même endroit (l'ancienne page /soignant/dpae redirige vers ?tab=dpae). */
+const TABS = ['contrats', 'justificatifs', 'dpae'] as const;
 type Tab = typeof TABS[number];
 
 export default function MesDocuments() {
@@ -27,23 +30,31 @@ export default function MesDocuments() {
         value={currentTab}
         onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}
       >
-        <TabsList className="grid w-full grid-cols-2 mb-4">
-          <TabsTrigger value="contrats" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span>Mes contrats</span>
-          </TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 mb-4">
           <TabsTrigger value="justificatifs" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <FolderOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span>Mes justificatifs</span>
+            <span>Justificatifs</span>
+          </TabsTrigger>
+          <TabsTrigger value="contrats" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span>Contrats</span>
+          </TabsTrigger>
+          <TabsTrigger value="dpae" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <FileCheck2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span>DPAE</span>
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="justificatifs" className="mt-0">
+          <DocumentsSoignantContent />
+        </TabsContent>
 
         <TabsContent value="contrats" className="mt-0">
           <ListeContratsContent role="SOIGNANT" />
         </TabsContent>
 
-        <TabsContent value="justificatifs" className="mt-0">
-          <DocumentsSoignantContent />
+        <TabsContent value="dpae" className="mt-0">
+          <MesDPAEContent />
         </TabsContent>
       </Tabs>
     </LayoutApp>

@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileCheck2, AlertCircle, ExternalLink, Clock } from 'lucide-react';
-import { LayoutApp } from '@/components/LayoutApp';
+import { FileCheck2, AlertCircle, ExternalLink, Clock } from 'lucide-react';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
-import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -31,19 +29,16 @@ interface DpaeContrat {
 type FiltreStatut = 'TOUS' | 'EN_ATTENTE' | 'VALIDEE';
 
 /**
- * Page "Mes DPAE" soignant (Sprint 5.5 PR 10).
+ * Contenu "Mes DPAE" soignant (Sprint 5.5 PR 10, embarqué Session B).
  *
- * Fix P0-12 audit Sprint 5 : aucune page dédiée pour que le soignant voit
- * les DPAE générées par l'établissement pour ses missions CDD.
- *
- * Liste les contrats CDD/SALARIE signés avec leur statut DPAE :
+ * Onglet DPAE de /soignant/mes-documents (l'ancienne page dédiée
+ * /soignant/dpae redirige) : statut DPAE des contrats CDD/SALARIE signés.
  *  - VALIDEE_URSSAF : numéro URSSAF saisi par l'étab
  *  - EN_ATTENTE_ETAB : étab pas encore déclaré
  *
  * Appelle fn_mes_dpae (RPC Sprint 5.5 PR 10).
  */
-export default function MesDPAE() {
-  usePageTitle('Mes DPAE');
+export function MesDPAEContent() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [dpae, setDpae] = useState<DpaeContrat[]>([]);
@@ -75,22 +70,13 @@ export default function MesDPAE() {
   const nbEnAttente = dpae.filter((d) => !d.dpae_effectuee).length;
   const nbValidees = dpae.filter((d) => d.dpae_effectuee).length;
 
-  if (loading) return <LayoutApp role="SOIGNANT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
 
   return (
-    <LayoutApp role="SOIGNANT">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary hover:underline mb-2">
-        <ArrowLeft className="h-4 w-4" /> Retour
-      </button>
-
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground inline-flex items-center gap-2">
-          <FileCheck2 className="h-6 w-6 text-primary" /> Mes DPAE
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Liste des Déclarations Préalables à l'Embauche (DPAE) générées par vos établissements pour vos contrats CDD signés.
-        </p>
-      </div>
+    <div>
+      <p className="text-sm text-muted-foreground mb-4">
+        Déclarations Préalables à l'Embauche (DPAE) générées par vos établissements pour vos contrats CDD signés.
+      </p>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
@@ -221,7 +207,7 @@ export default function MesDPAE() {
           Compléter mon profil DPAE <ExternalLink className="h-3 w-3" />
         </button>
       </div>
-    </LayoutApp>
+    </div>
   );
 }
 
