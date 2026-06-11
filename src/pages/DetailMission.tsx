@@ -47,6 +47,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
+import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
 import { toast } from 'sonner';
 import { capturerErreurSentry } from '@/lib/sentry';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -549,11 +550,54 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
   const fin = new Date(m.fin_le);
   const estAnnulee = m.statut === 'ANNULEE_PAR_ETABLISSEMENT' || m.statut === 'ANNULEE_PAR_SOIGNANT';
 
+  /* Hiérarchisation : LA prochaine action attendue de l'établissement —
+     uniquement les cas certains depuis l'état chargé (pas de faux rappels). */
+  const actionPrioritaire: ActionPrioritaire | null = (() => {
+    if (isAdmin) return null;
+    if (m.statut === 'TERMINEE' && (m as any).mode_remuneration === 'RETROCESSION' && m.montant_honoraires_bruts == null) {
+      return {
+        titre: 'Déclarez les honoraires du remplacement',
+        description: 'Montant encaissé + justificatif — la rétrocession et la commission seront calculées automatiquement.',
+        cta: 'Déclarer',
+        cibleId: 'bloc-retro-declaration',
+        variante: 'warning',
+      };
+    }
+    if (m.statut === 'ABSENCE') {
+      return {
+        titre: 'Trouvez un remplaçant en urgence',
+        description: 'Le soignant ne s\'est pas présenté — diffusez la mission au pool de remplaçants disponibles.',
+        cta: 'Chercher',
+        cibleId: 'bloc-remplacant',
+        variante: 'destructive',
+      };
+    }
+    if (m.mode_attribution === 'CANDIDATURE' && m.statut === 'OUVERTE' && nbCandidatures > 0) {
+      return {
+        titre: `${nbCandidatures} candidature${nbCandidatures > 1 ? 's' : ''} en attente`,
+        description: 'Des soignants attendent votre réponse — examinez les profils.',
+        cta: 'Examiner',
+        cibleId: 'bloc-candidatures',
+      };
+    }
+    if (m.statut === 'EN_COURS' && fin.getTime() < Date.now()) {
+      return {
+        titre: 'Terminez la mission',
+        description: 'La mission est arrivée à son terme — clôturez-la pour déclencher la facturation et le paiement.',
+        cta: 'Terminer',
+        onClick: () => setModalTerminer(true),
+      };
+    }
+    return null;
+  })();
+
   return (
     <LayoutApp role={role}>
       <button onClick={handleBack} className="text-sm text-primary hover:underline mb-4 inline-block">
         {backLabel}
       </button>
+
+      {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
 
       {alerteRequalif?.alerte && (
         <div className="bg-warning/5 border border-warning/30 rounded-xl p-4 mb-4 flex items-start gap-3">
@@ -566,7 +610,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
       {/* Candidatures en haut si mode CANDIDATURE et OUVERTE */}
       {m.mode_attribution === 'CANDIDATURE' && m.statut === 'OUVERTE' && (
-        <div className="mb-4">
+        <div id="bloc-candidatures" className="mb-4">
           <h2 className="text-lg font-bold text-foreground mb-3">Candidatures {nbCandidatures > 0 ? `(${nbCandidatures})` : ''}</h2>
           <ListeCandidatures
             missionId={m.id}
@@ -678,18 +722,22 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
 
               {/* Rétrocession : déclaration des honoraires encaissés en fin de mission */}
               {m.statut === 'TERMINEE' && (m as any).mode_remuneration === 'RETROCESSION' && (
-                <DeclarationRetrocession mission={m} onMaj={(patch) => setMission((prev: any) => ({ ...prev, ...patch }))} />
+                <div id="bloc-retro-declaration">
+                  <DeclarationRetrocession mission={m} onMaj={(patch) => setMission((prev: any) => ({ ...prev, ...patch }))} />
+                </div>
               )}
 
 
               {/* Recherche remplaçant urgence si ABSENCE */}
               {m.statut === 'ABSENCE' && (
+                <div id="bloc-remplacant">
                 <RechercheRemplacantUrgence
                   missionId={m.id}
                   onPropose={() => {}}
                   onError={(msg) => afficherNotification({ type: 'erreur', message: msg })}
                   onSuccess={(msg) => afficherNotification({ type: 'succes', message: msg })}
                 />
+                </div>
               )}
 
               <div className="card-base">
