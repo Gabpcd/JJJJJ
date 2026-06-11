@@ -15,15 +15,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock, MessageCircle, Plus } from 'lucide-react';
+import { Flame, Users, UserCheck, Trophy, Bell, BellRing, Send, MapPin, Clock, MessageCircle, Plus, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { PROFESSIONS } from '@/lib/constantes';
+import { PROFESSIONS, BADGES_STATUT } from '@/lib/constantes';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
 import { logger } from '@/lib/logger';
+import { cn } from '@/lib/utils';
 
 interface SoignantPool {
   id: string;
@@ -88,6 +89,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   const [filtreRayonMax, setFiltreRayonMax] = useState(50);
   const [filtreScoreMin, setFiltreScoreMin] = useState(0);
   const [filtreHistorique, setFiltreHistorique] = useState<'TOUT' | 'POURVUES_MOIS'>('TOUT');
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
 
   const etablissementId = isAdmin ? selectedEtablissementId : scopedEtablissementId || '';
 
@@ -117,7 +119,10 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
 
   useEffect(() => {
     if (searchParams.get('disponibles') === '1') setFiltreDispo(true);
-    if (searchParams.get('historique') === 'pourvues_mois') setFiltreHistorique('POURVUES_MOIS');
+    if (searchParams.get('historique') === 'pourvues_mois') {
+      setFiltreHistorique('POURVUES_MOIS');
+      setHistoriqueOuvert(true);
+    }
   }, [searchParams]);
 
   const loadData = async () => {
@@ -151,13 +156,16 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
   };
 
   const filtered = useMemo(() => {
-    return soignants.filter((s) => {
-      if (filtreProfession !== 'TOUTES' && s.profession !== filtreProfession) return false;
-      if (filtreDispo && s.en_mission_maintenant) return false;
-      if (s.distance_km !== null && s.distance_km > filtreRayonMax) return false;
-      if (s.score_fiabilite < filtreScoreMin) return false;
-      return true;
-    });
+    return soignants
+      .filter((s) => {
+        if (filtreProfession !== 'TOUTES' && s.profession !== filtreProfession) return false;
+        if (filtreDispo && s.en_mission_maintenant) return false;
+        if (s.distance_km !== null && s.distance_km > filtreRayonMax) return false;
+        if (s.score_fiabilite < filtreScoreMin) return false;
+        return true;
+      })
+      // Disponibles d'abord (tri stable : l'ordre d'origine est conservé au sein de chaque groupe)
+      .sort((a, b) => Number(a.en_mission_maintenant) - Number(b.en_mission_maintenant));
   }, [soignants, filtreProfession, filtreDispo, filtreRayonMax, filtreScoreMin]);
 
   const kpiTotal = soignants.length;
@@ -168,14 +176,28 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && h.statut === 'TERMINEE';
   }).length;
 
+  // File de travail : les urgences encore à pourvoir en tête de page, le reste en historique replié.
+  const urgencesAPourvoir = useMemo(
+    () =>
+      historique
+        .filter((h) => h.statut === 'OUVERTE' && !h.soignant_assigne_id)
+        .sort((a, b) => a.debut_le.localeCompare(b.debut_le)),
+    [historique]
+  );
+
+  const historiqueClos = useMemo(
+    () => historique.filter((h) => !(h.statut === 'OUVERTE' && !h.soignant_assigne_id)),
+    [historique]
+  );
+
   const historiqueAffiche = useMemo(() => {
-    if (filtreHistorique !== 'POURVUES_MOIS') return historique;
+    if (filtreHistorique !== 'POURVUES_MOIS') return historiqueClos;
     const now = new Date();
-    return historique.filter((h) => {
+    return historiqueClos.filter((h) => {
       const d = new Date(h.debut_le);
       return h.soignant_assigne_id && h.statut === 'TERMINEE' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     });
-  }, [historique, filtreHistorique]);
+  }, [historiqueClos, filtreHistorique]);
 
   const alerterSoignant = async (s: SoignantPool) => {
     const { error } = await supabase.functions.invoke('send-push', {
@@ -334,6 +356,8 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
     return found ? found.label : code;
   };
 
+  const statutMissionLabel = (statut: string) => BADGES_STATUT[statut]?.label ?? statut;
+
   if (loading) {
     return (
       <Layout>
@@ -386,6 +410,47 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
           </div>
         </div>
 
+        {/* Urgences à pourvoir — la raison d'être de la page, affichées en tête */}
+        {urgencesAPourvoir.length > 0 && (
+          <section aria-label="Urgences à pourvoir" className="card-base border-destructive/40">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
+                {urgencesAPourvoir.length}
+              </span>
+              Urgences à pourvoir
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1 mb-3">
+              Ces missions urgentes attendent encore un remplaçant. Alertez le pool ou proposez-les à un soignant disponible.
+            </p>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mission</TableHead>
+                  <TableHead>Début prévu</TableHead>
+                  <TableHead>Créée le</TableHead>
+                  <TableHead>Statut</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {urgencesAPourvoir.map((h) => (
+                  <TableRow key={h.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/etablissement/missions/${h.id}`)}>
+                    <TableCell className="font-medium text-sm">{h.intitule}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(new Date(h.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(new Date(h.cree_le), 'dd/MM/yyyy HH:mm', { locale: fr })}
+                    </TableCell>
+                    <TableCell>
+                      <BadgeY2K variant="error" size="sm">À pourvoir</BadgeY2K>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </section>
+        )}
+
         {/* KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <CarteKPIY2K
@@ -408,6 +473,7 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
             variant="default"
             onClick={() => {
               setFiltreHistorique('POURVUES_MOIS');
+              setHistoriqueOuvert(true);
               setSearchParams({ historique: 'pourvues_mois' }, { replace: true });
               document.getElementById('historique-urgences')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }}
@@ -575,14 +641,23 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
           </div>
         )}
 
-        {/* Historique urgences */}
-        {historique.length > 0 && (
-          <div id="historique-urgences" className="card-base">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <Clock className="h-5 w-5 text-muted-foreground" />
-              Historique des urgences
-              </h2>
+        {/* Historique urgences — replié par défaut (pattern « file de travail ») */}
+        {historiqueClos.length > 0 && (
+          <section id="historique-urgences" aria-label="Historique des urgences" className="card-base">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setHistoriqueOuvert((o) => !o)}
+                aria-expanded={historiqueOuvert}
+                className="flex items-center gap-2 text-base font-semibold text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Clock className="h-5 w-5" />
+                Historique des urgences
+                <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold">
+                  {historiqueAffiche.length}
+                </span>
+                <ChevronDown className={cn('h-4 w-4 transition-transform', historiqueOuvert && 'rotate-180')} />
+              </button>
               {filtreHistorique === 'POURVUES_MOIS' && (
                 <Button
                   variant="outline"
@@ -596,51 +671,55 @@ export default function PoolUrgenceEtablissement({ isAdmin = false }: { isAdmin?
                 </Button>
               )}
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Mission</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Remplaçant</TableHead>
-                  <TableHead>Délai de réponse</TableHead>
-                  <TableHead>Statut</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {historiqueAffiche.map((h) => {
-                  const delaiMin = h.soignant_assigne_id
-                    ? Math.round((new Date(h.debut_le).getTime() - new Date(h.cree_le).getTime()) / 60000)
-                    : null;
-                  return (
-                    <TableRow key={h.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/etablissement/missions/${h.id}`)}>
-                      <TableCell className="font-medium text-sm">{h.intitule}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {format(new Date(h.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {h.soignant_prenom ? `${h.soignant_prenom} ${h.soignant_nom}` : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {delaiMin !== null && delaiMin > 0 ? (
-                          <BadgeY2K variant="info" size="sm">{delaiMin < 60 ? `${delaiMin} min` : `${Math.round(delaiMin / 60)}h`}</BadgeY2K>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <BadgeY2K
-                          variant={h.statut === 'TERMINEE' ? 'info' : h.statut === 'OUVERTE' ? 'error' : 'info'}
-                          size="sm"
-                        >
-                          {h.statut}
-                        </BadgeY2K>
-                      </TableCell>
+            {historiqueOuvert && (
+              <div className="mt-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Mission</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Remplaçant</TableHead>
+                      <TableHead>Délai de réponse</TableHead>
+                      <TableHead>Statut</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {historiqueAffiche.map((h) => {
+                      const delaiMin = h.soignant_assigne_id
+                        ? Math.round((new Date(h.debut_le).getTime() - new Date(h.cree_le).getTime()) / 60000)
+                        : null;
+                      return (
+                        <TableRow key={h.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/etablissement/missions/${h.id}`)}>
+                          <TableCell className="font-medium text-sm">{h.intitule}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {format(new Date(h.debut_le), 'dd/MM/yyyy HH:mm', { locale: fr })}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {h.soignant_prenom ? `${h.soignant_prenom} ${h.soignant_nom}` : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {delaiMin !== null && delaiMin > 0 ? (
+                              <BadgeY2K variant="info" size="sm">{delaiMin < 60 ? `${delaiMin} min` : `${Math.round(delaiMin / 60)}h`}</BadgeY2K>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <BadgeY2K
+                              variant={h.statut === 'TERMINEE' ? 'info' : h.statut === 'OUVERTE' ? 'error' : 'info'}
+                              size="sm"
+                            >
+                              {statutMissionLabel(h.statut)}
+                            </BadgeY2K>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </section>
         )}
       </div>
 

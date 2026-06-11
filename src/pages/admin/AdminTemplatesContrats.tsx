@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Power, Loader2 } from 'lucide-react';
+import { FileText, Power, ChevronDown } from 'lucide-react';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -10,6 +10,7 @@ import { useNotification } from '@/contexts/NotificationContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
+import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -32,6 +33,7 @@ export default function AdminTemplatesContrats() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateLigne[]>([]);
+  const [inactifsOuverts, setInactifsOuverts] = useState(false);
 
   async function charger() {
     setLoading(true);
@@ -71,6 +73,104 @@ export default function AdminTemplatesContrats() {
   const actifs = templates.filter((t) => t.est_actif);
   const inactifs = templates.filter((t) => !t.est_actif);
 
+  const colonnes: ColonneTableau<TemplateLigne>[] = [
+    { cle: 'nom', titre: 'Nom' },
+    { cle: 'type', titre: 'Type' },
+    { cle: 'version', titre: 'Version' },
+    { cle: 'statut', titre: 'Statut' },
+    { cle: 'taille', titre: 'Taille' },
+    { cle: 'modifie', titre: 'Modifié' },
+    { cle: 'actions', titre: '', align: 'right', largeur: 'w-48' },
+  ];
+
+  const statutBadge = (actif: boolean) =>
+    actif ? (
+      <BadgeY2K variant="success" size="sm">Actif</BadgeY2K>
+    ) : (
+      <BadgeY2K variant="info" size="sm">Inactif</BadgeY2K>
+    );
+
+  const renduCellule = (t: TemplateLigne, col: ColonneTableau<TemplateLigne>) => {
+    switch (col.cle) {
+      case 'nom':
+        return <span className="font-medium">{t.nom}</span>;
+      case 'type':
+        return <code className="text-xs">{t.type_contrat}</code>;
+      case 'version':
+        return <span className="text-xs">v{t.version}</span>;
+      case 'statut':
+        return statutBadge(t.est_actif);
+      case 'taille':
+        return <span className="text-xs text-muted-foreground">{(t.contenu_taille / 1024).toFixed(1)} KB</span>;
+      case 'modifie':
+        return (
+          <span className="text-[11px] text-muted-foreground">
+            {format(new Date(t.modifie_le), 'dd MMM yy HH:mm', { locale: fr })}
+          </span>
+        );
+      case 'actions':
+        return (
+          <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+            <BoutonY2K
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(`/admin/templates-contrats/${t.id}`)}
+            >
+              Éditer
+            </BoutonY2K>
+            <BoutonY2K
+              variant={t.est_actif ? 'ghost' : 'secondary'}
+              size="sm"
+              onClick={() => toggle(t)}
+              disabled={toggling === t.id}
+              loading={toggling === t.id}
+              iconeGauche={toggling !== t.id ? <Power className="h-3 w-3" /> : undefined}
+            >
+              {t.est_actif ? 'Désactiver' : 'Activer'}
+            </BoutonY2K>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const renduCarte = (t: TemplateLigne) => (
+    <div className="space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground truncate">{t.nom}</p>
+          <p className="text-xs"><code>{t.type_contrat}</code> · v{t.version} · {(t.contenu_taille / 1024).toFixed(1)} KB</p>
+        </div>
+        {statutBadge(t.est_actif)}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Modifié le {format(new Date(t.modifie_le), 'dd MMM yy HH:mm', { locale: fr })}
+      </p>
+      <div className="flex gap-2 pt-2 border-t border-border">
+        <BoutonY2K
+          variant="secondary"
+          size="sm"
+          onClick={(e) => { e.stopPropagation(); navigate(`/admin/templates-contrats/${t.id}`); }}
+          className="flex-1"
+        >
+          Éditer
+        </BoutonY2K>
+        <BoutonY2K
+          variant={t.est_actif ? 'ghost' : 'secondary'}
+          size="sm"
+          onClick={(e) => { e.stopPropagation(); toggle(t); }}
+          disabled={toggling === t.id}
+          loading={toggling === t.id}
+          iconeGauche={toggling !== t.id ? <Power className="h-3 w-3" /> : undefined}
+          className="flex-1"
+        >
+          {t.est_actif ? 'Désactiver' : 'Activer'}
+        </BoutonY2K>
+      </div>
+    </div>
+  );
+
   return (
     <LayoutAdmin>
       <div className="mb-6">
@@ -98,112 +198,62 @@ export default function AdminTemplatesContrats() {
         </div>
       </div>
 
-      {(() => {
-        const colonnes: ColonneTableau<TemplateLigne>[] = [
-          { cle: 'nom', titre: 'Nom' },
-          { cle: 'type', titre: 'Type' },
-          { cle: 'version', titre: 'Version' },
-          { cle: 'statut', titre: 'Statut' },
-          { cle: 'taille', titre: 'Taille' },
-          { cle: 'modifie', titre: 'Modifié' },
-          { cle: 'actions', titre: '', align: 'right', largeur: 'w-48' },
-        ];
-
-        const statutBadge = (actif: boolean) =>
-          actif ? (
-            <BadgeY2K variant="success" size="sm">ACTIF</BadgeY2K>
-          ) : (
-            <BadgeY2K variant="info" size="sm">INACTIF</BadgeY2K>
-          );
-
-        return (
-          <TableOuCartes
-            colonnes={colonnes}
-            donnees={templates}
-            getId={(t) => t.id}
-            etatVide={<EmptyState titre="Aucun template enregistré" description="Les 14 templates Sprint 2 devraient être présents." />}
-            renduCellule={(t, col) => {
-              switch (col.cle) {
-                case 'nom':
-                  return <span className="font-medium">{t.nom}</span>;
-                case 'type':
-                  return <code className="text-xs">{t.type_contrat}</code>;
-                case 'version':
-                  return <span className="text-xs">v{t.version}</span>;
-                case 'statut':
-                  return statutBadge(t.est_actif);
-                case 'taille':
-                  return <span className="text-xs text-muted-foreground">{(t.contenu_taille / 1024).toFixed(1)} KB</span>;
-                case 'modifie':
-                  return (
-                    <span className="text-[11px] text-muted-foreground">
-                      {format(new Date(t.modifie_le), 'dd MMM yy HH:mm', { locale: fr })}
-                    </span>
-                  );
-                case 'actions':
-                  return (
-                    <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                      <BoutonY2K
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => navigate(`/admin/templates-contrats/${t.id}`)}
-                      >
-                        Éditer
-                      </BoutonY2K>
-                      <BoutonY2K
-                        variant={t.est_actif ? 'ghost' : 'secondary'}
-                        size="sm"
-                        onClick={() => toggle(t)}
-                        disabled={toggling === t.id}
-                        loading={toggling === t.id}
-                        iconeGauche={toggling !== t.id ? <Power className="h-3 w-3" /> : undefined}
-                      >
-                        {t.est_actif ? 'Désactiver' : 'Activer'}
-                      </BoutonY2K>
-                    </div>
-                  );
-                default:
-                  return null;
-              }
-            }}
-            renduCarte={(t) => (
-              <div className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-foreground truncate">{t.nom}</p>
-                    <p className="text-xs"><code>{t.type_contrat}</code> · v{t.version} · {(t.contenu_taille / 1024).toFixed(1)} KB</p>
-                  </div>
-                  {statutBadge(t.est_actif)}
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Modifié le {format(new Date(t.modifie_le), 'dd MMM yy HH:mm', { locale: fr })}
-                </p>
-                <div className="flex gap-2 pt-2 border-t border-border">
-                  <BoutonY2K
-                    variant="secondary"
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); navigate(`/admin/templates-contrats/${t.id}`); }}
-                    className="flex-1"
-                  >
-                    Éditer
-                  </BoutonY2K>
-                  <BoutonY2K
-                    variant={t.est_actif ? 'ghost' : 'secondary'}
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); toggle(t); }}
-                    disabled={toggling === t.id}
-                    loading={toggling === t.id}
-                    iconeGauche={toggling !== t.id ? <Power className="h-3 w-3" /> : undefined}
-                    className="flex-1"
-                  >
-                    {t.est_actif ? 'Désactiver' : 'Activer'}
-                  </BoutonY2K>
-                </div>
-              </div>
+      {templates.length === 0 ? (
+        <EmptyState titre="Aucun template enregistré" description="Les 14 templates Sprint 2 devraient être présents." />
+      ) : (
+        <div className="space-y-6">
+          {/* ── Templates actifs : toujours visibles, en tête ── */}
+          <section aria-label="Templates actifs">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-foreground mb-3">
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-success/15 text-success text-[11px] font-bold">
+                {actifs.length}
+              </span>
+              Templates actifs
+            </h2>
+            {actifs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Aucun template actif. Activez un template depuis la section « Inactifs » ci-dessous pour le rendre disponible.
+              </p>
+            ) : (
+              <TableOuCartes
+                colonnes={colonnes}
+                donnees={actifs}
+                getId={(t) => t.id}
+                renduCellule={renduCellule}
+                renduCarte={renduCarte}
+              />
             )}
-          />
-        );
-      })()}
+          </section>
+
+          {/* ── Templates inactifs : section repliée par défaut ── */}
+          {inactifs.length > 0 && (
+            <section aria-label="Templates inactifs">
+              <button
+                type="button"
+                onClick={() => setInactifsOuverts((o) => !o)}
+                aria-expanded={inactifsOuverts}
+                className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors mb-3"
+              >
+                <Power className="h-4 w-4" />
+                Inactifs
+                <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold">
+                  {inactifs.length}
+                </span>
+                <ChevronDown className={cn('h-4 w-4 transition-transform', inactifsOuverts && 'rotate-180')} />
+              </button>
+              {inactifsOuverts && (
+                <TableOuCartes
+                  colonnes={colonnes}
+                  donnees={inactifs}
+                  getId={(t) => t.id}
+                  renduCellule={renduCellule}
+                  renduCarte={renduCarte}
+                />
+              )}
+            </section>
+          )}
+        </div>
+      )}
 
       <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground mt-6">
         <p className="font-semibold text-foreground mb-1">⚠️ Mises en garde</p>
