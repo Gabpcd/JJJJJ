@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 import { FileDeTravail } from '@/components/admin/FileDeTravail';
 import { getLabelProfession } from '@/lib/constantes';
-import { FileCheck, Search, CheckCircle, AlertCircle } from 'lucide-react';
+import { FileCheck, Search, CheckCircle, AlertCircle, BellRing } from 'lucide-react';
+import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -25,6 +26,60 @@ export default function AdminMandatsFacturation() {
   const [soignants, setSoignants] = useState<any[]>([]);
   const [recherche, setRecherche] = useState('');
   const [filtre, setFiltre] = useState<'TOUS' | 'SIGNE' | 'NON_SIGNE'>('TOUS');
+  const [relanceEnCours, setRelanceEnCours] = useState<string | null>(null);
+  const [relanceGroupee, setRelanceGroupee] = useState(false);
+
+  // Relance mandat : notification in-app + email (template ADMIN_BROADCAST).
+  const relancer = async (s: any): Promise<boolean> => {
+    const corps = `Bonjour ${s.prenom},\n\nVotre mandat de facturation n'est pas encore signé. Il permet à Jolene de générer automatiquement vos factures d'honoraires et vous donne accès au paiement rapide (24-48h).\n\nSignez-le en 2 minutes depuis votre espace : Mon profil → Mandat de facturation.\n\nL'équipe Jolene`;
+    const [notifRes, emailRes] = await Promise.all([
+      supabase.rpc('fn_creer_notification', {
+        p_destinataire_id: s.id,
+        p_type_destinataire: 'SOIGNANT',
+        p_type: 'RAPPEL_DOCUMENTS',
+        p_titre: 'Signez votre mandat de facturation',
+        p_corps: 'Votre mandat de facturation attend votre signature — il débloque la facturation automatique et le paiement rapide.',
+        p_lien: '/soignant/mandat-facturation',
+        p_type_ressource: null,
+        p_id_ressource: null,
+      } as any),
+      supabase.functions.invoke('send-email', {
+        body: {
+          type: 'ADMIN_BROADCAST',
+          destinataire_id: s.id,
+          data: { subject: 'Votre mandat de facturation attend votre signature', body: corps },
+        },
+      }),
+    ]);
+    return !notifRes.error && !emailRes.error;
+  };
+
+  const relancerUn = async (s: any) => {
+    setRelanceEnCours(s.id);
+    try {
+      const ok = await relancer(s);
+      if (ok) toast.success(`${s.prenom} ${s.nom} relancé(e) — notification + email envoyés.`);
+      else toast.error('Relance partielle ou échouée — réessayez.');
+    } finally {
+      setRelanceEnCours(null);
+    }
+  };
+
+  const relancerTous = async (liste: any[]) => {
+    if (!window.confirm(`Relancer les ${liste.length} soignants sans mandat signé ? Chacun recevra une notification + un email.`)) return;
+    setRelanceGroupee(true);
+    let ok = 0; let ko = 0;
+    try {
+      for (const s of liste) {
+        // Envois séquentiels : évite le rate-limit Resend et garde l'UI réactive
+        const succes = await relancer(s);
+        if (succes) ok++; else ko++;
+      }
+      toast.success(`Relance groupée terminée : ${ok} envoyée(s)${ko > 0 ? `, ${ko} échec(s)` : ''}.`);
+    } finally {
+      setRelanceGroupee(false);
+    }
+  };
 
   useEffect(() => {
     Promise.all([
@@ -88,6 +143,7 @@ export default function AdminMandatsFacturation() {
                     <th className="p-3 font-medium">Signé le</th>
                     <th className="p-3 font-medium">Version</th>
                     <th className="p-3 font-medium">Inscrit le</th>
+                    <th className="p-3 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -124,6 +180,20 @@ export default function AdminMandatsFacturation() {
                       </td>
                       <td className="p-3 text-xs text-muted-foreground">
                         {s.cree_le ? format(new Date(s.cree_le), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                      </td>
+                      <td className="p-3">
+                        {!s.mandat_facturation_signe && (
+                          <BoutonY2K
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => relancerUn(s)}
+                            disabled={relanceEnCours === s.id || relanceGroupee}
+                            loading={relanceEnCours === s.id}
+                            iconeGauche={relanceEnCours === s.id ? undefined : <BellRing className="h-3.5 w-3.5" />}
+                          >
+                            Relancer
+                          </BoutonY2K>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -176,6 +246,19 @@ export default function AdminMandatsFacturation() {
                       </p>
                     </div>
                   </div>
+                  {!s.mandat_facturation_signe && (
+                    <BoutonY2K
+                      size="sm"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => relancerUn(s)}
+                      disabled={relanceEnCours === s.id || relanceGroupee}
+                      loading={relanceEnCours === s.id}
+                      iconeGauche={relanceEnCours === s.id ? undefined : <BellRing className="h-3.5 w-3.5" />}
+                    >
+                      Relancer
+                    </BoutonY2K>
+                  )}
                 </div>
               ))}
             </div>
@@ -241,6 +324,19 @@ export default function AdminMandatsFacturation() {
               className="pl-10"
             />
           </div>
+          {nonSignes.length > 0 && (
+            <BoutonY2K
+              variant="primary"
+              size="sm"
+              onClick={() => relancerTous(nonSignes)}
+              disabled={relanceGroupee}
+              loading={relanceGroupee}
+              iconeGauche={relanceGroupee ? undefined : <BellRing className="h-4 w-4" />}
+              className="whitespace-nowrap"
+            >
+              Relancer les {nonSignes.length} non signés
+            </BoutonY2K>
+          )}
           <div className="flex gap-2">
             {(['TOUS', 'SIGNE', 'NON_SIGNE'] as const).map((f) => (
               <button

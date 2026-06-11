@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ReclamationsScoreContent } from './AdminReclamationsScore';
+import { ScoreTriageContent } from './AdminScoreTriage';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { ChargementPage } from '@/components/ChargementPage';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,6 +27,10 @@ const STATUT_OPTIONS = [
 export default function AdminReclamations() {
   usePageTitle('Réclamations');
   const { afficherNotification } = useNotification();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const onglet = ['generales', 'score', 'triage'].includes(tabParam ?? '') ? (tabParam as string) : 'generales';
 
   const [reclamations, setReclamations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,23 +90,30 @@ export default function AdminReclamations() {
     setTraitement(null);
   };
 
-  if (loading) return <LayoutAdmin><ChargementPage /></LayoutAdmin>;
-
   const enAttente = reclamations.filter(r => r.statut === 'EN_ATTENTE' || r.statut === 'EN_COURS');
   const traitees = reclamations.filter(r => r.statut === 'RESOLUE' || r.statut === 'FERMEE');
 
   return (
     <LayoutAdmin>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground">Traiter les réclamations</h1>
+        <h1 className="text-xl font-bold text-foreground">Réclamations & scores</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Demandes générales des utilisateurs — les contestations de score sont sur{' '}
-          <a href="/admin/reclamations-score" className="text-primary hover:underline">Réclamations score</a>.
+          Demandes des utilisateurs, contestations de score et triage des comptes à risque — au même endroit.
         </p>
       </div>
 
+      <Tabs value={onglet} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="generales">Réclamations</TabsTrigger>
+          <TabsTrigger value="score">Contestations score</TabsTrigger>
+          <TabsTrigger value="triage">Triage des scores</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="generales" className="mt-0">
       <div className="space-y-4">
-        {reclamations.length === 0 ? (
+        {loading ? (
+          <ChargementPage />
+        ) : reclamations.length === 0 ? (
           <p className="text-center py-12 text-muted-foreground">Aucune réclamation générale.</p>
         ) : (
           <>
@@ -173,6 +188,16 @@ export default function AdminReclamations() {
           </>
         )}
       </div>
+        </TabsContent>
+
+        <TabsContent value="score" className="mt-0">
+          <ReclamationsScoreContent />
+        </TabsContent>
+
+        <TabsContent value="triage" className="mt-0">
+          <ScoreTriageContent />
+        </TabsContent>
+      </Tabs>
     </LayoutAdmin>
   );
 }

@@ -185,12 +185,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ─── Étape 3 : Ping API Chorus Pro (endpoint métier léger) ───
-    // Endpoint recommanderChorusPro : /cpro/transverses/v1/recupererAnnuaireDestinataire
-    // Alternative plus simple : consulter annuaire destinataire via API PISTE structures
-    // ⚠️ Header `KeyId` requis sur les endpoints métier en prod (plan API Manager).
+    // ─── Étape 3 : Ping API Chorus Pro (consulter/historique) ───
+    // Raccordement UTILISATEUR_APPLICATION_INTERNE : l'app PISTE est liée à la
+    // structure — pas de header cpro-account (il provoque un 401), et les routes
+    // /cpro/transverses/* ne sont pas exposées (403 écho). On teste une route
+    // métier réelle : un 400 « fonctionnel » prouve que routage + auth passent
+    // (le gateway a accepté le token et atteint l'API, qui rejette le body vide).
     const pingStart = Date.now();
-    const pingUrl = `${urls.api}/cpro/transverses/v1/recupererUtilisateurCourant`;
+    const pingUrl = `${urls.api}/cpro/factures/v1/consulter/historique`;
     try {
       const pingHeaders: Record<string, string> = {
         Authorization: `Bearer ${accessToken}`,
@@ -201,80 +203,74 @@ Deno.serve(async (req) => {
       const pingRes = await fetch(pingUrl, {
         method: 'POST',
         headers: pingHeaders,
-        body: JSON.stringify({ idUtilisateurCourant: 0 }),
+        body: JSON.stringify({}),
       });
       const pingText = await pingRes.text();
       let pingData: any;
       try { pingData = JSON.parse(pingText); } catch { pingData = { raw: pingText.slice(0, 500) }; }
 
+      const pingFonctionnel = pingRes.ok || pingRes.status === 400;
       diagnostics.push({
-        step: '3. Ping API Chorus Pro (recupererUtilisateurCourant)',
-        status: pingRes.ok ? 'OK' : 'FAIL',
+        step: '3. Ping API Chorus Pro (consulter/historique)',
+        status: pingFonctionnel ? 'OK' : 'FAIL',
         http_status: pingRes.status,
         duration_ms: Date.now() - pingStart,
-        detail: pingRes.ok
-          ? `Utilisateur courant : ${JSON.stringify(pingData).slice(0, 300)}`
+        detail: pingFonctionnel
+          ? `Routage + auth OK (HTTP ${pingRes.status}${pingRes.status === 400 ? ' fonctionnel — body de test rejeté comme attendu' : ''})`
           : `Erreur ${pingRes.status}: ${pingData?.libelleErreur || pingData?.error || pingText.slice(0, 200)}`,
       });
     } catch (pingErr) {
       diagnostics.push({
-        step: '3. Ping API Chorus Pro (recupererUtilisateurCourant)',
+        step: '3. Ping API Chorus Pro (consulter/historique)',
         status: 'FAIL',
         duration_ms: Date.now() - pingStart,
         detail: `Exception fetch : ${pingErr instanceof Error ? pingErr.message : String(pingErr)}`,
       });
     }
 
-    // ─── Étape 4 : Test auth Basic CHORUS_TECH_USER_* (si présent) ───
-    if (techLogin && techPassword) {
+    // ─── Étape 4 : API structures (/cpro/structures/v1/rechercher) ───
+    // Nouveau chemin (l'ancien /cpro/transverses/v1/rechercherStructure renvoie
+    // un 403 « route inconnue »). Pas de cpro-account : en mode
+    // UTILISATEUR_APPLICATION_INTERNE ce header provoque un 401 systématique.
+    {
       const techAuthStart = Date.now();
       try {
-        const cproAccount = btoa(`${techLogin}:${techPassword}`);
-        const techUrl = `${urls.api}/cpro/transverses/v1/rechercherStructure`;
+        const techUrl = `${urls.api}/cpro/structures/v1/rechercher`;
         const techHeaders: Record<string, string> = {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          'cpro-account': cproAccount,
         };
         if (apiKey) techHeaders['KeyId'] = apiKey;
         const techRes = await fetch(techUrl, {
           method: 'POST',
           headers: techHeaders,
           body: JSON.stringify({
-            idUtilisateurCourant: 0,
-            parametres: { nbResultatsMaxParPage: 1, numeroPagePourRechercher: 1, triSurChamp: 'Identifiant', triSensTri: 'Ascendant' },
-            restreindreStructures: { structureActive: true },
-            typeRecherche: 'ACTIF',
+            structure: { identifiantStructure: '00000000000000', typeIdentifiantStructure: 'SIRET' },
           }),
         });
         const techText = await techRes.text();
         let techData: any;
         try { techData = JSON.parse(techText); } catch { techData = { raw: techText.slice(0, 500) }; }
 
+        const techFonctionnel = techRes.ok || techRes.status === 400;
         diagnostics.push({
-          step: '4. Auth CHORUS_TECH_USER (rechercherStructure)',
-          status: techRes.ok ? 'OK' : 'FAIL',
+          step: '4. API structures (rechercher)',
+          status: techFonctionnel ? 'OK' : 'FAIL',
           http_status: techRes.status,
           duration_ms: Date.now() - techAuthStart,
-          detail: techRes.ok
-            ? `Recherche structure OK (resultats=${techData?.listeStructures?.length ?? 0})`
+          detail: techFonctionnel
+            ? `Routage + auth OK (HTTP ${techRes.status}${techRes.status === 400 ? ' fonctionnel' : ` — resultats=${techData?.listeStructures?.length ?? 0}`})`
             : `Erreur ${techRes.status}: ${techData?.libelleErreur || techData?.message || techText.slice(0, 200)}`,
         });
       } catch (techErr) {
         diagnostics.push({
-          step: '4. Auth CHORUS_TECH_USER (rechercherStructure)',
+          step: '4. API structures (rechercher)',
           status: 'FAIL',
           duration_ms: Date.now() - techAuthStart,
           detail: `Exception fetch : ${techErr instanceof Error ? techErr.message : String(techErr)}`,
         });
       }
-    } else {
-      diagnostics.push({
-        step: '4. Auth CHORUS_TECH_USER',
-        status: 'SKIP',
-        detail: 'CHORUS_TECH_USER_LOGIN/PASSWORD non configurés',
-      });
     }
 
     // ─── Résumé ───
