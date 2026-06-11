@@ -39,6 +39,7 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { BlocContratTravailMission } from '@/components/BlocContratTravailMission';
+import { BandeauActionPrioritaire, type ActionPrioritaire } from '@/components/BandeauActionPrioritaire';
 import { ModaleAnnulationCandidature } from '@/components/soignant/ModaleAnnulationCandidature';
 import { AnnulationCandidatureTimer } from '@/components/soignant/AnnulationCandidatureTimer';
 
@@ -180,6 +181,45 @@ export default function DetailMissionSoignant() {
   const estAssigneAutre = !estOuverte && !estAssigne && mission.soignant_assigne_id;
   const duree = mission.duree_heures ?? ((new Date(mission.fin_le).getTime() - new Date(mission.debut_le).getTime()) / 3600000);
   const estModeCandidature = mission.mode_attribution === 'CANDIDATURE';
+
+  /* Hiérarchisation : LA prochaine action attendue du soignant (la plus
+     prioritaire seulement, et uniquement si l'état chargé la rend certaine —
+     jamais de rappel pour une action peut-être déjà faite). */
+  const actionPrioritaire: ActionPrioritaire | null = (() => {
+    if (estAssigne && (mission as any).mode_remuneration === 'RETROCESSION'
+      && (mission as any).montant_honoraires_bruts && !(mission as any).honoraires_confirmes_le) {
+      return {
+        titre: "Confirmez votre relevé d'honoraires",
+        description: `Le cabinet déclare ${Number((mission as any).montant_honoraires_bruts).toLocaleString('fr-FR')} € — validez ou contestez sous 48h.`,
+        cta: 'Voir le relevé',
+        cibleId: 'bloc-retro-confirm',
+        variante: 'warning',
+      };
+    }
+    if (estAssigne && mission.statut === 'ASSIGNEE'
+      && new Date(mission.debut_le).getTime() - Date.now() < 48 * 3600000
+      && new Date(mission.debut_le).getTime() > Date.now()
+      && !(mission as any).presence_confirmee_le) {
+      return {
+        titre: 'Confirmez votre présence',
+        description: 'La mission démarre bientôt — 1 clic pour rassurer l\'établissement.',
+        cta: 'Confirmer',
+        cibleId: 'bloc-presence',
+        variante: 'warning',
+      };
+    }
+    if (estOuverte && peutPostuler && !candidatureEnvoyee && !chevauchement) {
+      return {
+        titre: estModeCandidature ? 'Postulez à cette mission' : 'Acceptez cette mission',
+        description: estModeCandidature
+          ? 'L\'établissement examinera votre profil et vous répondra.'
+          : 'Premier arrivé, premier servi — la mission part vite.',
+        cta: estModeCandidature ? 'Postuler' : 'Accepter',
+        cibleId: 'bloc-actions',
+      };
+    }
+    return null;
+  })();
 
   const postulerMission = async (choixContrat?: string) => {
     if (postulationLockRef.current) return;
@@ -344,6 +384,8 @@ export default function DetailMissionSoignant() {
         <ArrowLeft className="h-4 w-4" /> Retour
       </button>
 
+      {actionPrioritaire && <BandeauActionPrioritaire {...actionPrioritaire} />}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Col 1 — Infos */}
         <div className="space-y-4">
@@ -502,7 +544,7 @@ export default function DetailMissionSoignant() {
               }}
             />
           ) : (mission as any).mode_remuneration === 'RETROCESSION' && (mission as any).montant_honoraires_bruts && !(mission as any).honoraires_confirmes_le && mission.soignant_assigne_id === user?.id ? (
-            <div className="card-base border-warning/40 bg-warning/5 space-y-2">
+            <div id="bloc-retro-confirm" className="card-base border-warning/40 bg-warning/5 space-y-2">
               <p className="text-sm font-semibold text-foreground">💶 Relevé d'honoraires à confirmer</p>
               <p className="text-xs text-muted-foreground">
                 Le cabinet déclare <strong>{Number((mission as any).montant_honoraires_bruts).toLocaleString('fr-FR')} €</strong> d'honoraires
@@ -588,7 +630,7 @@ export default function DetailMissionSoignant() {
           )}
 
           {/* Actions */}
-          <div className="card-base">
+          <div id="bloc-actions" className="card-base">
             {estOuverte && (
               <>
                 <BlocagePostulation completionProfil={completionProfil} documentsValides={!!soignant.tous_documents_valides} premiereMissionLe={premiereMissionLe} missionDebutLe={mission.debut_le} />
@@ -668,7 +710,7 @@ export default function DetailMissionSoignant() {
                   && new Date(mission.debut_le).getTime() - Date.now() < 48 * 3600000
                   && new Date(mission.debut_le).getTime() > Date.now()
                   && !(mission as any).presence_confirmee_le && (
-                  <div className="bg-warning/5 border border-warning/30 rounded-xl p-3 mb-4">
+                  <div id="bloc-presence" className="bg-warning/5 border border-warning/30 rounded-xl p-3 mb-4">
                     <p className="text-sm font-semibold text-foreground">Confirmez votre présence</p>
                     <p className="text-xs text-muted-foreground mt-1 mb-2">
                       La mission démarre bientôt — confirmez en 1 clic pour rassurer l'établissement.
