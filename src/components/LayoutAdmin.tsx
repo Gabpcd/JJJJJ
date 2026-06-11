@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings } from 'lucide-react';
+import { LucideIcon, BarChart3, Users, Shield, CreditCard, LogOut, HeartPulse, ShieldCheck, Mail, Code2, Building2, CalendarDays, Flame, ClipboardList, MessageCircle, Menu, X, Home, Coins, AlertTriangle, FileCheck, Zap, TrendingUp, ChevronDown, FileStack, Scale, Star, FileSignature, Activity, Flag, Rocket, UserPlus, Megaphone, Settings, Search } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FooterLegal } from '@/components/FooterLegal';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { RechercheGlobaleAdmin } from '@/components/admin/RechercheGlobaleAdmin';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
 
 import { useAccesAdmin } from '@/hooks/useAccesAdmin';
@@ -170,8 +171,21 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { deconnexion } = useAuth();
   const [menuOuvert, setMenuOuvert] = useState(false);
+  const [rechercheOuverte, setRechercheOuverte] = useState(false);
   const scrollDirection = useScrollDirection();
   const { accesTotal, aAcces } = useAccesAdmin();
+
+  // ⌘K / Ctrl+K → recherche globale
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setRechercheOuverte(o => !o);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const handleDeconnexion = async () => {
     await deconnexion();
@@ -211,6 +225,16 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
           </div>
           <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
+        <div className="px-3 pt-3">
+          <button
+            onClick={() => setRechercheOuverte(true)}
+            className="w-full flex items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 py-2 text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+          >
+            <Search className="h-4 w-4" />
+            <span className="flex-1 text-left">Rechercher…</span>
+            <kbd className="text-[10px] font-mono border border-sidebar-border rounded px-1.5 py-0.5">⌘K</kbd>
+          </button>
+        </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navFiltered.map((entry, i) =>
             isGroup(entry) ? (
@@ -249,12 +273,27 @@ export function LayoutAdmin({ children }: { children: React.ReactNode }) {
           <span className="font-bold text-foreground">Admin</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setRechercheOuverte(true)}
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+            title="Rechercher"
+            aria-label="Rechercher"
+          >
+            <Search className="h-5 w-5" />
+          </button>
           <ThemeToggle />
           <button onClick={handleDeconnexion} className="p-2 text-muted-foreground hover:text-destructive transition-colors" title="Déconnexion">
             <LogOut className="h-5 w-5" />
           </button>
         </div>
       </header>
+
+      {/* ── Recherche globale (⌘K) ── */}
+      <RechercheGlobaleAdmin
+        open={rechercheOuverte}
+        onOpenChange={setRechercheOuverte}
+        pages={allFlatItems}
+      />
 
       {/* ── Mobile bottom nav (Sprint 9-D : glassmorphism subtle) ── */}
       <nav
