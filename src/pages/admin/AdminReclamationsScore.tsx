@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, FileText, AlertCircle, CheckCircle, XCircle, Edit3 } from 'lucide-react';
-import { LayoutAdmin } from '@/components/LayoutAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
-import { usePageTitle } from '@/hooks/usePageTitle';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
@@ -73,8 +71,9 @@ const LIBELLES_DECISION: Record<NonNullable<Reclamation['decision_admin']>, stri
  * Liste des réclamations de score avec actions MAINTENIR/REDUIRE/ANNULER.
  * Décision propagée automatiquement aux événements + recalcul score.
  */
-export default function AdminReclamationsScore() {
-  usePageTitle('Réclamations score');
+/* Session D-bis : contenu embarqué comme onglet « Contestations score » de
+   /admin/reclamations (l'ancienne route /admin/reclamations-score redirige). */
+export function ReclamationsScoreContent() {
   const { afficherNotification } = useNotification();
   const [filtre, setFiltre] = useState<'PENDING' | 'TREATED' | 'TOUS'>('PENDING');
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
@@ -97,9 +96,7 @@ export default function AdminReclamationsScore() {
   useEffect(() => { charger(); }, [filtre]);
 
   return (
-    <LayoutAdmin>
-      <div className="max-w-5xl mx-auto p-4 space-y-4">
-        <h1 className="text-2xl font-bold text-foreground">Réclamations score</h1>
+      <div className="space-y-4">
 
         <div className="flex gap-2">
           {(['PENDING', 'TREATED', 'TOUS'] as const).map(f => (
@@ -188,7 +185,6 @@ export default function AdminReclamationsScore() {
           />
         )}
       </div>
-    </LayoutAdmin>
   );
 }
 

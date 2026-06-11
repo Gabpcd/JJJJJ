@@ -53,6 +53,57 @@ export default function AdminDetailUtilisateur() {
     charger();
   }, [id]);
 
+  /* Validation manuelle : l'admin téléverse un document reçu en privé au nom
+     du soignant (storage admin policy + RPC fn_admin_ajouter_document_soignant)
+     puis il est validé immédiatement — tous_documents_valides est recalculé. */
+  const [uploadDocType, setUploadDocType] = useState('CNI');
+  const [uploadEnCours, setUploadEnCours] = useState(false);
+  const [validationEnCours, setValidationEnCours] = useState<string | null>(null);
+
+  const uploaderPourSoignant = async (fichier: File) => {
+    if (!id) return;
+    setUploadEnCours(true);
+    try {
+      const nomSanitise = fichier.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '-');
+      const cle = `${id}/documents/${uploadDocType}/${Date.now()}-${nomSanitise}`;
+      const { error: upErr } = await supabase.storage.from('jolene-documents')
+        .upload(cle, fichier, { contentType: fichier.type || undefined, upsert: false });
+      if (upErr) { toast.error(`Téléversement impossible : ${upErr.message}`); return; }
+      const { data, error } = await supabase.rpc('fn_admin_ajouter_document_soignant' as any, {
+        p_soignant_id: id,
+        p_type_document: uploadDocType,
+        p_cle: cle,
+        p_nom_fichier: fichier.name,
+        p_type_mime: fichier.type || null,
+        p_taille_octets: fichier.size,
+        p_valider: true,
+      });
+      if (error || (data as any)?.error) {
+        await supabase.storage.from('jolene-documents').remove([cle]);
+        toast.error((data as any)?.error || 'Enregistrement impossible.');
+        return;
+      }
+      toast.success(`Document ${TYPES_DOCUMENTS[uploadDocType] || uploadDocType} ajouté et validé ✓`);
+      charger();
+    } finally {
+      setUploadEnCours(false);
+    }
+  };
+
+  const validerDocument = async (docId: string) => {
+    setValidationEnCours(docId);
+    try {
+      const { data, error } = await supabase.rpc('fn_admin_moderer_document' as any, {
+        p_document_id: docId, p_action: 'VALIDER',
+      });
+      if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Validation impossible.'); return; }
+      toast.success('Document validé ✓');
+      charger();
+    } finally {
+      setValidationEnCours(null);
+    }
+  };
+
   const charger = async () => {
     setLoading(true);
 
@@ -414,6 +465,35 @@ export default function AdminDetailUtilisateur() {
             <CardY2K noPadding>
               <CardY2KHeader><CardY2KTitle className="text-lg">Documents ({documents.length})</CardY2KTitle></CardY2KHeader>
               <CardY2KContent>
+                {/* Upload admin : documents reçus en privé, validés à l'ajout */}
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
+                  <p className="text-xs text-muted-foreground flex-1">
+                    📎 Le soignant vous a envoyé un document en privé ? Ajoutez-le ici : il sera validé immédiatement.
+                  </p>
+                  <select
+                    value={uploadDocType}
+                    onChange={(e) => setUploadDocType(e.target.value)}
+                    className="input-base text-xs h-9 sm:w-44"
+                  >
+                    {Object.entries(TYPES_DOCUMENTS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                  <label className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3 h-9 text-xs font-semibold cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 ${uploadEnCours ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {uploadEnCours ? 'Envoi…' : 'Choisir le fichier'}
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      disabled={uploadEnCours}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploaderPourSoignant(f);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
                 {documents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Aucun document téléversé.</p>
                 ) : (
@@ -428,6 +508,7 @@ export default function AdminDetailUtilisateur() {
                             <TableHead>Statut</TableHead>
                             <TableHead>Validité</TableHead>
                             <TableHead>Téléversé le</TableHead>
+                            <TableHead></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -447,6 +528,19 @@ export default function AdminDetailUtilisateur() {
                                 </TableCell>
                                 <TableCell className="text-xs">
                                   {doc.televerse_le ? new Date(doc.televerse_le).toLocaleDateString('fr-FR') : '—'}
+                                </TableCell>
+                                <TableCell>
+                                  {doc.statut_verification !== 'VERIFIE' && (
+                                    <BoutonY2K
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => validerDocument(doc.id)}
+                                      disabled={validationEnCours === doc.id}
+                                      loading={validationEnCours === doc.id}
+                                    >
+                                      Valider
+                                    </BoutonY2K>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             );

@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Search, Eye, MessageSquare, Award } from 'lucide-react';
-import { LayoutAdmin } from '@/components/LayoutAdmin';
+import { Loader2, Search, Eye, MessageSquare } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableOuCartes, type ColonneTableau } from '@/components/ui/TableOuCartes';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
-import { usePageTitle } from '@/hooks/usePageTitle';
 import { BoutonY2K } from '@/components/y2k/BoutonY2K';
 import { BadgeY2K } from '@/components/y2k/BadgeY2K';
 
@@ -49,8 +47,9 @@ function badgeNiveauVariant(niveau: LigneScore['niveau']): 'premium' | 'warning'
   }
 }
 
-export default function AdminScoreTriage() {
-  usePageTitle('Triage scores');
+/* Session D-bis : contenu embarqué comme onglet « Triage des scores » de
+   /admin/reclamations (l'ancienne route /admin/scores redirige). */
+export function ScoreTriageContent() {
   const navigate = useNavigate();
   const { afficherNotification } = useNotification();
   const [lignes, setLignes] = useState<LigneScore[]>([]);
@@ -120,17 +119,10 @@ export default function AdminScoreTriage() {
   };
 
   return (
-    <LayoutAdmin>
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-        <header className="flex items-center gap-3">
-          <Award className="w-7 h-7 text-amber-600" aria-hidden />
-          <div>
-            <h1 className="text-2xl font-bold">Triage des scores</h1>
-            <p className="text-sm text-muted-foreground">
-              Vue centralisée soignants + établissements pour identifier rapidement les comptes à risque.
-            </p>
-          </div>
-        </header>
+      <div className="space-y-6">
+        <p className="text-sm text-muted-foreground">
+          Vue centralisée soignants + établissements pour identifier rapidement les comptes à risque.
+        </p>
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="relative flex-1 max-w-md">
@@ -280,6 +272,5 @@ export default function AdminScoreTriage() {
           );
         })()}
       </div>
-    </LayoutAdmin>
   );
 }
