@@ -44,12 +44,12 @@ test.describe('Matrice documents requis par profession + exercice', () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
-  test('AS salariée → CARTE_IDENTITE + DIPLOME (+ autorisation d'exercice optionnelle)', () => {
+  test('AS salariée → CARTE_IDENTITE + DIPLOME (+ autorisation exercice optionnelle)', () => {
     const docs = docsVisibles(rows, 'AS', 'SALARIE');
     expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
   });
 
-  test('AES salariée → CARTE_IDENTITE + DIPLOME (+ autorisation d'exercice optionnelle)', () => {
+  test('AES salariée → CARTE_IDENTITE + DIPLOME (+ autorisation exercice optionnelle)', () => {
     const docs = docsVisibles(rows, 'AES', 'SALARIE');
     expect(docs).toEqual(['AUTORISATION_EXERCICE', 'CARTE_IDENTITE', 'DIPLOME']);
   });
