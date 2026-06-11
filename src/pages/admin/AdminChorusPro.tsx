@@ -90,7 +90,7 @@ export default function AdminChorusPro() {
       if (error) throw error;
       const d: any = data;
       if (d.success) {
-        toast.success(`Connexion Chorus Pro ${d.env} opérationnelle (${d.duration_ms}ms)`);
+        toast.success(`Connexion Chorus Pro ${d.env} opérationnelle — 4/4 tests OK (${d.total_duration_ms ?? '—'} ms)`);
       } else {
         const fails = d.diagnostics?.filter((s: any) => s.status === 'FAIL').map((s: any) => s.step).join(', ');
         toast.error(`Connexion Chorus Pro — échecs : ${fails || d.summary}`);
