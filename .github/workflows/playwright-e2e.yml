@@ -102,6 +102,12 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ env.E2E_PUBLISHABLE_KEY }}
           PLAYWRIGHT_TEST_PASSWORD: ${{ env.E2E_TEST_PASSWORD }}
           CI: 'true'
+      - name: Détail a11y si échec (rapport court en fin de log)
+        if: failure()
+        run: npx playwright test e2e/a11y.spec.ts --project=chromium --reporter=line --retries=0 || true
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          CI: 'true'
       - name: Upload report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v5
