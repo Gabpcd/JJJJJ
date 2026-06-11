@@ -78,7 +78,10 @@ export default function InscriptionEtablissement() {
   const maj = (champ: string, valeur: any) => setForm(prev => ({ ...prev, [champ]: valeur }));
   const etape1Valide = form.email && form.motDePasse.length >= 8 && form.motDePasse === form.confirmMdp && cgu && cgv;
   const siretEstValide = siretValidation?.valide === true;
-  const etape2Valide = form.nom && siretEstValide && form.type && form.ville;
+  // Session C : étape 2 = identité établissement, étape 3 = coordonnées (10 champs
+  // d'un bloc → 2 écrans courts, moins d'abandon mi-parcours)
+  const etape2Valide = form.nom && siretEstValide && form.type;
+  const etape3Valide = !!form.ville;
 
   const verifierSiretInsee = useCallback(async (siret: string) => {
     if (siret.length !== 14) return;
@@ -154,13 +157,19 @@ export default function InscriptionEtablissement() {
         </div>
         <h1 className="text-xl font-bold text-foreground text-center mb-2">Inscription Établissement</h1>
 
-        <div className="flex items-center justify-center gap-0 mb-8">
-          <div className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${etape >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-            {etape > 1 ? <Check className="h-4 w-4" /> : '1'}
-          </div>
-          <div className={`h-1 w-16 mx-1 rounded-full ${etape > 1 ? 'bg-primary' : 'bg-muted'}`} />
-          <div className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${etape >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>2</div>
+        <div className="flex items-center justify-center gap-0 mb-2">
+          {[1, 2, 3].map((n) => (
+            <React.Fragment key={n}>
+              {n > 1 && <div className={`h-1 w-12 mx-1 rounded-full ${etape >= n ? 'bg-primary' : 'bg-muted'}`} />}
+              <div className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${etape >= n ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                {etape > n ? <Check className="h-4 w-4" /> : n}
+              </div>
+            </React.Fragment>
+          ))}
         </div>
+        <p className="text-center text-xs text-muted-foreground mb-6">
+          Étape {etape}/3 — {etape === 1 ? 'Identifiants' : etape === 2 ? 'Votre établissement' : 'Coordonnées'} · environ 2 minutes
+        </p>
 
         <form onSubmit={handleSubmit}>
           {etape === 1 && (
@@ -203,8 +212,6 @@ export default function InscriptionEtablissement() {
           )}
 
           {etape === 2 && (
-            <>
-            <GeoAutoEtab onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
             <div className="space-y-4">
               <p className="text-sm font-medium text-muted-foreground mb-4">Étape 2 — Votre établissement</p>
               <div><label className="text-sm font-medium text-foreground mb-1.5 block">Nom de l'établissement *</label><input value={form.nom} onChange={e => maj('nom', e.target.value)} className="input-base" required /></div>
@@ -255,6 +262,18 @@ export default function InscriptionEtablissement() {
               {form.type !== 'PHARMACIE_OFFICINE' && (
                 <p className="text-xs text-muted-foreground">ℹ️ Le plafond Loi Rist s'applique aux taux horaires en CDD.</p>
               )}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
+                <button type="button" onClick={() => setEtape(3)} disabled={!etape2Valide} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
+              </div>
+            </div>
+          )}
+
+          {etape === 3 && (
+            <>
+            <GeoAutoEtab onResult={(lat, lng) => { maj('lat', lat); maj('lng', lng); }} />
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-muted-foreground mb-4">Étape 3 — Coordonnées</p>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Adresse</label>
                 <input value={form.rue} onChange={e => maj('rue', e.target.value)} placeholder="Rue" className="input-base mb-2" />
@@ -270,8 +289,8 @@ export default function InscriptionEtablissement() {
               </div>
               <CaptchaTurnstile className="flex justify-center pt-2" onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} onError={() => setTurnstileToken(null)} />
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEtape(1)} className="btn-secondary flex-1">Retour</button>
-                <button type="submit" disabled={!etape2Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+                <button type="button" onClick={() => setEtape(2)} className="btn-secondary flex-1">Retour</button>
+                <button type="submit" disabled={!etape3Valide || submitting} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {submitting ? 'Création…' : 'Créer le compte'}
                 </button>

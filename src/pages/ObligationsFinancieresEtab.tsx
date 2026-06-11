@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, Banknote, FileText, Building2, Users, Loader2, ExternalLink } from 'lucide-react';
-import { LayoutApp } from '@/components/LayoutApp';
+import { AlertTriangle, Banknote, FileText, Building2, Users, Loader2, ExternalLink } from 'lucide-react';
 import { ChargementPage } from '@/components/ChargementPage';
-import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/integrations/supabase/client';
 import { useNotification } from '@/contexts/NotificationContext';
 import { format, differenceInDays } from 'date-fns';
@@ -82,8 +80,10 @@ type FiltreType = 'TOUS' | 'SOIGNANTS' | 'COMMISSIONS';
  *  - Liste paiements en attente (déclarés non confirmés)
  *  - Liens vers détail mission + page facturation pour règlement
  */
-export default function ObligationsFinancieresEtab() {
-  usePageTitle('Obligations financières');
+/* Session C : contenu embarqué comme onglet « Obligations » de
+   /etablissement/facturation (l'ancienne page /etablissement/obligations
+   redirige). */
+export function ObligationsFinancieresContent() {
   const navigate = useNavigate();
   const { afficherNotification } = useNotification();
   const [loading, setLoading] = useState(true);
@@ -116,13 +116,9 @@ export default function ObligationsFinancieresEtab() {
   const missionsNonPayees = useMemo(() => obligations?.missions_non_payees ?? [], [obligations]);
   const paiementsEnAttente = useMemo(() => obligations?.paiements_soignants_en_attente ?? [], [obligations]);
 
-  if (loading) return <LayoutApp role="ADMIN_ETABLISSEMENT"><ChargementPage /></LayoutApp>;
+  if (loading) return <ChargementPage />;
   if (!obligations) {
-    return (
-      <LayoutApp role="ADMIN_ETABLISSEMENT">
-        <p className="text-muted-foreground">Données non disponibles.</p>
-      </LayoutApp>
-    );
+    return <p className="text-muted-foreground">Données non disponibles.</p>;
   }
 
   const totalDu = Number(obligations.total_du ?? 0);
@@ -130,19 +126,10 @@ export default function ObligationsFinancieresEtab() {
   const totalCommissions = Number(obligations.total_commissions_du ?? 0);
 
   return (
-    <LayoutApp role="ADMIN_ETABLISSEMENT">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary hover:underline mb-2">
-        <ArrowLeft className="h-4 w-4" /> Retour
-      </button>
-
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground inline-flex items-center gap-2">
-          <Banknote className="h-6 w-6 text-primary" /> Obligations financières
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Vue consolidée de vos dettes en attente : soignants à payer + commissions Jolene + factures publiques.
-        </p>
-      </div>
+    <div>
+      <p className="text-sm text-muted-foreground mb-4">
+        Vue consolidée de vos dettes en attente : soignants à payer + commissions Jolene + factures publiques.
+      </p>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
@@ -374,14 +361,13 @@ export default function ObligationsFinancieresEtab() {
       )}
 
       <div className="rounded-xl bg-muted/30 border border-border p-4 text-xs text-muted-foreground">
-        <p className="font-semibold text-foreground mb-1">À propos de cette page</p>
+        <p className="font-semibold text-foreground mb-1">À propos de cet onglet</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>Vue consolidée alimentée par la RPC <code>fn_obligations_financieres</code>.</li>
-          <li>Les actions de paiement détaillées (Stripe Connect, déclaration manuelle, Chorus Pro) sont disponibles dans la page facturation.</li>
-          <li>Les factures Chorus Pro publiques apparaissent dans la facturation dédiée.</li>
+          <li>Vue consolidée et actualisée en temps réel de tout ce qui reste à régler.</li>
+          <li>Les actions de paiement (carte, virement, Chorus Pro) se font depuis l'onglet Facturation.</li>
         </ul>
       </div>
-    </LayoutApp>
+    </div>
   );
 }
 

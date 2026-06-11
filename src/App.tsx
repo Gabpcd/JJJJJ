@@ -121,7 +121,6 @@ const MesFavorisEtablissement = lazy(() => import("./pages/MesFavorisEtablisseme
 const PageParrainageEtablissement = lazy(() => import("./pages/PageParrainageEtablissement"));
 const DetailPresencesMission = lazy(() => import("./pages/DetailPresencesMission"));
 const Parametres = lazy(() => import("./pages/Parametres"));
-const ObligationsFinancieresEtab = lazy(() => import("./pages/ObligationsFinancieresEtab"));
 const EquipeEtablissement = lazy(() => import("./pages/EquipeEtablissement"));
 const AccepterInvitationEtab = lazy(() => import("./pages/AccepterInvitationEtab"));
 const EvaluationsAFaireEtab = lazy(() => import("./pages/EvaluationsAFaireEtab"));
@@ -322,7 +321,7 @@ function AppRoutes() {
           <Route path="/etablissement/parrainage" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><PageParrainageEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/dashboard" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><DashboardEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/contrat-plateforme" element={<Navigate to="/etablissement/parametres?tab=contrats" replace />} />
-          <Route path="/etablissement/obligations" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><ObligationsFinancieresEtab /></RouteProtegee>} />
+          <Route path="/etablissement/obligations" element={<Navigate to="/etablissement/facturation?tab=obligations" replace />} />
           <Route path="/etablissement/equipe" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EquipeEtablissement /></RouteProtegee>} />
           <Route path="/etablissement/evaluations-a-faire" element={<RouteProtegee rolesAutorises={['ADMIN_ETABLISSEMENT']}><EvaluationsAFaireEtab /></RouteProtegee>} />
           <Route path="/etab/invitation/:token" element={<AccepterInvitationEtab />} />

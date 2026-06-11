@@ -50,7 +50,7 @@ export default function MonCompteEtablissement() {
       titre: 'Finances',
       lignes: [
         { icone: CreditCard, label: 'Facturation', route: '/etablissement/facturation' },
-        { icone: Landmark, label: 'Obligations financières', route: '/etablissement/obligations' },
+        { icone: Landmark, label: 'Obligations financières', route: '/etablissement/facturation?tab=obligations' },
         { icone: FileSpreadsheet, label: 'Export paie', route: '/etablissement/export-paie' },
         { icone: FileStack, label: 'Chorus Pro', route: '/etablissement/chorus-config' },
         { icone: ShieldCheck, label: 'Assurance', route: '/etablissement/assurance' },

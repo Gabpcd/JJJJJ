@@ -46,6 +46,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useEtablissementScope } from '@/hooks/useEtablissementScope';
+import { ObligationsFinancieresContent } from '@/pages/ObligationsFinancieresEtab';
 
 const fmt = (v: number | null | undefined) =>
   v != null ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v) : '—';
@@ -101,6 +102,12 @@ export default function FacturationEtablissement() {
   const { afficherNotification } = useNotification();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  // Onglet de page : 'obligations' = vue consolidée des dettes (ex-page dédiée).
+  // Les autres valeurs de ?tab= (commissions, missions-a-payer…) ciblent des
+  // sections de l'onglet facturation et ne changent pas d'onglet.
+  const [ongletPage, setOngletPage] = useState<'facturation' | 'obligations'>(
+    searchParams.get('tab') === 'obligations' ? 'obligations' : 'facturation'
+  );
 
   // ── Data ──
   const [loading, setLoading] = useState(true);
@@ -406,6 +413,27 @@ export default function FacturationEtablissement() {
         </div>
       </div>
 
+      {/* ── Onglets Facturation | Obligations (Session C : fusion de l'ancienne
+          page /etablissement/obligations, redirigée vers ?tab=obligations) ── */}
+      <div className="flex gap-1 mb-6 bg-muted/50 rounded-xl p-1 w-fit">
+        {([
+          { id: 'facturation', label: '💳 Facturation' },
+          { id: 'obligations', label: '📋 Obligations' },
+        ] as const).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setOngletPage(t.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${ongletPage === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {ongletPage === 'obligations' ? (
+        <ObligationsFinancieresContent />
+      ) : (
+      <>
       {/* ── SECTION 0 : État vide si rien à payer ── */}
       {data && data.total_du === 0 && missionsNonPayees.length === 0 && facturesImpayees.length === 0 && (
         <FadeInView>
@@ -1313,6 +1341,8 @@ export default function FacturationEtablissement() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      )}
+      </>
       )}
     </LayoutApp>
   );
