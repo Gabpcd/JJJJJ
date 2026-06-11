@@ -193,7 +193,9 @@ function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (pat
         <p className="text-sm font-semibold text-success">💶 Honoraires déclarés : {Number(mission.montant_honoraires_bruts).toLocaleString('fr-FR')} €</p>
         <p className="text-xs text-muted-foreground mt-1">
           Rétrocession au remplaçant ({mission.retrocession_pct}%) : <strong>{Number(mission.net_a_payer ?? retro).toLocaleString('fr-FR')} €</strong> —
-          réglez-le par virement puis déclarez le paiement ci-dessous.
+          {mission.honoraires_confirmes_le
+            ? ' relevé confirmé par le remplaçant ✓. Réglez-le par virement puis déclarez le paiement ci-dessous.'
+            : ' ⏳ en attente de confirmation du remplaçant (validation automatique sous 48h sans contestation).'}
         </p>
       </div>
     );
@@ -417,7 +419,7 @@ export default function DetailMission({ role = 'ADMIN_ETABLISSEMENT' }: { role?:
           montant_commission_ttc, commission_facturee,
           statut, est_urgente, niveau_urgence, soignant_assigne_id, etablissement_id,
           mode_attribution, boostee_le, garantie_remplacement, presence_confirmee_le,
-          mode_remuneration, retrocession_pct, montant_honoraires_bruts,
+          mode_remuneration, retrocession_pct, montant_honoraires_bruts, honoraires_confirmes_le,
           type_contrat_recherche, type_contrat_applique, type_paiement_soignant, mode_paiement_soignant, choix_contrat_soignant,
           cree_le, modifie_le,
           etablissements(nom, adresse_ville, adresse_departement,
