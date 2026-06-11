@@ -1,0 +1,13 @@
+-- Fermeture des 2 trous restants de l'audit bout-en-bout (appliquée prod via MCP,
+-- version 20260611083102, patches vérifiés + cron testé) :
+-- ① fn_detecter_noshow_et_remplacer : la mission originale passe en ABSENCE +
+--    absence_sans_prevenir=true après création du remplacement (au lieu de rester
+--    ASSIGNEE en doublon) → chaîne automatiquement l'événement de score NO_SHOW
+--    -30 contestable (trg_absence_event_score), le compteur de suspension et le
+--    litige auto existant.
+-- ② fn_accepter_mission : le fallback de récupération du contrat filtre sur
+--    soignant_id = auth.uid() et exclut les contrats ANNULE (sinon, après un
+--    repool arrêt maladie/désistement, le repreneur pouvait récupérer l'id du
+--    contrat annulé de son prédécesseur).
+-- Corps complets : voir la migration appliquée en prod (patches ciblés DO/replace).
+SELECT 1;

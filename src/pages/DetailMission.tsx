@@ -183,6 +183,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
    le remplacement → rétrocession (%) et commission calculées automatiquement. ── */
 function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (patch: any) => void }) {
   const [montant, setMontant] = useState('');
+  const [justificatif, setJustificatif] = useState<File | null>(null);
   const [envoi, setEnvoi] = useState(false);
 
   if (mission.montant_honoraires_bruts != null) {
@@ -201,10 +202,19 @@ function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (pat
   const declarer = async () => {
     const v = parseFloat(montant);
     if (!v || v <= 0) { toast.error('Saisissez le montant des honoraires encaissés.'); return; }
+    if (!justificatif) { toast.error('Joignez le relevé d\'actes / bordereau justificatif (obligatoire).'); return; }
     setEnvoi(true);
     try {
+      // Preuve opposable : relevé uploadé dans le bucket privé 'justificatifs',
+      // référencé sur la mission (consultable par le remplaçant via litige et l'admin).
+      const nomSanitise = justificatif.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '-');
+      const cle = `retrocession/${mission.id}/${Date.now()}-${nomSanitise}`;
+      const { error: upErr } = await supabase.storage.from('justificatifs')
+        .upload(cle, justificatif, { contentType: justificatif.type || undefined, upsert: false });
+      if (upErr) { toast.error('Téléversement du justificatif impossible.'); return; }
+
       const { data, error } = await supabase.rpc('fn_declarer_honoraires_retrocession' as any, {
-        p_mission_id: mission.id, p_montant_honoraires: v,
+        p_mission_id: mission.id, p_montant_honoraires: v, p_justificatif_cle: cle,
       });
       if (error || (data as any)?.error) { toast.error((data as any)?.error || 'Déclaration impossible.'); return; }
       toast.success(`Rétrocession calculée : ${(data as any).montant_retrocede} € à verser au remplaçant. Le soignant est notifié.`);
@@ -220,14 +230,26 @@ function DeclarationRetrocession({ mission, onMaj }: { mission: any; onMaj: (pat
       <p className="text-xs text-muted-foreground">
         Montant brut des actes encaissés pendant le remplacement (vos feuilles de soins).
         La rétrocession ({mission.retrocession_pct ?? 50}%) et la commission Jolene seront calculées automatiquement.
+        <strong> Justificatif obligatoire</strong> (relevé d'actes, journal SNIR ou bordereau de la période) —
+        preuve opposable jointe à la mission.
       </p>
+      <label className="text-xs font-medium text-foreground block">
+        📎 Relevé justificatif *
+        <input
+          type="file"
+          accept="image/*,.pdf"
+          onChange={(e) => setJustificatif(e.target.files?.[0] || null)}
+          className="block mt-1 text-xs text-muted-foreground file:mr-2 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-primary file:text-xs file:font-medium"
+        />
+        {justificatif && <span className="text-success">✓ {justificatif.name}</span>}
+      </label>
       <div className="flex gap-2">
         <div className="relative flex-1 max-w-[220px]">
           <input type="number" step="0.01" min="1" value={montant} onChange={(e) => setMontant(e.target.value)}
             placeholder="Ex : 4 250" className="input-base pr-8" />
           <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
         </div>
-        <BoutonY2K size="sm" onClick={declarer} disabled={envoi || !montant} loading={envoi}>
+        <BoutonY2K size="sm" onClick={declarer} disabled={envoi || !montant || !justificatif} loading={envoi}>
           Déclarer
         </BoutonY2K>
       </div>

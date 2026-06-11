@@ -1,0 +1,11 @@
+-- ① Preuve de déclaration rétrocession : justificatif OBLIGATOIRE (relevé d'actes/
+--    SNIR/bordereau CPAM) uploadé dans le bucket privé 'justificatifs', référencé
+--    sur missions.justificatif_honoraires_cle — preuve opposable (litige 48h, admin).
+--    fn_declarer_honoraires_retrocession v3 : nouveau param p_justificatif_cle requis
+--    (ancienne signature à 2 args supprimée).
+-- ② Contrats orphelins : trigger trg_annuler_contrat_orphelin — quand une mission
+--    perd son soignant assigné et repasse OUVERTE (arrêt maladie, désistement,
+--    admin), le contrat de l'ancien soignant passe à ANNULE ; le repreneur génère
+--    le sien (pas de contrainte unique sur mission_id, vérifié).
+-- NOTE : appliquée prod via MCP (version 20260611082804), corps complets en prod.
+ALTER TABLE public.missions ADD COLUMN IF NOT EXISTS justificatif_honoraires_cle text;
